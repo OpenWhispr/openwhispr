@@ -295,6 +295,47 @@ const panelSettings = {
   dictationAgentVisionCustomApiKey: "",
 };
 
+// Profiles that configured Chat before the onboarding fan-out existed hold a
+// Voice Assistant scope that was never seeded; their panel must keep working.
+test("an unreachable Voice Assistant scope falls the panel back to the Chat scope", async () => {
+  const { resolveAssistantPanelInference } = await load();
+
+  const { config } = resolveAssistantPanelInference({
+    ...panelSettings,
+    dictationAgentMode: "openwhispr",
+    dictationAgentProvider: "",
+    dictationAgentModel: "",
+  });
+
+  assert.equal(config.scope, "chatIntelligence");
+  assert.equal(config.provider, "anthropic");
+  assert.equal(config.model, "claude-sonnet-4-5");
+});
+
+test("a signed-in cloud Voice Assistant scope is reachable without a model", async () => {
+  const { resolveAssistantPanelInference } = await load();
+
+  const { config } = resolveAssistantPanelInference({
+    ...panelSettings,
+    isSignedIn: true,
+    dictationAgentMode: "openwhispr",
+    dictationAgentCloudMode: "openwhispr",
+    dictationAgentProvider: "",
+    dictationAgentModel: "",
+  });
+
+  assert.equal(config.scope, "dictationAgent");
+  assert.equal(config.mode, "openwhispr");
+});
+
+test("the assistant toggled off keeps the panel on the Chat scope", async () => {
+  const { resolveAssistantPanelInference } = await load();
+
+  const { config } = resolveAssistantPanelInference({ ...panelSettings, useDictationAgent: false });
+
+  assert.equal(config.scope, "chatIntelligence");
+});
+
 test("the assistant panel resolves the Voice Assistant scope, not the Chat scope", async () => {
   const { resolveAssistantPanelInference } = await load();
 

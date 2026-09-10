@@ -7,7 +7,7 @@ import {
 } from "./dictationRouting.js";
 import { isProviderValidForMode } from "../models/ModelRegistry";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
-import { selectResolvedLLMConfig } from "../stores/settingsStore";
+import { selectIsCloudDictationAgentMode, selectResolvedLLMConfig } from "../stores/settingsStore";
 import { inheritsFallbackEndpoint } from "./reasoningRouting.js";
 
 // The dictation agent's inference scope, shared by the dictation route in
@@ -130,6 +130,13 @@ export function resolveDictationAgentVisionInference(settings, { isSignedIn = fa
  * rather than quietly redirecting it to a model the user did not choose,
  * mirroring resolveAgentImageTarget on the dictation route.
  *
+ * The Voice Assistant scope shipped with an empty provider and model and was
+ * never seeded from the Chat scope, so profiles that configured Chat before
+ * the onboarding fan-out existed hold an unreachable Voice Assistant scope
+ * while their panel worked on Chat. Those keep working: an unreachable Voice
+ * Assistant scope (or the assistant toggled off) falls back to the Chat scope,
+ * the panel's previous home, and a reachable one is honored.
+ *
  * `isProviderImageWired` is injected (the provider registry reads Vite env at
  * load, which this helper's callers and tests do not all have).
  *
@@ -147,6 +154,16 @@ export function resolveAssistantPanelInference(
   settings,
   { hasScreenContext = false, isProviderImageWired = () => false } = {}
 ) {
+  const reachable = resolveDictationAgentInference(settings, {
+    isCloudAgent: selectIsCloudDictationAgentMode(settings),
+  }).reachable;
+  if (!reachable) {
+    return {
+      config: selectResolvedLLMConfig(settings, "chatIntelligence"),
+      dropScreenContext: false,
+    };
+  }
+
   const agent = selectResolvedLLMConfig(settings, "dictationAgent");
   if (!hasScreenContext) return { config: agent, dropScreenContext: false };
 

@@ -66,7 +66,9 @@ async function buildRAGContext(userText: string, scope?: ContainerScope): Promis
 /**
  * Which settings scope answers a conversation. Typed chat surfaces stay on the
  * Chat scope; the voice assistant panel runs on the Voice Assistant scope so
- * the model picked under Settings > Voice Assistant is the one that answers.
+ * the model picked under Settings > Voice Assistant is the one that answers
+ * (falling back to Chat while that scope is unconfigured — see
+ * resolveAssistantPanelInference).
  */
 export type ChatStreamingScope = "chatIntelligence" | "dictationAgent";
 
@@ -443,7 +445,10 @@ export function useChatStreaming({
             llmConfig.provider,
             {
               systemPrompt,
-              inferenceScope,
+              // The panel's Chat fallback must be judged as the Chat scope by
+              // policy and managed enforcement, so follow the resolved config.
+              inferenceScope:
+                llmConfig.scope === "chatIntelligence" ? "chatIntelligence" : inferenceScope,
               lanUrl: isLanAgent ? llmConfig.remoteUrl : undefined,
               baseUrl: isCustomAgent ? llmConfig.cloudBaseUrl || undefined : undefined,
               customApiKey:
@@ -589,6 +594,7 @@ export function useChatStreaming({
       completeToolActivity();
     },
     [
+      inferenceScope,
       t,
       setMessages,
       onStreamComplete,
