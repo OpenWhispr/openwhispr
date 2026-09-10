@@ -8089,6 +8089,9 @@ class IPCHandlers {
             await streaming.connect({
               apiKey,
               model,
+              language: options.language,
+              prompt: options.prompt,
+              keyterms: options.keyterms,
               // The capture worklet emits 16kHz PCM; declare the true rate.
               inputRate: 16000,
               createSocket: () => createTinfoilRealtimeSocket({ model, apiKey }),
@@ -8097,6 +8100,9 @@ class IPCHandlers {
             await streaming.connect({
               apiKey,
               model: options.model || "gpt-4o-mini-transcribe",
+              language: options.language,
+              prompt: options.prompt,
+              keyterms: options.keyterms,
               // OpenAI rejects rates below 24kHz; the 16kHz capture is upsampled instead.
               captureRate: 16000,
               preconfigured: isCloud,
@@ -8757,7 +8763,16 @@ class IPCHandlers {
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
-        if (!this._dictationStreaming?.isConnected) await connectDictationStreaming(event, options);
+        if (!this._dictationStreaming?.isConnected) {
+          await connectDictationStreaming(event, options);
+        } else {
+          this._dictationStreaming.updateSession?.({
+            language: options.language,
+            model: options.model,
+            prompt: options.prompt,
+            keyterms: options.keyterms,
+          });
+        }
         return { success: true };
       } catch (err) {
         return streamingStartFailure(err);

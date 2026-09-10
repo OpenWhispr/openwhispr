@@ -532,7 +532,7 @@ test("completedSegments accumulate across turns", async () => {
   assert.equal(lastFull, "Hello world How are you");
 });
 
-test("BYOK session.update is byte-for-byte today's payload when no VAD/language/noise options are passed", async () => {
+test("BYOK session.update includes language and prompt when language/keyterms are passed", async () => {
   const OpenAIRealtimeStreaming = (await load()).default;
   const streaming = new OpenAIRealtimeStreaming();
   const socket = makeFakeSocket(WS.CONNECTING);
@@ -540,9 +540,55 @@ test("BYOK session.update is byte-for-byte today's payload when no VAD/language/
   const connected = streaming.connect({
     apiKey: "sk-test",
     model: "gpt-4o-mini-transcribe",
-    // Phase 1 will add these; today connect() must ignore them entirely.
     language: "en",
     keyterms: ["OpenWhispr"],
+    sampleRate: 24000,
+    createSocket: async () => socket,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+
+  const updates = socket.sent
+    .map((raw) => JSON.parse(raw))
+    .filter((e) => e.type === "session.update");
+  assert.equal(updates.length, 1, "exactly one session.update after session.created");
+  assert.deepEqual(updates[0], {
+    type: "session.update",
+    session: {
+      type: "transcription",
+      audio: {
+        input: {
+          format: { type: "audio/pcm", rate: 24000 },
+          transcription: {
+            model: "gpt-4o-mini-transcribe",
+            language: "en",
+            prompt: "OpenWhispr",
+          },
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.6,
+            silence_duration_ms: 600,
+            prefix_padding_ms: 500,
+          },
+        },
+      },
+    },
+  });
+
+  socket.emit("message", JSON.stringify({ type: "session.updated" }));
+  await connected;
+  streaming.cleanup();
+});
+
+test("BYOK session.update omits language and prompt when not configured", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+
+  const connected = streaming.connect({
+    apiKey: "sk-test",
+    model: "gpt-4o-mini-transcribe",
     sampleRate: 24000,
     createSocket: async () => socket,
   });
@@ -866,4 +912,77 @@ test("without a streamLabel (dictation) log metadata carries no stream key", asy
   const line = logs.find((entry) => entry.message === "OpenAI Realtime disconnect");
   assert.ok(line);
   assert.equal("stream" in line.meta, false, "unlabelled sockets keep today's metadata shape");
+});
+
+test("updateSession sends session.update with updated language and prompt on connected socket", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+
+  const connected = streaming.connect({
+    apiKey: "sk-test",
+    model: "gpt-4o-mini-transcribe",
+    sampleRate: 24000,
+    createSocket: async () => socket,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+  socket.emit("message", JSON.stringify({ type: "session.updated" }));
+  await connected;
+
+  assert.equal(streaming.language, null);
+  assert.equal(streaming.prompt, null);
+
+  streaming.updateSession({ language: "de-DE", keyterms: ["Arzt", "Patient"] });
+
+  assert.equal(streaming.language, "de");
+  assert.equal(streaming.prompt, "Arzt, Patient");
+
+  const updates = socket.sent
+    .map((raw) => JSON.parse(raw))
+    .filter((e) => e.type === "session.update");
+  assert.equal(updates.length, 2, "initial session.update plus one from updateSession");
+  assert.deepEqual(updates[1], {
+    type: "session.update",
+    session: {
+      type: "transcription",
+      audio: {
+        input: {
+          format: { type: "audio/pcm", rate: 24000 },
+          transcription: {
+            model: "gpt-4o-mini-transcribe",
+            language: "de",
+            prompt: "Arzt, Patient",
+          },
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.6,
+            silence_duration_ms: 600,
+            prefix_padding_ms: 500,
+          },
+        },
+      },
+    },
+  });
+
+  streaming.cleanup();
+});
+
+test("updateSession is a no-op when configuration does not change or session is preconfigured", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+
+  await connectPreconfigured(streaming, socket);
+
+  const sentBefore = socket.sent.length;
+  streaming.updateSession({ language: "de" });
+  assert.equal(
+    socket.sent.length,
+    sentBefore,
+    "preconfigured session must never send session.update"
+  );
+
+  streaming.cleanup();
 });

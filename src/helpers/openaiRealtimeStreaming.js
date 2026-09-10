@@ -30,6 +30,24 @@ async function createSocketWithTimeout(createSocket, timeoutMs) {
   }
 }
 
+function normalizeLanguage(lang) {
+  if (typeof lang !== "string") return null;
+  const trimmed = lang.trim();
+  if (!trimmed || trimmed === "auto") return null;
+  return trimmed.split("-")[0].toLowerCase();
+}
+
+function normalizePrompt(prompt, keyterms) {
+  if (typeof prompt === "string" && prompt.trim()) {
+    return prompt.trim();
+  }
+  if (Array.isArray(keyterms) && keyterms.length > 0) {
+    const terms = keyterms.filter((k) => typeof k === "string" && k.trim());
+    if (terms.length > 0) return terms.join(", ");
+  }
+  return null;
+}
+
 class OpenAIRealtimeStreaming {
   constructor() {
     this.ws = null;
@@ -61,6 +79,8 @@ class OpenAIRealtimeStreaming {
     this.speechStartedCount = 0;
     this._vadEventCount = 0;
     this.model = "gpt-4o-mini-transcribe";
+    this.language = null;
+    this.prompt = null;
     this.inputRate = SAMPLE_RATE;
     this.captureRate = SAMPLE_RATE;
     this.coldStartBuffer = [];
@@ -87,6 +107,9 @@ class OpenAIRealtimeStreaming {
     const {
       apiKey,
       model,
+      language,
+      prompt,
+      keyterms,
       preconfigured,
       inputRate,
       captureRate,
@@ -98,6 +121,9 @@ class OpenAIRealtimeStreaming {
 
     if (this.isConnected || this.isConnecting) {
       debugLogger.debug(`${this.providerLabel} already connected/connecting`, this._logContext());
+      if (this.isConnected) {
+        this.updateSession({ language, model, prompt, keyterms });
+      }
       return;
     }
 
@@ -107,6 +133,8 @@ class OpenAIRealtimeStreaming {
 
     this.isConnecting = true;
     this.model = model || "gpt-4o-mini-transcribe";
+    this.language = normalizeLanguage(language);
+    this.prompt = normalizePrompt(prompt, keyterms);
     this.preconfigured = !!preconfigured;
     this.inputRate = inputRate || SAMPLE_RATE;
     this.captureRate = captureRate || this.inputRate;
@@ -228,6 +256,7 @@ class OpenAIRealtimeStreaming {
               `${this.providerLabel} session created, sending configuration`,
               this._logContext({
                 model: this.model,
+                language: this.language,
                 vadThreshold: this.vadThreshold,
               })
             );
@@ -240,7 +269,7 @@ class OpenAIRealtimeStreaming {
                   audio: {
                     input: {
                       format: { type: "audio/pcm", rate: this.inputRate },
-                      transcription: { model: this.model },
+                      transcription: this._buildTranscriptionConfig(),
                       turn_detection: {
                         type: "server_vad",
                         threshold: this.vadThreshold,
@@ -399,6 +428,69 @@ class OpenAIRealtimeStreaming {
           event: type,
           count: this._vadEventCount,
           audioBytesSent: this.audioBytesSent,
+        })
+      );
+    }
+  }
+
+  _buildTranscriptionConfig() {
+    const config = { model: this.model };
+    if (this.language) config.language = this.language;
+    if (this.prompt) config.prompt = this.prompt;
+    return config;
+  }
+
+  updateSession({ language, model, prompt, keyterms } = {}) {
+    if (this.preconfigured) return;
+    let changed = false;
+
+    if (model && model !== this.model) {
+      this.model = model;
+      changed = true;
+    }
+    if (language !== undefined) {
+      const normalizedLang = normalizeLanguage(language);
+      if (normalizedLang !== this.language) {
+        this.language = normalizedLang;
+        changed = true;
+      }
+    }
+    if (prompt !== undefined || keyterms !== undefined) {
+      const normalizedPrompt = normalizePrompt(prompt, keyterms);
+      if (normalizedPrompt !== this.prompt) {
+        this.prompt = normalizedPrompt;
+        changed = true;
+      }
+    }
+
+    if (!changed) return;
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && this.isConnected) {
+      debugLogger.debug(
+        `${this.providerLabel} updating session configuration`,
+        this._logContext({
+          model: this.model,
+          language: this.language,
+        })
+      );
+      this.ws.send(
+        JSON.stringify({
+          type: "session.update",
+          session: {
+            type: "transcription",
+            audio: {
+              input: {
+                format: { type: "audio/pcm", rate: this.inputRate },
+                transcription: this._buildTranscriptionConfig(),
+                turn_detection: {
+                  type: "server_vad",
+                  threshold: this.vadThreshold,
+                  silence_duration_ms: 600,
+                  prefix_padding_ms: 500,
+                },
+              },
+            },
+          },
         })
       );
     }
