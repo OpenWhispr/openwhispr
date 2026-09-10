@@ -1,7 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const load = () => import("../../src/helpers/transcriptionRoute.ts");
+const load = async () => {
+  const mod = await import("../../src/helpers/transcriptionRoute.ts");
+  return mod.resolveTranscriptionRoute ? mod : mod.default;
+};
 
 const resolve = async (settings, extra = {}) => {
   const { resolveTranscriptionRoute } = await load();
@@ -284,6 +287,26 @@ test("request overrides win: explicit model and effective language", async () =>
   );
   assert.equal(route.model, "whisper-large-v3");
   assert.equal(route.language, "ja");
+});
+
+test("normalizes underscore-separated and padded locales for route language and xAI support", async () => {
+  const xaiRoute = await resolve({
+    cloudTranscriptionProvider: "xai",
+    preferredLanguage: "pt_BR",
+  });
+  assert.equal(xaiRoute.language, "pt");
+
+  const groqRoute = await resolve(
+    { cloudTranscriptionProvider: "groq", preferredLanguage: "en-US" },
+    { request: { effectiveLanguage: "  zh_CN  " } }
+  );
+  assert.equal(groqRoute.language, "zh");
+
+  const autoRoute = await resolve({
+    cloudTranscriptionProvider: "openai",
+    preferredLanguage: "auto",
+  });
+  assert.equal(autoRoute.language, undefined);
 });
 
 const MANAGED_STT = {

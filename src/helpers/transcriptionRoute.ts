@@ -27,6 +27,7 @@ import {
   type TranscriptionProviderBaseUrl,
 } from "../services/transcriptionBaseUrl.ts";
 import type { ManagedEnterpriseRequestContext } from "../types/enterpriseIdentity.ts";
+import { getBaseLanguageCode } from "../utils/languageSupport.ts";
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
@@ -212,11 +213,7 @@ export function resolveTranscriptionRoute({
 }: TranscriptionRouteInput): TranscriptionRoute {
   const s = settings || {};
   const managed = policy?.status === "managed";
-  const language =
-    request?.effectiveLanguage ??
-    (!s.preferredLanguage || s.preferredLanguage === "auto"
-      ? undefined
-      : s.preferredLanguage.split("-")[0]);
+  const language = getBaseLanguageCode(request?.effectiveLanguage ?? s.preferredLanguage);
 
   // Managed enterprise STT outranks every personal setting; the resolution is
   // already policy-checked where it was computed (enterpriseIdentityStore /

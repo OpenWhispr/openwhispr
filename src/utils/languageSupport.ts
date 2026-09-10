@@ -1,4 +1,4 @@
-import registry from "../config/languageRegistry.json";
+import registry from "../config/languageRegistry.json" with { type: "json" };
 
 function buildLanguageSet(key: "whisper" | "assemblyai"): Set<string> {
   const set = new Set<string>();
@@ -25,8 +25,11 @@ const LANGUAGE_INSTRUCTIONS: Record<string, string> = Object.fromEntries(
 );
 
 export function getBaseLanguageCode(language: string | null | undefined): string | undefined {
-  if (!language || language === "auto") return undefined;
-  return language.split("-")[0];
+  if (typeof language !== "string") return undefined;
+  const trimmed = language.trim().replace(/_/g, "-");
+  if (!trimmed || trimmed.toLowerCase() === "auto") return undefined;
+  const base = trimmed.split("-")[0].toLowerCase();
+  return base || undefined;
 }
 
 export function getLanguageInstruction(language: string | undefined): string {
