@@ -244,15 +244,38 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
   return route;
 }
 
+/**
+ * The Notes step's forward action. Calendar connections are optional, so the step
+ * offers Skip until one connects and Continue afterwards. "loading" is its own
+ * state rather than an absence: while the workspace resolves there is nothing to
+ * commit yet, but the step still has to show a disabled Continue — dropping the
+ * action entirely leaves the footer with only Back and no explanation.
+ */
 export function getNotesFooterAction({
   workspaceResolutionPending,
   hasConnectedCalendar,
 }: {
   workspaceResolutionPending: boolean;
   hasConnectedCalendar: boolean;
-}): "skip" | "continue" | null {
-  if (workspaceResolutionPending) return null;
+}): "skip" | "continue" | "loading" {
+  if (workspaceResolutionPending) return "loading";
   return hasConnectedCalendar ? "continue" : "skip";
+}
+
+/**
+ * Whether the permissions step offers Log out. `authPath` alone is not the
+ * question: migrateLegacyOnboardingStep labels any pre-v2 session past the auth
+ * step "account" without anyone having signed in, and the action clears the
+ * session, localSetupPending and the pending model selections without confirming.
+ */
+export function shouldOfferOnboardingLogout({
+  isSignedIn,
+  authPath,
+}: {
+  isSignedIn: boolean;
+  authPath: OnboardingAuthPath;
+}): boolean {
+  return isSignedIn && authPath === "account";
 }
 
 export function isOnboardingStepId(value: unknown): value is OnboardingStepId {

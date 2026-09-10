@@ -104,9 +104,16 @@ test("notes starts with Skip and switches to Continue after a calendar connects"
     getNotesFooterAction({ workspaceResolutionPending: false, hasConnectedCalendar: true }),
     "continue"
   );
+  // Naming this state rather than returning null: the footer has to keep showing a
+  // Continue while workspaces resolve, disabled and loading. Reading it as "no
+  // action" left the step with nothing but Back and no explanation.
   assert.equal(
     getNotesFooterAction({ workspaceResolutionPending: true, hasConnectedCalendar: true }),
-    null
+    "loading"
+  );
+  assert.equal(
+    getNotesFooterAction({ workspaceResolutionPending: true, hasConnectedCalendar: false }),
+    "loading"
   );
 });
 
@@ -449,4 +456,20 @@ test("a session written before the resume flags infers its hotkey confirmations"
   // Nothing else is inferred — a demo the user never ran must still gate Continue.
   assert.equal(past.resume.dictationDemoCompleted, false);
   assert.equal(past.resume.assistantDemoCompleted, false);
+});
+
+test("only a signed-in account holder is offered a logout during onboarding", async () => {
+  const { shouldOfferOnboardingLogout } = await load();
+
+  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: true, authPath: "account" }), true);
+
+  // Guests have no account to leave.
+  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: "guest" }), false);
+  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: true, authPath: "guest" }), false);
+
+  // The legacy migration labels any pre-v2 session past the auth step "account"
+  // without anyone signing in, and Log out wipes the session, localSetupPending and
+  // the pending model selections — unconfirmed, for someone with nothing to log out of.
+  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: "account" }), false);
+  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: null }), false);
 });

@@ -53,6 +53,7 @@ import {
   reconcileStepWithRoute,
   resetOnboardingProgress,
   resolveEnterpriseWorkspaceForOnboarding,
+  shouldOfferOnboardingLogout,
   shouldSkipOnboardingSetupChoice,
   type OnboardingAuthDraft,
   type OnboardingByokDraft,
@@ -807,8 +808,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 : undefined
             }
-            // Guests never signed in, so there is nothing for them to log out of.
-            onLogout={session.authPath === "account" ? handleLogout : undefined}
+            onLogout={
+              shouldOfferOnboardingLogout({ isSignedIn, authPath: session.authPath })
+                ? handleLogout
+                : undefined
+            }
             onContinue={() => void continueFromCurrentStep()}
           />
         );
@@ -1151,7 +1155,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     !choiceStep &&
     !inlineProviderStep &&
     (!inlineGatedStep || canContinue) &&
-    (!notesStep || notesFooterAction === "continue");
+    (!notesStep || notesFooterAction !== "skip");
   // Practice remains skippable if it cannot complete. Calendar connections are
   // optional, so Notes starts with Skip and replaces it with Continue on connect.
   const showsSkip = (demoStep && !canContinue) || (notesStep && notesFooterAction === "skip");
@@ -1181,7 +1185,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }
         skipLabel={t("common.skip")}
         continueDisabled={!canContinue}
-        continueLoading={isFinishing || isRegistering}
+        continueLoading={
+          isFinishing || isRegistering || (notesStep && notesFooterAction === "loading")
+        }
         progress={getOnboardingProgress(currentStepId, route)}
         // Label Back only when it is the sole footer action. Unlike the source
         // commit, this branch also has demo Skip, so Back stays icon-only there.
