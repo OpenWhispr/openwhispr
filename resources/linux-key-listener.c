@@ -113,52 +113,82 @@ static void emit_key_up(void) {
     }
 }
 
+// BEGIN hotkey-parser
+// Contract-tested: test/helpers/nativeListenerKeyVocabulary.test.js compiles
+// exactly this block (BEGIN to END) with the host cc and runs every key name
+// the Settings capture screen can emit through parse_hotkey_spec. Keep it
+// self-contained: libc and the KEY_* codes from <linux/input-event-codes.h>
+// only — no listener globals.
+//
+// The vocabulary must match CODE_TO_KEY in src/utils/hotkeyKeyNames.ts. A name
+// missing here used to leave the key at 0 and be read as "modifiers only", so
+// "Control+Alt+Up" silently became a bare Control+Alt listener that fired on
+// the modifiers alone. An unknown name now refuses the whole spec instead.
+
+struct hotkey_spec {
+    int require_ctrl;
+    int require_alt;
+    int require_shift;
+    int require_super;
+    int modifiers_only;      /* modifiers named and no regular key (e.g. Control+Super) */
+    int key;                 /* the regular key's KEY_* code; 0 when modifiers_only */
+    char unknown_token[64];  /* the offending token when parse_hotkey_spec returns 0 */
+};
+
+struct key_name_entry {
+    const char *name;
+    int code;
+};
+
+/* Case-insensitive names. Single characters are handled in map_key_name. */
+static const struct key_name_entry KEY_NAMES[] = {
+    /* Function keys */
+    {"F1", KEY_F1},   {"F2", KEY_F2},   {"F3", KEY_F3},   {"F4", KEY_F4},   {"F5", KEY_F5},
+    {"F6", KEY_F6},   {"F7", KEY_F7},   {"F8", KEY_F8},   {"F9", KEY_F9},   {"F10", KEY_F10},
+    {"F11", KEY_F11}, {"F12", KEY_F12}, {"F13", KEY_F13}, {"F14", KEY_F14}, {"F15", KEY_F15},
+    {"F16", KEY_F16}, {"F17", KEY_F17}, {"F18", KEY_F18}, {"F19", KEY_F19}, {"F20", KEY_F20},
+    {"F21", KEY_F21}, {"F22", KEY_F22}, {"F23", KEY_F23}, {"F24", KEY_F24},
+    /* Whitespace, editing and navigation */
+    {"Space", KEY_SPACE},
+    {"Escape", KEY_ESC},        {"Esc", KEY_ESC},
+    {"Tab", KEY_TAB},
+    {"Enter", KEY_ENTER},       {"Return", KEY_ENTER},
+    {"Backspace", KEY_BACKSPACE},
+    {"Delete", KEY_DELETE},     {"Del", KEY_DELETE},
+    {"Insert", KEY_INSERT},
+    {"Home", KEY_HOME},         {"End", KEY_END},
+    {"PageUp", KEY_PAGEUP},     {"PageDown", KEY_PAGEDOWN},
+    {"Up", KEY_UP},             {"Down", KEY_DOWN},
+    {"Left", KEY_LEFT},         {"Right", KEY_RIGHT},
+    /* Lock and system keys */
+    {"CapsLock", KEY_CAPSLOCK}, {"NumLock", KEY_NUMLOCK},
+    {"ScrollLock", KEY_SCROLLLOCK}, {"Pause", KEY_PAUSE},
+    {"PrintScreen", KEY_SYSRQ},
+    /* Numpad — evdev reports the physical key regardless of NumLock */
+    {"num0", KEY_KP0}, {"num1", KEY_KP1}, {"num2", KEY_KP2}, {"num3", KEY_KP3},
+    {"num4", KEY_KP4}, {"num5", KEY_KP5}, {"num6", KEY_KP6}, {"num7", KEY_KP7},
+    {"num8", KEY_KP8}, {"num9", KEY_KP9},
+    {"numadd", KEY_KPPLUS}, {"numsub", KEY_KPMINUS}, {"nummult", KEY_KPASTERISK},
+    {"numdiv", KEY_KPSLASH}, {"numdec", KEY_KPDOT},
+    /* Media keys */
+    {"MediaPlayPause", KEY_PLAYPAUSE}, {"MediaStop", KEY_STOPCD},
+    {"MediaNextTrack", KEY_NEXTSONG}, {"MediaPreviousTrack", KEY_PREVIOUSSONG},
+    /* Right-side modifiers bound on their own as single-key hotkeys */
+    {"RightAlt", KEY_RIGHTALT},      {"RightOption", KEY_RIGHTALT},
+    {"RightControl", KEY_RIGHTCTRL}, {"RightCtrl", KEY_RIGHTCTRL},
+    {"RightShift", KEY_RIGHTSHIFT},
+    {"RightSuper", KEY_RIGHTMETA}, {"RightWin", KEY_RIGHTMETA}, {"RightMeta", KEY_RIGHTMETA},
+    {"RightCommand", KEY_RIGHTMETA}, {"RightCmd", KEY_RIGHTMETA},
+    /* Named punctuation */
+    {"Backquote", KEY_GRAVE}, {"Minus", KEY_MINUS}, {"Equal", KEY_EQUAL},
+};
+
+/* Map a key name to its KEY_* code; -1 when the name is unknown. */
 static int map_key_name(const char *name) {
-    if (strcasecmp(name, "F1") == 0) return KEY_F1;
-    if (strcasecmp(name, "F2") == 0) return KEY_F2;
-    if (strcasecmp(name, "F3") == 0) return KEY_F3;
-    if (strcasecmp(name, "F4") == 0) return KEY_F4;
-    if (strcasecmp(name, "F5") == 0) return KEY_F5;
-    if (strcasecmp(name, "F6") == 0) return KEY_F6;
-    if (strcasecmp(name, "F7") == 0) return KEY_F7;
-    if (strcasecmp(name, "F8") == 0) return KEY_F8;
-    if (strcasecmp(name, "F9") == 0) return KEY_F9;
-    if (strcasecmp(name, "F10") == 0) return KEY_F10;
-    if (strcasecmp(name, "F11") == 0) return KEY_F11;
-    if (strcasecmp(name, "F12") == 0) return KEY_F12;
-
-    if (strcasecmp(name, "F13") == 0) return KEY_F13;
-    if (strcasecmp(name, "F14") == 0) return KEY_F14;
-    if (strcasecmp(name, "F15") == 0) return KEY_F15;
-    if (strcasecmp(name, "F16") == 0) return KEY_F16;
-    if (strcasecmp(name, "F17") == 0) return KEY_F17;
-    if (strcasecmp(name, "F18") == 0) return KEY_F18;
-    if (strcasecmp(name, "F19") == 0) return KEY_F19;
-    if (strcasecmp(name, "F20") == 0) return KEY_F20;
-    if (strcasecmp(name, "F21") == 0) return KEY_F21;
-    if (strcasecmp(name, "F22") == 0) return KEY_F22;
-    if (strcasecmp(name, "F23") == 0) return KEY_F23;
-    if (strcasecmp(name, "F24") == 0) return KEY_F24;
-
-    if (strcasecmp(name, "Space") == 0) return KEY_SPACE;
-    if (strcasecmp(name, "Escape") == 0 || strcasecmp(name, "Esc") == 0) return KEY_ESC;
-    if (strcasecmp(name, "Tab") == 0) return KEY_TAB;
-    if (strcasecmp(name, "Pause") == 0) return KEY_PAUSE;
-    if (strcasecmp(name, "ScrollLock") == 0) return KEY_SCROLLLOCK;
-    if (strcasecmp(name, "Insert") == 0) return KEY_INSERT;
-    if (strcasecmp(name, "Home") == 0) return KEY_HOME;
-    if (strcasecmp(name, "End") == 0) return KEY_END;
-    if (strcasecmp(name, "PageUp") == 0) return KEY_PAGEUP;
-    if (strcasecmp(name, "PageDown") == 0) return KEY_PAGEDOWN;
-
-    if (strcmp(name, "`") == 0 || strcasecmp(name, "Backquote") == 0) return KEY_GRAVE;
-
-    if (strcasecmp(name, "RightAlt") == 0 || strcasecmp(name, "RightOption") == 0) return KEY_RIGHTALT;
-    if (strcasecmp(name, "RightControl") == 0 || strcasecmp(name, "RightCtrl") == 0) return KEY_RIGHTCTRL;
-    if (strcasecmp(name, "RightShift") == 0) return KEY_RIGHTSHIFT;
-    if (strcasecmp(name, "RightSuper") == 0 || strcasecmp(name, "RightWin") == 0 ||
-        strcasecmp(name, "RightMeta") == 0 || strcasecmp(name, "RightCommand") == 0 ||
-        strcasecmp(name, "RightCmd") == 0) return KEY_RIGHTMETA;
+    size_t i;
+    for (i = 0; i < sizeof(KEY_NAMES) / sizeof(KEY_NAMES[0]); i++) {
+        if (strcasecmp(name, KEY_NAMES[i].name) == 0) return KEY_NAMES[i].code;
+    }
 
     if (strlen(name) == 1) {
         char c = name[0];
@@ -177,7 +207,7 @@ static int map_key_name(const char *name) {
         case '3': return KEY_3; case '4': return KEY_4; case '5': return KEY_5;
         case '6': return KEY_6; case '7': return KEY_7; case '8': return KEY_8;
         case '9': return KEY_9;
-        case '-': return KEY_MINUS;   case '=': return KEY_EQUAL;
+        case '`': return KEY_GRAVE;  case '-': return KEY_MINUS;   case '=': return KEY_EQUAL;
         case '[': return KEY_LEFTBRACE;  case ']': return KEY_RIGHTBRACE;
         case '\\': return KEY_BACKSLASH; case ';': return KEY_SEMICOLON;
         case '\'': return KEY_APOSTROPHE; case ',': return KEY_COMMA;
@@ -188,52 +218,80 @@ static int map_key_name(const char *name) {
     return -1;
 }
 
-static void parse_hotkey(const char *hotkey) {
+/* Consume a modifier token into the spec; 0 when the token is not a modifier. */
+static int parse_modifier_token(const char *token, struct hotkey_spec *spec) {
+    if (strcasecmp(token, "CommandOrControl") == 0 || strcasecmp(token, "Control") == 0 ||
+        strcasecmp(token, "Ctrl") == 0 || strcasecmp(token, "CmdOrCtrl") == 0) {
+        spec->require_ctrl = 1;
+    } else if (strcasecmp(token, "Alt") == 0 || strcasecmp(token, "Option") == 0) {
+        spec->require_alt = 1;
+    } else if (strcasecmp(token, "Shift") == 0) {
+        spec->require_shift = 1;
+    } else if (strcasecmp(token, "Super") == 0 || strcasecmp(token, "Meta") == 0 ||
+               strcasecmp(token, "Win") == 0 || strcasecmp(token, "Command") == 0 ||
+               strcasecmp(token, "Cmd") == 0) {
+        spec->require_super = 1;
+    } else {
+        return 0;
+    }
+    return 1;
+}
+
+static void record_unknown_token(struct hotkey_spec *spec, const char *token) {
+    strncpy(spec->unknown_token, token, sizeof(spec->unknown_token) - 1);
+    spec->unknown_token[sizeof(spec->unknown_token) - 1] = '\0';
+}
+
+/* Parse a hotkey like "CommandOrControl+Shift+F11", "Control+Super" or "F8"
+ * into `out`. Returns 0 — with `out->unknown_token` set when a token is the
+ * cause — for an unknown key name, two regular keys, a dangling "+", or an
+ * empty string. A failed parse never yields a modifiers-only spec. */
+static int parse_hotkey_spec(const char *hotkey, struct hotkey_spec *out) {
     char buf[256];
+    char *token;
+    size_t len;
+
+    memset(out, 0, sizeof(*out));
+    if (hotkey == NULL) return 0;
+
     strncpy(buf, hotkey, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
 
-    require_ctrl = 0;
-    require_alt = 0;
-    require_shift = 0;
-    require_super = 0;
-    use_modifiers_only = 0;
-    target_key = 0;
+    /* Trim the whole string, then refuse a leading or trailing "+": strtok
+     * would drop the empty token and read "Control+Alt+" as modifiers-only. */
+    len = strlen(buf);
+    while (len > 0 && buf[len - 1] == ' ') buf[--len] = '\0';
+    if (len == 0) return 0;
+    if (buf[0] == '+' || buf[len - 1] == '+') return 0;
 
-    char *token = strtok(buf, "+");
+    token = strtok(buf, "+");
     while (token) {
+        char *end;
         while (*token == ' ') token++;
-        char *end = token + strlen(token) - 1;
+        end = token + strlen(token) - 1;
         while (end > token && *end == ' ') *end-- = '\0';
 
-        if (strcasecmp(token, "CommandOrControl") == 0 ||
-            strcasecmp(token, "Control") == 0 ||
-            strcasecmp(token, "Ctrl") == 0 ||
-            strcasecmp(token, "CmdOrCtrl") == 0) {
-            require_ctrl = 1;
-        } else if (strcasecmp(token, "Alt") == 0 ||
-                   strcasecmp(token, "Option") == 0) {
-            require_alt = 1;
-        } else if (strcasecmp(token, "Shift") == 0) {
-            require_shift = 1;
-        } else if (strcasecmp(token, "Super") == 0 ||
-                   strcasecmp(token, "Meta") == 0 ||
-                   strcasecmp(token, "Win") == 0 ||
-                   strcasecmp(token, "Command") == 0 ||
-                   strcasecmp(token, "Cmd") == 0) {
-            require_super = 1;
-        } else {
+        if (!parse_modifier_token(token, out)) {
             int code = map_key_name(token);
-            if (code >= 0)
-                target_key = code;
+            if (code <= 0 || out->key != 0) {
+                record_unknown_token(out, token);
+                out->key = 0;
+                return 0;
+            }
+            out->key = code;
         }
 
         token = strtok(NULL, "+");
     }
 
-    if (target_key == 0 && (require_ctrl || require_alt || require_shift || require_super))
-        use_modifiers_only = 1;
+    if (out->key == 0) {
+        if (!(out->require_ctrl || out->require_alt || out->require_shift || out->require_super))
+            return 0;
+        out->modifiers_only = 1;
+    }
+    return 1;
 }
+// END hotkey-parser
 
 static int is_keyboard_device(int fd) {
     unsigned long ev_bits = 0;
@@ -378,12 +436,20 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    parse_hotkey(argv[1]);
-
-    if (target_key == 0 && !use_modifiers_only) {
-        fprintf(stderr, "Error: unrecognized key in '%s'\n", argv[1]);
+    struct hotkey_spec spec;
+    if (!parse_hotkey_spec(argv[1], &spec)) {
+        if (spec.unknown_token[0] != '\0')
+            fprintf(stderr, "Error: unrecognized key '%s' in hotkey '%s'\n", spec.unknown_token, argv[1]);
+        else
+            fprintf(stderr, "Error: invalid hotkey '%s'\n", argv[1]);
         return 1;
     }
+    target_key = spec.key;
+    require_ctrl = spec.require_ctrl;
+    require_alt = spec.require_alt;
+    require_shift = spec.require_shift;
+    require_super = spec.require_super;
+    use_modifiers_only = spec.modifiers_only;
 
     fprintf(stderr, "Listening for: %s (code=%d, ctrl=%d, alt=%d, shift=%d, super=%d, mod_only=%d)\n",
             argv[1], target_key, require_ctrl, require_alt, require_shift, require_super, use_modifiers_only);

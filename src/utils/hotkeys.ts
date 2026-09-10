@@ -209,6 +209,22 @@ export function getDefaultHotkey(): string {
 }
 
 /**
+ * Default Voice Agent hotkey, offered by onboarding on a fresh install only —
+ * a stored key is never rewritten.
+ * - Windows: Alt+Super+Space (Win+Alt+Space). Decided 2026-09-10 from a
+ *   researched candidate table (Titan: windows-voice-agent-default-hotkey).
+ *   It carries a regular key, so the low-level hook fires on Space rather than
+ *   the moment two modifiers meet; it shares no Ctrl with the dictation default
+ *   Control+Super, so that modifier-only chord cannot fire first; it is absent
+ *   from Microsoft's Windows shortcut list; and with no Ctrl in it the AltGr
+ *   (= Ctrl+Alt) trap on non-US layouts cannot reach it.
+ * - macOS and Linux: the long-standing CommandOrControl+Shift+Space.
+ */
+export function getDefaultVoiceAgentHotkey(): string {
+  return getPlatform() === "win32" ? "Alt+Super+Space" : "CommandOrControl+Shift+Space";
+}
+
+/**
  * Validates if a hotkey string is in a valid format.
  * Valid formats include single keys and Electron accelerator strings.
  *

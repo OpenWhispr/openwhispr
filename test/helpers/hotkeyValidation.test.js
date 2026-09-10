@@ -268,3 +268,43 @@ test("the Linux default hotkey carries a regular key so it can Hold", async () =
   // both edges, so nothing there needs a regular key.
   assert.equal(withPlatform("win32", getDefaultHotkey), "Control+Super");
 });
+
+test("the Voice Agent default is a real key chord that cannot pre-empt dictation and is not reserved", async () => {
+  const { isModifierOnlyHotkey } = require("../../src/helpers/hotkeyManager");
+  const { validateHotkey } = await load();
+  const { getDefaultHotkey, getDefaultVoiceAgentHotkey } =
+    await import("../../src/utils/hotkeys.ts");
+
+  const withPlatform = (platform, run) => {
+    const had = "window" in globalThis;
+    const previous = globalThis.window;
+    globalThis.window = { electronAPI: { getPlatform: () => platform } };
+    try {
+      return run();
+    } finally {
+      if (had) globalThis.window = previous;
+      else delete globalThis.window;
+    }
+  };
+
+  // Windows: Alt+Super+Space (Win+Alt+Space). Chosen from research, not taste —
+  // see the decision record linked from getDefaultVoiceAgentHotkey. It must
+  // carry a regular key, and must not contain every modifier of the dictation
+  // default: a modifier-only chord fires the instant its modifiers are down,
+  // so any superset of Control+Super would start dictation first.
+  const winAgent = withPlatform("win32", getDefaultVoiceAgentHotkey);
+  const winDictation = withPlatform("win32", getDefaultHotkey);
+  assert.equal(winAgent, "Alt+Super+Space");
+  assert.equal(isModifierOnlyHotkey(winAgent), false);
+  const dictationModifiers = winDictation.split("+");
+  assert.ok(
+    !dictationModifiers.every((mod) => winAgent.split("+").includes(mod)),
+    `"${winAgent}" contains every modifier of dictation's "${winDictation}"`
+  );
+  assert.equal(validateHotkey(winAgent, "win32").valid, true);
+
+  // macOS and Linux keep the long-standing onboarding suggestion.
+  assert.equal(withPlatform("darwin", getDefaultVoiceAgentHotkey), "CommandOrControl+Shift+Space");
+  assert.equal(withPlatform("linux", getDefaultVoiceAgentHotkey), "CommandOrControl+Shift+Space");
+  assert.equal(isModifierOnlyHotkey(withPlatform("linux", getDefaultVoiceAgentHotkey)), false);
+});

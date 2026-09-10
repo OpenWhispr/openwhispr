@@ -105,88 +105,194 @@ static BOOL AreRequiredModifiersPressed(void) {
     return TRUE;
 }
 
-// Map key name to virtual key code
-DWORD ParseKeyCode(const char* keyName) {
-    // Function keys (F1-F12)
-    if (_stricmp(keyName, "F1") == 0) return VK_F1;
-    if (_stricmp(keyName, "F2") == 0) return VK_F2;
-    if (_stricmp(keyName, "F3") == 0) return VK_F3;
-    if (_stricmp(keyName, "F4") == 0) return VK_F4;
-    if (_stricmp(keyName, "F5") == 0) return VK_F5;
-    if (_stricmp(keyName, "F6") == 0) return VK_F6;
-    if (_stricmp(keyName, "F7") == 0) return VK_F7;
-    if (_stricmp(keyName, "F8") == 0) return VK_F8;
-    if (_stricmp(keyName, "F9") == 0) return VK_F9;
-    if (_stricmp(keyName, "F10") == 0) return VK_F10;
-    if (_stricmp(keyName, "F11") == 0) return VK_F11;
-    if (_stricmp(keyName, "F12") == 0) return VK_F12;
+// BEGIN hotkey-parser
+// Contract-tested: test/helpers/nativeListenerKeyVocabulary.test.js compiles
+// exactly this block (BEGIN to END) with a POSIX cc against a stub windows.h
+// and runs every key name the Settings capture screen can emit through
+// ParseHotkeySpec. Keep it self-contained: libc, DWORD/BOOL and VK_* only —
+// no listener globals, no Win32 calls.
+//
+// The vocabulary must match CODE_TO_KEY in src/utils/hotkeyKeyNames.ts. A name
+// missing here used to parse as VK 0 and be read as "modifiers only", so
+// "Control+Alt+Up" silently became a bare Control+Alt listener that fired on
+// the modifiers alone. An unknown name now refuses the whole spec instead.
 
-    // Extended function keys (F13-F24)
-    if (_stricmp(keyName, "F13") == 0) return VK_F13;
-    if (_stricmp(keyName, "F14") == 0) return VK_F14;
-    if (_stricmp(keyName, "F15") == 0) return VK_F15;
-    if (_stricmp(keyName, "F16") == 0) return VK_F16;
-    if (_stricmp(keyName, "F17") == 0) return VK_F17;
-    if (_stricmp(keyName, "F18") == 0) return VK_F18;
-    if (_stricmp(keyName, "F19") == 0) return VK_F19;
-    if (_stricmp(keyName, "F20") == 0) return VK_F20;
-    if (_stricmp(keyName, "F21") == 0) return VK_F21;
-    if (_stricmp(keyName, "F22") == 0) return VK_F22;
-    if (_stricmp(keyName, "F23") == 0) return VK_F23;
-    if (_stricmp(keyName, "F24") == 0) return VK_F24;
+typedef struct {
+    BOOL requireCtrl;
+    BOOL requireAlt;
+    BOOL requireShift;
+    BOOL requireWin;
+    BOOL modifiersOnly;     // modifiers named and no regular key (e.g. Control+Super)
+    DWORD vk;               // the regular key; 0 when modifiersOnly
+    char unknownToken[64];  // the offending token when ParseHotkeySpec returns FALSE
+} HotkeySpec;
 
-    // Special keys
-    if (_stricmp(keyName, "Pause") == 0) return VK_PAUSE;
-    if (_stricmp(keyName, "ScrollLock") == 0) return VK_SCROLL;
-    if (_stricmp(keyName, "Insert") == 0) return VK_INSERT;
-    if (_stricmp(keyName, "Home") == 0) return VK_HOME;
-    if (_stricmp(keyName, "End") == 0) return VK_END;
-    if (_stricmp(keyName, "PageUp") == 0) return VK_PRIOR;
-    if (_stricmp(keyName, "PageDown") == 0) return VK_NEXT;
-    if (_stricmp(keyName, "Space") == 0) return VK_SPACE;
-    if (_stricmp(keyName, "Escape") == 0 || _stricmp(keyName, "Esc") == 0) return VK_ESCAPE;
-    if (_stricmp(keyName, "Tab") == 0) return VK_TAB;
-    if (_stricmp(keyName, "CapsLock") == 0) return VK_CAPITAL;
-    if (_stricmp(keyName, "NumLock") == 0) return VK_NUMLOCK;
+typedef struct {
+    const char* name;
+    DWORD vk;
+} KeyNameEntry;
 
-    // Right-side modifier keys (used as single-key hotkeys)
-    if (_stricmp(keyName, "RightAlt") == 0 || _stricmp(keyName, "RightOption") == 0) return VK_RMENU;
-    if (_stricmp(keyName, "RightControl") == 0 || _stricmp(keyName, "RightCtrl") == 0) return VK_RCONTROL;
-    if (_stricmp(keyName, "RightShift") == 0) return VK_RSHIFT;
-    if (_stricmp(keyName, "RightSuper") == 0 || _stricmp(keyName, "RightWin") == 0 ||
-        _stricmp(keyName, "RightMeta") == 0 || _stricmp(keyName, "RightCommand") == 0 ||
-        _stricmp(keyName, "RightCmd") == 0) return VK_RWIN;
+// Case-insensitive names. Single characters (letters, digits, punctuation) are
+// handled below, not here.
+static const KeyNameEntry KEY_NAMES[] = {
+    // Function keys
+    {"F1", VK_F1},   {"F2", VK_F2},   {"F3", VK_F3},   {"F4", VK_F4},   {"F5", VK_F5},
+    {"F6", VK_F6},   {"F7", VK_F7},   {"F8", VK_F8},   {"F9", VK_F9},   {"F10", VK_F10},
+    {"F11", VK_F11}, {"F12", VK_F12}, {"F13", VK_F13}, {"F14", VK_F14}, {"F15", VK_F15},
+    {"F16", VK_F16}, {"F17", VK_F17}, {"F18", VK_F18}, {"F19", VK_F19}, {"F20", VK_F20},
+    {"F21", VK_F21}, {"F22", VK_F22}, {"F23", VK_F23}, {"F24", VK_F24},
+    // Whitespace, editing and navigation
+    {"Space", VK_SPACE},
+    {"Escape", VK_ESCAPE},      {"Esc", VK_ESCAPE},
+    {"Tab", VK_TAB},
+    {"Enter", VK_RETURN},       {"Return", VK_RETURN},
+    {"Backspace", VK_BACK},
+    {"Delete", VK_DELETE},      {"Del", VK_DELETE},
+    {"Insert", VK_INSERT},
+    {"Home", VK_HOME},          {"End", VK_END},
+    {"PageUp", VK_PRIOR},       {"PageDown", VK_NEXT},
+    {"Up", VK_UP},              {"Down", VK_DOWN},
+    {"Left", VK_LEFT},          {"Right", VK_RIGHT},
+    // Lock and system keys
+    {"CapsLock", VK_CAPITAL},   {"NumLock", VK_NUMLOCK},
+    {"ScrollLock", VK_SCROLL},  {"Pause", VK_PAUSE},
+    {"PrintScreen", VK_SNAPSHOT},
+    // Numpad. Windows reports these virtual keys only while NumLock is on;
+    // with it off the same physical keys arrive as Home/Up/PageUp etc.
+    {"num0", VK_NUMPAD0}, {"num1", VK_NUMPAD1}, {"num2", VK_NUMPAD2}, {"num3", VK_NUMPAD3},
+    {"num4", VK_NUMPAD4}, {"num5", VK_NUMPAD5}, {"num6", VK_NUMPAD6}, {"num7", VK_NUMPAD7},
+    {"num8", VK_NUMPAD8}, {"num9", VK_NUMPAD9},
+    {"numadd", VK_ADD},   {"numsub", VK_SUBTRACT}, {"nummult", VK_MULTIPLY},
+    {"numdiv", VK_DIVIDE}, {"numdec", VK_DECIMAL},
+    // Media keys
+    {"MediaPlayPause", VK_MEDIA_PLAY_PAUSE}, {"MediaStop", VK_MEDIA_STOP},
+    {"MediaNextTrack", VK_MEDIA_NEXT_TRACK}, {"MediaPreviousTrack", VK_MEDIA_PREV_TRACK},
+    // Right-side modifiers bound on their own as single-key hotkeys
+    {"RightAlt", VK_RMENU},        {"RightOption", VK_RMENU},
+    {"RightControl", VK_RCONTROL}, {"RightCtrl", VK_RCONTROL},
+    {"RightShift", VK_RSHIFT},
+    {"RightSuper", VK_RWIN}, {"RightWin", VK_RWIN}, {"RightMeta", VK_RWIN},
+    {"RightCommand", VK_RWIN}, {"RightCmd", VK_RWIN},
+    // Named punctuation
+    {"Backquote", VK_OEM_3}, {"Minus", VK_OEM_MINUS}, {"Equal", VK_OEM_PLUS},
+};
 
-    // Backtick/tilde - the default hotkey
-    if (strcmp(keyName, "`") == 0 || _stricmp(keyName, "Backquote") == 0) return VK_OEM_3;
+// Map a key name to its virtual-key code; 0 when the name is unknown.
+static DWORD ParseKeyCode(const char* keyName) {
+    size_t i;
+    for (i = 0; i < sizeof(KEY_NAMES) / sizeof(KEY_NAMES[0]); i++) {
+        if (_stricmp(keyName, KEY_NAMES[i].name) == 0) return KEY_NAMES[i].vk;
+    }
 
-    // Other punctuation
-    if (strcmp(keyName, "-") == 0 || _stricmp(keyName, "Minus") == 0) return VK_OEM_MINUS;
-    if (strcmp(keyName, "=") == 0 || _stricmp(keyName, "Equal") == 0) return VK_OEM_PLUS;
-    if (strcmp(keyName, "[") == 0) return VK_OEM_4;
-    if (strcmp(keyName, "]") == 0) return VK_OEM_6;
-    if (strcmp(keyName, "\\") == 0) return VK_OEM_5;
-    if (strcmp(keyName, ";") == 0) return VK_OEM_1;
-    if (strcmp(keyName, "'") == 0) return VK_OEM_7;
-    if (strcmp(keyName, ",") == 0) return VK_OEM_COMMA;
-    if (strcmp(keyName, ".") == 0) return VK_OEM_PERIOD;
-    if (strcmp(keyName, "/") == 0) return VK_OEM_2;
-
-    // Single letter/number - convert to VK code
     if (strlen(keyName) == 1) {
         char c = keyName[0];
         if (c >= 'a' && c <= 'z') return (DWORD)(c - 'a' + 'A');
         if (c >= 'A' && c <= 'Z') return (DWORD)c;
         if (c >= '0' && c <= '9') return (DWORD)c;
+        switch (c) {
+            case '`':  return VK_OEM_3;
+            case '-':  return VK_OEM_MINUS;
+            case '=':  return VK_OEM_PLUS;
+            case '[':  return VK_OEM_4;
+            case ']':  return VK_OEM_6;
+            case '\\': return VK_OEM_5;
+            case ';':  return VK_OEM_1;
+            case '\'': return VK_OEM_7;
+            case ',':  return VK_OEM_COMMA;
+            case '.':  return VK_OEM_PERIOD;
+            case '/':  return VK_OEM_2;
+            default:   return 0;
+        }
     }
 
-    // Try parsing as hex or decimal number (for direct VK codes)
-    if (keyName[0] == '0' && (keyName[1] == 'x' || keyName[1] == 'X')) {
-        return (DWORD)strtol(keyName, NULL, 16);
+    // A raw virtual-key code, hex ("0x41") or decimal ("65"). The whole token
+    // must be a number in 1..255: atoi() used to turn any garbage into VK 0.
+    {
+        char* end = NULL;
+        int hex = keyName[0] == '0' && (keyName[1] == 'x' || keyName[1] == 'X');
+        long value = strtol(keyName, &end, hex ? 16 : 10);
+        if (end != keyName && *end == '\0' && value > 0 && value < 256) return (DWORD)value;
     }
 
-    return (DWORD)atoi(keyName);
+    return 0;
 }
+
+// Consume a modifier token into the spec. Returns FALSE when the token is not
+// a modifier, so the caller treats it as the regular key.
+static BOOL ParseModifierToken(const char* token, HotkeySpec* spec) {
+    if (_stricmp(token, "CommandOrControl") == 0 || _stricmp(token, "Control") == 0 ||
+        _stricmp(token, "Ctrl") == 0 || _stricmp(token, "CmdOrCtrl") == 0) {
+        spec->requireCtrl = TRUE;
+    } else if (_stricmp(token, "Alt") == 0 || _stricmp(token, "Option") == 0) {
+        spec->requireAlt = TRUE;
+    } else if (_stricmp(token, "Shift") == 0) {
+        spec->requireShift = TRUE;
+    } else if (_stricmp(token, "Super") == 0 || _stricmp(token, "Meta") == 0 ||
+               _stricmp(token, "Win") == 0 || _stricmp(token, "Command") == 0 ||
+               _stricmp(token, "Cmd") == 0) {
+        spec->requireWin = TRUE;
+    } else {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+static void RecordUnknownToken(HotkeySpec* spec, const char* token) {
+    strncpy(spec->unknownToken, token, sizeof(spec->unknownToken) - 1);
+    spec->unknownToken[sizeof(spec->unknownToken) - 1] = '\0';
+}
+
+// Parse a hotkey like "CommandOrControl+Shift+F11", "Control+Super" or "F8"
+// into `out`. Returns FALSE — with `out->unknownToken` set when a token is the
+// cause — for an unknown key name, two regular keys, a dangling "+", or an
+// empty string. A failed parse never yields a modifiers-only spec.
+static BOOL ParseHotkeySpec(const char* hotkey, HotkeySpec* out) {
+    char buffer[256];
+    char* token;
+    size_t len;
+
+    memset(out, 0, sizeof(*out));
+    if (hotkey == NULL) return FALSE;
+
+    strncpy(buffer, hotkey, sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0';
+
+    // Trim the whole string, then refuse a leading or trailing "+": strtok
+    // would drop the empty token and read "Control+Alt+" as modifiers-only.
+    len = strlen(buffer);
+    while (len > 0 && buffer[len - 1] == ' ') buffer[--len] = '\0';
+    if (len == 0) return FALSE;
+    if (buffer[0] == '+' || buffer[len - 1] == '+') return FALSE;
+
+    token = strtok(buffer, "+");
+    while (token != NULL) {
+        char* end;
+        while (*token == ' ') token++;
+        end = token + strlen(token) - 1;
+        while (end > token && *end == ' ') *end-- = '\0';
+
+        if (!ParseModifierToken(token, out)) {
+            DWORD vk = ParseKeyCode(token);
+            if (vk == 0 || out->vk != 0) {
+                RecordUnknownToken(out, token);
+                out->vk = 0;
+                return FALSE;
+            }
+            out->vk = vk;
+        }
+
+        token = strtok(NULL, "+");
+    }
+
+    if (out->vk == 0) {
+        if (!(out->requireCtrl || out->requireAlt || out->requireShift || out->requireWin)) {
+            return FALSE;
+        }
+        out->modifiersOnly = TRUE;
+    }
+    return TRUE;
+}
+// END hotkey-parser
 
 LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode == HC_ACTION) {
@@ -268,58 +374,6 @@ BOOL WINAPI ConsoleHandler(DWORD signal) {
     return TRUE;
 }
 
-// Parse a compound hotkey like "CommandOrControl+Shift+F11"
-// Sets g_requireCtrl, g_requireAlt, g_requireShift and returns the main key VK code
-DWORD ParseCompoundHotkey(const char* hotkey) {
-    char buffer[256];
-    strncpy(buffer, hotkey, sizeof(buffer) - 1);
-    buffer[sizeof(buffer) - 1] = '\0';
-
-    // Reset modifier requirements
-    g_requireCtrl = FALSE;
-    g_requireAlt = FALSE;
-    g_requireShift = FALSE;
-    g_requireWin = FALSE;
-    g_useModifiersOnly = FALSE;
-
-    DWORD mainKeyVk = 0;
-    char* token = strtok(buffer, "+");
-
-    while (token != NULL) {
-        // Trim leading/trailing spaces
-        while (*token == ' ') token++;
-        char* end = token + strlen(token) - 1;
-        while (end > token && *end == ' ') *end-- = '\0';
-
-        // Check for modifiers
-        if (_stricmp(token, "CommandOrControl") == 0 ||
-            _stricmp(token, "Control") == 0 ||
-            _stricmp(token, "Ctrl") == 0 ||
-            _stricmp(token, "CmdOrCtrl") == 0) {
-            g_requireCtrl = TRUE;
-        } else if (_stricmp(token, "Alt") == 0 ||
-                   _stricmp(token, "Option") == 0) {
-            g_requireAlt = TRUE;
-        } else if (_stricmp(token, "Shift") == 0) {
-            g_requireShift = TRUE;
-        } else if (_stricmp(token, "Super") == 0 ||
-                   _stricmp(token, "Meta") == 0 ||
-                   _stricmp(token, "Win") == 0 ||
-                   _stricmp(token, "Command") == 0 ||
-                   _stricmp(token, "Cmd") == 0) {
-            // Windows key
-            g_requireWin = TRUE;
-        } else {
-            // This should be the main key
-            mainKeyVk = ParseKeyCode(token);
-        }
-
-        token = strtok(NULL, "+");
-    }
-
-    return mainKeyVk;
-}
-
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <key>\n", argv[0]);
@@ -329,18 +383,25 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "  %s F13                      (extended function key F13-F24)\n", argv[0]);
         fprintf(stderr, "  %s CommandOrControl+F11     (with modifier)\n", argv[0]);
         fprintf(stderr, "  %s Ctrl+Shift+Space         (multiple modifiers)\n", argv[0]);
+        fprintf(stderr, "  %s Control+Super            (modifier-only combo)\n", argv[0]);
         return 1;
     }
 
-    g_targetVk = ParseCompoundHotkey(argv[1]);
-    if (g_targetVk == 0 && (g_requireCtrl || g_requireAlt || g_requireShift || g_requireWin)) {
-        g_useModifiersOnly = TRUE;
-    }
-
-    if (g_targetVk == 0 && !g_useModifiersOnly) {
-        fprintf(stderr, "Error: Invalid key '%s'\n", argv[1]);
+    HotkeySpec spec;
+    if (!ParseHotkeySpec(argv[1], &spec)) {
+        if (spec.unknownToken[0] != '\0') {
+            fprintf(stderr, "Error: unrecognized key '%s' in hotkey '%s'\n", spec.unknownToken, argv[1]);
+        } else {
+            fprintf(stderr, "Error: Invalid key '%s'\n", argv[1]);
+        }
         return 1;
     }
+    g_targetVk = spec.vk;
+    g_requireCtrl = spec.requireCtrl;
+    g_requireAlt = spec.requireAlt;
+    g_requireShift = spec.requireShift;
+    g_requireWin = spec.requireWin;
+    g_useModifiersOnly = spec.modifiersOnly;
 
     // Log what we're listening for
     fprintf(stderr, "Listening for: %s (VK=0x%02X, Ctrl=%d, Alt=%d, Shift=%d, Win=%d, ModOnly=%d)\n",
