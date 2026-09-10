@@ -63,20 +63,25 @@ const clipboardModulePath = require.resolve("../../src/helpers/clipboard");
 
 const originalLoad = Module._load;
 
-function loadClipboardManager({ spawn } = {}) {
+function loadClipboardManager({ spawn, spawnSync } = {}) {
   delete require.cache[clipboardModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron") {
       return {
+        app: { isPackaged: false, isReady: () => false },
         clipboard: fakeClipboard,
         systemPreferences: {
           isTrustedAccessibilityClient: () => true,
         },
       };
     }
-    if (request === "child_process" && spawn) {
-      return { ...childProcess, spawn };
+    if (request === "child_process" && (spawn || spawnSync)) {
+      return {
+        ...childProcess,
+        ...(spawn ? { spawn } : {}),
+        ...(spawnSync ? { spawnSync } : {}),
+      };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -123,6 +128,17 @@ function createSpawn(calls, exitCodes, { stdout = [] } = {}) {
       pasteProcess.emit("close", code);
     });
     return pasteProcess;
+  };
+}
+
+function createSpawnSync(calls, handler) {
+  return function mockedSpawnSync(command, args = [], options = {}) {
+    calls.push({ command, args, options });
+    if (handler) {
+      const custom = handler(command, args, options);
+      if (custom !== undefined) return custom;
+    }
+    return { status: 0, stdout: Buffer.from(""), stderr: Buffer.from("") };
   };
 }
 
@@ -813,4 +829,120 @@ test("terminal detection matches window classes and macOS app names alike", () =
   assert.equal(manager.isLinuxTerminalWindowClass("konsole"), true);
   assert.equal(manager.isLinuxTerminalWindowClass("org.mozilla.firefox"), false);
   assert.equal(manager.isLinuxTerminalWindowClass(null), false);
+});
+
+test("_writeClipboardWayland on KDE writes to both wl-copy (Wayland) and xclip (X11)", async () => {
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(spawnSyncCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (cmd) => ["wl-copy", "xclip"].includes(cmd);
+  resetClipboard();
+
+  await withWaylandEnvironment("KDE", async () => {
+    manager._writeClipboardWayland("dictated KDE text");
+  });
+
+  const commands = spawnSyncCalls.map((call) => call.command);
+  assert.equal(commands.includes("wl-copy"), true, "wl-copy must be called for Wayland clipboard");
+  assert.equal(commands.includes("xclip"), true, "xclip must be called for X11 clipboard");
+
+  const wlCopyCall = spawnSyncCalls.find((c) => c.command === "wl-copy");
+  assert.deepEqual(wlCopyCall.args, ["--", "dictated KDE text"]);
+
+  const xclipCall = spawnSyncCalls.find((c) => c.command === "xclip");
+  assert.deepEqual(xclipCall.args, ["-selection", "clipboard"]);
+  assert.equal(xclipCall.options.input, "dictated KDE text");
+
+  assert.equal(fakeClipboard.text, "dictated KDE text");
+});
+
+test("_writeClipboardWayland on KDE writes to wl-copy even when X11 tools are missing", async () => {
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(spawnSyncCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (cmd) => cmd === "wl-copy";
+  resetClipboard();
+
+  await withWaylandEnvironment("KDE", async () => {
+    manager._writeClipboardWayland("dictated KDE text");
+  });
+
+  const commands = spawnSyncCalls.map((call) => call.command);
+  assert.deepEqual(commands, ["wl-copy"]);
+  assert.equal(fakeClipboard.text, "dictated KDE text");
+});
+
+test("_writeClipboardWayland on KDE uses renderer fallback when wl-copy is unavailable", async () => {
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(spawnSyncCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (cmd) => cmd === "xclip";
+  resetClipboard();
+
+  let rendererWritten = null;
+  const webContents = {
+    isDestroyed: () => false,
+    executeJavaScript: async (code) => {
+      rendererWritten = code;
+    },
+  };
+
+  await withWaylandEnvironment("KDE", async () => {
+    manager._writeClipboardWayland("dictated KDE text", webContents);
+  });
+
+  assert.equal(
+    spawnSyncCalls.some((c) => c.command === "xclip"),
+    true
+  );
+  assert.equal(rendererWritten.includes("dictated KDE text"), true);
+  assert.equal(fakeClipboard.text, "dictated KDE text");
+});
+
+test("_writePrimarySelection on KDE mirrors to both wl-copy and xclip", async () => {
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(spawnSyncCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (cmd) => ["wl-copy", "xclip"].includes(cmd);
+
+  await withWaylandEnvironment("KDE", async () => {
+    manager._writePrimarySelection("selection text");
+  });
+
+  const commands = spawnSyncCalls.map((call) => call.command);
+  assert.equal(commands.includes("wl-copy"), true);
+  assert.equal(commands.includes("xclip"), true);
+
+  const wlCopyCall = spawnSyncCalls.find((c) => c.command === "wl-copy");
+  assert.deepEqual(wlCopyCall.args, ["--primary", "--", "selection text"]);
+
+  const xclipCall = spawnSyncCalls.find((c) => c.command === "xclip");
+  assert.deepEqual(xclipCall.args, ["-selection", "primary"]);
+  assert.equal(xclipCall.options.input, "selection text");
+});
+
+test("_writeClipboardWayland on non-KDE (e.g. GNOME) does not invoke X11 clipboard tools", async () => {
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(spawnSyncCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (cmd) => ["wl-copy", "xclip"].includes(cmd);
+  resetClipboard();
+
+  await withWaylandEnvironment("GNOME", async () => {
+    manager._writeClipboardWayland("gnome text");
+  });
+
+  const commands = spawnSyncCalls.map((call) => call.command);
+  assert.deepEqual(commands, ["wl-copy"]);
+  assert.equal(fakeClipboard.text, "gnome text");
 });

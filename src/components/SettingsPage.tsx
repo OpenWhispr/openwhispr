@@ -1408,6 +1408,7 @@ export default function SettingsPage({
     isWlroots: boolean;
     hasXclip: boolean;
     hasXsel: boolean;
+    hasWlCopy?: boolean;
     isNixOS: boolean;
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
@@ -3739,20 +3740,26 @@ EOF`,
                   if (ydotoolStatus.isKde) {
                     checks.push({
                       key: "hasXclip",
-                      label: "xclip",
-                      ok: ydotoolStatus.hasXclip || ydotoolStatus.hasXsel || false,
+                      label: "wl-clipboard / xclip",
+                      ok:
+                        ydotoolStatus.hasWlCopy ||
+                        ydotoolStatus.hasXclip ||
+                        ydotoolStatus.hasXsel ||
+                        false,
                       required: true,
                       desc: t("settingsPage.general.waylandPaste.xclipDesc", {
-                        defaultValue: "Clipboard tool for KDE Wayland paste (xclip or xsel)",
+                        defaultValue:
+                          "Clipboard tool for KDE Wayland paste (wl-copy, xclip, or xsel)",
                       }),
                       steps: [
                         {
                           title: t("settingsPage.general.waylandPaste.guide.xclip.step1Title", {
-                            defaultValue: "Install xclip",
+                            defaultValue: "Install clipboard tools",
                           }),
                           cmds: [
-                            { cmd: "sudo dnf install xclip  # Fedora" },
-                            { cmd: "sudo apt install xclip  # Debian/Ubuntu" },
+                            { cmd: "sudo dnf install wl-clipboard xclip  # Fedora" },
+                            { cmd: "sudo apt install wl-clipboard xclip  # Debian/Ubuntu" },
+                            { cmd: "sudo pacman -S wl-clipboard xclip    # Arch" },
                           ],
                         },
                       ],

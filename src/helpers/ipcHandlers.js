@@ -9959,6 +9959,7 @@ class IPCHandlers {
       const { isKde } = getLinuxSessionInfo();
       let hasXclip = false;
       let hasXsel = false;
+      let hasWlCopy = status.hasWlCopy || false;
       if (isKde) {
         try {
           execFileSync("which", ["xclip"], { timeout: 1000 });
@@ -9968,8 +9969,14 @@ class IPCHandlers {
           execFileSync("which", ["xsel"], { timeout: 1000 });
           hasXsel = true;
         } catch {}
+        if (!hasWlCopy) {
+          try {
+            execFileSync("which", ["wl-copy"], { timeout: 1000 });
+            hasWlCopy = true;
+          } catch {}
+        }
       }
-      return { ...status, hasXclip, hasXsel };
+      return { ...status, hasXclip, hasXsel, hasWlCopy };
     });
 
     ipcMain.handle("get-debug-state", async () => {
