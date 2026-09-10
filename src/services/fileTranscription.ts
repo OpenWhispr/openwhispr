@@ -181,7 +181,7 @@ export async function transcribeFile(
     };
   }
 
-  if (route.provider === "xai") {
+  if (route.transport === "proxied" && route.provider === "xai") {
     const consoleKey = cfg.getApiKey();
     const hasConsoleKey = Boolean(consoleKey?.trim()) && consoleKey !== "xai-oauth";
     if (!hasConsoleKey) {
