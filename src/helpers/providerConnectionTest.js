@@ -16,6 +16,13 @@ const ENDPOINTS = {
 // Neither response is OpenAI-shaped — Deepgram's /v1/models is {stt,tts}-keyed
 // and AssemblyAI returns transcripts — so a 200 is the whole credential signal.
 const MODEL_LIST_UNVERIFIABLE = new Set(["deepgram", "assemblyai"]);
+// OpenRouter keeps speech-to-text models out of the default catalog — they are
+// returned only when filtering by output modality. Without this a transcription
+// test reads every STT selection as missing, because /v1/models lists the ~440
+// text models and none of the transcription ones.
+const TRANSCRIPTION_ENDPOINTS = {
+  openrouter: "https://openrouter.ai/api/v1/models?output_modalities=transcription",
+};
 
 // Renderers translate errorCode via onboarding.rehaul.provider.errors.*; the
 // English `error` string stays for logs and older callers.
@@ -153,8 +160,11 @@ function buildModelEndpoints(base) {
 
 function resolveProviderRequest(config) {
   const provider = String(config?.provider || "").toLowerCase();
+  const scope = String(config?.scope || "").toLowerCase();
   const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
-  let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
+  const catalog =
+    (scope === "transcription" ? TRANSCRIPTION_ENDPOINTS[provider] : null) ?? ENDPOINTS[provider];
+  let endpoints = catalog ? [catalog] : [];
 
   if (provider === "openai") {
     const override = normalizeBaseUrl(

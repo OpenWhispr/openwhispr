@@ -66,6 +66,54 @@ test("a 200 is the whole signal for providers with no OpenAI-shaped model list",
   }
 });
 
+test("a transcription test asks OpenRouter for its speech-to-text catalog", () => {
+  // /v1/models returns OpenRouter's ~440 text models and no STT ones, so a
+  // transcription selection would always read as modelNotFound without the
+  // output_modalities filter.
+  assert.equal(
+    resolveProviderRequest({ provider: "openrouter", scope: "transcription", apiKey: "secret" })
+      .endpoint,
+    "https://openrouter.ai/api/v1/models?output_modalities=transcription"
+  );
+
+  // The reasoning scope keeps the plain catalog.
+  for (const scope of ["reasoning", undefined]) {
+    assert.equal(
+      resolveProviderRequest({ provider: "openrouter", scope, apiKey: "secret" }).endpoint,
+      "https://openrouter.ai/api/v1/models",
+      String(scope)
+    );
+  }
+
+  // The override is OpenRouter-only; no other provider splits its catalog.
+  assert.equal(
+    resolveProviderRequest({ provider: "groq", scope: "transcription", apiKey: "secret" }).endpoint,
+    "https://api.groq.com/openai/v1/models"
+  );
+});
+
+test("an OpenRouter transcription model passes the availability check", async () => {
+  const seen = [];
+  const result = await testProviderConnection(
+    {
+      provider: "openrouter",
+      scope: "transcription",
+      apiKey: "secret",
+      model: "openai/gpt-transcribe",
+    },
+    async (url) => {
+      seen.push(url);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ id: "openai/gpt-transcribe" }, { id: "deepgram/nova-3" }] }),
+      };
+    }
+  );
+  assert.deepEqual(result, { success: true });
+  assert.deepEqual(seen, ["https://openrouter.ai/api/v1/models?output_modalities=transcription"]);
+});
+
 test("normalizes custom compatible endpoints", () => {
   assert.equal(
     resolveProviderRequest({ provider: "custom", baseUrl: "localhost:11434/v1", apiKey: "" })
