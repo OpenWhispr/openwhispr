@@ -917,6 +917,11 @@
         "failedTitle": "翻譯失敗",
         "failedDescription": "已貼上原始文字。你可以在歷史記錄中重試。"
       },
+      "pushForceStopped": {
+        "title": "轉錄內容未貼上",
+        "description": "聽寫停止時快捷鍵仍處於按住狀態，因此未貼上文字。轉錄內容已複製到剪貼簿。",
+        "descriptionClipboardFailed": "聽寫停止時快捷鍵仍處於按住狀態，因此未貼上文字，也無法複製到剪貼簿。"
+      },
       "selectionEditing": {
         "notAppliedTitle": "未套用選取文字編輯",
         "changed": "處理期間，選取的文字或目標應用程式已變更。未取代任何內容。",

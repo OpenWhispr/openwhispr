@@ -50,6 +50,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopRequestedDuringStartRef = useRef(false);
+  const pushForceStoppedRef = useRef(false);
   const stopLockRef = useRef(false);
   const preparationGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
@@ -114,6 +115,7 @@ export const useAudioRecording = (toast, options = {}) => {
       lastStartOptionsRef.current = { voiceAgentRequested, translationRequested };
       startLockRef.current = true;
       stopRequestedDuringStartRef.current = false;
+      pushForceStoppedRef.current = false;
       let recordingStarted = false;
       try {
         if (!audioManagerRef.current) return false;
@@ -582,16 +584,35 @@ export const useAudioRecording = (toast, options = {}) => {
               if (clipboardResult?.success === false) {
                 throw new Error("clipboard-write-failed");
               }
+              return true;
             } catch (error) {
               logger.warn(
                 "Failed to keep transcription in clipboard",
                 { delivery, error: error?.message },
                 "clipboard"
               );
+              return false;
             }
           };
 
-          if (autoPasteEnabled && !result.assistantConversation) {
+          if (pushForceStoppedRef.current && autoPasteEnabled && !result.assistantConversation) {
+            // The push hit its safety ceiling while the trigger keys were still
+            // down. Injecting the paste shortcut into those held modifiers is
+            // what silently loses the transcript, so keep it instead.
+            const keptInClipboard = await keepInClipboard("push-force-stopped");
+            window.electronAPI?.hideDictationPreview?.();
+            showDictationError({
+              title: t("hooks.audioRecording.pushForceStopped.title"),
+              // Never promise a clipboard that rejected the write; the transcript
+              // action on this pill is the recovery path either way.
+              description: t(
+                keptInClipboard
+                  ? "hooks.audioRecording.pushForceStopped.description"
+                  : "hooks.audioRecording.pushForceStopped.descriptionClipboardFailed"
+              ),
+              transcript: result.rawText ?? result.text,
+            });
+          } else if (autoPasteEnabled && !result.assistantConversation) {
             const pasteStart = performance.now();
             let pasteSucceeded = true;
             if (result.selectionEdit?.sessionId) {
@@ -778,6 +799,14 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
+    const disposeForceStopped = window.electronAPI.onDictationForceStopped?.((payload) => {
+      // Listed rather than negated: a future renderer-initiated stop would not
+      // leave the keys down, and must not be swept in here.
+      if (payload?.reason === "timeout" || payload?.reason === "reset") {
+        pushForceStoppedRef.current = true;
+      }
+    });
+
     // Cleanup
     return () => {
       reportLifecycle("idle");
@@ -789,6 +818,7 @@ export const useAudioRecording = (toast, options = {}) => {
       disposePrepare?.();
       disposeCancelPreparation?.();
       disposeStop?.();
+      disposeForceStopped?.();
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();
       }

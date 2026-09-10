@@ -917,6 +917,11 @@
         "failedTitle": "翻译失败",
         "failedDescription": "已粘贴原始文本。你可以在历史记录中重试。"
       },
+      "pushForceStopped": {
+        "title": "转录内容未粘贴",
+        "description": "听写停止时快捷键仍处于按下状态，因此未粘贴文本。转录内容已复制到剪贴板。",
+        "descriptionClipboardFailed": "听写停止时快捷键仍处于按下状态，因此未粘贴文本，也无法复制到剪贴板。"
+      },
       "selectionEditing": {
         "notAppliedTitle": "未应用选中文本编辑",
         "changed": "处理期间，选中的文本或目标应用已发生变化。未替换任何内容。",

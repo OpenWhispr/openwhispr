@@ -917,6 +917,11 @@
         "failedTitle": "Échec de la traduction",
         "failedDescription": "Le texte original a été collé. Vous pouvez réessayer depuis l'Historique."
       },
+      "pushForceStopped": {
+        "title": "Transcription non collée",
+        "description": "La dictée s'est arrêtée alors que le raccourci était encore enfoncé, le texte n'a donc pas été collé. Votre transcription est dans le presse-papiers.",
+        "descriptionClipboardFailed": "La dictée s'est arrêtée alors que le raccourci était encore enfoncé : le texte n'a pas été collé et n'a pas pu être copié dans le presse-papiers non plus."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Modification de la sélection non appliquée",
         "changed": "Le texte sélectionné ou l’application cible a changé pendant le traitement. Rien n’a été remplacé.",

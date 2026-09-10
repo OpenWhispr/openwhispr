@@ -4,19 +4,19 @@ const EventEmitter = require("events");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
 
-// Force a key-up if the native listener never reports one (e.g. a missed release
-// while another window had focus), so a held key can't get stuck recording.
-// Aligned with Windows and macOS push-to-talk maximum duration (5 minutes, #1594, #2047).
-const WATCHDOG_MS = 300000;
-
+// Key state comes from an evdev reader (resources/linux-key-listener.c) that reads
+// /dev/input directly, so it observes KEY_UP regardless of which window has focus
+// and cannot miss a release. The ceiling for a genuinely stuck key is
+// MAX_PUSH_DURATION_MS in windowManager, which owns push state; enforcing one here
+// too would end the push by synthesizing a release, making a forced stop
+// indistinguishable from the user letting go.
 class LinuxKeyManager extends EventEmitter {
-  constructor(options = {}) {
+  constructor() {
     super();
-    this.isSupported = options.isSupported ?? process.platform === "linux";
+    this.isSupported = process.platform === "linux";
     this.hasReportedError = false;
     this.hasReportedUnavailable = false;
-    this.watchdogMs = typeof options.watchdogMs === "number" ? options.watchdogMs : WATCHDOG_MS;
-    this.listeners = new Map(); // key string -> { child, watchdog }
+    this.listeners = new Map(); // key string -> { child }
   }
 
   /**
@@ -58,7 +58,7 @@ class LinuxKeyManager extends EventEmitter {
     }
 
     this.hasReportedError = false;
-    const entry = { child, watchdog: null };
+    const entry = { child };
     this.listeners.set(key, entry);
     debugLogger.debug("[LinuxKeyManager] Starting key listener", { key, binaryPath: listenerPath });
 
@@ -109,10 +109,9 @@ class LinuxKeyManager extends EventEmitter {
     const entry = this.listeners.get(key);
     if (!entry) return;
     this.listeners.delete(key);
-    if (entry.watchdog) clearTimeout(entry.watchdog);
     debugLogger.debug("[LinuxKeyManager] Stopping key listener", { key });
     try {
-      entry.child?.kill?.();
+      entry.child.kill();
     } catch {
       // Already gone
     }
@@ -133,29 +132,12 @@ class LinuxKeyManager extends EventEmitter {
 
     if (line === "KEY_DOWN") {
       debugLogger.debug("[LinuxKeyManager] KEY_DOWN detected", { key });
-      const entry = this.listeners.get(key);
-      if (entry) {
-        if (entry.watchdog) clearTimeout(entry.watchdog);
-        entry.watchdog = setTimeout(() => {
-          debugLogger.warn(
-            `[LinuxKeyManager] Watchdog: no KEY_UP within ${Math.round(this.watchdogMs / 1000)}s, forcing release`,
-            { key }
-          );
-          entry.watchdog = null;
-          this.emit("key-up", key);
-        }, this.watchdogMs);
-      }
       this.emit("key-down", key);
       return;
     }
 
     if (line === "KEY_UP") {
       debugLogger.debug("[LinuxKeyManager] KEY_UP detected", { key });
-      const entry = this.listeners.get(key);
-      if (entry?.watchdog) {
-        clearTimeout(entry.watchdog);
-        entry.watchdog = null;
-      }
       this.emit("key-up", key);
       return;
     }
@@ -233,8 +215,5 @@ class LinuxKeyManager extends EventEmitter {
     return null;
   }
 }
-
-LinuxKeyManager.WATCHDOG_MS = WATCHDOG_MS;
-LinuxKeyManager.DEFAULT_WATCHDOG_MS = WATCHDOG_MS;
 
 module.exports = LinuxKeyManager;
