@@ -259,16 +259,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // The setting turns on only once the permission is actually granted, so an
   // Enable click whose System Settings grant is abandoned can't leave screen
   // context armed to activate silently on some later grant. The latch lives in
-  // the persisted session: macOS asks to quit and reopen the app after the
-  // grant, and a component-state latch died with that relaunch, leaving the OS
-  // permission granted but Settings > Voice Assistant still off.
+  // the persisted session because macOS asks to quit and reopen the app after
+  // the grant; it is cleared as soon as it is consumed.
   const screenContextRequested = session.screenContextRequested;
 
   const applyScreenContext = useCallback(() => {
+    setScreenContextRequested(false);
     settingsStore.setVoiceAgentScreenContext(true);
     // Keeps the dictation overlay out of its own screenshots.
     void window.electronAPI?.setScreenContextEnabled?.(true);
-  }, [settingsStore]);
+  }, [setScreenContextRequested, settingsStore]);
 
   const enableScreenContext = useCallback(async () => {
     setScreenContextRequested(true);
@@ -279,18 +279,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   // macOS grants Screen Recording in System Settings, outside the app; the
   // permission hook re-checks on mount and window focus. When the grant lands,
-  // complete the opt-in the Enable click started — within this onboarding
-  // session only, which clearSession ends at finalization.
+  // complete the opt-in the Enable click started.
   useEffect(() => {
-    if (!screenContextRequested || !screenRecordingGranted) return;
-    if (settingsStore.voiceAgentScreenContext) return;
-    applyScreenContext();
-  }, [
-    screenContextRequested,
-    screenRecordingGranted,
-    settingsStore.voiceAgentScreenContext,
-    applyScreenContext,
-  ]);
+    if (screenContextRequested && screenRecordingGranted) applyScreenContext();
+  }, [screenContextRequested, screenRecordingGranted, applyScreenContext]);
 
   const requiredModels = useRequiredLocalModels();
   // Latched for the session once the step is entered (or resumed at), so a
@@ -565,11 +557,22 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       // onProceed() in the same tick, so `settingsStore` here still holds the
       // values from before the pick. Reading it stale configured the other three
       // scopes to the defaults (groq / openai/gpt-oss-120b) with no key.
-      const { chatAgentProvider, chatAgentModel } = useSettingsStore.getState();
+      const {
+        chatAgentProvider,
+        chatAgentModel,
+        chatAgentCloudBaseUrl,
+        chatAgentRemoteUrl,
+        chatAgentCustomApiKey,
+      } = useSettingsStore.getState();
       settingsStore.setCloudReasoningForAllScopes({
         cleanupCloudMode: mode,
         cleanupProvider: chatAgentProvider,
         cleanupModel: chatAgentModel,
+        cleanupCloudBaseUrl: chatAgentCloudBaseUrl,
+        cleanupRemoteUrl: chatAgentRemoteUrl,
+        // Only a self-hosted or custom endpoint has one; an empty write would
+        // just churn five secure-store entries.
+        ...(chatAgentCustomApiKey ? { cleanupCustomApiKey: chatAgentCustomApiKey } : {}),
         useCleanupModel: true,
         useDictationAgent: true,
       });

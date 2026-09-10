@@ -80,10 +80,10 @@ export interface OnboardingSession {
   setupMode: OnboardingSetupMode;
   selfHostedRequested: boolean;
   /**
-   * The permissions step's screen-context Enable was clicked. Persisted so the
-   * opt-in completes when the macOS grant lands across the quit-and-reopen
-   * System Settings asks for; dropped with the session at finalization so an
-   * abandoned grant can't arm screen context on some later one.
+   * The permissions step's screen-context Enable was clicked and the grant has
+   * not landed yet. Persisted so the opt-in completes across the quit-and-reopen
+   * macOS asks for after granting Screen Recording; cleared once consumed and
+   * dropped with the session at finalization.
    */
   screenContextRequested: boolean;
   resume: OnboardingResumeState;

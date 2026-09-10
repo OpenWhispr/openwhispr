@@ -71,7 +71,7 @@ export const INFERENCE_SCOPES = {
   },
   // Runs typed chat conversations (Control Panel, note and container chat).
   // The voice assistant panel's spoken commands, like selection edits, run on
-  // dictationAgent(Vision) — see resolveAssistantPanelInference.
+  // dictationAgent(Vision) — see resolveChatStreamingInference.
   chatIntelligence: {
     storeKeys: {
       mode: "chatAgentMode",

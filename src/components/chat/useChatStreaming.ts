@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
-import { getCloudModel, isEnterpriseProvider } from "../../models/ModelRegistry";
+import { isEnterpriseProvider } from "../../models/ModelRegistry";
 import { providerSupportsImages } from "../../services/ai/inferenceProviders";
-import { getSettings, selectResolvedLLMConfig } from "../../stores/settingsStore";
-import { resolveAssistantPanelInference } from "../../helpers/dictationAgentInference.js";
+import { getSettings } from "../../stores/settingsStore";
+import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
 import {
   isAgentAllowed,
   isLlmSelectionAllowed,
@@ -67,8 +67,7 @@ async function buildRAGContext(userText: string, scope?: ContainerScope): Promis
  * Which settings scope answers a conversation. Typed chat surfaces stay on the
  * Chat scope; the voice assistant panel runs on the Voice Assistant scope so
  * the model picked under Settings > Voice Assistant is the one that answers
- * (falling back to Chat while that scope is unconfigured — see
- * resolveAssistantPanelInference).
+ * (see resolveChatStreamingInference for its Chat fallback).
  */
 export type ChatStreamingScope = "chatIntelligence" | "dictationAgent";
 
@@ -108,14 +107,6 @@ export interface ChatStreaming {
   sendToAI: (userText: string, allMessages: Message[], options?: SendToAIOptions) => Promise<void>;
   cancelStream: () => void;
 }
-
-// An image attaches only where the provider's AI-SDK client is image-wired
-// (registry `supportsImages`) AND the model id exists in the local registry,
-// so supportsVision is decidable — the same dual gate the single-shot
-// dictation path applies. OpenRouter/custom alias the OpenAI client here, but
-// their model ids never appear in the registry (vision would be a guess that
-// errors the whole command on a text-only backend). The cloud path carries its
-// screenshot separately as a server-routed field below.
 
 type HistoryMessage = { role: string; content: string | Array<Record<string, unknown>> };
 
@@ -244,14 +235,12 @@ export function useChatStreaming({
         if (!options?.suppressResponseContent) onResponseContent?.();
       };
       const settings = getSettings();
-      const { config: llmConfig, dropScreenContext } =
-        inferenceScope === "dictationAgent"
-          ? resolveAssistantPanelInference(settings, {
-              hasScreenContext: !!options?.attachment,
-              isProviderImageWired: providerSupportsImages,
-            })
-          : { config: selectResolvedLLMConfig(settings, inferenceScope), dropScreenContext: false };
-      const requestedAttachment = dropScreenContext ? null : (options?.attachment ?? null);
+      const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
+        inferenceScope,
+        hasScreenContext: !!options?.attachment,
+        isProviderImageWired: providerSupportsImages,
+      });
+      const requestedAttachment = attachScreenContext ? (options?.attachment ?? null) : null;
       const llmMode = llmConfig.mode || "openwhispr";
       const policyState = usePolicyStore.getState();
       const policyProvider =
@@ -347,21 +336,12 @@ export function useChatStreaming({
         );
       }
 
-      // Attach the screenshot to the command it came with, but only where a
-      // model can actually see it; otherwise drop it silently — an image
-      // problem must never cost the user their command. BYOK models get it as
-      // an image part when the registry says they have vision; the cloud
-      // agent gets it as a dedicated field the server vision-routes (older
-      // servers strip the unknown field, which degrades to a plain command).
-      const attachment =
-        requestedAttachment &&
-        !isCloudAgent &&
-        !isLanAgent &&
-        !isLocalProvider &&
-        providerSupportsImages(llmConfig.provider) &&
-        getCloudModel(llmConfig.model)?.supportsVision
-          ? requestedAttachment
-          : null;
+      // A screenshot the resolver kept rides with the command it came with:
+      // BYOK models get it as an image part, the cloud agent as a dedicated
+      // field the server vision-routes (older servers strip the unknown field,
+      // which degrades to a plain command). A dropped one costs nothing but the
+      // image — the command still runs.
+      const attachment = requestedAttachment && !isCloudAgent ? requestedAttachment : null;
       const cloudScreenContext =
         requestedAttachment && isCloudAgent
           ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
@@ -445,10 +425,11 @@ export function useChatStreaming({
             llmConfig.provider,
             {
               systemPrompt,
-              // The panel's Chat fallback must be judged as the Chat scope by
-              // policy and managed enforcement, so follow the resolved config.
+              // Policy and managed enforcement judge the scope that actually
+              // answers: the panel's Chat fallback as Chat, and the vision
+              // override as the agent scope whose image lane it is.
               inferenceScope:
-                llmConfig.scope === "chatIntelligence" ? "chatIntelligence" : inferenceScope,
+                llmConfig.scope === "dictationAgentVision" ? "dictationAgent" : llmConfig.scope,
               lanUrl: isLanAgent ? llmConfig.remoteUrl : undefined,
               baseUrl: isCustomAgent ? llmConfig.cloudBaseUrl || undefined : undefined,
               customApiKey:
