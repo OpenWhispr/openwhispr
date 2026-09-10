@@ -35,7 +35,7 @@ export default function McpIntegrationCard({ isPaid, onUpgrade }: McpIntegration
   };
 
   return (
-    <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm p-4">
+    <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-4">
       <div className="flex items-center gap-2 mb-4">
         <LogoTile src={logo} alt="OpenWhispr" />
         <Plus className="h-3 w-3 text-muted-foreground/40 shrink-0" />
