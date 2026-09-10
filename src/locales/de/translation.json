@@ -164,6 +164,7 @@
     "add": "Hinzufügen",
     "retry": "Erneut versuchen",
     "back": "Zurück",
+    "logout": "Abmelden",
     "next": "Weiter",
     "complete": "Fertig",
     "reset": "Zurücksetzen",
@@ -200,7 +201,7 @@
     "done": "Fertig",
     "skip": "Überspringen",
     "policyAiProcessingRestricted": "Die KI-Verarbeitung ist durch Ihre Organisation eingeschränkt.",
-    "policyAgentRestricted": "Die Nutzung des KI-Agenten ist durch Ihre Organisation eingeschränkt.",
+    "policyAgentRestricted": "Die Nutzung des KI-Assistenten ist durch Ihre Organisation eingeschränkt.",
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt.",
     "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
     "managedConfigUnavailable": "Der verwaltete Unternehmenszugriff ist nicht verfügbar. Melden Sie sich erneut an oder wenden Sie sich an Ihren Administrator.",
@@ -213,8 +214,8 @@
         "microphoneDescription": "Verwandelt Sprache in Text.",
         "accessibilityDescription": "Fügt Text in deine aktive App ein.",
         "systemAudioTitle": "Systemaudio",
-        "systemAudioDescription": "Nimmt Audio aus anderen Apps auf.",
-        "screenContextDescription": "Lässt deinen Sprachassistenten deinen Bildschirm sehen. Wird nie gespeichert.",
+        "systemAudioDescription": "Erforderlich, um Audio für Besprechungsnotizen aufzunehmen.",
+        "screenContextDescription": "Bildschirmkontext mit dem Sprachassistenten teilen.",
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },
@@ -239,6 +240,7 @@
       "hotkey": {
         "capture": "Drücken Sie die Tasten, die Sie verwenden möchten",
         "chooseAnother": "Anderes Tastenkürzel wählen",
+        "confirmAgain": "Drücke {{hotkey}} erneut zum Bestätigen",
         "inUse": "Dieses Tastenkürzel wird bereits verwendet. Wähle ein anderes.",
         "holding": "Weiter halten oder eine andere Taste drücken"
       },
@@ -411,7 +413,6 @@
         "descriptionLineOne": "Wählen Sie die Modelle, die",
         "descriptionLineTwo": "auf Ihrem Gerät laufen sollen.",
         "providerLabel": "Anbieter",
-        "agent": "Agent",
         "download": "Herunterladen",
         "downloadingShort": "Wird geladen",
         "selected": "Ausgewählt",
@@ -420,7 +421,7 @@
         "cancelDownload": "Download von {{model}} abbrechen",
         "downloads": "Modell-Downloads",
         "downloading": "Wird heruntergeladen… {{progress}}%",
-        "installing": "Modell wird installiert…"
+        "installing": "Wird installiert"
       }
     },
     "steps": {
@@ -680,11 +681,6 @@
       },
       "retryTranslationMode": "Übersetzungsmodus"
     },
-    "cloudMigration": {
-      "title": "Willkommen bei OpenWhispr Cloud",
-      "description": "Wir haben die Transkription auf OpenWhispr Cloud umgestellt für schnellere und genauere Ergebnisse. Ihre bisherigen Einstellungen sind gespeichert – wechseln Sie jederzeit in den Einstellungen zurück.",
-      "viewSettings": "Einstellungen anzeigen"
-    },
     "aiCta": {
       "title": "Verbessern Sie Ihre Transkriptionen mit KI",
       "description": "Korrigiert automatisch Grammatik, Zeichensetzung und Formatierung, während Sie sprechen.",
@@ -869,7 +865,7 @@
       "errorTitles": {
         "sessionExpired": "Sitzung abgelaufen",
         "offline": "Sie sind offline",
-        "agentUnavailable": "Agent nicht verfügbar",
+        "agentUnavailable": "Assistent nicht verfügbar",
         "screenContextSkipped": "Bildschirmkontext übersprungen",
         "dailyLimitReached": "Tägliches Limit erreicht",
         "providerRateLimited": "Anbieter-Ratenlimit erreicht"
@@ -909,7 +905,10 @@
         "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text.",
         "managedTranscriptionUnavailable": "Die verwaltete Transkription ist derzeit nicht verfügbar. Versuchen Sie es gleich noch einmal.",
         "managedRouteInvalid": "Die verwaltete Transkription konnte aufgrund einer Konfigurationsabweichung nicht gestartet werden. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
-        "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator."
+        "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator.",
+        "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
+        "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
+        "providerKeyMissing": "Für Ihren Transkriptionsanbieter ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprache zu Text hinzu."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
@@ -1106,12 +1105,12 @@
       "welcomeBack": "Willkommen zurück"
     },
     "signedIn": {
-      "ready": "Bereit",
-      "welcomeBack": "Willkommen zurück",
-      "welcomeBackName": "Willkommen zurück, {{name}}"
+      "welcomeBack": "Willkommen zurück"
     },
     "sso": {
       "continueWithSSO": "Mit SSO anmelden",
+      "workEmailLabel": "Geschäftliche E-Mail",
+      "emailPlaceholder": "E-Mail-Adresse hinzufügen",
       "emailRequired": "Geben Sie Ihre geschäftliche E-Mail-Adresse ein, um SSO zu verwenden.",
       "failed": "Single Sign-on fehlgeschlagen. Bitte versuchen Sie es erneut.",
       "companySignInTitle": "Unternehmensanmeldung verwenden",
@@ -1466,10 +1465,10 @@
       }
     },
     "edit": {
-      "agentNameLabel": "Agent-Name:",
+      "agentNameLabel": "Assistent-Name:",
       "cautionLabel": "Vorsicht",
       "cautionTextPrefix": "Änderungen an diesem Prompt können die Transkriptionsqualität beeinträchtigen.",
-      "cautionTextSuffix": "Behalten Sie den Platzhalter {{agentName}} bei, um die Agent-Erkennung zu gewährleisten.",
+      "cautionTextSuffix": "Behalten Sie den Platzhalter {{agentName}} bei, um die Assistent-Erkennung zu gewährleisten.",
       "placeholder": "Geben Sie Ihren benutzerdefinierten System-Prompt ein..."
     },
     "tabs": {
@@ -1884,7 +1883,7 @@
           "features": [
             "Unbegrenzte Meeting-Aufnahmen",
             "Workspace-Rollen & Mitgliederverwaltung",
-            "Agentenmodus",
+            "Assistentenmodus",
             "Chat über Ihre Daten",
             "Prioritäts-Support"
           ],
@@ -2008,11 +2007,11 @@
       }
     },
     "agentConfig": {
-      "agentName": "Agent-Name",
+      "agentName": "Assistent-Name",
       "description": "Benennen Sie Ihren KI-Assistenten, damit Sie ihn beim Diktieren direkt ansprechen können",
       "dialogs": {
-        "updatedDescription": "Ihr Agent heißt jetzt '{{name}}'. Sprechen Sie ihn an, indem Sie 'Hey {{name}}' gefolgt von Ihren Anweisungen sagen.",
-        "updatedTitle": "Agent-Name aktualisiert"
+        "updatedDescription": "Ihr Assistent heißt jetzt '{{name}}'. Sprechen Sie ihn an, indem Sie 'Hey {{name}}' gefolgt von Ihren Anweisungen sagen.",
+        "updatedTitle": "Assistent-Name aktualisiert"
       },
       "examplesTitle": "Beispiele",
       "helper": "Wählen Sie etwas Kurzes und Natürliches zum Aussprechen",
@@ -2127,7 +2126,7 @@
       "clearDictionaryTitle": "Wörterbuch löschen?",
       "clearDictionaryDescription": "Dadurch werden alle Wörter aus Ihrem benutzerdefinierten Wörterbuch entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "clearAll": "Alles löschen",
-      "agentNameAutoManaged": "Automatisch verwaltet — synchronisiert mit dem Agentennamen",
+      "agentNameAutoManaged": "Automatisch verwaltet — synchronisiert mit dem Assistentennamen",
       "removeWord": "Wort entfernen",
       "noWords": "Noch keine Wörter",
       "wordsAppearHere": "Hinzugefügte Wörter erscheinen hier",
@@ -2396,6 +2395,9 @@
       "insightsSyncDescription": "Synchronisieren Sie Wortanzahl, Datum und genaue Uhrzeit jedes Diktats, Dauer und Modelltyp geräteübergreifend. Transkriptionsinhalte werden nie übertragen. Wenn Sie angemeldet sind, werden diese Zähler beim Löschen des Verlaufs auch von diesem Gerät und aus Ihrem Konto entfernt.",
       "insightsSyncRequiresAccount": "Melden Sie sich an, um inhaltsfreie Statistikdaten geräteübergreifend zu synchronisieren.",
       "insightsSyncRequiresHistory": "Aktivieren Sie die Datenaufbewahrung, um Statistiken zu erfassen, bevor Sie sie geräteübergreifend synchronisieren.",
+      "leaderboardDescription": "Zeigen Sie Ihren Namen, Ihre E-Mail-Adresse und Ihre Aktivität in berechtigten Workspace- und Arbeitsdomain-Bestenlisten an. Transkripte bleiben privat.",
+      "leaderboardRequiresAccount": "Melden Sie sich an, um Ihre Teilnahme an Bestenlisten zu verwalten.",
+      "leaderboardRequiresHistory": "Aktivieren Sie die Datenaufbewahrung, bevor Sie Bestenlisten beitreten.",
       "usageAnalytics": "Nutzungsanalysen",
       "usageAnalyticsDescription": "Helfen Sie uns, OpenWhispr zu verbessern, indem Sie anonyme Leistungsdaten teilen. Wir senden niemals Transkriptionsinhalte – nur Timing- und Fehlerdaten.",
       "audioRetention": "Audio-Aufbewahrung",
@@ -2626,9 +2628,14 @@
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
         "gemini_3_5_transcribe": "Googles Gemini-Spracherkennung",
+        "gemini_3_5_transcribe_live": "Spracherkennung per Echtzeit-Streaming",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
-        "tinfoil_voxtral": "Nachweisbar private Transkription"
+        "tinfoil_voxtral": "Nachweisbar private Transkription",
+        "deepgram_nova_3": "Deepgrams genauestes Echtzeitmodell",
+        "assemblyai_universal_streaming_english": "Unveränderliche Echtzeit-Transkripte, Englisch",
+        "assemblyai_universal_streaming_multilingual": "Unveränderliche Echtzeit-Transkripte, mehrsprachig",
+        "assemblyai_universal_3_5_pro": "Höchste Genauigkeit in Echtzeit, 18 Sprachen"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",
@@ -2638,7 +2645,7 @@
         "openai_gpt_4_1_mini": "Kleineres GPT-4.1-Modell",
         "openai_gpt_4_1_nano": "GPT-4.1 mit der niedrigsten Latenz",
         "anthropic_claude_fable_5": "Leistungsstärkstes Modell von Anthropic, Mythos-Klasse",
-        "anthropic_claude_sonnet_5": "Schnelles, leistungsfähiges Agent-Modell zu geringeren Kosten",
+        "anthropic_claude_sonnet_5": "Schnelles, leistungsfähiges Assistentenmodell zu geringeren Kosten",
         "anthropic_claude_sonnet_4_6": "Ausgewogene Leistung",
         "anthropic_claude_sonnet_4_5": "Vorherige Sonnet-Generation",
         "anthropic_claude_haiku_4_5": "Schnell mit nahezu Frontier-Intelligenz",
@@ -2673,12 +2680,12 @@
         "corti_corti_s1_mini": "Kompaktes klinisches Modell mit Reasoning zum halben Preis"
       },
       "enterprise": {
-        "bedrock_claude_fable_5": "Leistungsstärkstes Claude-Modell. Ideal für die schwierigsten Agent-Modus-Aufgaben.",
+        "bedrock_claude_fable_5": "Leistungsstärkstes Claude-Modell. Ideal für die schwierigsten Assistenten-Aufgaben.",
         "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",
-        "bedrock_claude_sonnet_5": "Ausgewogen. Empfohlener Standard für den Agent-Modus.",
-        "bedrock_claude_opus_4_8": "Höchste Intelligenz. Für komplexe Aufgaben im Agent-Modus.",
+        "bedrock_claude_sonnet_5": "Ausgewogen. Empfohlener Standard für Assistenten-Aufgaben.",
+        "bedrock_claude_opus_4_8": "Höchste Intelligenz. Für komplexe Assistenten-Aufgaben.",
         "bedrock_gpt_oss_120b": "Offenes OpenAI-Modell. Starkes Reasoning zu geringen Kosten.",
-        "bedrock_deepseek_v3_2": "Offenes Frontier-Modell. Starker Wert für den Agent-Modus.",
+        "bedrock_deepseek_v3_2": "Offenes Frontier-Modell. Starker Wert für Assistenten-Aufgaben.",
         "bedrock_qwen3_next_80b": "Sparsames offenes Modell. Schnell und mehrsprachig.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
@@ -2724,6 +2731,7 @@
   },
   "insights": {
     "title": "Statistiken",
+    "yourUsage": "Ihre Nutzung",
     "description": "Ein privater Blick auf Ihre Diktiergewohnheiten und Ihren Fortschritt.",
     "wordsSpoken": "Gesprochene Wörter",
     "currentStreak": "Aktuelle Serie",
@@ -2744,22 +2752,108 @@
     "dayTooltip_other": "{{date}}: {{count}} Wörter",
     "dataRetentionDisabled": "Die Datenaufbewahrung ist deaktiviert, daher werden neue Diktate in den Statistiken nicht gezählt – weder auf diesem Gerät noch in Ihrem Konto. Bereits synchronisierte Zähler bleiben in Ihrem Konto.",
     "onDevice": "Auf diesem Gerät",
+    "onDevicePrivacy": "Diese Insights werden auf diesem Gerät berechnet, um deine Privatsphäre zu schützen.",
     "synced": "Geräteübergreifend synchronisiert",
     "syncFallback": "Gerätedaten werden angezeigt – Synchronisierung nicht verfügbar",
     "syncPrompt": "Synchronisieren Sie inhaltsfreie Zähler, um lokale und Cloud-Aktivität geräteübergreifend zusammenzuführen.",
     "enableSync": "Synchronisierung aktivieren",
+    "syncEnableError": "Die Insights-Synchronisierung konnte nicht aktiviert werden. Versuchen Sie es erneut.",
     "claimTitle": "Frühere Diktate einbeziehen?",
-    "claimDescription_one": "{{count}} Diktat wurde auf diesem Gerät vor Ihrer Anmeldung aufgezeichnet. Wird es einbezogen, werden nur Wortanzahl, Datum und genaue Uhrzeit der Aufnahme, Dauer und Modelltyp übertragen – nie Transkriptionsinhalte.",
-    "claimDescription_other": "{{count}} Diktate wurden auf diesem Gerät vor Ihrer Anmeldung aufgezeichnet. Werden sie einbezogen, werden nur Wortanzahl, Datum und genaue Uhrzeit der jeweiligen Aufnahme, Dauer und Modelltyp übertragen – nie Transkriptionsinhalte.",
+    "claimDescription_one": "Nutzung aus {{count}} früheren Diktat synchronisieren. Transkripte bleiben privat.",
+    "claimDescription_other": "Nutzung aus {{count}} früheren Diktaten synchronisieren. Transkripte bleiben privat.",
     "claimInclude": "Einbeziehen",
     "claimSkip": "Jetzt nicht",
     "enableTitle": "Insights-Synchronisierung aktivieren?",
     "enableConfirm": "Synchronisierung aktivieren",
-    "enableDescription_one": "{{count}} bereits auf diesem Gerät aufgezeichnetes Diktat wird in Ihr Konto hochgeladen. Die Insights-Synchronisierung überträgt nur Wortanzahl, Datum und genaue Uhrzeit der jeweiligen Aufnahme, Dauer und Modelltyp – nie Transkriptionsinhalte.",
-    "enableDescription_other": "{{count}} bereits auf diesem Gerät aufgezeichnete Diktate werden in Ihr Konto hochgeladen. Die Insights-Synchronisierung überträgt nur Wortanzahl, Datum und genaue Uhrzeit der jeweiligen Aufnahme, Dauer und Modelltyp – nie Transkriptionsinhalte.",
+    "enableDescription_one": "Nutzung aus {{count}} vorhandenem Diktat synchronisieren. Transkripte bleiben privat.",
+    "enableDescription_other": "Nutzung aus {{count}} vorhandenen Diktaten synchronisieren. Transkripte bleiben privat.",
     "emptyTitle": "Noch keine Diktate",
     "emptyBody": "Beginnen Sie zu diktieren – Ihre Wörter, Serien und tägliche Aktivität erscheinen dann hier.",
-    "loadError": "Insights konnten von diesem Gerät nicht gelesen werden."
+    "loadError": "Insights konnten von diesem Gerät nicht gelesen werden.",
+    "leaderboard": {
+      "title": "Bestenliste",
+      "inviteCta": "Teammitglieder einladen",
+      "soloTitle": "Lade dein erstes Teammitglied ein",
+      "soloDescription": "Deine Bestenliste ist bereit. Lade jemanden zu {{scope}} ein, um Aktivitäten zu vergleichen und gemeinsam Fortschritte zu machen.",
+      "soloHint": "Die Person erscheint hier, sobald sie der Bestenliste beitritt.",
+      "topPerformers": "Top-Platzierte",
+      "refreshCadence": "Wird stündlich aktualisiert",
+      "moreActions": "Weitere Ranglistenaktionen",
+      "setupTitle": "Erstelle deine Team-Bestenliste",
+      "setupDescription": "Erstelle einen Workspace und lade dann Teammitglieder ein, um Aktivitäten zu vergleichen und gemeinsam Fortschritte zu machen.",
+      "setupDomainDescription_one": "{{count}} Person bei {{domain}} nimmt an Leaderboards teil. Erstelle einen Workspace und lade sie ein.",
+      "setupDomainDescription_other": "{{count}} Personen bei {{domain}} nehmen an Leaderboards teil. Erstelle einen Workspace und lade sie ein.",
+      "setupCta": "Workspace erstellen",
+      "accessError": "Der Zugriff auf die Bestenliste konnte nicht geprüft werden.",
+      "signInTitle": "Melde dich an, um deine Bestenliste zu sehen",
+      "signInDescription": "Bestenlisten vergleichen dich mit Teammitgliedern deines Kontos. Melde dich an, um zu sehen, ob deine verfügbar ist.",
+      "requestJoinTitle": "Dein Team ist bereits hier",
+      "requestJoinDescription_one": "{{workspace}} hat {{count}} Mitglied. Bitte einen Admin, dich hinzuzufügen.",
+      "requestJoinDescription_other": "{{workspace}} hat {{count}} Mitglieder. Bitte einen Admin, dich hinzuzufügen.",
+      "requestJoinCta": "Beitritt anfragen",
+      "requestSent": "Anfrage gesendet",
+      "requesting": "Anfrage wird gesendet…",
+      "acceptInviteTitle": "Du wurdest zu {{workspace}} eingeladen",
+      "acceptInviteDescription": "{{inviter}} hat dich eingeladen. Tritt bei, um die Team-Bestenliste zu sehen.",
+      "acceptInviteDescriptionNoInviter": "Tritt {{workspace}} bei, um die Team-Bestenliste zu sehen.",
+      "acceptInviteCta": "Team beitreten",
+      "joining": "Beitritt läuft…",
+      "inviteAcceptedTitle": "Workspace beigetreten",
+      "inviteAcceptedDescription": "Du kannst jetzt die Bestenliste von {{workspace}} sehen.",
+      "inviteAcceptError": "Beitritt zum Workspace fehlgeschlagen",
+      "invitedList": "Eingeladen: {{emails}}",
+      "chooseBoard": "Bestenliste auswählen",
+      "emptyStrip_one": "{{count}} Teammitglied ist der Bestenliste noch nicht beigetreten. Die Rangliste startet danach.",
+      "emptyStrip_other": "{{count}} Teammitglieder sind der Bestenliste noch nicht beigetreten. Die Rangliste startet danach.",
+      "copyNudge": "Erinnerung kopieren",
+      "nudgeText": "Treten Sie unter OpenWhispr → Insights der Bestenliste bei, damit wir die Team-Bestenliste sehen können.",
+      "nudgeCopied": "Erinnerung kopiert",
+      "nudgeCopyError": "Erinnerung konnte nicht kopiert werden",
+      "joinTitle": "Sehen Sie, wo Sie bei {{scope}} stehen",
+      "joinDescription": "Ihr Name, Ihre E-Mail-Adresse und Ihre Aktivität erscheinen in allen berechtigten Workspace- und Domain-Bestenlisten. Transkripte bleiben privat; Sie können jederzeit austreten.",
+      "joinCta": "Bestenlisten beitreten",
+      "joiningLeaderboard": "Beitritt…",
+      "joinPolicyBlocked": "Ihre Workspace-Richtlinie erlaubt keine Teilnahme an Bestenlisten.",
+      "activationError": "Ihre Teilnahme an der Bestenliste konnte nicht bestätigt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "disabled": "Bestenliste ist deaktiviert",
+      "leave": "Bestenlisten verlassen",
+      "leavePending": "Sobald Sie wieder online sind, schließen wir den Austritt aus den Bestenlisten ab.",
+      "allTime": "Gesamt",
+      "thisWeek": "Diese Woche",
+      "wpmValue": "{{count}} WPM",
+      "dayValue_one": "{{count}} Tag",
+      "dayValue_other": "{{count}} Tage",
+      "share": "Teilen",
+      "refresh": "Bestenliste aktualisieren",
+      "error": "Die Bestenliste konnte nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "rank": "Rang",
+      "member": "Mitglied",
+      "you": "(du)",
+      "jumpToMe": "Zu mir springen",
+      "jumpUnavailable": "Dein Konto konnte in dieser Bestenliste nicht identifiziert werden.",
+      "previous": "Vorherige Seite",
+      "jumpToRank": "Zu Rang springen",
+      "next": "Nächste Seite",
+      "metrics": {
+        "total_words": "Wörter insgesamt",
+        "words_per_minute": "Wörter pro Minute",
+        "current_daily_streak": "Aktuelle Tagesserie",
+        "desktop_words": "Desktop-Wörter",
+        "mobile_words": "Mobil-Wörter"
+      },
+      "shareText": "Sehen Sie, welchen Rang ich bei OpenWhispr habe.",
+      "shareTitle": "Bestenliste teilen",
+      "shareDescription": "Kopiere oder lade diese Karte herunter oder kopiere sie, bevor du einen Beitrag öffnest.",
+      "copyImage": "Bild kopieren",
+      "download": "Herunterladen",
+      "shareX": "Auf X teilen",
+      "shareLinkedIn": "Auf LinkedIn teilen",
+      "copied": "Bild kopiert — füge es in deinen Beitrag ein.",
+      "saved": "Bild heruntergeladen.",
+      "failed": "Die Karte konnte nicht erstellt werden.",
+      "unnamedMember": "Teammitglied"
+    }
   },
   "sidebar": {
     "insights": "Statistiken",
@@ -3230,13 +3324,17 @@
       "queueFailed": "{{n}} fehlgeschlagen",
       "urlFileTooLarge": "Die Datei ist zu groß zum Herunterladen. Die maximale Größe beträgt 500 MB.",
       "urlYoutubeBlocked": "YouTube blockiert Downloads aus Ihrem Netzwerk vorübergehend. Versuchen Sie es später erneut.",
-      "customEndpointInvalid": "Benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder ungültig. Aktualisieren Sie ihn in den Einstellungen."
+      "customEndpointInvalid": "Benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder ungültig. Aktualisieren Sie ihn in den Einstellungen.",
+      "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter."
     },
     "meeting": {
       "title": "Besprechungsnotizen",
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "back": "Zurück",
       "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt.",
+      "unsupportedSelfHosted": "Die Notizaufnahme kann noch keinen selbst gehosteten Endpunkt verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
+      "unsupportedProvider": "Die Notizaufnahme kann {{provider}} nicht für die Live-Transkription verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
+      "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "autoEnded": "Die Aufnahme wurde nach dem Ende des Meetings automatisch beendet.",
       "restartFailed": "Die Meeting-Aufnahme konnte nicht neu gestartet werden.",
       "systemAudioSilent": {
@@ -3571,7 +3669,7 @@
   },
   "dictationAgent": {
     "enabled": "Sprachassistenten aktivieren",
-    "enabledDescription": "Diktieren Sie Anweisungen an Ihren Agenten. Markierter Text wird an das konfigurierte Modell gesendet und direkt bearbeitet. Aktivieren Sie ihn, indem Sie \"{{agentName}}\" sagen.",
+    "enabledDescription": "Diktieren Sie Anweisungen an Ihren Assistenten. Markierter Text wird an das konfigurierte Modell gesendet und direkt bearbeitet. Aktivieren Sie ihn, indem Sie \"{{agentName}}\" sagen.",
     "screenContext": {
       "title": "Bildschirmkontext",
       "description": "Hängt einen Screenshot Ihres aktiven Bildschirms an Sprachassistent-Befehle an.",
@@ -3586,7 +3684,7 @@
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Den von OpenWhispr verwalteten Agenten nutzen, kein API-Schlüssel nötig.",
+      "openwhisprDesc": "Den von OpenWhispr verwalteten Assistenten nutzen, kein API-Schlüssel nötig.",
       "providers": "Eigenen Schlüssel nutzen",
       "providersDesc": "Mit Ihrem eigenen API-Schlüssel an OpenAI, Anthropic, Gemini oder Groq anbinden.",
       "local": "Lokal",
@@ -3597,14 +3695,14 @@
       "enterpriseDesc": "AWS Bedrock, Azure OpenAI oder Google Vertex nutzen."
     },
     "prompt": {
-      "title": "Agent-Prompt",
+      "title": "Assistent-Prompt",
       "description": "Der System-Prompt, der bei Erkennung des Aktivierungsworts verwendet wird. Fällt auf die integrierte Standardvorgabe zurück."
     }
   },
   "agentMode": {
     "settings": {
       "systemPrompt": "System-Prompt",
-      "systemPromptDescription": "Benutzerdefinierte Anweisungen für den Agenten",
+      "systemPromptDescription": "Benutzerdefinierte Anweisungen für den Assistenten",
       "systemPromptPlaceholder": "Benutzerdefinierten System-Prompt eingeben...",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
@@ -3628,7 +3726,8 @@
       "transcribing": "Transkribiert...",
       "thinking": "Denkt nach...",
       "typeMessage": "Nachricht eingeben...",
-      "send": "Senden"
+      "send": "Senden",
+      "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Sprache zu Text einen anderen Anbieter."
     },
     "tools": {
       "search_notesName": "Notizen durchsuchen",
@@ -3756,7 +3855,7 @@
     },
     "cli": {
       "title": "Kommandozeilen-Zugriff",
-      "description": "Gib deinem Agenten über das Terminal Zugriff auf deine Notizen.",
+      "description": "Gib deinem Assistenten über das Terminal Zugriff auf deine Notizen.",
       "installLabel": "Installieren",
       "learnMore": "Dokumentation lesen",
       "copyDocsLink": "Doku-Link kopieren",

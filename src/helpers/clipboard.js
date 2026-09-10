@@ -1571,6 +1571,22 @@ class ClipboardManager {
         ? ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"]
         : ["-M", "ctrl", "-k", "v", "-m", "ctrl"];
 
+    // ydotool 0.1.x (Ubuntu 24.04) uses key names; 1.0.x uses raw keycodes.
+    // Wayland's physical fallback is always Shift+Insert to avoid KEY_V's layout-sensitive position.
+    const buildYdotoolArgs = () => {
+      const legacyYdotool = this._isYdotoolLegacy();
+      if (isWayland || useShiftInsert) {
+        return legacyYdotool ? ["key", "shift+Insert"] : ["key", "42:1", "110:1", "110:0", "42:0"];
+      }
+      if (isTerminalTarget) {
+        return legacyYdotool
+          ? ["key", "ctrl+shift+v"]
+          : ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"];
+      }
+      return legacyYdotool ? ["key", "ctrl+v"] : ["key", "29:1", "47:1", "47:0", "29:0"];
+    };
+    let ydotoolAttempted = false;
+
     // Konsole on X11 silently drops simulated Ctrl+Shift+V via XTest (a long-standing
     // focus/grab quirk), and the native fast-paste binary uses XTest. Route Konsole+X11
     // through the xdotool fallback instead, which sends shift+Insert with
@@ -1724,6 +1740,27 @@ class ClipboardManager {
           this.portalTokenPasteFailed = true;
         }
 
+        // GNOME: a running ydotoold already owns a persistent uinput device, so
+        // paste through it instead of the throwaway device the binary creates per
+        // paste. Mutter can take 150–500 ms to pick up a hotplugged device, but the
+        // binary destroys its device ~100 ms after creation and exits 0 regardless,
+        // so the keystrokes are dropped and the fallbacks never run (#956).
+        if (isGnome && ydotoolDaemonRunning) {
+          ydotoolAttempted = true;
+          try {
+            await this._runLinuxPasteCommand("ydotool", buildYdotoolArgs(), "ydotool");
+            this.safeLog("✅ Paste successful using ydotool");
+            debugLogger.info("Paste successful", { tool: "ydotool" }, "clipboard");
+            return { method: "ydotool", restoreComplete: restoreClipboard() };
+          } catch (error) {
+            debugLogger.warn(
+              "ydotool paste failed on GNOME, trying uinput",
+              { error: error?.message },
+              "clipboard"
+            );
+          }
+        }
+
         try {
           const uinputPaste = await tryUinputPaste();
           return { method: "uinput", ...uinputPaste };
@@ -1826,24 +1863,9 @@ class ClipboardManager {
       );
     }
 
-    // ydotool 0.1.x (Ubuntu 24.04) uses key names; 1.0.x uses raw keycodes.
-    // Wayland's physical fallback is always Shift+Insert to avoid KEY_V's layout-sensitive position.
-    const legacyYdotool = this._isYdotoolLegacy();
-    let ydotoolArgs;
-    if (isWayland || useShiftInsert) {
-      ydotoolArgs = legacyYdotool
-        ? ["key", "shift+Insert"]
-        : ["key", "42:1", "110:1", "110:0", "42:0"];
-    } else if (isTerminalTarget) {
-      ydotoolArgs = legacyYdotool
-        ? ["key", "ctrl+shift+v"]
-        : ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"];
-    } else {
-      ydotoolArgs = legacyYdotool ? ["key", "ctrl+v"] : ["key", "29:1", "47:1", "47:0", "29:0"];
-    }
-
     const xdotoolEntry = canUseXdotool ? [{ cmd: "xdotool", args: xdotoolArgs }] : [];
-    const ydotoolEntry = canUseYdotool ? [{ cmd: "ydotool", args: ydotoolArgs }] : [];
+    const ydotoolEntry =
+      canUseYdotool && !ydotoolAttempted ? [{ cmd: "ydotool", args: buildYdotoolArgs() }] : [];
 
     // Compositor-aware priority ordering. X11 and wlroots (where wtype already
     // ran): xdotool first — native on X11, no daemon needed. GNOME, KDE, or

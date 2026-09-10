@@ -47,12 +47,11 @@ export function resolveSyncConsent(state: {
 /**
  * Whether the Insights view offers to adopt the counters recorded while signed
  * out. The offer is gated on there being rows to adopt, never on the sync
- * toggle: insightsSyncEnabled is device-scoped and survives sign-out, so
- * counters spoken between a sign-out and the next sign-in land unattributed
- * with the toggle still on. Gating the offer on the toggle left exactly those
- * rows unreachable — excluded from the account summary the view then shows,
- * so visible totals silently dropped after signing back in. Offering is not
- * adopting: the prompt still has to be confirmed (useInsightsSyncOptIn).
+ * toggle: account-scope bootstrap can leave rows unattributed while the local
+ * setting is on. Gating the offer on the toggle left exactly those rows
+ * unreachable — excluded from the account summary the view then shows, so
+ * visible totals silently dropped. Offering is not adopting: the prompt still
+ * has to be confirmed (useInsightsSyncOptIn).
  *
  * The other three inputs are the preconditions the offer always had. Retention
  * being off is not a technicality here: it stops new counters being recorded,

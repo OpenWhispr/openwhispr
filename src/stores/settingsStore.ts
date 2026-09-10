@@ -35,6 +35,8 @@ import { pickDefaultModelId } from "../models/providerDefaultModel";
 // the switch store only zustand, so neither reopens the ModelRegistry cycle.
 import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { recordTinfoilModelSwitch } from "./tinfoilModelSwitchStore";
+import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
+import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
   getTranscriptionSelection,
   isScreenContextAllowed,
@@ -65,6 +67,8 @@ let _ReasoningService: typeof import("../services/ReasoningService").default | n
 // store with partial window stubs that don't define it.
 const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
 
+const DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER = "openai";
+
 export const TRANSCRIPTION_POLICY_PROVIDER_IDS = [
   ...modelRegistryData.transcriptionProviders.map((provider) => provider.id),
   "custom",
@@ -92,7 +96,11 @@ const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
   // Self-hosted realtime is not implemented for Note Recording.
   modes: ["openwhispr", "providers", "local"] as const,
   byokProviders: modelRegistryData.transcriptionProviders
-    .filter((provider) => provider.models.some((model) => model.streaming))
+    .filter(
+      (provider) =>
+        MEETING_STREAMING_PROVIDER_IDS.includes(provider.id) &&
+        provider.models.some((model) => model.streaming)
+    )
     .map((provider) => provider.id),
 };
 
@@ -232,54 +240,6 @@ function migrateMicrophoneSelectionMode() {
 
 migrateMicrophoneSelectionMode();
 
-// One-time migration for legacy `meetingFollows{Transcription,Reasoning}` flags.
-// When the flag was true (the default), meeting/note recordings inherited the
-// main dictation/intelligence settings. We've removed the toggle; copy the
-// effective values into the dedicated meeting fields so post-migration reads
-// (which always go through meeting fields) preserve every existing user's
-// behavior. After migration the flag stays at "false" as a marker so this
-// never runs again. Safe to delete after a few releases.
-const MEETING_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
-  ["useLocalWhisper", "meetingUseLocalWhisper"],
-  ["whisperModel", "meetingWhisperModel"],
-  ["localTranscriptionProvider", "meetingLocalTranscriptionProvider"],
-  ["parakeetModel", "meetingParakeetModel"],
-  ["cohereModel", "meetingCohereModel"],
-  ["cloudTranscriptionProvider", "meetingCloudTranscriptionProvider"],
-  ["cloudTranscriptionModel", "meetingCloudTranscriptionModel"],
-  ["cloudTranscriptionBaseUrl", "meetingCloudTranscriptionBaseUrl"],
-  ["cloudTranscriptionMode", "meetingCloudTranscriptionMode"],
-  ["transcriptionMode", "meetingTranscriptionMode"],
-  ["remoteTranscriptionType", "meetingRemoteTranscriptionType"],
-  ["remoteTranscriptionUrl", "meetingRemoteTranscriptionUrl"],
-];
-const MEETING_REASONING_PAIRS: ReadonlyArray<[string, string]> = [
-  ["reasoningProvider", "meetingReasoningProvider"],
-  ["reasoningModel", "meetingReasoningModel"],
-  ["reasoningMode", "meetingReasoningMode"],
-  ["cloudReasoningMode", "meetingCloudReasoningMode"],
-  ["cloudReasoningBaseUrl", "meetingCloudReasoningBaseUrl"],
-  ["remoteReasoningType", "meetingRemoteReasoningType"],
-  ["remoteReasoningUrl", "meetingRemoteReasoningUrl"],
-];
-
-function migrateMeetingFollowFlags() {
-  if (!isBrowser) return;
-  for (const [flag, pairs] of [
-    ["meetingFollowsTranscription", MEETING_TRANSCRIPTION_PAIRS],
-    ["meetingFollowsReasoning", MEETING_REASONING_PAIRS],
-  ] as const) {
-    if (localStorage.getItem(flag) === "false") continue;
-    for (const [src, dst] of pairs) {
-      const v = localStorage.getItem(src);
-      if (v !== null) localStorage.setItem(dst, v);
-    }
-    localStorage.setItem(flag, "false");
-  }
-}
-
-migrateMeetingFollowFlags();
-
 const BOOLEAN_SETTINGS = new Set([
   "useLocalWhisper",
   "meetingUseLocalWhisper",
@@ -391,6 +351,24 @@ function deriveTranscriptionMode(
   return "openwhispr";
 }
 
+// Map the legacy `cloudReasoningMode` + provider pair to the InferenceMode the
+// Settings tabs select on. Shared by the provider-settings and agent-mode
+// migrations and by healSkippedMeetingFollowModes(). Distinct from the imported
+// deriveReasoningMode(), which collapses local and enterprise into "providers"
+// on purpose for the cloud-only "use everywhere" action.
+function deriveLegacyReasoningMode(
+  cloudMode: string | null,
+  provider: string | null
+): InferenceMode {
+  if (cloudMode !== "byok") return "openwhispr";
+  if (provider === "custom") return "self-hosted";
+  if (provider === "bedrock" || provider === "azure" || provider === "vertex") {
+    return "enterprise";
+  }
+  if (provider && localLlmProviderIds.has(provider)) return "local";
+  return "providers";
+}
+
 function migrateProviderSettings() {
   if (!isBrowser) return;
   if (localStorage.getItem("_providerSettingsMigrated") === "1") return;
@@ -413,23 +391,10 @@ function migrateProviderSettings() {
 
   const reasoningMode = localStorage.getItem("cloudReasoningMode");
   const reasoningProvider = localStorage.getItem("reasoningProvider");
-  let newReasoningMode: InferenceMode = "openwhispr";
-  if (reasoningMode === "byok") {
-    if (reasoningProvider === "custom") {
-      newReasoningMode = "self-hosted";
-    } else if (
-      reasoningProvider === "bedrock" ||
-      reasoningProvider === "azure" ||
-      reasoningProvider === "vertex"
-    ) {
-      newReasoningMode = "enterprise";
-    } else if (reasoningProvider && localLlmProviderIds.has(reasoningProvider)) {
-      newReasoningMode = "local";
-    } else {
-      newReasoningMode = "providers";
-    }
-  }
-  localStorage.setItem("reasoningMode", newReasoningMode);
+  localStorage.setItem(
+    "reasoningMode",
+    deriveLegacyReasoningMode(reasoningMode, reasoningProvider)
+  );
 
   if (reasoningProvider === "custom" && reasoningMode === "byok") {
     localStorage.setItem("remoteReasoningType", "openai-compatible");
@@ -439,6 +404,58 @@ function migrateProviderSettings() {
 }
 
 migrateProviderSettings();
+
+// One-time migration for legacy `meetingFollows{Transcription,Reasoning}` flags.
+// When the flag was true (the default), meeting/note recordings inherited the
+// main dictation/intelligence settings. We've removed the toggle; copy the
+// effective values into the dedicated meeting fields so post-migration reads
+// (which always go through meeting fields) preserve every existing user's
+// behavior. After migration the flag stays at "false" as a marker so this
+// never runs again. Safe to delete after a few releases.
+const MEETING_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
+  ["useLocalWhisper", "meetingUseLocalWhisper"],
+  ["whisperModel", "meetingWhisperModel"],
+  ["localTranscriptionProvider", "meetingLocalTranscriptionProvider"],
+  ["parakeetModel", "meetingParakeetModel"],
+  ["cohereModel", "meetingCohereModel"],
+  ["cloudTranscriptionProvider", "meetingCloudTranscriptionProvider"],
+  ["cloudTranscriptionModel", "meetingCloudTranscriptionModel"],
+  ["cloudTranscriptionBaseUrl", "meetingCloudTranscriptionBaseUrl"],
+  ["cloudTranscriptionMode", "meetingCloudTranscriptionMode"],
+  ["transcriptionMode", "meetingTranscriptionMode"],
+  ["remoteTranscriptionType", "meetingRemoteTranscriptionType"],
+  ["remoteTranscriptionUrl", "meetingRemoteTranscriptionUrl"],
+];
+const MEETING_REASONING_PAIRS: ReadonlyArray<[string, string]> = [
+  ["reasoningProvider", "meetingReasoningProvider"],
+  ["reasoningModel", "meetingReasoningModel"],
+  ["reasoningMode", "meetingReasoningMode"],
+  ["cloudReasoningMode", "meetingCloudReasoningMode"],
+  ["cloudReasoningBaseUrl", "meetingCloudReasoningBaseUrl"],
+  ["remoteReasoningType", "meetingRemoteReasoningType"],
+  ["remoteReasoningUrl", "meetingRemoteReasoningUrl"],
+];
+
+function migrateMeetingFollowFlags() {
+  if (!isBrowser) return;
+  for (const [flag, pairs] of [
+    ["meetingFollowsTranscription", MEETING_TRANSCRIPTION_PAIRS],
+    ["meetingFollowsReasoning", MEETING_REASONING_PAIRS],
+  ] as const) {
+    if (localStorage.getItem(flag) === "false") continue;
+    for (const [src, dst] of pairs) {
+      const v = localStorage.getItem(src);
+      if (v !== null) localStorage.setItem(dst, v);
+    }
+    localStorage.setItem(flag, "false");
+  }
+}
+
+// Runs after migrateProviderSettings() so the mode keys it derives and persists
+// (`transcriptionMode`, `reasoningMode`, the `remote*` keys) exist to be copied.
+// Before 1.10.0 it ran first, skipped those pairs, and latched — see
+// healSkippedMeetingFollowModes() for the profiles that already did.
+migrateMeetingFollowFlags();
 
 // One-time seed of the dedicated audio-upload transcription settings. Runs
 // after migrateProviderSettings() so the `transcriptionMode` it derives and
@@ -472,30 +489,74 @@ function migrateUploadTranscription() {
 
 migrateUploadTranscription();
 
+// Dictation and upload render `*TranscriptionMode` in their picker but route on
+// `*UseLocalWhisper` (audioManager, fileTranscription) and `*CloudTranscriptionMode`
+// (the `isOpenWhisprCloud` test), so routing can disagree with what the user sees
+// (#2086). Must run after the upload one-shot copy, which mirrors the dictation
+// keys desync-and-all and then latches.
+//
+// Note Recording is excluded: resolveMeetingTranscriptionOptions branches on
+// `meetingTranscriptionMode`, the key MeetingSettings renders, so it cannot
+// disagree, and no router reads `meetingUseLocalWhisper`.
+//
+// Never complete either rule symmetrically — it would start uploading audio from
+// profiles that exist: the mode-less Settings toggle wrote the local flag alone
+// until 6fb0c906, and ProviderSetupStep writes `cloudTranscriptionMode` before the
+// commit that derives the mode.
+const TRANSCRIPTION_ROUTING_KEYS: ReadonlyArray<{
+  mode: keyof SettingsState;
+  useLocal: keyof SettingsState;
+  cloudMode: keyof SettingsState;
+}> = [
+  { mode: "transcriptionMode", useLocal: "useLocalWhisper", cloudMode: "cloudTranscriptionMode" },
+  {
+    mode: "uploadTranscriptionMode",
+    useLocal: "uploadUseLocalWhisper",
+    cloudMode: "uploadCloudTranscriptionMode",
+  },
+];
+
+function reconcileTranscriptionRouting(): void {
+  if (!isBrowser) return;
+  const repaired: string[] = [];
+  for (const keys of TRANSCRIPTION_ROUTING_KEYS) {
+    const mode = localStorage.getItem(keys.mode);
+    if (mode === "local" && localStorage.getItem(keys.useLocal) !== "true") {
+      localStorage.setItem(keys.useLocal, "true");
+      repaired.push(keys.useLocal);
+    }
+    // Stored value, not the upload resolver's inherited one: these modes are only
+    // derivable when the scope's own cloud key is set, so unset is not a desync.
+    if (
+      (mode === "providers" || mode === "self-hosted") &&
+      localStorage.getItem(keys.cloudMode) === "openwhispr"
+    ) {
+      localStorage.setItem(keys.cloudMode, "byok");
+      repaired.push(keys.cloudMode);
+    }
+  }
+  if (repaired.length === 0) return;
+
+  logger.info(
+    "Repaired transcription routing that disagreed with the selected mode",
+    { keys: repaired },
+    "settings"
+  );
+}
+
+reconcileTranscriptionRouting();
+
 function migrateAgentMode() {
   if (!isBrowser) return;
   if (localStorage.getItem("_agentModeMigrated") === "1") return;
 
-  const cloudAgentMode = localStorage.getItem("cloudAgentMode");
-  const agentProvider = localStorage.getItem("agentProvider");
-
-  let agentInferenceMode: InferenceMode = "openwhispr";
-  if (cloudAgentMode === "byok") {
-    if (agentProvider === "custom") {
-      agentInferenceMode = "self-hosted";
-    } else if (
-      agentProvider === "bedrock" ||
-      agentProvider === "azure" ||
-      agentProvider === "vertex"
-    ) {
-      agentInferenceMode = "enterprise";
-    } else if (agentProvider && localLlmProviderIds.has(agentProvider)) {
-      agentInferenceMode = "local";
-    } else {
-      agentInferenceMode = "providers";
-    }
-  }
-  localStorage.setItem("agentInferenceMode", agentInferenceMode);
+  localStorage.setItem(
+    "agentInferenceMode",
+    deriveLegacyReasoningMode(
+      localStorage.getItem("cloudAgentMode"),
+      localStorage.getItem("agentProvider")
+    )
+  );
 
   localStorage.setItem("_agentModeMigrated", "1");
 }
@@ -600,6 +661,88 @@ function migrateLLMScopeKeys() {
 }
 
 migrateLLMScopeKeys();
+
+// Builds before 1.10.0 ran migrateMeetingFollowFlags() before
+// migrateProviderSettings() had created `transcriptionMode` / `reasoningMode`,
+// so a profile upgrading straight from ≤1.6.7 copied every Note Recording key
+// except the two modes and then latched the follow flags.
+//
+// The two modes fail differently when absent, so they are healed differently.
+// `meetingTranscriptionMode` has no fallback: selectResolvedMeetingTranscription
+// passes it straight through and the store default sends note recordings to
+// OpenWhispr Cloud, so every mode is reconstructed from the snapshot the copy
+// did write — with the same functions migrateProviderSettings() uses, not from
+// today's dictation keys, which the user may have changed since.
+// `noteFormattingMode` does have one: an absent mode reads "openwhispr", but
+// selectIsCloudNoteFormattingMode also requires cloudMode "openwhispr", and the
+// copied cloudMode is "byok", so buildNoteFormattingOverrides emits no provider
+// and processText dispatches from the dictation-cleanup scope. Note formatting
+// therefore follows cleanup rather than leaking, and the only cohort at risk is
+// one whose reasoning snapshot was local and whose cleanup has since moved
+// cloud-ward. So that mode is healed local-ward only: pinning a cloud snapshot
+// would override a since-local cleanup and send note text to a third party.
+//
+// Runs after migrateLLMScopeKeys() so a pre-1.7.0 profile's reasoning snapshot
+// is under its final `noteFormatting*` names. `noteFormattingCloudMode` is the
+// reasoning-side signal: the scope editor can write the provider alone but only
+// ever writes cloudMode together with mode. Idempotent — writing a mode retires
+// its own guard — and it never touches `meetingUseLocalWhisper`, which no router
+// reads but which rule two below depends on.
+function healSkippedMeetingFollowModes(): Record<string, InferenceMode> {
+  if (!isBrowser) return {};
+  const healed: Record<string, InferenceMode> = {};
+
+  const meetingUseLocal = localStorage.getItem("meetingUseLocalWhisper");
+  const meetingCloudMode = localStorage.getItem("meetingCloudTranscriptionMode");
+  if (
+    localStorage.getItem("meetingTranscriptionMode") === null &&
+    (meetingUseLocal !== null || meetingCloudMode !== null)
+  ) {
+    const mode = deriveTranscriptionMode(
+      meetingUseLocal === "true",
+      meetingCloudMode,
+      localStorage.getItem("meetingCloudTranscriptionProvider")
+    );
+    localStorage.setItem("meetingTranscriptionMode", mode);
+    healed.meetingTranscriptionMode = mode;
+  }
+
+  // v1.6.8–v1.6.9's since-removed mode-less toggle wrote `useLocalWhisper` alone,
+  // so a deliberate Local choice could sit under a stale cloud mode; v1.6.10's
+  // wholesale copy carried both into Note Recording, where the mode is what
+  // routes. The UI writes the flag as `mode === "local"`, so this pair can only
+  // be that copy. Follow the flag — local-ward only.
+  const meetingMode = localStorage.getItem("meetingTranscriptionMode");
+  if (meetingUseLocal === "true" && meetingMode !== null && meetingMode !== "local") {
+    localStorage.setItem("meetingTranscriptionMode", "local");
+    healed.meetingTranscriptionMode = "local";
+  }
+
+  const noteFormattingCloudMode = localStorage.getItem("noteFormattingCloudMode");
+  if (localStorage.getItem("noteFormattingMode") === null && noteFormattingCloudMode !== null) {
+    const mode = deriveLegacyReasoningMode(
+      noteFormattingCloudMode,
+      localStorage.getItem("noteFormattingProvider")
+    );
+    // Local-ward only — see the header. Any other snapshot is left absent so
+    // note formatting keeps following dictation cleanup, as it does today.
+    if (mode === "local") {
+      localStorage.setItem("noteFormattingMode", mode);
+      healed.noteFormattingMode = mode;
+    }
+  }
+
+  return healed;
+}
+
+const healedMeetingFollowModes = healSkippedMeetingFollowModes();
+if (Object.keys(healedMeetingFollowModes).length > 0) {
+  logger.info(
+    "Re-derived Note Recording modes the follow-flag migration had skipped",
+    healedMeetingFollowModes,
+    "settings"
+  );
+}
 
 // Resolved offline, so a retired model's name survives only in the user's own
 // catalog cache and a replacement's only if we seed it. The raw-id fallback is
@@ -899,6 +1042,8 @@ export interface SettingsState
   setCortiClientSecret: (key: string) => void;
   setCortiApiKey: (key: string) => void;
   setTinfoilApiKey: (key: string) => void;
+  setDeepgramApiKey: (key: string) => void;
+  setAssemblyaiApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
 
@@ -1137,6 +1282,8 @@ const SECRET_IPC_SAVERS = {
   cortiClientSecret: "saveCortiClientSecret",
   cortiApiKey: "saveCortiKey",
   tinfoil: "saveTinfoilKey",
+  deepgram: "saveDeepgramKey",
+  assemblyai: "saveAssemblyAIKey",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
   noteFormattingCustom: "saveNoteFormattingCustomKey",
@@ -1184,6 +1331,8 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "cortiClientSecret",
   "cortiApiKey",
   "tinfoilApiKey",
+  "deepgramApiKey",
+  "assemblyaiApiKey",
   "customTranscriptionApiKey",
   "customReasoningApiKey",
   "cleanupCustomApiKey",
@@ -1267,7 +1416,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   chineseScriptPreference: normalizeChineseScriptPreference(
     readString("chineseScriptPreference", "as-transcribed")
   ),
-  cloudTranscriptionProvider: readString("cloudTranscriptionProvider", "openai"),
+  cloudTranscriptionProvider: readString(
+    "cloudTranscriptionProvider",
+    DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER
+  ),
   cloudTranscriptionModel: readString("cloudTranscriptionModel", "gpt-4o-mini-transcribe"),
   cloudTranscriptionBaseUrl: readString(
     "cloudTranscriptionBaseUrl",
@@ -1311,6 +1463,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cortiClientSecret: "",
   cortiApiKey: "",
   tinfoilApiKey: "",
+  deepgramApiKey: "",
+  assemblyaiApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -1951,6 +2105,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
   setTinfoilApiKey: createSecretSetter("tinfoilApiKey", "tinfoil", "tinfoil"),
+  // STT-only, so there is no ReasoningService key cache to invalidate.
+  setDeepgramApiKey: createSecretSetter("deepgramApiKey", "deepgram"),
+  setAssemblyaiApiKey: createSecretSetter("assemblyaiApiKey", "assemblyai"),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -2465,6 +2622,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
     if (keys.cortiApiKey !== undefined) s.setCortiApiKey(keys.cortiApiKey);
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
+    if (keys.deepgramApiKey !== undefined) s.setDeepgramApiKey(keys.deepgramApiKey);
+    if (keys.assemblyaiApiKey !== undefined) s.setAssemblyaiApiKey(keys.assemblyaiApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
@@ -2557,22 +2716,33 @@ export interface ResolvedUploadTranscription {
 
 // Audio upload is batch (not streaming), so unset values fall back to the base
 // dictation settings — matching the behavior before upload had its own context.
+// A realtime-only dictation provider is the exception: it has no batch route, so
+// inheriting it would fail every upload closed. Uploads take the default provider
+// instead, and the dictation model stays behind with the provider it belongs to.
 export const selectResolvedUploadTranscription = (
   state: SettingsState
-): ResolvedUploadTranscription => ({
-  useLocalWhisper: state.uploadUseLocalWhisper,
-  whisperModel: state.uploadWhisperModel || state.whisperModel,
-  localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
-  parakeetModel: state.uploadParakeetModel || state.parakeetModel,
-  cohereModel: state.uploadCohereModel || state.cohereModel,
-  cloudTranscriptionProvider:
-    state.uploadCloudTranscriptionProvider || state.cloudTranscriptionProvider,
-  cloudTranscriptionModel: state.uploadCloudTranscriptionModel || state.cloudTranscriptionModel,
-  cloudTranscriptionBaseUrl:
-    state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
-  cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
-  transcriptionMode: state.uploadTranscriptionMode,
-});
+): ResolvedUploadTranscription => {
+  const inheritsDictationProvider = !STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider);
+  return {
+    useLocalWhisper: state.uploadUseLocalWhisper,
+    whisperModel: state.uploadWhisperModel || state.whisperModel,
+    localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
+    parakeetModel: state.uploadParakeetModel || state.parakeetModel,
+    cohereModel: state.uploadCohereModel || state.cohereModel,
+    cloudTranscriptionProvider:
+      state.uploadCloudTranscriptionProvider ||
+      (inheritsDictationProvider
+        ? state.cloudTranscriptionProvider
+        : DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER),
+    cloudTranscriptionModel:
+      state.uploadCloudTranscriptionModel ||
+      (inheritsDictationProvider ? state.cloudTranscriptionModel : ""),
+    cloudTranscriptionBaseUrl:
+      state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
+    cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
+    transcriptionMode: state.uploadTranscriptionMode,
+  };
+};
 
 export interface ResolvedNoteFormatting {
   provider: string;
@@ -3006,6 +3176,8 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken,
         azureApiKey,
         vertexApiKey,
+        deepgram,
+        assemblyai,
       ] = await Promise.all([
         window.electronAPI.getOpenAIKey?.(),
         window.electronAPI.getAnthropicKey?.(),
@@ -3030,6 +3202,8 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getBedrockSessionToken?.(),
         window.electronAPI.getAzureApiKey?.(),
         window.electronAPI.getVertexApiKey?.(),
+        window.electronAPI.getDeepgramKey?.(),
+        window.electronAPI.getAssemblyAIKey?.(),
       ]);
 
       useSettingsStore.setState({
@@ -3062,6 +3236,8 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken: bedrockSessionToken || "",
         azureApiKey: azureApiKey || "",
         vertexApiKey: vertexApiKey || "",
+        deepgramApiKey: deepgram || "",
+        assemblyaiApiKey: assemblyai || "",
       });
 
       if (!localStorage.getItem("enterpriseSetupMode")) {

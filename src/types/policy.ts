@@ -4,8 +4,9 @@ import type { InferenceMode } from "./electron";
  * Organization policy delivered by the OpenWhispr API and enforced by the app.
  *
  * Mirrors the canonical schema in `openwhispr-api/lib/policy-schema.ts` and
- * `openwhispr-admin/lib/policy-schema.ts` — keep the three in sync. Provider and
- * mode ids match the model registry exactly.
+ * `openwhispr-admin/lib/policy-schema.ts` — keep the three in sync. Mode ids are
+ * validated strictly; BYOK provider ids are validated shape-only (see
+ * `allowedByokProviders`) so the server enum can grow ahead of this build.
  */
 
 export type LocalHistoryMode = "user_choice" | "always_on" | "always_off";
@@ -15,12 +16,18 @@ export interface OrgPolicy {
   version: number;
   transcription: {
     allowedModes: InferenceMode[];
+    /**
+     * Registry provider ids plus "custom". Validated shape-only so a provider
+     * added server-side can't invalidate the policy on older builds; ids this
+     * build does not know are filtered out at enforcement time and grant nothing.
+     */
     allowedByokProviders: string[];
     /** Absent on servers that predate the field; absent means none. */
     allowedEnterpriseProviders?: string[];
   };
   llm: {
     allowedModes: InferenceMode[];
+    /** Registry provider ids plus "custom" and "openrouter"; same forward-compat rule as transcription. */
     allowedByokProviders: string[];
     allowedEnterpriseProviders: string[];
   };

@@ -17,12 +17,18 @@ import { useDelayedFlag } from "../hooks/useDelayedFlag";
 import { useToast } from "./ui/useToast";
 
 interface Props {
+  defaultName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: (workspaceId: string) => void;
 }
 
-export default function CreateWorkspaceDialog({ open, onOpenChange, onCreated }: Props) {
+export default function CreateWorkspaceDialog({
+  defaultName,
+  open,
+  onOpenChange,
+  onCreated,
+}: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
@@ -32,8 +38,8 @@ export default function CreateWorkspaceDialog({ open, onOpenChange, onCreated }:
   const showSpinner = useDelayedFlag(submitting);
 
   useEffect(() => {
-    if (!open) setName("");
-  }, [open]);
+    setName(open ? (defaultName ?? "") : "");
+  }, [defaultName, open]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

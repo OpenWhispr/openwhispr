@@ -14,7 +14,7 @@ import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
 import {
   getTranscriptionProviders,
-  getStreamingTranscriptionProviders,
+  getMeetingStreamingTranscriptionProviders,
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
   PARAKEET_MODEL_INFO,
@@ -35,6 +35,7 @@ import {
   type TranscriptionPolicyContext,
 } from "../stores/policyRules";
 import { usePolicySnapshot } from "../hooks/usePolicy";
+import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
@@ -226,6 +227,8 @@ const CLOUD_PROVIDER_TABS = [
   { id: "gemini", name: "Gemini" },
   { id: "corti", name: "Corti" },
   { id: "tinfoil", name: "Tinfoil" },
+  { id: "deepgram", name: "Deepgram" },
+  { id: "assemblyai", name: "AssemblyAI" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -240,7 +243,9 @@ interface ProviderCredentialField {
     | "cortiClientSecret"
     | "cortiEnvironment"
     | "cortiTenant"
-    | "tinfoilApiKey";
+    | "tinfoilApiKey"
+    | "deepgramApiKey"
+    | "assemblyaiApiKey";
   input: "secret" | "text" | "select";
   labelKey?: string;
   placeholder?: string;
@@ -296,6 +301,14 @@ const PROVIDER_CREDENTIALS: Record<
   tinfoil: {
     consoleUrl: "https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr",
     fields: [{ key: "tinfoilApiKey", input: "secret" }],
+  },
+  deepgram: {
+    consoleUrl: "https://console.deepgram.com/",
+    fields: [{ key: "deepgramApiKey", input: "secret" }],
+  },
+  assemblyai: {
+    consoleUrl: "https://www.assemblyai.com/dashboard/api-keys",
+    fields: [{ key: "assemblyaiApiKey", input: "secret" }],
   },
 };
 
@@ -386,6 +399,10 @@ export default function TranscriptionModelPicker({
   const setCortiTenant = useSettingsStore((s) => s.setCortiTenant);
   const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
+  const deepgramApiKey = useSettingsStore((s) => s.deepgramApiKey);
+  const setDeepgramApiKey = useSettingsStore((s) => s.setDeepgramApiKey);
+  const assemblyaiApiKey = useSettingsStore((s) => s.assemblyaiApiKey);
+  const setAssemblyaiApiKey = useSettingsStore((s) => s.setAssemblyaiApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
@@ -463,10 +480,16 @@ export default function TranscriptionModelPicker({
     (providerId: string) => isProviderAllowedByPolicy(policyState, "transcription", providerId),
     [policyState]
   );
-  const availableCloudProviders = useMemo(
-    () => (streamingOnly ? getStreamingTranscriptionProviders() : getTranscriptionProviders()),
-    [streamingOnly]
-  );
+  // streamingOnly is Note Recording's picker, so it offers the streaming
+  // providers note recording can actually run — not every streaming provider.
+  // Upload is always http-batch, and the realtime-only providers have no batch
+  // route at all (transcriptionRoute fails them closed), so they are hidden there.
+  const availableCloudProviders = useMemo(() => {
+    if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
+    const providers = getTranscriptionProviders();
+    if (transcriptionContext !== "upload") return providers;
+    return providers.filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id));
+  }, [streamingOnly, transcriptionContext]);
   const cloudProviders = useMemo(
     () => filterByokProviderOptionsByPolicy(availableCloudProviders, "transcription", policyState),
     [availableCloudProviders, policyState]
@@ -559,11 +582,12 @@ export default function TranscriptionModelPicker({
   }, []);
 
   const effectiveCloudSelection = useMemo(() => {
-    // Every provider's URL counts as known, including policy-blocked ones:
-    // otherwise a blocked provider's stored URL reads as a custom endpoint and
-    // reconciliation would keep pointing "custom" at what policy just denied.
+    // Every provider's URL counts as known, including policy-blocked ones and
+    // the ones this scope does not offer: otherwise such a provider's stored URL
+    // reads as a custom endpoint and reconciliation would keep pointing "custom"
+    // at what policy — or this scope — just denied.
     const knownProviderUrls = new Set(
-      availableCloudProviders.map((provider) => normalizeBaseUrl(provider.baseUrl))
+      getTranscriptionProviders().map((provider) => normalizeBaseUrl(provider.baseUrl))
     );
     const normalizedBaseUrl = normalizeBaseUrl(cloudTranscriptionBaseUrl);
     const hasCustomUrl = Boolean(
@@ -587,7 +611,6 @@ export default function TranscriptionModelPicker({
       }
     );
   }, [
-    availableCloudProviders,
     cloudProviders,
     cloudTranscriptionBaseUrl,
     browsedCloudProvider,
@@ -936,6 +959,8 @@ export default function TranscriptionModelPicker({
     cortiEnvironment,
     cortiTenant,
     tinfoilApiKey,
+    deepgramApiKey,
+    assemblyaiApiKey,
   };
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
     openaiApiKey: setOpenaiApiKey,
@@ -948,6 +973,8 @@ export default function TranscriptionModelPicker({
     cortiEnvironment: setCortiEnvironment,
     cortiTenant: setCortiTenant,
     tinfoilApiKey: setTinfoilApiKey,
+    deepgramApiKey: setDeepgramApiKey,
+    assemblyaiApiKey: setAssemblyaiApiKey,
   };
 
   const cloudModelOptions = useMemo(() => {

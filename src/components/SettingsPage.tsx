@@ -64,6 +64,7 @@ import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { useSettings } from "../hooks/useSettings";
 import { useDialogs } from "../hooks/useDialogs";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
+import { useLeaderboardParticipation } from "../hooks/useLeaderboardParticipation";
 import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
@@ -99,7 +100,7 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
-import { resetOnboardingProgress } from "./onboarding/flow";
+import { useStartOnboarding } from "../hooks/useStartOnboarding";
 import type {
   ChineseScriptPreference,
   GpuDevice,
@@ -1253,7 +1254,6 @@ export default function SettingsPage({
     cloudBackupEnabled,
     setCloudBackupEnabled,
     insightsSyncEnabled,
-    setInsightsSyncEnabled,
     telemetryEnabled,
     setTelemetryEnabled,
     audioRetentionDays,
@@ -1815,10 +1815,63 @@ export default function SettingsPage({
   const { isSignedIn, isLoaded, user, refetch } = useAuth();
   const {
     canToggleSync: canToggleInsightsSync,
+    disableInsightsSync,
     enableInsightsSync,
     optInDialog: insightsOptInDialog,
     syncAllowedByPolicy: insightsSyncAllowedByPolicy,
   } = useInsightsSyncOptIn();
+  const {
+    enabled: leaderboardParticipationEnabled,
+    error: leaderboardParticipationError,
+    join: joinLeaderboard,
+    leave: leaveLeaderboard,
+    leavePending: leaderboardLeavePending,
+    ready: leaderboardParticipationReady,
+    updating: leaderboardParticipationUpdating,
+  } = useLeaderboardParticipation();
+  const [leaderboardPreferencePending, setLeaderboardPreferencePending] = useState(false);
+  const updateLeaderboardParticipation = useCallback(
+    async (enabled: boolean) => {
+      if (!isSignedIn || !leaderboardParticipationReady || leaderboardPreferencePending) return;
+      setLeaderboardPreferencePending(true);
+      try {
+        if (enabled) {
+          if (
+            !effectiveDataRetentionEnabled ||
+            !insightsSyncAllowedByPolicy ||
+            (!insightsSyncEnabled && !(await enableInsightsSync({ confirmWhenEmpty: true })))
+          )
+            return;
+          if (!(await joinLeaderboard())) {
+            toast({
+              title: t("insights.leaderboard.activationError"),
+              variant: "destructive",
+            });
+          }
+          return;
+        }
+
+        if (!(await leaveLeaderboard())) {
+          toast({ title: t("insights.leaderboard.leavePending") });
+        }
+      } finally {
+        setLeaderboardPreferencePending(false);
+      }
+    },
+    [
+      effectiveDataRetentionEnabled,
+      enableInsightsSync,
+      insightsSyncAllowedByPolicy,
+      insightsSyncEnabled,
+      isSignedIn,
+      joinLeaderboard,
+      leaderboardParticipationReady,
+      leaderboardPreferencePending,
+      leaveLeaderboard,
+      t,
+      toast,
+    ]
+  );
   // Signed out there is nothing to load and the plan grid is purely
   // promotional; signed in, no card may claim a plan until usage confirms one.
   const planStateKnown = !isSignedIn || usage?.status === "success";
@@ -1851,11 +1904,7 @@ export default function SettingsPage({
   } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  const startOnboarding = useCallback(() => {
-    localStorage.setItem("pendingCloudMigration", "true");
-    resetOnboardingProgress(localStorage);
-    window.location.reload();
-  }, []);
+  const startOnboarding = useStartOnboarding();
 
   const handleSwitchPlan = useCallback(
     async (plan: "monthly" | "annual", tier: "pro" | "business") => {
@@ -4218,9 +4267,44 @@ EOF`,
                         !canToggleInsightsSync ||
                         (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
                       }
-                      onChange={(enabled) =>
-                        enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)
+                      onChange={(enabled) => {
+                        if (enabled) void enableInsightsSync();
+                        else disableInsightsSync();
+                      }}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("insights.leaderboard.title")}
+                    description={
+                      !isSignedIn
+                        ? t("settingsPage.privacy.leaderboardRequiresAccount")
+                        : leaderboardParticipationError === "read"
+                          ? t("insights.leaderboard.activationError")
+                          : leaderboardLeavePending
+                            ? t("insights.leaderboard.leavePending")
+                            : !insightsSyncAllowedByPolicy
+                              ? t("common.managedByOrg")
+                              : !effectiveDataRetentionEnabled
+                                ? t("settingsPage.privacy.leaderboardRequiresHistory")
+                                : t("settingsPage.privacy.leaderboardDescription")
+                    }
+                  >
+                    <Toggle
+                      checked={isSignedIn && leaderboardParticipationEnabled}
+                      disabled={
+                        !isSignedIn ||
+                        !leaderboardParticipationReady ||
+                        leaderboardPreferencePending ||
+                        leaderboardParticipationUpdating ||
+                        leaderboardParticipationError === "read" ||
+                        (!leaderboardParticipationEnabled &&
+                          (!effectiveDataRetentionEnabled ||
+                            !insightsSyncAllowedByPolicy ||
+                            (!insightsSyncEnabled && !canToggleInsightsSync)))
                       }
+                      onChange={(enabled) => void updateLeaderboardParticipation(enabled)}
                     />
                   </SettingsRow>
                 </SettingsPanelRow>

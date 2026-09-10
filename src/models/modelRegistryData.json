@@ -277,12 +277,20 @@
       "id": "gemini",
       "name": "Gemini",
       "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+      "batchModel": "gemini-3.5-transcribe",
       "models": [
         {
           "id": "gemini-3.5-transcribe",
           "name": "Gemini 3.5 Transcribe",
           "description": "Google's Gemini speech-to-text",
           "descriptionKey": "models.descriptions.transcription.gemini_3_5_transcribe"
+        },
+        {
+          "id": "gemini-3.5-transcribe-live",
+          "name": "Gemini 3.5 Transcribe Live",
+          "description": "Realtime streaming speech-to-text",
+          "descriptionKey": "models.descriptions.transcription.gemini_3_5_transcribe_live",
+          "streaming": true
         }
       ]
     },
@@ -311,6 +319,48 @@
           "name": "Voxtral",
           "description": "Verifiably private transcription",
           "descriptionKey": "models.descriptions.transcription.tinfoil_voxtral",
+          "streaming": true
+        }
+      ]
+    },
+    {
+      "id": "deepgram",
+      "name": "Deepgram",
+      "baseUrl": "https://api.deepgram.com/v1",
+      "models": [
+        {
+          "id": "nova-3",
+          "name": "Nova-3",
+          "description": "Deepgram's most accurate realtime model",
+          "descriptionKey": "models.descriptions.transcription.deepgram_nova_3",
+          "streaming": true
+        }
+      ]
+    },
+    {
+      "id": "assemblyai",
+      "name": "AssemblyAI",
+      "baseUrl": "https://api.assemblyai.com/v2",
+      "models": [
+        {
+          "id": "universal-3-5-pro",
+          "name": "Universal-3.5 Pro",
+          "description": "Highest accuracy realtime, 18 languages",
+          "descriptionKey": "models.descriptions.transcription.assemblyai_universal_3_5_pro",
+          "streaming": true
+        },
+        {
+          "id": "universal-streaming-english",
+          "name": "Universal Streaming (English)",
+          "description": "Immutable realtime transcripts, English",
+          "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_english",
+          "streaming": true
+        },
+        {
+          "id": "universal-streaming-multilingual",
+          "name": "Universal Streaming (Multilingual)",
+          "description": "Immutable realtime transcripts, multilingual",
+          "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_multilingual",
           "streaming": true
         }
       ]

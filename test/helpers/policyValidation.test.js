@@ -118,7 +118,7 @@ test("accepts empty allowlists", () => {
   assert.equal(isValidPolicyShape(policy), true);
 });
 
-test("rejects unknown modes and providers", () => {
+test("rejects unknown modes and enterprise providers", () => {
   const cases = [
     [
       "transcription.allowedModes",
@@ -126,14 +126,9 @@ test("rejects unknown modes and providers", () => {
     ],
     ["llm.allowedModes", (policy) => policy.llm.allowedModes.push("future-mode")],
     [
-      "transcription.allowedByokProviders",
-      (policy) => policy.transcription.allowedByokProviders.push("future-stt"),
-    ],
-    [
       "transcription.allowedEnterpriseProviders",
       (policy) => (policy.transcription.allowedEnterpriseProviders = ["bedrock"]),
     ],
-    ["llm.allowedByokProviders", (policy) => policy.llm.allowedByokProviders.push("future-llm")],
     [
       "llm.allowedEnterpriseProviders",
       (policy) => policy.llm.allowedEnterpriseProviders.push("future-enterprise"),
@@ -157,6 +152,26 @@ test("enterprise transcription is additive within policy v1", () => {
   const withoutField = validPolicy();
   delete withoutField.transcription.allowedEnterpriseProviders;
   assert.equal(isValidPolicyShape(withoutField), true);
+});
+
+test("accepts unknown BYOK provider ids — shape-only forward compat", () => {
+  // The server enum can only grow once desktops in the field tolerate ids they
+  // do not know; discarding the whole policy here would fail cloud
+  // transcription closed for every managed user on the older build.
+  const policy = validPolicy();
+  policy.transcription.allowedByokProviders = ["openai", "future-stt"];
+  policy.llm.allowedByokProviders = ["future-llm"];
+  assert.equal(isValidPolicyShape(policy), true);
+});
+
+test("rejects malformed BYOK provider lists", () => {
+  for (const value of ["openai", [42], [null], [""], [{ id: "openai" }], {}]) {
+    for (const scope of ["transcription", "llm"]) {
+      const policy = validPolicy();
+      policy[scope].allowedByokProviders = value;
+      assert.equal(isValidPolicyShape(policy), false, `${scope}: ${JSON.stringify(value)}`);
+    }
+  }
 });
 
 test("rejects a missing or non-object policy", () => {

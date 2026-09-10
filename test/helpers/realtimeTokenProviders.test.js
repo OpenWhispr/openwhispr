@@ -15,6 +15,7 @@ const deps = (overrides = {}) => ({
     getTinfoilKey: () => "tk-tinfoil",
     getDeepgramKey: () => "dg-key",
     getAssemblyAIKey: () => "aai-key",
+    getGeminiKey: () => "gm-key",
     ...overrides.environmentManager,
   },
   proxyFetch: overrides.proxyFetch || (async () => jsonResponse(200, { token: "aai-token" })),
@@ -135,6 +136,40 @@ test("deepgram byok duplicates the key; cloud mints per stream", async () => {
   );
 });
 
+test("gemini byok duplicates the raw key; cloud mints one token per stream", async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  // The raw key opens the Live socket itself and survives any number of
+  // handshakes, so both streams share it.
+  assert.deepEqual(
+    await fetchRealtimeTokenForProvider(
+      "gemini-realtime",
+      deps(),
+      { mode: "byok" },
+      { streams: 2 }
+    ),
+    ["gm-key", "gm-key"]
+  );
+  // Managed tokens are minted with uses:1 — a shared token would be rejected
+  // at the second handshake with close code 1011.
+  let mints = 0;
+  const cloudDeps = deps({ postServerToken: async () => ({ token: `gm-${++mints}` }) });
+  assert.deepEqual(
+    await fetchRealtimeTokenForProvider(
+      "gemini-realtime",
+      cloudDeps,
+      { mode: "openwhispr" },
+      { streams: 2 }
+    ),
+    ["gm-1", "gm-2"]
+  );
+  await assert.rejects(
+    fetchRealtimeTokenForProvider("gemini-realtime", deps({ postServerToken: async () => ({}) }), {
+      mode: "openwhispr",
+    }),
+    /No Gemini token received/
+  );
+});
+
 test("corti mints one token and shares it across both streams", async () => {
   const { fetchRealtimeTokenForProvider } = await load();
   let mints = 0;
@@ -148,8 +183,18 @@ test("corti mints one token and shares it across both streams", async () => {
 
 test("missing byok keys throw configuration errors, not token errors", async () => {
   const { fetchRealtimeTokenForProvider } = await load();
-  const empty = { getOpenAIKey: () => "", getDeepgramKey: () => "", getAssemblyAIKey: () => "" };
-  for (const provider of ["openai-realtime", "deepgram-realtime", "assemblyai-realtime"]) {
+  const empty = {
+    getOpenAIKey: () => "",
+    getDeepgramKey: () => "",
+    getAssemblyAIKey: () => "",
+    getGeminiKey: () => "",
+  };
+  for (const provider of [
+    "openai-realtime",
+    "deepgram-realtime",
+    "assemblyai-realtime",
+    "gemini-realtime",
+  ]) {
     await assert.rejects(
       fetchRealtimeTokenForProvider(provider, deps({ environmentManager: empty }), {
         mode: "byok",
@@ -163,10 +208,12 @@ test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+l
   const { fetchRealtimeTokenForProvider } = await load();
   const wire = [];
   const cloudDeps = deps({
-    postServerToken: async (path, body) => {
+    // `body = {}` mirrors ipcHandlers' postServerToken default, so an entry that
+    // posts no body at all is recorded as the `{}` it really sends.
+    postServerToken: async (path, body = {}) => {
       // JSON.stringify drops undefined keys exactly like the real fetch does.
       wire.push({ path, json: JSON.stringify(body) });
-      return { clientSecret: "cs-single", clientSecrets: ["cs-a", "cs-b"] };
+      return { clientSecret: "cs-single", clientSecrets: ["cs-a", "cs-b"], token: "gm-token" };
     },
   });
 
@@ -188,6 +235,9 @@ test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+l
     { streams: 1 }
   );
 
+  // Gemini's endpoint reads nothing from the request; it must post a bare body.
+  await fetchRealtimeTokenForProvider("gemini-realtime", cloudDeps, { mode: "openwhispr" });
+
   assert.deepEqual(wire, [
     { path: "/api/openai-realtime-token", json: '{"streams":1}' },
     {
@@ -195,5 +245,6 @@ test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+l
       json: '{"model":"gpt-4o-mini-transcribe","language":"en","streams":2}',
     },
     { path: "/api/openai-realtime-token", json: '{"model":"gpt-4o-mini-transcribe","streams":1}' },
+    { path: "/api/gemini-live-token", json: "{}" },
   ]);
 });

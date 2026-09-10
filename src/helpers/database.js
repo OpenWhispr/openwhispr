@@ -1383,10 +1383,21 @@ class DatabaseManager {
     }
   }
 
-  getPendingAnalyticsEvents(limit = 200) {
+  analyticsAccountId(expectedAccountId) {
+    if (expectedAccountId == null) return this.activeAccountId;
+    if (expectedAccountId !== this.activeAccountId) {
+      throw Object.assign(new Error("Analytics account context changed"), {
+        code: "AUTH_CONTEXT_CHANGED",
+      });
+    }
+    return expectedAccountId;
+  }
+
+  getPendingAnalyticsEvents(limit = 200, expectedAccountId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      if (!this.activeAccountId) return [];
+      const accountId = this.analyticsAccountId(expectedAccountId);
+      if (!accountId) return [];
       const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
       // The projection is the wire shape: AnalyticsService posts these rows
       // verbatim, so every column here has to satisfy the batch endpoint's
@@ -1400,17 +1411,18 @@ class DatabaseManager {
            WHERE account_id = ? AND sync_status = 'pending' AND deleted_at IS NULL
            ORDER BY occurred_at ASC LIMIT ?`
         )
-        .all(this.activeAccountId, safeLimit);
+        .all(accountId, safeLimit);
     } catch (error) {
       debugLogger.error("Error reading pending analytics", { error: error.message }, "database");
       throw error;
     }
   }
 
-  markAnalyticsEventsSynced(eventIds) {
+  markAnalyticsEventsSynced(eventIds, expectedAccountId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
+      const accountId = this.analyticsAccountId(expectedAccountId);
+      if (!accountId || !Array.isArray(eventIds) || eventIds.length === 0) {
         return { success: true, updated: 0 };
       }
       const placeholders = eventIds.map(() => "?").join(", ");
@@ -1420,7 +1432,7 @@ class DatabaseManager {
            WHERE account_id = ? AND deleted_at IS NULL
              AND event_id IN (${placeholders})`
         )
-        .run(this.activeAccountId, ...eventIds);
+        .run(accountId, ...eventIds);
       return { success: true, updated: result.changes };
     } catch (error) {
       debugLogger.error("Error marking analytics synced", { error: error.message }, "database");
@@ -1428,10 +1440,11 @@ class DatabaseManager {
     }
   }
 
-  getPendingAnalyticsDeletes(limit = 200) {
+  getPendingAnalyticsDeletes(limit = 200, expectedAccountId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      if (!this.activeAccountId) return [];
+      const accountId = this.analyticsAccountId(expectedAccountId);
+      if (!accountId) return [];
       const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
       return this.db
         .prepare(
@@ -1439,7 +1452,7 @@ class DatabaseManager {
            WHERE account_id = ? AND deleted_at IS NOT NULL AND sync_status = 'pending'
            ORDER BY occurred_at ASC LIMIT ?`
         )
-        .all(this.activeAccountId, safeLimit);
+        .all(accountId, safeLimit);
     } catch (error) {
       debugLogger.error(
         "Error reading pending analytics deletes",
@@ -1450,10 +1463,11 @@ class DatabaseManager {
     }
   }
 
-  hardDeleteAnalyticsEvents(eventIds) {
+  hardDeleteAnalyticsEvents(eventIds, expectedAccountId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
+      const accountId = this.analyticsAccountId(expectedAccountId);
+      if (!accountId || !Array.isArray(eventIds) || eventIds.length === 0) {
         return { success: true, deleted: 0 };
       }
       const placeholders = eventIds.map(() => "?").join(", ");
@@ -1463,7 +1477,7 @@ class DatabaseManager {
            WHERE account_id = ? AND deleted_at IS NOT NULL
              AND event_id IN (${placeholders})`
         )
-        .run(this.activeAccountId, ...eventIds);
+        .run(accountId, ...eventIds);
       return { success: true, deleted: result.changes };
     } catch (error) {
       debugLogger.error(
@@ -1475,22 +1489,24 @@ class DatabaseManager {
     }
   }
 
-  getPendingAnalyticsClear() {
+  getPendingAnalyticsClear(expectedAccountId) {
     if (!this.db) throw new Error("Database not initialized");
-    if (!this.activeAccountId) return null;
+    const accountId = this.analyticsAccountId(expectedAccountId);
+    if (!accountId) return null;
     return (
       this.db
         .prepare(
           `SELECT cleared_through FROM analytics_clear_requests
            WHERE account_id = ? AND synced = 0`
         )
-        .get(this.activeAccountId) ?? null
+        .get(accountId) ?? null
     );
   }
 
-  completeAnalyticsClear(clearedThrough) {
+  completeAnalyticsClear(clearedThrough, expectedAccountId) {
     if (!this.db) throw new Error("Database not initialized");
-    if (!this.activeAccountId || typeof clearedThrough !== "string") {
+    const accountId = this.analyticsAccountId(expectedAccountId);
+    if (!accountId || typeof clearedThrough !== "string") {
       return { success: false, deleted: 0 };
     }
 
@@ -1500,14 +1516,14 @@ class DatabaseManager {
           `UPDATE analytics_clear_requests SET synced = 1
            WHERE account_id = ? AND cleared_through = ? AND synced = 0`
         )
-        .run(this.activeAccountId, clearedThrough);
+        .run(accountId, clearedThrough);
       if (request.changes === 0) return 0;
       return this.db
         .prepare(
           `DELETE FROM analytics_events
            WHERE account_id = ? AND occurred_at <= ?`
         )
-        .run(this.activeAccountId, clearedThrough).changes;
+        .run(accountId, clearedThrough).changes;
     });
     return { success: true, deleted: complete() };
   }
@@ -1529,28 +1545,35 @@ class DatabaseManager {
   // user who had been signed in for months had nothing "unclaimed" — the
   // consent prompt never opened, and flipping the toggle uploaded their entire
   // history in one pass.
-  countAnalyticsEventsAwaitingUpload() {
+  countAnalyticsEventsAwaitingUpload(expectedAccountId) {
     if (!this.db) throw new Error("Database not initialized");
+    const accountId = this.analyticsAccountId(expectedAccountId);
     return this.db
       .prepare(
         `SELECT COUNT(*) AS count FROM analytics_events
          WHERE deleted_at IS NULL AND sync_status <> 'synced'
            AND (account_id IS NULL OR account_id = ?)`
       )
-      .get(this.activeAccountId).count;
+      .get(accountId).count;
   }
 
   // Device-local rows stay unattributed until the signed-in user explicitly
   // asks for them, so signing in never silently adopts someone else's history.
-  claimAnonymousAnalyticsEvents() {
+  claimAnonymousAnalyticsEvents(expectedAccountId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      if (!this.activeAccountId) return { success: false, claimed: 0 };
+      const accountId =
+        typeof expectedAccountId === "string" && expectedAccountId.trim().length > 0
+          ? expectedAccountId.trim()
+          : null;
+      if (!accountId || accountId !== this.activeAccountId) {
+        return { success: false, claimed: 0 };
+      }
       const result = this.db
         .prepare(
           "UPDATE analytics_events SET account_id = ? WHERE account_id IS NULL AND deleted_at IS NULL"
         )
-        .run(this.activeAccountId);
+        .run(accountId);
       return { success: true, claimed: result.changes };
     } catch (error) {
       debugLogger.error("Error claiming analytics events", { error: error.message }, "database");

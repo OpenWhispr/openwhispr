@@ -143,6 +143,7 @@
     "add": "Adicionar",
     "retry": "Tentar novamente",
     "back": "Voltar",
+    "logout": "Sair",
     "next": "Avançar",
     "complete": "Concluir",
     "reset": "Redefinir",
@@ -179,7 +180,7 @@
     "done": "Listo",
     "skip": "Pular",
     "policyAiProcessingRestricted": "O processamento de IA está restrito pela sua organização.",
-    "policyAgentRestricted": "O uso do agente de IA está restrito pela sua organização.",
+    "policyAgentRestricted": "O uso do assistente de IA está restrito pela sua organização.",
     "policyTranscriptionRestricted": "A transcrição está restrita pela sua organização.",
     "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
     "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
@@ -192,8 +193,8 @@
         "microphoneDescription": "Transforma voz em texto.",
         "accessibilityDescription": "Cola o texto no app ativo.",
         "systemAudioTitle": "Áudio do Sistema",
-        "systemAudioDescription": "Captura o áudio de outros apps.",
-        "screenContextDescription": "Permite que o assistente de voz veja sua tela. Nunca é salvo.",
+        "systemAudioDescription": "Necessário para capturar áudio nas notas de reunião.",
+        "screenContextDescription": "Compartilhe o contexto da tela com o assistente de voz.",
         "enable": "Ativar",
         "enabled": "Ativado"
       },
@@ -218,6 +219,7 @@
       "hotkey": {
         "capture": "Pressione as teclas que você quer usar",
         "chooseAnother": "Escolher outro atalho",
+        "confirmAgain": "Pressione {{hotkey}} novamente para confirmar",
         "inUse": "Esse atalho já está em uso. Escolha outro.",
         "holding": "Continue pressionando ou pressione outra tecla"
       },
@@ -390,7 +392,6 @@
         "descriptionLineOne": "Escolha os modelos que você quer",
         "descriptionLineTwo": "executar no seu dispositivo.",
         "providerLabel": "Provedor",
-        "agent": "Agente",
         "download": "Baixar",
         "downloadingShort": "Baixando",
         "selected": "Selecionado",
@@ -399,7 +400,7 @@
         "cancelDownload": "Cancelar o download de {{model}}",
         "downloads": "Downloads de modelos",
         "downloading": "Baixando… {{progress}}%",
-        "installing": "Instalando o modelo…"
+        "installing": "Instalando"
       }
     },
     "steps": {
@@ -659,11 +660,6 @@
       },
       "retryTranslationMode": "Modo de Tradução"
     },
-    "cloudMigration": {
-      "title": "Boas-vindas ao OpenWhispr Cloud",
-      "description": "Mudamos sua transcrição para o OpenWhispr Cloud para resultados mais rápidos e precisos. Suas configurações anteriores foram salvas — volte quando quiser em Configurações.",
-      "viewSettings": "Ver configurações"
-    },
     "aiCta": {
       "title": "Melhore suas transcrições com IA",
       "description": "Corrija automaticamente gramática, pontuação e formatação enquanto você fala.",
@@ -848,7 +844,7 @@
       "errorTitles": {
         "sessionExpired": "Sessão expirada",
         "offline": "Sem conexão",
-        "agentUnavailable": "Agente indisponível",
+        "agentUnavailable": "Assistente indisponível",
         "screenContextSkipped": "Contexto de tela ignorado",
         "dailyLimitReached": "Limite diário atingido",
         "providerRateLimited": "Limite de taxa do provedor"
@@ -888,7 +884,10 @@
         "customEndpointInvalid": "Seu endpoint de transcrição personalizado não está configurado ou a URL é inválida. Atualize-o em Configurações → Fala para texto.",
         "managedTranscriptionUnavailable": "A transcrição gerenciada não está disponível no momento. Tente novamente em instantes.",
         "managedRouteInvalid": "A transcrição gerenciada não pôde ser iniciada devido a uma incompatibilidade de configuração. Tente novamente ou entre em contato com o administrador.",
-        "managedAuthRejected": "As credenciais de transcrição gerenciada da sua organização foram rejeitadas. Entre em contato com o administrador."
+        "managedAuthRejected": "As credenciais de transcrição gerenciada da sua organização foram rejeitadas. Entre em contato com o administrador.",
+        "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas.",
+        "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas.",
+        "providerKeyMissing": "Nenhuma chave de API definida para seu provedor de transcrição. Adicione-a em Configurações → Fala para texto."
       },
       "translationFallback": {
         "unreachableTitle": "Tradução indisponível",
@@ -1086,12 +1085,12 @@
       "welcomeBack": "Que bom ter você de volta"
     },
     "signedIn": {
-      "ready": "Pronto",
-      "welcomeBack": "Que bom ter você de volta",
-      "welcomeBackName": "Que bom ter você de volta, {{name}}"
+      "welcomeBack": "Que bom ter você de volta"
     },
     "sso": {
       "continueWithSSO": "Entrar com SSO",
+      "workEmailLabel": "E-mail profissional",
+      "emailPlaceholder": "Adicione seu e-mail",
       "emailRequired": "Insira seu e-mail corporativo para usar o SSO.",
       "failed": "Falha no logon único. Tente novamente.",
       "companySignInTitle": "Usar o login da sua empresa",
@@ -1356,10 +1355,10 @@
       }
     },
     "edit": {
-      "agentNameLabel": "Nome do agente:",
+      "agentNameLabel": "Nome do assistente:",
       "cautionLabel": "Cuidado",
       "cautionTextPrefix": "Modificar este prompt pode afetar a qualidade da transcrição.",
-      "cautionTextSuffix": "Mantenha o marcador {{agentName}} para preservar a detecção do agente.",
+      "cautionTextSuffix": "Mantenha o marcador {{agentName}} para preservar a detecção do assistente.",
       "placeholder": "Digite seu prompt de sistema personalizado..."
     },
     "tabs": {
@@ -1593,7 +1592,7 @@
           "features": [
             "Gravações de reuniões ilimitadas",
             "Funções e gestão de membros do espaço de trabalho",
-            "Modo agente",
+            "Modo assistente",
             "Converse com seus dados",
             "Suporte prioritário"
           ],
@@ -1698,11 +1697,11 @@
       }
     },
     "agentConfig": {
-      "agentName": "Nome do agente",
+      "agentName": "Nome do assistente",
       "description": "Dê um nome ao seu assistente de IA para poder chamá-lo diretamente durante o ditado",
       "dialogs": {
-        "updatedDescription": "Seu agente agora se chama \"{{name}}\". Chame-o dizendo \"Ei {{name}}\" seguido das suas instruções.",
-        "updatedTitle": "Nome do agente atualizado"
+        "updatedDescription": "Seu assistente agora se chama \"{{name}}\". Chame-o dizendo \"Ei {{name}}\" seguido das suas instruções.",
+        "updatedTitle": "Nome do assistente atualizado"
       },
       "examplesTitle": "Exemplos",
       "helper": "Escolha algo curto e natural de se dizer em voz alta",
@@ -1817,7 +1816,7 @@
       "clearDictionaryTitle": "Limpar dicionário?",
       "clearDictionaryDescription": "Isso removerá todas as palavras do seu dicionário personalizado. Esta ação não pode ser desfeita.",
       "clearAll": "Limpar tudo",
-      "agentNameAutoManaged": "Gerenciado automaticamente — sincronizado com o nome do agente",
+      "agentNameAutoManaged": "Gerenciado automaticamente — sincronizado com o nome do assistente",
       "removeWord": "Remover palavra",
       "noWords": "Nenhuma palavra ainda",
       "wordsAppearHere": "Palavras que você adicionar aparecerão aqui",
@@ -2086,6 +2085,9 @@
       "insightsSyncDescription": "Sincronize contagens de palavras, a data e a hora exata de cada ditado, durações e tipos de modelo entre seus dispositivos. O conteúdo das transcrições nunca é incluído. Quando você está conectado, limpar o histórico também remove essas contagens deste dispositivo e da sua conta.",
       "insightsSyncRequiresAccount": "Entre na sua conta para sincronizar dados de Estatísticas sem conteúdo entre seus dispositivos.",
       "insightsSyncRequiresHistory": "Ative a retenção de dados para registrar as Estatísticas antes de sincronizá-las entre seus dispositivos.",
+      "leaderboardDescription": "Mostre seu nome, e-mail e atividade nas classificações qualificadas de espaços de trabalho e domínios profissionais. As transcrições permanecem privadas.",
+      "leaderboardRequiresAccount": "Entre na sua conta para gerenciar sua participação nas classificações.",
+      "leaderboardRequiresHistory": "Ative a retenção de dados antes de participar das classificações.",
       "usageAnalytics": "Análise de uso",
       "usageAnalyticsDescription": "Ajude-nos a melhorar o OpenWhispr compartilhando métricas anônimas de desempenho. Nunca enviamos conteúdo de transcrição — apenas dados de tempo e erros.",
       "dataRetention": "Retenção de dados",
@@ -2512,9 +2514,14 @@
         "groq_whisper_large_v3": "Modelo Large v3, rápido e preciso",
         "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida",
         "gemini_3_5_transcribe": "Fala para texto Gemini do Google",
+        "gemini_3_5_transcribe_live": "Fala para texto em streaming em tempo real",
         "corti_transcribe": "Transcrição médica de nível clínico",
         "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI",
-        "tinfoil_voxtral": "Transcrição verificavelmente privada"
+        "tinfoil_voxtral": "Transcrição verificavelmente privada",
+        "deepgram_nova_3": "O modelo em tempo real mais preciso da Deepgram",
+        "assemblyai_universal_streaming_english": "Transcrições em tempo real imutáveis, em inglês",
+        "assemblyai_universal_streaming_multilingual": "Transcrições em tempo real imutáveis, multilíngues",
+        "assemblyai_universal_3_5_pro": "Máxima precisão em tempo real, 18 idiomas"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo forte de raciocínio",
@@ -2524,7 +2531,7 @@
         "openai_gpt_4_1_mini": "Modelo GPT-4.1 menor",
         "openai_gpt_4_1_nano": "GPT-4.1 com menor latência",
         "anthropic_claude_fable_5": "O modelo mais capaz da Anthropic, classe Mythos",
-        "anthropic_claude_sonnet_5": "Modelo agêntico rápido e capaz por menor custo",
+        "anthropic_claude_sonnet_5": "Modelo assistente rápido e capaz por menor custo",
         "anthropic_claude_sonnet_4_6": "Desempenho equilibrado",
         "anthropic_claude_sonnet_4_5": "Geração anterior do Sonnet",
         "anthropic_claude_haiku_4_5": "Rápido com inteligência quase de ponta",
@@ -2559,12 +2566,12 @@
         "corti_corti_s1_mini": "Modelo clínico compacto com raciocínio pela metade do preço"
       },
       "enterprise": {
-        "bedrock_claude_fable_5": "O modelo Claude mais capaz. Ideal para as tarefas mais difíceis do Modo Agente.",
+        "bedrock_claude_fable_5": "O modelo Claude mais capaz. Ideal para as tarefas de assistente mais difíceis.",
         "bedrock_claude_haiku_4_5": "Rápido e barato. Ótimo para limpar texto.",
-        "bedrock_claude_sonnet_5": "Equilibrado. Padrão recomendado para o Modo Agente.",
-        "bedrock_claude_opus_4_8": "Máxima inteligência. Para tarefas complexas do Modo Agente.",
+        "bedrock_claude_sonnet_5": "Equilibrado. Padrão recomendado para tarefas de assistente.",
+        "bedrock_claude_opus_4_8": "Máxima inteligência. Para tarefas complexas de assistente.",
         "bedrock_gpt_oss_120b": "Modelo aberto da OpenAI. Ótimo raciocínio a baixo custo.",
-        "bedrock_deepseek_v3_2": "Modelo de fronteira de pesos abertos. Ótimo custo-benefício para o Modo Agente.",
+        "bedrock_deepseek_v3_2": "Modelo de fronteira de pesos abertos. Ótimo custo-benefício para tarefas de assistente.",
         "bedrock_qwen3_next_80b": "Modelo aberto esparso. Rápido e multilíngue.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
@@ -2979,13 +2986,17 @@
       "queueFailed": "{{n}} com falha",
       "urlFileTooLarge": "O arquivo é grande demais para baixar. O tamanho máximo é 500 MB.",
       "urlYoutubeBlocked": "O YouTube está bloqueando temporariamente downloads da sua rede. Tente novamente em instantes.",
-      "customEndpointInvalid": "O endpoint de transcrição personalizado não está configurado ou é inválido. Atualize-o nas Configurações."
+      "customEndpointInvalid": "O endpoint de transcrição personalizado não está configurado ou é inválido. Atualize-o nas Configurações.",
+      "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas."
     },
     "meeting": {
       "title": "Notas de reunião",
       "description": "Transcrições e resumos estruturados",
       "back": "Voltar",
       "restrictedByOrg": "A transcrição de reuniões está restrita pela sua organização.",
+      "unsupportedSelfHosted": "A gravação de notas ainda não pode usar um endpoint auto-hospedado. Abra as Configurações e escolha Local ou um provedor de streaming.",
+      "unsupportedProvider": "A gravação de notas não pode usar {{provider}} para transcrição ao vivo. Abra as Configurações e escolha Local ou um provedor de streaming.",
+      "noProviderSelected": "Nenhum provedor está selecionado para a gravação de notas. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "autoEnded": "A gravação parou automaticamente após o fim da reunião.",
       "restartFailed": "Não foi possível reiniciar a gravação da reunião.",
       "systemAudioSilent": {
@@ -3235,6 +3246,7 @@
   },
   "insights": {
     "title": "Estatísticas",
+    "yourUsage": "Seu uso",
     "description": "Uma visão privada dos seus hábitos de ditado e da sua constância.",
     "wordsSpoken": "Palavras ditadas",
     "currentStreak": "Sequência atual",
@@ -3255,22 +3267,108 @@
     "dayTooltip_other": "{{date}}: {{count}} palavras",
     "dataRetentionDisabled": "A retenção de dados está desativada, então novos ditados não são contados nas Estatísticas: nem neste dispositivo nem na sua conta. As contagens já sincronizadas permanecem na sua conta.",
     "onDevice": "Neste dispositivo",
+    "onDevicePrivacy": "Estas informações são calculadas neste dispositivo para proteger sua privacidade.",
     "synced": "Sincronizado entre dispositivos",
     "syncFallback": "Mostrando dados do dispositivo — sincronização indisponível",
     "syncPrompt": "Sincronize contadores sem conteúdo para combinar a atividade local e a da nuvem entre dispositivos.",
     "enableSync": "Ativar sincronização",
+    "syncEnableError": "Não foi possível ativar a sincronização do Insights. Tente novamente.",
     "claimTitle": "Incluir ditados anteriores?",
-    "claimDescription_one": "{{count}} ditado foi gravado neste dispositivo antes de você entrar na conta. Ao incluí-lo, só são enviadas a contagem de palavras, a data e a hora exata em que ocorreu, sua duração e o tipo de modelo, nunca o conteúdo das transcrições.",
-    "claimDescription_other": "{{count}} ditados foram gravados neste dispositivo antes de você entrar na conta. Ao incluí-los, só são enviadas as contagens de palavras, a data e a hora exata de cada um, as durações e os tipos de modelo, nunca o conteúdo das transcrições.",
+    "claimDescription_one": "Sincronize o uso de {{count}} ditado anterior. As transcrições permanecem privadas.",
+    "claimDescription_other": "Sincronize o uso de {{count}} ditados anteriores. As transcrições permanecem privadas.",
     "claimInclude": "Incluir",
     "claimSkip": "Agora não",
     "enableTitle": "Ativar a sincronização do Insights?",
     "enableConfirm": "Ativar sincronização",
-    "enableDescription_one": "{{count}} ditado já gravado neste dispositivo será enviado para a sua conta. A sincronização do Insights só envia as contagens de palavras, a data e a hora exata de cada um, as durações e os tipos de modelo, nunca o conteúdo das transcrições.",
-    "enableDescription_other": "{{count}} ditados já gravados neste dispositivo serão enviados para a sua conta. A sincronização do Insights só envia as contagens de palavras, a data e a hora exata de cada um, as durações e os tipos de modelo, nunca o conteúdo das transcrições.",
+    "enableDescription_one": "Sincronize o uso de {{count}} ditado existente. As transcrições permanecem privadas.",
+    "enableDescription_other": "Sincronize o uso de {{count}} ditados existentes. As transcrições permanecem privadas.",
     "emptyTitle": "Ainda sem ditados",
     "emptyBody": "Comece a ditar e as suas palavras, sequências e atividade diária aparecerão aqui.",
-    "loadError": "Não foi possível ler os Insights deste dispositivo."
+    "loadError": "Não foi possível ler os Insights deste dispositivo.",
+    "leaderboard": {
+      "title": "Classificação",
+      "inviteCta": "Convidar colegas",
+      "soloTitle": "Convide o seu primeiro colega",
+      "soloDescription": "A sua classificação está pronta. Convide alguém para {{scope}} para começar a comparar a atividade e avançar em conjunto.",
+      "soloHint": "Essa pessoa aparecerá aqui depois de participar da classificação.",
+      "topPerformers": "Melhores classificados",
+      "refreshCadence": "Atualizado a cada hora",
+      "moreActions": "Mais ações da classificação",
+      "setupTitle": "Crie a classificação da sua equipa",
+      "setupDescription": "Crie um espaço de trabalho e convide colegas para comparar a atividade e avançar em conjunto.",
+      "setupDomainDescription_one": "{{count}} pessoa de {{domain}} participa nas classificações. Crie um espaço de trabalho e convide-a.",
+      "setupDomainDescription_other": "{{count}} pessoas de {{domain}} participam nas classificações. Crie um espaço de trabalho e convide-as.",
+      "setupCta": "Criar espaço de trabalho",
+      "accessError": "Não foi possível verificar o seu acesso à classificação.",
+      "signInTitle": "Entre para ver sua classificação",
+      "signInDescription": "As classificações comparam você com os colegas da sua conta. Entre para verificar se a sua está disponível.",
+      "requestJoinTitle": "A sua equipa já está aqui",
+      "requestJoinDescription_one": "{{workspace}} tem {{count}} membro. Peça a um administrador para o adicionar.",
+      "requestJoinDescription_other": "{{workspace}} tem {{count}} membros. Peça a um administrador para o adicionar.",
+      "requestJoinCta": "Pedir para participar",
+      "requestSent": "Pedido enviado",
+      "requesting": "A enviar pedido…",
+      "acceptInviteTitle": "Recebeu um convite para {{workspace}}",
+      "acceptInviteDescription": "{{inviter}} convidou-o. Entre para ver a classificação da equipa.",
+      "acceptInviteDescriptionNoInviter": "Entre em {{workspace}} para ver a classificação da equipa.",
+      "acceptInviteCta": "Entrar na equipe",
+      "joining": "A entrar…",
+      "inviteAcceptedTitle": "Entrou no espaço de trabalho",
+      "inviteAcceptedDescription": "Já pode ver a classificação de {{workspace}}.",
+      "inviteAcceptError": "Não foi possível entrar no espaço de trabalho",
+      "invitedList": "Convidados: {{emails}}",
+      "chooseBoard": "Escolher uma classificação",
+      "emptyStrip_one": "{{count}} colega ainda não participa da classificação. A classificação começa quando entrar.",
+      "emptyStrip_other": "{{count}} colegas ainda não participam da classificação. A classificação começa quando entrarem.",
+      "copyNudge": "Copiar lembrete",
+      "nudgeText": "Participe da classificação em OpenWhispr → Insights para podermos ver a classificação da equipa.",
+      "nudgeCopied": "Lembrete copiado",
+      "nudgeCopyError": "Não foi possível copiar o lembrete",
+      "joinTitle": "Veja sua posição em {{scope}}",
+      "joinDescription": "Seu nome, e-mail e atividade aparecem em todos os rankings elegíveis de espaços de trabalho e domínios profissionais. As transcrições permanecem privadas e você pode sair a qualquer momento.",
+      "joinCta": "Participar das classificações",
+      "joiningLeaderboard": "Entrando…",
+      "joinPolicyBlocked": "A política do seu espaço de trabalho não permite participar das classificações.",
+      "activationError": "Não foi possível verificar sua participação na classificação. Confira sua conexão e tente novamente.",
+      "disabled": "A classificação está desativada",
+      "leave": "Sair das classificações",
+      "leavePending": "Concluiremos sua saída das classificações quando você voltar a ficar online.",
+      "allTime": "Todo o período",
+      "thisWeek": "Esta semana",
+      "wpmValue": "{{count}} PPM",
+      "dayValue_one": "{{count}} dia",
+      "dayValue_other": "{{count}} dias",
+      "share": "Compartilhar",
+      "refresh": "Atualizar classificação",
+      "error": "Não foi possível carregar a classificação.",
+      "retry": "Tentar novamente",
+      "rank": "Posição",
+      "member": "Membro",
+      "you": "(você)",
+      "jumpToMe": "Ir para minha posição",
+      "jumpUnavailable": "Não foi possível identificar sua conta nesta classificação.",
+      "previous": "Página anterior",
+      "jumpToRank": "Ir para a posição",
+      "next": "Próxima página",
+      "metrics": {
+        "total_words": "Total de palavras",
+        "words_per_minute": "Palavras por minuto",
+        "current_daily_streak": "Sequência diária atual",
+        "desktop_words": "Palavras no computador",
+        "mobile_words": "Palavras no celular"
+      },
+      "shareText": "Veja minha posição no OpenWhispr.",
+      "shareTitle": "Compartilhar classificação",
+      "shareDescription": "Copie ou baixe este cartão, ou copie-o antes de abrir o editor de uma rede social.",
+      "copyImage": "Copiar imagem",
+      "download": "Baixar",
+      "shareX": "Compartilhar no X",
+      "shareLinkedIn": "Compartilhar no LinkedIn",
+      "copied": "Imagem copiada — cole-a na sua publicação.",
+      "saved": "Imagem baixada.",
+      "failed": "Não foi possível criar o cartão de compartilhamento.",
+      "unnamedMember": "Colega de equipe"
+    }
   },
   "sidebar": {
     "insights": "Estatísticas",
@@ -3406,7 +3504,7 @@
   },
   "dictationAgent": {
     "enabled": "Ativar assistente de voz",
-    "enabledDescription": "Dite instruções para o seu agente. O texto destacado é enviado ao modelo configurado e editado no lugar. Ative dizendo \"{{agentName}}\".",
+    "enabledDescription": "Dite instruções para o seu assistente. O texto destacado é enviado ao modelo configurado e editado no lugar. Ative dizendo \"{{agentName}}\".",
     "screenContext": {
       "title": "Contexto de tela",
       "description": "Anexa uma captura da tela ativa aos comandos do assistente de voz.",
@@ -3421,7 +3519,7 @@
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use o agente gerenciado pelo OpenWhispr, sem precisar de chave API.",
+      "openwhisprDesc": "Use o assistente gerenciado pelo OpenWhispr, sem precisar de chave API.",
       "providers": "Use sua própria chave",
       "providersDesc": "Conecte-se à OpenAI, Anthropic, Gemini ou Groq com sua própria chave API.",
       "local": "Local",
@@ -3432,14 +3530,14 @@
       "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI ou Google Vertex."
     },
     "prompt": {
-      "title": "Prompt do agente",
+      "title": "Prompt do assistente",
       "description": "O prompt de sistema usado quando a palavra de ativação é detectada. Recorre ao padrão integrado."
     }
   },
   "agentMode": {
     "settings": {
       "systemPrompt": "Prompt do Sistema",
-      "systemPromptDescription": "Instruções personalizadas para o agente",
+      "systemPromptDescription": "Instruções personalizadas para o assistente",
       "systemPromptPlaceholder": "Digite um prompt de sistema personalizado...",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
@@ -3463,7 +3561,8 @@
       "transcribing": "Transcrevendo...",
       "thinking": "Pensando...",
       "typeMessage": "Digite uma mensagem...",
-      "send": "Enviar"
+      "send": "Enviar",
+      "voiceDraftStreamingOnly": "A entrada por voz não está disponível com seu provedor de transcrição: ele só suporta ditado ao vivo. Escolha outro provedor em Configurações → Fala para texto."
     },
     "tools": {
       "search_notesName": "Pesquisar notas",
@@ -3591,7 +3690,7 @@
     },
     "cli": {
       "title": "Acesso pela linha de comando",
-      "description": "Dê ao seu agente acesso às suas notas pelo terminal.",
+      "description": "Dê ao seu assistente acesso às suas notas pelo terminal.",
       "installLabel": "Instalar",
       "learnMore": "Ler a documentação",
       "copyDocsLink": "Copiar link da documentação",

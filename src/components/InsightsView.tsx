@@ -1,23 +1,33 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Cloud, Flame, Gauge, Loader2, Mic2 } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, Cloud, CloudUpload, Flame, Gauge, Loader2, Mic2, Trophy } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
+import { hasValidatedAuthContext } from "../lib/authRequestContext";
 import {
   getAccountAnalyticsSummary,
   subscribeToAnalyticsRefresh,
-  syncPendingAnalytics,
 } from "../services/AnalyticsService";
+import { syncService } from "../services/SyncService";
 import { buildAnalyticsActivityDays } from "../helpers/analytics";
 import { canOfferAnalyticsClaim } from "../services/syncPassPolicy";
 import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
+import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipationStore";
 import { usePolicyStore } from "../stores/policyStore";
 import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
+import { Button } from "./ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Tooltip } from "./ui/tooltip";
 
 type ActivityDay = { date: string; words: number };
+
+interface InsightsViewProps {
+  onSignIn: () => void;
+}
+
+const LeaderboardView = lazy(() => import("./LeaderboardView"));
 
 const ACTIVITY_INTENSITY_CLASSES = [
   "bg-foreground/6 dark:bg-white/6",
@@ -207,19 +217,18 @@ function MetricCard({
   );
 }
 
-export default function InsightsView() {
+function YourUsage({
+  dataRetentionEnabled,
+  isLoaded,
+  onSyncErrorChange,
+  syncActive,
+}: {
+  dataRetentionEnabled: boolean;
+  isLoaded: boolean;
+  onSyncErrorChange: (error: boolean) => void;
+  syncActive: boolean;
+}) {
   const { t, i18n } = useTranslation();
-  const { isSignedIn, isLoaded } = useAuth();
-  const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
-  const dataRetentionEnabled = usePolicyStore((policyState) =>
-    effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
-  );
-  const { enableInsightsSync, optInDialog, syncAllowedByPolicy, unclaimedCount } =
-    useInsightsSyncOptIn();
-  // A managed workspace that forbids cloud backup forbids these counters with
-  // it, so the view stays device-scoped even with the preference left on.
-  const syncActive =
-    isSignedIn && insightsSyncEnabled && syncAllowedByPolicy && dataRetentionEnabled;
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
@@ -254,9 +263,10 @@ export default function InsightsView() {
 
     try {
       if (isLoaded && syncActive) {
-        await syncPendingAnalytics();
-        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-        const account = await getAccountAnalyticsSummary(timeZone);
+        if (!(await syncService.syncAnalyticsNow())) {
+          throw new Error("Insights uploads are not enabled for this account");
+        }
+        const account = await getAccountAnalyticsSummary();
         if (requestId !== requestIdRef.current) return;
         setSummary(account);
       } else {
@@ -274,6 +284,10 @@ export default function InsightsView() {
 
   useEffect(() => subscribeToAnalyticsRefresh(load, syncActive), [load, syncActive]);
 
+  useEffect(() => {
+    onSyncErrorChange(syncError);
+  }, [onSyncErrorChange, syncError]);
+
   // i18n.language, not the runtime default: the OS locale is not the language
   // the app is being read in, so a Japanese UI rendered 12.3K where 1.2万
   // belongs, next to correctly localized month labels in the same card.
@@ -284,18 +298,16 @@ export default function InsightsView() {
 
   if (loadFailed) {
     return (
-      <div className="mx-auto w-full max-w-5xl px-6 py-8">
-        <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
-          <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
-            <p className="max-w-sm text-sm text-muted-foreground">{t("insights.loadError")}</p>
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
-            >
-              {t("common.retry")}
-            </button>
-          </div>
+      <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
+        <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
+          <p className="max-w-sm text-sm text-muted-foreground">{t("insights.loadError")}</p>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
+          >
+            {t("common.retry")}
+          </button>
         </div>
       </div>
     );
@@ -303,62 +315,23 @@ export default function InsightsView() {
 
   if (!summary) {
     return (
-      <div className="mx-auto w-full max-w-5xl px-6 py-8">
-        <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
-          <div className="flex items-center justify-center gap-2 py-8">
-            <Loader2 size={14} className="animate-spin text-primary" />
-            <span className="text-sm text-muted-foreground">{t("controlPanel.loading")}</span>
-          </div>
+      <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
+        <div className="flex items-center justify-center gap-2 py-8">
+          <Loader2 size={14} className="animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">{t("controlPanel.loading")}</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-base! font-semibold! leading-none! tracking-normal! text-foreground">
-            {t("insights.title")}
-          </h1>
-        </div>
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-          <Cloud size={13} />
-          {syncActive
-            ? syncError
-              ? t("insights.syncFallback")
-              : t("insights.synced")
-            : t("insights.onDevice")}
-        </div>
-      </div>
-
+    <>
       {!dataRetentionEnabled && (
         <div className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 px-3.5 py-2.5 flex items-center gap-2.5">
           <span className="text-amber-600 dark:text-amber-400 shrink-0 text-sm">⊘</span>
           <p className="text-xs text-amber-700 dark:text-amber-300/90 leading-relaxed">
             {t("insights.dataRetentionDisabled")}
           </p>
-        </div>
-      )}
-
-      {canOfferAnalyticsClaim({
-        signedIn: isSignedIn,
-        syncAllowedByPolicy,
-        dataRetentionEnabled,
-        insightsSyncEnabled,
-        unclaimedCount,
-      }) && (
-        <div className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3">
-          <p className="text-xs text-muted-foreground">
-            {t(insightsSyncEnabled ? "insights.claimTitle" : "insights.syncPrompt")}
-          </p>
-          <button
-            type="button"
-            onClick={enableInsightsSync}
-            className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            {t(insightsSyncEnabled ? "insights.claimInclude" : "insights.enableSync")}
-          </button>
         </div>
       )}
 
@@ -412,7 +385,128 @@ export default function InsightsView() {
           </div>
         </>
       )}
+    </>
+  );
+}
 
+export default function InsightsView({ onSignIn }: InsightsViewProps) {
+  const { t } = useTranslation();
+  const { isLoaded, isSignedIn } = useAuth();
+  const authValidated = hasValidatedAuthContext();
+  const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
+  const dataRetentionEnabled = usePolicyStore((policyState) =>
+    effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
+  );
+  const { canToggleSync, enableInsightsSync, optInDialog, syncAllowedByPolicy, unclaimedCount } =
+    useInsightsSyncOptIn();
+  const participationEnabled = useLeaderboardParticipationStore((state) => state.enabled);
+  const participationError = useLeaderboardParticipationStore((state) => state.error);
+  const participationReady = useLeaderboardParticipationStore((state) => state.ready);
+  const participationLeavePending = useLeaderboardParticipationStore((state) => state.leavePending);
+  const [activeTab, setActiveTab] = useState("usage");
+  const [syncError, setSyncError] = useState(false);
+  // A managed workspace that forbids cloud backup forbids these counters with
+  // it, so the page stays device-scoped even with the preference left on.
+  const syncActive =
+    isSignedIn &&
+    authValidated &&
+    insightsSyncEnabled &&
+    syncAllowedByPolicy &&
+    dataRetentionEnabled;
+  const claimAvailable = canOfferAnalyticsClaim({
+    signedIn: isSignedIn,
+    syncAllowedByPolicy,
+    dataRetentionEnabled,
+    insightsSyncEnabled,
+    unclaimedCount,
+  });
+  const showSyncAction =
+    activeTab === "usage" && isSignedIn && authValidated && (!syncActive || claimAvailable);
+  const syncActionDisabled = !canToggleSync || !dataRetentionEnabled || !syncAllowedByPolicy;
+  const syncStatusLabel = syncActive
+    ? syncError
+      ? t("insights.syncFallback")
+      : t("insights.synced")
+    : t("insights.onDevice");
+
+  return (
+    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-6 py-8">
+      <h1 className="text-base! font-semibold! leading-none! tracking-normal! text-foreground">
+        {t("insights.title")}
+      </h1>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6 flex flex-1 flex-col">
+        <div className="flex min-h-8 items-center justify-between gap-4">
+          <TabsList className="h-7 p-0.5 rounded-[7px]">
+            <TabsTrigger value="usage" className="h-6 px-2.5 text-xs rounded-[5px]">
+              {t("insights.yourUsage")}
+            </TabsTrigger>
+            <TabsTrigger value="leaderboard" className="h-6 px-2.5 text-xs rounded-[5px]">
+              {t("insights.leaderboard.title")}
+            </TabsTrigger>
+          </TabsList>
+
+          {activeTab === "usage" ? (
+            <div className="flex shrink-0 items-center gap-3">
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Cloud size={13} />
+                {syncStatusLabel}
+              </div>
+              {showSyncAction && (
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  className="h-7 rounded-[7px] px-2.5 text-[11px]"
+                  disabled={syncActionDisabled}
+                  onClick={() => void enableInsightsSync()}
+                >
+                  <CloudUpload size={13} />
+                  {t(syncActive ? "insights.claimInclude" : "insights.enableSync")}
+                </Button>
+              )}
+            </div>
+          ) : (
+            isSignedIn &&
+            participationReady &&
+            participationError === null &&
+            !participationEnabled && (
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Trophy size={13} />
+                {t(
+                  participationLeavePending
+                    ? "insights.leaderboard.leavePending"
+                    : "insights.leaderboard.disabled"
+                )}
+              </div>
+            )
+          )}
+        </div>
+
+        <TabsContent value="usage" className="mt-6 flex flex-1 flex-col">
+          <YourUsage
+            dataRetentionEnabled={dataRetentionEnabled}
+            isLoaded={isLoaded}
+            onSyncErrorChange={setSyncError}
+            syncActive={syncActive}
+          />
+          {isLoaded && !syncActive && (
+            <p className="mt-auto pt-8 text-center text-[11px] text-muted-foreground/70">
+              {t("insights.onDevicePrivacy")}
+            </p>
+          )}
+        </TabsContent>
+        <TabsContent value="leaderboard" className="mt-0">
+          <Suspense fallback={null}>
+            <LeaderboardView
+              enableInsightsSync={enableInsightsSync}
+              insightsSyncEnabled={insightsSyncEnabled}
+              onSignIn={onSignIn}
+              syncAllowedByPolicy={syncAllowedByPolicy}
+            />
+          </Suspense>
+        </TabsContent>
+      </Tabs>
       {optInDialog}
     </div>
   );

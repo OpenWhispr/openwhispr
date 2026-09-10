@@ -164,6 +164,7 @@
     "add": "Add",
     "retry": "Retry",
     "back": "Back",
+    "logout": "Log out",
     "next": "Next",
     "complete": "Complete",
     "reset": "Reset",
@@ -200,7 +201,7 @@
     "done": "Done",
     "skip": "Skip",
     "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
-    "policyAgentRestricted": "AI agent use is restricted by your organization.",
+    "policyAgentRestricted": "AI assistant use is restricted by your organization.",
     "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
@@ -213,8 +214,8 @@
         "microphoneDescription": "Turns speech into text.",
         "accessibilityDescription": "Pastes text into your active app.",
         "systemAudioTitle": "System Audio",
-        "systemAudioDescription": "Captures audio from other apps.",
-        "screenContextDescription": "Lets your voice assistant see your screen. Never stored.",
+        "systemAudioDescription": "Required for capturing audio in Meeting Notes.",
+        "screenContextDescription": "Share screen context with Voice Assistant.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -239,6 +240,7 @@
       "hotkey": {
         "capture": "Press the keys you want to use",
         "chooseAnother": "Choose another shortcut",
+        "confirmAgain": "Press {{hotkey}} again to confirm",
         "inUse": "That shortcut is already in use. Choose another one.",
         "holding": "Keep holding, or press another key"
       },
@@ -411,7 +413,6 @@
         "descriptionLineOne": "Choose the models you want",
         "descriptionLineTwo": "to run on your device.",
         "providerLabel": "Provider",
-        "agent": "Agent",
         "download": "Download",
         "downloadingShort": "Downloading",
         "selected": "Selected",
@@ -420,7 +421,7 @@
         "cancelDownload": "Cancel download of {{model}}",
         "downloads": "Model downloads",
         "downloading": "Downloading… {{progress}}%",
-        "installing": "Installing model…"
+        "installing": "Installing"
       }
     },
     "steps": {
@@ -680,11 +681,6 @@
       },
       "retryTranslationMode": "Translation Mode"
     },
-    "cloudMigration": {
-      "title": "Welcome to OpenWhispr Cloud",
-      "description": "We've switched your transcription to OpenWhispr Cloud for faster, more accurate results. Your previous settings are saved — switch back anytime in Settings.",
-      "viewSettings": "View Settings"
-    },
     "aiCta": {
       "title": "Enhance your transcriptions with AI",
       "description": "Automatically fix grammar, punctuation, and formatting as you speak.",
@@ -869,7 +865,7 @@
       "errorTitles": {
         "sessionExpired": "Session Expired",
         "offline": "You're Offline",
-        "agentUnavailable": "Agent Unavailable",
+        "agentUnavailable": "Assistant Unavailable",
         "screenContextSkipped": "Screen Context Skipped",
         "dailyLimitReached": "Daily Limit Reached",
         "providerRateLimited": "Provider Rate Limited"
@@ -909,7 +905,10 @@
         "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text.",
         "managedTranscriptionUnavailable": "Managed transcription is not available right now. Try again in a moment.",
         "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
-        "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator."
+        "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator.",
+        "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
+        "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
+        "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text."
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",
@@ -1106,12 +1105,12 @@
       "welcomeBack": "Welcome back"
     },
     "signedIn": {
-      "ready": "Ready",
-      "welcomeBack": "Welcome back",
-      "welcomeBackName": "Welcome back, {{name}}"
+      "welcomeBack": "Welcome back"
     },
     "sso": {
       "continueWithSSO": "Sign in with SSO",
+      "workEmailLabel": "Work email",
+      "emailPlaceholder": "Add your email",
       "emailRequired": "Enter your work email to use SSO.",
       "failed": "Single sign-on failed. Please try again.",
       "companySignInTitle": "Use your company sign-in",
@@ -1466,10 +1465,10 @@
       }
     },
     "edit": {
-      "agentNameLabel": "Agent name:",
+      "agentNameLabel": "Assistant name:",
       "cautionLabel": "Caution",
       "cautionTextPrefix": "Modifying this prompt may affect transcription quality.",
-      "cautionTextSuffix": "Keep the {{agentName}} placeholder to preserve agent detection.",
+      "cautionTextSuffix": "Keep the {{agentName}} placeholder to preserve assistant detection.",
       "placeholder": "Enter your custom system prompt..."
     },
     "tabs": {
@@ -1884,7 +1883,7 @@
           "features": [
             "Unlimited meeting recordings",
             "Workspace roles & member management",
-            "Agent mode",
+            "Assistant mode",
             "Chat over your data",
             "Priority support"
           ],
@@ -2008,11 +2007,11 @@
       }
     },
     "agentConfig": {
-      "agentName": "Agent Name",
+      "agentName": "Assistant name",
       "description": "Name your AI assistant so you can address it directly during dictation",
       "dialogs": {
-        "updatedDescription": "Your agent is now named \"{{name}}\". Address it by saying \"Hey {{name}}\" followed by your instructions.",
-        "updatedTitle": "Agent Name Updated"
+        "updatedDescription": "Your assistant is now named \"{{name}}\". Address it by saying \"Hey {{name}}\" followed by your instructions.",
+        "updatedTitle": "Assistant name updated"
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
@@ -2127,7 +2126,7 @@
       "clearDictionaryTitle": "Clear dictionary?",
       "clearDictionaryDescription": "This will remove all words from your custom dictionary. This action cannot be undone.",
       "clearAll": "Clear all",
-      "agentNameAutoManaged": "Auto-managed — synced from agent name",
+      "agentNameAutoManaged": "Auto-managed — synced from assistant name",
       "removeWord": "Remove word",
       "noWords": "No words yet",
       "wordsAppearHere": "Words you add will appear here",
@@ -2398,6 +2397,9 @@
       "insightsSyncDescription": "Sync word counts, the date and exact time of each dictation, durations, and model types across your devices. Transcript content is never included. When you're signed in, clearing history also removes these counters from this device and your account.",
       "insightsSyncRequiresAccount": "Sign in to sync content-free Insights data across your devices.",
       "insightsSyncRequiresHistory": "Turn on data retention to record Insights before syncing them across your devices.",
+      "leaderboardDescription": "Show your name, email, and activity on eligible workspace and work-domain leaderboards. Transcripts stay private.",
+      "leaderboardRequiresAccount": "Sign in to manage leaderboard participation.",
+      "leaderboardRequiresHistory": "Turn on data retention before joining leaderboards.",
       "audioRetention": "Audio Retention",
       "audioRetentionDescription": "Store dictation audio locally for re-transcription and download. Files are automatically deleted after the retention period. Meeting audio is never stored.",
       "audioRetentionDisabled": "Disabled",
@@ -2626,9 +2628,14 @@
         "groq_whisper_large_v3_turbo": "216x real-time speed",
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
         "gemini_3_5_transcribe": "Google's Gemini speech-to-text",
+        "gemini_3_5_transcribe_live": "Realtime streaming speech-to-text",
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
-        "tinfoil_voxtral": "Verifiably private transcription"
+        "tinfoil_voxtral": "Verifiably private transcription",
+        "deepgram_nova_3": "Deepgram's most accurate realtime model",
+        "assemblyai_universal_streaming_english": "Immutable realtime transcripts, English",
+        "assemblyai_universal_streaming_multilingual": "Immutable realtime transcripts, multilingual",
+        "assemblyai_universal_3_5_pro": "Highest accuracy realtime, 18 languages"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
@@ -2638,7 +2645,7 @@
         "openai_gpt_4_1_mini": "Smaller GPT-4.1 model",
         "openai_gpt_4_1_nano": "Lowest latency GPT-4.1",
         "anthropic_claude_fable_5": "Anthropic's most capable model, Mythos-class",
-        "anthropic_claude_sonnet_5": "Fast, capable agentic model at lower cost",
+        "anthropic_claude_sonnet_5": "Fast, capable assistant model at lower cost",
         "anthropic_claude_sonnet_4_6": "Balanced performance",
         "anthropic_claude_sonnet_4_5": "Previous Sonnet generation",
         "anthropic_claude_haiku_4_5": "Fast with near-frontier intelligence",
@@ -2673,12 +2680,12 @@
         "corti_corti_s1_mini": "Compact clinical model with reasoning at half the price"
       },
       "enterprise": {
-        "bedrock_claude_fable_5": "Most capable Claude model. Best for the hardest Agent Mode tasks.",
+        "bedrock_claude_fable_5": "Most capable Claude model. Best for the hardest Assistant tasks.",
         "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
-        "bedrock_claude_sonnet_5": "Balanced workhorse. Best default for Agent Mode.",
-        "bedrock_claude_opus_4_8": "Max intelligence. Best for complex Agent Mode tasks.",
+        "bedrock_claude_sonnet_5": "Balanced workhorse. Best default for Assistant tasks.",
+        "bedrock_claude_opus_4_8": "Max intelligence. Best for complex Assistant tasks.",
         "bedrock_gpt_oss_120b": "Open-weight OpenAI model. Strong reasoning at low cost.",
-        "bedrock_deepseek_v3_2": "Open-weight frontier model. Great value for Agent Mode.",
+        "bedrock_deepseek_v3_2": "Open-weight frontier model. Great value for Assistant tasks.",
         "bedrock_qwen3_next_80b": "Sparse open-weight model. Fast and multilingual.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
@@ -2749,6 +2756,7 @@
   },
   "insights": {
     "title": "Insights",
+    "yourUsage": "Your Usage",
     "description": "A private view of your dictation habits and momentum.",
     "wordsSpoken": "Words spoken",
     "currentStreak": "Current streak",
@@ -2769,22 +2777,108 @@
     "dayTooltip_other": "{{date}}: {{count}} words",
     "dataRetentionDisabled": "Data retention is off, so new dictations aren't counted in Insights — not on this device and not in your account. Counters already synced stay in your account.",
     "onDevice": "On this device",
+    "onDevicePrivacy": "These insights are calculated on this device to protect your privacy.",
     "synced": "Synced across devices",
     "syncFallback": "Showing device data — sync unavailable",
     "syncPrompt": "Sync content-free counters to combine local and cloud activity across devices.",
-    "enableSync": "Enable sync",
+    "enableSync": "Enable Sync",
+    "syncEnableError": "Insights sync couldn't be enabled. Please try again.",
     "claimTitle": "Include earlier dictations?",
-    "claimDescription_one": "{{count}} dictation on this device was recorded before you signed in. Including it sends only word counts, the date and exact time it happened, its duration, and the model type — never transcript content.",
-    "claimDescription_other": "{{count}} dictations on this device were recorded before you signed in. Including them sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
+    "claimDescription_one": "Sync usage from {{count}} earlier dictation. Transcripts stay private.",
+    "claimDescription_other": "Sync usage from {{count}} earlier dictations. Transcripts stay private.",
     "claimInclude": "Include",
     "claimSkip": "Not now",
     "enableTitle": "Turn on Insights sync?",
     "enableConfirm": "Turn on sync",
-    "enableDescription_one": "{{count}} dictation already recorded on this device will be uploaded to your account. Insights sync sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
-    "enableDescription_other": "{{count}} dictations already recorded on this device will be uploaded to your account. Insights sync sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
+    "enableDescription_one": "Sync usage from {{count}} existing dictation. Transcripts stay private.",
+    "enableDescription_other": "Sync usage from {{count}} existing dictations. Transcripts stay private.",
     "emptyTitle": "No dictations yet",
     "emptyBody": "Start dictating and your words, streaks, and daily activity will show up here.",
-    "loadError": "Insights couldn't be read from this device."
+    "loadError": "Insights couldn't be read from this device.",
+    "leaderboard": {
+      "title": "Leaderboard",
+      "inviteCta": "Invite teammates",
+      "soloTitle": "Invite your first teammate",
+      "soloDescription": "Your leaderboard is ready. Invite someone to {{scope}} to start comparing activity and building momentum together.",
+      "soloHint": "They’ll appear here after they join the leaderboard.",
+      "topPerformers": "Top performers",
+      "refreshCadence": "Updates hourly",
+      "moreActions": "More leaderboard actions",
+      "setupTitle": "Create your team leaderboard",
+      "setupDescription": "Create a workspace, then invite teammates to start comparing activity and building momentum together.",
+      "setupDomainDescription_one": "{{count}} person at {{domain}} has joined leaderboards. Create a workspace and invite them.",
+      "setupDomainDescription_other": "{{count}} people at {{domain}} have joined leaderboards. Create a workspace and invite them.",
+      "setupCta": "Create workspace",
+      "accessError": "We couldn't check your leaderboard access.",
+      "signInTitle": "Sign in to see your leaderboard",
+      "signInDescription": "Leaderboards rank you against teammates on your account. Sign in to check whether yours is available.",
+      "requestJoinTitle": "Your team is already here",
+      "requestJoinDescription_one": "{{workspace}} has {{count}} member. Ask an admin to add you.",
+      "requestJoinDescription_other": "{{workspace}} has {{count}} members. Ask an admin to add you.",
+      "requestJoinCta": "Request to join",
+      "requestSent": "Request sent",
+      "requesting": "Sending request…",
+      "acceptInviteTitle": "You're invited to {{workspace}}",
+      "acceptInviteDescription": "{{inviter}} invited you. Join to see the team board.",
+      "acceptInviteDescriptionNoInviter": "Join {{workspace}} to see the team board.",
+      "acceptInviteCta": "Join Team",
+      "joining": "Joining…",
+      "inviteAcceptedTitle": "Workspace joined",
+      "inviteAcceptedDescription": "You can now see the {{workspace}} leaderboard.",
+      "inviteAcceptError": "Couldn't join this workspace",
+      "invitedList": "Invited: {{emails}}",
+      "chooseBoard": "Choose a board",
+      "emptyStrip_one": "{{count}} teammate hasn't joined the leaderboard yet. Rankings start when they do.",
+      "emptyStrip_other": "{{count}} teammates haven't joined the leaderboard yet. Rankings start when they do.",
+      "copyNudge": "Copy a nudge",
+      "nudgeText": "Join the leaderboard in OpenWhispr → Insights so we can see the team board.",
+      "nudgeCopied": "Nudge copied",
+      "nudgeCopyError": "Couldn't copy the nudge",
+      "joinTitle": "See where you rank in {{scope}}",
+      "joinDescription": "Your name, email, and activity appear on all your eligible workspace and work-domain leaderboards. Transcripts stay private, and you can leave at any time.",
+      "joinCta": "Join leaderboards",
+      "joiningLeaderboard": "Joining…",
+      "joinPolicyBlocked": "Your workspace policy doesn't allow leaderboard participation.",
+      "activationError": "We couldn't verify your leaderboard participation. Check your connection and try again.",
+      "disabled": "Leaderboard is disabled",
+      "leave": "Leave leaderboards",
+      "leavePending": "We'll finish leaving the leaderboards when you're online.",
+      "allTime": "All time",
+      "thisWeek": "This week",
+      "wpmValue": "{{count}} WPM",
+      "dayValue_one": "{{count}} day",
+      "dayValue_other": "{{count}} days",
+      "share": "Share",
+      "refresh": "Refresh leaderboard",
+      "error": "The leaderboard couldn't be loaded.",
+      "retry": "Try again",
+      "rank": "Rank",
+      "member": "Member",
+      "you": "(you)",
+      "jumpToMe": "Jump to me",
+      "jumpUnavailable": "Your account couldn't be identified in this leaderboard.",
+      "previous": "Previous page",
+      "jumpToRank": "Jump to rank",
+      "next": "Next page",
+      "metrics": {
+        "total_words": "Total words",
+        "words_per_minute": "Words per minute",
+        "current_daily_streak": "Current daily streak",
+        "desktop_words": "Desktop words",
+        "mobile_words": "Mobile words"
+      },
+      "shareText": "See where I rank on OpenWhispr.",
+      "shareTitle": "Share leaderboard",
+      "shareDescription": "Copy or download this card, or copy it before opening a social composer.",
+      "copyImage": "Copy image",
+      "download": "Download",
+      "shareX": "Share to X",
+      "shareLinkedIn": "Share to LinkedIn",
+      "copied": "Image copied — paste it into your post.",
+      "saved": "Image downloaded.",
+      "failed": "The share card couldn't be created.",
+      "unnamedMember": "Teammate"
+    }
   },
   "workspaces": {
     "switcher": {
@@ -3230,13 +3324,17 @@
       "queueFailed": "{{n}} failed",
       "urlFileTooLarge": "File is too large to download. The maximum size is 500 MB.",
       "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while.",
-      "customEndpointInvalid": "Custom transcription endpoint is not configured or invalid. Update it in Settings."
+      "customEndpointInvalid": "Custom transcription endpoint is not configured or invalid. Update it in Settings.",
+      "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries."
     },
     "meeting": {
       "title": "Meeting Notes",
       "description": "Transcriptions & structured summaries",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
+      "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
+      "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
+      "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
       "autoEnded": "Recording stopped automatically after your meeting ended.",
       "restartFailed": "Couldn't restart the meeting recording.",
       "systemAudioSilent": {
@@ -3479,7 +3577,7 @@
       "addPlaceholder": "Add a trigger phrase — \"investor ask\", \"cal link\""
     },
     "emptyTitle": "Your dictionary is empty",
-    "emptyDescription": "Add words {{agentName}} should always get right: names, tools, acronyms.",
+    "emptyDescription": "Add words for {{agentName}} to always get right: names, tools, acronyms.",
     "addFirstWord": "Add your first word",
     "importList": "Import a list",
     "agentDefault": "Added by default"
@@ -3571,7 +3669,7 @@
   },
   "dictationAgent": {
     "enabled": "Enable voice assistant",
-    "enabledDescription": "Dictate instructions to your agent. Highlighted text is sent to the configured model and edited in place. Activate by saying \"{{agentName}}\".",
+    "enabledDescription": "Dictate instructions to your assistant. Highlighted text is sent to the configured model and edited in place. Activate by saying \"{{agentName}}\".",
     "screenContext": {
       "title": "Screen Context",
       "description": "Attach a screenshot of your active screen to voice assistant commands.",
@@ -3586,7 +3684,7 @@
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "openwhisprDesc": "Use the OpenWhispr-managed assistant — no API key needed.",
       "providers": "Bring your own key",
       "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
       "local": "Local",
@@ -3597,14 +3695,14 @@
       "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
     },
     "prompt": {
-      "title": "Agent prompt",
+      "title": "Assistant prompt",
       "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {
     "settings": {
       "systemPrompt": "System Prompt",
-      "systemPromptDescription": "Custom instructions for the agent",
+      "systemPromptDescription": "Custom instructions for the assistant",
       "systemPromptPlaceholder": "Enter custom system prompt...",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
@@ -3628,7 +3726,8 @@
       "transcribing": "Transcribing...",
       "thinking": "Thinking...",
       "typeMessage": "Type a message...",
-      "send": "Send"
+      "send": "Send",
+      "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text."
     },
     "tools": {
       "search_notesName": "Search notes",
@@ -3756,7 +3855,7 @@
     },
     "cli": {
       "title": "Command-line access",
-      "description": "Give your agent access to your notes from the terminal.",
+      "description": "Give your assistant access to your notes from the terminal.",
       "installLabel": "Install",
       "learnMore": "Read the docs",
       "copyDocsLink": "Copy docs link",
