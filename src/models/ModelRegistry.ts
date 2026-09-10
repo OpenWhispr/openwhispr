@@ -1,4 +1,4 @@
-import modelDataRaw from "./modelRegistryData.json";
+import modelDataRaw from "./modelRegistryData.json" with { type: "json" };
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
 import type { InferenceMode } from "../types/electron";
