@@ -65,7 +65,7 @@ export function ChatInput({
   const { t } = useTranslation();
   const { toast } = useToast();
   const [inputText, setInputText] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const voice = useVoiceDraft({
     onTranscript: (text) => {
@@ -92,7 +92,8 @@ export function ChatInput({
   }, [inputText, onTextSubmit]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.nativeEvent.isComposing) return;
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSubmit();
@@ -199,18 +200,19 @@ export function ChatInput({
 
         {(isIdle || isBusy) && !isVoiceRecording && !isVoiceTranscribing && (
           <div className="flex items-center gap-2 w-full">
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
+              rows={1}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isBusy}
               autoFocus={autoFocus}
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
+              aria-label={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
-                "input-inline flex-1 outline-none bg-transparent caret-primary",
-                "text-[13px] text-foreground placeholder:text-muted-foreground/40",
+                "input-inline flex-1 max-h-32 resize-none overflow-y-auto [field-sizing:content] outline-none bg-transparent caret-primary",
+                "text-[13px] leading-5 text-foreground placeholder:text-muted-foreground/40",
                 "min-w-0 p-0",
                 isBusy && "text-muted-foreground/30 cursor-not-allowed"
               )}

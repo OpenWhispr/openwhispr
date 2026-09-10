@@ -346,7 +346,7 @@ async function renderAssistantPanel(
 test("an empty idle Assistant shows typed input and generic suggestions", async (t) => {
   const markup = await renderAssistantPanel(t, []);
 
-  assert.match(markup, /<input/);
+  assert.match(markup, /<textarea/);
   assert.match(markup, /Summarize my recent notes/);
   assert.match(markup, /What is on my calendar\?/);
   assert.match(markup, /Help me draft something/);
@@ -358,7 +358,7 @@ test("a populated Assistant keeps typed input without empty-state suggestions", 
   ]);
 
   assert.match(markup, /Existing answer/);
-  assert.match(markup, /<input/);
+  assert.match(markup, /<textarea/);
   assert.doesNotMatch(markup, /Summarize my recent notes/);
 });
 
@@ -577,7 +577,7 @@ test("the Assistant exposes an accessible new-conversation control only after me
 test("a reopened Assistant blocks typed actions until retained history finishes loading", async (t) => {
   const markup = await renderAssistantPanel(t, [], { initialConversationId: 42 });
 
-  assert.match(markup, /<input[^>]*disabled=""/);
+  assert.match(markup, /<textarea[^>]*disabled=""/);
   assert.doesNotMatch(markup, /Summarize my recent notes/);
 });
 
