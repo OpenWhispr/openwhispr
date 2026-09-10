@@ -22,9 +22,10 @@ func emitWarning(_ message: String) {
 
 // Mouse buttons arrive as a positional comma-separated list; everything else is
 // an explicit flag.
-func parseArguments() -> (config: ListenerConfig, statePath: String?) {
+func parseArguments() -> (config: ListenerConfig, statePath: String?, restoreLeftoverPreferenceOnly: Bool) {
     var config = ListenerConfig()
     var statePath: String?
+    var restoreLeftoverPreferenceOnly = false
     var arguments = CommandLine.arguments.dropFirst().makeIterator()
 
     while let argument = arguments.next() {
@@ -33,6 +34,8 @@ func parseArguments() -> (config: ListenerConfig, statePath: String?) {
             config.suppressGlobeAction = true
         case "--globe-preference-state":
             statePath = arguments.next()
+        case "--restore-leftover-globe-preference":
+            restoreLeftoverPreferenceOnly = true
         default:
             config.mouseButtons.formUnion(
                 argument.split(separator: ",")
@@ -42,7 +45,7 @@ func parseArguments() -> (config: ListenerConfig, statePath: String?) {
         }
     }
 
-    return (config, statePath)
+    return (config, statePath, restoreLeftoverPreferenceOnly)
 }
 
 struct GlobePreferenceState: Codable {
@@ -186,6 +189,10 @@ func applyConfiguration(_ config: ListenerConfig) {
 let launchOptions = parseArguments()
 GlobeSystemAction.statePath = launchOptions.statePath
 GlobeSystemAction.recoverLeftoverState()
+if launchOptions.restoreLeftoverPreferenceOnly {
+    GlobeSystemAction.restore()
+    exit(0)
+}
 
 let rightModifiers: [(UInt16, NSEvent.ModifierFlags, String)] = [
     (61, .option, "RightOption"),

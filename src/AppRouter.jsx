@@ -13,6 +13,7 @@ import { useTheme } from "./hooks/useTheme";
 import { mirrorActiveAccountScope } from "./lib/accountScopeMirror";
 import { usePolicyStore } from "./stores/policyStore";
 import { resolveSettledControlPanelWindowMode } from "./utils/controlPanelWindowMode.ts";
+import { resolveMacAccessibilityReadiness } from "./utils/macAccessibilityReadiness.ts";
 import { isControlPanelWindow } from "./utils/windowContext.ts";
 
 // Either marker means the flow is mid-way: the legacy step key is kept for
@@ -169,9 +170,23 @@ function MainApp() {
     // actually committed the normal app may release global hotkeys and popup
     // surfaces; fresh installs and onboarding reloads keep them suppressed.
     void window.electronAPI?.setOnboardingActive?.(!normalAppVisible);
-    if (normalAppVisible && (isSignedIn || authSkipped)) {
-      window.electronAPI?.markMacAccessibilityFeaturesReady?.();
-    }
+    let cancelled = false;
+    void resolveMacAccessibilityReadiness({
+      normalAppVisible,
+      isControlPanel,
+      isSignedIn,
+      authSkipped,
+      // The hidden dictation window cannot resolve Better Auth itself. Its
+      // persisted main-process scope proves this is a validated returning user.
+      readActiveAccountScope: window.electronAPI?.getActiveAccountScope,
+    }).then((ready) => {
+      if (!cancelled && ready) {
+        window.electronAPI?.markMacAccessibilityFeaturesReady?.();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [isControlPanel, isLoading, isSignedIn, isWaitingForPolicyStart, needsReauth, showOnboarding]);
 
   const handleOnboardingComplete = (options) => {

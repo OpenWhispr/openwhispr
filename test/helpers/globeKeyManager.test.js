@@ -46,7 +46,7 @@ function makeChild() {
 
 // Returns the manager plus the spawn calls it made, so tests can assert on the
 // arguments handed to the native listener.
-function loadManager() {
+function loadManager({ markerExists = true } = {}) {
   delete require.cache[managerModulePath];
   setPlatform("darwin");
 
@@ -68,6 +68,7 @@ function loadManager() {
       return {
         constants: { X_OK: 1 },
         statSync: () => ({ isFile: () => true }),
+        existsSync: () => markerExists,
         accessSync() {},
         // Architecture verification is best-effort; failing it here keeps the
         // test independent of the host CPU.
@@ -102,6 +103,43 @@ test("spawn args carry the state path and omit suppression by default", () => {
   assert.equal(spawnCalls.length, 1);
   assert.equal(spawnCalls[0].command, LISTENER_PATH);
   assert.deepEqual(spawnCalls[0].args, ["--globe-preference-state", "/tmp/state.json"]);
+});
+
+test("leftover preference recovery uses a one-shot helper without starting the listener", async () => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager({ preferenceStatePath: "/tmp/state.json" });
+
+  const recovery = manager.restoreLeftoverSystemPreference();
+
+  assert.equal(spawnCalls.length, 1);
+  assert.deepEqual(spawnCalls[0].args, [
+    "--globe-preference-state",
+    "/tmp/state.json",
+    "--restore-leftover-globe-preference",
+  ]);
+  assert.equal(manager.process, null);
+
+  spawnCalls[0].child.emit("exit", 0, null);
+  await recovery;
+
+  assert.equal(manager.process, null);
+});
+
+test("leftover preference recovery is skipped without a marker or off macOS", async () => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager();
+
+  await manager.restoreLeftoverSystemPreference();
+  setPlatform("win32");
+  await new GlobeKeyManager({ preferenceStatePath: "/tmp/state.json" })
+    .restoreLeftoverSystemPreference();
+
+  assert.equal(spawnCalls.length, 0);
+
+  const withoutMarker = loadManager({ markerExists: false });
+  await new withoutMarker.GlobeKeyManager({ preferenceStatePath: "/tmp/state.json" })
+    .restoreLeftoverSystemPreference();
+  assert.equal(withoutMarker.spawnCalls.length, 0);
 });
 
 test("spawn args include mouse buttons, a spaced state path, and the suppression flag", () => {

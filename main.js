@@ -1183,6 +1183,11 @@ async function startApp() {
 
   // Phase 2: Initialize remaining managers after windows are visible
   initializeDeferredManagers();
+  if (process.platform === "darwin") {
+    // Restore a Globe preference marker left by a crash without starting any
+    // Accessibility-protected event monitors during onboarding.
+    await globeKeyManager.restoreLeftoverSystemPreference();
+  }
 
   app.on("browser-window-focus", () => {
     if (googleCalendarManager) googleCalendarManager.syncOnFocus();

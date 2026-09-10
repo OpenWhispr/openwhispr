@@ -86,6 +86,58 @@ class GlobeKeyManager extends EventEmitter {
     return args;
   }
 
+  restoreLeftoverSystemPreference() {
+    if (!this.isSupported || !this.preferenceStatePath) {
+      return Promise.resolve();
+    }
+    if (!fs.existsSync(this.preferenceStatePath)) {
+      return Promise.resolve();
+    }
+
+    const listenerPath = this.resolveListenerBinary();
+    if (!listenerPath) {
+      debugLogger.warn("[GlobeKeyManager] Preference recovery skipped — binary not found");
+      return Promise.resolve();
+    }
+
+    const archMismatch = this._checkArchMismatch(listenerPath);
+    if (archMismatch) {
+      debugLogger.warn("[GlobeKeyManager] Preference recovery skipped", { error: archMismatch });
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (error, code) => {
+        if (settled) return;
+        settled = true;
+        if (error || code !== 0) {
+          debugLogger.warn("[GlobeKeyManager] Preference recovery failed", {
+            error: error?.message,
+            code,
+          });
+        }
+        resolve();
+      };
+
+      try {
+        const child = spawn(
+          listenerPath,
+          [
+            "--globe-preference-state",
+            this.preferenceStatePath,
+            "--restore-leftover-globe-preference",
+          ],
+          { stdio: "ignore" }
+        );
+        child.once("error", (error) => finish(error));
+        child.once("exit", (code) => finish(null, code));
+      } catch (error) {
+        finish(error);
+      }
+    });
+  }
+
   start() {
     if (!this.isSupported) {
       debugLogger.info("[GlobeKeyManager] Skipped — not macOS");
