@@ -27,3 +27,16 @@ export function mergeHydratedDownloads<T>(
   ) as Record<string, T>;
   return { ...recoverable, ...current };
 }
+
+/**
+ * Extraction is the last phase of a transfer, so the tray header only claims it
+ * once every row has reached it — a mixed tray is still, truthfully, downloading.
+ */
+export function isTrayInstalling(downloads: readonly { installing?: boolean }[]): boolean {
+  return downloads.length > 0 && downloads.every((download) => download.installing === true);
+}
+
+/** Cycles "" → "." → ".." → "..." so an installing header reads as live work. */
+export function ellipsisFrame(tick: number): string {
+  return ".".repeat(tick % 4);
+}

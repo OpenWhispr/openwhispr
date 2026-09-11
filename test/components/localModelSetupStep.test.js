@@ -237,6 +237,14 @@ async function createSetupHarness(
       const button = findElement(trayRow, (node) => node.type === "button");
       await React.act(async () => button.props.onClick());
     },
+    trayHeader: () => {
+      const header = findElement(
+        trayTree,
+        (node) => node.type === "div" && String(node.props?.className).includes("gap-[5px]")
+      );
+      assert.ok(header, "tray header is visible");
+      return textContent(header);
+    },
     chooseProvider: async (providerId) => {
       const select = findElement(tree, (node) => typeof node.props?.onValueChange === "function");
       await React.act(async () => select.props.onValueChange(providerId));
@@ -478,4 +486,18 @@ test("unsupported Macs cannot choose Oruk or NVIDIA during local onboarding", as
     assert.ok(setup.row("base"));
     assert.equal(setup.ready(), false);
   }
+});
+
+test("the tray header follows the transfer into its installing phase", async (t) => {
+  const modelId = "parakeet-tdt-0.6b-v3";
+  const setup = await createSetupHarness(t, { provider: "nvidia" });
+
+  await setup.click(modelId, "onboarding.rehaul.local.download");
+  await setup.progress(modelId, 100);
+  assert.equal(setup.trayHeader(), "onboarding.rehaul.local.downloadInProgress");
+
+  // Extraction reports no further bytes, so the header is the only thing left
+  // that can tell a full bar apart from a stalled one.
+  await setup.progress(modelId, 100, "installing");
+  assert.equal(setup.trayHeader(), "onboarding.rehaul.local.installing");
 });

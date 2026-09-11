@@ -23,7 +23,7 @@ import type {
   ParakeetDownloadProgressData,
   WhisperDownloadProgressData,
 } from "../../types/electron";
-import { mergeHydratedDownloads } from "./localDownloadState";
+import { ellipsisFrame, isTrayInstalling, mergeHydratedDownloads } from "./localDownloadState";
 import { ONBOARDING_SESSION_KEY, isRequiredModelsOnboardingStepActive } from "./flow";
 import { getPlatform } from "../../utils/platform";
 
@@ -122,6 +122,24 @@ function CancelGlyph() {
       />
     </svg>
   );
+}
+
+// One frame every 400ms, so a full stop-to-three-dots cycle takes 1.6s.
+const ELLIPSIS_FRAME_MS = 400;
+
+// Installation reports no byte progress, so without this the header sits on a
+// full bar and reads as a stalled download. aria-hidden because the tray is an
+// aria-live region: an announced dot would re-read the whole strip every frame.
+function AnimatedEllipsis() {
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = setInterval(() => setTick((current) => current + 1), ELLIPSIS_FRAME_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  return <span aria-hidden="true">{ellipsisFrame(tick)}</span>;
 }
 
 export default function BackgroundModelDownloadTray({
@@ -388,6 +406,8 @@ export default function BackgroundModelDownloadTray({
 
   if (activeDownloads.length === 0) return null;
 
+  const installing = isTrayInstalling(activeDownloads);
+
   return (
     // Figma "Onboarding / Frame 2147259036": 341 wide, radius 12, #E3E3E3
     // stroke, no shadow. Colours bind to the app's standard theme tokens
@@ -408,7 +428,14 @@ export default function BackgroundModelDownloadTray({
       {/* Frame 2147259037: #F7F7F7 strip, 7/8 padding, gap 5, 12/140% label. */}
       <div className="flex items-center gap-[5px] bg-muted px-2 py-[7px] text-xs leading-[1.4] text-muted-foreground">
         <BrandMark className="size-[11.2px] shrink-0 text-primary" />
-        {t("onboarding.rehaul.local.downloadInProgress")}
+        {installing ? (
+          <span>
+            {t("onboarding.rehaul.local.installing")}
+            <AnimatedEllipsis />
+          </span>
+        ) : (
+          <span>{t("onboarding.rehaul.local.downloadInProgress")}</span>
+        )}
       </div>
       {activeDownloads.map((download, index) => (
         // Frame 2147258983: a row of 8/10 padding and gap 10, holding the growing

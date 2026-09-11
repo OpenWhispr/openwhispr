@@ -29,10 +29,9 @@ test("hydration cannot resurrect a download removed by a live terminal event", a
     "llm:qwen": { percentage: 40 },
   };
 
-  assert.deepEqual(
-    mergeHydratedDownloads(staleInventory, {}, new Set(["whisper:base"])),
-    { "llm:qwen": { percentage: 40 } }
-  );
+  assert.deepEqual(mergeHydratedDownloads(staleInventory, {}, new Set(["whisper:base"])), {
+    "llm:qwen": { percentage: 40 },
+  });
 });
 
 test("live download state takes precedence over the hydration snapshot", async () => {
@@ -46,4 +45,20 @@ test("live download state takes precedence over the hydration snapshot", async (
     ),
     { "llm:qwen": { percentage: 55 } }
   );
+});
+
+test("the tray header only claims installation once every row is installing", async () => {
+  const { isTrayInstalling } = await load();
+
+  assert.equal(isTrayInstalling([{ installing: true }]), true);
+  assert.equal(isTrayInstalling([{ installing: true }, { installing: true }]), true);
+  assert.equal(isTrayInstalling([{ installing: true }, { installing: false }]), false);
+  assert.equal(isTrayInstalling([{ installing: true }, { error: "boom" }]), false);
+  assert.equal(isTrayInstalling([]), false);
+});
+
+test("the installing ellipsis cycles nothing, one, two, three dots and restarts", async () => {
+  const { ellipsisFrame } = await load();
+
+  assert.deepEqual([0, 1, 2, 3, 4, 5].map(ellipsisFrame), ["", ".", "..", "...", "", "."]);
 });
