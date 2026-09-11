@@ -26,4 +26,16 @@ function parseDbTimestamp(value) {
   return Number.isFinite(parsed.getTime()) ? parsed : null;
 }
 
-module.exports = { hasExplicitTimeZone, parseDbTimestamp };
+/**
+ * The shape a `transcriptions` timestamp is stored in: SQLite's space-separated
+ * form carrying an explicit Z. Both the history list's `ORDER BY timestamp` and
+ * the retention sweep compare that column as TEXT, so every writer has to agree
+ * on the separator -- "T" sorts above a space, so one ISO writer puts its rows
+ * above every other row from the same day. Returns null for anything
+ * unreadable, so callers can fall back to CURRENT_TIMESTAMP.
+ */
+function toDbTimestamp(value) {
+  return parseDbTimestamp(value)?.toISOString().replace("T", " ") ?? null;
+}
+
+module.exports = { hasExplicitTimeZone, parseDbTimestamp, toDbTimestamp };

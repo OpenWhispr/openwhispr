@@ -870,12 +870,39 @@ test("a dictation pulled from the cloud is dated when it was spoken, not when it
     client_transcription_id: "from-cloud",
     id: "cloud-1",
     text: "spoken last spring",
-    created_at: "2026-04-01 09:00:00",
+    created_at: "2026-04-01T09:00:00.000Z",
   });
 
   const [row] = db.getTranscriptions(10);
   assert.equal(row.client_transcription_id, "from-cloud");
-  assert.equal(row.timestamp, "2026-04-01 09:00:00");
+  assert.equal(row.timestamp, "2026-04-01 09:00:00.000Z");
+});
+
+test("a cloud pull sorts by when it was spoken, in the shape the API actually sends", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  // The API serializes transcriptions.created_at, a timestamptz, straight to
+  // JSON, so it arrives ISO 8601 with a "T". The history list sorts timestamp
+  // as TEXT and "T" (0x54) outranks the space (0x20) every locally written row
+  // uses, so an unnormalized cloud value jumps above everything spoken on the
+  // device that day regardless of the hour.
+  db.saveTranscription("spoken here tonight", null, {
+    clientTranscriptionId: "local-late",
+    analyticsOccurredAt: "2026-04-01T23:00:00.000Z",
+  });
+  db.upsertTranscriptionFromCloud({
+    client_transcription_id: "cloud-early",
+    id: "cloud-2",
+    text: "spoken elsewhere this morning",
+    created_at: "2026-04-01T02:00:00.000Z",
+  });
+
+  assert.deepEqual(
+    db.getTranscriptions(10).map((row) => row.client_transcription_id),
+    ["local-late", "cloud-early"],
+    "newest first, whichever writer stored the row"
+  );
 });
 
 test("a cloud pull does not overwrite the local recording time it already has", (t) => {

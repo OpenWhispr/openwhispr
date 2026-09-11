@@ -10,7 +10,7 @@ const { parseEventTime } = require("./calendarAvailability");
 // naive timestamp may instead be a sync artifact: upsertTranscriptionFromCloud
 // keeps the cloud created_at but lets timestamp default to the local pull, so
 // a naive value must never outrank created_at when dating a historical row.
-const { hasExplicitTimeZone, parseDbTimestamp } = require("./dbTimestamp");
+const { hasExplicitTimeZone, parseDbTimestamp, toDbTimestamp } = require("./dbTimestamp");
 const {
   ANALYTICS_COUNTER_VERSION,
   ANALYTICS_HISTORY_BACKFILL_VERSION,
@@ -1296,8 +1296,7 @@ class DatabaseManager {
       // Keep the existing SQLite-friendly separator so mixed old/new rows
       // continue to sort chronologically, while the trailing Z marks this as
       // an exact client-captured instant for clear-state reconciliation.
-      const occurredAt =
-        parseDbTimestamp(analyticsOccurredAt)?.toISOString().replace("T", " ") ?? null;
+      const occurredAt = toDbTimestamp(analyticsOccurredAt);
       const stmt = this.db.prepare(
         `INSERT INTO transcriptions (
            text, raw_text, status, error_message, error_code, route_kind,
@@ -6914,6 +6913,12 @@ class DatabaseManager {
       // spoken since. Deliberately not in the conflict update: a row this
       // device recorded already carries the recording's start time, which is
       // more precise than the cloud's creation time for the same dictation.
+      //
+      // The separator is normalized because that sort is a TEXT comparison and
+      // the API sends ISO 8601: "T" (0x54) outranks the space (0x20) every
+      // locally written row uses, so a raw cloud value would sort above every
+      // local dictation from the same UTC day whatever the hour.
+      const cloudOccurredAt = toDbTimestamp(cloudTranscription.created_at);
       const stmt = this.db.prepare(`
         INSERT INTO transcriptions (client_transcription_id, cloud_id, text, raw_text, status, sync_status, created_at, timestamp)
         VALUES (?, ?, ?, ?, ?, 'synced', ?, COALESCE(?, CURRENT_TIMESTAMP))
@@ -6944,7 +6949,7 @@ class DatabaseManager {
           rawText,
           status,
           cloudTranscription.created_at,
-          cloudTranscription.created_at ?? null
+          cloudOccurredAt
         );
         return this.db
           .prepare("SELECT * FROM transcriptions WHERE client_transcription_id = ?")
