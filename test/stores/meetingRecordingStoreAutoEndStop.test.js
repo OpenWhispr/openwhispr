@@ -74,6 +74,24 @@ test("a completed stop reports that it ended the recording", async (t) => {
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
 });
 
+// The note header's timer derives its elapsed seconds from this stamp instead of
+// counting ticks, so a note switch (which remounts the editor) keeps the real
+// duration rather than restarting at 00:00.
+test("a session stamps its start time and clears it on stop", async (t) => {
+  const { api } = createElectronAPI({ stopResult: () => ({ success: true }) });
+  const store = await loadStore(t, api);
+  const beforeStart = Date.now();
+
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const startedAt = store.useMeetingRecordingStore.getState().recordingStartedAt;
+  assert.equal(typeof startedAt, "number");
+  assert.ok(startedAt >= beforeStart, "the stamp is the moment recording began");
+
+  await store.stopRecording();
+
+  assert.equal(store.useMeetingRecordingStore.getState().recordingStartedAt, null);
+});
+
 // The renderer has already run cleanup and written the transcript by the time
 // main's result is read, so a teardown failure must not cost the user their
 // restart offer.

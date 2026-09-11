@@ -79,7 +79,12 @@ import {
 import NoteParticipants from "./NoteParticipants";
 import type { CalendarAttendee } from "../../types/calendar";
 import { observeFloatingChatLayout } from "./floatingChatLayout";
-import { NOTE_META_CHIP_CLASS, defaultFolderDisplayName, folderMatchesQuery } from "./shared";
+import {
+  NOTE_META_CHIP_CLASS,
+  defaultFolderDisplayName,
+  folderMatchesQuery,
+  shouldOfferMeetingSummary,
+} from "./shared";
 
 const SEGMENT_BUTTON_CLASS =
   "relative z-1 flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors duration-150";
@@ -189,6 +194,9 @@ interface NoteEditorProps {
   actionPicker?: React.ReactNode;
   /** Runs the built-in Generate Notes action; enables the post-recording summary pill. */
   onGenerateSummary?: () => void;
+  /** Set by the auto-end card's summary action: run this note's AI summary on arrival. */
+  generateSummaryRequested?: boolean;
+  onGenerateSummaryRequestHandled?: () => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   diarizationSessionId?: string | null;
@@ -222,6 +230,8 @@ export default function NoteEditor({
   enhancement,
   actionPicker,
   onGenerateSummary,
+  generateSummaryRequested,
+  onGenerateSummaryRequestHandled,
   actionProcessingState,
   actionName,
   diarizationSessionId,
@@ -373,6 +383,13 @@ export default function NoteEditor({
     noteContent: note.content,
     noteTranscript: note.transcript ?? undefined,
   });
+  // The auto-end card's summary action opens the note through main, then lands
+  // here to run the same action the bottom bar's offer would.
+  useEffect(() => {
+    if (!generateSummaryRequested) return;
+    onGenerateSummary?.();
+    onGenerateSummaryRequestHandled?.();
+  }, [generateSummaryRequested, onGenerateSummary, onGenerateSummaryRequestHandled]);
   const titleRef = useRef<HTMLDivElement>(null);
   const prevNoteIdRef = useRef<number>(note.id);
 
@@ -399,15 +416,15 @@ export default function NoteEditor({
   }, [diarizedSegments, note.transcript]);
 
   const hasChatSegments = displaySegments.length > 0;
-  // A finished recording with no AI summary yet offers one from the transcript view.
   const showSummaryCallout =
-    viewMode === "transcript" &&
-    !isRecording &&
-    hasChatSegments &&
-    !enhancement &&
-    canEditNote &&
     !!onGenerateSummary &&
-    actionProcessingState !== "processing";
+    shouldOfferMeetingSummary({
+      isRecording,
+      hasTranscriptSegments: hasChatSegments,
+      hasSummary: !!enhancement,
+      canEdit: canEditNote,
+      isProcessingAction: actionProcessingState === "processing",
+    });
 
   const knownSpeakers = useMemo(
     () => buildKnownSpeakers(speakerProfiles, displaySegments, speakerMappings),

@@ -125,6 +125,9 @@ interface PersonalNotesViewProps {
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
+  /** Set by the auto-end card's summary action, routed through note navigation. */
+  summaryRequest?: { noteId: number } | null;
+  onSummaryRequestHandled?: () => void;
   invitationEntry?: { workspaceId: string; teamIds: string[] } | null;
   onInvitationEntryHandled?: () => void;
   /** The topbar slot the New note button portals into; null while the topbar hides it. */
@@ -137,6 +140,8 @@ export default function PersonalNotesView({
   onOpenSettings,
   meetingRecordingRequest,
   onMeetingRecordingRequestHandled,
+  summaryRequest,
+  onSummaryRequestHandled,
   invitationEntry,
   onInvitationEntryHandled,
   topBarActions,
@@ -770,6 +775,10 @@ export default function PersonalNotesView({
     const action = actions.find((a) => a.translation_key === DETAILED_NOTES_KEY);
     if (action) void runNoteAction(action);
   };
+  // Actions load asynchronously, and a control panel opened by the auto-end card
+  // boots from cold: requesting the summary before the action exists would run
+  // nothing and clear the request, so wait for it.
+  const summaryActionReady = actions.some((a) => a.translation_key === DETAILED_NOTES_KEY);
 
   return (
     <div className="flex h-full">
@@ -849,6 +858,10 @@ export default function PersonalNotesView({
               actionProcessingState={actionProcessingState}
               actionName={actionName}
               onGenerateSummary={generateSummary}
+              generateSummaryRequested={
+                summaryActionReady && summaryRequest?.noteId === editorNote.id
+              }
+              onGenerateSummaryRequestHandled={onSummaryRequestHandled}
               actionPicker={
                 <ActionPicker
                   onRunAction={runNoteAction}

@@ -89,6 +89,10 @@ interface MeetingRecordingState {
   recordingNoteId: number | null;
   recordingNoteTitle: string | null;
   recordingFolderId: number | null;
+  /** Wall-clock start of the live recording. The note header's timer derives its
+   * elapsed seconds from this, so switching notes — which remounts the editor —
+   * keeps the real duration. Meaningful only while `isRecording`. */
+  recordingStartedAt: number | null;
   segments: TranscriptSegment[];
   transcript: string;
   micPartial: string;
@@ -433,6 +437,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   recordingNoteId: null,
   recordingNoteTitle: null,
   recordingFolderId: null,
+  recordingStartedAt: null,
   segments: [],
   transcript: "",
   micPartial: "",
@@ -815,6 +820,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       recordingNoteId: args.noteId,
       recordingNoteTitle: args.noteTitle,
       recordingFolderId: args.folderId,
+      recordingStartedAt: Date.now(),
       sessionDiarizationEnabled: initialEnabled,
       sessionExpectedCount: initialCount,
       userTouchedStepper: resolveInitialSpeakerCountOverride(
@@ -1554,6 +1560,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemAudioSilentWarning: false,
       systemAudioInterrupted: null,
       currentMicLevel: 0,
+      recordingStartedAt: null,
     });
     return { diarizationSessionId: null, stopped: false };
   }
@@ -1641,6 +1648,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemAudioSilentWarning: false,
       systemAudioInterrupted: null,
       currentMicLevel: 0,
+      recordingStartedAt: null,
     });
 
     logger.info("Meeting transcription stopped", {}, "meeting");

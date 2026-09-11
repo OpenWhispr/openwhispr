@@ -50,13 +50,9 @@ export default function MeetingRecordingMount(): null {
   const pendingAutoEndRestart = useRef<MeetingAutoEndRestartContext | null>(null);
   // The auto-end listeners are registered once, so they cannot close over `t`
   // or `toast` directly without pinning the language they mounted with.
-  const notifyAutoEnded = useRef<() => void>(() => {});
   const notifyRestartFailed = useRef<() => void>(() => {});
 
   useEffect(() => {
-    notifyAutoEnded.current = () => {
-      toast({ title: t("notes.meeting.title"), description: t("notes.meeting.autoEnded") });
-    };
     notifyRestartFailed.current = () => {
       toast({
         title: t("notes.meeting.title"),
@@ -83,13 +79,14 @@ export default function MeetingRecordingMount(): null {
         request,
         stopRecording,
         (sessionId, stopped) => {
-          // Every path that ends the recording without offering a restart card
-          // has to say so, or the recording just disappears.
+          // No restart card will be offered for this session, so drop the
+          // context it would have used. The note's Generate AI Summary offer is
+          // what tells the user the recording finished — an extra "meeting
+          // ended" toast only repeated it.
           const abandonRestart = () => {
             if (pendingAutoEndRestart.current?.sessionId === sessionId) {
               pendingAutoEndRestart.current = null;
             }
-            notifyAutoEnded.current();
           };
 
           const completion = window.electronAPI?.meetingAutoEndCompleted;
