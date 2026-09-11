@@ -775,9 +775,9 @@ export default function PersonalNotesView({
     const action = actions.find((a) => a.translation_key === DETAILED_NOTES_KEY);
     if (action) void runNoteAction(action);
   };
-  // Actions load asynchronously, and a control panel opened by the auto-end card
-  // boots from cold: requesting the summary before the action exists would run
-  // nothing and clear the request, so wait for it.
+  // Actions load asynchronously (ActionPicker's initializeActions), and a control
+  // panel opened by the auto-end card boots from cold: requesting the summary
+  // before the action exists would run nothing and clear the request.
   const summaryActionReady = actions.some((a) => a.translation_key === DETAILED_NOTES_KEY);
 
   return (

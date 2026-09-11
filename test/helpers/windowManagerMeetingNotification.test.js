@@ -365,6 +365,7 @@ test("window creation uses the auto-end dimensions and variant-aware position", 
       sessionId: "meeting-1",
       expiresAt: 70_000,
       reason: "silence",
+      canSummarize: true,
     });
     const notificationWindow = createdWindows[0];
 
@@ -378,12 +379,14 @@ test("window creation uses the auto-end dimensions and variant-aware position", 
       },
       { acceptFirstMouse: true, width: 620, height: 116, x: 380, y: 16 }
     );
-    // The reason rides along in the pending payload the overlay will fetch.
+    // The reason and the summary offer both ride along in the pending payload the
+    // overlay will fetch: dropping either here leaves the card unable to render it.
     assert.deepEqual(manager._pendingNotificationData, {
       kind: "auto-end",
       sessionId: "meeting-1",
       expiresAt: 70_000,
       reason: "silence",
+      canSummarize: true,
     });
 
     notificationWindow.loadDeferred.resolve();

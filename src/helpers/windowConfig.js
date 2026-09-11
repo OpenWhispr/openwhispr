@@ -287,7 +287,9 @@ const NOTIFICATION_WINDOW_CONFIG = {
 
 const AUTO_END_NOTIFICATION_WINDOW_SIZE = {
   width: 480,
-  height: 128,
+  // Taller than the countdown copy alone needs: the card stacks a second action
+  // (the note's AI summary) beside a body that wraps further in some locales.
+  height: 144,
 };
 
 function getMeetingNotificationWindowSize(promptData) {

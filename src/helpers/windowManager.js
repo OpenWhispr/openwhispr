@@ -2186,9 +2186,11 @@ class WindowManager {
     }
   }
 
-  showMeetingAutoEndNotification({ sessionId, expiresAt, reason }) {
+  showMeetingAutoEndNotification({ sessionId, expiresAt, reason, canSummarize }) {
     return this.showMeetingNotification(
-      { kind: "auto-end", sessionId, expiresAt, reason },
+      // This object is the payload the overlay fetches verbatim, so a field left
+      // out here is a field the card can never render.
+      { kind: "auto-end", sessionId, expiresAt, reason, ...(canSummarize ? { canSummarize } : {}) },
       { autoDismissAt: expiresAt }
     );
   }

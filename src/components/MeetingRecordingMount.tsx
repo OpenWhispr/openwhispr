@@ -80,9 +80,8 @@ export default function MeetingRecordingMount(): null {
         stopRecording,
         (sessionId, stopped) => {
           // No restart card will be offered for this session, so drop the
-          // context it would have used. The note's Generate AI Summary offer is
-          // what tells the user the recording finished — an extra "meeting
-          // ended" toast only repeated it.
+          // context it would have used. The note's own summary offer is what
+          // tells the user the recording finished.
           const abandonRestart = () => {
             if (pendingAutoEndRestart.current?.sessionId === sessionId) {
               pendingAutoEndRestart.current = null;
