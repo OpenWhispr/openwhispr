@@ -292,11 +292,8 @@ export default function ControlPanelSidebar({
                   {userName || t("sidebar.defaultUser")}
                 </p>
                 {userEmail && (
-                  <p
-                    dir="ltr"
-                    className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight"
-                  >
-                    {userEmail}
+                  <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">
+                    <bdi dir="ltr">{userEmail}</bdi>
                   </p>
                 )}
               </>

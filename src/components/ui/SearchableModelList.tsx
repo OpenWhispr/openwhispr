@@ -202,7 +202,7 @@ export default function SearchableModelList({
       </div>
 
       {rows.length > 0 && (
-        <div ref={scrollRef} className="overflow-y-auto pr-0.5 max-h-80">
+        <div ref={scrollRef} className="overflow-y-auto pe-0.5 max-h-80">
           <div
             id={listboxId}
             role="listbox"

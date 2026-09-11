@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { FileText, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useUiLocale } from "../../../hooks/useUiLocale";
 import MemberAvatar from "../../MemberAvatar";
 import { groupItemsByDate } from "../../../utils/dateGrouping";
 import { formatRelativeTime } from "../../../utils/dateFormatting";
@@ -23,8 +24,8 @@ export function OverviewNoteList({
   onNewNote,
   onAddExisting,
 }: OverviewNoteListProps) {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const { t } = useTranslation();
+  const locale = useUiLocale();
   const { user } = useAuth();
   const isTeamSpace = space.kind === "team";
   const roster = useSpaceRoster(isTeamSpace ? space.cloud_space_id : null);

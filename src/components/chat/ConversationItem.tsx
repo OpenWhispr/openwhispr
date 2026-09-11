@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { useUiLocale } from "../../hooks/useUiLocale";
 import { MoreHorizontal, Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import {
@@ -52,8 +53,8 @@ export default function ConversationItem({
   onArchive,
   onDelete,
 }: ConversationItemProps) {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const { t } = useTranslation();
+  const locale = useUiLocale();
   const isArchived = !!conversation.is_archived;
 
   return (

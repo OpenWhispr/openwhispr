@@ -47,6 +47,8 @@ function textContent(node) {
   if (Array.isArray(node)) return node.map(textContent).join("");
   if (typeof node === "string") return node;
   if (!node || typeof node !== "object") return "";
+  // Hook-free presentational wrapper: expand it so its interpolated text is visible.
+  if (node.type?.name === "BidiInterpolatedText") return textContent(node.type(node.props));
   return textContent(node.props?.children);
 }
 

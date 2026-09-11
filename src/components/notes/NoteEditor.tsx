@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
+import { useUiLocale } from "../../hooks/useUiLocale";
 import {
   Download,
   Loader2,
@@ -70,7 +71,7 @@ import {
 import NoteParticipants from "./NoteParticipants";
 import type { CalendarAttendee } from "../../types/calendar";
 import { observeFloatingChatLayout } from "./floatingChatLayout";
-import { defaultFolderDisplayName } from "./shared";
+import { defaultFolderDisplayName, folderMatchesQuery } from "./shared";
 
 const CHIP_BUTTON_CLASS =
   "inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
@@ -215,8 +216,8 @@ export default function NoteEditor({
   onCreateFolderAndMove,
   onCancelPendingSaves,
 }: NoteEditorProps) {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const { t } = useTranslation();
+  const locale = useUiLocale();
   const [viewMode, setViewMode] = useState<MeetingViewMode>("raw");
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   const [folderSearch, setFolderSearch] = useState("");
@@ -369,9 +370,7 @@ export default function NoteEditor({
   const filteredFolders = useMemo(
     () =>
       folderSearch && folders
-        ? folders.filter((f) =>
-            defaultFolderDisplayName(f, t).toLowerCase().includes(folderSearch.toLowerCase())
-          )
+        ? folders.filter((f) => folderMatchesQuery(f, t, folderSearch))
         : (folders ?? []),
     [folders, folderSearch, t]
   );

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useUiLocale } from "../../hooks/useUiLocale";
 import { Search, FileText, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -35,8 +36,8 @@ export default function AddNotesToFolderDialog({
   targetFolderId,
   onNotesAdded,
 }: AddNotesToFolderDialogProps) {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const { t } = useTranslation();
+  const locale = useUiLocale();
   const [allNotes, setAllNotes] = useState<NoteItem[]>([]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());

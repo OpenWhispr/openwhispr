@@ -35,7 +35,7 @@ test("dynamic prose and identity values keep their own direction", () => {
       "src/components/SettingsModal.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{user\.name \|\| t\("settingsPage\.account\.user"\)\}/,
     ],
-    ["src/components/SettingsModal.tsx", /<p\s+dir="ltr"[^>]*>\s*\{user\.email\}/],
+    ["src/components/SettingsModal.tsx", /<bdi dir="ltr">\{user\.email\}<\/bdi>/],
     [
       "src/components/settings/WorkspaceMembersTab.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{member\.name \|\| member\.email\}/,
@@ -44,7 +44,7 @@ test("dynamic prose and identity values keep their own direction", () => {
       "src/components/settings/WorkspaceMembersTab.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{request\.name \?\? request\.email\}/,
     ],
-    ["src/components/settings/WorkspaceMembersTab.tsx", /<p\s+dir="ltr"[^>]*>\s*\{inv\.email\}/],
+    ["src/components/settings/WorkspaceMembersTab.tsx", /<bdi dir="ltr">\{inv\.email\}<\/bdi>/],
     [
       "src/components/notes/UploadAudioView.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{downloadProgress\.title\}/,
@@ -80,7 +80,7 @@ test("technical output values remain LTR inside an Arabic document", () => {
       "src/components/settings/WorkspaceBillingCard.tsx",
       /<span\s+dir="ltr"[^>]*>\s*\{seatsUsed\} \/ \{seatsTotal\}/,
     ],
-    ["src/components/settings/WorkspaceMembersTab.tsx", /<p\s+dir="ltr"[^>]*>\s*\{member\.email\}/],
+    ["src/components/settings/WorkspaceMembersTab.tsx", /<bdi dir="ltr">\{member\.email\}<\/bdi>/],
     [
       "src/components/dictation/AssistantPanel.tsx",
       /<kbd\s+dir="ltr"[\s\S]*?\{readableVoiceHotkey\}/,

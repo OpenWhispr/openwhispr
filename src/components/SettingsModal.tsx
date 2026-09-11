@@ -172,8 +172,8 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
               <p dir="auto" className="text-[13px] font-semibold text-foreground truncate">
                 {user.name || t("settingsPage.account.user")}
               </p>
-              <p dir="ltr" className="text-xs text-muted-foreground truncate">
-                {user.email}
+              <p className="text-xs text-muted-foreground truncate">
+                <bdi dir="ltr">{user.email}</bdi>
               </p>
             </div>
           </div>

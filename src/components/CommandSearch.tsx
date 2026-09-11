@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { useUiLocale } from "../hooks/useUiLocale";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   Search,
@@ -76,8 +77,8 @@ export default function CommandSearch({
   onTranscriptSelect,
   onConversationSelect,
 }: CommandSearchProps) {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const { t } = useTranslation();
+  const locale = useUiLocale();
   const [query, setQuery] = useState("");
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);

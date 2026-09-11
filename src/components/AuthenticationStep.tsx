@@ -13,6 +13,7 @@ import {
 import { discoverEmailAuth } from "../lib/emailAuthDiscovery";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "lucide-react";
 import logger from "../utils/logger";
 import { EMAIL_REGEX } from "../utils/validation";
@@ -43,7 +44,6 @@ const EXISTING_ACCOUNT_ERROR_CODES = new Set([
   "USER_ALREADY_EXISTS",
   "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
 ]);
-const SSO_DOMAIN_MARKER = "__OPENWHISPR_SSO_DOMAIN__";
 
 function ProviderTile({
   label,
@@ -468,7 +468,7 @@ export default function AuthenticationStep({
               event.preventDefault();
               void handleSSOSignIn();
             }}
-            className="mt-6 space-y-4 text-left"
+            className="mt-6 space-y-4 text-start"
           >
             <label className="block space-y-2">
               <span className="text-xs text-[var(--onboarding-text-secondary)]">
@@ -515,7 +515,7 @@ export default function AuthenticationStep({
           )}
 
           {error && (
-            <div className="mt-3 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-left">
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-start">
               <AlertCircle className="size-3.5 shrink-0 text-destructive" />
               <p className="text-xs text-destructive">{error}</p>
             </div>
@@ -526,13 +526,6 @@ export default function AuthenticationStep({
   }
 
   if (ssoDiscovery && authMode === null) {
-    const ssoDescription = t(
-      ssoDiscovery.required ? "auth.sso.requiredDescription" : "auth.sso.availableDescription",
-      { domain: SSO_DOMAIN_MARKER }
-    );
-    const [descriptionBeforeDomain, descriptionAfterDomain = ""] =
-      ssoDescription.split(SSO_DOMAIN_MARKER);
-
     return (
       <CompactOnboardingFrame embedded={embedded}>
         <div className={`space-y-3 ${frameInset("pt-72")}`}>
@@ -553,9 +546,15 @@ export default function AuthenticationStep({
               {t("auth.sso.companySignInTitle")}
             </p>
             <p className="mt-1 text-xs leading-snug text-muted-foreground">
-              {descriptionBeforeDomain}
-              <bdi dir="ltr">{ssoDiscovery.domain}</bdi>
-              {descriptionAfterDomain}
+              <BidiInterpolatedText
+                text={t(
+                  ssoDiscovery.required
+                    ? "auth.sso.requiredDescription"
+                    : "auth.sso.availableDescription",
+                  { domain: BIDI_VALUE_TOKEN }
+                )}
+                value={ssoDiscovery.domain}
+              />
             </p>
           </div>
 

@@ -96,7 +96,7 @@ function AttendeePopover({
       <PopoverTrigger asChild>
         <button
           aria-label={`${attendees.length} ${t("notes.participants.attendees")}`}
-          className="flex shrink-0 items-center -space-x-1.5 rounded-full pt-0.5 outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring/40 rtl:space-x-reverse"
+          className="flex shrink-0 items-center -space-x-1.5 rounded-full pt-0.5 outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring/40"
         >
           {attendees.slice(0, 3).map((a) => (
             <PersonAvatar

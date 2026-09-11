@@ -1634,7 +1634,7 @@ function SelectedView({
               label={getActiveModelLabel()}
               actionLabel={t("notes.upload.noProviderAction")}
               onOpenSettings={onOpenSettings}
-              className="block max-w-full truncate text-left text-xs text-foreground/70 mt-0.5"
+              className="block max-w-full truncate text-start text-xs text-foreground/70 mt-0.5"
             />
           </div>
           <button

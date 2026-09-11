@@ -1047,14 +1047,14 @@ export default function LeaderboardSection({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-muted/10">
-                <tr className="border-y border-border/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <tr className="border-y border-border/40 text-start text-[11px] uppercase tracking-wide text-muted-foreground">
                   <th scope="col" className="w-16 px-5 py-2.5 font-medium">
                     {t("insights.leaderboard.rank")}
                   </th>
                   <th scope="col" className="px-3 py-2.5 font-medium">
                     {t("insights.leaderboard.member")}
                   </th>
-                  <th scope="col" className="w-56 px-5 py-2 text-right font-medium">
+                  <th scope="col" className="w-56 px-5 py-2 text-end font-medium">
                     <Select
                       value={metric}
                       onValueChange={(value: LeaderboardMetric) => {
@@ -1118,7 +1118,7 @@ export default function LeaderboardSection({
                             <p className="truncate font-medium">
                               {memberLabel(member)}
                               {isViewer && (
-                                <span className="ml-1 text-xs font-normal text-primary">
+                                <span className="ms-1 text-xs font-normal text-primary">
                                   {t("insights.leaderboard.you")}
                                 </span>
                               )}
@@ -1131,7 +1131,7 @@ export default function LeaderboardSection({
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-right font-semibold tabular-nums">
+                      <td className="px-5 py-3 text-end font-semibold tabular-nums">
                         {formatValue(member)}
                       </td>
                     </tr>
@@ -1178,7 +1178,7 @@ export default function LeaderboardSection({
                     onClick={() => setPage((current) => Math.max(0, current - 1))}
                     aria-label={t("insights.leaderboard.previous")}
                   >
-                    <ChevronLeft size={15} />
+                    <ChevronLeft size={15} className="rtl:rotate-180" />
                   </Button>
                   {editingRank ? (
                     <form
@@ -1189,6 +1189,7 @@ export default function LeaderboardSection({
                       }}
                     >
                       <Input
+                        dir="ltr"
                         autoFocus
                         type="number"
                         min={1}
@@ -1223,7 +1224,7 @@ export default function LeaderboardSection({
                     onClick={() => setPage((current) => Math.min(pages - 1, current + 1))}
                     aria-label={t("insights.leaderboard.next")}
                   >
-                    <ChevronRight size={15} />
+                    <ChevronRight size={15} className="rtl:rotate-180" />
                   </Button>
                 </div>
               )}

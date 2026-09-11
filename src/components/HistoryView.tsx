@@ -1,5 +1,6 @@
 import { Fragment, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { useUiLocale } from "../hooks/useUiLocale";
 import { Button } from "./ui/button";
 import { Loader2, Sparkles, X, Mic, Trash2, Archive } from "lucide-react";
 import TranscriptionItem from "./ui/TranscriptionItem";
@@ -47,8 +48,8 @@ export default function HistoryView({
   showDiscarded,
   onToggleDiscarded,
 }: HistoryViewProps) {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const { t } = useTranslation();
+  const locale = useUiLocale();
   const personalDataRetentionEnabled = useSettingsStore((s) => s.dataRetentionEnabled);
   const dataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)

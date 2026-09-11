@@ -228,7 +228,7 @@ export default function SetupChoiceStep({
               <div className="flex items-center justify-between">
                 {/* Frame 2147259034: the two model marks overlap by 8, each on a
                     1.33px white ring so the stack reads front-to-back. */}
-                <span className="flex -space-x-2 rtl:space-x-reverse">
+                <span className="flex -space-x-2">
                   <span className="flex size-9 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] ring-[1.33px] ring-[var(--onboarding-surface)]">
                     <img
                       src={openAIIcon}

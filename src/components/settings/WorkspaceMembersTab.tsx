@@ -272,8 +272,8 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                   {member.name || member.email}
                 </p>
                 {member.name && (
-                  <p dir="ltr" className="text-xs text-muted-foreground truncate">
-                    {member.email}
+                  <p className="text-xs text-muted-foreground truncate">
+                    <bdi dir="ltr">{member.email}</bdi>
                   </p>
                 )}
               </div>
@@ -355,8 +355,8 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                     {request.name ?? request.email}
                   </p>
                   {request.name && (
-                    <p dir="ltr" className="text-[11px] text-muted-foreground truncate">
-                      {request.email}
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      <bdi dir="ltr">{request.email}</bdi>
                     </p>
                   )}
                 </div>
@@ -402,8 +402,8 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                 >
                   <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p dir="ltr" className="text-xs text-foreground truncate">
-                      {inv.email}
+                    <p className="text-xs text-foreground truncate">
+                      <bdi dir="ltr">{inv.email}</bdi>
                     </p>
                     <p
                       className={cn(

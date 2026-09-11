@@ -176,7 +176,7 @@ export default function JoinYourTeamModal({
                     }
                     disabled={busyId !== null}
                   >
-                    {busy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                    {busy && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                     {entry.mode === "join"
                       ? t("workspaces.join.join")
                       : t("workspaces.join.request")}

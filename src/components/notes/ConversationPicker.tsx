@@ -1,5 +1,6 @@
 import { ChevronDown, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useUiLocale } from "../../hooks/useUiLocale";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { formatShortDate } from "../../utils/dateFormatting";
 import { cn } from "../lib/utils";
@@ -26,15 +27,15 @@ export function ConversationPicker({
   onNewChat,
   titleClassName,
 }: ConversationPickerProps) {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const { t } = useTranslation();
+  const locale = useUiLocale();
   const activeConversation = conversations.find((item) => item.id === activeConversationId);
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="inline-flex items-center gap-1 text-xs font-medium text-foreground/50 hover:text-foreground/70 hover:bg-foreground/5 rounded-md px-1.5 py-0.5 -ml-1.5 transition-colors duration-150 outline-none"
+          className="inline-flex items-center gap-1 text-xs font-medium text-foreground/50 hover:text-foreground/70 hover:bg-foreground/5 rounded-md px-1.5 py-0.5 -ms-1.5 transition-colors duration-150 outline-none"
           aria-label={t("embeddedChat.conversationSelector")}
         >
           <span className={cn("truncate max-w-40", titleClassName)}>

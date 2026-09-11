@@ -340,7 +340,7 @@ export default function EnterpriseCheckoutDialog({
                 onClick={() => void handleUpgrade()}
                 disabled={submitting || !upgradePreview}
               >
-                {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                {submitting && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                 {t("settingsPage.enterpriseCheckout.upgradeCta")}
               </Button>
             ) : (
@@ -349,13 +349,13 @@ export default function EnterpriseCheckoutDialog({
                 onClick={() => void handleCheckout()}
                 disabled={submitting || !selected || !seatsValid}
               >
-                {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                {submitting && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                 {t("settingsPage.enterpriseCheckout.continueCta")}
               </Button>
             )
           ) : (
             <Button size="sm" onClick={() => window.electronAPI?.openExternal?.(CONTACT_SALES_URL)}>
-              <Mail className="mr-1.5 h-3.5 w-3.5" />
+              <Mail className="me-1.5 h-3.5 w-3.5" />
               {t("settingsPage.account.pricing.enterprise.cta")}
             </Button>
           )}

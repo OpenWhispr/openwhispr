@@ -206,7 +206,7 @@ function LocalModelCard({
             event.stopPropagation();
             createExternalLinkHandler(modelCardUrl)(event);
           }}
-          className="inline-block ml-7 mb-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="inline-block ms-7 mb-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           {t("transcription.modelCard")}
         </a>

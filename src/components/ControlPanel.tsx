@@ -966,19 +966,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           style={{ width: sidebarCollapsed || isSidePanelLayout ? 0 : SIDEBAR_WIDTH_PX }}
         />
         <div
-          className={`absolute inset-y-0 start-0 z-30 transition-transform duration-300 ease-out${
+          className={`absolute inset-y-0 start-0 z-30 transition-transform duration-300 ease-out ${
+            !isSidePanelLayout && (!sidebarCollapsed || sidebarPeek)
+              ? "translate-x-0"
+              : "ltr:-translate-x-full rtl:translate-x-full"
+          }${
             sidebarCollapsed && sidebarPeek && !isSidePanelLayout
               ? " shadow-[10px_0_40px_-18px_rgba(0,0,0,0.2)] rtl:shadow-[-10px_0_40px_-18px_rgba(0,0,0,0.2)]"
               : ""
           }`}
-          style={{
-            transform:
-              !isSidePanelLayout && (!sidebarCollapsed || sidebarPeek)
-                ? "translateX(0)"
-                : document.documentElement.dir === "rtl"
-                  ? "translateX(100%)"
-                  : "translateX(-100%)",
-          }}
           onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
           onMouseLeave={sidebarCollapsed ? hideSidebarPeek : undefined}
         >
@@ -1248,7 +1244,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         {!isSidePanelLayout && (
           <div
             className={`absolute z-40 flex h-10 items-center ${
-              platform === "darwin" ? "ltr:left-[84px] rtl:right-2 top-2" : "start-2 top-0"
+              platform === "darwin" ? "ltr:left-21 rtl:right-2 top-2" : "start-2 top-0"
             }`}
             data-no-window-drag=""
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}

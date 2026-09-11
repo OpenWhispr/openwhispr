@@ -115,8 +115,8 @@ function CalendarAccountRows({
         <SettingsPanelRow key={account.email}>
           <div className="group flex items-center gap-3 ps-12">
             <Mail className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-            <span dir="ltr" className="text-xs text-muted-foreground truncate flex-1 text-start">
-              {account.email}
+            <span className="text-xs text-muted-foreground truncate flex-1">
+              <bdi dir="ltr">{account.email}</bdi>
             </span>
             <button
               onClick={() => onUnlink(account.email)}
