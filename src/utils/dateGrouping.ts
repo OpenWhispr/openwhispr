@@ -23,8 +23,16 @@ export function groupItemsByDate<T>(
   const weekAgo = new Date(today);
   weekAgo.setDate(weekAgo.getDate() - 7);
 
-  const groups: Array<DateGroup<T>> = [];
-  let current: DateGroup<T> | null = null;
+  const bucketOrder = [
+    t("chat.today"),
+    t("chat.yesterday"),
+    t("chat.previousWeek"),
+    t("chat.older"),
+  ];
+  const bucketMap = new Map<string, T[]>();
+  for (const label of bucketOrder) {
+    bucketMap.set(label, []);
+  }
 
   for (const item of items) {
     const date = normalizeDbDate(getDate(item));
@@ -41,11 +49,15 @@ export function groupItemsByDate<T>(
       label = t("chat.older");
     }
 
-    if (!current || current.label !== label) {
-      current = { label, items: [] };
-      groups.push(current);
+    bucketMap.get(label)!.push(item);
+  }
+
+  const groups: Array<DateGroup<T>> = [];
+  for (const label of bucketOrder) {
+    const bucketItems = bucketMap.get(label)!;
+    if (bucketItems.length > 0) {
+      groups.push({ label, items: bucketItems });
     }
-    current.items.push(item);
   }
 
   return groups;
