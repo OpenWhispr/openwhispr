@@ -907,7 +907,6 @@
         "managedRouteInvalid": "由于配置不匹配，托管转录无法启动。请重试或联系管理员。",
         "managedAuthRejected": "您组织的托管转录凭证被拒绝。请联系管理员。",
         "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
-        "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
         "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。"
       },
       "translationFallback": {
@@ -2641,6 +2640,10 @@
         "segmentation": "用于说话人分离的语音边界检测",
         "embedding_en": "用于说话人识别的声纹提取"
       }
+    },
+    "errors": {
+      "contextTooLarge": "内容过长，{{model}} 无法在这台电脑上读取。大约需要 {{needed}} 个上下文 token，但内存中只能容纳 {{max}} 个。请改用云端模型，或对更短的选区执行该操作。",
+      "contextTooLargeGeneric": "内容过长，{{model}} 无法在这台电脑上读取。请改用云端模型，或对更短的选区执行该操作。"
     }
   },
   "referral": {

@@ -21,6 +21,7 @@ const STARTUP_POLL_INTERVAL_MS = 500;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_CONTEXT_SIZE = 4096;
+const PREFLIGHT_TIMEOUT_MS = 10000;
 
 /**
  * llama-server reports a prompt that overflows the context as a 400 whose body
@@ -579,6 +580,90 @@ class LlamaServerManager {
       clearTimeout(this.idleTimer);
       this.idleTimer = null;
     }
+  }
+
+  /**
+   * Small JSON round-trip against the running server.
+   *
+   * Resolves null on any failure rather than rejecting: these calls exist to
+   * make a decision more precise, so a broken one must degrade to the estimate
+   * and never fail the user's request.
+   */
+  _requestJson(path, body = null, timeoutMs = PREFLIGHT_TIMEOUT_MS) {
+    return new Promise((resolve) => {
+      const payload = body === null ? null : JSON.stringify(body);
+      const req = http.request(
+        {
+          hostname: "127.0.0.1",
+          port: this.port,
+          path,
+          method: payload === null ? "GET" : "POST",
+          headers: payload
+            ? {
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(payload),
+              }
+            : {},
+          timeout: timeoutMs,
+        },
+        (res) => {
+          let data = "";
+          res.on("data", (chunk) => {
+            data += chunk;
+          });
+          res.on("end", () => {
+            if (res.statusCode !== 200) return resolve(null);
+            try {
+              resolve(JSON.parse(data));
+            } catch {
+              resolve(null);
+            }
+          });
+        }
+      );
+
+      req.on("error", () => resolve(null));
+      req.on("timeout", () => {
+        req.destroy();
+        resolve(null);
+      });
+      if (payload) req.write(payload);
+      req.end();
+    });
+  }
+
+  /**
+   * The context window actually in force, which is not always what we asked
+   * for: a concurrent caller can join an in-flight start that used a smaller
+   * size. Returns null when it cannot be read.
+   */
+  async usableContextSize() {
+    if (!this.ready || !this.process) return null;
+    const props = await this._requestJson("/props");
+    const contextSize = props?.default_generation_settings?.n_ctx;
+    return Number.isFinite(contextSize) && contextSize > 0 ? contextSize : null;
+  }
+
+  /**
+   * Exact token count for the prompt as the server will actually see it, chat
+   * template included. Roughly 15 ms for an 85 KB prompt, which is cheap
+   * enough to make the difference between a right-sized window and a 400.
+   */
+  async countPromptTokens(messages, options = {}) {
+    if (!this.ready || !this.process) return null;
+
+    const payload = { messages };
+    // Must mirror inference() exactly, or we would price a different prompt
+    // than the one we go on to send.
+    if (options.disableThinking !== false) {
+      payload.chat_template_kwargs = { enable_thinking: false };
+    }
+
+    const templated = await this._requestJson("/apply-template", payload);
+    if (typeof templated?.prompt !== "string") return null;
+
+    const tokenized = await this._requestJson("/tokenize", { content: templated.prompt });
+    return Array.isArray(tokenized?.tokens) ? tokenized.tokens.length : null;
   }
 
   async inference(messages, options = {}) {

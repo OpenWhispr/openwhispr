@@ -88,7 +88,7 @@ async function setupChain(t, respond) {
   modelManager.currentServerModelId = model.id;
   t.after(() => serverManager.clearIdleTimer());
 
-  return { bridge, modelId: model.id, requests };
+  return { bridge, modelId: model.id, requests, serverManager };
 }
 
 const completion = (finishReason, content) => ({
@@ -117,4 +117,29 @@ test("an explicit temperature of 0 reaches llama-server instead of the 0.7 defau
 
   assert.equal(requests.length, 1);
   assert.equal(requests[0].temperature, 0);
+});
+
+test("a caller's contextSize reaches the server start (regression: it was dropped)", async (t) => {
+  // ReasoningConfig.contextSize was declared, written by selection editing,
+  // and then rebuilt away in this bridge, so it never reached anything. The
+  // field only means something now that the server can grow, so the wiring
+  // needs a guard that fails if anyone rebuilds the config object again.
+  const { bridge, modelId, serverManager } = await setupChain(t, () => completion("stop", "ok"));
+
+  const started = [];
+  serverManager._doStart = async (modelPath, options = {}) => {
+    started.push(options.contextSize);
+    serverManager.ready = true;
+    serverManager.process = {};
+  };
+  serverManager.stop = async () => {
+    serverManager.ready = false;
+    serverManager.process = null;
+    serverManager.contextSize = null;
+  };
+  serverManager.contextSize = 16384;
+
+  await bridge.processText("short text", modelId, { contextSize: 32768 });
+
+  assert.deepEqual(started, [32768]);
 });

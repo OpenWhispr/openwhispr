@@ -12,13 +12,31 @@ const {
 const modelRegistryData = require("../models/modelRegistryData.json");
 const LlamaServerManager = require("./llamaServer");
 const debugLogger = require("./debugLogger");
+const { readGgufMetadataFromFile } = require("./ggufMetadata");
+const {
+  estimateTokens,
+  kvBytesPerToken,
+  resolveContextCeiling,
+  resolveContextSize,
+  BASELINE_CONTEXT_SIZE,
+} = require("./llamaContextPolicy");
 
 const MIN_FILE_SIZE = 1_000_000; // 1MB minimum for valid model files
 
-// Bounds the KV cache — registry contextLength is the full trained context
-// (128K+), which can exceed total RAM (#1203). Uniform for all start paths:
-// start() won't restart a ready server when only options change.
-const SERVER_CONTEXT_SIZE = 16384;
+// The context every server still STARTS at. Requests that need more grow it
+// on demand, bounded by a per-machine, per-model ceiling (llamaContextPolicy).
+// Keeping the starting value at the historical constant means prewarm, chat
+// and every short request behave exactly as they did before #2142.
+const SERVER_CONTEXT_SIZE = BASELINE_CONTEXT_SIZE;
+
+// Slack on top of the output reservation, for tokenizer drift and llama.cpp's
+// own bookkeeping.
+const CONTEXT_RESERVE_TOKENS = 512;
+
+// Only measure the prompt exactly when the estimate lands within this factor
+// of the running window. Below that the answer cannot change, and dictation
+// should not pay two HTTP round trips to learn nothing.
+const PREFLIGHT_MEASURE_FACTOR = 2;
 
 function getLocalProviders() {
   return modelRegistryData.localProviders || [];
@@ -205,11 +223,62 @@ class ModelManager {
     };
   }
 
-  async serverStartOptions(modelInfo) {
-    const options = this.serverOptions(modelInfo);
+  async serverStartOptions(modelInfo, overrides = {}) {
+    const options = { ...this.serverOptions(modelInfo), ...overrides };
     const draftPath = await this.resolveDraftPath(modelInfo.model);
     if (draftPath) options.draftModelPath = draftPath;
     return options;
+  }
+
+  // Seam so the ceiling can be exercised for any machine size in tests.
+  _systemMemoryBytes() {
+    return require("os").totalmem();
+  }
+
+  /**
+   * The largest context this machine may give this model, and the prompt-cache
+   * bound that goes with it. Memoized per model file: it reads a few MiB off
+   * the front of the GGUF, so it must not sit on the hot path.
+   */
+  async contextCeiling(modelInfo, modelPath) {
+    if (this._contextCeilingCache?.modelPath === modelPath) {
+      return this._contextCeilingCache.value;
+    }
+
+    const metadata = await readGgufMetadataFromFile(modelPath);
+    const sizeOf = async (filePath) => {
+      if (!filePath) return 0;
+      try {
+        return (await fsPromises.stat(filePath)).size;
+      } catch {
+        return 0;
+      }
+    };
+
+    const value = resolveContextCeiling({
+      totalMemoryBytes: this._systemMemoryBytes(),
+      weightsBytes: await sizeOf(modelPath),
+      draftWeightsBytes: await sizeOf(await this.resolveDraftPath(modelInfo.model)),
+      kvBytesPerToken: kvBytesPerToken(metadata),
+      hasRecurrentState: metadata?.hasRecurrentState,
+      // The GGUF is the file llama.cpp actually loads, so it outranks the
+      // registry, which is wrong for at least the qwen2.5-7b entries.
+      trainedContextTokens: metadata?.contextLength || modelInfo.model.contextLength || 0,
+      // Off macOS the GPU has its own memory that we do not probe, so the
+      // system-RAM budget alone is not a safe bound. Stay modest and let the
+      // existing GPU fallback ladder handle anything that still will not fit.
+      discreteGpuUnverified: process.platform !== "darwin",
+    });
+
+    debugLogger.info("Resolved llama-server context ceiling", {
+      model: modelInfo.model.id,
+      architecture: metadata?.architecture ?? null,
+      kvBytesPerToken: kvBytesPerToken(metadata),
+      ...value,
+    });
+
+    this._contextCeilingCache = { modelPath, value };
+    return value;
   }
 
   getReservedDownloadBytes() {
@@ -450,6 +519,75 @@ class ModelManager {
     }
   }
 
+  /**
+   * Make sure the prompt actually fits the running window, growing it once if
+   * it does not and refusing outright if even the ceiling is too small.
+   *
+   * The estimate above only picks a starting size. This is where the decision
+   * becomes exact, because a wrong guess here is the bug: llama-server answers
+   * an overlong prompt with a 400 whose JSON body used to reach the user.
+   */
+  async _ensurePromptFits({
+    modelInfo,
+    modelPath,
+    messages,
+    options,
+    estimatedTokens,
+    reserveTokens,
+    contextFloor,
+    ceilingFor,
+    startServer,
+  }) {
+    const running = this.serverManager.contextSize || contextFloor;
+
+    // Comfortably inside the window: measuring cannot change the outcome, and
+    // every dictation would otherwise pay for two HTTP round trips.
+    if ((estimatedTokens + reserveTokens) * PREFLIGHT_MEASURE_FACTOR <= running) return;
+
+    const usable = (await this.serverManager.usableContextSize()) ?? running;
+    const exactTokens = await this.serverManager.countPromptTokens(messages, {
+      disableThinking: options.disableThinking,
+    });
+
+    // A measurement we could not take must never fail the request; the
+    // estimate already sized the window, and an overflow would still surface
+    // as a typed error from llama-server itself.
+    if (exactTokens === null) {
+      debugLogger.warn("Could not measure prompt tokens; proceeding on the estimate", {
+        model: modelInfo.model.id,
+        estimatedTokens,
+      });
+      return;
+    }
+
+    const neededTokens = exactTokens + reserveTokens;
+    if (neededTokens <= usable) return;
+
+    const { ceiling: maxContext } = await ceilingFor();
+    const grown = resolveContextSize({
+      needed: neededTokens,
+      floor: contextFloor,
+      ceiling: maxContext,
+    });
+
+    if (grown > usable) await startServer(grown);
+
+    const nowUsable =
+      (await this.serverManager.usableContextSize()) ?? this.serverManager.contextSize ?? grown;
+    if (neededTokens <= nowUsable) return;
+
+    throw new ModelError(
+      `This content needs about ${neededTokens} tokens of context, but ${modelInfo.model.name} can only use ${nowUsable} on this computer.`,
+      "CONTEXT_TOO_LARGE",
+      {
+        modelId: modelInfo.model.id,
+        modelName: modelInfo.model.name,
+        neededTokens,
+        maxContextTokens: nowUsable,
+      }
+    );
+  }
+
   async runInference(modelId, prompt, options = {}) {
     this.ensureInitialized();
     const startTime = Date.now();
@@ -490,28 +628,80 @@ class ModelManager {
       );
     }
 
-    // Start/restart server if needed or if model changed
-    if (!this.serverManager.ready || this.currentServerModelId !== modelId) {
-      debugLogger.logReasoning("INFERENCE_STARTING_SERVER", {
-        currentModel: this.currentServerModelId,
-        requestedModel: modelId,
-        serverReady: this.serverManager.ready,
-      });
-
-      await this.serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
-      this.currentServerModelId = modelId;
-
-      debugLogger.logReasoning("INFERENCE_SERVER_STARTED", {
-        port: this.serverManager.port,
-        model: modelId,
-      });
-    }
-
     // Build messages for chat completion
     const messages = [
       { role: "system", content: options.systemPrompt || "" },
       { role: "user", content: prompt },
     ];
+
+    const maxTokens = options.maxTokens ?? 512;
+    // Whatever the prompt needs, plus room for the reply. The output reserve
+    // is part of the context budget, not on top of it.
+    const reserveTokens = maxTokens + CONTEXT_RESERVE_TOKENS;
+    const estimatedTokens = estimateTokens(options.systemPrompt || "") + estimateTokens(prompt);
+    // A caller may ask for a larger floor (selection editing does); it can
+    // raise the floor but never breach the ceiling.
+    const contextFloor = Math.max(SERVER_CONTEXT_SIZE, options.contextSize || 0);
+
+    let ceiling = null;
+    const ceilingFor = async () => {
+      if (ceiling === null) ceiling = await this.contextCeiling(modelInfo, modelPath);
+      return ceiling;
+    };
+
+    let targetContextSize = contextFloor;
+    if (estimatedTokens + reserveTokens > contextFloor) {
+      const { ceiling: maxContext } = await ceilingFor();
+      targetContextSize = resolveContextSize({
+        needed: estimatedTokens + reserveTokens,
+        floor: contextFloor,
+        ceiling: maxContext,
+      });
+    }
+
+    const startServer = async (contextSize) => {
+      const { cacheRamMiB } = ceiling ?? {};
+      await this.serverManager.start(
+        modelPath,
+        await this.serverStartOptions(modelInfo, { contextSize, cacheRamMiB })
+      );
+      this.currentServerModelId = modelId;
+    };
+
+    // Start/restart the server if needed, if the model changed, or if this
+    // request needs a bigger window than the running one has.
+    if (
+      !this.serverManager.ready ||
+      this.currentServerModelId !== modelId ||
+      targetContextSize > (this.serverManager.contextSize || SERVER_CONTEXT_SIZE)
+    ) {
+      debugLogger.logReasoning("INFERENCE_STARTING_SERVER", {
+        currentModel: this.currentServerModelId,
+        requestedModel: modelId,
+        serverReady: this.serverManager.ready,
+        contextSize: targetContextSize,
+      });
+
+      await startServer(targetContextSize);
+
+      debugLogger.logReasoning("INFERENCE_SERVER_STARTED", {
+        port: this.serverManager.port,
+        model: modelId,
+        contextSize: this.serverManager.contextSize,
+      });
+    }
+
+    await this._ensurePromptFits({
+      modelInfo,
+      modelPath,
+      messages,
+      options,
+      estimatedTokens,
+      reserveTokens,
+      contextFloor,
+      ceilingFor,
+      startServer,
+    });
 
     debugLogger.logReasoning("INFERENCE_SENDING_REQUEST", {
       messageCount: messages.length,
@@ -541,6 +731,16 @@ class ModelManager {
         totalTimeMs: totalTime,
         error: error.message,
       });
+      // A typed failure (a context overflow, say) must keep its identity, or
+      // the renderer cannot translate it and the user sees raw server text.
+      if (error.code === "CONTEXT_TOO_LARGE") {
+        throw new ModelError(error.message, "CONTEXT_TOO_LARGE", {
+          modelId,
+          modelName: modelInfo.model.name,
+          neededTokens: error.neededTokens ?? null,
+          maxContextTokens: error.maxContextTokens ?? null,
+        });
+      }
       throw new ModelError(`Inference failed: ${error.message}`, "INFERENCE_FAILED", {
         error: error.message,
       });

@@ -17,6 +17,9 @@ export interface NoteActionState {
 export interface ActionErrorEvent {
   noteId: number;
   message: string;
+  /** Set when the failure has a translatable form; the toast prefers it. */
+  messageKey?: string;
+  messageParams?: Record<string, string | number>;
 }
 
 interface ActionProcessingStoreState {
@@ -184,7 +187,11 @@ export function runBackgroundAction(
       processingFlags.set(noteId, false);
       clearNoteState(noteId);
       const message = err instanceof Error ? err.message : labels.actionFailed;
-      pushErrorEvent({ noteId, message });
+      const { messageKey, messageParams } = (err ?? {}) as {
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
+      };
+      pushErrorEvent({ noteId, message, messageKey, messageParams });
     } finally {
       cancelledFlags.delete(noteId);
     }

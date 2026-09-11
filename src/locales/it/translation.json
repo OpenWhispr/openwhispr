@@ -907,7 +907,6 @@
         "managedRouteInvalid": "La trascrizione gestita non è potuta partire per un'incoerenza di configurazione. Riprova o contatta l'amministratore.",
         "managedAuthRejected": "Le credenziali di trascrizione gestita della tua organizzazione sono state rifiutate. Contatta l'amministratore.",
         "streamingOnlyProvider": "Questo provider supporta solo la trascrizione dal vivo. Scegli un altro provider per i caricamenti di file e i nuovi tentativi.",
-        "streamingOnlyProvider": "Questo provider supporta solo la trascrizione dal vivo. Scegli un altro provider per i caricamenti di file e i nuovi tentativi.",
         "providerKeyMissing": "Nessuna chiave API impostata per il tuo provider di trascrizione. Aggiungila in Impostazioni → Da voce a testo."
       },
       "translationFallback": {
@@ -2641,6 +2640,10 @@
         "segmentation": "Rilevamento dei confini del parlato per l'identificazione dei parlanti",
         "embedding_en": "Impronta vocale per l'identificazione dei parlanti"
       }
+    },
+    "errors": {
+      "contextTooLarge": "È troppo lungo perché {{model}} possa leggerlo su questo computer. Servono circa {{needed}} token di contesto, ma in memoria ne entrano solo {{max}}. Prova un modello cloud oppure esegui l’azione su una selezione più breve.",
+      "contextTooLargeGeneric": "È troppo lungo perché {{model}} possa leggerlo su questo computer. Prova un modello cloud oppure esegui l’azione su una selezione più breve."
     }
   },
   "referral": {

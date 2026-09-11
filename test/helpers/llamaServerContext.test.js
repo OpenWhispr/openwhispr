@@ -182,3 +182,96 @@ test("other llama-server failures keep their existing shape", async () => {
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+// --- measuring the running server ----------------------------------------
+//
+// The estimate only picks the size the server starts at. These two calls are
+// what make the decision exact: /props reports the window actually in force
+// (which can differ from what we asked for), and /apply-template + /tokenize
+// price the real prompt, chat template and all.
+
+function withStubServer(routes) {
+  return async (run) => {
+    const server = http.createServer((req, res) => {
+      const handler = routes[req.url];
+      if (!handler) {
+        res.writeHead(404).end();
+        return;
+      }
+      let body = "";
+      req.on("data", (chunk) => {
+        body += chunk;
+      });
+      req.on("end", () => {
+        const { status = 200, payload } = handler(body);
+        res.writeHead(status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(payload));
+      });
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+    const manager = new LlamaServerManager();
+    manager.ready = true;
+    manager.process = {};
+    manager.port = server.address().port;
+    try {
+      await run(manager);
+    } finally {
+      manager.clearIdleTimer();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  };
+}
+
+test("usableContextSize reports the window the server actually has", async () => {
+  await withStubServer({
+    "/props": () => ({ payload: { default_generation_settings: { n_ctx: 32768 } } }),
+  })(async (manager) => {
+    assert.equal(await manager.usableContextSize(), 32768);
+  });
+});
+
+test("usableContextSize returns null rather than guessing when props is unreadable", async () => {
+  // A broken measurement must degrade to the estimate, never fail the request.
+  await withStubServer({ "/props": () => ({ status: 500, payload: {} }) })(async (manager) => {
+    assert.equal(await manager.usableContextSize(), null);
+  });
+  await withStubServer({})(async (manager) => {
+    assert.equal(await manager.usableContextSize(), null);
+  });
+});
+
+test("countPromptTokens prices the rendered template, not just the message text", async () => {
+  let templatedWith = null;
+  let tokenized = null;
+
+  await withStubServer({
+    "/apply-template": (body) => {
+      templatedWith = JSON.parse(body);
+      // The real server renders role tags and, with thinking disabled, an
+      // empty <think></think> block. All of it costs context.
+      return { payload: { prompt: "<|im_start|>system\nSYS<|im_end|>\nhello" } };
+    },
+    "/tokenize": (body) => {
+      tokenized = JSON.parse(body);
+      return { payload: { tokens: new Array(20514).fill(0) } };
+    },
+  })(async (manager) => {
+    const messages = [
+      { role: "system", content: "SYS" },
+      { role: "user", content: "hello" },
+    ];
+    assert.equal(await manager.countPromptTokens(messages, { disableThinking: true }), 20514);
+    assert.deepEqual(templatedWith.messages, messages);
+    assert.deepEqual(templatedWith.chat_template_kwargs, { enable_thinking: false });
+    assert.equal(tokenized.content, "<|im_start|>system\nSYS<|im_end|>\nhello");
+  });
+});
+
+test("countPromptTokens returns null when the server cannot measure", async () => {
+  await withStubServer({ "/apply-template": () => ({ status: 500, payload: {} }) })(
+    async (manager) => {
+      assert.equal(await manager.countPromptTokens([{ role: "user", content: "hi" }], {}), null);
+    }
+  );
+});

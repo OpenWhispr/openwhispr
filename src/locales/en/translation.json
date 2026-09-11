@@ -907,7 +907,6 @@
         "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
         "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator.",
         "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
-        "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
         "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text."
       },
       "translationFallback": {
@@ -2730,6 +2729,10 @@
         "liquidai_lfm2_5_350m_q8_0": "Ultra-light model for fast dictation cleanup",
         "liquidai_lfm2_5_230m_q8_0": "Tiny model, instant cleanup on modest hardware"
       }
+    },
+    "errors": {
+      "contextTooLarge": "This is too long for {{model}} to read on this computer. It needs about {{needed}} tokens of context, but only {{max}} fit in memory. Try a cloud model, or run the action on a shorter selection.",
+      "contextTooLargeGeneric": "This is too long for {{model}} to read on this computer. Try a cloud model, or run the action on a shorter selection."
     }
   },
   "sidebar": {
