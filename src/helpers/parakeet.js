@@ -64,6 +64,10 @@ class ParakeetManager {
     return path.join(this.getModelsDir(), modelName);
   }
 
+  isModelDownloaded(modelName) {
+    return this.serverManager.isModelDownloaded(modelName);
+  }
+
   // Cohere models keep their weights in encoder.int8.onnx.data; transducers in
   // encoder.int8.onnx. Used as the reported on-disk size of a model.
   _getModelWeightsSize(modelDir) {
