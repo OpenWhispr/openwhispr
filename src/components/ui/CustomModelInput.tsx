@@ -16,6 +16,7 @@ export default function CustomModelInput({ value, onChange, placeholder }: Custo
         {t("reasoning.enterprise.customModelId", { defaultValue: "Custom Model ID" })}
       </label>
       <Input
+        dir="ltr"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={

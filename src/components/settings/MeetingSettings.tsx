@@ -1,17 +1,18 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network } from "lucide-react";
+import { Cloud, Key, Cpu, Network } from "../icons";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { usePolicyModeOptions } from "../../hooks/usePolicy";
+import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
+import { isModeAllowedByPolicy } from "../../stores/policyRules";
 import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import type { InferenceMode } from "../../types/electron";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
-import { getStreamingTranscriptionProviders } from "../../models/ModelRegistry";
+import { getMeetingStreamingTranscriptionProviders } from "../../models/ModelRegistry";
 
-const MEETING_BYOK_PROVIDER_IDS = getStreamingTranscriptionProviders().map(
+const MEETING_BYOK_PROVIDER_IDS = getMeetingStreamingTranscriptionProviders().map(
   (provider) => provider.id
 );
 
@@ -35,6 +36,7 @@ const noop = () => {};
 export function MeetingTranscriptionPanel() {
   const { t } = useTranslation();
   const startOnboarding = useStartOnboarding();
+  const policySnapshot = usePolicySnapshot();
 
   const {
     isSignedIn,
@@ -155,8 +157,20 @@ export function MeetingTranscriptionPanel() {
     />
   );
 
+  // Only true when the org's policy actually allows the enterprise
+  // transcription mode — an empty list can also mean e.g. a self-hosted-only
+  // policy, where this specific explanation would be false.
+  const emptyListIsEnterpriseOnly =
+    transcriptionModes.length === 0 &&
+    isModeAllowedByPolicy(policySnapshot, "transcription", "enterprise");
+
   return (
     <div className="space-y-3">
+      {emptyListIsEnterpriseOnly && (
+        <p className="text-sm text-muted-foreground">
+          {t("settingsPage.transcription.meetingEnterpriseOnly")}
+        </p>
+      )}
       <InferenceModeSelector
         modes={transcriptionModes}
         activeMode={effectiveTranscriptionMode}

@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "../icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 
@@ -11,7 +11,7 @@ export default function EmptyConversationList({ onNewChat }: EmptyConversationLi
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-2 px-4 select-none">
-      <p className="text-xs text-muted-foreground/40 text-center">{t("chat.noConversations")}</p>
+      <p className="text-xs text-muted-foreground/70 text-center">{t("chat.noConversations")}</p>
       <button
         onClick={onNewChat}
         className={cn(

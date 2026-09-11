@@ -1,7 +1,19 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const load = () => import("../../src/helpers/meetingTranscriptionRouting.js");
+const modelRegistryData = require("../../src/models/modelRegistryData.json");
+
+// Sentinels this module throws, paired with the MEETING_ERROR_KEYS entry that
+// MeetingRecordingMount looks up. A healed legacy profile can reach any of them,
+// so an untranslated one would show a bare sentinel in the failure toast.
+const SENTINEL_KEYS = {
+  unsupportedSelfHosted: "unsupportedSelfHosted",
+  unsupportedProvider: "unsupportedProvider",
+  noProviderSelected: "noProviderSelected",
+};
 
 const byokProviders = [
   {
@@ -10,6 +22,11 @@ const byokProviders = [
   },
   { id: "corti", models: [{ id: "corti-transcribe" }] },
   { id: "tinfoil", models: [{ id: "voxtral-mini-4b-realtime" }] },
+  { id: "deepgram", models: [{ id: "nova-3", default: true }] },
+  {
+    id: "assemblyai",
+    models: [{ id: "universal-streaming-english", default: true }],
+  },
 ];
 
 const baseOptions = {
@@ -43,6 +60,20 @@ test("providers mode routes Tinfoil through its realtime client", async () => {
   });
 });
 
+test("BYOK Deepgram and AssemblyAI route to their own realtime clients", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  for (const [selectedProvider, model] of [
+    ["deepgram", "nova-3"],
+    ["assemblyai", "universal-streaming-english"],
+  ]) {
+    assert.deepEqual(
+      resolveMeetingTranscriptionOptions({ ...baseOptions, selectedProvider, selectedModel: "" }),
+      { provider: `${selectedProvider}-realtime`, model, mode: "byok", language: "en" }
+    );
+  }
+});
+
 test("BYOK OpenAI never downgrades to managed cloud when its key is unavailable", async () => {
   const { resolveMeetingTranscriptionOptions } = await load();
 
@@ -70,7 +101,7 @@ test("self-hosted mode never follows a stale Tinfoil provider", async () => {
         ...baseOptions,
         transcriptionMode: "self-hosted",
       }),
-    /Self-hosted realtime transcription is not supported/
+    { message: "unsupportedSelfHosted" }
   );
 });
 
@@ -152,14 +183,90 @@ test("Corti keeps the meeting-specific connection settings", async () => {
 test("unknown and custom providers fail closed", async () => {
   const { resolveMeetingTranscriptionOptions } = await load();
 
-  for (const selectedProvider of ["custom", "groq", "", undefined]) {
+  // Sentinels, translated at display time by MeetingRecordingMount. The named
+  // provider rides after the colon so the toast can say which one failed.
+  for (const [selectedProvider, message] of [
+    ["custom", "unsupportedProvider:custom"],
+    ["groq", "unsupportedProvider:groq"],
+    ["", "noProviderSelected"],
+    [undefined, "noProviderSelected"],
+  ]) {
     assert.throws(
       () =>
         resolveMeetingTranscriptionOptions({
           ...baseOptions,
           selectedProvider,
         }),
-      /Unsupported Note Recording provider/
+      { message },
+      `provider ${JSON.stringify(selectedProvider)}`
+    );
+  }
+});
+
+test("every thrown sentinel is translated and rendered by the mount", () => {
+  const translation = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
+  );
+  const mount = fs.readFileSync(
+    path.join(__dirname, "../../src/components/MeetingRecordingMount.tsx"),
+    "utf8"
+  );
+
+  for (const [sentinel, key] of Object.entries(SENTINEL_KEYS)) {
+    assert.equal(
+      typeof translation.notes.meeting[key],
+      "string",
+      `notes.meeting.${key} missing from en/translation.json`
+    );
+    assert.ok(
+      mount.includes(`${sentinel}: "notes.meeting.${key}"`),
+      `MEETING_ERROR_KEYS is missing ${sentinel}`
+    );
+  }
+
+  // The provider sentinel carries its argument after a colon, so its copy has to
+  // have somewhere to put it.
+  assert.match(translation.notes.meeting.unsupportedProvider, /\{\{provider\}\}/);
+});
+
+// gpt-live-transcribe has no server VAD and only completes a turn when the client
+// commits, which dictation does on stop and a long-running meeting stream never
+// does. Until that guard exists, the desktop must not be able to route a meeting
+// onto it: no registry entry, and a stale selection falls back to the default.
+test("gpt-live-transcribe is never offered for Note Recording", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+  // Mirrors getStreamingTranscriptionProviders(): the meeting BYOK picker.
+  const registryStreamingProviders = modelRegistryData.transcriptionProviders
+    .map((provider) => ({ ...provider, models: provider.models.filter((m) => m.streaming) }))
+    .filter((provider) => provider.models.length > 0);
+  for (const provider of registryStreamingProviders) {
+    for (const model of provider.models) {
+      assert.equal(model.id.startsWith("gpt-live-transcribe"), false, model.id);
+    }
+  }
+
+  assert.equal(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      selectedProvider: "openai",
+      selectedModel: "gpt-live-transcribe",
+      byokProviders: registryStreamingProviders,
+    }).model,
+    "gpt-4o-mini-transcribe"
+  );
+  const managedCatalogs = [
+    null,
+    [{ id: "openai", models: [{ id: "gpt-4o-mini-transcribe", default: true }] }],
+  ];
+  for (const managedProviders of managedCatalogs) {
+    assert.equal(
+      resolveMeetingTranscriptionOptions({
+        ...baseOptions,
+        transcriptionMode: "openwhispr",
+        managedProviders,
+        selectedModel: "gpt-live-transcribe",
+      }).model,
+      "gpt-4o-mini-transcribe"
     );
   }
 });

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { RotateCcw, ScrollText } from "lucide-react";
+import { RotateCcw, ScrollText } from "../icons";
 import { ASSISTANT_PANEL_SIZE_LIMITS } from "../../helpers/voiceSurfaceGeometry.mjs";
 import { cn } from "../lib/utils";
 import type { ToastActionConfig } from "../ui/useToast";

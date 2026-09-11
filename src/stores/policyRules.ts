@@ -19,6 +19,39 @@ function managedPolicy(state: PolicyDecisionSnapshot): OrgPolicy | null {
   return state.status === "managed" && state.policy ? state.policy : null;
 }
 
+const KNOWN_BYOK_PROVIDER_IDS: Record<PolicyScope, ReadonlySet<string>> = {
+  transcription: new Set([
+    ...modelRegistryData.transcriptionProviders.map((provider) => provider.id),
+    "custom",
+  ]),
+  llm: new Set([
+    ...modelRegistryData.cloudProviders.map((provider) => provider.id),
+    "custom",
+    "openrouter",
+  ]),
+};
+
+const warnedUnknownByokProviderIds = new Set<string>();
+
+/**
+ * The scope's BYOK allowlist, filtered to provider ids this build knows. The
+ * field is validated shape-only, so an id from a newer server reaches here and
+ * is dropped with a warning instead of invalidating the whole policy — it can
+ * grant nothing an older app could act on. Mirrors requiredLocalModelIds.
+ */
+function allowedByokProviderIds(policy: OrgPolicy, scope: PolicyScope): string[] {
+  const known = KNOWN_BYOK_PROVIDER_IDS[scope];
+  return policy[scope].allowedByokProviders.filter((id) => {
+    if (known.has(id)) return true;
+    const key = `${scope}:${id}`;
+    if (!warnedUnknownByokProviderIds.has(key)) {
+      warnedUnknownByokProviderIds.add(key);
+      console.warn(`[policy] Ignoring unknown ${scope} BYOK provider id: ${id}`);
+    }
+    return false;
+  });
+}
+
 export function isPolicyActionAllowed(state: PolicyDecisionSnapshot): boolean {
   if (state.status === "idle" || state.status === "unmanaged") return true;
   if (state.status !== "managed" || !state.policy) return false;
@@ -49,6 +82,27 @@ export function effectiveLocalHistoryEnabled(
   personalPreference: boolean
 ): boolean {
   return lockedLocalHistoryValue(state) ?? personalPreference;
+}
+
+/**
+ * Whether the managed policy that can force local history off has settled.
+ *
+ * `effectiveLocalHistoryEnabled` resolves an unsettled policy to the user's own
+ * preference, which is the right value to show and to sweep retention with --
+ * but it is a default, not an answer, and one consumer reads that switch as
+ * consent: the main process reconstructs Insights history from stored
+ * transcripts the first time the renderer reports it. A scan finishes in
+ * milliseconds while the policy is a network round trip, so a workspace with
+ * `localHistoryMode: "always_off"` would have its members' existing transcripts
+ * mined before the policy forbidding it ever arrived.
+ *
+ * `idle` is unsettled here even though `isPolicyActionAllowed` treats it as
+ * permissive, because it covers both "no account" and "signed in, fetch not
+ * started". Only the main process can tell those apart, from the account scope
+ * it persists, so it makes that call.
+ */
+export function isLocalHistoryPolicyResolved(state: PolicyDecisionSnapshot): boolean {
+  return state.status === "managed" || state.status === "unmanaged";
 }
 
 /** The org-forced local history value, or null when the user may choose. */
@@ -89,7 +143,7 @@ export function isProviderAllowedByPolicy(
   providerId: string
 ): boolean {
   return managedPolicyDecision(state, (policy) =>
-    policy[scope].allowedByokProviders.includes(providerId)
+    allowedByokProviderIds(policy, scope).includes(providerId)
   );
 }
 
@@ -101,6 +155,33 @@ export function isEnterpriseProviderAllowed(
   return managedPolicyDecision(state, (policy) =>
     policy.llm.allowedEnterpriseProviders.includes(providerId)
   );
+}
+
+/**
+ * Whether an enterprise cloud may run managed transcription. The field is
+ * absent on servers that predate it; absent means none.
+ */
+export function isTranscriptionEnterpriseProviderAllowed(
+  state: PolicyDecisionSnapshot,
+  providerId: string
+): boolean {
+  return managedPolicyDecision(state, (policy) =>
+    (policy.transcription.allowedEnterpriseProviders ?? []).includes(providerId)
+  );
+}
+
+/**
+ * Whether the "Enterprise cloud" transcription tile should ever be shown as
+ * a selectable option. Unlike every other mode, "enterprise" can only ever
+ * resolve for a managed org — resolveEffectivePolicySelection requires a
+ * managed policy with a matching allowedEnterpriseProviders entry. Offering
+ * the tile to an unmanaged/idle user would let them pick a mode with no
+ * personal configuration surface and no managed resolution, which then
+ * fails every dictation and upload closed via the transcription route's
+ * fail-closed guard.
+ */
+export function isEnterpriseTranscriptionOfferable(state: PolicyDecisionSnapshot): boolean {
+  return state.status === "managed";
 }
 
 /** Whether the AI agent (dictation, voice, and chat) is allowed. */
@@ -201,17 +282,18 @@ export function resolveEffectivePolicySelection(
   const policy = managedPolicy(state);
   if (!policy) return null;
 
+  const policyByokProviders = allowedByokProviderIds(policy, scope);
   const allowedByokProviders = catalog.byokProviders.filter((provider) =>
-    policy[scope].allowedByokProviders.includes(provider)
+    policyByokProviders.includes(provider)
   );
   const allowedEnterpriseProviders = (catalog.enterpriseProviders ?? []).filter((provider) =>
-    policy.llm.allowedEnterpriseProviders.includes(provider)
+    (policy[scope].allowedEnterpriseProviders ?? []).includes(provider)
   );
   const modeIsUsable = (mode: InferenceMode): boolean => {
     if (!catalog.modes.includes(mode)) return false;
     if (!policy[scope].allowedModes.includes(mode)) return false;
     if (mode === "providers") return allowedByokProviders.length > 0;
-    if (mode === "enterprise") return scope === "llm" && allowedEnterpriseProviders.length > 0;
+    if (mode === "enterprise") return allowedEnterpriseProviders.length > 0;
     return true;
   };
 
@@ -263,8 +345,13 @@ export function isTranscriptionSelectionAllowed(
   selection: TranscriptionSelection
 ): boolean {
   if (!isModeAllowedByPolicy(state, "transcription", selection.mode)) return false;
-  if (selection.mode !== "providers") return true;
-  return isProviderAllowedByPolicy(state, "transcription", selection.provider);
+  if (selection.mode === "providers") {
+    return isProviderAllowedByPolicy(state, "transcription", selection.provider);
+  }
+  if (selection.mode === "enterprise") {
+    return isTranscriptionEnterpriseProviderAllowed(state, selection.provider);
+  }
+  return true;
 }
 
 export type TranscriptionPolicyContext = "dictation" | "meeting" | "upload";
@@ -387,20 +474,16 @@ function policyModeHasAvailableProvider(
   providerCatalog?: Pick<PolicySelectionCatalog, "byokProviders" | "enterpriseProviders">
 ): boolean {
   if (mode === "providers") {
+    const allowed = allowedByokProviderIds(policy, scope);
     return providerCatalog
-      ? providerCatalog.byokProviders.some((provider) =>
-          policy[scope].allowedByokProviders.includes(provider)
-        )
-      : policy[scope].allowedByokProviders.length > 0;
+      ? providerCatalog.byokProviders.some((provider) => allowed.includes(provider))
+      : allowed.length > 0;
   }
   if (mode === "enterprise") {
-    const selectableProviders = providerCatalog?.enterpriseProviders ?? ["bedrock"];
-    return (
-      scope === "llm" &&
-      selectableProviders.some((provider) =>
-        policy.llm.allowedEnterpriseProviders.includes(provider)
-      )
-    );
+    const allowed = policy[scope].allowedEnterpriseProviders ?? [];
+    const selectable =
+      providerCatalog?.enterpriseProviders ?? (scope === "llm" ? ["bedrock"] : ["azure"]);
+    return selectable.some((provider) => allowed.includes(provider));
   }
   return true;
 }

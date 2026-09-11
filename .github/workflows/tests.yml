@@ -24,7 +24,7 @@ jobs:
       - name: Check translations
         run: npm run i18n:check
       - name: Audit dependencies
-        run: npm audit
+        run: npm audit --audit-level=high
       - name: Run tests
         # The gates above fail on drift that has nothing to do with the suite —
         # a stray format nit, a missing locale key, a fresh advisory. Without

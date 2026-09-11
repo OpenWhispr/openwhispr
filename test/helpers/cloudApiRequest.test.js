@@ -86,6 +86,7 @@ test("a stable authenticated request is bearer-only and returns parsed data", as
     assert.equal(options.headers.Authorization, "Bearer token-a");
     assert.equal(options.headers["x-openwhispr-policy-version"], "1");
     assert.equal(options.headers["x-openwhispr-version"], "1.2.3");
+    assert.equal(options.headers["x-openwhispr-source"], "desktop");
     return new Response(JSON.stringify({ data: [{ id: "space-a" }] }));
   });
 
@@ -107,6 +108,7 @@ test("public requests carry neither bearer nor cookies", async () => {
     assert.equal(options.headers.Authorization, undefined);
     assert.equal(options.headers["x-openwhispr-policy-version"], undefined);
     assert.equal(options.headers["x-openwhispr-version"], "1.2.3");
+    assert.equal(options.headers["x-openwhispr-source"], "desktop");
     return new Response(JSON.stringify({ data: { invite: "preview" } }));
   });
 

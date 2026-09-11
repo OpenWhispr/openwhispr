@@ -1,47 +1,26 @@
 import React, { useState } from "react";
-import {
-  Home,
-  MessageSquare,
-  NotebookPen,
-  BookOpen,
-  Upload,
-  Blocks,
-  Gift,
-  Lock,
-  Settings,
-  ShieldCheck,
-  HelpCircle,
-  UserCircle,
-  X,
-  Search,
-  Zap,
-} from "lucide-react";
+import { Gift, Lock, Settings, ShieldCheck, HelpCircle, UserCircle, X, Zap } from "./icons";
 import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
-import { getCachedPlatform } from "../utils/platform";
+import { Button } from "./ui/button";
 import type { UpsellDecision } from "../lib/upsell";
-import { isAgentAllowed, isPolicyActionAllowed } from "../stores/policyRules";
-import { usePolicyStore } from "../stores/policyStore";
+import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
 
-const platform = getCachedPlatform();
+export type { ControlPanelView };
 
 const rowIconClass =
-  "shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150";
+  "shrink-0 text-foreground/70 group-hover:text-foreground/90 dark:text-foreground/65 dark:group-hover:text-foreground/85 transition-colors duration-150";
 const rowLabelClass =
-  "text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150";
+  "text-[13px] text-foreground/90 group-hover:text-foreground dark:text-foreground/85 dark:group-hover:text-foreground transition-colors duration-150";
 const rowButtonClass =
-  "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
-
-export type ControlPanelView =
-  "home" | "chat" | "personal-notes" | "dictionary" | "upload" | "integrations";
+  "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-start outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
 
 interface ControlPanelSidebarProps {
   activeView: ControlPanelView;
   onViewChange: (view: ControlPanelView) => void;
   onOpenSettings: () => void;
-  onOpenSearch?: () => void;
   onOpenReferrals?: () => void;
   onUpgrade?: () => void;
   isOverLimit?: boolean;
@@ -58,7 +37,6 @@ export default function ControlPanelSidebar({
   activeView,
   onViewChange,
   onOpenSettings,
-  onOpenSearch,
   onOpenReferrals,
   onUpgrade,
   isOverLimit,
@@ -78,54 +56,14 @@ export default function ControlPanelSidebar({
   const showLimitBanner = upsell === "show" && Boolean(isSignedIn) && Boolean(isOverLimit);
   const showUpgradeBanner = upsell === "show" && !showLimitBanner && !upgradeDismissed;
 
-  const agentAllowed = usePolicyStore(isAgentAllowed);
-  const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
-
-  const navItems: {
-    id: ControlPanelView;
-    label: string;
-    icon: React.ComponentType<{ size?: number; className?: string }>;
-  }[] = [
-    { id: "home", label: t("sidebar.home"), icon: Home },
-    ...(agentAllowed
-      ? [{ id: "chat" as const, label: t("sidebar.chat"), icon: MessageSquare }]
-      : []),
-    { id: "personal-notes", label: t("sidebar.notes"), icon: NotebookPen },
-    ...(policyActionsAllowed
-      ? [{ id: "upload" as const, label: t("sidebar.upload"), icon: Upload }]
-      : []),
-    { id: "dictionary", label: t("sidebar.dictionary"), icon: BookOpen },
-    { id: "integrations", label: t("sidebar.integrations"), icon: Blocks },
-  ];
+  const navItems = useControlPanelNavItems();
 
   return (
-    <div className="w-48 h-full shrink-0 border-r border-border/15 dark:border-white/6 flex flex-col bg-surface-1/60 dark:bg-surface-1">
+    <div className="w-48 h-full shrink-0 flex flex-col bg-surface-window">
       <div
         className="w-full h-10 shrink-0"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
-
-      {onOpenSearch && (
-        <div className="px-2 pt-2 pb-1">
-          <button
-            onClick={onOpenSearch}
-            className="group flex items-center w-full h-7 px-2.5 rounded-md border border-border/70 dark:border-white/25 bg-transparent hover:bg-foreground/5 dark:hover:bg-white/5 transition-colors gap-2 outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
-          >
-            <Search size={11} className="text-muted-foreground/50 shrink-0" />
-            <span className="flex-1 text-[11px] text-left text-muted-foreground/50">
-              {t("commandSearch.shortPlaceholder")}
-            </span>
-            <div className="flex items-center gap-0.5 shrink-0">
-              <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
-                {platform === "darwin" ? "⌘" : "Ctrl"}
-              </kbd>
-              <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
-                K
-              </kbd>
-            </div>
-          </button>
-        </div>
-      )}
 
       <nav className="flex flex-col gap-0.5 px-2 pt-2 pb-2">
         {navItems.map((item) => {
@@ -137,7 +75,7 @@ export default function ControlPanelSidebar({
               key={item.id}
               onClick={() => onViewChange(item.id)}
               className={cn(
-                "group relative flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md outline-none transition-colors duration-150 text-left",
+                "group relative flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md outline-none transition-colors duration-150 text-start",
                 "focus-visible:ring-1 focus-visible:ring-primary/30",
                 isActive
                   ? "bg-primary/8 dark:bg-primary/10"
@@ -145,20 +83,20 @@ export default function ControlPanelSidebar({
               )}
             >
               <Icon
-                size={15}
+                size={16}
                 className={cn(
                   "shrink-0 transition-colors duration-150",
                   isActive
                     ? "text-primary"
-                    : "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/55 dark:group-hover:text-foreground/70"
+                    : "text-foreground/70 group-hover:text-foreground/90 dark:text-foreground/65 dark:group-hover:text-foreground/85"
                 )}
               />
               <span
                 className={cn(
-                  "text-xs transition-colors duration-150",
+                  "text-[13px] transition-colors duration-150",
                   isActive
                     ? "text-foreground font-medium"
-                    : "text-foreground/80 group-hover:text-foreground dark:text-foreground/75 dark:group-hover:text-foreground/90"
+                    : "text-foreground/90 group-hover:text-foreground dark:text-foreground/85 dark:group-hover:text-foreground"
                 )}
               >
                 {item.label}
@@ -181,12 +119,9 @@ export default function ControlPanelSidebar({
               <p className="text-[11px] leading-snug text-muted-foreground mb-2.5">
                 {t("sidebar.limitReachedDescription")}
               </p>
-              <button
-                onClick={onUpgrade}
-                className="w-full h-7 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
-              >
+              <Button size="sm" onClick={onUpgrade} className="h-7 w-full text-xs">
                 {t("sidebar.viewPlans")}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -201,7 +136,7 @@ export default function ControlPanelSidebar({
                 localStorage.setItem("upgradeProDismissed", "true");
               }}
               aria-label={t("common.dismiss")}
-              className="absolute top-2 right-2 p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="absolute top-2 end-2 p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
               <X size={12} />
             </button>
@@ -226,12 +161,9 @@ export default function ControlPanelSidebar({
                 </div>
               ))}
             </div>
-            <button
-              onClick={onUpgrade}
-              className="w-full h-7 rounded-full bg-[#4079ed] text-white text-xs font-medium hover:bg-[#3568d9] active:bg-[#2f5dc4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4079ed]/40 transition-colors"
-            >
+            <Button size="sm" onClick={onUpgrade} className="h-7 w-full text-xs">
               {t("sidebar.learnMore")}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -249,7 +181,7 @@ export default function ControlPanelSidebar({
             aria-label={t("sidebar.referral")}
             className={rowButtonClass}
           >
-            <Gift size={15} className={rowIconClass} />
+            <Gift size={16} className={rowIconClass} />
             <span className={rowLabelClass}>{t("sidebar.referral")}</span>
           </button>
         )}
@@ -259,14 +191,14 @@ export default function ControlPanelSidebar({
           aria-label={t("sidebar.settings")}
           className={rowButtonClass}
         >
-          <Settings size={15} className={rowIconClass} />
+          <Settings size={16} className={rowIconClass} />
           <span className={rowLabelClass}>{t("sidebar.settings")}</span>
         </button>
 
         <SupportDropdown
           trigger={
             <button aria-label={t("sidebar.support")} className={rowButtonClass}>
-              <HelpCircle size={15} className={rowIconClass} />
+              <HelpCircle size={16} className={rowIconClass} />
               <span className={rowLabelClass}>{t("sidebar.support")}</span>
             </button>
           }
@@ -283,12 +215,15 @@ export default function ControlPanelSidebar({
           <div className="flex-1 min-w-0">
             {isSignedIn && (userName || userEmail) ? (
               <>
-                <p className="text-xs text-foreground/80 dark:text-foreground/80 truncate leading-tight">
+                <p
+                  dir="auto"
+                  className="text-xs text-foreground/80 dark:text-foreground/80 truncate leading-tight"
+                >
                   {userName || t("sidebar.defaultUser")}
                 </p>
                 {userEmail && (
                   <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">
-                    {userEmail}
+                    <bdi dir="ltr">{userEmail}</bdi>
                   </p>
                 )}
               </>

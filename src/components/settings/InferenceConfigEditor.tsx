@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "../icons";
 import {
   LLM_ENTERPRISE_POLICY_PROVIDER_IDS,
   LLM_POLICY_PROVIDER_IDS,
@@ -29,7 +29,7 @@ import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore"
 import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
-import { resetOnboardingProgress } from "../onboarding/flow";
+import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",
@@ -39,12 +39,6 @@ const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   chatIntelligence: "agentMode.settings.modes",
   dictationTranslation: "settingsPage.aiModels.modes",
 };
-
-function startCloudOnboarding() {
-  localStorage.setItem("pendingCloudMigration", "true");
-  resetOnboardingProgress(localStorage);
-  window.location.reload();
-}
 
 interface InferenceConfigEditorProps {
   scope: InferenceScope;
@@ -59,6 +53,7 @@ export default function InferenceConfigEditor({
   allowedModes,
 }: InferenceConfigEditorProps) {
   const { t } = useTranslation();
+  const startOnboarding = useStartOnboarding();
   const policyState = usePolicySnapshot();
   const config = useSettingsStore(
     useShallow((settings) =>
@@ -129,7 +124,7 @@ export default function InferenceConfigEditor({
     (mode: InferenceMode) => {
       if (!isModeAllowed(mode)) return;
       if (mode === "openwhispr" && !isSignedIn) {
-        startCloudOnboarding();
+        startOnboarding();
         return;
       }
       if (mode === effectiveMode) return;
@@ -150,7 +145,15 @@ export default function InferenceConfigEditor({
 
       onModeChange?.(mode);
     },
-    [scope, config.provider, effectiveMode, isSignedIn, onModeChange, isModeAllowed]
+    [
+      scope,
+      config.provider,
+      effectiveMode,
+      isSignedIn,
+      onModeChange,
+      isModeAllowed,
+      startOnboarding,
+    ]
   );
 
   const setMode = setField("mode");
@@ -189,7 +192,9 @@ export default function InferenceConfigEditor({
             <p className="text-sm font-medium">
               {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{managed.message}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {managed.messageKey ? t(managed.messageKey) : managed.message}
+            </p>
           </div>
         </div>
       </div>
@@ -216,7 +221,7 @@ export default function InferenceConfigEditor({
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
           <TestConnectionButton
             provider={managed.provider}
             getConfig={() => ({
@@ -264,7 +269,13 @@ export default function InferenceConfigEditor({
           </Button>
         </div>
       )}
-      <InferenceModeSelector modes={modes} activeMode={effectiveMode} onSelect={handleModeSelect} />
+      {modes.length > 1 && (
+        <InferenceModeSelector
+          modes={modes}
+          activeMode={effectiveMode}
+          onSelect={handleModeSelect}
+        />
+      )}
 
       {effectiveMode === "providers" && renderModelSelector("cloud")}
       {effectiveMode === "local" && renderModelSelector("local")}

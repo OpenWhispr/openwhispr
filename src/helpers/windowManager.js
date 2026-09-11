@@ -1,4 +1,4 @@
-const { app, screen, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, screen, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
 const debugLogger = require("./debugLogger");
 // Aliased: this class has an openExternalUrl method wrapping the helper.
 const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
@@ -43,6 +43,7 @@ const {
 const AGENT_DICTATION_PILL_SIZE = Object.freeze({ ...WINDOW_SIZES.BASE });
 const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
 const { ONBOARDING_DEMO_KINDS, isOnboardingInputAllowed } = require("./onboardingInputPolicy");
+const { createHotkeyRepeatGate } = require("./hotkeyRepeatGate");
 
 class WindowManager {
   constructor() {
@@ -80,15 +81,10 @@ class WindowManager {
         this.meetingDetectionEngine.handleNotificationTimeout(notification);
       }
     });
-    this.updateNotificationWindow = null;
-    this._pendingUpdateNotificationData = null;
-    this._deferredUpdateNotificationInfo = null;
-    this._updateNotificationDismissed = false;
     this.notificationPrefs = {
       notificationsEnabled: true,
       notifyMeetingDetection: true,
       notifyCalendarReminders: true,
-      notifyUpdates: true,
     };
     this.tray = null;
     this.hotkeyManager = new HotkeyManager();
@@ -132,6 +128,7 @@ class WindowManager {
 
     this.setMainWindowInteractivity(false);
     this.registerMainWindowEvents();
+    this.registerAssistantSelectionContextMenu();
 
     // Register load event handlers BEFORE loading to catch all events
     this.mainWindow.webContents.on(
@@ -173,6 +170,14 @@ class WindowManager {
     MenuManager.setupMainMenu(() => this.openSettings());
   }
 
+  registerAssistantSelectionContextMenu() {
+    this.mainWindow?.webContents.on("context-menu", (_event, params) => {
+      if (!this._assistantPanelOpen || !params?.selectionText?.trim()) return;
+
+      Menu.buildFromTemplate([{ role: "copy" }]).popup({ window: this.mainWindow });
+    });
+  }
+
   _updateMainContentProtection() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.setContentProtection(
@@ -186,7 +191,8 @@ class WindowManager {
   }
 
   // The pill window is created focusable:false so it never steals focus; the
-  // assistant panel needs keyboard focus so Escape can dismiss it reliably.
+  // assistant panel makes it focusable so it can take keyboard input at all.
+  // How it then becomes key is platform-split — see the branches below.
   setAssistantPanelOpen(open) {
     this._assistantPanelOpen = Boolean(open);
     if (!this._assistantPanelOpen) {
@@ -198,12 +204,24 @@ class WindowManager {
         // (PTT tap, auto-hide, tray); focus() is a no-op on a hidden window.
         if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
         this.mainWindow.setFocusable(true);
-        this.mainWindow.focus();
+        // macOS: never request app activation for the overlay. focus() calls
+        // NSApp activate, and when another OpenWhispr window (control panel)
+        // lives on a different Space, macOS answers a granted activation by
+        // sliding the whole desktop to it — the "massive flash" on panel
+        // open/close. The window is a non-activating panel, so clicking its
+        // input still makes it key (typing and Escape work from then on)
+        // without activating the app or stealing the user's keyboard.
+        if (process.platform !== "darwin") {
+          this.mainWindow.focus();
+        }
       } else {
         // On Windows/Linux the pill is a normal/toolbar window, so focus()
         // activated OpenWhispr — blur before dropping focusability to hand
-        // the foreground back to the app the user was in.
-        this.mainWindow.blur();
+        // the foreground back to the app the user was in. On macOS nothing
+        // was activated, and blur() would only churn key-window state.
+        if (process.platform !== "darwin") {
+          this.mainWindow.blur();
+        }
         this.mainWindow.setFocusable(false);
       }
       this.enforceMainWindowOnTop();
@@ -419,6 +437,19 @@ class WindowManager {
           ? "center"
           : `bottom-${this._activeHorizontalDirection || this.getMainWindowHorizontalDirection()}`;
       this._baseBoundsBeforeResize = null;
+      if (
+        restored.x === currentBounds.x &&
+        restored.y === currentBounds.y &&
+        restored.width === currentBounds.width &&
+        restored.height === currentBounds.height
+      ) {
+        // Nothing moved (BASE and the grown size share bounds) — skip the mask
+        // handshake and setBounds so the restore cannot perturb the renderer.
+        this._lastResizeBounds = restored;
+        this._activeHorizontalDirection = null;
+        this._notifyMainWindowHorizontalDirection();
+        return { success: true, bounds: restored, changed: false };
+      }
       await this._prepareRendererForMainWindowResize(restored, restoreAnchor);
       if (!this.mainWindow || this.mainWindow.isDestroyed()) {
         return { success: false, message: "Window not available" };
@@ -533,8 +564,7 @@ class WindowManager {
   }
 
   createHotkeyCallback() {
-    let lastToggleTime = 0;
-    const DEBOUNCE_MS = 150;
+    const isPress = createHotkeyRepeatGate();
 
     // globalShortcut registrations pass the hotkey that fired; native shortcuts
     // use down/up phases and resolve their primary hotkey from the active slot.
@@ -578,12 +608,7 @@ class WindowManager {
         return;
       }
 
-      const now = Date.now();
-      if (now - lastToggleTime < DEBOUNCE_MS) {
-        return;
-      }
-      lastToggleTime = now;
-
+      if (!isPress()) return;
       this.sendToggleDictation();
     };
   }
@@ -658,6 +683,16 @@ class WindowManager {
     }
   }
 
+  // A push that ends without a physical release leaves the trigger keys down, so
+  // an injected paste shortcut lands in a modifier state the target app cannot
+  // interpret and the transcript is lost. Tell the renderer to hold the text
+  // back instead of pasting it.
+  _notifyPushForceStopped(reason) {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("dictation-force-stopped", { reason });
+    }
+  }
+
   forceStopMacCompoundPush(reason = "manual") {
     if (!this.macCompoundPushState) {
       return;
@@ -670,15 +705,13 @@ class WindowManager {
     const wasRecording = this.macCompoundPushState.isRecording;
     this.macCompoundPushState = null;
 
+    this._notifyPushForceStopped(reason);
+
     if (wasRecording) {
       this.sendStopDictation();
     } else {
       this.sendCancelDictationPreparation();
-    }
-    this.hideDictationPanel();
-
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send("compound-ptt-force-stopped", { reason });
+      this.hideDictationPanel();
     }
   }
 
@@ -740,7 +773,7 @@ class WindowManager {
     const safetyTimeoutId = setTimeout(() => {
       if (!this.winPushState || this.winPushState.downTime !== downTime) return;
       debugLogger.warn("Native PTT safety timeout", undefined, "ptt");
-      this.handleWindowsPushKeyUp();
+      this.handleWindowsPushKeyUp(undefined, { reason: "timeout" });
     }, MAX_PUSH_DURATION_MS);
 
     this.winPushState = {
@@ -763,9 +796,11 @@ class WindowManager {
     }, MIN_HOLD_DURATION_MS);
   }
 
-  // With several dictation hotkeys bound, only the key that started the push
-  // may stop it; called without a key to force-stop (resetWindowsPushState).
-  handleWindowsPushKeyUp(key) {
+  // With several dictation hotkeys bound, only the key that started the push may
+  // stop it; called without a key to force-stop. "release" is the user letting
+  // go; every other reason ends a push whose trigger keys are still physically
+  // down, which the renderer must know before it pastes.
+  handleWindowsPushKeyUp(key, { reason = "release" } = {}) {
     if (!this.winPushState?.active) {
       return;
     }
@@ -780,6 +815,8 @@ class WindowManager {
     const wasRecording = this.winPushState.isRecording;
     this.winPushState = null;
 
+    if (reason !== "release") this._notifyPushForceStopped(reason);
+
     if (wasRecording) {
       this.sendStopDictation();
     } else {
@@ -793,7 +830,7 @@ class WindowManager {
       return;
     }
 
-    this.handleWindowsPushKeyUp();
+    this.handleWindowsPushKeyUp(undefined, { reason: "reset" });
   }
 
   _isOnboardingInputAllowed(inputKind) {
@@ -1129,6 +1166,21 @@ class WindowManager {
 
   isUsingNativeShortcutHotkeys() {
     return this.hotkeyManager.isUsingNativeShortcut();
+  }
+
+  // The control panel is transparent on macOS, where Electron ignores
+  // `-webkit-app-region: drag` entirely — the renderer recreates its titlebar
+  // drag through the shared DragManager instead (useControlPanelWindowDrag).
+  // No pill bookkeeping: position ownership below is main-window-only.
+  async startControlPanelDrag() {
+    if (!this.controlPanelWindow || this.controlPanelWindow.isDestroyed()) {
+      return { success: false, message: "Window not available" };
+    }
+    return await this.dragManager.startWindowDrag(this.controlPanelWindow);
+  }
+
+  async stopControlPanelDrag() {
+    return await this.dragManager.stopWindowDrag();
   }
 
   async startWindowDrag() {
@@ -1493,9 +1545,6 @@ class WindowManager {
     this.hideDictationPanel();
     this._onboardingActive = false;
     if (!this._floatingIconAutoHide) this.showDictationPanel();
-    const deferredUpdate = this._deferredUpdateNotificationInfo;
-    this._deferredUpdateNotificationInfo = null;
-    if (deferredUpdate) void this.showUpdateNotification(deferredUpdate);
     return true;
   }
 
@@ -1504,11 +1553,6 @@ class WindowManager {
     this.hideTranscriptionPreview();
     this.hideAgentDictationPill();
     this.dismissMeetingNotification({ flushQueued: false });
-
-    if (this._pendingUpdateNotificationData) {
-      this._deferredUpdateNotificationInfo = { ...this._pendingUpdateNotificationData };
-    }
-    this.dismissUpdateNotification({ persistent: false });
   }
 
   beginOnboardingDemo(kind) {
@@ -1995,7 +2039,9 @@ class WindowManager {
       win.setIgnoreMouseEvents(true, { forward: true });
     }
 
-    WindowPositionUtil.setupAlwaysOnTop(win);
+    // Notifications must clear every other window, including our own floating
+    // dictation panel and assistant pill.
+    WindowPositionUtil.setupAlwaysOnTop(win, { level: "screen-saver" });
 
     this._pendingNotificationData = promptData;
 
@@ -2131,109 +2177,6 @@ class WindowManager {
   isMeetingNotificationSender(sender) {
     const win = this.notificationWindow;
     return !!win && !win.isDestroyed() && win.webContents === sender;
-  }
-
-  async showUpdateNotification(info) {
-    if (this._onboardingActive) {
-      this._deferredUpdateNotificationInfo = info;
-      return false;
-    }
-    this._deferredUpdateNotificationInfo = null;
-    if (this._updateNotificationDismissed) return;
-    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
-      this.updateNotificationWindow.close();
-      this.updateNotificationWindow = null;
-    }
-    if (this._updateNotificationAutoDismiss) {
-      clearTimeout(this._updateNotificationAutoDismiss);
-      this._updateNotificationAutoDismiss = null;
-    }
-
-    const display = screen.getPrimaryDisplay();
-    const position = WindowPositionUtil.getNotificationPosition(display);
-
-    const win = new BrowserWindow({
-      ...NOTIFICATION_WINDOW_CONFIG,
-      ...position,
-    });
-    this.updateNotificationWindow = win;
-    this._pendingUpdateNotificationData = {
-      version: info?.version,
-      releaseDate: info?.releaseDate,
-    };
-
-    WindowPositionUtil.setupAlwaysOnTop(win);
-
-    try {
-      if (process.env.NODE_ENV === "development") {
-        await DevServerManager.waitForDevServer();
-        await win.loadURL(`${DevServerManager.DEV_SERVER_URL}?update-notification=true`);
-      } else {
-        const fileInfo = DevServerManager.getAppFilePath(false);
-        await win.loadFile(fileInfo.path, {
-          query: { ...fileInfo.query, "update-notification": "true" },
-        });
-      }
-    } catch (error) {
-      // Entering onboarding closes any in-flight normal-app popup. Its aborted
-      // load is expected, and the saved update is replayed once the gate opens.
-      if (this._onboardingActive || this.updateNotificationWindow !== win) return false;
-      throw error;
-    }
-
-    if (this._onboardingActive || this.updateNotificationWindow !== win) return false;
-
-    this._updateNotificationReadyFallback = setTimeout(() => {
-      this._updateNotificationReadyFallback = null;
-      if (this._onboardingActive || this.updateNotificationWindow !== win || win.isDestroyed())
-        return;
-      win.webContents.send("update-notification-data", this._pendingUpdateNotificationData);
-      win.showInactive();
-    }, 3000);
-
-    this._updateNotificationAutoDismiss = setTimeout(() => {
-      this.dismissUpdateNotification({ persistent: false });
-    }, 5000);
-
-    win.on("closed", () => {
-      if (this.updateNotificationWindow !== win) return;
-      this.updateNotificationWindow = null;
-      if (this._updateNotificationAutoDismiss) {
-        clearTimeout(this._updateNotificationAutoDismiss);
-        this._updateNotificationAutoDismiss = null;
-      }
-    });
-  }
-
-  showUpdateNotificationWindow() {
-    if (this._onboardingActive) return;
-    if (this._updateNotificationReadyFallback) {
-      clearTimeout(this._updateNotificationReadyFallback);
-      this._updateNotificationReadyFallback = null;
-    }
-    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
-      this.updateNotificationWindow.showInactive();
-    }
-  }
-
-  dismissUpdateNotification({ persistent = true } = {}) {
-    this._pendingUpdateNotificationData = null;
-    if (persistent) {
-      this._updateNotificationDismissed = true;
-      this._deferredUpdateNotificationInfo = null;
-    }
-    if (this._updateNotificationReadyFallback) {
-      clearTimeout(this._updateNotificationReadyFallback);
-      this._updateNotificationReadyFallback = null;
-    }
-    if (this._updateNotificationAutoDismiss) {
-      clearTimeout(this._updateNotificationAutoDismiss);
-      this._updateNotificationAutoDismiss = null;
-    }
-    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
-      this.updateNotificationWindow.close();
-    }
-    this.updateNotificationWindow = null;
   }
 
   sendToControlPanel(channel, data) {

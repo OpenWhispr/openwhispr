@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import {
@@ -12,11 +13,20 @@ import {
 import { discoverEmailAuth } from "../lib/emailAuthDiscovery";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "lucide-react";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
+import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "./icons";
 import logger from "../utils/logger";
+import { EMAIL_REGEX } from "../utils/validation";
+import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
 import { getCachedPlatform } from "../utils/platform";
 import ForgotPasswordView from "./ForgotPasswordView";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
+import {
+  RESUME_DRAFT_PERSIST_DELAY_MS,
+  type OnboardingAuthDraft,
+  type OnboardingAuthMode,
+  type OnboardingSsoDiscoveryDraft,
+} from "./onboarding/flow";
 
 interface AuthenticationStepProps {
   onContinueWithoutAccount?: () => void;
@@ -24,14 +34,19 @@ interface AuthenticationStepProps {
   onNeedsVerification: (email: string) => void;
   /** Rendering inside SignInDialog rather than the onboarding window. */
   embedded?: boolean;
+  /**
+   * Whether an already signed-in user is completed on sight. Off when the user
+   * came Back to this step: they asked to see it, so it shows the welcome screen
+   * instead of bouncing them forward again.
+   */
+  autoContinue?: boolean;
+  /** Offers "Not you? Log out" on the welcome-back screen. */
+  onSignOut?: () => void;
+  resumeState?: OnboardingAuthDraft;
+  onResumeStateChange?: (state: Partial<OnboardingAuthDraft>) => void;
 }
 
-type AuthMode = "sign-in" | "sign-up" | null;
-type SsoDiscovery = {
-  required: boolean;
-  domain: string;
-  exists: boolean;
-};
+type SsoDiscovery = OnboardingSsoDiscoveryDraft;
 
 const EXISTING_ACCOUNT_ERROR_CODES = new Set([
   "USER_ALREADY_EXISTS",
@@ -60,14 +75,14 @@ function ProviderTile({
       disabled={disabled}
       title={title}
       aria-label={label}
-      className="flex h-13 min-w-0 flex-1 flex-col items-center justify-center gap-1.5 rounded-xl bg-[var(--onboarding-surface-secondary)] px-2 text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_40%,transparent)] disabled:pointer-events-none disabled:opacity-100"
+      className="flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-[var(--onboarding-surface-secondary)] px-2 text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_40%,transparent)] disabled:pointer-events-none disabled:opacity-100"
     >
       {loading ? (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       ) : (
         <Icon className="size-4" />
       )}
-      <span className="truncate text-sm font-normal">{label}</span>
+      <span className="truncate text-[13px]">{label}</span>
     </button>
   );
 }
@@ -113,11 +128,20 @@ const AppleIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+/** Lift a compact-window control out of the step tree so it can out-stack the
+ *  onboarding shell's drag band; embedded (SignInDialog) has no band to escape. */
+const withCompactPortal = (embedded: boolean, control: React.ReactElement) =>
+  embedded ? control : createPortal(control, document.body);
+
 export default function AuthenticationStep({
   onContinueWithoutAccount,
   onAuthComplete,
   onNeedsVerification,
   embedded = false,
+  autoContinue = true,
+  onSignOut,
+  resumeState,
+  onResumeStateChange,
 }: AuthenticationStepProps) {
   const { t } = useTranslation();
   // The fixed top offsets centre content in the compact setup window;
@@ -127,15 +151,18 @@ export default function AuthenticationStep({
     ? "text-2xl font-semibold tracking-tight"
     : "onboarding-display-title";
   const { isSignedIn, isLoaded, user } = useAuth();
-  const [authMode, setAuthMode] = useState<AuthMode>(null);
-  const [email, setEmail] = useState("");
+  const [authMode, setAuthMode] = useState<OnboardingAuthMode>(resumeState?.authMode ?? null);
+  const [email, setEmail] = useState(resumeState?.email ?? "");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [fullName, setFullName] = useState(resumeState?.fullName ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [isSocialLoading, setIsSocialLoading] = useState<SocialProvider | null>(null);
   const [isSSOLoading, setIsSSOLoading] = useState(false);
-  const [ssoDiscovery, setSsoDiscovery] = useState<SsoDiscovery | null>(null);
+  const [showSSOEmailStep, setShowSSOEmailStep] = useState(false);
+  const [ssoDiscovery, setSsoDiscovery] = useState<SsoDiscovery | null>(
+    resumeState?.ssoDiscovery ?? null
+  );
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState(true);
@@ -150,15 +177,40 @@ export default function AuthenticationStep({
       .catch(() => {});
   }, []);
 
+  // Only the fields this step owns: pendingVerificationEmail belongs to
+  // CompactAuthenticationFlow, and the forgot-password / SSO-email sub-screens are
+  // transient — a returning user should land on sign-in, not on a reset form.
+  const latestAuthDraft = useRef<Partial<OnboardingAuthDraft>>({});
+  const persistAuthDraft = useDebouncedCallback(
+    () => onResumeStateChange?.(latestAuthDraft.current),
+    RESUME_DRAFT_PERSIST_DELAY_MS
+  );
+
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || needsVerificationRef.current || !user?.id || !user?.email)
+    latestAuthDraft.current = { authMode, email, fullName, ssoDiscovery };
+    persistAuthDraft();
+  }, [authMode, email, fullName, persistAuthDraft, ssoDiscovery]);
+
+  // The debounce drops a pending write when this step unmounts, which is exactly
+  // what sign-up does on its way to verification, so flush the last draft.
+  useEffect(() => () => onResumeStateChange?.(latestAuthDraft.current), [onResumeStateChange]);
+
+  useEffect(() => {
+    if (
+      !autoContinue ||
+      !isLoaded ||
+      !isSignedIn ||
+      needsVerificationRef.current ||
+      !user?.id ||
+      !user?.email
+    )
       return;
     // The ref only latches within one mount. Remounting over a session that is
     // still unverified (Back from the verification step) must not complete —
     // that would advance with an email the user came back to correct.
     if (user.emailVerified === false) return;
     onAuthComplete();
-  }, [isLoaded, isSignedIn, user, onAuthComplete]);
+  }, [autoContinue, isLoaded, isSignedIn, user, onAuthComplete]);
 
   useEffect(() => {
     if (isSocialLoading === null && !isSSOLoading) return;
@@ -220,12 +272,21 @@ export default function AuthenticationStep({
 
   const handleSSOSignIn = useCallback(() => startSSOSignIn(email), [email, startSSOSignIn]);
 
+  const handleOpenSSOEmailStep = useCallback(() => {
+    setError(null);
+    setShowSSOEmailStep(true);
+  }, []);
+
+  const handleBackFromSSOEmailStep = useCallback(() => {
+    setError(null);
+    setShowSSOEmailStep(false);
+  }, []);
+
   const handleEmailContinue = useCallback(async () => {
     if (!email.trim() || !authClient) return;
 
-    const localPart = email.trim().split("@")[0];
-    if (localPart?.includes("+")) {
-      setError(t("auth.errors.plusAliasUnsupported"));
+    if (!EMAIL_REGEX.test(email.trim())) {
+      setError(t("auth.errors.invalidEmail"));
       return;
     }
 
@@ -362,7 +423,7 @@ export default function AuthenticationStep({
   if (!AUTH_URL || !authClient) {
     return (
       <CompactOnboardingFrame embedded={embedded}>
-        <div className={`${frameInset("pt-44")} text-center`}>
+        <div className={`${frameInset("pt-48")} text-center`}>
           <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
           <p className="mt-3 text-base text-muted-foreground">{t("auth.welcomeSubtitle")}</p>
           <div className="mt-8 rounded-xl border border-warning/20 bg-warning/5 p-3 text-sm text-warning">
@@ -371,7 +432,7 @@ export default function AuthenticationStep({
           {onContinueWithoutAccount && (
             <Button onClick={onContinueWithoutAccount} className="mt-3 h-12 w-full rounded-full">
               {t("auth.getStarted")}
-              <ArrowRight className="size-4" />
+              <ArrowRight className="size-4 rtl:rotate-180" />
             </Button>
           )}
         </div>
@@ -388,15 +449,22 @@ export default function AuthenticationStep({
             <Check className="size-5 text-success" />
           </div>
           <p className="mt-6 text-2xl font-medium leading-tight tracking-tight">
-            {user?.name
-              ? t("auth.signedIn.welcomeBackName", { name: user.name })
-              : t("auth.signedIn.welcomeBack")}
+            <span className="block">{t("auth.signedIn.welcomeBack")}</span>
+            {user?.name && <span className="mt-1 block">{user.name}</span>}
           </p>
-          <p className="mt-2 text-sm text-muted-foreground">{t("auth.signedIn.ready")}</p>
-          <Button onClick={onAuthComplete} className="mt-7 h-12 w-full rounded-full">
+          <Button onClick={onAuthComplete} className="mt-7 h-12 w-fit min-w-32 rounded-full px-6">
             {t("auth.common.continue")}
-            <ArrowRight className="size-4" />
+            <ArrowRight className="size-4 rtl:rotate-180" />
           </Button>
+          {onSignOut && (
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="mt-4 block w-full text-sm text-[var(--onboarding-text-secondary)] transition-colors hover:text-[var(--onboarding-text-primary)]"
+            >
+              {t("auth.signedIn.notYou")}
+            </button>
+          )}
         </div>
       </CompactOnboardingFrame>
     );
@@ -405,8 +473,79 @@ export default function AuthenticationStep({
   if (forgotPasswordOpen) {
     return (
       <CompactOnboardingFrame embedded={embedded}>
-        <div className={frameInset("pt-42")}>
+        <div className={frameInset("pt-48")}>
           <ForgotPasswordView email={email} onBack={handleBackFromForgotPassword} />
+        </div>
+      </CompactOnboardingFrame>
+    );
+  }
+
+  if (showSSOEmailStep) {
+    return (
+      <CompactOnboardingFrame embedded={embedded}>
+        <div className={`${frameInset("pt-48")} text-center`}>
+          <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
+          <p className="mt-2 text-base text-[var(--onboarding-text-secondary)]">
+            {t("auth.welcomeSubtitle")}
+          </p>
+
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSSOSignIn();
+            }}
+            className="mt-6 space-y-4 text-start"
+          >
+            <label className="block space-y-2">
+              <span className="text-xs text-[var(--onboarding-text-secondary)]">
+                {t("auth.sso.workEmailLabel")}
+              </span>
+              <Input
+                dir="ltr"
+                type="email"
+                placeholder={t("auth.sso.emailPlaceholder")}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="onboarding-light-input onboarding-auth-input h-10 rounded-xl px-3 text-sm disabled:opacity-100"
+                required
+                autoFocus
+                disabled={isSSOLoading}
+              />
+            </label>
+
+            <Button
+              type="submit"
+              disabled={!email.trim() || isSSOLoading || !oauthProtocolRegistered}
+              className="h-10 w-full text-[15px]"
+            >
+              {isSSOLoading ? <Loader2 className="size-4 animate-spin" /> : null}
+              {isSSOLoading
+                ? t("auth.social.completeInBrowser")
+                : t("auth.emailStep.continueWithEmail")}
+            </Button>
+          </form>
+
+          <button
+            type="button"
+            onClick={handleBackFromSSOEmailStep}
+            disabled={isSSOLoading}
+            className="mt-4 text-sm font-medium text-[var(--onboarding-text-primary)] transition-colors hover:text-[var(--onboarding-text-secondary)] disabled:opacity-50"
+          >
+            {t("auth.common.back")}
+          </button>
+
+          {!oauthProtocolRegistered && (
+            <p className="mt-3 text-center text-xs leading-tight text-muted-foreground/80">
+              {t("auth.social.protocolUnavailable")}
+            </p>
+          )}
+
+          {error && (
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-start">
+              <AlertCircle className="size-3.5 shrink-0 text-destructive" />
+              <p className="text-xs text-destructive">{error}</p>
+            </div>
+          )}
         </div>
       </CompactOnboardingFrame>
     );
@@ -421,19 +560,27 @@ export default function AuthenticationStep({
             onClick={handleBack}
             className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ChevronLeft className="h-3 w-3" />
+            <ChevronLeft className="h-3 w-3 rtl:rotate-180" />
             {t("auth.common.back")}
           </button>
 
           <div className="pb-1 text-center">
-            <p className="mb-2 text-sm leading-tight text-muted-foreground/70">{email}</p>
+            <p dir="ltr" className="mb-2 text-sm leading-tight text-muted-foreground/70">
+              {email}
+            </p>
             <p className="text-lg font-semibold leading-tight tracking-tight text-foreground">
               {t("auth.sso.companySignInTitle")}
             </p>
             <p className="mt-1 text-xs leading-snug text-muted-foreground">
-              {ssoDiscovery.required
-                ? t("auth.sso.requiredDescription", { domain: ssoDiscovery.domain })
-                : t("auth.sso.availableDescription", { domain: ssoDiscovery.domain })}
+              <BidiInterpolatedText
+                text={t(
+                  ssoDiscovery.required
+                    ? "auth.sso.requiredDescription"
+                    : "auth.sso.availableDescription",
+                  { domain: BIDI_VALUE_TOKEN }
+                )}
+                value={ssoDiscovery.domain}
+              />
             </p>
           </div>
 
@@ -484,28 +631,41 @@ export default function AuthenticationStep({
   if (authMode !== null) {
     return (
       <CompactOnboardingFrame embedded={embedded}>
-        <div className={`${frameInset("pt-38")} text-center`}>
+        <div className={`${frameInset("pt-48")} text-center`}>
           <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
           <p className="mt-2 text-base text-[var(--onboarding-text-secondary)]">
             {t("auth.welcomeSubtitle")}
           </p>
 
-          <button
-            type="button"
-            onClick={handleBack}
-            className={
-              embedded
-                ? "mb-3 inline-flex h-8 items-center gap-1 text-xs text-[var(--onboarding-text-secondary)] transition-colors hover:text-[var(--onboarding-text-primary)]"
-                : "absolute left-5 top-13 inline-flex h-8 items-center gap-1 text-xs font-medium text-white/80 transition-colors hover:text-white"
-            }
-            style={embedded ? undefined : ({ WebkitAppRegion: "no-drag" } as React.CSSProperties)}
-            disabled={isSubmitting}
-          >
-            <ChevronLeft className="size-3.5" />
-            {t("auth.common.back")}
-          </button>
+          {/* The compact Back sits at y=52, inside the onboarding shell's drag
+              band — which spans the full 192px hero on compact screens. Nothing
+              in the step tree can out-stack that z-50 band (the step wrapper's
+              entry animation keeps a transform, so its descendants are capped
+              regardless of z-index — see OnboardingShell), so it has to leave
+              the tree entirely or its clicks are swallowed and this screen has
+              no way back. Portalled to body exactly like CompactPermissionsStep's
+              Continue; no-drag keeps both the JS drag fallback and the
+              Windows/Linux app-region off it. Embedded in SignInDialog there is
+              no band, so it stays inline. */}
+          {withCompactPortal(
+            embedded,
+            <button
+              type="button"
+              onClick={handleBack}
+              className={
+                embedded
+                  ? "mb-3 inline-flex h-8 items-center gap-1 text-xs text-[var(--onboarding-text-secondary)] transition-colors hover:text-[var(--onboarding-text-primary)]"
+                  : "fixed start-5 top-13 z-[60] inline-flex h-8 items-center gap-1 text-xs font-medium text-white/80 transition-colors hover:text-white"
+              }
+              style={embedded ? undefined : ({ WebkitAppRegion: "no-drag" } as React.CSSProperties)}
+              disabled={isSubmitting}
+            >
+              <ChevronLeft className="size-3.5 rtl:rotate-180" />
+              {t("auth.common.back")}
+            </button>
+          )}
 
-          <form onSubmit={handleSubmit} className="mt-4 space-y-3 text-left">
+          <form onSubmit={handleSubmit} className="mt-4 space-y-3 text-start">
             <label className="block space-y-2">
               <span className="text-xs text-[var(--onboarding-text-secondary)]">
                 {authMode === "sign-up"
@@ -514,6 +674,7 @@ export default function AuthenticationStep({
               </span>
               {authMode === "sign-up" ? (
                 <Input
+                  dir="auto"
                   type="text"
                   placeholder={t("auth.passwordForm.fullNamePlaceholder")}
                   value={fullName}
@@ -524,6 +685,7 @@ export default function AuthenticationStep({
                 />
               ) : (
                 <Input
+                  dir="ltr"
                   type="email"
                   value={email}
                   className="onboarding-light-input onboarding-auth-input h-10 rounded-xl px-3 text-sm"
@@ -537,6 +699,7 @@ export default function AuthenticationStep({
                 {t("auth.passwordForm.passwordLabel")}
               </span>
               <Input
+                dir="ltr"
                 type="password"
                 placeholder={t("auth.passwordForm.passwordLabel")}
                 value={password}
@@ -559,7 +722,7 @@ export default function AuthenticationStep({
             <Button
               type="submit"
               disabled={isSubmitting || !password}
-              className="h-10 w-full rounded-full border-transparent bg-[var(--onboarding-inverse-surface)] text-base font-normal text-[var(--onboarding-inverse-text)] shadow-none hover:opacity-90 disabled:border-transparent disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)] disabled:opacity-100"
+              className="h-10 w-full text-[15px]"
             >
               {isSubmitting ? (
                 <>
@@ -630,14 +793,20 @@ export default function AuthenticationStep({
       onClick: () => handleSocialSignIn("microsoft"),
       loading: isSocialLoading === "microsoft",
     },
-    { id: "sso", label: "SSO", icon: Building2, onClick: handleSSOSignIn, loading: isSSOLoading },
+    {
+      id: "sso",
+      label: "SSO",
+      icon: Building2,
+      onClick: handleOpenSSOEmailStep,
+      loading: isSSOLoading,
+    },
   ];
 
   return (
     <CompactOnboardingFrame embedded={embedded}>
-      <div className={`${frameInset("pt-38")} text-center`}>
+      <div className={`${frameInset("pt-48")} text-center`}>
         <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
-        <p className="mt-2 text-base text-[var(--onboarding-text-secondary)]">
+        <p className="mt-2.5 text-[15px] text-[var(--onboarding-text-secondary)]">
           {t("auth.welcomeSubtitle")}
         </p>
 
@@ -646,9 +815,10 @@ export default function AuthenticationStep({
             event.preventDefault();
             handleEmailContinue();
           }}
-          className="mt-3 space-y-3"
+          className="mt-5 space-y-3"
         >
           <Input
+            dir="ltr"
             type="email"
             placeholder={t("auth.emailStep.emailPlaceholder")}
             value={email}
@@ -660,11 +830,7 @@ export default function AuthenticationStep({
           <Button
             type="submit"
             disabled={!email.trim() || busy}
-            className={`h-10 w-full rounded-full border-transparent bg-[var(--onboarding-inverse-surface)] text-base font-normal text-[var(--onboarding-inverse-text)] shadow-none hover:opacity-90 disabled:border-transparent disabled:opacity-100 ${
-              email.trim()
-                ? ""
-                : "disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)]"
-            }`}
+            className="h-10 w-full text-[15px]"
           >
             {isCheckingEmail ? <Loader2 className="size-4 animate-spin" /> : null}
             {isCheckingEmail
@@ -673,9 +839,11 @@ export default function AuthenticationStep({
           </Button>
         </form>
 
-        <p className="pb-3 pt-4 text-sm font-normal uppercase text-[var(--onboarding-text-secondary)]">
+        <div className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--onboarding-text-secondary)]">
+          <span className="h-px flex-1 bg-[var(--onboarding-control-border)]" />
           {t("auth.common.or")}
-        </p>
+          <span className="h-px flex-1 bg-[var(--onboarding-control-border)]" />
+        </div>
 
         <div className="flex gap-3">
           {providers.map((provider) => (
@@ -698,25 +866,21 @@ export default function AuthenticationStep({
         )}
 
         {error && (
-          <div className="mt-2 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-left">
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-start">
             <AlertCircle className="size-3.5 shrink-0 text-destructive" />
             <p className="text-xs text-destructive">{error}</p>
           </div>
         )}
 
         {onContinueWithoutAccount && (
-          <div className="pt-5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onContinueWithoutAccount}
-              className="w-full rounded-full text-base font-normal text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-hover)] hover:text-[var(--onboarding-text-primary)]"
-              disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
-            >
-              {t("auth.emailStep.continueWithoutAccount")}
-            </Button>
-          </div>
+          <button
+            type="button"
+            onClick={onContinueWithoutAccount}
+            className="mt-5 text-sm text-[var(--onboarding-text-secondary)] underline-offset-4 transition-colors hover:text-[var(--onboarding-text-primary)] hover:underline disabled:opacity-50"
+            disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
+          >
+            {t("auth.emailStep.continueWithoutAccount")}
+          </button>
         )}
       </div>
     </CompactOnboardingFrame>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import { FolderOpen, Copy, Check } from "lucide-react";
+import { FolderOpen, Copy, Check } from "./icons";
 import { useToast } from "./ui/useToast";
 import { Toggle } from "./ui/toggle";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
@@ -123,7 +123,7 @@ export default function DeveloperSection() {
       </div>
 
       {/* Debug Toggle */}
-      <div className="rounded-xl border border-border/60 dark:border-border-subtle bg-card dark:bg-surface-2 divide-y divide-border/40 dark:divide-border-subtle">
+      <div className="rounded-xl border border-border/70 dark:border-border-subtle bg-card dark:bg-surface-2 divide-y divide-border/60 dark:divide-border-subtle">
         <div className="px-5 py-4">
           <div className="flex items-center justify-between gap-6">
             <div className="min-w-0 flex-1">
@@ -156,11 +156,14 @@ export default function DeveloperSection() {
         {/* Log Path — only when active */}
         {debugEnabled && logPath && (
           <div className="px-5 py-4">
-            <p className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider mb-2">
+            <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider mb-2">
               {t("developerSection.currentLogFile")}
             </p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 text-xs text-muted-foreground font-mono break-all leading-relaxed bg-muted/30 dark:bg-surface-raised/30 px-3 py-2 rounded-lg border border-border/30">
+              <code
+                dir="ltr"
+                className="flex-1 text-xs text-muted-foreground font-mono break-all leading-relaxed bg-muted/30 dark:bg-surface-raised/30 px-3 py-2 rounded-lg border border-border/70"
+              >
                 {logPath}
               </code>
               <Button
@@ -183,7 +186,7 @@ export default function DeveloperSection() {
         {debugEnabled && (
           <div className="px-5 py-4">
             <Button onClick={handleOpenLogsFolder} variant="outline" size="sm" className="w-full">
-              <FolderOpen className="mr-2 h-3.5 w-3.5" />
+              <FolderOpen className="me-2 h-3.5 w-3.5" />
               {t("developerSection.openLogsFolder")}
             </Button>
           </div>
@@ -197,7 +200,7 @@ export default function DeveloperSection() {
             {t("developerSection.whatGetsLogged.title")}
           </h3>
         </div>
-        <div className="rounded-xl border border-border/60 dark:border-border-subtle bg-card dark:bg-surface-2">
+        <div className="rounded-xl border border-border/70 dark:border-border-subtle bg-card dark:bg-surface-2">
           <div className="px-5 py-4">
             <div
               className={`grid gap-y-2 ${isCompact ? "grid-cols-1 gap-x-0" : "grid-cols-2 gap-x-6"}`}
@@ -242,7 +245,7 @@ export default function DeveloperSection() {
               {t("developerSection.sharing.title")}
             </h3>
           </div>
-          <div className="rounded-xl border border-border/60 dark:border-border-subtle bg-card dark:bg-surface-2">
+          <div className="rounded-xl border border-border/70 dark:border-border-subtle bg-card dark:bg-surface-2">
             <div className="px-5 py-4">
               <div className="space-y-2">
                 {[
@@ -251,14 +254,14 @@ export default function DeveloperSection() {
                   t("developerSection.sharing.steps.2"),
                 ].map((step, i) => (
                   <div key={i} className="flex items-start gap-3">
-                    <span className="shrink-0 text-xs font-mono text-muted-foreground/40 mt-0.5 w-4 text-right">
+                    <span className="mt-0.5 w-4 shrink-0 text-end font-mono text-xs text-muted-foreground/70">
                       {i + 1}
                     </span>
                     <p className="text-xs text-muted-foreground leading-relaxed">{step}</p>
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground/40 mt-4 pt-3 border-t border-border/20">
+              <p className="text-xs text-muted-foreground/70 mt-4 pt-3 border-t border-border/70">
                 {t("developerSection.sharing.footer")}
               </p>
             </div>

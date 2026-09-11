@@ -133,6 +133,10 @@ class WhisperManager {
     return path.join(this.getModelsDir(), config.fileName);
   }
 
+  isModelDownloaded(modelName) {
+    return fs.existsSync(this.getModelPath(modelName));
+  }
+
   getVadModelPath() {
     if (this.cachedVadModelPath !== undefined) return this.cachedVadModelPath;
 

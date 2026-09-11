@@ -426,7 +426,10 @@ export function useLiveTranscriptPanel({
     if (normalRecording && !previousNormalRecordingRef.current) {
       suppressedRef.current = false;
       setManuallyCollapsed(false);
+      const contentWasReady = openRef.current && contentReadyRef.current;
       resetText();
+      // An open panel is reused without another entrance to resume its text.
+      contentReadyRef.current = contentWasReady;
       setPhase("listening");
     }
     previousNormalRecordingRef.current = normalRecording;

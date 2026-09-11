@@ -51,7 +51,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **windows-key-listener.c**: C source for Windows low-level keyboard hook (Push-to-Talk)
 - **windows-mic-listener.c**: C source for WASAPI mic session monitor (event-driven mic detection)
 - **windows-system-audio-helper.c**: C source for WASAPI process-loopback system audio capture (meeting transcription). Excludes OpenWhispr's own process tree, so it hears every app on every output device. Requires Windows 10 2004+; falls back to Chromium display-media loopback when unavailable, and mid-session when the helper emits a `capture_silent` warning (its own stream is silent while a render endpoint is metering output — activation success cannot detect that). Outputs 24 kHz mono s16le PCM on stdout, line-delimited JSON events on stderr (same protocol as linux-system-audio-helper)
-- **macos-mic-listener.swift**: Swift source for CoreAudio mic property listener (event-driven mic detection)
+- **macos-mic-listener.swift**: Swift source for the CoreAudio process-object microphone listener (event-driven mic detection); falls back to aggregate device activity and retries PID monitoring from its heartbeat
 - **globe-listener.swift**: Swift source for macOS Globe/Fn key detection
 - **bin/**: Directory for compiled native binaries (whisper-cpp, nircmd, key/mic listeners)
 
@@ -130,10 +130,10 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - macOS: Event-driven via `systemPreferences.subscribeWorkspaceNotification` (zero CPU)
   - Windows/Linux: Shared `processListCache` polling (30s interval)
 - **audioActivityDetector.js**: Detects microphone usage for unscheduled meetings
-  - macOS: Event-driven via `macos-mic-listener` binary (CoreAudio property listeners)
+  - macOS: Event-driven via `macos-mic-listener` binary (CoreAudio process objects; aggregate device activity prompts only while a known meeting app is running)
   - Windows: Event-driven via `windows-mic-listener.exe` (WASAPI sessions, self-PID exclusion)
   - Linux: Event-driven via `pactl subscribe` (PulseAudio source-output events)
-  - All platforms: Graceful fallback to polling if native approach fails
+  - Windows/Linux: Graceful fallback to polling if the native approach fails; macOS has no safe polling signal and respawns the listener with backoff instead
 - **processListCache.js**: Shared singleton process list cache (5s TTL, `ps-list` npm)
 - **meetingEchoLeakDetector.js**: Audio-layer echo analysis for meeting recordings — correlates each mic chunk against the recent system-audio tap (lag search 0–500 ms in 5 ms steps) and classifies it `clean_local` / `suspected_render_bleed` / `double_talk`; drives chunk muting and per-segment suppression flags. PCM-driven tests in `test/helpers/meetingEchoLeakDetector.test.js`
 - **meetingMicGate.js**: Pure RMS/peak chunk stats + the meeting mic gate verdict (`send` / `zero` for streaming, `send` / `skip` for local) with the exported silence and bleed thresholds; `ipcHandlers.js` (`dispatchMeetingAudioBuffer`, `transcribeLocalMeetingChunk`) only applies the verdict. Unit-tested in `test/helpers/meetingMicGate.test.js`
@@ -161,7 +161,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **vectorIndex.js**: Qdrant collection management — upsert, delete, search, batch reindex
 - **windowConfig.js**: Centralized window configuration
 - **windowManager.js**: Window creation and lifecycle management
-- **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app.
+- **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app. `POST /v1/transcribe` takes a file **path** (never audio) and runs the user's downloaded local model through `IPCHandlers.transcribeLocalFile`, approving the path with `approveAudioPath` first; `GET /v1/transcribe/models` lists local models with download state and the app's default (`localTranscriptionModels.js`, read from the `.env` pre-warm values).
 - **postMigrationDetector.js**: Detects users returning from the pre-Gizmo bundle ID via a `.bundle-migrated` sentinel in userData; consumed by `ipcHandlers.js` to drive the `PostMigrationOnboarding` modal
 
 ### React Components (src/components/)
@@ -214,6 +214,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **parakeet.js**: Model management for NVIDIA Parakeet ASR models
   - Uses sherpa-onnx runtime for cross-platform ONNX inference
   - Bundled binaries in `resources/bin/sherpa-onnx-{platform}-{arch}`
+  - Windows: the bundled ONNX Runtime ships as `ow-onnxrt.dll`, not `onnxruntime.dll`. `scripts/download-sherpa-onnx.js` renames it and rewrites the import tables of every sherpa image (`scripts/lib/pe-imports.js`) because Windows 11 ships an older `onnxruntime.dll` in System32 and some loader configurations resolve the bare name to that copy (#2054). `afterPack.js` fails the Windows build if `onnxruntime.dll` is present or `ow-onnxrt.dll` is missing
   - INT8 quantized models for efficient CPU inference
   - Models stored in `~/.cache/openwhispr/parakeet-models/`
   - Server pre-warming on startup when `LOCAL_TRANSCRIPTION_PROVIDER=nvidia` is set
@@ -273,6 +274,8 @@ Always-on offline semantic search that finds notes by meaning, not just keywords
 - **download-sherpa-onnx.js**: Downloads sherpa-onnx binaries for Parakeet support
 - **download-qdrant.js**: Downloads Qdrant vector DB binary for local semantic search
 - **download-minilm.js**: Downloads all-MiniLM-L6-v2 ONNX model + tokenizer for local embeddings
+- **download-brand-fonts.js**: Fetches the licensed Yowza font files from the private `OpenWhispr/brand-assets` release into the git-ignored `src/assets/fonts/yowza/`. Runs in `predev:main` and every `prebuild*` chain; skips (Noto Sans fallback) without repo access, fails only when `BRAND_FONTS_REQUIRED=1` (release CI)
+- **sync-nucleo-icons.js**: Regenerates `src/components/icons/` from `nucleo-map.json` using the local Nucleo install (`~/.nucleo/skills`); only the icons the app uses are vendored
 - **build-globe-listener.js**: Compiles macOS Globe key listener from Swift source
 - **build-macos-mic-listener.js**: Compiles macOS mic listener from Swift source
 - **build-windows-key-listener.js**: Compiles Windows key listener (for local development)
@@ -354,10 +357,12 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 
 ### 6. Language Support
 
-58 languages supported (see src/utils/languages.ts):
+60 languages supported, defined in `src/config/languageRegistry.json` and read through
+`src/utils/languageSupport.ts`:
 
-- Each language has a two-letter code and label
-- "auto" for automatic detection
+- Each entry has a two-letter code, label, flag, and per-engine support flags
+  (`whisper`, `parakeet`, `assemblyai`) — 59 Whisper, 26 Parakeet, 7 AssemblyAI
+- "auto" is a 61st entry for automatic detection
 - Passed to whisper.cpp via -l parameter
 
 ### 7. Agent Naming System
@@ -368,18 +373,27 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 - Standalone wake-word commands stream into the assistant panel (the address is stripped first, `stripAgentAddress`); a highlighted selection is edited in place by the dictation agent
 - Supports multiple AI providers (all models defined in `src/models/modelRegistryData.json`):
   - **OpenAI** (Responses API):
-    - GPT-5.5 (`gpt-5.5`) - Latest flagship frontier model, 1M context
+    - GPT-6 Astra (`gpt-6-astra`) - Most capable OpenAI model for coding, computer use, and research, 1M context
+    - GPT-5.6 Series (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`) - Flagship, balanced, and fastest tiers
+    - GPT-5.5 (`gpt-5.5`) - Frontier model for complex reasoning, 1M context
     - GPT-5.2 (`gpt-5.2`) - Strong reasoning model
     - GPT-5 Mini (`gpt-5-mini`) - Fast and cost-efficient
     - GPT-5 Nano (`gpt-5-nano`) - Ultra-fast, low latency
     - GPT-4.1 Series (`gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`) - Strong baseline with 1M context
+    - GPT-5 and newer reject `temperature`, so their registry entries carry `supportsTemperature: false`
   - **Anthropic** (Via IPC bridge to avoid CORS):
-    - Claude Opus 4.7 (`claude-opus-4-7`) - Most capable Claude model, 1M context
+    - Claude Fable 5.1 (`claude-fable-5-1`) - Most capable Claude model, Mythos-class, 1M context
+    - Claude Fable 5 (`claude-fable-5`) - Previous Mythos-class flagship, 1M context
+    - Claude Sonnet 5 (`claude-sonnet-5`) - Fast, capable agentic model at lower cost
     - Claude Sonnet 4.6 (`claude-sonnet-4-6`) - Balanced performance
     - Claude Haiku 4.5 (`claude-haiku-4-5`) - Fast with near-frontier intelligence
+    - Claude Opus 5 (`claude-opus-5`) - Most capable Opus model, 1M context
+    - Claude Opus 4.8 (`claude-opus-4-8`) - Powerful Opus model tuned for honesty and reliability, 1M context
+    - Claude Opus 4.7 (`claude-opus-4-7`) - Powerful Opus model, 1M context
     - Claude Opus 4.6 (`claude-opus-4-6`) - Previous Opus generation, 1M context
     - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Previous Sonnet generation
     - Claude Opus 4.5 (`claude-opus-4-5`) - Earlier Opus model
+    - Models from Opus 4.7 onward reject `temperature` (`supportsTemperature: false`); the Anthropic IPC bridge sends no thinking parameters, so no Anthropic entry carries `supportsThinking`
   - **Google Gemini** (Direct API integration):
     - Gemini 3.5 Flash (`gemini-3.5-flash`) - Latest fast, high-capability Gemini model
     - Gemini 3.5 Flash Lite (`gemini-3.5-flash-lite`) - Fastest, most cost-effective 3.5 model
@@ -404,9 +418,11 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 **Key files:**
 
 - `src/models/modelRegistryData.json` - Single source of truth for all models
-- `src/models/ModelRegistry.ts` - TypeScript wrapper with helper methods
-- `src/config/aiProvidersConfig.ts` - Derives AI_MODES from registry
-- `src/utils/languages.ts` - Derives REASONING_PROVIDERS from registry
+- `src/models/ModelRegistry.ts` - TypeScript wrapper with helper methods; also derives
+  `REASONING_PROVIDERS` (`buildReasoningProviders()`), consumed by the model pickers
+- `src/models/providerDefaultModel.ts` - `pickProviderDefaultModel()`; with no
+  `defaultModel` on the provider, the first model in the array is the default
+- `src/config/retiredCloudModels.ts` - Remaps selections pinned to a retired model
 - `src/helpers/modelManagerBridge.js` - Handles local model downloads
 
 **Local model features:**
@@ -615,13 +631,14 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 
 - macOS: `systemPreferences.subscribeWorkspaceNotification` — zero CPU, instant detection
 - Windows/Linux: `processListCache` shared polling (30s interval, `ps-list` npm)
+- Context-only: a running meeting app never prompts by itself (FaceTime idles in the background). It corroborates unattributed macOS device activity (below) and drives the auto-end process-exit fast path
 
 **Microphone Detection** (unscheduled/browser meetings like Google Meet):
 
-- macOS: `macos-mic-listener` binary — CoreAudio `kAudioDevicePropertyDeviceIsRunningSomewhere` property listeners with hot-plug support
-- Windows: `windows-mic-listener.exe` — WASAPI `IAudioSessionManager2` session monitoring, `--exclude-pid` for self-mic exclusion
+- macOS: `macos-mic-listener` binary — CoreAudio process-object input monitoring, excluding the background `com.apple.CoreSpeech` service (it runs input during ordinary playback). `CAPABILITY PID` transitions prompt on their own. `CAPABILITY AGGREGATE` device activity (no process objects — roughly macOS < 14.2 — or a transient snapshot failure) includes playback on combined input/output devices, so it prompts only while a known meeting app is running; the helper retries PID monitoring every 30s from its heartbeat and the detector accepts the later `CAPABILITY PID`. Capability is logged at info level; `sustained-audio-detected` carries `attributed`
+- Windows: `windows-mic-listener.exe` — WASAPI `IAudioSessionManager2` session monitoring; self-mic exclusion happens in JavaScript using current OpenWhispr and capture-helper PIDs
 - Linux: `pactl subscribe` — PulseAudio source-output events
-- All platforms: Graceful fallback to polling if native binary/command unavailable
+- Windows/Linux: Fall back to polling if the native binary/command is unavailable. macOS has no safe polling signal: a missing binary pauses audio prompts, a crashed listener is respawned with exponential backoff (5s → 60s), and meanwhile only calendar reminders prompt while auto-end uses its existing silence fallback
 
 **Calendar Reminders** (scheduled meetings):
 
@@ -660,7 +677,7 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 1. Hotkey pressed → `voiceAgent` slot callback in `main.js` → `windowManager.sendToggleVoiceAgent()` → `toggle-voice-agent` IPC to the main window → recording capsule appears
 2. `useAudioRecording.js` starts a recording with `audioManager.setVoiceAgentRequested(true)` (any other start resets it to `false`)
 3. On transcription, `resolveReasoningRoute` consults `resolveDictationRouteKind()` (`src/helpers/dictationRouting.js`): a voice assistant recording always takes the agent route and never falls back to cleanup. The dictation agent's reachability only gates selection edits — a selection with the dictation agent unconfigured routes to the panel with the selected text quoted instead of editing in place
-4. Standalone commands (no text selected) run through the chat pipeline (`src/components/dictation/AssistantPanel.tsx`): chat tools (notes search/create/update, calendar, web search, clipboard), RAG memory, and the custom dictionary injected into the system prompt. Conversations persist in the `agent_conversations` table and are browsable from the ControlPanel chat
+4. Standalone commands (no text selected) run through the chat pipeline (`src/components/dictation/AssistantPanel.tsx`): chat tools (notes search/create/update, calendar, web search, clipboard, `get_snippet` — triggers listed in the tool description, body fetched on demand — and `update_dictionary` / `update_snippets`, which write through the settings store so the change syncs like a UI edit), RAG memory, and the custom dictionary plus snippet triggers injected into the system prompt. Conversations persist in the `agent_conversations` table and are browsable from the ControlPanel chat
 5. Response delivery: a capture with `status: "editable"` (a focused writable non-terminal field with no selection) plus auto-paste banks a `deliverySessionId`; the completed answer is pasted via `paste-at-captured-target`, which revalidates the target and fails closed to the panel + clipboard on any change (`assistantResponseDelivery.ts`, `pasteAtCapturedTarget` in `selectionManager.js`). A follow-up spoken while the panel is already open stays panel-first. Cancelled or empty responses never paste and never touch the clipboard
 6. Selection edits are unchanged: highlighted text goes through the `dictationAgent` scope and is safely replaced in place — it never opens the panel
 
@@ -678,8 +695,8 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 **UI**:
 
 - Settings → Hotkeys → "Voice Assistant Hotkey" (with cross-slot conflict validation)
-- Onboarding: optional step right after the dictation hotkey (activation) step
-- Panel conversations run on the `chatIntelligence` scope (the chat's brain); in-place selection edits require the dictation agent (Settings → AI Models) and its `dictationAgent`/`dictationAgentVision` scopes
+- Onboarding: optional pair of steps (hotkey, then demo) after the Notes step, so the demo can suggest meeting times from a calendar connected there. The demo card is a mail thread; the reply is answered headlessly in the dictation window by `useOnboardingAssistantDemo` (the panel's streaming pipeline, tools and screenshot included) and streamed back over `onboarding-demo-event` as `processing` (transcript) → `replying` (partial reply, `tool` while one runs) → `success`
+- Panel conversations and in-place selection edits both run on the Voice Assistant scope (Settings → AI Models → Voice Assistant; `dictationAgent`/`dictationAgentVision`), resolved by `resolveChatStreamingInference`; the panel falls back to the `chatIntelligence` scope while the Voice Assistant scope is unreachable. Typed chat (Control Panel, note and container chat) stays on `chatIntelligence`
 
 **Screen Context (opt-in)**:
 
@@ -729,12 +746,16 @@ const { t } = useTranslation();
 1. Every new UI string must have a translation key in `en/translation.json` and all other language files
 2. Use `useTranslation()` hook in components and hooks
 3. Keep `{{variable}}` interpolation syntax for dynamic values
-4. Do NOT translate: brand names (OpenWhispr, Pro), technical terms (Markdown, Signal ID), format names (MP3, WAV), AI system prompts
+4. Do NOT translate: brand names (OpenWhispr, Pro), technical terms (Markdown, Signal ID), format names (MP3, WAV), or the shared assistant `fullPrompt` in `prompts.json`. The other prompt keys (`cleanupPrompt`, `translatePrompt`, `dictionarySuffix`, `screenContextSuffix`) are translated per locale, and any change to a default prompt must update `CURRENT_DEFAULT_PROMPT_HASHES` in `src/config/retiredPrompts.js`
 5. Group keys by feature area (e.g., `notes.editor.*`, `referral.toasts.*`)
 
 ### Image and Icon Assets — REQUIRED
 
 Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`). Vector provider/brand marks live in `src/assets/icons/`.
+
+UI icons come from `src/components/icons/` (vendored Nucleo core outline components behind lucide-style names, e.g. `import { Check, Loader2 } from "../icons"`). To add one, map a name to a Nucleo label in `src/components/icons/nucleo-map.json` and run `node scripts/sync-nucleo-icons.js`; never import from `lucide-react` or a machine-local Nucleo path.
+
+**Typography**: `--font-family-sans` is Yowza (brand, Latin only) falling back to the bundled Noto Sans; `--font-family-display` is Yowza Soft for headings. The font files are licensed and never committed — `src/brandFonts.ts` registers whatever `scripts/download-brand-fonts.js` fetched at build time, and a build without them silently uses Noto Sans.
 
 **Rules**:
 
@@ -821,11 +842,11 @@ Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`
    - CI workflow (`.github/workflows/build-windows-key-listener.yml`) auto-builds on push to main
 
 6. **Meeting Detection Not Working**:
-   - Check debug logs for "event-driven" vs "polling" mode
+   - Check debug logs for "event-driven" vs "polling" mode; macOS also logs `macOS microphone detection capability` as `PID` or `AGGREGATE`
    - macOS: Verify `macos-mic-listener` binary exists in `resources/bin/` (compiled during `npm run compile:native`)
    - Windows: Verify `windows-mic-listener.exe` exists in `resources/bin/` (downloaded during `prebuild:win`)
    - Linux: Verify `pactl` is installed (`pulseaudio-utils` or `pipewire-pulse` package)
-   - If event-driven binary is missing, detection falls back to polling automatically
+   - If the event-driven binary is missing, Windows/Linux fall back to polling; macOS pauses audio prompts (and respawns a crashed listener with backoff)
 
 7. **Local Semantic Search Not Working**:
    - Qdrant binary should be in `resources/bin/qdrant-{platform}-{arch}` (auto-downloaded during `predev`/`prebuild`)
@@ -908,7 +929,7 @@ Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`
 - Temporary file cleanup
 - Memory usage with large models
 - Process timeout protection (5 minutes)
-- Meeting detection uses event-driven OS APIs (near-zero CPU) with polling fallback
+- Meeting detection uses event-driven OS APIs (near-zero CPU) with polling fallback on Windows/Linux
 - Process list cache shared between detectors to avoid duplicate `tasklist`/`pgrep` calls
 - Calendar sync (Google/Microsoft) uses exponential backoff to avoid hammering APIs on network failures
 

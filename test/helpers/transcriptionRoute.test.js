@@ -160,6 +160,69 @@ test("custom requires a configured secure endpoint (empty, sentinel, garbage all
   assert.deepEqual(localhost.auth, { scheme: "bearer", keyRef: "custom" });
 });
 
+// The pre-guard fall-through returned an OpenAI http-batch route with
+// keyRef "openai" for any unrecognised provider, so selecting a realtime-only
+// provider and then uploading or retrying would have POSTed the user's audio to
+// api.openai.com under their OpenAI key.
+test("realtime-only providers fail closed instead of falling through to OpenAI", async () => {
+  const { STREAMING_ONLY_PROVIDERS } = await load();
+  assert.ok(STREAMING_ONLY_PROVIDERS.size > 0);
+
+  for (const provider of STREAMING_ONLY_PROVIDERS) {
+    for (const model of [undefined, "nova-3", "gpt-4o-mini-transcribe"]) {
+      const route = await resolve({
+        cloudTranscriptionProvider: provider,
+        cloudTranscriptionModel: model,
+      });
+      assert.equal(route.transport, "error", `${provider} must not produce a batch route`);
+      assert.equal(route.code, "STREAMING_ONLY_PROVIDER", provider);
+      assert.equal(
+        route.messageKey,
+        "hooks.audioRecording.errorDescriptions.streamingOnlyProvider"
+      );
+      assert.equal(route.provider, undefined, provider);
+      assert.equal(route.endpoint, undefined, provider);
+      assert.equal(
+        JSON.stringify(route).includes("openai.com"),
+        false,
+        `${provider} route leaked an OpenAI endpoint`
+      );
+    }
+  }
+});
+
+// Dictation only reaches the batch path for these providers when streaming was
+// skipped for want of a key, so the key — not the transport — is the diagnosis
+// there. Retry and upload cannot know about keys and keep the transport error.
+test("realtime-only providers report a missing key ahead of the transport limitation", async () => {
+  const { STREAMING_ONLY_PROVIDERS } = await load();
+
+  for (const provider of STREAMING_ONLY_PROVIDERS) {
+    const missingKey = await resolve(
+      { cloudTranscriptionProvider: provider },
+      { hasProviderKey: false }
+    );
+    assert.equal(missingKey.transport, "error", provider);
+    assert.equal(missingKey.code, "API_KEY_MISSING", provider);
+    assert.equal(
+      missingKey.messageKey,
+      "hooks.audioRecording.errorDescriptions.providerKeyMissing",
+      provider
+    );
+    assert.equal(JSON.stringify(missingKey).includes("openai.com"), false, provider);
+
+    for (const hasProviderKey of [true, undefined]) {
+      const route = await resolve({ cloudTranscriptionProvider: provider }, { hasProviderKey });
+      assert.equal(route.code, "STREAMING_ONLY_PROVIDER", `${provider} key=${hasProviderKey}`);
+    }
+  }
+
+  // The hint is only about realtime-only providers: batch providers diagnose
+  // their own missing key at the key read, with the store+env fallback.
+  const groq = await resolve({ cloudTranscriptionProvider: "groq" }, { hasProviderKey: false });
+  assert.equal(groq.transport, "http-batch");
+});
+
 test("a custom URL pointing at Tinfoil's host must use the attested proxy", async () => {
   const route = await resolve(
     {
@@ -230,8 +293,15 @@ test("openai and groq route to fixed endpoints with provider-validated models", 
   const openai = await resolve({});
   assert.equal(openai.provider, "openai");
   assert.equal(openai.endpoint, "https://api.openai.com/v1/audio/transcriptions");
-  assert.equal(openai.model, "gpt-4o-mini-transcribe");
+  assert.equal(openai.model, "gpt-transcribe");
   assert.equal(openai.sizeCapBytes, 25 * 1024 * 1024);
+
+  // The deprecated OpenAI ids stay selectable and must reach the API untouched;
+  // only an empty or foreign selection takes the new default.
+  for (const legacy of ["gpt-4o-mini-transcribe", "gpt-4o-transcribe", "whisper-1"]) {
+    const route = await resolve({ cloudTranscriptionModel: legacy });
+    assert.equal(route.model, legacy);
+  }
 
   const groqStale = await resolve({
     cloudTranscriptionProvider: "groq",
@@ -284,4 +354,94 @@ test("request overrides win: explicit model and effective language", async () =>
   );
   assert.equal(route.model, "whisper-large-v3");
   assert.equal(route.language, "ja");
+});
+
+const MANAGED_STT = {
+  kind: "managed",
+  provider: "azure",
+  deployment: "gpt-4o-transcribe",
+  context: {
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+    setupMode: "auto",
+    inferenceScope: "transcription",
+    provider: "azure",
+    generation: 3,
+    providerVersion: 2,
+  },
+};
+
+test("a managed resolution outranks every personal setting", async () => {
+  const route = await resolve(
+    {
+      transcriptionMode: "self-hosted",
+      remoteTranscriptionUrl: "http://192.168.1.5:11434/v1",
+      useLocalWhisper: true,
+      cloudTranscriptionProvider: "custom",
+      cloudTranscriptionBaseUrl: "https://example.test/v1",
+      preferredLanguage: "de-DE",
+    },
+    { managed: MANAGED_STT }
+  );
+  assert.equal(route.transport, "managed");
+  assert.equal(route.provider, "azure");
+  assert.equal(route.deployment, "gpt-4o-transcribe");
+  assert.equal(route.context, MANAGED_STT.context);
+  assert.equal(route.language, "de");
+  // Routes never carry secrets — the context is identity metadata only.
+  assert.equal("auth" in route, false);
+});
+
+test("a managed resolution bypasses the personal-selection policy floor", async () => {
+  const enterpriseOnly = structuredClone(MANAGED_OPENAI_ONLY);
+  enterpriseOnly.policy.transcription.allowedModes = ["enterprise"];
+  enterpriseOnly.policy.transcription.allowedByokProviders = [];
+  enterpriseOnly.policy.transcription.allowedEnterpriseProviders = ["azure"];
+  const route = await resolve(
+    { cloudTranscriptionProvider: "openai" },
+    { policy: enterpriseOnly, managed: MANAGED_STT }
+  );
+  assert.equal(route.transport, "managed");
+  // Without the managed resolution the same settings fail closed.
+  const blocked = await resolve(
+    { cloudTranscriptionProvider: "openai" },
+    { policy: enterpriseOnly }
+  );
+  assert.equal(blocked.transport, "error");
+  assert.equal(blocked.code, "POLICY_RESTRICTED");
+});
+
+test("a managed resolution error becomes an error route", async () => {
+  const route = await resolve(
+    { cloudTranscriptionProvider: "openai" },
+    {
+      managed: {
+        kind: "error",
+        message: "Managed access unavailable",
+        code: "MANAGED_CONFIG_UNAVAILABLE",
+      },
+    }
+  );
+  assert.equal(route.transport, "error");
+  assert.equal(route.code, "MANAGED_CONFIG_UNAVAILABLE");
+});
+
+test("an enterprise transcription mode without a managed resolution fails closed", async () => {
+  const route = await resolve({
+    transcriptionMode: "enterprise",
+    cloudTranscriptionProvider: "openai",
+  });
+  assert.equal(route.transport, "error");
+  assert.equal(route.code, "MANAGED_CONFIG_UNAVAILABLE");
+});
+
+test("an enterprise transcription mode WITH a managed resolution takes the managed transport, not the fail-closed guard", async () => {
+  const route = await resolve(
+    { transcriptionMode: "enterprise", cloudTranscriptionProvider: "openai" },
+    { managed: MANAGED_STT }
+  );
+  assert.equal(route.transport, "managed");
+  assert.equal(route.provider, "azure");
+  assert.equal(route.deployment, "gpt-4o-transcribe");
 });

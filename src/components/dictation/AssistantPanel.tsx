@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, Plus, X } from "lucide-react";
+import { Check, Copy, Plus, X } from "../icons";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { Button } from "../ui/button";
@@ -27,6 +27,11 @@ import {
   normalizeAgentSelectionContext,
   type AgentSelectionContext,
 } from "../../utils/agentSelectionContext";
+import {
+  getSelectionForCopyShortcut,
+  getSelectionInside,
+  isEditableTarget,
+} from "../../utils/assistantSelection";
 import { AssistantEmptyState } from "./AssistantEmptyState";
 import { useToast } from "../ui/useToast";
 import {
@@ -113,6 +118,8 @@ export function AssistantPanel({
   const streaming = useChatStreaming({
     messages,
     setMessages,
+    // Spoken commands answer on the Voice Assistant scope, not the Chat one.
+    inferenceScope: "dictationAgent",
     onStreamComplete: (_assistantId, content, toolCalls) => {
       void persistence.saveAssistantMessage(content, toolCalls);
     },
@@ -142,6 +149,7 @@ export function AssistantPanel({
   const {
     copied,
     copy: handleCopy,
+    copyText,
     confirmCopied,
   } = useCopyFeedback(responseContent, {
     resetMs: MANUAL_COPY_FEEDBACK_MS,
@@ -341,15 +349,11 @@ export function AssistantPanel({
     if (!open || !isResponseReady || !latestAssistantMessage) return undefined;
 
     const captureSelection = () => {
-      const selection = window.getSelection();
-      const root = responseSelectionRootRef.current;
-      if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !root) return;
-
-      const range = selection.getRangeAt(0);
-      if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return;
+      const selectedText = getSelectionInside(responseSelectionRootRef.current);
+      if (!selectedText) return;
 
       const context = normalizeAgentSelectionContext({
-        text: selection.toString(),
+        text: selectedText,
         sourceMessageId: latestAssistantMessage.id,
       });
       if (!context) return;
@@ -388,9 +392,15 @@ export function AssistantPanel({
         return;
       }
 
-      const target = e.target as HTMLElement | null;
-      const isEditable =
-        target?.isContentEditable || target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+      if (isResponseReady) {
+        const selectedText = getSelectionForCopyShortcut(e, responseSelectionRootRef.current);
+        if (selectedText) {
+          e.preventDefault();
+          void copyText(selectedText);
+          return;
+        }
+      }
+      const isEditable = isEditableTarget(e.target);
       if (
         isResponseReady &&
         footerPhase === "actions" &&
@@ -406,7 +416,17 @@ export function AssistantPanel({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [voiceState, isBusy, streaming, open, onClose, isResponseReady, footerPhase, handleCopy]);
+  }, [
+    voiceState,
+    isBusy,
+    streaming,
+    open,
+    onClose,
+    isResponseReady,
+    footerPhase,
+    handleCopy,
+    copyText,
+  ]);
 
   return (
     <>
@@ -434,9 +454,9 @@ export function AssistantPanel({
           </button>
         )}
 
-        <div className="flex min-w-0 flex-1 items-center justify-end text-right text-xs text-muted-foreground/70">
+        <div className="flex min-w-0 flex-1 items-center justify-end text-end text-xs text-muted-foreground/70">
           {selectedContext ? (
-            <div className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border/55 bg-foreground/[0.06] py-1 pl-2.5 pr-1.5 text-foreground/75">
+            <div className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border/55 bg-foreground/[0.06] py-1 ps-2.5 pe-1.5 text-foreground/75">
               <span className="truncate">{t("assistant.panel.selectedContext")}</span>
               <button
                 type="button"
@@ -458,7 +478,10 @@ export function AssistantPanel({
             <>
               <span className="truncate">{t("assistant.panel.selectionHint")}</span>
               {readableVoiceHotkey && (
-                <kbd className="ml-2 inline-flex rounded-md border border-border/40 bg-foreground/5 px-2 py-1 font-mono text-[11px] tracking-normal text-foreground/65 shadow-sm">
+                <kbd
+                  dir="ltr"
+                  className="ms-2 inline-flex rounded-md border border-border/40 bg-foreground/5 px-2 py-1 font-mono text-[11px] tracking-normal text-foreground/65 shadow-sm"
+                >
                   {readableVoiceHotkey}
                 </kbd>
               )}
@@ -490,7 +513,7 @@ export function AssistantPanel({
                 />
                 {latestAssistantMessage?.isStreaming && (
                   <span
-                    className="ml-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
+                    className="ms-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
                     style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
                   />
                 )}
@@ -545,7 +568,7 @@ export function AssistantPanel({
               <span className="assistant-tool-invocation-pulse relative flex size-2 shrink-0 rounded-full bg-agent-brand" />
               <span
                 key={`${streaming.activeToolName}-${toolVerbIndex}`}
-                className="assistant-tool-invocation-verb w-16 text-right text-sm text-muted-foreground"
+                className="assistant-tool-invocation-verb w-16 text-end text-sm text-muted-foreground"
               >
                 {t(AGENT_TOOL_ACTIVITY_VERB_KEYS[toolVerbIndex])}
               </span>
@@ -603,7 +626,10 @@ export function AssistantPanel({
               {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
               {copied ? t("common.copied") : t("assistant.panel.copyToClipboard")}
               {!copied && (
-                <kbd className="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-medium dark:bg-black/10">
+                <kbd
+                  dir="ltr"
+                  className="ms-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-medium dark:bg-black/10"
+                >
                   C
                 </kbd>
               )}

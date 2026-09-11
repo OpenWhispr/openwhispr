@@ -38,7 +38,7 @@ export function PillTooltip({
         <div
           className={`absolute bottom-full ${alignClass} mb-2 px-1.5 py-1 text-[10px] text-popover-foreground bg-popover border border-border rounded-full z-10 shadow-lg transition-opacity duration-150 whitespace-nowrap`}
         >
-          {emoji && <span className="mr-1">{emoji}</span>}
+          {emoji && <span className="me-1">{emoji}</span>}
           {content}
           <div
             className={`absolute top-full ${arrowClass} w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-popover`}

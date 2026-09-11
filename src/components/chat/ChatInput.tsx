@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Mic, Square, X } from "lucide-react";
+import { Mic, Square, X } from "../icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { SendIcon } from "../ui/SendIcon";
@@ -117,7 +117,7 @@ export function ChatInput({
     <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
       <div
         className={cn(
-          "flex items-center gap-2 min-h-11 pl-4 pr-1.5 rounded-full",
+          "flex items-center gap-2 min-h-11 ps-4 pe-1.5 rounded-full",
           GLASS_SURFACE,
           "border border-black/10 dark:border-white/14",
           "transition-all duration-200",
@@ -163,7 +163,7 @@ export function ChatInput({
               title={t("common.cancel")}
               className={cn(
                 "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
-                "text-muted-foreground/60 hover:text-foreground hover:bg-foreground/8",
+                "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
                 "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                 "transition-colors duration-100"
               )}
@@ -200,6 +200,7 @@ export function ChatInput({
         {(isIdle || isBusy) && !isVoiceRecording && !isVoiceTranscribing && (
           <div className="flex items-center gap-2 w-full">
             <input
+              dir="auto"
               ref={inputRef}
               type="text"
               value={inputText}
@@ -210,9 +211,9 @@ export function ChatInput({
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
                 "input-inline flex-1 outline-none bg-transparent caret-primary",
-                "text-[13px] text-foreground placeholder:text-muted-foreground/40",
+                "text-[13px] text-foreground placeholder:text-muted-foreground/70",
                 "min-w-0 p-0",
-                isBusy && "text-muted-foreground/30 cursor-not-allowed"
+                isBusy && "text-muted-foreground/70 cursor-not-allowed"
               )}
             />
             {isBusy && onCancel ? (
@@ -223,7 +224,7 @@ export function ChatInput({
                 title={t("common.cancel")}
                 className={cn(
                   "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
-                  "text-muted-foreground/60 hover:text-foreground hover:bg-foreground/8",
+                  "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-colors duration-100"
                 )}
@@ -245,19 +246,26 @@ export function ChatInput({
                     : "opacity-30 saturate-0 cursor-default"
                 )}
               >
-                <SendIcon size={28} className="block" />
+                <SendIcon size={28} className="block rtl:scale-x-[-1]" />
               </button>
             ) : isIdle ? (
               <button
                 onClick={voice.start}
+                disabled={voice.streamingOnlyProvider}
                 aria-label={t("notes.editor.transcribe")}
-                title={t("notes.editor.transcribe")}
+                title={
+                  voice.streamingOnlyProvider
+                    ? t("agentMode.input.voiceDraftStreamingOnly")
+                    : t("notes.editor.transcribe")
+                }
                 className={cn(
                   "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
                   GRADIENT_CIRCLE,
-                  "hover:brightness-110 active:scale-95",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
-                  "transition-all duration-100"
+                  "transition-all duration-100",
+                  voice.streamingOnlyProvider
+                    ? "opacity-30 saturate-0 cursor-default"
+                    : "hover:brightness-110 active:scale-95"
                 )}
               >
                 <Mic size={14} />

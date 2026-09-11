@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Mic, Square, Loader2 } from "lucide-react";
+import { Mic, Square, Loader2 } from "../icons";
 import { cn } from "../lib/utils";
 import { formatMmSs } from "../../utils/formatDuration";
 

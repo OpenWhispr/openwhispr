@@ -97,7 +97,11 @@
   ],
   "extraResources": [
     ".env",
-    "src/assets/**/*",
+    {
+      "from": "src/assets",
+      "to": "src/assets",
+      "filter": ["**/*", "!fonts/yowza/**"]
+    },
     {
       "from": "resources/bin/",
       "to": "bin/",

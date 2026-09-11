@@ -5,12 +5,16 @@
 
 /* Shared pill-to-panel surface. Each mode chooses the pill corner it grows from. */
 .expanding-panel-surface {
-  clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 108px) round 24px);
+  clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 114px) round 24px);
   opacity: 0;
   pointer-events: none;
+  /* Exit transition (the -open state carries the entrance's). A fade much
+     faster than the 280ms contraction makes the surface blink-vanish a frame
+     or two in — it must stay visible long enough for the condense-into-the-
+     pill motion to read. */
   transition:
     clip-path 280ms cubic-bezier(0.2, 0, 0, 1),
-    opacity 140ms ease-out,
+    opacity 240ms ease-out,
     transform 280ms cubic-bezier(0.2, 0, 0, 1);
   will-change: clip-path, opacity, transform;
 }
@@ -21,7 +25,7 @@
 }
 
 .expanding-panel-anchor-bottom-left {
-  clip-path: inset(calc(100% - 52px) calc(100% - 108px) 0 0 round 24px);
+  clip-path: inset(calc(100% - 52px) calc(100% - 114px) 0 0 round 24px);
   transform: translate(-4px, 4px);
   transform-origin: bottom left;
 }
@@ -31,6 +35,12 @@
   opacity: 1;
   pointer-events: auto;
   transform: none;
+  /* Entrance: turn solid fast so the expansion reads as a surface growing,
+     not a ghost inflating. The exit reads the base rule's slower fade. */
+  transition:
+    clip-path 280ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 140ms ease-out,
+    transform 280ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* Agent close first fades its complex inner tree while the surface is still
@@ -49,7 +59,7 @@
 /* Live Transcript stages its empty surface before buffered text becomes visible. */
 .expanding-panel-surface[data-panel-mode="live-transcript"] {
   --live-transcript-footer-height: 4rem;
-  --live-transcript-speaking-pill-width: 5.75rem;
+  --live-transcript-speaking-pill-width: 6.125rem;
   --live-transcript-speaking-pill-height: 2.25rem;
   --live-transcript-footer-inline-padding: 1rem;
   --live-transcript-encapsulated-width: calc(
@@ -229,6 +239,53 @@
     var(--shadow-card),
     0 0 0 1px color-mix(in oklch, var(--color-agent-brand) 28%, transparent),
     0 0 10px color-mix(in oklch, var(--color-agent-brand) 18%, transparent);
+}
+
+/* While the cancel button's liquid skin owns the fused surface, the pill goes
+   headless like inside the Live Transcript panel. Placed after the agent-beam
+   rule so a fused pill never keeps the brand glow ring on its own box. */
+.voice-pill-control[data-liquid-fused="true"] {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.liquid-cancel-skin {
+  pointer-events: none;
+}
+
+/* The skin's chrome mirrors VoicePill's STATE_APPEARANCE border/background
+   classes for every state it can replace — change together. Hover matters: a
+   de-fusing skin lingers over a hovered pill for its 280ms collapse, and
+   hover is the one state on surface-3. Fill and stroke transition at the
+   pill's own 220ms so a state flip under the skin (recording → thinking)
+   shades over instead of popping. */
+.liquid-cancel-skin path {
+  fill: var(--color-surface-1);
+  stroke: var(--color-border-hover);
+  transition:
+    fill 220ms ease-out,
+    stroke 220ms ease-out;
+}
+
+.liquid-cancel-skin[data-pill-state="hover"] path {
+  fill: var(--color-surface-3);
+}
+
+.liquid-cancel-skin[data-pill-state="processing"] path,
+.liquid-cancel-skin[data-pill-state="thinking"] path,
+.liquid-cancel-skin[data-pill-state="unavailable"] path {
+  stroke: color-mix(in oklab, var(--color-border) 60%, transparent);
+}
+
+/* The idle pill's dark-theme border is softer (dark:border-border/50). */
+.dark .liquid-cancel-skin[data-pill-state="idle"] path {
+  stroke: color-mix(in oklab, var(--color-border) 50%, transparent);
+}
+
+/* Match the pill's shadow-card, which only exists in dark theme. */
+.dark .liquid-cancel-skin {
+  filter: drop-shadow(0 1px 3px oklch(0 0 0 / 0.2));
 }
 
 /* The Signal glow: a comet orbiting a breathing ambient halo around the

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, Trash2 } from "../icons";
 import {
   formatHotkeyLabel,
   formatHotkeyLabelForPlatform,
@@ -8,6 +8,11 @@ import {
   sidedModifierToken,
 } from "../../utils/hotkeys";
 import { getPlatform, type Platform } from "../../utils/platform";
+import {
+  hasMetModifierOnlyHoldThreshold,
+  shouldAcceptModifierOnlyCapture,
+  shouldRestoreCaptureFocus,
+} from "./hotkeyCapturePolicy";
 
 const CODE_TO_KEY: Record<string, string> = {
   Backquote: "`",
@@ -276,8 +281,6 @@ export function HotkeyInput({
   const platform = getPlatform();
   const isMac = platform === "darwin";
 
-  const MODIFIER_HOLD_THRESHOLD_MS = 200;
-
   const resolveModifierOnlyCapture = useCallback(
     (
       modifiers: Record<ModifierKind, boolean>,
@@ -446,31 +449,36 @@ export function HotkeyInput({
 
       if (wasHoldingModifiers && MODIFIER_CODES.has(e.nativeEvent.code)) {
         const holdDuration = Date.now() - keyDownTimeRef.current;
+        const capture = resolveModifierOnlyCapture(
+          heldModifiersRef.current,
+          modifierCodesRef.current
+        );
 
-        if (holdDuration >= MODIFIER_HOLD_THRESHOLD_MS) {
-          const capture = resolveModifierOnlyCapture(
-            heldModifiersRef.current,
-            modifierCodesRef.current
-          );
-          if (capture?.kind === "hotkey") {
-            attempted = true;
-            if (fnHeldRef.current) {
-              fnCapturedKeyRef.current = true;
-              finalizeCapture(`Fn+${capture.hotkey}`);
-            } else {
-              finalizeCapture(capture.hotkey);
-            }
-          } else if (capture?.kind === "needsRightSide" && !fnHeldRef.current) {
-            // Silently dropping this release is what made a left-side Option or
-            // Control look like the field was ignoring the key entirely.
-            attempted = true;
-            rejectCapture(
-              t("hotkeyInput.singleModifierNeedsRightSide", {
-                key: capture.held,
-                alternative: capture.rightSide,
-              })
-            );
+        if (
+          capture?.kind === "hotkey" &&
+          shouldAcceptModifierOnlyCapture(capture.hotkey, holdDuration)
+        ) {
+          attempted = true;
+          if (fnHeldRef.current) {
+            fnCapturedKeyRef.current = true;
+            finalizeCapture(`Fn+${capture.hotkey}`);
+          } else {
+            finalizeCapture(capture.hotkey);
           }
+        } else if (
+          capture?.kind === "needsRightSide" &&
+          hasMetModifierOnlyHoldThreshold(holdDuration) &&
+          !fnHeldRef.current
+        ) {
+          // Silently dropping this release is what made a left-side Option or
+          // Control look like the field was ignoring the key entirely.
+          attempted = true;
+          rejectCapture(
+            t("hotkeyInput.singleModifierNeedsRightSide", {
+              key: capture.held,
+              alternative: capture.rightSide,
+            })
+          );
         }
       }
 
@@ -486,7 +494,11 @@ export function HotkeyInput({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (disabled || !isCapturing) return;
+      if (disabled) return;
+      if (!isCapturing) {
+        containerRef.current?.focus({ preventScroll: true });
+        return;
+      }
 
       const mouseHotkey = e.button === 3 ? "MouseButton4" : e.button === 4 ? "MouseButton5" : null;
       if (!mouseHotkey) return;
@@ -525,7 +537,7 @@ export function HotkeyInput({
     let cancelled = false;
     let frame: number | null = null;
 
-    const focusCaptureSurface = async () => {
+    const focusCaptureSurface = async (onlyIfPageFocusIsUnclaimed = false) => {
       if (platform === "win32") {
         // On Windows, focusing a DOM node does not bring an inactive native
         // window to the foreground. Main restores/focuses the BrowserWindow as
@@ -535,12 +547,30 @@ export function HotkeyInput({
       }
       if (cancelled) return;
 
-      frame = requestAnimationFrame(() => containerRef.current?.focus({ preventScroll: true }));
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        if (
+          onlyIfPageFocusIsUnclaimed &&
+          !shouldRestoreCaptureFocus(document.activeElement, document.body)
+        ) {
+          return;
+        }
+        containerRef.current?.focus({ preventScroll: true });
+      });
     };
 
     void focusCaptureSurface();
+    const handleWindowFocus = () => void focusCaptureSurface(true);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void focusCaptureSurface(true);
+    };
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (frame !== null) cancelAnimationFrame(frame);
     };
   }, [autoFocus, platform]);
@@ -604,7 +634,7 @@ export function HotkeyInput({
           e.stopPropagation();
           onClear();
         }}
-        className="rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 transition-opacity duration-150 text-muted-foreground/50 hover:text-destructive cursor-pointer"
+        className="rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 transition-opacity duration-150 text-muted-foreground/70 hover:text-destructive cursor-pointer"
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
@@ -669,7 +699,7 @@ export function HotkeyInput({
             </div>
             {activeModifiers.length > 0 ? (
               <div className="flex flex-col items-center gap-1.5">
-                <div className="flex items-center gap-1.5">
+                <div dir="ltr" className="flex items-center gap-1.5">
                   {activeModifiers.map((token) => (
                     <kbd
                       key={token}
@@ -703,12 +733,12 @@ export function HotkeyInput({
         ) : value ? (
           /* Has value: show the hotkey prominently */
           <div className="flex flex-col items-center gap-2">
-            <div className="flex items-center gap-1.5">
+            <div dir="ltr" className="flex items-center gap-1.5">
               {hotkeyParts.length > 0 ? (
                 hotkeyParts.map((part, i) => (
                   <React.Fragment key={part}>
                     {i > 0 && (
-                      <span className="text-muted-foreground/40 text-lg font-light">+</span>
+                      <span className="text-muted-foreground/70 text-lg font-light">+</span>
                     )}
                     <kbd className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-sm font-semibold text-foreground shadow-sm">
                       {part}
@@ -716,16 +746,22 @@ export function HotkeyInput({
                   </React.Fragment>
                 ))
               ) : isGlobe ? (
-                <kbd className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-lg shadow-sm">
+                <kbd
+                  dir="ltr"
+                  className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-lg shadow-sm"
+                >
                   🌐
                 </kbd>
               ) : (
-                <kbd className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-sm font-semibold text-foreground shadow-sm">
+                <kbd
+                  dir="ltr"
+                  className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-sm font-semibold text-foreground shadow-sm"
+                >
                   {displayValue}
                 </kbd>
               )}
             </div>
-            <span className="text-xs text-muted-foreground/60 group-hover:text-muted-foreground transition-colors">
+            <span className="text-xs text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
               {t("hotkeyInput.clickToChange")}
             </span>
           </div>
@@ -735,7 +771,7 @@ export function HotkeyInput({
             <span className="text-sm font-medium">{t("hotkeyInput.clickToSet")}</span>
           </div>
         )}
-        {clearButton && <span className="absolute top-2.5 right-2.5">{clearButton}</span>}
+        {clearButton && <span className="absolute top-2.5 end-2.5">{clearButton}</span>}
       </div>
     );
   }
@@ -766,7 +802,7 @@ export function HotkeyInput({
       `}
     >
       {isCapturing && (
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary animate-pulse" />
+        <div className="absolute top-0 start-0 end-0 h-0.5 bg-primary animate-pulse" />
       )}
 
       <div className="px-4 py-3">
@@ -781,14 +817,16 @@ export function HotkeyInput({
               </div>
               {activeModifiers.length > 0 ? (
                 <div className="flex items-center gap-1">
-                  {activeModifiers.map((token) => (
-                    <kbd
-                      key={token}
-                      className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-sm text-xs font-semibold text-primary"
-                    >
-                      {heldModifierLabel(token, platform)}
-                    </kbd>
-                  ))}
+                  <span dir="ltr" className="inline-flex items-center gap-1">
+                    {activeModifiers.map((token) => (
+                      <kbd
+                        key={token}
+                        className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-sm text-xs font-semibold text-primary"
+                      >
+                        {heldModifierLabel(token, platform)}
+                      </kbd>
+                    ))}
+                  </span>
                   <span className="text-primary/40 text-xs">
                     {isFnHeld ? t("hotkeyInput.fnCaptureHint") : t("hotkeyInput.keyHint")}
                   </span>
@@ -815,10 +853,10 @@ export function HotkeyInput({
             </span>
             <div className="flex items-center gap-2">
               {hotkeyParts.length > 0 ? (
-                <div className="flex items-center gap-1">
+                <div dir="ltr" className="flex items-center gap-1">
                   {hotkeyParts.map((part, i) => (
                     <React.Fragment key={part}>
-                      {i > 0 && <span className="text-muted-foreground/30 text-xs">+</span>}
+                      {i > 0 && <span className="text-muted-foreground/70 text-xs">+</span>}
                       <kbd className="px-2 py-0.5 bg-surface-raised border border-border rounded-sm text-xs font-semibold text-foreground">
                         {part}
                       </kbd>
@@ -827,17 +865,23 @@ export function HotkeyInput({
                 </div>
               ) : isGlobe ? (
                 <div className="flex items-center gap-1.5">
-                  <kbd className="px-2 py-0.5 bg-surface-raised border border-border rounded-sm text-base">
+                  <kbd
+                    dir="ltr"
+                    className="px-2 py-0.5 bg-surface-raised border border-border rounded-sm text-base"
+                  >
                     🌐
                   </kbd>
                   <span className="text-xs text-muted-foreground">{t("hotkeyInput.globe")}</span>
                 </div>
               ) : (
-                <kbd className="px-2.5 py-1 bg-surface-raised border border-border rounded-sm text-xs font-semibold text-foreground">
+                <kbd
+                  dir="ltr"
+                  className="px-2.5 py-1 bg-surface-raised border border-border rounded-sm text-xs font-semibold text-foreground"
+                >
                   {displayValue}
                 </kbd>
               )}
-              <span className="text-xs text-muted-foreground/50">
+              <span className="text-xs text-muted-foreground/70">
                 {t("hotkeyInput.clickToChangeLower")}
               </span>
               {clearButton}

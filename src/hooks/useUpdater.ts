@@ -4,6 +4,7 @@ interface UpdateStatus {
   updateAvailable: boolean;
   updateDownloaded: boolean;
   isDevelopment: boolean;
+  isSupported: boolean;
 }
 
 interface UpdateInfo {
@@ -20,7 +21,6 @@ interface UpdateState {
   isChecking: boolean;
   isDownloading: boolean;
   isInstalling: boolean;
-  error: Error | null;
 }
 
 let globalState: UpdateState = {
@@ -28,13 +28,13 @@ let globalState: UpdateState = {
     updateAvailable: false,
     updateDownloaded: false,
     isDevelopment: false,
+    isSupported: true,
   },
   info: null,
   downloadProgress: 0,
   isChecking: false,
   isDownloading: false,
   isInstalling: false,
-  error: null,
 };
 
 const stateListeners = new Set<(state: UpdateState) => void>();
@@ -108,13 +108,8 @@ function registerEventListeners() {
   }
 
   if (window.electronAPI.onUpdateError) {
-    const dispose = window.electronAPI.onUpdateError((_event, error) => {
-      updateGlobalState({
-        isChecking: false,
-        isDownloading: false,
-        isInstalling: false,
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
+    const dispose = window.electronAPI.onUpdateError(() => {
+      updateGlobalState({ isChecking: false, isDownloading: false, isInstalling: false });
     });
     if (dispose) cleanupFunctions.push(dispose);
   }
@@ -163,17 +158,11 @@ export function useUpdater() {
   }, []);
 
   const checkForUpdates = useCallback(async () => {
-    updateGlobalState({ isChecking: true, error: null });
+    updateGlobalState({ isChecking: true });
     try {
-      const result = await window.electronAPI.checkForUpdates();
+      return await window.electronAPI.checkForUpdates();
+    } finally {
       updateGlobalState({ isChecking: false });
-      return result;
-    } catch (error) {
-      updateGlobalState({
-        isChecking: false,
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
-      throw error;
     }
   }, []);
 
@@ -182,15 +171,11 @@ export function useUpdater() {
       return { success: true, message: "Update already downloaded" };
     }
 
-    updateGlobalState({ isDownloading: true, downloadProgress: 0, error: null });
+    updateGlobalState({ isDownloading: true, downloadProgress: 0 });
     try {
-      const result = await window.electronAPI.downloadUpdate();
-      return result;
+      return await window.electronAPI.downloadUpdate();
     } catch (error) {
-      updateGlobalState({
-        isDownloading: false,
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
+      updateGlobalState({ isDownloading: false });
       throw error;
     }
   }, [state.status.updateDownloaded]);
@@ -200,29 +185,22 @@ export function useUpdater() {
       throw new Error("No update available to install");
     }
 
-    updateGlobalState({ isInstalling: true, error: null });
+    updateGlobalState({ isInstalling: true });
     isInstallingRef.current = true;
 
     try {
       await window.electronAPI.installUpdate();
 
+      // Settings raises its own "almost there" dialog when the restart stalls.
       setTimeout(() => {
         if (isInstallingRef.current) {
           isInstallingRef.current = false;
-          updateGlobalState({
-            isInstalling: false,
-            error: new Error(
-              "Install timed out. Please restart the app manually to apply the update."
-            ),
-          });
+          updateGlobalState({ isInstalling: false });
         }
       }, 10000);
     } catch (error) {
       isInstallingRef.current = false;
-      updateGlobalState({
-        isInstalling: false,
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
+      updateGlobalState({ isInstalling: false });
       throw error;
     }
   }, [state.status.updateDownloaded]);
@@ -237,12 +215,6 @@ export function useUpdater() {
     }
   }, []);
 
-  const clearError = useCallback(() => {
-    if (globalState.error) {
-      updateGlobalState({ error: null });
-    }
-  }, []);
-
   return {
     status: state.status,
     info: state.info,
@@ -250,11 +222,9 @@ export function useUpdater() {
     isChecking: state.isChecking,
     isDownloading: state.isDownloading,
     isInstalling: state.isInstalling,
-    error: state.error,
     checkForUpdates,
     downloadUpdate,
     installUpdate,
     getAppVersion,
-    clearError,
   };
 }

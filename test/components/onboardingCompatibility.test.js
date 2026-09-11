@@ -27,10 +27,17 @@ async function createOnboardingRenderer(t, platform = "linux") {
       "onboarding-permission-microphone.webp": `export default "microphone.webp";`,
       "onboarding-permission-accessibility.webp": `export default "accessibility.webp";`,
       "onboarding-permission-system-audio.webp": `export default "system-audio.webp";`,
-      "onboarding-permission-screen-context.webp": `export default "screen-context.webp";`,
       "/utils/platform": `
         export function getPlatform() { return "${platform}"; }
         export function getCachedPlatform() { return "${platform}"; }
+      `,
+      "/stores/settingsStore": `
+        export function useSettingsStore() { return {}; }
+        useSettingsStore.getState = () => ({});
+      `,
+      "/ui/ProviderIcon": `
+        import React from "react";
+        export function ProviderIcon() { return React.createElement("span"); }
       `,
     },
   });
@@ -53,6 +60,16 @@ function permissions(overrides = {}) {
     setAccessibilityPermissionGranted: noop,
     ...overrides,
   };
+}
+
+// The action row carries mt-auto, so anything rendered after it rides down on
+// that auto margin and lands under the buttons — below the fold on the compact
+// frame. Contextual guidance has to precede it in the DOM, and so in tab order.
+function assertGuidancePrecedesActions(markup, guidance) {
+  assert.ok(
+    markup.indexOf(guidance) < markup.indexOf("common.continue"),
+    `${guidance} should render before the action row`
+  );
 }
 
 const systemAudio = {
@@ -112,6 +129,7 @@ test("a denied microphone exposes the existing Linux settings recovery", async (
 
   assert.match(markup, /Microphone blocked by the OS/);
   assert.match(markup, />hooks.permissions.warning.soundLabel<\/button>/);
+  assertGuidancePrecedesActions(markup, "Microphone blocked by the OS");
 });
 
 test("Linux onboarding shows paste-tool installation and recheck guidance", async (t) => {
@@ -141,8 +159,47 @@ test("Linux onboarding shows paste-tool installation and recheck guidance", asyn
 
   assert.match(markup, /sudo apt install xdotool/);
   assert.match(markup, />pasteToolsInfo.recheck<\/button>/);
+  assertGuidancePrecedesActions(markup, "sudo apt install xdotool");
 });
 
+test("permissions offers Back ahead of Continue and gates Continue on microphone access", async (t) => {
+  const vite = await createOnboardingRenderer(t, "darwin");
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const render = (micPermissionGranted, onBack) =>
+    renderToStaticMarkup(
+      React.createElement(CompactPermissionsStep, {
+        permissions: permissions({ micPermissionGranted }),
+        systemAudio,
+        screenContext,
+        onBack,
+        onContinue: noop,
+      })
+    );
+
+  const blocked = render(false, noop);
+  assert.doesNotMatch(blocked, /common\.logout/);
+  assert.ok(
+    blocked.indexOf("common.back") < blocked.indexOf("common.continue"),
+    "Back sits ahead of Continue"
+  );
+  // Continue is part of the step now rather than an overlay above it, so it
+  // follows the permission rows in the DOM, and so in tab order.
+  assert.ok(
+    blocked.indexOf("onboarding.permissions.microphoneTitle") < blocked.indexOf("common.continue"),
+    "Continue should render after the permission rows"
+  );
+  assert.match(blocked, /<button[^>]*\bdisabled=""[^>]*>common\.continue<\/button>/);
+
+  const ready = render(true, noop);
+  assert.match(ready, /<button[^>]*>common\.continue<\/button>/);
+  assert.doesNotMatch(ready, /\bdisabled=""[^>]*>common\.continue/);
+
+  // With nothing to return to (a resumed session with no history), Back is gone.
+  assert.doesNotMatch(render(true, undefined), /common\.back/);
+});
 test("macOS onboarding offers optional Screen Context setup", async (t) => {
   const vite = await createOnboardingRenderer(t, "darwin");
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
@@ -159,7 +216,13 @@ test("macOS onboarding offers optional Screen Context setup", async (t) => {
   );
 
   assert.match(markup, /dictationAgent\.screenContext\.title/);
-  assert.match(markup, /screen-context\.webp/);
+  assert.match(markup, /data-icon="laptop"/);
+  assert.doesNotMatch(markup, /onboarding\.permissions\.recommended/);
+  assert.equal(
+    markup.match(/onboarding\.permissions\.optional/g)?.length,
+    2,
+    "System Audio and Screen Context should be labelled Optional on macOS"
+  );
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
 });
 
@@ -185,6 +248,7 @@ test("macOS onboarding shows the Screen Context relaunch guidance when needed", 
 
   assert.match(markup, /dictationAgent\.screenContext\.relaunchHint/);
   assert.match(markup, />onboarding\.rehaul\.permissions\.enabled<\/button>/);
+  assertGuidancePrecedesActions(markup, "dictationAgent.screenContext.relaunchHint");
 });
 
 test("macOS onboarding omits Screen Context when the flow does not offer it", async (t) => {
@@ -224,7 +288,12 @@ test("Windows onboarding offers Screen Context as a permissionless opt-in", asyn
   );
 
   assert.match(markup, /dictationAgent\.screenContext\.title/);
-  assert.match(markup, /screen-context\.webp/);
+  assert.match(markup, /data-icon="laptop"/);
+  assert.equal(
+    markup.match(/onboarding\.permissions\.optional/g)?.length,
+    1,
+    "Screen Context should be labelled Optional on Windows"
+  );
   assert.match(markup, />onboarding\.rehaul\.permissions\.enabled<\/button>/);
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
 });
@@ -245,4 +314,18 @@ test("Linux onboarding does not show Screen Context", async (t) => {
   );
 
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.title/);
+});
+
+test("provider setup stages mark dictation complete before Assistant", async (t) => {
+  const vite = await createOnboardingRenderer(t);
+  const { SetupStageStepper } = await vite.ssrLoadModule(
+    "/components/onboarding/ProviderSetupStep.tsx"
+  );
+
+  for (const stepId of ["byok-assistant", "local-assistant"]) {
+    const markup = renderToStaticMarkup(React.createElement(SetupStageStepper, { stepId }));
+
+    assert.match(markup, /data-icon="circle-check"/);
+    assert.doesNotMatch(markup, /data-icon="audio-lines"/);
+  }
 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Loader2, LogOut } from "lucide-react";
+import { Loader2, LogOut } from "../icons";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, ConfirmDialog } from "../ui/dialog";
 import { useToast } from "../ui/useToast";
 import { useDialogs } from "../../hooks/useDialogs";
@@ -132,7 +132,7 @@ export default function TeamMembersDialog({
               disabled={isLeaving}
               className={cn(
                 "flex items-center gap-2 w-full px-4 h-10 rounded-lg",
-                "border border-border/50 dark:border-border-subtle/70",
+                "border border-border/70 dark:border-border-subtle/70",
                 "text-xs font-medium text-destructive",
                 "transition-colors duration-150 outline-none",
                 "hover:bg-destructive/5 active:bg-destructive/8",

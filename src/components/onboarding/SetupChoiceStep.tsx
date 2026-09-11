@@ -12,7 +12,7 @@ import {
   WandSparkles,
   WifiOff,
   Zap,
-} from "lucide-react";
+} from "../icons";
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
@@ -57,11 +57,11 @@ interface MoreSetupOption {
 // The mark is tertiary grey on the self-serve cards and the brand accent on the
 // cloud card, which is the only visual weighting between them.
 //
-// strokeWidth stays at lucide's default 2 rather than the 1.16667 the export
-// shows. Both describe the same line: Figma exports these at viewBox 0 0 14 14,
-// so its 1.16667 is already in 14px space, while lucide draws in a 24 viewBox
-// scaled down to 14 — 2 x (14/24) = 1.1667 device px, exactly the spec. Passing
-// 1.167 here applies the scale twice and renders a 0.68px hairline.
+// strokeWidth stays at the icon set's default 2 rather than the 1.16667 the
+// export shows. Both describe the same line: Figma exports these at viewBox
+// 0 0 14 14, so its 1.16667 is already in 14px space, while the icons draw in a
+// 24 viewBox scaled down to 14 — 2 x (14/24) = 1.1667 device px, exactly the
+// spec. Passing 1.167 here applies the scale twice and renders a 0.68px hairline.
 function Feature({
   icon: Icon,
   accent = false,
@@ -84,7 +84,7 @@ function Feature({
 // Compact setup card: content stays pinned to the top and the action to the bottom.
 function SetupCard({ children }: { children: React.ReactNode }) {
   return (
-    <section className="relative flex h-[350px] w-68 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 pb-5 pt-4 text-left">
+    <section className="relative flex h-[350px] w-68 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 pb-5 pt-4 text-start">
       {children}
     </section>
   );
@@ -129,12 +129,15 @@ export default function SetupChoiceStep({
   const [showMore, setShowMore] = useState(false);
 
   const localReferenceModel = getParakeetModelInfo(REFERENCE_LOCAL_MODEL_ID);
+  // Two deliberately different numbers: the setup steps quote the transfer, so
+  // they get the model's own download size, while the disk figure is rounded up
+  // and floored at 2 GB because the model arrives as an archive and needs room
+  // to unpack — quoting only the compressed size as the space requirement can
+  // send a user into a setup that runs out of disk.
   const localModelSize = (localReferenceModel?.size ?? t("common.unknown")).replace(
     /(\d)([A-Za-z])/,
     "$1 $2"
   );
-  // The model arrives as an archive and needs room to unpack, so quoting only
-  // its compressed size can send a user into a setup that runs out of disk.
   const minimumLocalSpaceGb = Math.max(2, Math.ceil((localReferenceModel?.sizeMb ?? 0) / 1000));
 
   const availability = getOnboardingSetupAvailability({
@@ -273,10 +276,8 @@ export default function SetupChoiceStep({
                     })}
                   </p>
                 </div>
-                {/* The four marks are the lucide originals the Figma assets were
-                    exported from, matched by their path coordinates: Laptop (not
-                    LaptopMinimal, which is a plain rect with a detached base line)
-                    and BanknoteCheck (not BadgeCheck). */}
+                {/* The four marks are the icon-set equivalents of the glyphs the
+                    Figma assets were exported from. */}
                 <ul className="flex flex-col gap-2">
                   <Feature icon={Laptop}>
                     {t("onboarding.rehaul.setupChoice.local.features.device")}
@@ -311,7 +312,7 @@ export default function SetupChoiceStep({
               <div className="flex items-center justify-between">
                 {/* Frame 48: 40px mark on the brand gradient. */}
                 <span className="flex size-9 items-center justify-center rounded-full bg-gradient-to-b from-[#4079ed] to-[#244587] text-white">
-                  <BrandMark className="size-5" />
+                  <BrandMark className="size-6" />
                 </span>
                 {/* Frame 49: the "Recommended" chip. Figma has white text on a
                     glass fill over the card's background artwork ("Vector 1",
@@ -376,7 +377,7 @@ export default function SetupChoiceStep({
       <Dialog open={showMore} onOpenChange={(open) => !open && setShowMore(false)}>
         <DialogContent
           overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
-          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-left [&>button]:hidden"
+          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-start [&>button]:hidden"
         >
           {/* Frame 2147258979: 238 tall, radius 20, image fill. Source is 840x477,
               so it lands at ~2x for the 420x238 slot. */}
@@ -422,7 +423,7 @@ export default function SetupChoiceStep({
                     // starting it with the self-hosted field set on.
                     onSelect("byok", { selfHosted: row.id === "self-hosted" });
                   }}
-                  className={`onboarding-pressable flex w-full items-center gap-[14px] text-left ${
+                  className={`onboarding-pressable flex w-full items-center gap-[14px] text-start ${
                     index === 0 ? "pb-4" : "border-t border-[var(--onboarding-control-border)] pt-4"
                   }`}
                 >
@@ -439,7 +440,7 @@ export default function SetupChoiceStep({
                   </span>
                   {/* Frame 25: 32px surface-tertiary disc with a tertiary chevron. */}
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--onboarding-surface-tertiary)] text-[var(--onboarding-text-tertiary)]">
-                    <ChevronRight className="size-4" strokeWidth={1.667} />
+                    <ChevronRight className="size-4 rtl:rotate-180" strokeWidth={1.667} />
                   </span>
                 </button>
               ))}
@@ -451,7 +452,7 @@ export default function SetupChoiceStep({
       <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <DialogContent
           overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
-          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-left text-[var(--onboarding-text-primary)] [&>button]:hidden"
+          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-start text-[var(--onboarding-text-primary)] [&>button]:hidden"
           onOpenAutoFocus={handleWarningAutoFocus}
         >
           {/* Frame 2147258979: 238 tall, radius 20, image crop. The three marks
