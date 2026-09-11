@@ -354,8 +354,8 @@ function SearchableMoveSubmenu({
           <>
             <div className="relative px-1.5 py-0.5">
               <Search
-                size={9}
-                className="absolute start-3.5 top-1/2 -translate-y-1/2 text-foreground/45 pointer-events-none"
+                size={12}
+                className="absolute start-3 top-1/2 -translate-y-1/2 text-foreground/45 pointer-events-none"
               />
               <input
                 dir="auto"
@@ -363,7 +363,7 @@ function SearchableMoveSubmenu({
                 onChange={(event) => onSearchChange(event.target.value)}
                 onKeyDown={(event) => event.stopPropagation()}
                 placeholder={searchPlaceholder}
-                className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
+                className="input-inline w-full ps-8 pe-1 py-1 text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
               />
             </div>
             <DropdownMenuSeparator />

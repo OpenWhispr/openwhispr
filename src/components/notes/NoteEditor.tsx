@@ -470,16 +470,14 @@ export default function NoteEditor({
         setDiarizedSegments(null);
         setIsDiarizing(false);
         setSpeakerMappings({});
-        if (!isRecording) {
-          setViewMode("raw");
-        }
+        setViewMode("raw");
         if (titleRef.current && titleRef.current.textContent !== note.title) {
           titleRef.current.textContent = note.title || "";
         }
         editorRef.current?.commands.focus();
       });
     }
-  }, [isRecording, note.id, note.title, scheduleUiUpdate]);
+  }, [note.id, note.title, scheduleUiUpdate]);
 
   useEffect(() => {
     window.electronAPI?.getSpeakerMappings?.(note.id).then((mappings) => {
@@ -699,14 +697,6 @@ export default function NoteEditor({
     const text = e.clipboardData.getData("text/plain").replace(/\n/g, " ");
     document.execCommand("insertText", false, text);
   }, []);
-
-  const prevRecordingRef = useRef(false);
-  useEffect(() => {
-    if (isRecording && !prevRecordingRef.current) {
-      scheduleUiUpdate(() => setViewMode("transcript"));
-    }
-    prevRecordingRef.current = isRecording;
-  }, [isRecording, scheduleUiUpdate]);
 
   const contentScrollRef = useRef<HTMLDivElement>(null);
 
