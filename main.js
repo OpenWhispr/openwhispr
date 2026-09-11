@@ -1008,11 +1008,7 @@ async function startApp() {
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 
-  // A saved Hold with a key that cannot be held (macOS lone regular key) stays
-  // on Tap; write that back so the renderer's setting agrees with main.
-  if (!(await windowManager.setActivationModeCache(environmentManager.getActivationMode()))) {
-    environmentManager.saveActivationMode(windowManager.getActivationMode());
-  }
+  await windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 
@@ -1075,6 +1071,22 @@ async function startApp() {
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
   await windowManager.createMainWindow();
+  // The activation mode was cached before any hotkey was registered, so a saved
+  // Hold could not be checked against its key then. Now that the key is known,
+  // a Hold it cannot support (a lone regular key on macOS, which would toggle on
+  // every autorepeat) drops back to Tap, and the renderer's setting follows.
+  if (
+    windowManager.getActivationMode() === "push" &&
+    !windowManager.hotkeyManager.supportsPushToTalk()
+  ) {
+    await windowManager.setActivationModeCache("tap");
+    environmentManager.saveActivationMode("tap");
+    for (const browserWindow of BrowserWindow.getAllWindows()) {
+      if (!browserWindow.isDestroyed()) {
+        browserWindow.webContents.send("setting-updated", { key: "activationMode", value: "tap" });
+      }
+    }
+  }
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
