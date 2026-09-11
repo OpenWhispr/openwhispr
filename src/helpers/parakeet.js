@@ -1,6 +1,7 @@
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
+const { net } = require("electron");
 const { pipeline } = require("stream/promises");
 const debugLogger = require("./debugLogger");
 const { runSystemTar } = require("./systemTar");
@@ -27,6 +28,7 @@ function getParakeetModelConfig(modelName) {
   if (!modelInfo) return null;
   return {
     url: modelInfo.downloadUrl,
+    manifestUrl: modelInfo.manifestUrl,
     size: modelInfo.expectedSizeBytes || modelInfo.sizeMb * 1_000_000,
     language: modelInfo.language,
     supportedLanguages: modelInfo.supportedLanguages || [],
@@ -443,6 +445,17 @@ class ParakeetManager {
         });
       }
 
+      // Optional provenance: one request after a fresh install, never on model load.
+      // Hugging Face counts this JSON request for NeMo repositories.
+      if (!archiveReady && !signal.aborted && modelConfig.manifestUrl) {
+        this._saveModelManifest(modelConfig, modelPath).catch((error) => {
+          debugLogger.debug("Optional model manifest unavailable", {
+            modelName,
+            error: error.message,
+          });
+        });
+      }
+
       return { model: modelName, downloaded: true, path: modelPath, success: true };
     } catch (error) {
       if (error.isAbort) {
@@ -457,6 +470,32 @@ class ParakeetManager {
         this.currentDownloadProcess = null;
       }
     }
+  }
+
+  async _saveModelManifest(modelConfig, modelPath) {
+    const response = await net.fetch(modelConfig.manifestUrl, {
+      headers: { "User-Agent": "OpenWhispr/1.0" },
+      credentials: "omit",
+      useSessionCookies: false,
+      cache: "no-store",
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) throw new Error(`Manifest HTTP ${response.status}`);
+    const manifest = await response.json();
+    if (
+      manifest?.archive !== path.posix.basename(new URL(modelConfig.url).pathname) ||
+      manifest.extract_dir !== modelConfig.extractDir ||
+      manifest.archive_bytes !== modelConfig.size ||
+      !/^[a-f0-9]{64}$/.test(manifest.archive_sha256)
+    ) {
+      throw new Error("Manifest does not match the installed model");
+    }
+    // Never recreate a deleted model directory or overwrite an existing sidecar.
+    await fsPromises.writeFile(
+      path.join(modelPath, "download-manifest.json"),
+      JSON.stringify(manifest, null, 2) + "\n",
+      { flag: "wx" }
+    );
   }
 
   async _extractModel(archivePath, modelName) {
