@@ -60,6 +60,7 @@ test("non-table markdown is unchanged", async (t) => {
   assert.ok(html.includes("<ul"), "lists still render");
   assert.ok(html.includes("<strong"), "bold still renders");
   assert.ok(html.includes("<code"), "inline code still renders");
+  assert.ok(!html.includes("prose"), "no typography-plugin classes: the plugin is not installed");
 });
 
 test("GFM extras the plugin enables render as elements, not literal syntax", async (t) => {

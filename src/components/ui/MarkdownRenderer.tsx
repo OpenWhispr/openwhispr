@@ -1,6 +1,5 @@
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { cn } from "../lib/utils";
 
 interface MarkdownRendererProps {
   content: string;
@@ -9,7 +8,7 @@ interface MarkdownRendererProps {
 
 export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
   return (
-    <div dir="auto" className={cn("prose prose-sm max-w-none", className)}>
+    <div dir="auto" className={className}>
       <Markdown
         remarkPlugins={[remarkGfm]}
         components={{
