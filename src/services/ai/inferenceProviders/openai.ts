@@ -14,6 +14,7 @@ import { detectEndpointDialect } from "../thinkingSuppressionDialects";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
+import { openCodeSessionHeaders } from "../openCodeSession";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const PROBE_TIMEOUT_MS = 2_000;
@@ -61,23 +62,6 @@ function rememberPreference(base: string, preference: "responses" | "chat"): voi
     data[base] = preference;
     window.localStorage.setItem(OPENAI_ENDPOINT_PREF_STORAGE_KEY, JSON.stringify(data));
   } catch {}
-}
-
-const OPENCODE_HOST = "opencode.ai";
-
-/**
- * OpenCode Go routes each conversation by a stable `x-opencode-session` id and
- * rejects requests without one (HTTP 400 MissingSessionID). Recognised by host
- * so a custom base such as https://opencode.ai/zen/go/v1 gets the header.
- */
-function isOpenCodeBase(base: string): boolean {
-  try {
-    const normalized = base.includes("://") ? base : `https://${base}`;
-    const host = new URL(normalized).hostname.toLowerCase();
-    return host === OPENCODE_HOST || host.endsWith(`.${OPENCODE_HOST}`);
-  } catch {
-    return false;
-  }
 }
 
 function getEndpointCandidates(base: string): Array<{ url: string; type: "responses" | "chat" }> {
@@ -211,7 +195,7 @@ export const openaiProvider: InferenceProvider = {
     const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
     // One cleanup call is one conversation: every attempt below (endpoint
     // fallback, parameter fallback, retry) reuses the same session id.
-    const openCodeSessionId = isOpenCodeBase(openAiBase) ? crypto.randomUUID() : null;
+    const openCodeHeaders = openCodeSessionHeaders(openAiBase);
 
     logger.logReasoning("OPENAI_ENDPOINTS", {
       base: openAiBase,
@@ -281,7 +265,7 @@ export const openaiProvider: InferenceProvider = {
                 headers: {
                   "Content-Type": "application/json",
                   ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-                  ...(openCodeSessionId ? { "x-opencode-session": openCodeSessionId } : {}),
+                  ...openCodeHeaders,
                 },
                 body: JSON.stringify(requestBody),
                 signal: controller.signal,
