@@ -227,7 +227,9 @@ class ParakeetManager {
   }
 
   async transcribeLocalParakeet(audioBlob, options = {}) {
-    const model = options.model || "parakeet-tdt-0.6b-v3";
+    const defaultModel =
+      options.provider === "cohere" ? "cohere-transcribe-03-2026" : "parakeet-tdt-0.6b-v3";
+    const model = options.model || defaultModel;
     assertParakeetSupported();
     const serverAvailable = this.serverManager.isAvailable(getModelRuntime(model));
 
