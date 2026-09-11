@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { CircleCheck, Laptop, LogOut } from "../icons";
+import { CircleCheck, Laptop, Undo2 } from "../icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 // Imported (not referenced by path) so Vite fingerprints them and they resolve
@@ -30,8 +30,8 @@ interface CompactPermissionsStepProps {
     needsRelaunch: boolean;
     request: () => Promise<boolean>;
   };
-  /** Omitted on the guest route, which never signed in. */
-  onLogout?: () => Promise<void>;
+  /** Omitted when there is no step to return to. */
+  onBack?: () => void;
   onContinue: () => void;
 }
 
@@ -121,7 +121,7 @@ export default function CompactPermissionsStep({
   permissions,
   systemAudio,
   screenContext,
-  onLogout,
+  onBack,
   onContinue,
 }: CompactPermissionsStepProps) {
   const { t } = useTranslation();
@@ -259,14 +259,14 @@ export default function CompactPermissionsStep({
             relaunch hint and the two warnings below the buttons — and, on Linux
             where the paste guidance is the point of the screen, out of view. */}
         <div className="mt-auto flex w-full shrink-0 items-center justify-between gap-3 pt-5">
-          {onLogout && (
+          {onBack && (
             <button
               type="button"
-              onClick={() => void onLogout()}
+              onClick={onBack}
               className="onboarding-pressable inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 text-sm font-medium text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
             >
-              <LogOut className="size-3.5" aria-hidden="true" />
-              {t("common.logout")}
+              <Undo2 className="size-4" aria-hidden="true" />
+              {t("common.back")}
             </button>
           )}
 

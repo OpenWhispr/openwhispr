@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Los atajos con botones del ratón solo son compatibles con macOS por ahora.",
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
+      "holdNeedsReleaseKey": "Mantener para hablar necesita una tecla cuya liberación macOS pueda detectar: Globo, una tecla derecha como Opción derecha o un atajo con modificador. Pulsar funciona con cualquier tecla.",
       "registrationFailed": "No se pudo registrar \"{{hotkey}}\". Puede estar en uso por otra aplicación.",
       "updateFailedCheckFormat": "No se pudo actualizar el atajo a \"{{hotkey}}\". Comprueba que el formato sea válido.",
       "trySuggestions": "Prueba: {{suggestions}}",
@@ -211,11 +212,11 @@
     "rehaul": {
       "permissions": {
         "title": "Configura OpenWhispr en 3 minutos",
-        "microphoneDescription": "Convierte la voz en texto.",
-        "accessibilityDescription": "Pega texto en tu aplicación activa.",
+        "microphoneDescription": "Convierte lo que dices en texto. Solo se activa mientras grabas.",
+        "accessibilityDescription": "Pega el texto en la aplicación que estás usando.",
         "systemAudioTitle": "Audio del Sistema",
-        "systemAudioDescription": "Necesario para capturar audio en las notas de reuniones.",
-        "screenContextDescription": "Comparte el contexto de pantalla con el asistente de voz.",
+        "systemAudioDescription": "Graba a las demás personas de tus llamadas para las notas de reuniones. Solo mientras grabas.",
+        "screenContextDescription": "Deja que tu asistente de voz vea tu pantalla cuando le pides algo. Nunca se guarda.",
         "enable": "Activar",
         "enabled": "Activado"
       },
@@ -226,21 +227,21 @@
         "description": "Selecciona todos los que correspondan. Esto ayuda a OpenWhispr a reconocer los cambios de idioma con mayor precisión."
       },
       "dictationHotkey": {
-        "title": "Configura tu atajo de teclado",
-        "titleLineOne": "Configura tu",
-        "titleLineTwo": "atajo de teclado",
-        "description": "Elige un atajo de teclado para iniciar y detener el dictado desde cualquier lugar."
+        "title": "Elige tu atajo de dictado",
+        "titleLineOne": "Elige tu",
+        "titleLineTwo": "atajo de dictado",
+        "description": "Púlsalo cuando quieras hablar en vez de escribir. Funciona en cualquier aplicación.",
+        "activation": "¿Pulsar o mantener?"
       },
       "assistantHotkey": {
         "title": "Configura OpenWhispr Assistant",
         "titleLineOne": "Configura",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Di lo que necesitas y OpenWhispr Assistant escribe el resultado por ti."
+        "description": "Di lo que necesitas. OpenWhispr Assistant escribe el resultado por ti."
       },
       "hotkey": {
-        "capture": "Pulsa las teclas que quieras usar",
+        "capture": "Pulsa la tecla que quieras usar",
         "chooseAnother": "Elegir otro atajo",
-        "confirmAgain": "Pulsa {{hotkey}} otra vez para confirmar",
         "inUse": "Ese atajo ya está en uso. Elige otro.",
         "holding": "Mantén pulsado o pulsa otra tecla"
       },
@@ -249,21 +250,39 @@
         "titleLineOne": "Prueba tu",
         "titleLineTwo": "primer dictado",
         "description": "Pulsa {{hotkey}} y empieza a hablar. OpenWhispr convertirá tu voz en texto.",
-        "founder": "Hola, soy Gabe, fundador de OpenWhispr",
-        "prompt": "Prueba a decir: «Estoy probando el dictado por primera vez».",
-        "placeholder": "Tu dictado aparecerá aquí…"
+        "founder": "Hola, soy Gabe, el fundador. ¡Gracias por probar OpenWhispr!",
+        "prompt": "Haz clic en el cuadro de abajo, pulsa tu atajo y cuéntame: ¿qué te encantaría que OpenWhispr hiciera por ti?",
+        "placeholder": "Haz clic aquí y luego pulsa tu atajo. OpenWhispr escribe en cualquier cuadro de texto."
       },
       "assistantDemo": {
         "title": "Conoce OpenWhispr Assistant",
         "titleLineOne": "Te presentamos",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Di lo que necesitas y OpenWhispr Assistant escribe el resultado por ti.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "para John Doe",
-        "email": "¡Hola! ¿Te apetece un café la semana que viene? Dime qué día te viene bien.",
-        "prompt": "Responde que el martes a las 3 me va bien. Envía una invitación.",
-        "response": "Hola Eren:\n\nMe encantaría ponernos al día. El martes a las 15:00 me viene bien. Si te parece bien, te enviaré una invitación de calendario.\nCon ganas de verte,\nJohn"
+        "email": {
+          "subject": "¿Café la semana que viene?",
+          "senderName": "Maria Alvarez",
+          "recipient": "para mí",
+          "body": "¡Hola! Fue un placer conocerte ayer en el meetup. ¿Te apetece tomar un café rápido la semana que viene? Dime qué te viene bien.\n\nMaria",
+          "reply": "Responder"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente lee el correo de tu pantalla y busca huecos libres en tu calendario.",
+            "prompt": "Prueba a decir: «Responde y propón algunas horas libres de la semana que viene»."
+          },
+          "screen": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente lee el correo directamente de tu pantalla.",
+            "prompt": "Prueba a decir: «Responde que me encantaría y propón el miércoles por la tarde»."
+          },
+          "calendar": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente busca huecos libres en tu calendario y escribe la respuesta.",
+            "prompt": "Prueba a decir: «Responde a Maria y propón algunas horas libres de la semana que viene»."
+          },
+          "general": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente la escribe por ti.",
+            "prompt": "Prueba a decir: «Responde a Maria que me encantaría y propón el miércoles por la tarde»."
+          }
+        }
       },
       "demo": {
         "listening": "Escuchando…",
@@ -1094,7 +1113,8 @@
       "welcomeBack": "Bienvenido de nuevo"
     },
     "signedIn": {
-      "welcomeBack": "Bienvenido de nuevo"
+      "welcomeBack": "Bienvenido de nuevo",
+      "notYou": "¿No eres tú? Cerrar sesión"
     },
     "sso": {
       "continueWithSSO": "Iniciar sesión con SSO",

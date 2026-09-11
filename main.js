@@ -1,6 +1,7 @@
 // Chromium picks the display backend before JS runs, so appendSwitch is too
 // late — the flag has to come from a relaunch.
 const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
+const { createHotkeyRepeatGate } = require("./src/helpers/hotkeyRepeatGate");
 
 if (shouldForceXWayland(process.argv)) {
   const { spawn } = require("child_process");
@@ -1071,6 +1072,20 @@ async function startApp() {
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
   await windowManager.createMainWindow();
+  // The activation mode was cached before the hotkey was registered, so a saved
+  // Hold could not be checked against its key until now.
+  if (
+    windowManager.getActivationMode() === "push" &&
+    !windowManager.hotkeyManager.supportsPushToTalk()
+  ) {
+    await windowManager.setActivationModeCache("tap");
+    environmentManager.saveActivationMode("tap");
+    for (const browserWindow of BrowserWindow.getAllWindows()) {
+      if (!browserWindow.isDestroyed()) {
+        browserWindow.webContents.send("setting-updated", { key: "activationMode", value: "tap" });
+      }
+    }
+  }
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
@@ -1094,8 +1109,11 @@ async function startApp() {
   }
 
   // Set up voice agent hotkey (dictation routed straight to the dictation
-  // agent, bypassing cleanup)
+  // agent, bypassing cleanup). Tap-only slots gate autorepeat like the
+  // dictation toggle does.
+  const isVoiceAgentPress = createHotkeyRepeatGate();
   const voiceAgentHotkeyCallback = () => {
+    if (!isVoiceAgentPress()) return;
     windowManager.sendToggleVoiceAgent();
   };
   windowManager._voiceAgentHotkeyCallback = voiceAgentHotkeyCallback;
@@ -1118,7 +1136,9 @@ async function startApp() {
 
   // Set up translation hotkey (dictation cleaned up and translated into the
   // configured target language before pasting)
+  const isTranslationPress = createHotkeyRepeatGate();
   const translationHotkeyCallback = () => {
+    if (!isTranslationPress()) return;
     windowManager.sendToggleTranslation();
   };
   windowManager._translationHotkeyCallback = translationHotkeyCallback;
@@ -1140,7 +1160,9 @@ async function startApp() {
   }
 
   // Set up meeting mode hotkey
+  const isMeetingPress = createHotkeyRepeatGate();
   const meetingHotkeyCallback = () => {
+    if (!isMeetingPress()) return;
     if (hotkeyManager.isInListeningMode()) return;
     // Fail closed during onboarding, like every other hotkey slot.
     if (!windowManager.isMeetingInputAllowed()) return;

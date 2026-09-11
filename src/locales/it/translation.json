@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Le scorciatoie con i tasti del mouse sono attualmente supportate solo su macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
+      "holdNeedsReleaseKey": "Tieni premuto per parlare richiede un tasto di cui macOS rilevi il rilascio: Globo, un tasto destro come Opzione destra o una scorciatoia con modificatore. Tocca funziona con qualsiasi tasto.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
       "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
       "trySuggestions": "Prova: {{suggestions}}",
@@ -211,11 +212,11 @@
     "rehaul": {
       "permissions": {
         "title": "Configura OpenWhispr in 3 minuti",
-        "microphoneDescription": "Trasforma la voce in testo.",
-        "accessibilityDescription": "Incolla il testo nell’app attiva.",
+        "microphoneDescription": "Trasforma quello che dici in testo. Attivo solo durante la registrazione.",
+        "accessibilityDescription": "Incolla il testo nell’app che stai usando.",
         "systemAudioTitle": "Audio di Sistema",
-        "systemAudioDescription": "Necessario per acquisire l’audio nelle note delle riunioni.",
-        "screenContextDescription": "Condividi il contesto dello schermo con l’assistente vocale.",
+        "systemAudioDescription": "Registra le altre persone nelle tue chiamate per le note delle riunioni. Solo durante la registrazione.",
+        "screenContextDescription": "Mostra lo schermo al tuo assistente vocale quando gli chiedi qualcosa. Mai salvato.",
         "enable": "Attiva",
         "enabled": "Attivato"
       },
@@ -226,21 +227,21 @@
         "description": "Seleziona tutte le opzioni pertinenti. Questo aiuta OpenWhispr a riconoscere i cambi di lingua con maggiore precisione."
       },
       "dictationHotkey": {
-        "title": "Configura la tua scorciatoia da tastiera",
-        "titleLineOne": "Configura la",
-        "titleLineTwo": "scorciatoia da tastiera",
-        "description": "Scegli una scorciatoia da tastiera per avviare e interrompere la dettatura da qualsiasi punto."
+        "title": "Scegli la tua scorciatoia per dettare",
+        "titleLineOne": "Scegli la tua",
+        "titleLineTwo": "scorciatoia per dettare",
+        "description": "Premila quando vuoi parlare invece di scrivere. Funziona in qualsiasi app.",
+        "activation": "Toccare o tenere premuto?"
       },
       "assistantHotkey": {
         "title": "Configura OpenWhispr Assistant",
         "titleLineOne": "Configura",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Pronuncia una richiesta e OpenWhispr Assistant scrive il risultato per te."
+        "description": "Pronuncia una richiesta. OpenWhispr Assistant scrive il risultato per te."
       },
       "hotkey": {
-        "capture": "Premi i tasti che vuoi usare",
+        "capture": "Premi il tasto che vuoi usare",
         "chooseAnother": "Scegli un’altra scorciatoia",
-        "confirmAgain": "Premi di nuovo {{hotkey}} per confermare",
         "inUse": "Questa scorciatoia è già in uso. Scegline un’altra.",
         "holding": "Continua a tenere premuto o premi un altro tasto"
       },
@@ -249,21 +250,39 @@
         "titleLineOne": "Prova la tua",
         "titleLineTwo": "prima dettatura",
         "description": "Premi {{hotkey}} e inizia a parlare. OpenWhispr trasformerà la tua voce in testo.",
-        "founder": "Ciao, sono Gabe, fondatore di OpenWhispr",
-        "prompt": "Prova a dire: «Sto provando la dettatura per la prima volta».",
-        "placeholder": "La tua dettatura apparirà qui…"
+        "founder": "Ciao, sono Gabe, il fondatore. Grazie per provare OpenWhispr!",
+        "prompt": "Clicca nel riquadro qui sotto, premi la tua scorciatoia e dimmi: cosa vorresti che OpenWhispr facesse per te?",
+        "placeholder": "Clicca qui, poi premi la tua scorciatoia. OpenWhispr scrive in qualsiasi campo di testo."
       },
       "assistantDemo": {
         "title": "Scopri OpenWhispr Assistant",
         "titleLineOne": "Ecco",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Pronuncia una richiesta e OpenWhispr Assistant scrive il risultato per te.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "a John Doe",
-        "email": "Ciao! Ti va un caffè la settimana prossima? Fammi sapere quando ti è comodo.",
-        "prompt": "Rispondi che martedì alle 15 va bene. Invia un invito.",
-        "response": "Ciao Eren,\n\nmi farebbe piacere sentirci. Martedì alle 15 per me va benissimo. Se ti va bene, ti invierò un invito sul calendario.\nA presto,\nJohn"
+        "email": {
+          "subject": "Un caffè la prossima settimana?",
+          "senderName": "Maria Alvarez",
+          "recipient": "a me",
+          "body": "Ciao! È stato un piacere conoscerti ieri al meetup. Ti andrebbe un caffè veloce la prossima settimana? Fammi sapere quando ti va bene.\n\nMaria",
+          "reply": "Rispondi"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Premi {{hotkey}} e chiedi una risposta. L’assistente legge l’e-mail sullo schermo e cerca gli orari liberi nel tuo calendario.",
+            "prompt": "Prova a dire: «Rispondi e proponi alcuni orari liberi della prossima settimana»."
+          },
+          "screen": {
+            "description": "Premi {{hotkey}} e chiedi una risposta. L’assistente legge l’e-mail direttamente dal tuo schermo.",
+            "prompt": "Prova a dire: «Rispondi che mi farebbe piacere e proponi mercoledì pomeriggio»."
+          },
+          "calendar": {
+            "description": "Premi {{hotkey}} e chiedi una risposta. L’assistente cerca gli orari liberi nel tuo calendario e scrive la risposta.",
+            "prompt": "Prova a dire: «Rispondi a Maria e proponi alcuni orari liberi della prossima settimana»."
+          },
+          "general": {
+            "description": "Premi {{hotkey}} e chiedi una risposta. L’assistente la scrive per te.",
+            "prompt": "Prova a dire: «Rispondi a Maria che mi farebbe piacere e proponi mercoledì pomeriggio»."
+          }
+        }
       },
       "demo": {
         "listening": "In ascolto…",
@@ -1095,7 +1114,8 @@
       "welcomeBack": "Bentornato"
     },
     "signedIn": {
-      "welcomeBack": "Bentornato"
+      "welcomeBack": "Bentornato",
+      "notYou": "Non sei tu? Esci"
     },
     "sso": {
       "continueWithSSO": "Accedi con SSO",

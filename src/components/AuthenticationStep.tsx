@@ -34,6 +34,14 @@ interface AuthenticationStepProps {
   onNeedsVerification: (email: string) => void;
   /** Rendering inside SignInDialog rather than the onboarding window. */
   embedded?: boolean;
+  /**
+   * Whether an already signed-in user is completed on sight. Off when the user
+   * came Back to this step: they asked to see it, so it shows the welcome screen
+   * instead of bouncing them forward again.
+   */
+  autoContinue?: boolean;
+  /** Offers "Not you? Log out" on the welcome-back screen. */
+  onSignOut?: () => void;
   resumeState?: OnboardingAuthDraft;
   onResumeStateChange?: (state: Partial<OnboardingAuthDraft>) => void;
 }
@@ -130,6 +138,8 @@ export default function AuthenticationStep({
   onAuthComplete,
   onNeedsVerification,
   embedded = false,
+  autoContinue = true,
+  onSignOut,
   resumeState,
   onResumeStateChange,
 }: AuthenticationStepProps) {
@@ -186,14 +196,21 @@ export default function AuthenticationStep({
   useEffect(() => () => onResumeStateChange?.(latestAuthDraft.current), [onResumeStateChange]);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || needsVerificationRef.current || !user?.id || !user?.email)
+    if (
+      !autoContinue ||
+      !isLoaded ||
+      !isSignedIn ||
+      needsVerificationRef.current ||
+      !user?.id ||
+      !user?.email
+    )
       return;
     // The ref only latches within one mount. Remounting over a session that is
     // still unverified (Back from the verification step) must not complete —
     // that would advance with an email the user came back to correct.
     if (user.emailVerified === false) return;
     onAuthComplete();
-  }, [isLoaded, isSignedIn, user, onAuthComplete]);
+  }, [autoContinue, isLoaded, isSignedIn, user, onAuthComplete]);
 
   useEffect(() => {
     if (isSocialLoading === null && !isSSOLoading) return;
@@ -439,6 +456,15 @@ export default function AuthenticationStep({
             {t("auth.common.continue")}
             <ArrowRight className="size-4 rtl:rotate-180" />
           </Button>
+          {onSignOut && (
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="mt-4 block w-full text-sm text-[var(--onboarding-text-secondary)] transition-colors hover:text-[var(--onboarding-text-primary)]"
+            >
+              {t("auth.signedIn.notYou")}
+            </button>
+          )}
         </div>
       </CompactOnboardingFrame>
     );

@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
+      "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
       "trySuggestions": "Try: {{suggestions}}",
@@ -211,11 +212,11 @@
     "rehaul": {
       "permissions": {
         "title": "Set up OpenWhispr in 3 minutes",
-        "microphoneDescription": "Turns speech into text.",
-        "accessibilityDescription": "Pastes text into your active app.",
+        "microphoneDescription": "Turns what you say into text. Only on while you’re recording.",
+        "accessibilityDescription": "Pastes the text into the app you’re using.",
         "systemAudioTitle": "System Audio",
-        "systemAudioDescription": "Required for capturing audio in Meeting Notes.",
-        "screenContextDescription": "Share screen context with Voice Assistant.",
+        "systemAudioDescription": "Records the other people on your calls for meeting notes. Only on while you’re recording.",
+        "screenContextDescription": "Lets your voice assistant see your screen when you ask it something. Never stored.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -226,21 +227,21 @@
         "description": "Select all that apply. This helps OpenWhispr recognize language switches more accurately."
       },
       "dictationHotkey": {
-        "title": "Set up your keyboard shortcut",
-        "titleLineOne": "Set up your",
-        "titleLineTwo": "keyboard shortcut",
-        "description": "Choose a keyboard shortcut to start and stop dictation from anywhere."
+        "title": "Choose your dictation shortcut",
+        "titleLineOne": "Choose your",
+        "titleLineTwo": "dictation shortcut",
+        "description": "Press it whenever you want to talk instead of type. Works in any app.",
+        "activation": "Tap or hold?"
       },
       "assistantHotkey": {
         "title": "Set up OpenWhispr Assistant",
         "titleLineOne": "Set up",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you."
+        "description": "Speak a request. OpenWhispr Assistant writes the result for you."
       },
       "hotkey": {
-        "capture": "Press the keys you want to use",
+        "capture": "Press the key you want to use",
         "chooseAnother": "Choose another shortcut",
-        "confirmAgain": "Press {{hotkey}} again to confirm",
         "inUse": "That shortcut is already in use. Choose another one.",
         "holding": "Keep holding, or press another key"
       },
@@ -249,21 +250,39 @@
         "titleLineOne": "Try your",
         "titleLineTwo": "first dictation",
         "description": "Press {{hotkey}} and start speaking. OpenWhispr will turn your voice into text.",
-        "founder": "Hi, I am Gabe, Founder of OpenWhispr",
-        "prompt": "Try saying: “I’m testing dictation for the first time.”",
-        "placeholder": "Your dictation will appear here…"
+        "founder": "Hey, I’m Gabe, the founder. Thanks for trying OpenWhispr!",
+        "prompt": "Click the box below, press your shortcut, and tell me: what would you love OpenWhispr to do for you?",
+        "placeholder": "Click here, then press your shortcut. OpenWhispr types into any text box."
       },
       "assistantDemo": {
         "title": "Meet OpenWhispr Assistant",
         "titleLineOne": "Meet",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "to John Doe",
-        "email": "Hey! Want to grab coffee next week? Let me know what works for you.",
-        "prompt": "Reply that Tuesday at 3 works. Send an invite.",
-        "response": "Hi Eren,\n\nI’d love to catch up. Tuesday at 3 PM works well for me. If that suits you, I’ll send over a calendar invite.\nLooking forward to it,\nJohn"
+        "email": {
+          "subject": "Coffee next week?",
+          "senderName": "Maria Alvarez",
+          "recipient": "to me",
+          "body": "Hi! It was great meeting you at the meetup yesterday. Would you be up for a quick coffee sometime next week? Let me know what works for you.\n\nMaria",
+          "reply": "Reply"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant reads the email on your screen and checks your calendar for free times.",
+            "prompt": "Try saying: “Reply and suggest a few times next week when I’m free.”"
+          },
+          "screen": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant reads the email right off your screen.",
+            "prompt": "Try saying: “Reply that I’d love to, and suggest Wednesday afternoon.”"
+          },
+          "calendar": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant checks your calendar for free times and writes the answer.",
+            "prompt": "Try saying: “Reply to Maria and suggest a few times next week when I’m free.”"
+          },
+          "general": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant writes it for you.",
+            "prompt": "Try saying: “Reply to Maria that I’d love to, and suggest Wednesday afternoon.”"
+          }
+        }
       },
       "demo": {
         "listening": "Listening…",
@@ -1094,7 +1113,8 @@
       "welcomeBack": "Welcome back"
     },
     "signedIn": {
-      "welcomeBack": "Welcome back"
+      "welcomeBack": "Welcome back",
+      "notYou": "Not you? Log out"
     },
     "sso": {
       "continueWithSSO": "Sign in with SSO",

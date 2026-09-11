@@ -7,6 +7,8 @@ import type { OnboardingAuthDraft } from "./onboarding/flow";
 interface CompactAuthenticationFlowProps {
   onContinueWithoutAccount?: () => void;
   onAuthComplete: () => void;
+  autoContinue?: boolean;
+  onSignOut?: () => void;
   resumeState?: OnboardingAuthDraft;
   onResumeStateChange?: (state: Partial<OnboardingAuthDraft>) => void;
 }
@@ -14,6 +16,8 @@ interface CompactAuthenticationFlowProps {
 export function CompactAuthenticationFlow({
   onContinueWithoutAccount,
   onAuthComplete,
+  autoContinue,
+  onSignOut,
   resumeState,
   onResumeStateChange,
 }: CompactAuthenticationFlowProps): JSX.Element {
@@ -60,6 +64,8 @@ export function CompactAuthenticationFlow({
     <AuthenticationStep
       onContinueWithoutAccount={onContinueWithoutAccount}
       onAuthComplete={onAuthComplete}
+      autoContinue={autoContinue}
+      onSignOut={onSignOut}
       onNeedsVerification={updatePendingVerificationEmail}
       resumeState={resumeState}
       onResumeStateChange={onResumeStateChange}

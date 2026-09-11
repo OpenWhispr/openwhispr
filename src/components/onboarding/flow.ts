@@ -19,6 +19,8 @@ export type OnboardingStepId =
   | "languages"
   | "use-cases"
   | "dictation-hotkey"
+  /** No longer routed — tap/hold lives on dictation-hotkey. Kept so a session
+      saved on it still parses and reconciles onto its neighbour. */
   | "activation-mode"
   | "dictation-demo"
   | "assistant-hotkey"
@@ -104,14 +106,17 @@ export interface OnboardingRouteContext {
   skipSetupChoice?: boolean;
 }
 
+// Dictation first, then Notes (the meeting recorder and its calendar
+// connections), then the assistant: the assistant demo suggests meeting times
+// from whatever calendar the Notes step connected.
 const ACCOUNT_ROUTE: OnboardingStepId[] = [
   "auth",
   "permissions",
   "languages",
   "use-cases",
   "dictation-hotkey",
-  "activation-mode",
   "dictation-demo",
+  "notes",
 ];
 
 const SETUP_ROUTES: Record<Exclude<OnboardingSetupMode, null | "cloud">, OnboardingStepId[]> = {
@@ -130,9 +135,9 @@ const STEP_ORDER: OnboardingStepId[] = [
   "dictation-hotkey",
   "activation-mode",
   "dictation-demo",
+  "notes",
   "assistant-hotkey",
   "assistant-demo",
-  "notes",
   "setup-choice",
   "byok-dictation",
   "byok-assistant",
@@ -226,19 +231,12 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
         // finalizeOnboarding registers dictationHotkey either way, and skipping
         // these steps shipped users who neither granted the mic nor knew their
         // trigger key.
-        ([
-          "auth",
-          "permissions",
-          "dictation-hotkey",
-          "activation-mode",
-          "setup-choice",
-        ] as OnboardingStepId[])
+        (["auth", "permissions", "dictation-hotkey", "setup-choice"] as OnboardingStepId[])
       : [
           ...ACCOUNT_ROUTE,
           ...(context.agentAllowed
             ? (["assistant-hotkey", "assistant-demo"] as OnboardingStepId[])
             : []),
-          "notes" as const,
           ...setupChoice,
         ];
 
@@ -260,35 +258,31 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
 /**
  * The Notes step's forward action. Calendar connections are optional, so the step
  * offers Skip until one connects and Continue afterwards. "loading" is its own
- * state rather than an absence: while the workspace resolves there is nothing to
- * commit yet, but the step still has to show a disabled Continue — dropping the
- * action entirely leaves the footer with only Back and no explanation.
+ * state rather than an absence: while the setup decision is pending there is
+ * nothing to commit yet, but the step still has to show a disabled Continue —
+ * dropping the action entirely leaves the footer with only Back and no explanation.
  */
 export function getNotesFooterAction({
-  workspaceResolutionPending,
+  setupDecisionPending,
   hasConnectedCalendar,
 }: {
-  workspaceResolutionPending: boolean;
+  setupDecisionPending: boolean;
   hasConnectedCalendar: boolean;
 }): "skip" | "continue" | "loading" {
-  if (workspaceResolutionPending) return "loading";
+  if (setupDecisionPending) return "loading";
   return hasConnectedCalendar ? "continue" : "skip";
 }
 
 /**
- * Whether the permissions step offers Log out. `authPath` alone is not the
- * question: migrateLegacyOnboardingStep labels any pre-v2 session past the auth
- * step "account" without anyone having signed in, and the action clears the
- * session, localSetupPending and the pending model selections without confirming.
+ * The step whose Continue commits the setup decision: it leads into setup-choice,
+ * or ends the route once a confirmed Enterprise workspace has removed that step.
+ * Advancing from it before the workspace resolves could show setup-choice to a
+ * managed user, so the flow holds Continue there until resolution lands.
  */
-export function shouldOfferOnboardingLogout({
-  isSignedIn,
-  authPath,
-}: {
-  isSignedIn: boolean;
-  authPath: OnboardingAuthPath;
-}): boolean {
-  return isSignedIn && authPath === "account";
+export function isSetupDecisionStep(stepId: OnboardingStepId, route: OnboardingStepId[]): boolean {
+  const setupChoiceIndex = route.indexOf("setup-choice");
+  const decisionStep = setupChoiceIndex === -1 ? route.at(-1) : route[setupChoiceIndex - 1];
+  return stepId === decisionStep;
 }
 
 export function isOnboardingStepId(value: unknown): value is OnboardingStepId {
