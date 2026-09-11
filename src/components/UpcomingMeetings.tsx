@@ -171,6 +171,18 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
     window.electronAPI?.joinCalendarMeeting?.(event.id);
   };
 
+  const joinButton = (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={startNotes}
+      className="pointer-events-auto h-7 shrink-0 gap-1.5 rounded-full bg-surface-3 px-3 text-xs text-foreground hover:bg-surface-raised dark:bg-surface-2 dark:hover:bg-surface-3"
+    >
+      {joinUrl ? <Video size={12} /> : <Mic size={12} />}
+      {joinUrl ? t("upcoming.joinAndTranscribe") : t("upcoming.takeNotes")}
+    </Button>
+  );
+
   return (
     <div className="group/event relative flex items-center gap-3 px-1 py-2">
       {attendees.length > 1 ? (
@@ -202,20 +214,17 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
         )}
       </div>
       {/* Always shown once the meeting is live; otherwise revealed on hover so you can join early. */}
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={startNotes}
-        className={cn(
-          "h-7 shrink-0 gap-1.5 rounded-full bg-surface-3 px-3 text-xs text-foreground hover:bg-surface-raised dark:bg-surface-2 dark:hover:bg-surface-3",
-          // Overlaid rather than in flow so the row keeps its full width until hovered.
-          !isNow &&
-            "absolute end-1 top-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover/event:opacity-100 focus-visible:opacity-100"
-        )}
-      >
-        {joinUrl ? <Video size={12} /> : <Mic size={12} />}
-        {joinUrl ? t("upcoming.joinAndTranscribe") : t("upcoming.takeNotes")}
-      </Button>
+      {isNow ? (
+        joinButton
+      ) : (
+        <span
+          // Overlaid so the row keeps its full width until hovered; the scrim fades the
+          // covered end of a long title out instead of slicing it.
+          className="pointer-events-none absolute inset-y-0 end-0 flex items-center bg-linear-to-r from-transparent to-background to-[2rem] ps-8 pe-1 opacity-0 transition-opacity duration-150 group-hover/event:opacity-100 has-[:focus-visible]:opacity-100 dark:to-surface-2"
+        >
+          {joinButton}
+        </span>
+      )}
     </div>
   );
 }
