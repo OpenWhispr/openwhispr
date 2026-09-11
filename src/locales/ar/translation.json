@@ -1350,7 +1350,8 @@
       "stopListening": "إيقاف الاستماع",
       "startListening": "بدء الاستماع",
       "hideForNow": "إخفاء الآن",
-      "askAssistant": "اسأل المساعد"
+      "askAssistant": "اسأل المساعد",
+      "startMeetingRecording": "بدء تسجيل الاجتماع"
     }
   },
   "calendar": {

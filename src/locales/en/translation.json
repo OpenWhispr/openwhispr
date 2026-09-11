@@ -3696,7 +3696,8 @@
       "stopListening": "Stop listening",
       "startListening": "Start listening",
       "hideForNow": "Hide for now",
-      "askAssistant": "Ask Assistant"
+      "askAssistant": "Ask Assistant",
+      "startMeetingRecording": "Start meeting recording"
     }
   },
   "dictationAgent": {

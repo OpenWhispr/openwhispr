@@ -16,6 +16,7 @@ import { useWindowResizeCompensation } from "./hooks/useWindowResizeCompensation
 import { useSettingsStore } from "./stores/settingsStore";
 import { isAgentAllowed } from "./stores/policyRules";
 import { usePolicyStore } from "./stores/policyStore";
+import { useTranscriptionContextAllowed } from "./hooks/usePolicy";
 import { VoicePill } from "./components/dictation/VoicePill";
 import { AssistantPanel } from "./components/dictation/AssistantPanel";
 import { LiveTranscriptPanel } from "./components/dictation/LiveTranscriptPanel";
@@ -112,6 +113,7 @@ export default function App() {
   useMainProcessNotifications({ toast, dismiss, t });
 
   const agentAllowed = usePolicyStore(isAgentAllowed);
+  const meetingAllowed = useTranscriptionContextAllowed("meeting");
 
   const mainWindowResizeCoordinatorRef = useRef(null);
   useEffect(() => {
@@ -172,7 +174,11 @@ export default function App() {
     recordingControlsRef,
     onPanelOpened,
   });
-  const { noteDictationError, openRef: assistantOpenRef } = assistant;
+  const {
+    noteDictationError,
+    openRef: assistantOpenRef,
+    openPanel: openAssistantPanel,
+  } = assistant;
 
   const handleDictationError = React.useCallback(
     (options = {}) => {
@@ -370,6 +376,17 @@ export default function App() {
     });
     return () => unsubscribe?.();
   }, [isRecording, isPreparing, isProcessing, cancelRecording, cancelProcessing]);
+
+  // The tray's Ask Assistant is the pill menu's action, so it follows the pill
+  // menu's availability: agent allowed, not recording, no panel mounted.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onOpenAssistantPanel?.(() => {
+      if (!agentAllowed || isRecording || assistant.mounted || liveTranscript.mounted) return;
+      setIsCommandMenuOpen(false);
+      openAssistantPanel();
+    });
+    return () => unsubscribe?.();
+  }, [agentAllowed, isRecording, assistant.mounted, liveTranscript.mounted, openAssistantPanel]);
 
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {
@@ -722,6 +739,7 @@ export default function App() {
               buttonRef={buttonRef}
               isRecording={isRecording}
               agentAllowed={agentAllowed}
+              meetingAllowed={meetingAllowed}
               isHovered={isHovered}
               setWindowInteractivity={setWindowInteractivity}
               onToggleListening={() => {
@@ -729,7 +747,11 @@ export default function App() {
               }}
               onAskAssistant={() => {
                 setIsCommandMenuOpen(false);
-                assistant.openPanel();
+                openAssistantPanel();
+              }}
+              onStartMeeting={() => {
+                setIsCommandMenuOpen(false);
+                window.electronAPI.startManualMeeting();
               }}
               onHide={() => {
                 setIsCommandMenuOpen(false);

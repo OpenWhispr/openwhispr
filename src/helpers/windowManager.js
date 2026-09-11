@@ -837,11 +837,21 @@ class WindowManager {
     return isOnboardingInputAllowed(this._onboardingActive, this._onboardingDemoKind, inputKind);
   }
 
-  // Public gate for main.js's meeting hotkey call sites, which invoke the
-  // detection engine directly rather than routing through a send method here.
   // "meeting" is never a demo kind, so this is simply "not during onboarding".
   isMeetingInputAllowed() {
     return this._isOnboardingInputAllowed("meeting");
+  }
+
+  // The one entry for starting a meeting by hand: the meeting hotkey, the pill's
+  // command menu, and the tray. Fails closed during onboarding and while a
+  // hotkey is being captured, like every hotkey slot.
+  async startManualMeeting() {
+    if (this.hotkeyManager.isInListeningMode() || !this.isMeetingInputAllowed()) return;
+    try {
+      await this.meetingDetectionEngine?.startManualMeeting();
+    } catch (error) {
+      debugLogger.error("Failed to start manual meeting", { error: error.message }, "meeting");
+    }
   }
 
   // Visibility is part of "available": a ready pill that is merely hidden
@@ -986,6 +996,15 @@ class WindowManager {
 
   sendToggleTranslation() {
     this._sendDictationToggle("toggle-translation", "translation");
+  }
+
+  // The pill's Ask Assistant for surfaces outside the pill (the tray); the
+  // renderer applies the pill menu's availability rules on arrival.
+  sendOpenAssistantPanel() {
+    if (!this._isOnboardingInputAllowed("assistant")) return;
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.showDictationPanel({ focus: true });
+    this.mainWindow.webContents.send("open-assistant-panel");
   }
 
   sendStartDictation() {

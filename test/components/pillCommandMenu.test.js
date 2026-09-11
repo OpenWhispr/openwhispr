@@ -17,10 +17,12 @@ async function renderMenu(t, props) {
       buttonRef: { current: null },
       isRecording: false,
       agentAllowed: true,
+      meetingAllowed: true,
       isHovered: false,
       setWindowInteractivity: () => {},
       onToggleListening: () => {},
       onAskAssistant: () => {},
+      onStartMeeting: () => {},
       onHide: () => {},
       onClose: () => {},
       ...props,
@@ -34,4 +36,10 @@ test("the command menu hides Ask Assistant while a recording is active", async (
 
   const recordingMarkup = await renderMenu(t, { isRecording: true });
   assert.doesNotMatch(recordingMarkup, /askAssistant/);
+});
+
+test("the command menu offers a meeting recording only while idle and allowed", async (t) => {
+  assert.match(await renderMenu(t, {}), /startMeetingRecording/);
+  assert.doesNotMatch(await renderMenu(t, { isRecording: true }), /startMeetingRecording/);
+  assert.doesNotMatch(await renderMenu(t, { meetingAllowed: false }), /startMeetingRecording/);
 });

@@ -3527,7 +3527,8 @@
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示",
-      "askAssistant": "アシスタントに質問"
+      "askAssistant": "アシスタントに質問",
+      "startMeetingRecording": "ミーティングの録音を開始"
     }
   },
   "dictationAgent": {

@@ -3573,7 +3573,8 @@
       "stopListening": "Остановить запись",
       "startListening": "Начать запись",
       "hideForNow": "Скрыть",
-      "askAssistant": "Спросить помощника"
+      "askAssistant": "Спросить помощника",
+      "startMeetingRecording": "Начать запись встречи"
     }
   },
   "dictationAgent": {

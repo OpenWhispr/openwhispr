@@ -763,3 +763,45 @@ test("a detection card whose load fails releases that detection", async () => {
   await assert.rejects(showPromise, /load failed/);
   assert.deepEqual(closedDetections, ["audio:sustained-audio"]);
 });
+
+test("manual meeting starts fail closed like the meeting hotkey", async () => {
+  let starts = 0;
+  const engine = { startManualMeeting: async () => (starts += 1) };
+
+  const onboarding = new WindowManager();
+  onboarding.meetingDetectionEngine = engine;
+  await onboarding.startManualMeeting();
+  assert.equal(starts, 0);
+
+  const manager = createNormalWindowManager();
+  manager.meetingDetectionEngine = engine;
+  manager.hotkeyManager.isInListeningMode = () => true;
+  await manager.startManualMeeting();
+  assert.equal(starts, 0);
+
+  manager.hotkeyManager.isInListeningMode = () => false;
+  await manager.startManualMeeting();
+  assert.equal(starts, 1);
+});
+
+test("the tray's Ask Assistant focuses the pill before asking for the panel", () => {
+  const fakeMainWindow = (events) => ({
+    isDestroyed: () => false,
+    isMinimized: () => false,
+    isVisible: () => true,
+    focus: () => events.push("focus"),
+    webContents: { send: (channel) => events.push(channel) },
+  });
+
+  const onboardingEvents = [];
+  const onboarding = new WindowManager();
+  onboarding.mainWindow = fakeMainWindow(onboardingEvents);
+  onboarding.sendOpenAssistantPanel();
+  assert.deepEqual(onboardingEvents, []);
+
+  const events = [];
+  const manager = createNormalWindowManager();
+  manager.mainWindow = fakeMainWindow(events);
+  manager.sendOpenAssistantPanel();
+  assert.deepEqual(events, ["focus", "open-assistant-panel"]);
+});

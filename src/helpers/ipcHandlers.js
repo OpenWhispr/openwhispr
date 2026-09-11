@@ -11479,6 +11479,8 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("start-manual-meeting", () => this.windowManager.startManualMeeting());
+
     ipcMain.handle("get-meeting-notification-data", async () => {
       return this.windowManager?._pendingNotificationData ?? null;
     });

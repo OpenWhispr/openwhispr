@@ -3696,7 +3696,8 @@
       "stopListening": "Arrêter l’écoute",
       "startListening": "Commencer l’écoute",
       "hideForNow": "Masquer pour l’instant",
-      "askAssistant": "Demander à l'assistant"
+      "askAssistant": "Demander à l'assistant",
+      "startMeetingRecording": "Démarrer l’enregistrement de la réunion"
     }
   },
   "dictationAgent": {

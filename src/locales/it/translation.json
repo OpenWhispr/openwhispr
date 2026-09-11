@@ -3527,7 +3527,8 @@
       "stopListening": "Smetti di ascoltare",
       "startListening": "Inizia ad ascoltare",
       "hideForNow": "Nascondi per ora",
-      "askAssistant": "Chiedi all'assistente"
+      "askAssistant": "Chiedi all'assistente",
+      "startMeetingRecording": "Avvia registrazione meeting"
     }
   },
   "dictationAgent": {

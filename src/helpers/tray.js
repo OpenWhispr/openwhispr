@@ -256,6 +256,19 @@ class TrayManager {
 
     return [
       {
+        label: i18nMain.t("app.commandMenu.startListening"),
+        click: () => this.windowManager?.sendStartDictation(),
+      },
+      {
+        label: i18nMain.t("app.commandMenu.askAssistant"),
+        click: () => this.windowManager?.sendOpenAssistantPanel(),
+      },
+      {
+        label: i18nMain.t("app.commandMenu.startMeetingRecording"),
+        click: () => void this.windowManager?.startManualMeeting(),
+      },
+      { type: "separator" },
+      {
         label: dictationVisible
           ? i18nMain.t("tray.toggleDictation.hide")
           : i18nMain.t("tray.toggleDictation.show"),

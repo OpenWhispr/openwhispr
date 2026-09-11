@@ -3527,7 +3527,8 @@
       "stopListening": "停止录音",
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏",
-      "askAssistant": "询问助手"
+      "askAssistant": "询问助手",
+      "startMeetingRecording": "开始会议录音"
     }
   },
   "dictationAgent": {
