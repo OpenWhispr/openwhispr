@@ -33,6 +33,7 @@ import {
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
+import { openCodeSessionHeaders } from "./ai/openCodeSession";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
@@ -319,6 +320,9 @@ class ReasoningService extends BaseReasoningService {
       requestBody: JSON.stringify(requestBody).substring(0, 200),
     });
 
+    // Minted before the retry loop so every attempt of this call is one conversation.
+    const openCodeHeaders = openCodeSessionHeaders(endpoint);
+
     const requestGeneration = this.requestCancellationGeneration;
     const response = await withRetry(async () => {
       if (requestGeneration !== this.requestCancellationGeneration) {
@@ -331,6 +335,7 @@ class ReasoningService extends BaseReasoningService {
       try {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
+          ...openCodeHeaders,
         };
         if (apiKey) {
           headers["Authorization"] = `Bearer ${apiKey}`;
@@ -621,6 +626,7 @@ class ReasoningService extends BaseReasoningService {
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      ...openCodeSessionHeaders(endpoint),
     };
     if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`;
