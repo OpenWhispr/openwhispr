@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Automatic updates replace the update popup.** A new Automatic updates toggle under Settings → System downloads updates in the background and installs them when the app next quits. It is on for new installs; existing installs keep the manual download-and-install flow until they opt in. Turning it off also stops the periodic update checks, so offline or firewalled machines never reach the update feed. The update-available popup, the sidebar Update Available button, and the App updates notification toggle are gone; Settings → System remains the place to check for and install updates by hand. On Linux the toggle and the check only appear for AppImage installs, since deb, rpm and tar.gz packages are updated by the package manager.
 
+### Fixed
+
+- **Back to notes works in narrow windows.** The button only handled meeting mode, so with a note open in a narrow window it did nothing. It now returns to the notes list.
+- **Smoother notification swipe.** The meeting notification card follows your pointer, fades as it goes, and leaves through the edge you dragged it toward. The window no longer shows scrollbars mid-animation, and on macOS it now sits above every other window, including OpenWhispr's own floating panels.
+
 ## [1.10.0] - 2026-09-10
 
 Managed enterprise speech-to-text arrives for workspaces on Azure OpenAI or AI Foundry: a deployment an administrator distributes to every member, with no API keys on user machines. Transcription also gains streaming from Deepgram, AssemblyAI and Gemini Live, Cohere Transcribe as a local engine, and gpt-transcribe as the OpenAI default now that whisper-1 and the gpt-4o transcribe models are on their way out. Onboarding was rebuilt to preserve progress, Insights gains an opt-in leaderboard, and Astra and Fable 5.1 join the reasoning models.
