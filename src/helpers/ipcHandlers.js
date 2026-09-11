@@ -3866,6 +3866,22 @@ class IPCHandlers {
       return this.diarizationManager.cancelDownload();
     });
 
+    // The renderer calls this after cleanup-app, which closes the database and stops
+    // local services for good. `npm run dev` stops the Vite server once Electron
+    // exits, so a relaunched dev instance would have no renderer: just quit there.
+    ipcMain.handle("relaunch-app", () => {
+      if (process.env.NODE_ENV !== "development") {
+        app.relaunch(
+          getRelaunchOptions({
+            argv: process.argv,
+            protocol: this.oauthProtocol,
+            appImagePath: process.env.APPIMAGE,
+          })
+        );
+      }
+      app.quit();
+    });
+
     ipcMain.handle("cleanup-app", async (event) => {
       const fs = require("fs");
       const os = require("os");
@@ -4057,19 +4073,6 @@ class IPCHandlers {
       }
 
       return { success: errors.length === 0, message: "Cleanup completed", errors };
-    });
-
-    // cleanup-app leaves the database closed and local services stopped, and nothing
-    // reopens them in this process, so the renderer follows it with a full relaunch.
-    ipcMain.handle("relaunch-app", () => {
-      // `npm run dev` stops the Vite server once Electron exits, so a relaunched dev
-      // instance would come up without its renderer. Just quit there.
-      if (process.env.NODE_ENV !== "development") {
-        app.relaunch(
-          getRelaunchOptions({ argv: process.argv, appImagePath: process.env.APPIMAGE })
-        );
-      }
-      app.quit();
     });
 
     ipcMain.handle("update-hotkey", async (event, hotkey) => {

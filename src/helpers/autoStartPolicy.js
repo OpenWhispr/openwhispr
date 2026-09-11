@@ -45,11 +45,15 @@ function wasLaunchedHidden({ platform, argv, loginItemSettings }) {
   return argv.includes(HIDDEN_LAUNCH_FLAG);
 }
 
-// A relaunch is the user restarting us, so it must not inherit the flag that sent a
-// login launch to the tray. On AppImage, execPath is the FUSE mount, which is gone
-// once this process exits, so the relaunch has to start the AppImage file itself.
-function getRelaunchOptions({ argv, appImagePath }) {
-  const args = argv.slice(1).filter((arg) => arg !== HIDDEN_LAUNCH_FLAG);
+// A relaunch is the user restarting us, so it must not replay how this process was
+// launched: the flag that sent a login launch to the tray, or a deep link, which
+// startup handles again (a sign-in link would restore the session a reset cleared).
+// On AppImage, execPath is the FUSE mount, which is gone once this process exits, so
+// the relaunch has to start the AppImage file itself.
+function getRelaunchOptions({ argv, protocol, appImagePath }) {
+  const args = argv
+    .slice(1)
+    .filter((arg) => arg !== HIDDEN_LAUNCH_FLAG && !arg.startsWith(`${protocol}://`));
   return appImagePath ? { execPath: appImagePath, args } : { args };
 }
 

@@ -2026,7 +2026,7 @@ export default function SettingsPage({
             ? t("settingsPage.account.deleteAccount.partialCleanupDescription")
             : t("settingsPage.account.deleteAccount.successDescription"),
       });
-      // Erasing device data also tears down the main process, which only a relaunch restores.
+      // Erasing device data closes the database and stops services; only a relaunch restores them.
       setTimeout(() => {
         if (eraseDeviceData) {
           window.electronAPI?.relaunchApp();

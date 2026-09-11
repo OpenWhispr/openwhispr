@@ -1970,7 +1970,6 @@ declare global {
       setAssistantPanelBusy: (busy: boolean) => Promise<{ success: boolean }>;
 
       // App management
-      // cleanupApp closes the database and stops local services; relaunchApp brings them back.
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
       relaunchApp: () => Promise<void>;
 
