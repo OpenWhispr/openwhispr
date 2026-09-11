@@ -1823,10 +1823,10 @@
       "removing": "正在删除...",
       "resetAll": {
         "confirmText": "删除所有数据",
-        "description": "这将永久删除所有本地设置、转录、音频录制、下载的 AI 模型、日历连接和缓存数据。云端数据和您的账户不会受到影响。应用将在重置后重新加载。",
+        "description": "这将永久删除所有本地设置、转录、音频录制、下载的 AI 模型、日历连接和缓存数据。云端数据和您的账户不会受到影响。应用将在重置后重新启动。",
         "failedDescription": "出了点问题，请重试或重新安装应用。",
         "failedTitle": "无法重置",
-        "successDescription": "所有数据已重置，应用将立即重新加载。",
+        "successDescription": "所有数据已重置，应用将立即重新启动。",
         "successTitle": "全部完成",
         "title": "重置所有应用数据"
       },

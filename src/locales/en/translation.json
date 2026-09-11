@@ -2116,10 +2116,10 @@
       "removing": "Removing...",
       "resetAll": {
         "confirmText": "Delete Everything",
-        "description": "This will permanently delete all local settings, transcriptions, audio recordings, downloaded AI models, calendar connections, and cached data. Cloud data and your account will not be affected. The app will reload after reset.",
+        "description": "This will permanently delete all local settings, transcriptions, audio recordings, downloaded AI models, calendar connections, and cached data. Cloud data and your account will not be affected. The app will restart after reset.",
         "failedDescription": "Something went wrong. Please try again or reinstall the app.",
         "failedTitle": "Couldn't reset",
-        "successDescription": "Everything has been reset. The app will reload now.",
+        "successDescription": "Everything has been reset. The app will restart now.",
         "successTitle": "All done",
         "title": "Reset All App Data"
       },

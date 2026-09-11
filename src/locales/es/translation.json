@@ -1876,10 +1876,10 @@
       "removing": "Eliminando...",
       "resetAll": {
         "confirmText": "Eliminar todo",
-        "description": "Esta acción eliminará permanentemente todas las configuraciones locales, transcripciones, grabaciones de audio, modelos de IA descargados, conexiones de calendario y datos en caché. Los datos en la nube y tu cuenta no se verán afectados. La aplicación se recargará después del restablecimiento.",
+        "description": "Esta acción eliminará permanentemente todas las configuraciones locales, transcripciones, grabaciones de audio, modelos de IA descargados, conexiones de calendario y datos en caché. Los datos en la nube y tu cuenta no se verán afectados. La aplicación se reiniciará después del restablecimiento.",
         "failedDescription": "Algo salió mal. Inténtalo de nuevo o reinstala la app.",
         "failedTitle": "No se pudo restablecer",
-        "successDescription": "Todo ha sido restablecido. La app se recargará ahora.",
+        "successDescription": "Todo ha sido restablecido. La app se reiniciará ahora.",
         "successTitle": "Completado",
         "title": "Restablecer todos los datos de la app"
       },

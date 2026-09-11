@@ -1802,10 +1802,10 @@
       "removing": "Removendo...",
       "resetAll": {
         "confirmText": "Excluir tudo",
-        "description": "Isso excluirá permanentemente todas as configurações locais, transcrições, gravações de áudio, modelos de IA baixados, conexões de calendário e dados em cache. Os dados na nuvem e sua conta não serão afetados. O aplicativo será recarregado após a redefinição.",
+        "description": "Isso excluirá permanentemente todas as configurações locais, transcrições, gravações de áudio, modelos de IA baixados, conexões de calendário e dados em cache. Os dados na nuvem e sua conta não serão afetados. O aplicativo será reiniciado após a redefinição.",
         "failedDescription": "Algo deu errado. Tente novamente ou reinstale o app.",
         "failedTitle": "Não foi possível redefinir",
-        "successDescription": "Tudo foi redefinido. O app será recarregado agora.",
+        "successDescription": "Tudo foi redefinido. O app será reiniciado agora.",
         "successTitle": "Tudo pronto",
         "title": "Redefinir todos os dados do app"
       },

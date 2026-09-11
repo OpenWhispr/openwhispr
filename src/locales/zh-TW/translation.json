@@ -1823,10 +1823,10 @@
       "removing": "移除中...",
       "resetAll": {
         "confirmText": "刪除所有資料",
-        "description": "這將永久刪除所有本地設定、轉錄、音訊錄製、下載的 AI 模型、行事曆連線和快取資料。雲端資料和您的帳戶不會受到影響。應用程式將在重設後重新載入。",
+        "description": "這將永久刪除所有本地設定、轉錄、音訊錄製、下載的 AI 模型、行事曆連線和快取資料。雲端資料和您的帳戶不會受到影響。應用程式將在重設後重新啟動。",
         "failedDescription": "發生錯誤。請再試一次或重新安裝應用程式。",
         "failedTitle": "無法重設",
-        "successDescription": "所有資料已重設。應用程式即將重新載入。",
+        "successDescription": "所有資料已重設。應用程式即將重新啟動。",
         "successTitle": "完成",
         "title": "重設所有應用程式資料"
       },
