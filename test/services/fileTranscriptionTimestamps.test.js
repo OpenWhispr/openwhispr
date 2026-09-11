@@ -61,4 +61,25 @@ test("timestamps opt-in reaches the BYOK IPC call and segments flow back", async
   assert.equal(receivedOptions.timestamps, true);
   assert.deepEqual(withSpeakers.segments, segments);
   assert.equal(withSpeakers.durationSeconds, 120);
+
+  let mergedDurationPassed = null;
+  window.electronAPI.diarizeAudioFile = async () => ({
+    success: true,
+    durationSeconds: 150,
+    segments: [{ speaker: "speaker_0", start: 0, end: 100 }],
+  });
+  window.electronAPI.mergeSpeakerText = async (_segments, text, duration) => {
+    mergedDurationPassed = duration;
+    return { success: true, text: `[Speaker 1] ${text}` };
+  };
+
+  const localDiarizeConfig = { ...byokConfig(), cloudTranscriptionProvider: "groq" };
+  const withMeasuredDuration = await transcribeFileWithSpeakers(
+    "/tmp/audio.webm",
+    localDiarizeConfig,
+    { enabled: true, localModelsReady: true, numSpeakers: null }
+  );
+  assert.equal(mergedDurationPassed, 150);
+  assert.equal(withMeasuredDuration.durationSeconds, 150);
+  assert.equal(withMeasuredDuration.text, "[Speaker 1] Hello.");
 });
