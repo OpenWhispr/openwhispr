@@ -226,10 +226,10 @@
         "description": "Select all that apply. This helps OpenWhispr recognize language switches more accurately."
       },
       "dictationHotkey": {
-        "title": "Set up your keyboard shortcut",
-        "titleLineOne": "Set up your",
-        "titleLineTwo": "keyboard shortcut",
-        "description": "Choose a keyboard shortcut to start and stop dictation from anywhere."
+        "title": "Choose your dictation shortcut",
+        "titleLineOne": "Choose your",
+        "titleLineTwo": "dictation shortcut",
+        "description": "Press it whenever you want to talk instead of type. Works in any app."
       },
       "assistantHotkey": {
         "title": "Set up OpenWhispr Assistant",
@@ -238,7 +238,7 @@
         "description": "Speak a request, and OpenWhispr Assistant writes the result for you."
       },
       "hotkey": {
-        "capture": "Press the keys you want to use",
+        "capture": "Press the key you want to use",
         "chooseAnother": "Choose another shortcut",
         "confirmAgain": "Press {{hotkey}} again to confirm",
         "inUse": "That shortcut is already in use. Choose another one.",

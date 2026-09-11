@@ -145,10 +145,17 @@ export const resolveOnboardingDictationHotkey = ({
 export const resolveOnboardingAssistantHotkey = (savedHotkey: string): string =>
   savedHotkey || DEFAULT_ASSISTANT_ONBOARDING_HOTKEY;
 
+/**
+ * One-key picks lead where the platform has a spare key. macOS keyboards have a
+ * right Option nobody types with; Windows keyboards have a right Ctrl, while
+ * right Alt is AltGr on many layouts. Linux stays on what main could register —
+ * a lone right modifier needs input-device access there.
+ */
 export const getRecommendedDictationHotkeys = (
   platform: Platform,
   effectiveDefault: string
-): string[] =>
-  platform === "darwin"
-    ? [MACOS_DEFAULT_ONBOARDING_HOTKEY, "GLOBE", "Control+R"]
-    : [effectiveDefault];
+): string[] => {
+  if (platform === "darwin") return [MACOS_DEFAULT_ONBOARDING_HOTKEY, "GLOBE", "Control+R"];
+  if (platform === "win32") return ["RightControl", effectiveDefault];
+  return [effectiveDefault];
+};

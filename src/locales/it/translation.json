@@ -226,10 +226,10 @@
         "description": "Seleziona tutte le opzioni pertinenti. Questo aiuta OpenWhispr a riconoscere i cambi di lingua con maggiore precisione."
       },
       "dictationHotkey": {
-        "title": "Configura la tua scorciatoia da tastiera",
-        "titleLineOne": "Configura la",
-        "titleLineTwo": "scorciatoia da tastiera",
-        "description": "Scegli una scorciatoia da tastiera per avviare e interrompere la dettatura da qualsiasi punto."
+        "title": "Scegli la tua scorciatoia per dettare",
+        "titleLineOne": "Scegli la tua",
+        "titleLineTwo": "scorciatoia per dettare",
+        "description": "Premila quando vuoi parlare invece di scrivere. Funziona in qualsiasi app."
       },
       "assistantHotkey": {
         "title": "Configura OpenWhispr Assistant",
@@ -238,7 +238,7 @@
         "description": "Pronuncia una richiesta e OpenWhispr Assistant scrive il risultato per te."
       },
       "hotkey": {
-        "capture": "Premi i tasti che vuoi usare",
+        "capture": "Premi il tasto che vuoi usare",
         "chooseAnother": "Scegli un’altra scorciatoia",
         "confirmAgain": "Premi di nuovo {{hotkey}} per confermare",
         "inUse": "Questa scorciatoia è già in uso. Scegline un’altra.",

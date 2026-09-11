@@ -226,10 +226,10 @@
         "description": "選擇所有適用的語言。這有助於 OpenWhispr 更準確地辨識語言切換。"
       },
       "dictationHotkey": {
-        "title": "設定鍵盤快速鍵",
-        "titleLineOne": "設定你的",
-        "titleLineTwo": "鍵盤快速鍵",
-        "description": "選擇一個鍵盤快速鍵，隨時開始和停止聽寫。"
+        "title": "選擇你的聽寫快速鍵",
+        "titleLineOne": "選擇你的",
+        "titleLineTwo": "聽寫快速鍵",
+        "description": "想用說話取代打字時按下它。在任何 App 中都能用。"
       },
       "assistantHotkey": {
         "title": "設定 OpenWhispr Assistant",

@@ -205,10 +205,10 @@
         "description": "Selecione todas as opções aplicáveis. Isso ajuda o OpenWhispr a reconhecer trocas de idioma com mais precisão."
       },
       "dictationHotkey": {
-        "title": "Configure seu atalho de teclado",
-        "titleLineOne": "Configure seu",
-        "titleLineTwo": "atalho de teclado",
-        "description": "Escolha um atalho de teclado para iniciar e parar o ditado de qualquer lugar."
+        "title": "Escolha seu atalho de ditado",
+        "titleLineOne": "Escolha seu",
+        "titleLineTwo": "atalho de ditado",
+        "description": "Pressione-o sempre que quiser falar em vez de digitar. Funciona em qualquer app."
       },
       "assistantHotkey": {
         "title": "Configure o OpenWhispr Assistant",
@@ -217,7 +217,7 @@
         "description": "Fale um pedido e o OpenWhispr Assistant escreve o resultado para você."
       },
       "hotkey": {
-        "capture": "Pressione as teclas que você quer usar",
+        "capture": "Pressione a tecla que você quer usar",
         "chooseAnother": "Escolher outro atalho",
         "confirmAgain": "Pressione {{hotkey}} novamente para confirmar",
         "inUse": "Esse atalho já está em uso. Escolha outro.",

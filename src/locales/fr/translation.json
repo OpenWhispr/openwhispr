@@ -226,10 +226,10 @@
         "description": "Sélectionnez toutes les langues concernées. Cela aide OpenWhispr à reconnaître plus précisément les changements de langue."
       },
       "dictationHotkey": {
-        "title": "Configurez votre raccourci clavier",
-        "titleLineOne": "Configurez votre",
-        "titleLineTwo": "raccourci clavier",
-        "description": "Choisissez un raccourci clavier pour démarrer et arrêter la dictée depuis n’importe où."
+        "title": "Choisissez votre raccourci de dictée",
+        "titleLineOne": "Choisissez votre",
+        "titleLineTwo": "raccourci de dictée",
+        "description": "Appuyez dessus quand vous voulez parler plutôt que taper. Fonctionne dans toutes les applications."
       },
       "assistantHotkey": {
         "title": "Configurer OpenWhispr Assistant",
@@ -238,7 +238,7 @@
         "description": "Formulez une demande et OpenWhispr Assistant rédige le résultat pour vous."
       },
       "hotkey": {
-        "capture": "Appuyez sur les touches que vous souhaitez utiliser",
+        "capture": "Appuyez sur la touche que vous souhaitez utiliser",
         "chooseAnother": "Choisir un autre raccourci",
         "confirmAgain": "Appuyez à nouveau sur {{hotkey}} pour confirmer",
         "inUse": "Ce raccourci est déjà utilisé. Choisissez-en un autre.",

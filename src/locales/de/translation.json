@@ -226,10 +226,10 @@
         "description": "Wählen Sie alle zutreffenden aus. Das hilft OpenWhispr, Sprachwechsel genauer zu erkennen."
       },
       "dictationHotkey": {
-        "title": "Richten Sie Ihr Tastenkürzel ein",
-        "titleLineOne": "Tastenkürzel",
-        "titleLineTwo": "einrichten",
-        "description": "Wählen Sie ein Tastenkürzel, um das Diktieren von überall zu starten und zu stoppen."
+        "title": "Wählen Sie Ihr Diktier-Tastenkürzel",
+        "titleLineOne": "Wählen Sie Ihr",
+        "titleLineTwo": "Diktier-Tastenkürzel",
+        "description": "Drücken Sie es, wann immer Sie sprechen statt tippen möchten. Funktioniert in jeder App."
       },
       "assistantHotkey": {
         "title": "OpenWhispr Assistant einrichten",
@@ -238,7 +238,7 @@
         "description": "Sprechen Sie eine Anfrage aus, und OpenWhispr Assistant schreibt das Ergebnis für Sie."
       },
       "hotkey": {
-        "capture": "Drücken Sie die Tasten, die Sie verwenden möchten",
+        "capture": "Drücken Sie die Taste, die Sie verwenden möchten",
         "chooseAnother": "Anderes Tastenkürzel wählen",
         "confirmAgain": "Drücke {{hotkey}} erneut zum Bestätigen",
         "inUse": "Dieses Tastenkürzel wird bereits verwendet. Wähle ein anderes.",
