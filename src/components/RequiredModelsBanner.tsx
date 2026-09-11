@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "./icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { DownloadProgressBar } from "./ui/DownloadProgressBar";

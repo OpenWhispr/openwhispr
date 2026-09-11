@@ -12,12 +12,13 @@ import assistantPreview from "../../assets/onboarding-assistant-preview.webp";
  * reads for meaning.
  *
  * This stays above the shortcut controls and outside the shrinking flex pool.
- * The frame crops a lightly enlarged image so no export edge or component
- * border is visible around the artwork.
+ * The frame is a fixed band rather than the export's 16:9 (at full height the
+ * step scrolled) and crops a lightly enlarged image biased toward the top, so
+ * the spoken request and mail window stay in view with no export edge showing.
  */
 export default function AssistantHotkeyPreview() {
   return (
-    <div className="mx-auto mt-3 aspect-video w-full max-w-[30rem] shrink-0 overflow-hidden rounded-2xl">
+    <div className="mx-auto mt-3 h-56 w-full max-w-[30rem] shrink-0 overflow-hidden rounded-2xl">
       <img
         src={assistantPreview}
         alt=""
@@ -26,7 +27,7 @@ export default function AssistantHotkeyPreview() {
         height={318}
         decoding="async"
         draggable={false}
-        className="h-full w-full scale-105 select-none object-cover"
+        className="h-full w-full scale-105 select-none object-cover object-[50%_35%]"
       />
     </div>
   );

@@ -1,8 +1,12 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Monitor } from "lucide-react";
+import { Monitor } from "../icons";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules";
+import {
+  isAgentAllowed,
+  isModeAllowedByPolicy,
+  isScreenContextAllowed,
+} from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { useAgentName } from "../../utils/agentName";
 import { useDialogs } from "../../hooks/useDialogs";
@@ -34,6 +38,9 @@ export default function DictationAgentSettings() {
   } = useScreenRecordingPermission();
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
+  const visionOverrideAllowed = usePolicyStore((state) =>
+    isModeAllowedByPolicy(state, "llm", "providers")
+  );
   // Display the effective value: an org that forces the feature off shows the
   // toggle off while the raw preference survives for when the policy lifts.
   const screenContextActive = voiceAgentScreenContext && screenContextAllowed;
@@ -77,7 +84,7 @@ export default function DictationAgentSettings() {
   ];
 
   const voiceAgentSection = (
-    <div className="border-t border-border/40 pt-6 space-y-5">
+    <div className="border-t border-border/70 pt-6 space-y-5">
       <SectionHeader
         title={t("settingsPage.agentConfig.title")}
         description={t("settingsPage.agentConfig.description")}
@@ -92,6 +99,7 @@ export default function DictationAgentSettings() {
             <div className="space-y-3">
               <div className="flex gap-2">
                 <Input
+                  dir="auto"
                   placeholder={t("settingsPage.agentConfig.placeholder")}
                   value={agentNameInput}
                   onChange={(e) => setAgentNameInput(e.target.value)}
@@ -101,7 +109,7 @@ export default function DictationAgentSettings() {
                   {t("settingsPage.agentConfig.save")}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground/60">
+              <p className="text-xs text-muted-foreground/70">
                 {t("settingsPage.agentConfig.helper")}
               </p>
             </div>
@@ -167,7 +175,7 @@ export default function DictationAgentSettings() {
           blocks the agent, since enabling it would grant screen-capture
           permission for a route that can never run. */}
       {useDictationAgent && agentAllowed && (
-        <div className="border-t border-border/40 pt-6 space-y-3">
+        <div className="border-t border-border/70 pt-6 space-y-3">
           <SectionHeader
             title={t("dictationAgent.screenContext.title")}
             description={t("dictationAgent.screenContext.description")}
@@ -191,7 +199,7 @@ export default function DictationAgentSettings() {
                 />
               </SettingsRow>
             </SettingsPanelRow>
-            {screenContextActive && (
+            {screenContextActive && visionOverrideAllowed && (
               <SettingsPanelRow>
                 <SettingsRow
                   label={t("dictationAgent.screenContext.visionModel")}
@@ -220,11 +228,8 @@ export default function DictationAgentSettings() {
               {t("dictationAgent.screenContext.relaunchHint")}
             </p>
           )}
-          {screenContextActive && useDictationAgentVisionModel && (
-            <InferenceConfigEditor
-              scope="dictationAgentVision"
-              allowedModes={["openwhispr", "providers"]}
-            />
+          {screenContextActive && visionOverrideAllowed && useDictationAgentVisionModel && (
+            <InferenceConfigEditor scope="dictationAgentVision" allowedModes={["providers"]} />
           )}
         </div>
       )}
@@ -232,7 +237,7 @@ export default function DictationAgentSettings() {
       {voiceAgentSection}
 
       {useDictationAgent && (
-        <div className="border-t border-border/40 pt-6">
+        <div className="border-t border-border/70 pt-6">
           <SectionHeader
             title={t("dictationAgent.prompt.title")}
             description={t("dictationAgent.prompt.description")}

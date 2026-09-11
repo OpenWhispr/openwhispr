@@ -2,6 +2,7 @@
   "parakeetModels": {
     "parakeet-tdt-0.6b-v3": {
       "name": "Parakeet TDT 0.6B",
+      "sherpaModelType": "nemo_transducer",
       "description": "Fast multilingual ASR with auto language detection",
       "size": "680MB",
       "sizeMb": 680,
@@ -115,6 +116,53 @@
       "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01.tar.bz2",
       "extractDir": "sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01",
       "descriptionKey": "models.descriptions.cohere.cohere_transcribe_03_2026"
+    },
+    "orukeet-v0.1.0": {
+      "name": "Orukeet",
+      "description": "Multilingual Parakeet fine-tune with frozen Gabor kernels",
+      "descriptionKey": "models.descriptions.parakeet.orukeet",
+      "size": "672MB",
+      "sizeMb": 671.6198,
+      "expectedSizeBytes": 486807585,
+      "language": "multilingual",
+      "supportedLanguages": [
+        "bg",
+        "hr",
+        "cs",
+        "da",
+        "nl",
+        "en",
+        "et",
+        "fi",
+        "fr",
+        "de",
+        "el",
+        "hu",
+        "it",
+        "lv",
+        "lt",
+        "mt",
+        "pl",
+        "pt",
+        "ro",
+        "sk",
+        "sl",
+        "es",
+        "sv",
+        "ru",
+        "uk"
+      ],
+      "runtime": "offline",
+      "sherpaModelType": "nemo_transducer",
+      "recommended": true,
+      "extractDir": "sherpa-onnx-orukeet-v0.1.0-int8",
+      "downloadUrl": "https://huggingface.co/oruk/orukeet/resolve/55a984d46f68323301837194ce647c702f55facc/onnx/sherpa-onnx-orukeet-v0.1.0-int8.tar.bz2",
+      "license": "CC-BY-SA-4.0",
+      "organization": {
+        "id": "oruk",
+        "name": "Oruk"
+      },
+      "modelCardUrl": "https://huggingface.co/oruk/orukeet"
     }
   },
   "diarizationModels": {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, UserPlus } from "lucide-react";
+import { Plus, UserPlus } from "../../icons";
 import { useTranslation } from "react-i18next";
 import InviteTeammateDialog from "../../InviteTeammateDialog";
 import { useWorkspaceStore } from "../../../stores/workspaceStore";
@@ -16,6 +16,7 @@ import { ContainerIcon } from "./ContainerIcon";
 import { OverviewExplainerBanner } from "./OverviewExplainerBanner";
 import { OverviewAskSection } from "./OverviewAskSection";
 import { OverviewNoteList } from "./OverviewNoteList";
+import { defaultFolderDisplayName } from "../shared";
 import type { NoteItem, SpaceItem, FolderItem } from "../../../types/electron";
 
 const SPACE_NOTES_LIMIT = 50;
@@ -102,16 +103,16 @@ export function ContainerOverview({
     <div className="flex-1 overflow-y-auto min-h-0">
       <div className="max-w-2xl mx-auto px-6 py-8 flex flex-col gap-5">
         <div className="flex flex-col items-center text-center gap-2 pt-4">
-          <div className="h-12 w-12 rounded-xl bg-foreground/4 dark:bg-white/5 border border-border/25 dark:border-white/8 flex items-center justify-center mb-1">
+          <div className="h-12 w-12 rounded-xl bg-foreground/4 dark:bg-white/5 border border-border/70 dark:border-white/10 flex items-center justify-center mb-1">
             <ContainerIcon space={space} folder={folder} size={20} />
           </div>
           <h1 className="text-xl font-semibold text-foreground tracking-tight">
-            {folder?.name ?? space.name}
+            {folder ? defaultFolderDisplayName(folder, t) : space.name}
           </h1>
-          <p className="text-[13px] text-foreground/50 dark:text-foreground/40">
+          <p className="text-[13px] text-foreground/50 dark:text-foreground/45">
             {t(`notes.overview.subtitle.${space.kind === "team" ? "team" : "private"}`)}
           </p>
-          <p className="text-xs text-foreground/35 dark:text-foreground/25">
+          <p className="text-xs text-foreground/45 dark:text-foreground/45">
             {metaParts.join(" · ")}
           </p>
           <div className="mt-1 flex items-center gap-2">
@@ -119,7 +120,7 @@ export function ContainerOverview({
             {notes.length > 0 && (
               <button
                 onClick={onNewNote}
-                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-border/40 dark:border-white/10 text-xs font-medium text-foreground/60 hover:text-foreground/85 hover:border-border/70 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-border/70 dark:border-white/10 text-xs font-medium text-foreground/60 hover:text-foreground/85 hover:border-border/70 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               >
                 <Plus size={12} />
                 {t("notes.list.newNote")}
@@ -128,7 +129,7 @@ export function ContainerOverview({
             {canInvite && (
               <button
                 onClick={() => setShowInviteDialog(true)}
-                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-border/40 dark:border-white/10 text-xs font-medium text-foreground/60 hover:text-foreground/85 hover:border-border/70 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-border/70 dark:border-white/10 text-xs font-medium text-foreground/60 hover:text-foreground/85 hover:border-border/70 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               >
                 <UserPlus size={12} />
                 {t("notes.overview.invite")}
@@ -151,7 +152,7 @@ export function ContainerOverview({
           onOpenNote={onOpenNote}
         />
 
-        <div className="border-t border-border/20 dark:border-white/5">
+        <div className="border-t border-border/70 dark:border-white/10">
           <OverviewNoteList
             notes={notes}
             space={space}

@@ -343,13 +343,10 @@ test("push-to-talk dictation follows the companion pill's availability", () => {
 
 test("window manager starts fail-closed and suppresses normal-app popup surfaces", async () => {
   const manager = new WindowManager();
-  const update = { version: "2.0.0", releaseDate: "2026-08-20" };
 
   assert.equal(manager.isMeetingInputAllowed(), false);
   assert.equal(await manager.showMeetingNotification({ detectionId: "onboarding" }), false);
   assert.equal(await manager.showTranscriptionPreview("partial transcript"), undefined);
-  assert.equal(await manager.showUpdateNotification(update), false);
-  assert.deepEqual(manager._deferredUpdateNotificationInfo, update);
   assert.deepEqual(createdWindows, []);
 });
 

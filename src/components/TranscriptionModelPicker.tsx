@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "lucide-react";
+import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
 import { ProviderIcon } from "./ui/ProviderIcon";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
@@ -18,7 +18,6 @@ import {
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
   PARAKEET_MODEL_INFO,
-  isCohereTranscribeModel,
   isSherpaLocalProvider,
 } from "../models/ModelRegistry";
 import {
@@ -35,6 +34,12 @@ import {
   type TranscriptionPolicyContext,
 } from "../stores/policyRules";
 import { usePolicySnapshot } from "../hooks/usePolicy";
+import {
+  LOCAL_ASR_ORGANIZATIONS,
+  getASRModelOrganization,
+  getSelectedASROrganization,
+  usesParakeetManager,
+} from "../helpers/localASROrganization";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { createExternalLinkHandler } from "../utils/externalLinks";
@@ -64,6 +69,7 @@ interface LocalModelCardProps {
   recommended?: boolean;
   provider: string;
   languageLabel?: string;
+  modelCardUrl?: string;
   onSelect: () => void;
   onDelete: () => void;
   onDownload: () => void;
@@ -85,6 +91,7 @@ function LocalModelCard({
   recommended,
   provider,
   languageLabel,
+  modelCardUrl,
   onSelect,
   onDelete,
   onDownload,
@@ -101,7 +108,7 @@ function LocalModelCard({
   return (
     <div
       onClick={handleClick}
-      className={`relative w-full text-left overflow-hidden rounded-md border transition-colors duration-200 group ${
+      className={`relative w-full text-start overflow-hidden rounded-md border transition-colors duration-200 group ${
         isSelected ? cardStyles.modelCard.selected : cardStyles.modelCard.default
       } ${isDownloaded && !isSelected ? "cursor-pointer" : ""}`}
     >
@@ -127,14 +134,14 @@ function LocalModelCard({
           <span className="font-semibold text-sm text-foreground truncate tracking-tight">
             {name}
           </span>
-          <span className="text-xs text-muted-foreground/50 tabular-nums shrink-0">
+          <span className="text-xs text-muted-foreground/70 tabular-nums shrink-0">
             {actualSizeMb ? `${actualSizeMb}MB` : size}
           </span>
           {recommended && (
             <span className={cardStyles.badges.recommended}>{t("common.recommended")}</span>
           )}
           {languageLabel && (
-            <span className="text-xs text-muted-foreground/50 font-medium shrink-0">
+            <span className="text-xs text-muted-foreground/70 font-medium shrink-0">
               {languageLabel}
             </span>
           )}
@@ -155,7 +162,7 @@ function LocalModelCard({
                 }}
                 size="sm"
                 variant="ghost"
-                className="h-6 w-6 p-0 text-muted-foreground/40 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
+                className="h-6 w-6 p-0 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
               >
                 <Trash2 size={12} />
               </Button>
@@ -171,7 +178,7 @@ function LocalModelCard({
               variant="outline"
               className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
             >
-              <X size={11} className="mr-0.5" />
+              <X size={11} className="me-0.5" />
               {isCancelling ? "..." : t("common.cancel")}
             </Button>
           ) : (
@@ -184,12 +191,26 @@ function LocalModelCard({
               variant="default"
               className="h-6 px-2.5 text-xs"
             >
-              <Download size={11} className="mr-1" />
+              <Download size={11} className="me-1" />
               {t("common.download")}
             </Button>
           )}
         </div>
       </div>
+      {modelCardUrl && (
+        <a
+          href={modelCardUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => {
+            event.stopPropagation();
+            createExternalLinkHandler(modelCardUrl)(event);
+          }}
+          className="inline-block ms-7 mb-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          {t("transcription.modelCard")}
+        </a>
+      )}
     </div>
   );
 }
@@ -314,11 +335,8 @@ const PROVIDER_CREDENTIALS: Record<
 
 const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
 
-const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> = [
-  { id: "whisper", name: "OpenAI" },
-  { id: "nvidia", name: "NVIDIA" },
-  { id: "cohere", name: "Cohere" },
-];
+const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> =
+  LOCAL_ASR_ORGANIZATIONS;
 
 interface ModeToggleProps {
   useLocalWhisper: boolean;
@@ -328,10 +346,12 @@ interface ModeToggleProps {
 function ModeToggle({ useLocalWhisper, onModeChange }: ModeToggleProps) {
   const { t } = useTranslation();
   return (
-    <div className="relative flex p-0.5 rounded-lg bg-surface-1/80 backdrop-blur-xl dark:bg-surface-1 border border-border/60 dark:border-white/8 shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark)">
+    <div className="relative flex p-0.5 rounded-lg bg-surface-1/80 backdrop-blur-xl dark:bg-surface-1 border border-border/70 dark:border-white/10 shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark)">
       <div
-        className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md bg-card border border-border/60 dark:border-border-subtle shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark) transition-transform duration-200 ease-out ${
-          useLocalWhisper ? "translate-x-[calc(100%)]" : "translate-x-0"
+        className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md bg-card border border-border/70 dark:border-border-subtle shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark) transition-transform duration-200 ease-out ${
+          useLocalWhisper
+            ? "translate-x-[calc(100%)] rtl:-translate-x-[calc(100%)]"
+            : "translate-x-0"
         }`}
       />
       <button
@@ -411,7 +431,9 @@ export default function TranscriptionModelPicker({
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
   const [parakeetCapability, setParakeetCapability] = useState<ParakeetCheckResult | null>(null);
   const [browsedCloudProvider, setBrowsedCloudProvider] = useState<string | null>(null);
-  const [internalLocalProvider, setInternalLocalProvider] = useState(selectedLocalProvider);
+  const [internalLocalProvider, setInternalLocalProvider] = useState(
+    getSelectedASROrganization(selectedLocalProvider, selectedLocalModel)
+  );
   const hasLoadedRef = useRef(false);
   const hasLoadedParakeetRef = useRef(false);
   const [gpuBackend, setGpuBackend] = useState<"cuda" | "vulkan" | null>(null);
@@ -431,11 +453,12 @@ export default function TranscriptionModelPicker({
   const [gpuActive, setGpuActive] = useState(false);
 
   useEffect(() => {
-    if (selectedLocalProvider !== internalLocalProvider) {
-      setInternalLocalProvider(selectedLocalProvider);
+    const organization = getSelectedASROrganization(selectedLocalProvider, selectedLocalModel);
+    if (organization !== internalLocalProvider) {
+      setInternalLocalProvider(organization);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync prop→state: only re-run when the prop changes
-  }, [selectedLocalProvider]);
+  }, [selectedLocalProvider, selectedLocalModel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -461,7 +484,7 @@ export default function TranscriptionModelPicker({
     // provider must each leave the sherpa tabs on their own: moving the tab off
     // the disabled entry keeps the UI usable, while committing "whisper"
     // is what actually reroutes transcription on unsupported Macs.
-    if (isSherpaLocalProvider(internalLocalProvider)) setInternalLocalProvider("whisper");
+    if (usesParakeetManager(internalLocalProvider)) setInternalLocalProvider("whisper");
     if (isSherpaLocalProvider(selectedLocalProvider)) onLocalProviderSelect?.("whisper");
   }, [internalLocalProvider, onLocalProviderSelect, parakeetCapability, selectedLocalProvider]);
 
@@ -508,7 +531,7 @@ export default function TranscriptionModelPicker({
   const localProviderTabs = useMemo(
     () =>
       LOCAL_PROVIDER_TABS.map((provider) =>
-        isSherpaLocalProvider(provider.id) && parakeetCapability?.supported === false
+        usesParakeetManager(provider.id) && parakeetCapability?.supported === false
           ? {
               ...provider,
               disabled: true,
@@ -662,7 +685,7 @@ export default function TranscriptionModelPicker({
     if (internalLocalProvider === "whisper" && !hasLoadedRef.current) {
       hasLoadedRef.current = true;
       loadLocalModelsRef.current?.();
-    } else if (isSherpaLocalProvider(internalLocalProvider) && !hasLoadedParakeetRef.current) {
+    } else if (usesParakeetManager(internalLocalProvider) && !hasLoadedParakeetRef.current) {
       hasLoadedParakeetRef.current = true;
       loadParakeetModelsRef.current?.();
     }
@@ -884,8 +907,9 @@ export default function TranscriptionModelPicker({
 
   const handleParakeetModelSelect = useCallback(
     (modelId: string) => {
-      const provider = isCohereTranscribeModel(modelId) ? "cohere" : "nvidia";
-      setInternalLocalProvider(provider);
+      const organization = getASRModelOrganization(modelId);
+      const provider = organization === "cohere" ? "cohere" : "nvidia";
+      setInternalLocalProvider(organization);
       onLocalProviderSelect?.(provider);
       onLocalModelSelect(modelId, provider);
     },
@@ -1098,9 +1122,8 @@ export default function TranscriptionModelPicker({
     [showConfirmDialog, deleteParakeetModel, t]
   );
 
-  // Both sherpa-onnx tabs share one downloaded-models list; each renders only
-  // its own vendor's registry entries.
-  const renderParakeetModels = (provider: "nvidia" | "cohere") => {
+  // Organization tabs share the sherpa-onnx inventory and installation backend.
+  const renderParakeetModels = () => {
     const modelsToRender = (
       parakeetModels.length === 0
         ? Object.entries(PARAKEET_MODEL_INFO).map(([modelId, info]) => ({
@@ -1109,7 +1132,7 @@ export default function TranscriptionModelPicker({
             size_mb: info.sizeMb,
           }))
         : parakeetModels
-    ).filter((model) => isCohereTranscribeModel(model.model) === (provider === "cohere"));
+    ).filter((model) => getASRModelOrganization(model.model) === internalLocalProvider);
 
     return (
       <div className="space-y-0.5">
@@ -1118,6 +1141,7 @@ export default function TranscriptionModelPicker({
           const info = PARAKEET_MODEL_INFO[modelId] ?? {
             name: modelId,
             description: t("transcription.fallback.parakeetModelDescription"),
+            modelCardUrl: undefined,
             size: t("common.unknown"),
             language: "en",
             recommended: false,
@@ -1137,7 +1161,8 @@ export default function TranscriptionModelPicker({
               isCancelling={isCancellingParakeetModel(modelId)}
               isInstalling={parakeetDownloads[modelId]?.phase === "installing"}
               recommended={info.recommended}
-              provider={provider}
+              provider={getASRModelOrganization(modelId)}
+              modelCardUrl={info.modelCardUrl}
               onSelect={() => handleParakeetModelSelect(modelId)}
               onDelete={() => handleParakeetDelete(modelId)}
               onDownload={() =>
@@ -1182,6 +1207,7 @@ export default function TranscriptionModelPicker({
                       {t("transcription.endpointUrl")}
                     </label>
                     <Input
+                      dir="ltr"
                       value={cloudTranscriptionBaseUrl}
                       onChange={(e) => setCloudTranscriptionBaseUrl?.(e.target.value)}
                       onBlur={handleBaseUrlBlur}
@@ -1202,6 +1228,7 @@ export default function TranscriptionModelPicker({
                       {t("common.model")}
                     </label>
                     <Input
+                      dir="ltr"
                       value={
                         selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : ""
                       }
@@ -1256,6 +1283,7 @@ export default function TranscriptionModelPicker({
                         </Select>
                       ) : (
                         <Input
+                          dir="ltr"
                           value={credentialValues[field.key]}
                           onChange={(e) => credentialSetters[field.key](e.target.value)}
                           placeholder={field.placeholder}
@@ -1428,8 +1456,7 @@ export default function TranscriptionModelPicker({
 
           <div>
             {internalLocalProvider === "whisper" && renderLocalModels()}
-            {(internalLocalProvider === "nvidia" || internalLocalProvider === "cohere") &&
-              renderParakeetModels(internalLocalProvider)}
+            {usesParakeetManager(internalLocalProvider) && renderParakeetModels()}
           </div>
         </>
       )}

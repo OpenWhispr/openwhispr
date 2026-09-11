@@ -212,6 +212,7 @@ export interface AnalyticsSummary {
   longestStreakDays: number;
   wpmCoveragePercent: number;
   daily: AnalyticsDailyBucket[];
+  historyBackfillRetryRequired?: boolean;
 }
 
 export type LeaderboardMetric =
@@ -807,6 +808,8 @@ export interface ScreenRecordingAccessResult {
   needsRelaunch?: boolean;
 }
 
+export type CloudReasonPurpose = "cleanup" | "assistant" | "translation" | "noteFormatting";
+
 export interface ScreenContextImage {
   mediaType: string;
   /** Base64 image bytes, no data-URL prefix. */
@@ -826,6 +829,7 @@ export interface UpdateStatusResult {
   updateAvailable: boolean;
   updateDownloaded: boolean;
   isDevelopment: boolean;
+  isSupported: boolean;
 }
 
 export interface UpdateInfoResult {
@@ -1051,13 +1055,23 @@ export interface ConversationCreateAckResult {
 }
 
 export type OnboardingDemoKind = "dictation" | "assistant";
-export type OnboardingDemoStatus = "listening" | "processing" | "partial" | "success" | "error";
+/**
+ * "partial" streams the transcript, "processing" carries the final transcript,
+ * "replying" streams the assistant demo's reply, and "level" mirrors the
+ * microphone level while listening.
+ */
+export type OnboardingDemoStatus =
+  "listening" | "level" | "processing" | "partial" | "replying" | "success" | "error";
 export interface OnboardingDemoEvent {
   demoId: string;
   kind: OnboardingDemoKind;
   status: OnboardingDemoStatus;
   text?: string;
   message?: string;
+  /** Tool the assistant is running while it replies (a tool registry name). */
+  tool?: string;
+  /** Microphone input level, 0..1, on "level" events. */
+  level?: number;
 }
 
 export interface ReferralItem {
@@ -1160,6 +1174,9 @@ declare global {
       ) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
       onCancelDictation?: (callback: () => void) => () => void;
+      onDictationForceStopped?: (
+        callback: (payload?: { reason?: "timeout" | "reset" | "manual" }) => void
+      ) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (
         state: "idle" | "preparing" | "recording" | "processing",
@@ -1257,6 +1274,7 @@ declare global {
           errorMessage?: string | null;
           errorCode?: TranscriptionErrorCode;
           clientTranscriptionId?: string;
+          analyticsOccurredAt?: string;
         }
       ) => Promise<{ id: number; success: boolean; transcription?: TranscriptionItem }>;
       getTranscriptions: (
@@ -1321,6 +1339,8 @@ declare global {
       syncRetentionSettings?: (settings: {
         audioRetentionDays: number;
         transcriptRetentionDays: number;
+        dataRetentionEnabled: boolean;
+        localHistoryPolicyResolved: boolean;
       }) => void;
       retryTranscription: (
         id: number,
@@ -1970,6 +1990,7 @@ declare global {
       markBundleMigrationDismissed: () => Promise<void>;
       getUpdateStatus: () => Promise<UpdateStatusResult>;
       getUpdateInfo: () => Promise<UpdateInfoResult | null>;
+      setAutoUpdatesEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
 
       // Update event listeners
       onUpdateAvailable: (callback: (event: any, info: any) => void) => () => void;
@@ -2031,6 +2052,7 @@ declare global {
       onShowSettings?: (callback: () => void) => () => void;
 
       // Accessibility permission events (macOS)
+      markMacAccessibilityFeaturesReady?: (expectedAccountScope?: ActiveAccountScope) => void;
       onAccessibilityMissing?: (callback: () => void) => () => void;
       checkAccessibilityTrusted?: () => Promise<boolean>;
 
@@ -2330,6 +2352,7 @@ declare global {
           systemPrompt?: string;
           requestPurpose?: "agent";
           promptMode?: "cleanup" | "agent";
+          purpose?: CloudReasonPurpose;
           screenContext?: ScreenContextImage;
           language?: string;
           locale?: string;
@@ -3149,15 +3172,6 @@ declare global {
         folderId: number | null;
       } | null>;
       onNoteNavigationPending?: (callback: () => void) => () => void;
-      onUpdateNotificationData?: (
-        callback: (data: { version: string; releaseDate?: string }) => void
-      ) => () => void;
-      getUpdateNotificationData?: () => Promise<{
-        version: string;
-        releaseDate?: string;
-      } | null>;
-      updateNotificationReady?: () => Promise<void>;
-      updateNotificationRespond?: (action: string) => Promise<{ success: boolean }>;
       onPreviewText?: (callback: (text: string) => void) => () => void;
       onPreviewAppend?: (callback: (text: string) => void) => () => void;
       onPreviewHold?: (callback: (payload: { showCleanup: boolean }) => void) => () => void;

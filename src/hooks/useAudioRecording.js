@@ -50,6 +50,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopRequestedDuringStartRef = useRef(false);
+  const pushForceStoppedRef = useRef(false);
   const stopLockRef = useRef(false);
   const preparationGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
@@ -64,6 +65,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const {
     onToggle,
     onAssistantCommand,
+    onOnboardingAssistantCommand,
     dismissDictationError,
     onDictationError,
     getAssistantSelectionContext,
@@ -81,6 +83,10 @@ export const useAudioRecording = (toast, options = {}) => {
   const onAssistantCommandRef = useRef(onAssistantCommand);
   useEffect(() => {
     onAssistantCommandRef.current = onAssistantCommand;
+  });
+  const onOnboardingAssistantCommandRef = useRef(onOnboardingAssistantCommand);
+  useEffect(() => {
+    onOnboardingAssistantCommandRef.current = onOnboardingAssistantCommand;
   });
   const onShowTranscriptRef = useRef(onShowTranscript);
   useEffect(() => {
@@ -114,6 +120,7 @@ export const useAudioRecording = (toast, options = {}) => {
       lastStartOptionsRef.current = { voiceAgentRequested, translationRequested };
       startLockRef.current = true;
       stopRequestedDuringStartRef.current = false;
+      pushForceStoppedRef.current = false;
       let recordingStarted = false;
       try {
         if (!audioManagerRef.current) return false;
@@ -492,27 +499,29 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           setTranscript(result.text);
-          onDemoEventRef.current?.({
-            kind: demoKindRef.current,
-            status: "success",
-            text: result.text,
-          });
           if (result.assistantConversation) {
-            // The onboarding demo owns the transcript/result surface. Opening
-            // the normal Assistant panel here would cover the flow even though
-            // the main-process onboarding gate correctly hid normal surfaces.
+            window.electronAPI?.hideDictationPreview?.();
+            const { screenContext, transcript, selectedContext, deliverySessionId } =
+              result.assistantConversation;
+            const command = {
+              text: expandSnippets(transcript, getSettings().snippets),
+              attachment: screenContext
+                ? { image: screenContext.data, mediaType: screenContext.mediaType }
+                : null,
+            };
             if (localStorage.getItem("onboardingCompleted") !== "true") {
-              window.electronAPI?.hideDictationPreview?.();
+              // The assistant panel would cover the onboarding flow, so a headless
+              // responder answers and streams the reply back as demo events.
+              onDemoEventRef.current?.({
+                kind: demoKindRef.current,
+                status: "processing",
+                text: command.text,
+              });
+              onOnboardingAssistantCommandRef.current?.(command);
             } else {
-              window.electronAPI?.hideDictationPreview?.();
-              const { screenContext, transcript, selectedContext, deliverySessionId } =
-                result.assistantConversation;
               const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
               onAssistantCommandRef.current?.({
-                text: expandSnippets(transcript, getSettings().snippets),
-                attachment: screenContext
-                  ? { image: screenContext.data, mediaType: screenContext.mediaType }
-                  : null,
+                ...command,
                 selectedContext: selectedContext ?? null,
                 delivery: createAssistantResponseDelivery({
                   autoPasteEnabled,
@@ -523,6 +532,11 @@ export const useAudioRecording = (toast, options = {}) => {
               });
             }
           } else {
+            onDemoEventRef.current?.({
+              kind: demoKindRef.current,
+              status: "success",
+              text: result.text,
+            });
             window.electronAPI?.completeDictationPreview?.({ text: result.text });
           }
 
@@ -582,16 +596,35 @@ export const useAudioRecording = (toast, options = {}) => {
               if (clipboardResult?.success === false) {
                 throw new Error("clipboard-write-failed");
               }
+              return true;
             } catch (error) {
               logger.warn(
                 "Failed to keep transcription in clipboard",
                 { delivery, error: error?.message },
                 "clipboard"
               );
+              return false;
             }
           };
 
-          if (autoPasteEnabled && !result.assistantConversation) {
+          if (pushForceStoppedRef.current && autoPasteEnabled && !result.assistantConversation) {
+            // The push hit its safety ceiling while the trigger keys were still
+            // down. Injecting the paste shortcut into those held modifiers is
+            // what silently loses the transcript, so keep it instead.
+            const keptInClipboard = await keepInClipboard("push-force-stopped");
+            window.electronAPI?.hideDictationPreview?.();
+            showDictationError({
+              title: t("hooks.audioRecording.pushForceStopped.title"),
+              // Never promise a clipboard that rejected the write; the transcript
+              // action on this pill is the recovery path either way.
+              description: t(
+                keptInClipboard
+                  ? "hooks.audioRecording.pushForceStopped.description"
+                  : "hooks.audioRecording.pushForceStopped.descriptionClipboardFailed"
+              ),
+              transcript: result.rawText ?? result.text,
+            });
+          } else if (autoPasteEnabled && !result.assistantConversation) {
             const pasteStart = performance.now();
             let pasteSucceeded = true;
             if (result.selectionEdit?.sessionId) {
@@ -778,6 +811,14 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
+    const disposeForceStopped = window.electronAPI.onDictationForceStopped?.((payload) => {
+      // Listed rather than negated: a future renderer-initiated stop would not
+      // leave the keys down, and must not be swept in here.
+      if (payload?.reason === "timeout" || payload?.reason === "reset") {
+        pushForceStoppedRef.current = true;
+      }
+    });
+
     // Cleanup
     return () => {
       reportLifecycle("idle");
@@ -789,6 +830,7 @@ export const useAudioRecording = (toast, options = {}) => {
       disposePrepare?.();
       disposeCancelPreparation?.();
       disposeStop?.();
+      disposeForceStopped?.();
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();
       }
@@ -838,16 +880,20 @@ export const useAudioRecording = (toast, options = {}) => {
   );
 
   useEffect(() => {
-    if (!isRecording || isAssistantVoice) return undefined;
+    if (!isRecording) return undefined;
 
     const reportAudioLevel = () => {
+      const level = getAudioLevel();
+      if (level === null) return;
+      // The onboarding demo's pill draws its waveform from these levels.
+      onDemoEventRef.current?.({ kind: demoKindRef.current, status: "level", level });
       // The companion pill only exists while the Agent panel is open — with
       // the panel closed there is nobody to mirror levels to, so skip the
       // IPC. Checked per tick, not once: the panel can open mid-recording and
       // a ref change never re-runs this effect.
-      if (!assistantOpenRef?.current) return;
-      const level = getAudioLevel();
-      if (level !== null) window.electronAPI?.dictationAudioLevelChanged?.(level);
+      if (!isAssistantVoice && assistantOpenRef?.current) {
+        window.electronAPI?.dictationAudioLevelChanged?.(level);
+      }
     };
     reportAudioLevel();
     const interval = setInterval(reportAudioLevel, COMPANION_AUDIO_LEVEL_INTERVAL_MS);

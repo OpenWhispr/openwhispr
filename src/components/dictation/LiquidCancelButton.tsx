@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { X } from "../icons";
 import { cn } from "../lib/utils";
 import { emergenceBlend, traceFusedOutline } from "./liquidFusion";
 import type { VoicePillState } from "./VoicePill";

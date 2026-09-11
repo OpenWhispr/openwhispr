@@ -16,7 +16,12 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
 
     session.ownerWebContents?.removeListener?.("destroyed", session.ownerLossHandler);
     session.ownerWebContents?.removeListener?.("render-process-gone", session.ownerLossHandler);
+    session.ownerWebContents?.removeListener?.(
+      "did-start-navigation",
+      session.ownerNavigationHandler
+    );
     session.ownerLossHandler = null;
+    session.ownerNavigationHandler = null;
   };
 
   const removeSession = (session) => {
@@ -52,6 +57,18 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
   };
 
   const startSession = ({ sessionId, ownerWebContents, options }) => {
+    // A renderer that reloads mid-recording forgets its session while this side
+    // keeps capturing. The same owner asking to start again can only mean that,
+    // so retire its stale sessions instead of refusing every start until restart.
+    for (const session of sessions.values()) {
+      if (
+        ownerWebContents &&
+        session.ownerWebContents === ownerWebContents &&
+        session.state !== "stopping"
+      ) {
+        void stopSession(session.sessionId).catch((error) => onError(error, session.sessionId));
+      }
+    }
     const operationInProgress = [...sessions.values()].some(
       (session) => session.state !== "stopping"
     );
@@ -67,6 +84,7 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
       stopRequested: false,
       stopPromise: null,
       ownerLossHandler: null,
+      ownerNavigationHandler: null,
     };
     sessions.set(sessionId, session);
 
@@ -97,9 +115,17 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
         onError(error, sessionId);
       });
     };
+    // A main-frame navigation (reload, onboarding restart) replaces the renderer
+    // that owns the session, so it counts as owner loss too.
+    const handleOwnerNavigation = (details) => {
+      if (!details?.isMainFrame || details?.isSameDocument) return;
+      handleOwnerLoss();
+    };
     session.ownerLossHandler = handleOwnerLoss;
+    session.ownerNavigationHandler = handleOwnerNavigation;
     ownerWebContents?.once?.("destroyed", handleOwnerLoss);
     ownerWebContents?.once?.("render-process-gone", handleOwnerLoss);
+    ownerWebContents?.on?.("did-start-navigation", handleOwnerNavigation);
 
     if (ownerWebContents?.isDestroyed?.()) {
       handleOwnerLoss();

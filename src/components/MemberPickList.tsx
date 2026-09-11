@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, Search } from "lucide-react";
+import { Check, Loader2, Search } from "./icons";
 import MemberAvatar from "./MemberAvatar";
 import { cn } from "./lib/utils";
 import { filterMemberCandidates } from "../lib/memberCandidates";
@@ -37,17 +37,18 @@ export default function MemberPickList({
   const { t } = useTranslation();
   const filteredMembers = useMemo(() => filterMemberCandidates(members, search), [members, search]);
   return (
-    <div className="rounded border border-border/70 dark:border-border-subtle/50 overflow-hidden">
-      <div className="relative border-b border-border/40 dark:border-border-subtle/40">
+    <div className="rounded border border-border/70 dark:border-border-subtle/60 overflow-hidden">
+      <div className="relative border-b border-border/70 dark:border-border-subtle/60">
         <Search
           size={11}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/25 pointer-events-none"
+          className="absolute start-2.5 top-1/2 -translate-y-1/2 text-foreground/45 pointer-events-none"
         />
         <input
+          dir="auto"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={t("notes.spaces.members.searchPlaceholder")}
-          className="w-full h-8 pl-7 pr-2 bg-transparent text-xs text-foreground placeholder:text-foreground/25 outline-none"
+          className="w-full h-8 ps-7 pe-2 bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none"
         />
       </div>
       <div className={cn("overflow-y-auto p-1", listClassName ?? "max-h-36")}>
@@ -62,7 +63,7 @@ export default function MemberPickList({
               aria-pressed={selectedIds ? isSelected : undefined}
               onClick={() => onSelect(member)}
               className={cn(
-                "flex items-center gap-2 w-full px-2 h-8 rounded-md text-left",
+                "flex items-center gap-2 w-full px-2 h-8 rounded-md text-start",
                 "transition-colors duration-150 outline-none",
                 "hover:bg-foreground/4 dark:hover:bg-white/4",
                 "focus-visible:ring-1 focus-visible:ring-ring/30",
@@ -70,11 +71,11 @@ export default function MemberPickList({
               )}
             >
               <MemberAvatar name={member.name} email={member.email} size="sm" />
-              <span className="text-xs text-foreground truncate flex-1">
+              <span dir="auto" className="text-xs text-foreground truncate flex-1">
                 {member.name || member.email}
               </span>
               {member.user_id === currentUserId && (
-                <span className="text-[10px] text-foreground/40 shrink-0">
+                <span className="text-[10px] text-foreground/45 shrink-0">
                   {t("notes.spaces.members.you")}
                 </span>
               )}
@@ -86,7 +87,7 @@ export default function MemberPickList({
           );
         })}
         {filteredMembers.length === 0 && !footer && (
-          <p className="text-xs text-foreground/25 text-center py-2">
+          <p className="text-xs text-foreground/45 text-center py-2">
             {t("notes.spaces.members.noResults")}
           </p>
         )}

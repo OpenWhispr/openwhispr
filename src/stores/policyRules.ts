@@ -84,6 +84,27 @@ export function effectiveLocalHistoryEnabled(
   return lockedLocalHistoryValue(state) ?? personalPreference;
 }
 
+/**
+ * Whether the managed policy that can force local history off has settled.
+ *
+ * `effectiveLocalHistoryEnabled` resolves an unsettled policy to the user's own
+ * preference, which is the right value to show and to sweep retention with --
+ * but it is a default, not an answer, and one consumer reads that switch as
+ * consent: the main process reconstructs Insights history from stored
+ * transcripts the first time the renderer reports it. A scan finishes in
+ * milliseconds while the policy is a network round trip, so a workspace with
+ * `localHistoryMode: "always_off"` would have its members' existing transcripts
+ * mined before the policy forbidding it ever arrived.
+ *
+ * `idle` is unsettled here even though `isPolicyActionAllowed` treats it as
+ * permissive, because it covers both "no account" and "signed in, fetch not
+ * started". Only the main process can tell those apart, from the account scope
+ * it persists, so it makes that call.
+ */
+export function isLocalHistoryPolicyResolved(state: PolicyDecisionSnapshot): boolean {
+  return state.status === "managed" || state.status === "unmanaged";
+}
+
 /** The org-forced local history value, or null when the user may choose. */
 export function lockedLocalHistoryValue(state: PolicyDecisionSnapshot): boolean | null {
   const mode = managedPolicy(state)?.dataRetention.localHistoryMode;

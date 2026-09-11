@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "./icons";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -132,6 +132,7 @@ export default function CreateTeamDialog({
               {t("settingsPage.workspace.teams.nameLabel")}
             </Label>
             <Input
+              dir="auto"
               id="create-team-name"
               value={name}
               autoFocus
@@ -148,7 +149,7 @@ export default function CreateTeamDialog({
               {t("settingsPage.workspace.teams.addMembersLabel")}
             </label>
             {membersError ? (
-              <div className="rounded border border-border/70 dark:border-border-subtle/50 px-3 py-2.5 flex items-center justify-between gap-2">
+              <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
                   {t("settingsPage.workspace.members.loadError")}
                 </p>
@@ -181,7 +182,7 @@ export default function CreateTeamDialog({
             {t("common.cancel")}
           </Button>
           <Button onClick={() => void handleCreate()} disabled={!name.trim() || isCreating}>
-            {showSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
             {t("common.create")}
           </Button>
         </DialogFooter>

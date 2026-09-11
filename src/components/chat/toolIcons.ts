@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Search,
   Globe,
   ClipboardCheck,
@@ -7,7 +8,8 @@ import {
   FileText,
   FilePlus,
   FilePen,
-} from "lucide-react";
+  Zap,
+} from "../icons";
 
 export const toolIcons: Record<string, typeof Search> = {
   search_notes: Search,
@@ -18,4 +20,7 @@ export const toolIcons: Record<string, typeof Search> = {
   get_note: FileText,
   create_note: FilePlus,
   update_note: FilePen,
+  get_snippet: Zap,
+  update_snippets: Zap,
+  update_dictionary: BookOpen,
 };

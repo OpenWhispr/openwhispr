@@ -1,5 +1,4 @@
 import ReasoningService from "../services/ReasoningService";
-import { PROVIDER_REGISTRY } from "../services/ai/inferenceProviders";
 import logger from "../utils/logger";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
@@ -95,6 +94,7 @@ import {
   resolveDictationAgentInference,
   resolveDictationAgentVisionInference,
 } from "./dictationAgentInference";
+import { providerSupportsImages } from "../services/ai/inferenceProviders";
 import { resolveDictationTranslationInference } from "./dictationTranslationInference";
 import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
@@ -111,6 +111,7 @@ import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionary
 import { dictionaryKeywords, usesTranscriptionKeywords } from "../utils/dictionaryKeywords.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
+import { getAgentName } from "../utils/agentName";
 import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
 import {
   buildSelectionEditSystemPrompt,
@@ -169,9 +170,6 @@ function analyticsSyncEnabled(settings = getSettings()) {
   );
 }
 
-const providerSupportsImages = (providerId) =>
-  !!(providerId && PROVIDER_REGISTRY[providerId]?.supportsImages);
-
 // Shared by the agent route and its text-only retry, which needs the prompt
 // without the screen-context suffix.
 function dictationAgentPrompt(settings, agentName) {
@@ -203,6 +201,7 @@ function resolveReasoningRoute(
   screenContext,
   detectedLanguage
 ) {
+  const wakeWordLanguage = resolveWakeWordLanguage(settings, detectedLanguage, text);
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
   const cleanupReachable =
     !!settings.useCleanupModel && (!!cleanup.model?.trim() || isCloudCleanupMode());
@@ -219,9 +218,7 @@ function resolveReasoningRoute(
     agentReachable: agent.reachable,
     // A translation recording never routes to the agent, so skip the scan.
     agentInvoked:
-      !translationRequested &&
-      !!agentName &&
-      detectAgentName(text, agentName, resolveWakeWordLanguage(settings, detectedLanguage)),
+      !translationRequested && !!agentName && detectAgentName(text, agentName, wakeWordLanguage),
     voiceAgentRequested,
     translationRequested,
     translationReachable: translation.reachable,
@@ -301,11 +298,13 @@ function resolveReasoningRoute(
           : systemPrompt,
         ...(attach ? { screenContext, textOnlySystemPrompt: systemPrompt } : {}),
         // Selection edits run on this (dictation) scope, so they need it
-        // reachable; standalone commands run on the chat scope in the panel.
+        // reachable; standalone commands resolve the same scope again in the
+        // panel and report their own configuration problems in-conversation.
         selectionEditReachable: agent.reachable,
-        // The panel re-decides attach/drop against the chat scope's model,
-        // which may see images even when this scope's cannot — carry the raw
-        // screenshot past the attach gate for that path.
+        // Detection and stripping must resolve auto-language identically.
+        wakeWordLanguage,
+        // The panel re-decides attach/drop for its own request, so carry the
+        // raw screenshot past this attach gate for that path.
         ...(screenContext ? { rawScreenContext: screenContext } : {}),
       },
     };
@@ -1753,6 +1752,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       durationSeconds: this.recordingStartTime
         ? (Date.now() - this.recordingStartTime) / 1000
         : null,
+      analyticsOccurredAt: new Date(this.recordingStartTime || Date.now()).toISOString(),
       chunks: this.audioChunks,
       segments: this._batchSegments,
       mimeType: this.recordingMimeType,
@@ -1773,7 +1773,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.onStateChange?.({ isRecording: false, isProcessing: false });
   }
 
-  persistDiscardedBatchRecording({ durationSeconds, chunks, segments, mimeType }) {
+  persistDiscardedBatchRecording({
+    durationSeconds,
+    analyticsOccurredAt,
+    chunks,
+    segments,
+    mimeType,
+  }) {
     // This must run after MediaRecorder's final dataavailable event, so decide
     // whether to retain the discarded audio from the snapshot rather than live
     // manager state (which may already belong to a new recording).
@@ -1787,7 +1793,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         try {
           const current = new Blob(chunks, { type: mimeType });
           const blob = await this.mergeRecordedSegments([...segments, current]);
-          if (blob) await this.saveDiscardedTranscription(blob, durationSeconds);
+          if (blob)
+            await this.saveDiscardedTranscription(blob, durationSeconds, analyticsOccurredAt);
         } catch (error) {
           const fallback = this.getLargestRecordedSegment([
             ...segments,
@@ -1795,7 +1802,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           ]);
           if (fallback) {
             try {
-              await this.saveDiscardedTranscription(fallback, durationSeconds);
+              await this.saveDiscardedTranscription(fallback, durationSeconds, analyticsOccurredAt);
             } catch (fallbackError) {
               logger.warn(
                 "Failed to save discarded recording fallback",
@@ -2582,8 +2589,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       transcript,
       // resolveReasoningRoute mirrors an attached screenContext into
       // rawScreenContext (same object), so the raw carry is the single source
-      // to read — it also survives when the agent scope's attach gate dropped
-      // the image (the panel re-decides against the chat scope's model).
+      // to read — it also survives when this attach gate dropped the image
+      // (the panel re-decides for its own request).
       screenContext: config?.rawScreenContext ?? null,
       ...(selectedContext ? { selectedContext } : {}),
       ...(deliverySessionId ? { deliverySessionId } : {}),
@@ -2606,8 +2613,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return extras;
   }
 
-  // Panel-first commands skip the dictation-agent model, so the org policy
-  // guard that protected that model must run here instead.
+  // Panel-first commands make no LLM call here — the panel resolves the Voice
+  // Assistant scope itself — so the org policy guard must run at bank time.
   _bankPanelAgentCommand(
     text,
     agentName,
@@ -2617,7 +2624,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.assertAgentAllowedByPolicy();
     const command = this.voiceAgentRequested
       ? text
-      : stripAgentAddress(text, agentName, resolveWakeWordLanguage(getSettings()));
+      : stripAgentAddress(
+          text,
+          agentName,
+          config?.wakeWordLanguage ?? resolveWakeWordLanguage(getSettings())
+        );
     const transcript = selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
     this._bankAssistantDirective(transcript, config, { selectedContext, deliverySessionId });
     return text;
@@ -2700,10 +2711,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw error;
     }
 
-    // selectionEditReachable and rawScreenContext are routing directives for
-    // this method, not reasoning options — strip them before the config
-    // reaches ReasoningService.
-    const { selectionEditReachable, rawScreenContext, ...reasoningOptions } = config ?? {};
+    // These are routing directives for this method, not reasoning options —
+    // strip them before the config reaches ReasoningService.
+    const { selectionEditReachable, rawScreenContext, wakeWordLanguage, ...reasoningOptions } =
+      config ?? {};
     const selectionConfig = {
       ...reasoningOptions,
       maxTokens: Math.max(config?.maxTokens || 0, 8192),
@@ -2827,6 +2838,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const res = await window.electronAPI.cloudReason(currentText, {
             agentName,
             promptMode: "cleanup",
+            purpose: "cleanup",
             customDictionary: getDictionaryHintWords(settings),
             customPrompt: this.getCustomPrompt(),
             language: this.getCleanupLanguage(settings),
@@ -2930,15 +2942,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const cleanupReachable = !!settings.useCleanupModel && (!!cleanupModel || isCloud);
     const agentReachable = dictationAgentReachable(settings);
     const agentName =
-      typeof window !== "undefined" && window.localStorage
-        ? localStorage.getItem("agentName") || null
-        : null;
+      typeof window !== "undefined" && window.localStorage ? getAgentName() : "OpenWhispr";
     if (
       !cleanupReachable &&
       !agentReachable &&
       !(this.translationRequested && translationChainReachable(settings)) &&
-      // A voice-assistant command always routes: standalone commands run on
-      // the chat scope in the panel, so no dictation-scope model is needed.
+      // A voice-assistant command always routes: standalone commands stream
+      // in the panel, which reports a missing model in-conversation.
       !this.voiceAgentRequested
     ) {
       logger.logReasoning("REASONING_SKIPPED", {
@@ -3273,7 +3283,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let processedText = result.text;
     if (processedText) {
       const reasoningStart = performance.now();
-      const agentName = localStorage.getItem("agentName") || null;
+      const agentName = getAgentName();
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
       const route = resolveReasoningRoute(
         processedText,
@@ -3307,6 +3317,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             const res = await window.electronAPI.cloudReason(processedText, {
               agentName,
               promptMode: "cleanup",
+              purpose: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
               customPrompt: this.getCustomPrompt(),
               language: this.getCleanupLanguage(settings),
@@ -3927,6 +3938,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const result = await window.electronAPI.saveTranscription(text, rawText, {
         clientTranscriptionId: eventId,
         routeKind: this.translationRequested ? "translation" : null,
+        analyticsOccurredAt: occurredAt.toISOString(),
       });
       if (result?.id) syncService.debouncedPush("transcription", result.id);
 
@@ -3970,6 +3982,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         errorMessage,
         errorCode,
         routeKind: this.translationRequested ? "translation" : null,
+        ...(metadata?.analyticsOccurredAt
+          ? { analyticsOccurredAt: metadata.analyticsOccurredAt }
+          : {}),
       });
       if (result?.id) syncService.debouncedPush("transcription", result.id);
 
@@ -4009,12 +4024,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async saveDiscardedTranscription(blob, durationSeconds) {
+  async saveDiscardedTranscription(blob, durationSeconds, analyticsOccurredAt = null) {
     let savedId = null;
     try {
       const result = await window.electronAPI.saveTranscription("", null, {
         status: "discarded",
         routeKind: this.translationRequested ? "translation" : null,
+        ...(analyticsOccurredAt ? { analyticsOccurredAt } : {}),
       });
       if (!result?.id) return;
       savedId = result.id;
@@ -4954,7 +4970,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let usedCloudReasoning = false;
     if (finalText) {
       const reasoningStart = performance.now();
-      const agentName = localStorage.getItem("agentName") || null;
+      const agentName = getAgentName();
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
       if (wasCancelled()) return true;
       const route = resolveReasoningRoute(
@@ -4963,7 +4979,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         agentName,
         this.voiceAgentRequested,
         this.translationRequested,
-        screenContext
+        screenContext,
+        streamingSttLanguage
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
@@ -4993,6 +5010,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             const res = await window.electronAPI.cloudReason(finalText, {
               agentName,
               promptMode: "cleanup",
+              purpose: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
               customPrompt: this.getCustomPrompt(),
               language: this.getCleanupLanguage(stSettings),

@@ -65,6 +65,10 @@ const registerListener = (channel, handlerFactory) => {
 contextBridge.exposeInMainWorld("electronAPI", {
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
+  markMacAccessibilityFeaturesReady: (expectedAccountScope) =>
+    expectedAccountScope
+      ? ipcRenderer.send("mac-accessibility-features-ready", expectedAccountScope)
+      : ipcRenderer.send("mac-accessibility-features-ready"),
   beginOnboardingDemo: (session) => ipcRenderer.invoke("onboarding-demo-begin", session),
   endOnboardingDemo: (id) => ipcRenderer.invoke("onboarding-demo-end", id),
   stopOnboardingDemo: (id) => ipcRenderer.invoke("onboarding-demo-stop", id),
@@ -97,6 +101,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
   onCancelDictation: registerListener("cancel-dictation", (callback) => () => callback()),
+  onDictationForceStopped: registerListener(
+    "dictation-force-stopped",
+    (callback) => (_event, payload) => callback(payload)
+  ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
   dictationLifecycleStateChanged: (state, inputKind) =>
     ipcRenderer.send("dictation-lifecycle-state-changed", state, inputKind),
@@ -555,6 +563,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   markBundleMigrationDismissed: () => ipcRenderer.invoke("mark-bundle-migration-dismissed"),
   getUpdateStatus: () => ipcRenderer.invoke("get-update-status"),
   getUpdateInfo: () => ipcRenderer.invoke("get-update-info"),
+  setAutoUpdatesEnabled: (enabled) => ipcRenderer.invoke("set-auto-updates-enabled", enabled),
 
   // Update event listeners
   onUpdateAvailable: registerListener("update-available"),
@@ -1341,12 +1350,4 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "note-navigation-pending",
     (callback) => () => callback()
   ),
-
-  onUpdateNotificationData: registerListener(
-    "update-notification-data",
-    (callback) => (_event, data) => callback(data)
-  ),
-  getUpdateNotificationData: () => ipcRenderer.invoke("get-update-notification-data"),
-  updateNotificationReady: () => ipcRenderer.invoke("update-notification-ready"),
-  updateNotificationRespond: (action) => ipcRenderer.invoke("update-notification-respond", action),
 });

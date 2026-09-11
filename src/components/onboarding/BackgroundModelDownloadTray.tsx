@@ -7,6 +7,7 @@ import {
   getWhisperModelInfo,
   modelRegistry,
 } from "../../models/ModelRegistry";
+import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
   consumePendingLocalModel,
@@ -54,7 +55,10 @@ function downloadDisplay(download: ActiveDownload) {
     return { name: getWhisperModelInfo(download.id)?.name ?? download.id, provider: "openai" };
   }
   if (download.kind === "parakeet") {
-    return { name: getParakeetModelInfo(download.id)?.name ?? download.id, provider: "nvidia" };
+    return {
+      name: getParakeetModelInfo(download.id)?.name ?? download.id,
+      provider: getASRModelOrganization(download.id),
+    };
   }
   const localModel = modelRegistry.getModel(download.id);
   return {
@@ -93,9 +97,9 @@ function activatePendingLocalModel(kind: PendingLocalModelKind, modelId: string)
   });
 }
 
-// The X on each row (Figma "Frame 25"), inlined rather than drawn with lucide so
+// The X on each row (Figma "Frame 25"), inlined rather than drawn with the icon set so
 // the 8px glyph inside the 24px circle and the 1.333 stroke come out exactly as
-// exported instead of needing to be back-scaled out of lucide's 24 viewBox.
+// exported instead of needing to be back-scaled out of the 24 viewBox.
 // Colours come from the app theme tokens (see the note on the <aside> below), so
 // the glyph tracks light/dark on the control panel instead of Figma's literals.
 function CancelGlyph() {
@@ -372,9 +376,9 @@ export default function BackgroundModelDownloadTray({
   const positionClass =
     placement === "onboarding"
       ? getPlatform() === "darwin"
-        ? "right-5 top-5"
-        : "right-5 top-14"
-      : "right-7 bottom-5";
+        ? "end-5 top-5"
+        : "end-5 top-14"
+      : "end-7 bottom-5";
 
   useEffect(() => {
     if (hydrated && activeDownloads.length === 0 && !hasPendingLocalModels()) {

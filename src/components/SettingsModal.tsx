@@ -11,7 +11,7 @@ import {
   CreditCard,
   Shield,
   Users,
-} from "lucide-react";
+} from "./icons";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { AccountAvatar, SettingsSectionType } from "./SettingsPage";
 import { useAuth } from "../hooks/useAuth";
@@ -169,17 +169,19 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
           <div className="flex flex-col items-center gap-2 pb-2 text-center">
             <AccountAvatar image={user.image} name={user.name || t("settingsPage.account.user")} />
             <div className="min-w-0 w-full">
-              <p className="text-[13px] font-semibold text-foreground truncate">
+              <p dir="auto" className="text-[13px] font-semibold text-foreground truncate">
                 {user.name || t("settingsPage.account.user")}
               </p>
-              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+              <p className="text-xs text-muted-foreground truncate">
+                <bdi dir="ltr">{user.email}</bdi>
+              </p>
             </div>
           </div>
         ) : undefined
       }
     >
       {policyManaged && (
-        <div className="mx-4 mt-4 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+        <div className="mx-4 mt-4 rounded-lg border border-primary/20 bg-primary/8 px-3 py-2 text-sm text-primary dark:border-primary/30 dark:bg-primary/15">
           {t("settingsModal.managedByOrg")}
         </div>
       )}

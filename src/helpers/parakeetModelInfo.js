@@ -28,6 +28,16 @@ function getModelType(modelName) {
     : "transducer";
 }
 
+function getSherpaModelType(modelName) {
+  // NeMo and stateless transducers use different sherpa decoders. Unverified
+  // models must retain metadata detection rather than inherit a decoder type.
+  return getModelRuntime(modelName) === "offline" &&
+    getModelType(modelName) === "transducer" &&
+    getModelInfo(modelName)?.sherpaModelType === "nemo_transducer"
+    ? "nemo_transducer"
+    : null;
+}
+
 function getRequiredModelFiles(modelName) {
   return getModelType(modelName) === "cohere-transcribe"
     ? COHERE_TRANSCRIBE_MODEL_FILES
@@ -55,6 +65,7 @@ function resolveModelLanguage(modelName, language) {
 module.exports = {
   getModelRuntime,
   getModelType,
+  getSherpaModelType,
   getRequiredModelFiles,
   isSherpaLocalProvider,
   resolveModelLanguage,

@@ -288,6 +288,78 @@ class CliBridge {
       return value;
     };
 
+    const requireSnippetList = (value) => {
+      if (value === undefined || value === null) return [];
+      const valid =
+        Array.isArray(value) &&
+        value.every(
+          (s) =>
+            s &&
+            typeof s.trigger === "string" &&
+            s.trigger.trim() &&
+            typeof s.replacement === "string" &&
+            s.replacement.trim()
+        );
+      if (!valid) {
+        const err = new Error("'add' must be an array of { trigger, replacement } strings");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return value;
+    };
+
+    const requireAudioFile = (value) => {
+      if (typeof value !== "string" || !value.trim()) {
+        const err = new Error("'path' must be the path of an audio file");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      let stat;
+      try {
+        stat = fs.statSync(value);
+      } catch {
+        const err = new Error(`No file at ${value}`);
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      if (!stat.isFile()) {
+        const err = new Error("'path' must point to a file, not a directory");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return fs.realpathSync(value);
+    };
+
+    // Picks the requested model, or the one the app is set to use, and refuses
+    // anything not on disk so the engines' own errors stay genuine failures.
+    const requireLocalModel = (models, requested) => {
+      if (requested !== undefined && typeof requested !== "string") {
+        const err = new Error("'model' must be a string");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      const match = requested
+        ? models.find((m) => m.model === requested)
+        : models.find((m) => m.default);
+      if (!match) {
+        const err = new Error(
+          requested
+            ? `Unknown model '${requested}'. Available: ${models.map((m) => m.model).join(", ")}`
+            : "No local transcription model is selected. Choose one in OpenWhispr under Settings → Transcription, or pass 'model'."
+        );
+        err.code = "VALIDATION";
+        throw err;
+      }
+      if (!match.downloaded) {
+        const err = new Error(
+          `Model '${match.model}' is not downloaded. Open OpenWhispr and download it under Settings → Transcription.`
+        );
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return match;
+    };
+
     const requireSuccess = (result, message) => {
       if (!result?.success) {
         const err = new Error(result?.error || message);
@@ -393,6 +465,62 @@ class CliBridge {
         const words = db.getDictionary();
         setImmediate(() => broadcastToWindows("dictionary-updated", words));
         return { data: { words, added: result.added, removed: result.removed } };
+      }),
+      exact("GET", "/v1/snippets/list", () => {
+        return { data: db.getSnippets(), has_more: false, next_cursor: null };
+      }),
+      // Same delta shape as the dictionary route: an add with an existing
+      // trigger replaces that snippet's text, and removes are by trigger.
+      exact("POST", "/v1/snippets/update", ({ body }) => {
+        const add = requireSnippetList(body?.add);
+        const remove = requireWordList(body?.remove, "remove");
+        if (add.length === 0 && remove.length === 0) {
+          const err = new Error("Provide at least one snippet in 'add' or trigger in 'remove'");
+          err.code = "VALIDATION";
+          throw err;
+        }
+        const lower = (trigger) => trigger.trim().toLowerCase();
+        const removeKeys = new Set(remove.map(lower));
+        const addKeys = new Set(add.map((s) => lower(s.trigger)));
+        const current = db.getSnippets();
+        const kept = current.filter(
+          (s) => !removeKeys.has(lower(s.trigger)) && !addKeys.has(lower(s.trigger))
+        );
+        db.setSnippets([...kept, ...add]);
+        const snippets = db.getSnippets();
+        setImmediate(() => broadcastToWindows("snippets-updated", snippets));
+        // setSnippets drops entries it cannot store (e.g. over-long triggers),
+        // so count what landed rather than what was sent.
+        const storedKeys = new Set(snippets.map((s) => lower(s.trigger)));
+        return {
+          data: {
+            snippets,
+            added: add.filter((s) => storedKeys.has(lower(s.trigger))).length,
+            removed: current.filter((s) => removeKeys.has(lower(s.trigger))).length,
+          },
+        };
+      }),
+      exact("GET", "/v1/transcribe/models", () => ({ data: ipc.listLocalTranscriptionModels() })),
+      // The CLI runs on this machine, so it sends a path and the app reads the
+      // file itself: no audio crosses the bridge and the user's downloaded
+      // models do the work.
+      exact("POST", "/v1/transcribe", async ({ body }) => {
+        const real = requireAudioFile(body?.path);
+        const { provider, model } = requireLocalModel(
+          ipc.listLocalTranscriptionModels(),
+          body?.model
+        );
+        const language =
+          typeof body?.language === "string" && body.language ? body.language : undefined;
+        ipc.approveAudioPath(real);
+        const result = await ipc.transcribeLocalFile(real, { provider, model, language });
+        if (!result?.success) {
+          if (result?.code === "NO_SPEECH_DETECTED" || result?.message === "No audio detected") {
+            return { data: { text: "", provider, model, warning: "No speech detected" } };
+          }
+          throw new Error(result?.error || result?.message || "Local transcription failed");
+        }
+        return { data: { text: result.text, provider, model } };
       }),
       exact("GET", "/v1/transcriptions/list", ({ query }) => {
         const limit = query.get("limit") ? Number(query.get("limit")) : 50;

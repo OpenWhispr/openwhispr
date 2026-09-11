@@ -52,7 +52,7 @@ export function PillCommandMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute bottom-full right-0 mb-3 w-48 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm"
+      className="absolute bottom-full end-0 mb-3 w-48 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm"
       onMouseEnter={() => {
         setWindowInteractivity(true);
       }}
@@ -63,7 +63,7 @@ export function PillCommandMenu({
       }}
     >
       <button
-        className="w-full px-3 py-2 text-left text-sm font-medium hover:bg-muted focus:bg-muted focus:outline-none"
+        className="w-full px-3 py-2 text-start text-sm font-medium hover:bg-muted focus:bg-muted focus:outline-none"
         onClick={onToggleListening}
       >
         {isRecording ? t("app.commandMenu.stopListening") : t("app.commandMenu.startListening")}
@@ -76,7 +76,7 @@ export function PillCommandMenu({
         <>
           <div className="h-px bg-border" />
           <button
-            className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+            className="w-full px-3 py-2 text-start text-sm hover:bg-muted focus:bg-muted focus:outline-none"
             onClick={onAskAssistant}
           >
             {t("app.commandMenu.askAssistant")}
@@ -85,7 +85,7 @@ export function PillCommandMenu({
       )}
       <div className="h-px bg-border" />
       <button
-        className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+        className="w-full px-3 py-2 text-start text-sm hover:bg-muted focus:bg-muted focus:outline-none"
         onClick={onHide}
       >
         {t("app.commandMenu.hideForNow")}

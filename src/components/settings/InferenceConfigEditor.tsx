@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "../icons";
 import {
   LLM_ENTERPRISE_POLICY_PROVIDER_IDS,
   LLM_POLICY_PROVIDER_IDS,
@@ -221,7 +221,7 @@ export default function InferenceConfigEditor({
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
           <TestConnectionButton
             provider={managed.provider}
             getConfig={() => ({
@@ -269,7 +269,13 @@ export default function InferenceConfigEditor({
           </Button>
         </div>
       )}
-      <InferenceModeSelector modes={modes} activeMode={effectiveMode} onSelect={handleModeSelect} />
+      {modes.length > 1 && (
+        <InferenceModeSelector
+          modes={modes}
+          activeMode={effectiveMode}
+          onSelect={handleModeSelect}
+        />
+      )}
 
       {effectiveMode === "providers" && renderModelSelector("cloud")}
       {effectiveMode === "local" && renderModelSelector("local")}

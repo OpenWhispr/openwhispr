@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "滑鼠按鍵快捷鍵目前僅在 macOS 上受支援。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
+      "holdNeedsReleaseKey": "按住說話需要 macOS 能偵測到放開的按鍵：Globe、右側 Option 之類的右側按鍵，或帶修飾鍵的快速鍵。點按可用於任何按鍵。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
       "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
       "trySuggestions": "試試看：{{suggestions}}",
@@ -211,11 +212,11 @@
     "rehaul": {
       "permissions": {
         "title": "3 分鐘完成 OpenWhispr 設定",
-        "microphoneDescription": "將語音轉換為文字。",
-        "accessibilityDescription": "將文字貼到目前的 App。",
+        "microphoneDescription": "把你說的話變成文字。僅在錄音時開啟。",
+        "accessibilityDescription": "把文字貼到你正在使用的 App 裡。",
         "systemAudioTitle": "系統音訊",
-        "systemAudioDescription": "在會議筆記中擷取音訊時必需。",
-        "screenContextDescription": "與語音助理分享螢幕內容。",
+        "systemAudioDescription": "為會議筆記錄下通話中的其他人。僅在錄音時開啟。",
+        "screenContextDescription": "當你向語音助理提問時，讓它看到你螢幕上的內容。絕不儲存。",
         "enable": "啟用",
         "enabled": "已啟用"
       },
@@ -226,21 +227,21 @@
         "description": "選擇所有適用的語言。這有助於 OpenWhispr 更準確地辨識語言切換。"
       },
       "dictationHotkey": {
-        "title": "設定鍵盤快速鍵",
-        "titleLineOne": "設定你的",
-        "titleLineTwo": "鍵盤快速鍵",
-        "description": "選擇一個鍵盤快速鍵，隨時開始和停止聽寫。"
+        "title": "選擇你的聽寫快速鍵",
+        "titleLineOne": "選擇你的",
+        "titleLineTwo": "聽寫快速鍵",
+        "description": "想用說話取代打字時按下它。在任何 App 中都能用。",
+        "activation": "點按還是按住？"
       },
       "assistantHotkey": {
         "title": "設定 OpenWhispr Assistant",
         "titleLineOne": "設定",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "說出你的需求，OpenWhispr Assistant 就會為你寫好結果。"
+        "description": "說出你的請求，OpenWhispr Assistant 會為你寫好結果。"
       },
       "hotkey": {
         "capture": "請按下你想使用的按鍵",
         "chooseAnother": "選擇其他快速鍵",
-        "confirmAgain": "再次按下 {{hotkey}} 以確認",
         "inUse": "此快速鍵已被使用。請選擇其他快速鍵。",
         "holding": "繼續按住，或按下另一個鍵"
       },
@@ -249,21 +250,39 @@
         "titleLineOne": "試試你的",
         "titleLineTwo": "第一次語音輸入",
         "description": "按 {{hotkey}} 開始說話，OpenWhispr 會把你的語音轉成文字。",
-        "founder": "你好，我是 Gabe，OpenWhispr 的創辦人",
-        "prompt": "試著說：「我第一次測試聽寫功能。」",
-        "placeholder": "你的語音輸入結果會顯示在這裡…"
+        "founder": "你好，我是創辦人 Gabe。感謝你試用 OpenWhispr！",
+        "prompt": "點一下下面的輸入框，按下快速鍵，然後告訴我：你希望 OpenWhispr 為你做些什麼？",
+        "placeholder": "點一下這裡，然後按下快速鍵。OpenWhispr 可以在任何文字框中輸入。"
       },
       "assistantDemo": {
         "title": "認識 OpenWhispr Assistant",
         "titleLineOne": "來認識",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "說出你的需求，OpenWhispr Assistant 就會為你寫好結果。",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "寄給 John Doe",
-        "email": "嗨！下週一起喝杯咖啡嗎？告訴我你什麼時候方便。",
-        "prompt": "回覆說週二下午 3 點可以。傳送一個邀請。",
-        "response": "你好，Eren：\n\n很想和你聊聊近況。週二下午 3 點對我來說很合適。如果你方便，我會發送行事曆邀請。\n期待見面，\nJohn"
+        "email": {
+          "subject": "下週喝杯咖啡？",
+          "senderName": "Maria Alvarez",
+          "recipient": "寄給我",
+          "body": "嗨！很高興昨天在聚會上認識你。下週有空一起喝杯咖啡嗎？告訴我你什麼時間方便。\n\nMaria",
+          "reply": "回覆"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "按 {{hotkey}} 並請它回覆。助理會讀取螢幕上的郵件，並在你的行事曆中查找空閒時間。",
+            "prompt": "試著說：「回覆並建議幾個我下週有空的時間。」"
+          },
+          "screen": {
+            "description": "按 {{hotkey}} 並請它回覆。助理會直接從你的螢幕讀取這封郵件。",
+            "prompt": "試著說：「回覆說我很願意，並建議週三下午。」"
+          },
+          "calendar": {
+            "description": "按 {{hotkey}} 並請它回覆。助理會在你的行事曆中查找空閒時間並寫好回覆。",
+            "prompt": "試著說：「回覆 Maria 並建議幾個我下週有空的時間。」"
+          },
+          "general": {
+            "description": "按 {{hotkey}} 並請它回覆。助理會替你寫好。",
+            "prompt": "試著說：「回覆 Maria 說我很願意，並建議週三下午。」"
+          }
+        }
       },
       "demo": {
         "listening": "正在聆聽…",
@@ -431,8 +450,7 @@
       "activation": "聽寫",
       "useCase": "關於你",
       "meeting": "會議",
-      "finish": "完成",
-      "voiceAgent": "語音助理"
+      "finish": "完成"
     },
     "hotkey": {
       "couldNotRegisterTitle": "無法註冊該快捷鍵",
@@ -477,22 +495,6 @@
       "hotkeyToStartStop": "{{hotkey}} 開始/停止",
       "holdHotkey": "按住 {{hotkey}}",
       "textareaPlaceholder": "點擊這裡，然後使用快捷鍵開始語音輸入..."
-    },
-    "voiceAgent": {
-      "title": "語音助理設定",
-      "description": "一鍵喚起你的 AI 助理",
-      "hotkey": "快捷鍵",
-      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。如果有選取的文字，{{agentName}} 會編輯並取代它。如果可編輯文字欄位已取得焦點，回答會貼到游標處；否則會在懸浮面板中開啟。無需先說「Hey {{agentName}}」。",
-      "test": "試試看",
-      "testInstruction": "選取下方的範例文字，按下 {{hotkey}} 並說「把它改短一點」——編輯結果會直接出現在文字框裡",
-      "testSetHotkey": "在上方設定快捷鍵即可試用",
-      "sampleText": "週四的會議改期了，我們下週初碰個面，過一遍上線計畫，並分配剩下的任務。",
-      "examples": [
-        "翻譯成義大利文:「我說話比打字快」",
-        "給我的老闆寫一封簡短的郵件,告訴他我想要升職,他叫 Mark",
-        "5 × 5 等於多少?"
-      ],
-      "optionalNote": "選用——你可以隨時在設定中新增或修改。"
     },
     "connectivity": {
       "title": "無法從此網路連線到 OpenWhispr Cloud",
@@ -597,8 +599,6 @@
     "update": {
       "readyTitle": "更新已準備就緒",
       "readyDescription": "點擊「安裝更新」以重新啟動並套用最新版本。",
-      "problemTitle": "更新遇到問題",
-      "problemDescription": "無法完成更新。請稍後再試。",
       "installTitle": "安裝更新",
       "installDescription": "OpenWhispr 將重新啟動以套用更新。進行中的工作會自動儲存。",
       "couldNotInstallTitle": "無法安裝更新",
@@ -636,6 +636,8 @@
       "couldNotDeleteDescription": "這筆轉錄記錄可能已被移除。",
       "couldNotDeleteDescriptionGeneric": "發生錯誤，請再試一次。",
       "empty": "目前沒有轉錄記錄",
+      "emptyDescription": "在任何應用程式中按下快捷鍵開始說話。每則轉錄都會私密地儲存在你的裝置上。",
+      "sectionTitle": "轉錄記錄",
       "dataRetentionDisabled": "資料保留已關閉。轉錄和音訊不會儲存至歷史記錄。",
       "press": "按下",
       "toStart": "開始",
@@ -657,6 +659,7 @@
       "clearAllErrorTitle": "無法清除歷史紀錄",
       "clearAllErrorDescription": "發生錯誤，請重試。",
       "copyText": "複製文字",
+      "moreActions": "更多操作",
       "copyRawTranscript": "複製原始轉錄",
       "deleteItem": "刪除",
       "viewRawTranscript": "檢視原始轉錄",
@@ -828,6 +831,7 @@
     }
   },
   "transcription": {
+    "modelCard": "模型卡",
     "deleteModel": {
       "title": "刪除模型",
       "description": "確定要刪除此模型嗎？如果之後要使用，需要重新下載。"
@@ -914,6 +918,11 @@
         "unreachableDescription": "你的口述內容已按原文貼上，未經翻譯。請檢查翻譯設定。",
         "failedTitle": "翻譯失敗",
         "failedDescription": "已貼上原始文字。你可以在歷史記錄中重試。"
+      },
+      "pushForceStopped": {
+        "title": "轉錄內容未貼上",
+        "description": "聽寫停止時快捷鍵仍處於按住狀態，因此未貼上文字。轉錄內容已複製到剪貼簿。",
+        "descriptionClipboardFailed": "聽寫停止時快捷鍵仍處於按住狀態，因此未貼上文字，也無法複製到剪貼簿。"
       },
       "selectionEditing": {
         "notAppliedTitle": "未套用選取文字編輯",
@@ -1104,7 +1113,8 @@
       "welcomeBack": "歡迎回來"
     },
     "signedIn": {
-      "welcomeBack": "歡迎回來"
+      "welcomeBack": "歡迎回來",
+      "notYou": "不是你？登出"
     },
     "sso": {
       "continueWithSSO": "使用 SSO 登入",
@@ -1124,7 +1134,7 @@
       "continueWithMicrosoft": "使用 Microsoft 繼續",
       "protocolUnavailable": "無法透過瀏覽器登入 — 請在系統的「預設應用程式」設定中重新註冊 openwhispr:// 協定。"
     },
-    "welcomeSubtitle": "用語音完成一切",
+    "welcomeSubtitle": "你的聲音，由你掌控。",
     "welcomeTitle": "歡迎使用 OpenWhispr",
     "sessionExpired": "工作階段已過期，請重新登入。"
   },
@@ -1910,9 +1920,7 @@
         "meetingDetection": "會議偵測",
         "meetingDetectionDescription": "偵測到會議時通知您以便開始錄音",
         "calendarReminders": "行事曆提醒",
-        "calendarRemindersDescription": "預定會議即將開始時通知您",
-        "updates": "應用程式更新",
-        "updatesDescription": "有新版本可用時通知您"
+        "calendarRemindersDescription": "預定會議即將開始時通知您"
       },
       "clipboard": {
         "title": "剪貼簿",
@@ -2011,6 +2019,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "自動更新",
+        "automaticUpdatesDescription": "在背景下載並安裝更新",
         "badges": {
           "dev": "開發版",
           "latest": "最新",
@@ -2049,16 +2059,13 @@
           "updateAvailable": {
             "description": "有可用更新：v{{version}}",
             "title": "有可用更新"
-          },
-          "updateError": {
-            "description": "更新時發生錯誤。請再試一次。",
-            "title": "更新錯誤"
           }
         },
         "downloadUpdate": "下載更新 {{version}}",
         "downloading": "下載中... {{progress}}%",
         "installAndRestart": "安裝並重新啟動",
         "latestVersion": "你使用的是最新版本",
+        "managedByPackageManager": "更新透過您的套件管理器安裝",
         "newVersion": "有更新的版本可用",
         "newVersionAvailable": "有新版本可用",
         "restarting": "重新啟動中...",
@@ -2516,7 +2523,8 @@
         "parakeet_tdt_0_6b_v3": "快速多語言 ASR，自動語言偵測（25 種語言）",
         "parakeet_unified_en_0_6b": "僅英語 ASR，最先進的準確度（平均 WER 5.91%）",
         "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron 英語串流語音辨識",
-        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron 多語言串流語音辨識，自動語言偵測（15 種語言）"
+        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron 多語言串流語音辨識，自動語言偵測（15 種語言）",
+        "orukeet": "針對多語言語音辨識微調的 Parakeet"
       },
       "whisper": {
         "tiny": "最快速，品質較低",
@@ -2856,6 +2864,11 @@
       "reopen": "瞭解空間的組織方式"
     },
     "folders": {
+      "defaults": {
+        "personal": "個人",
+        "meetings": "會議",
+        "videos": "影片"
+      },
       "title": "資料夾",
       "soon": "即將推出",
       "folderName": "資料夾名稱",
@@ -2894,6 +2907,10 @@
       "raw": "原始",
       "enhanced": "已增強",
       "saving": "儲存中",
+      "transcriptEmptyTitle": "尚未錄製任何內容",
+      "transcriptEmptyDescription": "點擊錄製開始轉錄。所說的內容會即時顯示在這裡。",
+      "startRecording": "開始錄製",
+      "generateSummary": "產生 AI 摘要",
       "startWriting": "開始撰寫...",
       "staleIndicator": "內容在增強後已變更",
       "live": "即時",
@@ -3058,6 +3075,15 @@
         "generateNotes": {
           "name": "生成筆記",
           "description": "清理、結構化和增強您的筆記"
+        },
+        "followUpEmail": {
+          "name": "跟進郵件",
+          "description": "根據筆記和轉錄草擬一封跟進郵件",
+          "cta": "草擬跟進郵件"
+        },
+        "detailedNotes": {
+          "name": "詳細筆記",
+          "description": "準確、完整的會議筆記，包含決策和行動項目"
         }
       },
       "errors": {
@@ -3580,11 +3606,17 @@
       "web_searchName": "網頁搜尋",
       "get_calendar_eventsName": "取得行事曆事件",
       "get_calendar_availabilityName": "查看可用時段",
+      "get_snippetName": "取得片段",
+      "update_dictionaryName": "更新字典",
+      "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜尋筆記...",
       "web_searchStatus": "正在搜尋網頁...",
       "copy_to_clipboardStatus": "正在複製到剪貼簿...",
       "get_calendar_eventsStatus": "正在查看行事曆...",
       "get_calendar_availabilityStatus": "正在查看可用時段...",
+      "get_snippetStatus": "正在取得片段...",
+      "update_dictionaryStatus": "正在更新字典...",
+      "update_snippetsStatus": "正在更新片段...",
       "get_noteStatus": "正在讀取筆記...",
       "create_noteStatus": "正在建立筆記...",
       "update_noteStatus": "正在更新筆記...",
@@ -3754,10 +3786,9 @@
   },
   "upcoming": {
     "title": "即將開始",
-    "transcriptions": "轉錄",
     "now": "進行中",
     "untitledEvent": "無標題事件",
-    "joinAndTakeNotes": "加入並記筆記",
+    "joinAndTranscribe": "加入並轉錄",
     "takeNotes": "記筆記",
     "noEventsToday": "今天沒有行程",
     "noUpcomingEvents": "暫無即將開始的行程",
@@ -3805,6 +3836,7 @@
         "createLink": "建立連結",
         "copyLink": "複製連結",
         "copied": "已複製",
+        "export": "匯出",
         "owner": "擁有者",
         "editor": "可編輯",
         "viewer": "可檢視",
@@ -3845,7 +3877,6 @@
     "allSpaces": "所有空間",
     "title": "搜尋",
     "description": "搜尋筆記與轉錄",
-    "shortPlaceholder": "搜尋",
     "placeholder": "搜尋筆記與轉錄…",
     "sections": {
       "notes": "筆記",
@@ -3859,11 +3890,6 @@
       "open": "開啟",
       "dismiss": "關閉"
     }
-  },
-  "updateNotification": {
-    "title": "OpenWhispr 有可用更新",
-    "body": "版本 {{version}} 已可下載",
-    "cta": "立即更新"
   },
   "permissionsGate": {
     "title": "需要權限",
@@ -3902,7 +3928,12 @@
     "scopes": {
       "notesRead": "讀取筆記",
       "notesWrite": "建立與編輯筆記",
-      "transcriptionsRead": "讀取轉錄"
+      "transcriptionsRead": "讀取轉錄",
+      "dictionaryRead": "讀取字典",
+      "dictionaryWrite": "編輯字典",
+      "snippetsRead": "讀取片段",
+      "snippetsWrite": "編輯片段",
+      "transcriptionsWrite": "轉錄音訊"
     },
     "revoke": {
       "button": "撤銷",

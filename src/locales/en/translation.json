@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
+      "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
       "trySuggestions": "Try: {{suggestions}}",
@@ -211,11 +212,11 @@
     "rehaul": {
       "permissions": {
         "title": "Set up OpenWhispr in 3 minutes",
-        "microphoneDescription": "Turns speech into text.",
-        "accessibilityDescription": "Pastes text into your active app.",
+        "microphoneDescription": "Turns what you say into text. Only on while you’re recording.",
+        "accessibilityDescription": "Pastes the text into the app you’re using.",
         "systemAudioTitle": "System Audio",
-        "systemAudioDescription": "Required for capturing audio in Meeting Notes.",
-        "screenContextDescription": "Share screen context with Voice Assistant.",
+        "systemAudioDescription": "Records the other people on your calls for meeting notes. Only on while you’re recording.",
+        "screenContextDescription": "Lets your voice assistant see your screen when you ask it something. Never stored.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -226,21 +227,21 @@
         "description": "Select all that apply. This helps OpenWhispr recognize language switches more accurately."
       },
       "dictationHotkey": {
-        "title": "Set up your keyboard shortcut",
-        "titleLineOne": "Set up your",
-        "titleLineTwo": "keyboard shortcut",
-        "description": "Choose a keyboard shortcut to start and stop dictation from anywhere."
+        "title": "Choose your dictation shortcut",
+        "titleLineOne": "Choose your",
+        "titleLineTwo": "dictation shortcut",
+        "description": "Press it whenever you want to talk instead of type. Works in any app.",
+        "activation": "Tap or hold?"
       },
       "assistantHotkey": {
         "title": "Set up OpenWhispr Assistant",
         "titleLineOne": "Set up",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you."
+        "description": "Speak a request. OpenWhispr Assistant writes the result for you."
       },
       "hotkey": {
-        "capture": "Press the keys you want to use",
+        "capture": "Press the key you want to use",
         "chooseAnother": "Choose another shortcut",
-        "confirmAgain": "Press {{hotkey}} again to confirm",
         "inUse": "That shortcut is already in use. Choose another one.",
         "holding": "Keep holding, or press another key"
       },
@@ -249,21 +250,39 @@
         "titleLineOne": "Try your",
         "titleLineTwo": "first dictation",
         "description": "Press {{hotkey}} and start speaking. OpenWhispr will turn your voice into text.",
-        "founder": "Hi, I am Gabe, Founder of OpenWhispr",
-        "prompt": "Try saying: “I’m testing dictation for the first time.”",
-        "placeholder": "Your dictation will appear here…"
+        "founder": "Hey, I’m Gabe, the founder. Thanks for trying OpenWhispr!",
+        "prompt": "Click the box below, press your shortcut, and tell me: what would you love OpenWhispr to do for you?",
+        "placeholder": "Click here, then press your shortcut. OpenWhispr types into any text box."
       },
       "assistantDemo": {
         "title": "Meet OpenWhispr Assistant",
         "titleLineOne": "Meet",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "to John Doe",
-        "email": "Hey! Want to grab coffee next week? Let me know what works for you.",
-        "prompt": "Reply that Tuesday at 3 works. Send an invite.",
-        "response": "Hi Eren,\n\nI’d love to catch up. Tuesday at 3 PM works well for me. If that suits you, I’ll send over a calendar invite.\nLooking forward to it,\nJohn"
+        "email": {
+          "subject": "Coffee next week?",
+          "senderName": "Maria Alvarez",
+          "recipient": "to me",
+          "body": "Hi! It was great meeting you at the meetup yesterday. Would you be up for a quick coffee sometime next week? Let me know what works for you.\n\nMaria",
+          "reply": "Reply"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant reads the email on your screen and checks your calendar for free times.",
+            "prompt": "Try saying: “Reply and suggest a few times next week when I’m free.”"
+          },
+          "screen": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant reads the email right off your screen.",
+            "prompt": "Try saying: “Reply that I’d love to, and suggest Wednesday afternoon.”"
+          },
+          "calendar": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant checks your calendar for free times and writes the answer.",
+            "prompt": "Try saying: “Reply to Maria and suggest a few times next week when I’m free.”"
+          },
+          "general": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant writes it for you.",
+            "prompt": "Try saying: “Reply to Maria that I’d love to, and suggest Wednesday afternoon.”"
+          }
+        }
       },
       "demo": {
         "listening": "Listening…",
@@ -431,8 +450,7 @@
       "activation": "Dictation",
       "useCase": "About you",
       "meeting": "Meetings",
-      "finish": "Finish",
-      "voiceAgent": "Voice Assistant"
+      "finish": "Finish"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Couldn't register that hotkey",
@@ -477,22 +495,6 @@
       "hotkeyToStartStop": "{{hotkey}} to start/stop",
       "holdHotkey": "Hold {{hotkey}}",
       "textareaPlaceholder": "Click here and use your hotkey to dictate..."
-    },
-    "voiceAgent": {
-      "title": "Voice Assistant Setup",
-      "description": "Talk to your AI assistant with a single keypress",
-      "hotkey": "Hotkey",
-      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. If text is highlighted, {{agentName}} edits and replaces it. If a writable text field is focused, the answer is pasted at the cursor; otherwise it opens in a floating panel. No need to say “Hey {{agentName}}” first.",
-      "test": "Try it",
-      "testInstruction": "Select the sample text below, then press {{hotkey}} and say “make this shorter” — the edit lands right in the text box",
-      "testSetHotkey": "Set a hotkey above to try it",
-      "sampleText": "The meeting from thursday got moved, so lets sync up early next week to go over the launch plan and divide up the remaining tasks.",
-      "examples": [
-        "Translate to Italian: “I talk faster than I type”",
-        "Write a short email to my boss telling him I want a promotion, his name is Mark",
-        "What is 5 × 5?"
-      ],
-      "optionalNote": "Optional — you can set or change it anytime in Settings."
     },
     "connectivity": {
       "title": "We can't reach OpenWhispr Cloud from this network",
@@ -597,8 +599,6 @@
     "update": {
       "readyTitle": "Update ready to install",
       "readyDescription": "Click 'Install Update' to restart with the latest version.",
-      "problemTitle": "Update ran into a problem",
-      "problemDescription": "We couldn't complete the update. Please try again later.",
       "installTitle": "Install Update",
       "installDescription": "OpenWhispr will restart to apply the update. Any in-progress work will be saved.",
       "couldNotInstallTitle": "Couldn't install update",
@@ -636,6 +636,8 @@
       "couldNotDeleteDescription": "This transcription may have already been removed.",
       "couldNotDeleteDescriptionGeneric": "Something went wrong. Please try again.",
       "empty": "No transcriptions yet",
+      "emptyDescription": "Press your hotkey in any app and start talking. Every transcription is saved privately here on your device.",
+      "sectionTitle": "Transcriptions",
       "dataRetentionDisabled": "Data retention is off. Transcriptions and audio are not saved to history.",
       "press": "Press",
       "toStart": "to start",
@@ -644,6 +646,7 @@
         "yesterday": "Yesterday"
       },
       "copyText": "Copy text",
+      "moreActions": "More actions",
       "copyRawTranscript": "Copy raw transcript",
       "deleteItem": "Delete",
       "viewRawTranscript": "View raw transcript",
@@ -828,6 +831,7 @@
     }
   },
   "transcription": {
+    "modelCard": "Model card",
     "deleteModel": {
       "title": "Delete Model",
       "description": "Are you sure you want to delete this model? You'll need to re-download it if you want to use it again."
@@ -914,6 +918,11 @@
         "unreachableDescription": "Your dictation was pasted untranslated. Check the translation settings.",
         "failedTitle": "Translation failed",
         "failedDescription": "The original text was pasted. You can retry it from History."
+      },
+      "pushForceStopped": {
+        "title": "Transcription not pasted",
+        "description": "Dictation stopped while the hotkey was still held, so the text was not pasted. Your transcription is on the clipboard.",
+        "descriptionClipboardFailed": "Dictation stopped while the hotkey was still held, so the text was not pasted, and it could not be copied to the clipboard either."
       },
       "selectionEditing": {
         "notAppliedTitle": "Selection edit not applied",
@@ -1104,7 +1113,8 @@
       "welcomeBack": "Welcome back"
     },
     "signedIn": {
-      "welcomeBack": "Welcome back"
+      "welcomeBack": "Welcome back",
+      "notYou": "Not you? Log out"
     },
     "sso": {
       "continueWithSSO": "Sign in with SSO",
@@ -1124,7 +1134,7 @@
       "continueWithMicrosoft": "Continue with Microsoft",
       "protocolUnavailable": "Browser sign-in unavailable — re-register the openwhispr:// protocol in your system's Default Apps settings."
     },
-    "welcomeSubtitle": "Use voice for everything",
+    "welcomeSubtitle": "The power of your voice. On your terms.",
     "welcomeTitle": "Welcome to OpenWhispr",
     "sessionExpired": "Session expired. Please restart the sign-up process."
   },
@@ -1153,10 +1163,9 @@
   },
   "upcoming": {
     "title": "Coming up",
-    "transcriptions": "Transcriptions",
     "now": "Now",
     "untitledEvent": "Untitled Event",
-    "joinAndTakeNotes": "Join & take notes",
+    "joinAndTranscribe": "Join & transcribe",
     "takeNotes": "Take notes",
     "noEventsToday": "No events today",
     "noUpcomingEvents": "No upcoming events",
@@ -1267,7 +1276,12 @@
     "scopes": {
       "notesRead": "Read notes",
       "notesWrite": "Create & edit notes",
-      "transcriptionsRead": "Read transcriptions"
+      "transcriptionsRead": "Read transcriptions",
+      "dictionaryRead": "Read dictionary",
+      "dictionaryWrite": "Edit dictionary",
+      "snippetsRead": "Read snippets",
+      "snippetsWrite": "Edit snippets",
+      "transcriptionsWrite": "Transcribe audio"
     },
     "revoke": {
       "button": "Revoke",
@@ -2199,9 +2213,7 @@
         "meetingDetection": "Meeting detection",
         "meetingDetectionDescription": "Notify when a meeting is detected so you can start recording",
         "calendarReminders": "Calendar reminders",
-        "calendarRemindersDescription": "Notify when a scheduled meeting is about to start",
-        "updates": "App updates",
-        "updatesDescription": "Notify when a new version is available"
+        "calendarRemindersDescription": "Notify when a scheduled meeting is about to start"
       },
       "clipboard": {
         "title": "Clipboard",
@@ -2300,6 +2312,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "Automatic updates",
+        "automaticUpdatesDescription": "Download and install updates in the background",
         "badges": {
           "dev": "Dev",
           "latest": "Latest",
@@ -2338,16 +2352,13 @@
           "updateAvailable": {
             "description": "Update available: v{{version}}",
             "title": "Update Available"
-          },
-          "updateError": {
-            "description": "Something went wrong with the update. Please try again.",
-            "title": "Update Error"
           }
         },
         "downloadUpdate": "Download Update {{version}}",
         "downloading": "Downloading... {{progress}}%",
         "installAndRestart": "Install & Restart",
         "latestVersion": "You're on the latest version",
+        "managedByPackageManager": "Updates are installed through your package manager",
         "newVersion": "A newer version is available",
         "newVersionAvailable": "New version available",
         "restarting": "Restarting...",
@@ -2605,7 +2616,8 @@
         "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)",
         "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)",
         "nemotron_speech_streaming_en_0_6b": "English streaming ASR from NVIDIA Nemotron",
-        "nemotron_3_5_asr_streaming_0_6b": "Multilingual streaming ASR from NVIDIA Nemotron with auto language detection (15 languages)"
+        "nemotron_3_5_asr_streaming_0_6b": "Multilingual streaming ASR from NVIDIA Nemotron with auto language detection (15 languages)",
+        "orukeet": "Parakeet fine-tune for multilingual speech recognition"
       },
       "diarization": {
         "segmentation": "Speech boundary detection for speaker diarization",
@@ -3194,6 +3206,11 @@
       "reopen": "Learn how spaces are organized"
     },
     "folders": {
+      "defaults": {
+        "personal": "Personal",
+        "meetings": "Meetings",
+        "videos": "Videos"
+      },
       "title": "Folders",
       "soon": "Soon",
       "folderName": "Folder name",
@@ -3232,6 +3249,10 @@
       "raw": "Raw",
       "enhanced": "Enhanced",
       "saving": "Saving",
+      "transcriptEmptyTitle": "Nothing recorded yet",
+      "transcriptEmptyDescription": "Hit record to start transcribing. Everything said shows up here as it happens.",
+      "startRecording": "Start recording",
+      "generateSummary": "Generate AI Summary",
       "startWriting": "Start writing...",
       "staleIndicator": "Content has changed since enhancement",
       "live": "Live",
@@ -3412,6 +3433,15 @@
         "generateNotes": {
           "name": "Generate Notes",
           "description": "Clean up, structure, and enhance your notes"
+        },
+        "followUpEmail": {
+          "name": "Follow-up email",
+          "description": "Draft a follow-up email from your notes and transcript",
+          "cta": "Draft a follow-up email"
+        },
+        "detailedNotes": {
+          "name": "Detailed Notes",
+          "description": "Accurate, comprehensive meeting notes with decisions and action items"
         }
       },
       "errors": {
@@ -3745,11 +3775,17 @@
       "web_searchName": "Web search",
       "get_calendar_eventsName": "Get calendar events",
       "get_calendar_availabilityName": "Check calendar availability",
+      "get_snippetName": "Get snippet",
+      "update_dictionaryName": "Update dictionary",
+      "update_snippetsName": "Update snippets",
       "search_notesStatus": "Searching notes...",
       "web_searchStatus": "Searching the web...",
       "copy_to_clipboardStatus": "Copying to clipboard...",
       "get_calendar_eventsStatus": "Checking calendar...",
       "get_calendar_availabilityStatus": "Checking availability...",
+      "get_snippetStatus": "Fetching snippet...",
+      "update_dictionaryStatus": "Updating dictionary...",
+      "update_snippetsStatus": "Updating snippets...",
       "get_noteStatus": "Reading note...",
       "create_noteStatus": "Creating note...",
       "update_noteStatus": "Updating note...",
@@ -3929,6 +3965,7 @@
         "createLink": "Create link",
         "copyLink": "Copy link",
         "copied": "Copied",
+        "export": "Export",
         "owner": "Owner",
         "editor": "Can edit",
         "viewer": "Can view",
@@ -3969,7 +4006,6 @@
     "allSpaces": "All spaces",
     "title": "Search",
     "description": "Search across notes and transcripts",
-    "shortPlaceholder": "Search",
     "placeholder": "Search notes and transcripts…",
     "sections": {
       "notes": "Notes",
@@ -3983,11 +4019,6 @@
       "open": "Open",
       "dismiss": "Dismiss"
     }
-  },
-  "updateNotification": {
-    "title": "OpenWhispr Update Available",
-    "body": "Version {{version}} is ready to download",
-    "cta": "Update Now"
   },
   "permissionsGate": {
     "title": "Permissions Required",

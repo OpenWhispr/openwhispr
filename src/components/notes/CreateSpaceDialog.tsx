@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, Plus } from "lucide-react";
+import { Check, Loader2, Plus } from "../icons";
 import {
   Dialog,
   DialogContent,
@@ -272,7 +272,7 @@ export default function CreateSpaceDialog({
           </DialogHeader>
 
           {workspacesFailed ? (
-            <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-3">
+            <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-medium text-foreground">
                   {t("settingsPage.workspace.loadError.title")}
@@ -288,7 +288,7 @@ export default function CreateSpaceDialog({
                 disabled={workspacesLoading}
                 className="shrink-0"
               >
-                {workspacesLoading && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                {workspacesLoading && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
                 {t("settingsPage.workspace.loadError.retry")}
               </Button>
             </div>
@@ -315,7 +315,7 @@ export default function CreateSpaceDialog({
                         <SelectContent>
                           {manageableWorkspaces.map((item) => (
                             <SelectItem key={item.id} value={item.id}>
-                              {item.name}
+                              <span dir="auto">{item.name}</span>
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -326,7 +326,9 @@ export default function CreateSpaceDialog({
                       <p className="text-xs font-medium text-foreground/50">
                         {t("settingsPage.workspace.title")}
                       </p>
-                      <p className="text-sm text-foreground truncate">{workspace.name}</p>
+                      <p dir="auto" className="text-sm text-foreground truncate">
+                        {workspace.name}
+                      </p>
                     </>
                   )}
                 </div>
@@ -355,6 +357,7 @@ export default function CreateSpaceDialog({
                     {t("notes.spaces.nameLabel")}
                   </label>
                   <Input
+                    dir="auto"
                     id="create-space-name"
                     value={name}
                     autoFocus
@@ -372,7 +375,7 @@ export default function CreateSpaceDialog({
                   {t("notes.spaces.teams.assignLabel")}
                 </p>
                 {teamsError && teams.length === 0 ? (
-                  <div className="rounded border border-border/70 dark:border-border-subtle/50 px-3 py-2.5 flex items-center justify-between gap-2">
+                  <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
                     <p className="text-xs text-muted-foreground">
                       {t("notes.spaces.teams.loadError")}
                     </p>
@@ -392,7 +395,7 @@ export default function CreateSpaceDialog({
                 ) : (
                   <>
                     {teams.length > 0 && (
-                      <div className="rounded border border-border/70 dark:border-border-subtle/50 overflow-y-auto max-h-36 p-1">
+                      <div className="rounded border border-border/70 dark:border-border-subtle/60 overflow-y-auto max-h-36 p-1">
                         {teams.map((team) => {
                           const isSelected = selectedTeamIds.has(team.id);
                           return (
@@ -402,16 +405,16 @@ export default function CreateSpaceDialog({
                               aria-pressed={isSelected}
                               onClick={() => toggleTeam(team.id)}
                               className={cn(
-                                "flex items-center gap-2 w-full px-2 h-8 rounded-md text-left",
+                                "flex items-center gap-2 w-full px-2 h-8 rounded-md text-start",
                                 "transition-colors duration-150 outline-none",
                                 "hover:bg-foreground/4 dark:hover:bg-white/4",
                                 "focus-visible:ring-1 focus-visible:ring-ring/30"
                               )}
                             >
-                              <span className="text-xs text-foreground truncate flex-1">
+                              <span dir="auto" className="text-xs text-foreground truncate flex-1">
                                 {team.name}
                               </span>
-                              <span className="text-[10px] text-foreground/40 shrink-0">
+                              <span className="text-[10px] text-foreground/45 shrink-0">
                                 {t("settingsPage.workspace.teams.memberCount", {
                                   count: team.member_count ?? 0,
                                 })}
@@ -423,7 +426,7 @@ export default function CreateSpaceDialog({
                       </div>
                     )}
                     {newTeamOpen ? (
-                      <div className="rounded border border-border/70 dark:border-border-subtle/50 p-2.5 space-y-2">
+                      <div className="rounded border border-border/70 dark:border-border-subtle/60 p-2.5 space-y-2">
                         <div className="space-y-1.5">
                           <label
                             htmlFor="create-space-new-team-name"
@@ -432,6 +435,7 @@ export default function CreateSpaceDialog({
                             {t("notes.spaces.teams.newTeamNameLabel")}
                           </label>
                           <Input
+                            dir="auto"
                             id="create-space-new-team-name"
                             value={newTeamName}
                             maxLength={80}
@@ -487,7 +491,7 @@ export default function CreateSpaceDialog({
                         onClick={() => setCreateTeamOpen(true)}
                         className="h-7 px-2 text-xs text-foreground/60"
                       >
-                        <Plus size={12} className="mr-1" />
+                        <Plus size={12} className="me-1" />
                         {t("notes.spaces.teams.newTeam")}
                       </Button>
                     )}
@@ -507,7 +511,7 @@ export default function CreateSpaceDialog({
                   onClick={handleCreate}
                   disabled={!name.trim() || isCreating || !workspace || !hasTeamSelection}
                 >
-                  {showSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                  {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                   {t("notes.spaces.create")}
                 </Button>
               </DialogFooter>

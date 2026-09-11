@@ -1,4 +1,4 @@
-import { Building2, Clock3, Globe2, UserPlus, UserRound } from "lucide-react";
+import { Building2, Clock3, Globe2, UserPlus, UserRound } from "./icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 
@@ -28,7 +28,7 @@ export default function LeaderboardSoloEmptyState({
 
       <div className="relative flex max-w-lg flex-col items-center">
         <div aria-hidden="true" className="flex items-center">
-          <div className="flex size-11 items-center justify-center rounded-full border border-dashed border-border/70 bg-muted/30 text-muted-foreground/45">
+          <div className="flex size-11 items-center justify-center rounded-full border border-dashed border-border/70 bg-muted/30 text-muted-foreground/70">
             <UserRound size={18} />
           </div>
           <div className="w-9 border-t border-dashed border-border/70" />
@@ -36,12 +36,12 @@ export default function LeaderboardSoloEmptyState({
             <UserPlus size={24} />
           </div>
           <div className="w-9 border-t border-dashed border-border/70" />
-          <div className="flex size-11 items-center justify-center rounded-full border border-dashed border-border/70 bg-muted/30 text-muted-foreground/45">
+          <div className="flex size-11 items-center justify-center rounded-full border border-dashed border-border/70 bg-muted/30 text-muted-foreground/70">
             <UserRound size={18} />
           </div>
         </div>
 
-        <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/30 px-3 py-1 text-[11px] font-medium text-muted-foreground">
+        <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-3 py-1 text-[11px] font-medium text-muted-foreground">
           <ScopeIcon size={12} />
           <span>{scopeName}</span>
         </div>
@@ -61,7 +61,7 @@ export default function LeaderboardSoloEmptyState({
           {t("insights.leaderboard.soloHint")}
         </p>
         {pendingInvites.length > 0 && (
-          <div className="mt-4 flex max-w-full items-start gap-2 rounded-lg border border-border/50 bg-muted/25 px-3 py-2 text-left text-[11px] text-muted-foreground">
+          <div className="mt-4 flex max-w-full items-start gap-2 rounded-lg border border-border/70 bg-muted/25 px-3 py-2 text-left text-[11px] text-muted-foreground">
             <Clock3 size={13} className="mt-0.5 shrink-0" />
             <p className="min-w-0 break-words">
               {t("insights.leaderboard.invitedList", { emails: pendingInvites.join(", ") })}

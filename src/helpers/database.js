@@ -6,7 +6,21 @@ const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { parseEventTime } = require("./calendarAvailability");
-const { ANALYTICS_COUNTER_VERSION, summarizeAnalyticsDays } = require("./analytics");
+// An explicit zone marks an instant this app captured at dictation time. A
+// naive timestamp may instead be a sync artifact: upsertTranscriptionFromCloud
+// keeps the cloud created_at but lets timestamp default to the local pull, so
+// a naive value must never outrank created_at when dating a historical row.
+const { hasExplicitTimeZone, parseDbTimestamp, toDbTimestamp } = require("./dbTimestamp");
+const { BUILTIN_ACTIONS, GENERATE_NOTES_KEY } = require("./builtinActions");
+const {
+  ANALYTICS_COUNTER_VERSION,
+  ANALYTICS_HISTORY_BACKFILL_VERSION,
+  ANALYTICS_HISTORICAL_COUNTER_VERSION,
+  countSpokenWords,
+  inferHistoricalAnalyticsMode,
+  localDateKey,
+  summarizeAnalyticsDays,
+} = require("./analytics");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -509,33 +523,41 @@ class DatabaseManager {
         "CREATE INDEX IF NOT EXISTS idx_agent_conversations_container ON agent_conversations(space_id, folder_id)"
       );
 
-      const actionCount = this.db.prepare("SELECT COUNT(*) as count FROM actions").get();
-      if (actionCount.count === 0) {
-        this.db
-          .prepare(
-            "INSERT INTO actions (name, description, prompt, icon, is_builtin, sort_order, translation_key) VALUES (?, ?, ?, ?, 1, 0, ?)"
-          )
-          .run(
-            "Generate Notes",
-            "Clean up, structure, and enhance your notes",
-            "Transform the provided content into clean, well-structured notes in markdown. Preserve the user's intent and all substantive information. Remove filler, small talk, false starts, and redundant content. For personal notes, improve grammar and structure for readability. For meeting transcripts, extract key discussion points, decisions, action items, and follow-ups.",
-            "sparkles",
-            "notes.actions.builtin.generateNotes"
-          );
-      }
-
-      // Migrate built-in action to "Generate Notes"
+      // Pre-2026 installs carry one built-in row under an older key: rename it to
+      // Generate Notes so the loop below recognizes and upgrades it.
+      const builtinKeys = BUILTIN_ACTIONS.map((action) => action.translationKey);
       this.db
         .prepare(
-          "UPDATE actions SET name = ?, description = ?, prompt = ?, translation_key = ? WHERE is_builtin = 1 AND translation_key != ?"
+          `UPDATE actions SET translation_key = ? WHERE is_builtin = 1 AND (translation_key IS NULL OR translation_key NOT IN (${builtinKeys.map(() => "?").join(", ")}))`
         )
-        .run(
-          "Generate Notes",
-          "Clean up, structure, and enhance your notes",
-          "Transform the provided content into clean, well-structured notes in markdown. Preserve the user's intent and all substantive information. Remove filler, small talk, false starts, and redundant content. For personal notes, improve grammar and structure for readability. For meeting transcripts, extract key discussion points, decisions, action items, and follow-ups.",
-          "notes.actions.builtin.generateNotes",
-          "notes.actions.builtin.generateNotes"
-        );
+        .run(GENERATE_NOTES_KEY, ...builtinKeys);
+
+      // Built-in actions: insert any that are missing, and roll a new default prompt
+      // out to rows whose prompt is still a previous default (never a user edit).
+      const selectBuiltin = this.db.prepare(
+        "SELECT id, prompt FROM actions WHERE is_builtin = 1 AND translation_key = ?"
+      );
+      const insertBuiltin = this.db.prepare(
+        "INSERT INTO actions (name, description, prompt, icon, is_builtin, sort_order, translation_key) VALUES (?, ?, ?, ?, 1, ?, ?)"
+      );
+      const upgradeBuiltin = this.db.prepare(
+        "UPDATE actions SET name = ?, description = ?, prompt = ? WHERE id = ?"
+      );
+      for (const action of BUILTIN_ACTIONS) {
+        const existing = selectBuiltin.get(action.translationKey);
+        if (!existing) {
+          insertBuiltin.run(
+            action.name,
+            action.description,
+            action.prompt,
+            action.icon,
+            action.sortOrder,
+            action.translationKey
+          );
+        } else if (action.previousPrompts.includes(existing.prompt)) {
+          upgradeBuiltin.run(action.name, action.description, action.prompt, existing.id);
+        }
+      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS google_calendar_tokens (
@@ -986,6 +1008,12 @@ class DatabaseManager {
           id INTEGER PRIMARY KEY CHECK (id = 1),
           cleared_through TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS analytics_history_backfill_state (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          version INTEGER NOT NULL,
+          scanned_through_transcription_id INTEGER NOT NULL DEFAULT 0
+            CHECK (scanned_through_transcription_id >= 0)
+        );
       `);
       // Repair databases created before analytics deletion tombstones were
       // introduced. SQLite has no ADD COLUMN IF NOT EXISTS syntax.
@@ -1263,14 +1291,26 @@ class DatabaseManager {
       errorCode = null,
       routeKind = null,
       clientTranscriptionId = randomUUID(),
+      analyticsOccurredAt = null,
     } = {}
   ) {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
+      // With an occurrence time this column carries when the dictation was
+      // spoken rather than when the row was written -- earlier by the length
+      // of the recording plus transcription. History reads it through
+      // normalizeDbDate, which already branches on a trailing zone.
+      // Keep the existing SQLite-friendly separator so mixed old/new rows
+      // continue to sort chronologically, while the trailing Z marks this as
+      // an exact client-captured instant for clear-state reconciliation.
+      const occurredAt = toDbTimestamp(analyticsOccurredAt);
       const stmt = this.db.prepare(
-        "INSERT INTO transcriptions (text, raw_text, status, error_message, error_code, route_kind, client_transcription_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        `INSERT INTO transcriptions (
+           text, raw_text, status, error_message, error_code, route_kind,
+           client_transcription_id, timestamp
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`
       );
       const result = stmt.run(
         text,
@@ -1279,7 +1319,8 @@ class DatabaseManager {
         errorMessage,
         errorCode,
         routeKind,
-        clientTranscriptionId
+        clientTranscriptionId,
+        occurredAt
       );
 
       const fetchStmt = this.db.prepare("SELECT * FROM transcriptions WHERE id = ?");
@@ -1288,6 +1329,251 @@ class DatabaseManager {
       return { id: result.lastInsertRowid, success: true, transcription };
     } catch (error) {
       debugLogger.error("Error saving transcription", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  _ensureAnalyticsHistoryBackfillState(version) {
+    this.db
+      .prepare(
+        `INSERT INTO analytics_history_backfill_state (
+           id, version, scanned_through_transcription_id
+         ) VALUES (1, ?, 0)
+         ON CONFLICT(id) DO UPDATE SET
+           version = excluded.version,
+           scanned_through_transcription_id = 0
+         WHERE analytics_history_backfill_state.version <> excluded.version`
+      )
+      .run(version);
+    return this.db
+      .prepare(
+        `SELECT version, scanned_through_transcription_id
+         FROM analytics_history_backfill_state WHERE id = 1`
+      )
+      .get();
+  }
+
+  getAnalyticsHistoryBackfillState(version = ANALYTICS_HISTORY_BACKFILL_VERSION) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const safeVersion = Math.max(1, Math.trunc(Number(version)) || 1);
+      return this.db.transaction(() => {
+        const state = this._ensureAnalyticsHistoryBackfillState(safeVersion);
+        const target = this.db
+          .prepare("SELECT COALESCE(MAX(id), 0) AS id FROM transcriptions")
+          .get();
+        return {
+          version: safeVersion,
+          scannedThroughId: Number(state.scanned_through_transcription_id),
+          targetId: Number(target.id),
+        };
+      })();
+    } catch (error) {
+      debugLogger.error(
+        "Error reading analytics history backfill state",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  _invalidateAnalyticsHistoryFromTranscription(id) {
+    const resumeBeforeId = Math.max(0, Math.trunc(Number(id)) - 1);
+    this.db
+      .prepare(
+        `INSERT INTO analytics_history_backfill_state (
+           id, version, scanned_through_transcription_id
+         ) VALUES (1, ?, 0)
+         ON CONFLICT(id) DO UPDATE SET
+           version = excluded.version,
+           scanned_through_transcription_id = CASE
+             WHEN analytics_history_backfill_state.version = excluded.version
+             THEN MIN(
+               analytics_history_backfill_state.scanned_through_transcription_id,
+               ?
+             )
+             ELSE 0
+           END`
+      )
+      .run(ANALYTICS_HISTORY_BACKFILL_VERSION, resumeBeforeId);
+  }
+
+  backfillAnalyticsHistoryBatch({
+    afterId = 0,
+    throughId = null,
+    checkpointVersion = null,
+    limit = 250,
+  } = {}) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const safeLimit = Math.max(1, Math.min(Math.trunc(Number(limit)) || 250, 1_000));
+      const safeAfterId = Math.max(0, Math.trunc(Number(afterId)) || 0);
+      const safeThroughId =
+        throughId === null || throughId === undefined
+          ? null
+          : Math.max(0, Math.trunc(Number(throughId)) || 0);
+      const safeCheckpointVersion =
+        checkpointVersion === null || checkpointVersion === undefined
+          ? null
+          : Math.max(1, Math.trunc(Number(checkpointVersion)) || 1);
+
+      return this.db.transaction(() => {
+        const checkpoint =
+          safeCheckpointVersion === null
+            ? null
+            : this._ensureAnalyticsHistoryBackfillState(safeCheckpointVersion);
+        const effectiveAfterId = checkpoint
+          ? Number(checkpoint.scanned_through_transcription_id)
+          : safeAfterId;
+        if (safeThroughId !== null && effectiveAfterId >= safeThroughId) {
+          return {
+            complete: true,
+            nextCursor: effectiveAfterId,
+            scanned: 0,
+            inserted: 0,
+            skipped: 0,
+          };
+        }
+
+        const clearState = this.db
+          .prepare("SELECT cleared_through FROM analytics_device_clear_state WHERE id = 1")
+          .get();
+        // Legacy SQLite timestamps are completion times without an offset. Once
+        // the user has cleared Insights, only a client-captured occurrence time
+        // can prove that a historical row happened afterward, so an ambiguous
+        // legacy row stays out rather than reviving a cleared counter. That is
+        // the eligibility rule below; the boundary on the instant actually
+        // written is enforced in the loop, where the chosen value is known.
+        const rows = this.db
+          .prepare(
+            `SELECT transcription.id, transcription.client_transcription_id,
+                    transcription.text, transcription.raw_text, transcription.timestamp,
+                    transcription.created_at,
+                    audio_duration_ms, provider, model
+             FROM transcriptions transcription
+             WHERE transcription.id > ?
+               AND (? IS NULL OR transcription.id <= ?)
+               AND transcription.deleted_at IS NULL
+               AND transcription.status = 'completed'
+               AND TRIM(COALESCE(NULLIF(TRIM(transcription.raw_text), ''), transcription.text, '')) != ''
+               AND NOT EXISTS (
+                 SELECT 1 FROM analytics_events event
+                 WHERE event.event_id = TRIM(transcription.client_transcription_id)
+               )
+               AND (
+                 ? IS NULL
+                 OR (
+                   (TRIM(transcription.timestamp) LIKE '%Z'
+                    OR SUBSTR(TRIM(transcription.timestamp), -6, 1) IN ('+', '-'))
+                   AND JULIANDAY(transcription.timestamp) > JULIANDAY(?)
+                 )
+               )
+             ORDER BY transcription.id ASC
+             LIMIT ?`
+          )
+          .all(
+            effectiveAfterId,
+            safeThroughId,
+            safeThroughId,
+            clearState?.cleared_through ?? null,
+            clearState?.cleared_through ?? null,
+            safeLimit
+          );
+
+        let inserted = 0;
+        let skipped = 0;
+        const clearedThrough = clearState ? Date.parse(clearState.cleared_through) : null;
+        const insert = this.db.prepare(
+          `INSERT INTO analytics_events (
+             event_id, account_id, occurred_at, local_date, word_count,
+             spoken_duration_ms, mode, provider, model, counter_version, created_at
+           ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME(?))
+           ON CONFLICT(event_id) DO NOTHING`
+        );
+        const assignClientId = this.db.prepare(
+          `UPDATE transcriptions SET client_transcription_id = ?
+           WHERE id = ? AND (client_transcription_id IS NULL OR TRIM(client_transcription_id) = '')`
+        );
+
+        for (const row of rows) {
+          const sourceText = row.raw_text?.trim() ? row.raw_text : row.text;
+          const wordCount = countSpokenWords(sourceText);
+          if (wordCount === 0) {
+            skipped += 1;
+            continue;
+          }
+
+          const createdAt = parseDbTimestamp(row.created_at);
+          // A naive timestamp can be a sync artifact rather than an occurrence
+          // time, so it is never the answer: created_at carries the cloud row's
+          // own instant, while timestamp defaulted to the moment of the pull.
+          const occurredAt =
+            (hasExplicitTimeZone(row.timestamp) ? parseDbTimestamp(row.timestamp) : null) ??
+            createdAt;
+          // Guessing a date would put an old dictation on today, inflating
+          // today's counters and manufacturing a current streak out of a row
+          // whose age we could not read. It stays out instead.
+          if (!occurredAt) {
+            skipped += 1;
+            continue;
+          }
+          // Not a restatement of the query's clear filter: that one decides
+          // eligibility from transcription.timestamp, while this guards the
+          // instant actually chosen, which may be created_at. It also catches
+          // what the SQL shape test cannot -- a bare YYYY-MM-DD reads as zoned
+          // there, its day hyphen sitting six characters from the end.
+          if (clearedThrough !== null && occurredAt.getTime() <= clearedThrough) {
+            skipped += 1;
+            continue;
+          }
+
+          const eventId = row.client_transcription_id?.trim() || randomUUID();
+          if (!row.client_transcription_id?.trim()) assignClientId.run(eventId, row.id);
+          const result = insert.run(
+            eventId,
+            occurredAt.toISOString(),
+            localDateKey(occurredAt),
+            wordCount,
+            Number(row.audio_duration_ms) > 0 ? Number(row.audio_duration_ms) : null,
+            inferHistoricalAnalyticsMode(row.provider),
+            row.provider || null,
+            row.model || null,
+            ANALYTICS_HISTORICAL_COUNTER_VERSION,
+            (createdAt ?? occurredAt).toISOString()
+          );
+          if (result.changes > 0) inserted += 1;
+          else skipped += 1;
+        }
+
+        const complete = rows.length < safeLimit;
+        const lastCandidateId =
+          rows.length > 0 ? Number(rows[rows.length - 1].id) : effectiveAfterId;
+        const nextCursor = complete && safeThroughId !== null ? safeThroughId : lastCandidateId;
+        if (checkpoint) {
+          this.db
+            .prepare(
+              `UPDATE analytics_history_backfill_state
+               SET scanned_through_transcription_id = ?
+               WHERE id = 1 AND version = ?`
+            )
+            .run(nextCursor, safeCheckpointVersion);
+        }
+
+        return {
+          complete,
+          nextCursor,
+          scanned: rows.length,
+          inserted,
+          skipped,
+        };
+      })();
+    } catch (error) {
+      debugLogger.error(
+        "Error backfilling analytics history",
+        { error: error.message },
+        "database"
+      );
       throw error;
     }
   }
@@ -1402,14 +1688,15 @@ class DatabaseManager {
       // The projection is the wire shape: AnalyticsService posts these rows
       // verbatim, so every column here has to satisfy the batch endpoint's
       // event schema -- occurred_at included, which that schema requires
-      // alongside local_date. It also orders the batch, oldest dictation first.
+      // alongside local_date. Exact events go first so rejected historical
+      // rows cannot block current activity during an API rollback.
       return this.db
         .prepare(
           `SELECT event_id, occurred_at, local_date, word_count, spoken_duration_ms,
                   mode, provider, model, counter_version
            FROM analytics_events
            WHERE account_id = ? AND sync_status = 'pending' AND deleted_at IS NULL
-           ORDER BY occurred_at ASC LIMIT ?`
+           ORDER BY (counter_version = 0) ASC, occurred_at ASC LIMIT ?`
         )
         .all(accountId, safeLimit);
     } catch (error) {
@@ -1772,7 +2059,15 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const stmt = this.db.prepare("UPDATE transcriptions SET text = ?, raw_text = ? WHERE id = ?");
-      stmt.run(text, rawText, id);
+      this.db.transaction(() => {
+        const existing = this.db
+          .prepare("SELECT text, raw_text FROM transcriptions WHERE id = ?")
+          .get(id);
+        if (existing && (existing.text !== text || existing.raw_text !== rawText)) {
+          this._invalidateAnalyticsHistoryFromTranscription(id);
+        }
+        stmt.run(text, rawText, id);
+      })();
       return { success: true };
     } catch (error) {
       debugLogger.error("Error updating transcription text", { error: error.message }, "database");
@@ -1786,7 +2081,13 @@ class DatabaseManager {
       const stmt = this.db.prepare(
         "UPDATE transcriptions SET status = ?, error_message = ?, error_code = ? WHERE id = ?"
       );
-      stmt.run(status, errorMessage, errorCode, id);
+      this.db.transaction(() => {
+        const existing = this.db.prepare("SELECT status FROM transcriptions WHERE id = ?").get(id);
+        if (existing && existing.status !== status && status === "completed") {
+          this._invalidateAnalyticsHistoryFromTranscription(id);
+        }
+        stmt.run(status, errorMessage, errorCode, id);
+      })();
       return { success: true };
     } catch (error) {
       debugLogger.error(
@@ -6612,9 +6913,24 @@ class DatabaseManager {
   upsertTranscriptionFromCloud(cloudTranscription) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const text = cloudTranscription.text ?? "";
+      const rawText = cloudTranscription.raw_text || null;
+      const status = cloudTranscription.status || "completed";
+      // timestamp is what the history list sorts and groups on, so it takes the
+      // cloud row's own instant rather than defaulting to the moment of the
+      // pull -- which would land a whole archive at "now", above everything
+      // spoken since. Deliberately not in the conflict update: a row this
+      // device recorded already carries the recording's start time, which is
+      // more precise than the cloud's creation time for the same dictation.
+      //
+      // The separator is normalized because that sort is a TEXT comparison and
+      // the API sends ISO 8601: "T" (0x54) outranks the space (0x20) every
+      // locally written row uses, so a raw cloud value would sort above every
+      // local dictation from the same UTC day whatever the hour.
+      const cloudOccurredAt = toDbTimestamp(cloudTranscription.created_at);
       const stmt = this.db.prepare(`
-        INSERT INTO transcriptions (client_transcription_id, cloud_id, text, raw_text, status, sync_status, created_at)
-        VALUES (?, ?, ?, ?, ?, 'synced', ?)
+        INSERT INTO transcriptions (client_transcription_id, cloud_id, text, raw_text, status, sync_status, created_at, timestamp)
+        VALUES (?, ?, ?, ?, ?, 'synced', ?, COALESCE(?, CURRENT_TIMESTAMP))
         ON CONFLICT(client_transcription_id) DO UPDATE SET
           cloud_id = excluded.cloud_id,
           text = excluded.text,
@@ -6622,17 +6938,32 @@ class DatabaseManager {
           status = excluded.status,
           sync_status = 'synced'
       `);
-      stmt.run(
-        cloudTranscription.client_transcription_id,
-        cloudTranscription.id,
-        cloudTranscription.text ?? "",
-        cloudTranscription.raw_text || null,
-        cloudTranscription.status || "completed",
-        cloudTranscription.created_at
-      );
-      return this.db
-        .prepare("SELECT * FROM transcriptions WHERE client_transcription_id = ?")
-        .get(cloudTranscription.client_transcription_id);
+      return this.db.transaction(() => {
+        const existing = this.db
+          .prepare(
+            `SELECT id, text, raw_text, status FROM transcriptions
+             WHERE client_transcription_id = ?`
+          )
+          .get(cloudTranscription.client_transcription_id);
+        if (
+          existing &&
+          (existing.text !== text || existing.raw_text !== rawText || existing.status !== status)
+        ) {
+          this._invalidateAnalyticsHistoryFromTranscription(existing.id);
+        }
+        stmt.run(
+          cloudTranscription.client_transcription_id,
+          cloudTranscription.id,
+          text,
+          rawText,
+          status,
+          cloudTranscription.created_at,
+          cloudOccurredAt
+        );
+        return this.db
+          .prepare("SELECT * FROM transcriptions WHERE client_transcription_id = ?")
+          .get(cloudTranscription.client_transcription_id);
+      })();
     } catch (error) {
       debugLogger.error(
         "Error upserting transcription from cloud",

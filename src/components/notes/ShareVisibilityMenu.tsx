@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown, Globe, Lock, Building2, Users } from "lucide-react";
+import { Check, ChevronDown, Globe, Lock, Building2, Users } from "../icons";
 import { cn } from "../lib/utils";
 import {
   DropdownMenu,
@@ -51,7 +51,7 @@ export default function ShareVisibilityMenu({
         >
           {current.icon}
           <span className="max-w-44 truncate">{current.label}</span>
-          <ChevronDown size={12} className="text-foreground/40 shrink-0" />
+          <ChevronDown size={12} className="text-foreground/45 shrink-0" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={4} className="min-w-[260px]">

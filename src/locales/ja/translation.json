@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
+      "holdNeedsReleaseKey": "ホールドして話すには、macOS が離したことを検知できるキーが必要です。Globe、右 Option のような右側のキー、または修飾キー付きのショートカットです。タップならどのキーでも使えます。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
       "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
       "trySuggestions": "お試しください: {{suggestions}}",
@@ -211,11 +212,11 @@
     "rehaul": {
       "permissions": {
         "title": "3 分で OpenWhispr を設定",
-        "microphoneDescription": "音声をテキストに変換します。",
-        "accessibilityDescription": "アクティブなアプリにテキストを貼り付けます。",
+        "microphoneDescription": "話した内容をテキストにします。録音中のみ有効です。",
+        "accessibilityDescription": "テキストを、いま使っているアプリに貼り付けます。",
         "systemAudioTitle": "システムオーディオ",
-        "systemAudioDescription": "会議メモで音声を取り込むために必要です。",
-        "screenContextDescription": "画面コンテキストを音声アシスタントと共有します。",
+        "systemAudioDescription": "会議メモのために、通話相手の音声を録音します。録音中のみ有効です。",
+        "screenContextDescription": "音声アシスタントに何かを頼んだとき、画面の内容を見られるようにします。保存は一切されません。",
         "enable": "有効にする",
         "enabled": "有効"
       },
@@ -226,21 +227,21 @@
         "description": "当てはまるものをすべて選択してください。OpenWhisprが言語の切り替えをより正確に認識できるようになります。"
       },
       "dictationHotkey": {
-        "title": "キーボードショートカットを設定",
-        "titleLineOne": "キーボードショートカットを",
-        "titleLineTwo": "設定しましょう",
-        "description": "どこからでもディクテーションを開始・停止できるキーボードショートカットを選びます。"
+        "title": "ディクテーション用のショートカットを選びましょう",
+        "titleLineOne": "ディクテーション用の",
+        "titleLineTwo": "ショートカットを選びましょう",
+        "description": "入力の代わりに話したいときに押します。どのアプリでも使えます。",
+        "activation": "タップかホールド？"
       },
       "assistantHotkey": {
         "title": "OpenWhispr Assistant を設定",
         "titleLineOne": "セットアップ",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "話しかけるだけで、OpenWhispr Assistant が結果を書き上げます。"
+        "description": "頼みごとを話すだけ。OpenWhispr Assistant が結果を書きます。"
       },
       "hotkey": {
-        "capture": "使用したいキーを押してください",
+        "capture": "使いたいキーを押してください",
         "chooseAnother": "別のショートカットを選ぶ",
-        "confirmAgain": "確認するには {{hotkey}} をもう一度押してください",
         "inUse": "そのショートカットはすでに使用されています。別のものを選んでください。",
         "holding": "押したままにするか、別のキーを押してください"
       },
@@ -249,21 +250,39 @@
         "titleLineOne": "最初の",
         "titleLineTwo": "ディクテーションを試す",
         "description": "{{hotkey}} を押して話し始めてください。OpenWhispr が音声をテキストに変換します。",
-        "founder": "こんにちは、OpenWhispr創業者のゲイブです",
-        "prompt": "「初めてディクテーションを試しています」と話してみてください。",
-        "placeholder": "ここにディクテーションが表示されます…"
+        "founder": "こんにちは、創業者のゲイブです。OpenWhispr を試してくれてありがとう！",
+        "prompt": "下のボックスをクリックしてショートカットを押し、教えてください。OpenWhispr に何をしてほしいですか？",
+        "placeholder": "ここをクリックしてからショートカットを押してください。OpenWhispr はどんなテキスト欄にも入力します。"
       },
       "assistantDemo": {
         "title": "OpenWhispr Assistant を使ってみる",
         "titleLineOne": "ご紹介します",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "話しかけるだけで、OpenWhispr Assistant が結果を書き上げます。",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "John Doe 宛て",
-        "email": "こんにちは！来週コーヒーでもどうですか？ご都合を教えてください。",
-        "prompt": "火曜の15時で大丈夫だと返信して。招待を送って。",
-        "response": "エレンさん\n\nぜひ近況をお話ししたいです。火曜日の15時で大丈夫です。ご都合がよければ、カレンダーの招待をお送りします。\n楽しみにしています。\nジョン"
+        "email": {
+          "subject": "来週コーヒーでも？",
+          "senderName": "マリア・アルバレス",
+          "recipient": "宛先: 自分",
+          "body": "こんにちは！昨日のミートアップでお会いできてうれしかったです。来週、少しコーヒーでもご一緒しませんか？ご都合の良い日時を教えてください。\n\nマリア",
+          "reply": "返信"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "{{hotkey}} を押して返信を頼んでください。アシスタントが画面上のメールを読み取り、カレンダーで空き時間を確認します。",
+            "prompt": "「返信して、来週の空いている時間をいくつか提案して」と話してみてください。"
+          },
+          "screen": {
+            "description": "{{hotkey}} を押して返信を頼んでください。アシスタントが画面上のメールをそのまま読み取ります。",
+            "prompt": "「ぜひと返信して、水曜日の午後を提案して」と話してみてください。"
+          },
+          "calendar": {
+            "description": "{{hotkey}} を押して返信を頼んでください。アシスタントがカレンダーで空き時間を確認し、返信を書きます。",
+            "prompt": "「マリアに返信して、来週の空いている時間をいくつか提案して」と話してみてください。"
+          },
+          "general": {
+            "description": "{{hotkey}} を押して返信を頼んでください。アシスタントが代わりに書きます。",
+            "prompt": "「マリアにぜひと返信して、水曜日の午後を提案して」と話してみてください。"
+          }
+        }
       },
       "demo": {
         "listening": "聞き取り中…",
@@ -431,8 +450,7 @@
       "activation": "ディクテーション",
       "useCase": "あなたについて",
       "meeting": "会議",
-      "finish": "完了",
-      "voiceAgent": "音声アシスタント"
+      "finish": "完了"
     },
     "hotkey": {
       "couldNotRegisterTitle": "ホットキーを登録できませんでした",
@@ -477,22 +495,6 @@
       "hotkeyToStartStop": "{{hotkey}} で開始/停止",
       "holdHotkey": "{{hotkey}} を押し続ける",
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
-    },
-    "voiceAgent": {
-      "title": "音声アシスタント設定",
-      "description": "ワンキーでAIアシスタントに話しかけられます",
-      "hotkey": "ホットキー",
-      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えます。テキストが選択されていれば、{{agentName}}が編集して置き換えます。編集可能なテキスト欄にフォーカスがある場合、回答はカーソル位置に貼り付けられ、それ以外の場合はフローティングパネルに表示されます。「Hey {{agentName}}」と言う必要はありません。",
-      "test": "試す",
-      "testInstruction": "下のサンプルテキストを選択して {{hotkey}} を押し、「短くして」と話してください。編集結果がそのままテキストボックスに反映されます",
-      "testSetHotkey": "上でホットキーを設定すると試せます",
-      "sampleText": "木曜のミーティングが移動になったので、来週の頭に集まってローンチ計画を確認し、残りのタスクを分担しましょう。",
-      "examples": [
-        "イタリア語に翻訳して:「私はタイプするより話す方が速い」",
-        "上司に昇進したいと伝える短いメールを書いて、彼の名前はマークです",
-        "5 × 5 はいくつ?"
-      ],
-      "optionalNote": "任意です。設定からいつでも追加・変更できます。"
     },
     "connectivity": {
       "title": "このネットワークから OpenWhispr Cloud に接続できません",
@@ -597,8 +599,6 @@
     "update": {
       "readyTitle": "アップデートの準備完了",
       "readyDescription": "「アップデートをインストール」をクリックして最新バージョンで再起動します。",
-      "problemTitle": "アップデートで問題が発生しました",
-      "problemDescription": "アップデートを完了できませんでした。後でもう一度お試しください。",
       "installTitle": "アップデートをインストール",
       "installDescription": "OpenWhispr はアップデートを適用するために再起動します。作業中のデータは保存されます。",
       "couldNotInstallTitle": "アップデートをインストールできませんでした",
@@ -636,6 +636,8 @@
       "couldNotDeleteDescription": "この文字起こしは既に削除されている可能性があります。",
       "couldNotDeleteDescriptionGeneric": "問題が発生しました。もう一度お試しください。",
       "empty": "文字起こし履歴はまだありません",
+      "emptyDescription": "どのアプリでもホットキーを押して話し始めてください。すべての文字起こしは、このデバイス上にプライベートに保存されます。",
+      "sectionTitle": "文字起こし",
       "dataRetentionDisabled": "データ保持が無効です。文字起こしと音声は履歴に保存されません。",
       "press": "押してください",
       "toStart": "開始するには",
@@ -657,6 +659,7 @@
       "clearAllErrorTitle": "履歴を削除できませんでした",
       "clearAllErrorDescription": "問題が発生しました。もう一度お試しください。",
       "copyText": "テキストをコピー",
+      "moreActions": "その他の操作",
       "copyRawTranscript": "生の文字起こしをコピー",
       "deleteItem": "削除",
       "viewRawTranscript": "生の文字起こしを表示",
@@ -828,6 +831,7 @@
     }
   },
   "transcription": {
+    "modelCard": "モデルカード",
     "deleteModel": {
       "title": "モデルを削除",
       "description": "このモデルを削除してもよろしいですか？再度使用するにはダウンロードし直す必要があります。"
@@ -914,6 +918,11 @@
         "unreachableDescription": "口述内容は翻訳されずに貼り付けられました。翻訳設定を確認してください。",
         "failedTitle": "翻訳に失敗しました",
         "failedDescription": "元のテキストが貼り付けられました。履歴から再試行できます。"
+      },
+      "pushForceStopped": {
+        "title": "文字起こしは貼り付けられませんでした",
+        "description": "ホットキーが押されたままディクテーションが終了したため、テキストは貼り付けられませんでした。文字起こしはクリップボードにあります。",
+        "descriptionClipboardFailed": "ホットキーが押されたままディクテーションが終了したため、テキストは貼り付けられず、クリップボードにもコピーできませんでした。"
       },
       "selectionEditing": {
         "notAppliedTitle": "選択範囲の編集を適用できませんでした",
@@ -1105,7 +1114,8 @@
       "welcomeBack": "おかえりなさい"
     },
     "signedIn": {
-      "welcomeBack": "おかえりなさい"
+      "welcomeBack": "おかえりなさい",
+      "notYou": "別のアカウントですか？ログアウト"
     },
     "sso": {
       "continueWithSSO": "SSO でサインイン",
@@ -1125,7 +1135,7 @@
       "continueWithMicrosoft": "Microsoft で続ける",
       "protocolUnavailable": "ブラウザでのサインインを利用できません — システムの「既定のアプリ」設定で openwhispr:// プロトコルを再登録してください。"
     },
-    "welcomeSubtitle": "すべてを声で",
+    "welcomeSubtitle": "あなたの声の力を、あなたのやり方で。",
     "welcomeTitle": "OpenWhispr へようこそ"
   },
   "cleanupPrompt": "クリーンアップ",
@@ -1910,9 +1920,7 @@
         "meetingDetection": "会議の検出",
         "meetingDetectionDescription": "会議が検出されたときに通知して録音を開始できるようにする",
         "calendarReminders": "カレンダーリマインダー",
-        "calendarRemindersDescription": "予定された会議がまもなく始まるときに通知する",
-        "updates": "アプリの更新",
-        "updatesDescription": "新しいバージョンが利用可能になったときに通知する"
+        "calendarRemindersDescription": "予定された会議がまもなく始まるときに通知する"
       },
       "clipboard": {
         "title": "クリップボード",
@@ -2011,6 +2019,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "自動アップデート",
+        "automaticUpdatesDescription": "アップデートをバックグラウンドでダウンロードしてインストールします",
         "badges": {
           "dev": "開発版",
           "latest": "最新",
@@ -2049,16 +2059,13 @@
           "updateAvailable": {
             "description": "アップデートあり: v{{version}}",
             "title": "アップデートあり"
-          },
-          "updateError": {
-            "description": "アップデート中に問題が発生しました。もう一度お試しください。",
-            "title": "アップデートエラー"
           }
         },
         "downloadUpdate": "アップデート v{{version}} をダウンロード",
         "downloading": "ダウンロード中... {{progress}}%",
         "installAndRestart": "インストールして再起動",
         "latestVersion": "最新バージョンをお使いです",
+        "managedByPackageManager": "アップデートはパッケージマネージャーから行われます",
         "newVersion": "新しいバージョンがあります",
         "newVersionAvailable": "新しいバージョンが利用可能",
         "restarting": "再起動中...",
@@ -2516,7 +2523,8 @@
         "parakeet_tdt_0_6b_v3": "高速多言語 ASR、自動言語検出対応（25 言語）",
         "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）",
         "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron の英語ストリーミング ASR",
-        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron の多言語ストリーミング ASR、自動言語検出対応（15 言語）"
+        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron の多言語ストリーミング ASR、自動言語検出対応（15 言語）",
+        "orukeet": "多言語音声認識向けに調整したParakeet"
       },
       "whisper": {
         "tiny": "最速、品質は低め",
@@ -2807,6 +2815,10 @@
       "raw": "元のテキスト",
       "enhanced": "強化済み",
       "saving": "保存中",
+      "transcriptEmptyTitle": "まだ録音がありません",
+      "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
+      "startRecording": "録音を開始",
+      "generateSummary": "AI要約を生成",
       "startWriting": "書き始める..."
     },
     "participants": {
@@ -2849,6 +2861,15 @@
         "generateNotes": {
           "name": "ノートを生成",
           "description": "ノートを整理、構成、強化する"
+        },
+        "followUpEmail": {
+          "name": "フォローアップメール",
+          "description": "メモと文字起こしからフォローアップメールを作成",
+          "cta": "フォローアップメールを作成"
+        },
+        "detailedNotes": {
+          "name": "詳細ノート",
+          "description": "決定事項とアクションを含む正確で網羅的な会議ノート"
         }
       },
       "errors": {
@@ -2874,6 +2895,11 @@
       "noNotesAvailable": "他のノートはありません"
     },
     "folders": {
+      "defaults": {
+        "personal": "個人",
+        "meetings": "ミーティング",
+        "videos": "ビデオ"
+      },
       "title": "フォルダ",
       "soon": "近日公開",
       "folderName": "フォルダ名",
@@ -3580,11 +3606,17 @@
       "web_searchName": "ウェブ検索",
       "get_calendar_eventsName": "カレンダーの予定を取得",
       "get_calendar_availabilityName": "空き時間を確認",
+      "get_snippetName": "スニペットを取得",
+      "update_dictionaryName": "辞書を更新",
+      "update_snippetsName": "スニペットを更新",
       "search_notesStatus": "ノートを検索中...",
       "web_searchStatus": "ウェブを検索中...",
       "copy_to_clipboardStatus": "クリップボードにコピー中...",
       "get_calendar_eventsStatus": "カレンダーを確認中...",
       "get_calendar_availabilityStatus": "空き時間を確認中...",
+      "get_snippetStatus": "スニペットを取得中...",
+      "update_dictionaryStatus": "辞書を更新中...",
+      "update_snippetsStatus": "スニペットを更新中...",
       "get_noteStatus": "ノートを読み込み中...",
       "create_noteStatus": "ノートを作成中...",
       "update_noteStatus": "ノートを更新中...",
@@ -3754,10 +3786,9 @@
   },
   "upcoming": {
     "title": "今後の予定",
-    "transcriptions": "文字起こし",
     "now": "進行中",
     "untitledEvent": "無題のイベント",
-    "joinAndTakeNotes": "参加してメモを取る",
+    "joinAndTranscribe": "参加して文字起こし",
     "takeNotes": "メモを取る",
     "noEventsToday": "今日の予定はありません",
     "noUpcomingEvents": "今後の予定はありません",
@@ -3805,6 +3836,7 @@
         "createLink": "リンクを作成",
         "copyLink": "リンクをコピー",
         "copied": "コピーしました",
+        "export": "エクスポート",
         "owner": "オーナー",
         "editor": "編集可能",
         "viewer": "閲覧可能",
@@ -3845,7 +3877,6 @@
     "allSpaces": "すべてのスペース",
     "title": "検索",
     "description": "ノートと文字起こしを検索",
-    "shortPlaceholder": "検索",
     "placeholder": "ノートと文字起こしを検索…",
     "sections": {
       "notes": "ノート",
@@ -3859,11 +3890,6 @@
       "open": "開く",
       "dismiss": "閉じる"
     }
-  },
-  "updateNotification": {
-    "title": "OpenWhispr のアップデートあり",
-    "body": "バージョン {{version}} がダウンロード可能です",
-    "cta": "今すぐ更新"
   },
   "permissionsGate": {
     "title": "権限が必要です",
@@ -3902,7 +3928,12 @@
     "scopes": {
       "notesRead": "ノートの読み取り",
       "notesWrite": "ノートの作成と編集",
-      "transcriptionsRead": "文字起こしの読み取り"
+      "transcriptionsRead": "文字起こしの読み取り",
+      "dictionaryRead": "辞書を読み取り",
+      "dictionaryWrite": "辞書を編集",
+      "snippetsRead": "スニペットを読み取り",
+      "snippetsWrite": "スニペットを編集",
+      "transcriptionsWrite": "音声を文字起こし"
     },
     "revoke": {
       "button": "取り消し",

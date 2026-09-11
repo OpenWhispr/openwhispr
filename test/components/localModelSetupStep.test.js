@@ -37,6 +37,8 @@ async function createSetupHarness(
     installed = {},
     selectedModel = "",
     resumeState,
+    capability = { supported: true },
+    freshInstall = false,
   } = {}
 ) {
   let unmount = async () => {};
@@ -62,6 +64,7 @@ async function createSetupHarness(
       dispatchEvent: events.dispatchEvent.bind(events),
       electronAPI: {
         getPlatform: () => "linux",
+        checkParakeetInstallation: async () => capability,
         listWhisperModels: async () => ({
           success: true,
           models: [...inventory.whisper].map((model) => ({ model, downloaded: true })),
@@ -118,6 +121,13 @@ async function createSetupHarness(
     chatAgentModel: assistant ? selectedModel : "",
     chatAgentMode: "local",
   });
+  // The store setter also persists the choice; only a fresh install has no key.
+  if (!assistant && !freshInstall) {
+    localStorage.setItem(
+      "localTranscriptionProvider",
+      provider === "nvidia" ? "nvidia" : "whisper"
+    );
+  }
   const { LocalModelSetupStep } = await vite.ssrLoadModule(
     "/components/onboarding/ProviderSetupStep.tsx"
   );
@@ -276,6 +286,12 @@ for (const fixture of [
   });
 }
 
+test("a fresh install opens the local dictation step on Oruk with Orukeet offered", async (t) => {
+  const setup = await createSetupHarness(t, { freshInstall: true });
+  assert.ok(setup.row("orukeet-v0.1.0"));
+  assert.throws(() => setup.row("base"));
+});
+
 test("an explicit installed-model choice supersedes an earlier pending download", async (t) => {
   const setup = await createSetupHarness(t, { assistant: true, installed: { llm: [SECOND_LLM] } });
   await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
@@ -418,4 +434,48 @@ test("choosing a local model records it in the resume draft", async (t) => {
   // Without this the pick is only in component state, so relaunching mid-setup
   // silently reverts to whatever was saved before onboarding started.
   assert.deepEqual(setup.resumeDrafts().at(-1), { provider: "qwen", modelId: SECOND_LLM });
+});
+
+test("Oruk installs and activates Orukeet through the existing parakeet download flow", async (t) => {
+  const modelId = "orukeet-v0.1.0";
+  const setup = await createSetupHarness(t);
+  await setup.chooseProvider("oruk");
+  assert.match(textContent(setup.row(modelId)), /common\.recommended/);
+  assert.equal(setup.store.getState().localTranscriptionProvider, "whisper");
+  await setup.click(modelId, "onboarding.rehaul.local.download");
+  assert.deepEqual(setup.pending.readPendingLocalModels().dictation, {
+    provider: "nvidia",
+    modelId,
+  });
+  await setup.complete(modelId);
+  assert.equal(setup.store.getState().localTranscriptionProvider, "nvidia");
+  assert.equal(setup.store.getState().parakeetModel, modelId);
+  assert.equal(setup.ready(), true);
+  assert.equal(setup.canProceed(), true);
+});
+
+test("browsing Oruk preserves an installed stock Parakeet selection", async (t) => {
+  const modelId = "parakeet-tdt-0.6b-v3";
+  const setup = await createSetupHarness(t, {
+    provider: "nvidia",
+    installed: { parakeet: [modelId] },
+  });
+  await setup.click(modelId, "onboarding.rehaul.local.use");
+  await setup.chooseProvider("oruk");
+  assert.equal(setup.store.getState().parakeetModel, modelId);
+  assert.equal(setup.store.getState().localTranscriptionProvider, "nvidia");
+  assert.equal(setup.ready(), false);
+});
+
+test("unsupported Macs cannot choose Oruk or NVIDIA during local onboarding", async (t) => {
+  const setup = await createSetupHarness(t, {
+    provider: "nvidia",
+    capability: { supported: false, minimumMacOSVersion: "15.5" },
+  });
+  assert.ok(setup.row("base"));
+  for (const provider of ["oruk", "nvidia"]) {
+    await setup.chooseProvider(provider);
+    assert.ok(setup.row("base"));
+    assert.equal(setup.ready(), false);
+  }
 });

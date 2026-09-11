@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Mail } from "lucide-react";
+import { Loader2, Mail } from "../icons";
 import {
   Dialog,
   DialogContent,
@@ -231,7 +231,7 @@ export default function EnterpriseCheckoutDialog({
                 </div>
               ) : upgradePreview ? (
                 <>
-                  <div className="rounded-lg border border-border/50 divide-y divide-border/40">
+                  <div className="rounded-lg border border-border/70 divide-y divide-border/60">
                     <div className="flex justify-between px-3 py-2 text-xs">
                       <span className="text-muted-foreground">
                         {t("settingsPage.enterpriseCheckout.proratedCharge")}
@@ -262,7 +262,7 @@ export default function EnterpriseCheckoutDialog({
                   </p>
                 </>
               ) : previewError ? (
-                <div className="space-y-2 rounded-lg border border-border/50 px-3 py-3">
+                <div className="space-y-2 rounded-lg border border-border/70 px-3 py-3">
                   <p className="text-xs font-medium">
                     {t("settingsPage.enterpriseCheckout.errors.previewFailed")}
                   </p>
@@ -340,7 +340,7 @@ export default function EnterpriseCheckoutDialog({
                 onClick={() => void handleUpgrade()}
                 disabled={submitting || !upgradePreview}
               >
-                {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                {submitting && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                 {t("settingsPage.enterpriseCheckout.upgradeCta")}
               </Button>
             ) : (
@@ -349,13 +349,13 @@ export default function EnterpriseCheckoutDialog({
                 onClick={() => void handleCheckout()}
                 disabled={submitting || !selected || !seatsValid}
               >
-                {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                {submitting && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                 {t("settingsPage.enterpriseCheckout.continueCta")}
               </Button>
             )
           ) : (
             <Button size="sm" onClick={() => window.electronAPI?.openExternal?.(CONTACT_SALES_URL)}>
-              <Mail className="mr-1.5 h-3.5 w-3.5" />
+              <Mail className="me-1.5 h-3.5 w-3.5" />
               {t("settingsPage.account.pricing.enterprise.cta")}
             </Button>
           )}

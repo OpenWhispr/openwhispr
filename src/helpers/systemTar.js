@@ -39,6 +39,14 @@ function runSystemTar(
     spawnImpl = spawn,
   } = {}
 ) {
+  // Windows' bundled bsdtar can lack bz2lib and hang while invoking an
+  // external bzip2 from PATH. Callers already provide a bundled JS fallback.
+  if (platform === "win32" && tarExtractionFlags(archivePath) === "-xjf") {
+    return Promise.reject(
+      new Error("Use bundled JavaScript extraction for Windows bzip2 archives")
+    );
+  }
+
   return new Promise((resolve, reject) => {
     const executable = resolveSystemTarExecutable({ platform, arch, env });
     // Relative arguments avoid GNU tar interpreting a Windows drive-letter

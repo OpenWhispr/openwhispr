@@ -10,9 +10,11 @@ const { listImportedModules } = require("../../scripts/lib/pe-imports");
 const { buildPeImage } = require("../helpers/harness/peFixture");
 const {
   BINARIES,
+  MACOS_ARM64_ONNXRUNTIME,
   SHERPA_ONNX_VERSION,
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
+  extractTarBz2,
   isCompleteInstall,
   privatizeWindowsOnnxRuntime,
 } = require("../../scripts/download-sherpa-onnx");
@@ -28,6 +30,31 @@ function makeBinDir(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
+
+// A real, deterministic tar.bz2 containing sherpa-fixture/nested/tokens.txt.
+const BZIP2_FIXTURE = Buffer.from(
+  "QlpoOTFBWSZTWcjrkBQAAIZfgNqQQAP9AEAAAIB/ad7QCAggAHQaQmp4gTeomjCMZDaoMkgNGgABoGgPnMCiCBG+QQRRzUsRSpCCCEAnU6vjF4NbYtiEQUCGSyC5UXVrxyzeEU/18sO69rZRodrj+ckuqldRtcyf1bjbOD33nz4ahhPLBGufu1kDTQiID+LuSKcKEhkdcgKA",
+  "base64"
+);
+
+test("Windows runtime extraction reads a real bzip2 archive using bundled dependencies", async (t) => {
+  const root = makeBinDir(t);
+  const archive = path.join(root, "runtime with spaces.tar.bz2");
+  const destination = path.join(root, "nested destination");
+  fs.writeFileSync(archive, BZIP2_FIXTURE);
+  await extractTarBz2(archive, destination, { platform: "win32" });
+  assert.equal(
+    fs.readFileSync(path.join(destination, "sherpa-fixture", "nested", "tokens.txt"), "utf8"),
+    "Windows bzip2 extraction works.\n"
+  );
+});
+
+test("Windows runtime extraction rejects a corrupt bzip2 archive", async (t) => {
+  const root = makeBinDir(t);
+  const archive = path.join(root, "corrupt.tar.bz2");
+  fs.writeFileSync(archive, "not a bzip2 archive");
+  await assert.rejects(extractTarBz2(archive, path.join(root, "output"), { platform: "win32" }));
+});
 
 // Mirrors what the 1.13.4 win-x64-shared-MD-Release archive yields after copying:
 // three exes that import onnxruntime.dll, the C API DLL that imports it too
@@ -155,17 +182,42 @@ test("a win32 marker written before the rename is not a complete install", (t) =
   assert.equal(isCompleteInstall(marker, [exe], options), true);
 });
 
-test("non-Windows markers do not need the onnxRuntime field", (t) => {
+test("Linux markers do not need the onnxRuntime field", (t) => {
   const dir = makeBinDir(t);
-  const binary = path.join(dir, "sherpa-onnx-ws-darwin-arm64");
+  const binary = path.join(dir, "sherpa-onnx-ws-linux-x64");
   fs.writeFileSync(binary, "");
-  const marker = path.join(dir, ".sherpa-onnx-darwin-arm64.json");
+  const marker = path.join(dir, ".sherpa-onnx-linux-x64.json");
   fs.writeFileSync(marker, JSON.stringify({ version: SHERPA_ONNX_VERSION, libraries: [] }));
   assert.equal(
-    isCompleteInstall(marker, [binary], { platformArch: "darwin-arm64", binDir: dir }),
+    isCompleteInstall(marker, [binary], { platformArch: "linux-x64", binDir: dir }),
     true
   );
 });
+
+test(
+  "a macOS marker written before the arm64 ONNX Runtime slice is not a complete install",
+  { skip: process.platform !== "darwin" && "the slice is only replaced on macOS hosts" },
+  (t) => {
+    const dir = makeBinDir(t);
+    const binary = path.join(dir, "sherpa-onnx-ws-darwin-arm64");
+    fs.writeFileSync(binary, "");
+    const marker = path.join(dir, ".sherpa-onnx-darwin-arm64.json");
+    const options = { platformArch: "darwin-arm64", binDir: dir };
+
+    fs.writeFileSync(marker, JSON.stringify({ version: SHERPA_ONNX_VERSION, libraries: [] }));
+    assert.equal(isCompleteInstall(marker, [binary], options), false);
+
+    fs.writeFileSync(
+      marker,
+      JSON.stringify({
+        version: SHERPA_ONNX_VERSION,
+        libraries: [],
+        onnxRuntime: MACOS_ARM64_ONNXRUNTIME.marker,
+      })
+    );
+    assert.equal(isCompleteInstall(marker, [binary], options), true);
+  }
+);
 
 test("a failed automatic Windows repair stays incomplete and retries DLL patching", async (t) => {
   const root = makeBinDir(t);
@@ -186,7 +238,9 @@ test("a failed automatic Windows repair stays incomplete and retries DLL patchin
     {
       __dirname: path.join(root, "scripts"),
       module: { exports: {} },
-      process,
+      // This repair test injects a fake native extractor; the real Windows
+      // decompressor is exercised above with an actual compressed archive.
+      process: { ...process, platform: "linux" },
       console,
       require(name) {
         if (name === "fs") {

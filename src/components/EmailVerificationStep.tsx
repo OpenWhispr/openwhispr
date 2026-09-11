@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { OPENWHISPR_API_URL } from "../config/constants";
 import { authClient } from "../lib/auth";
 import { Button } from "./ui/button";
-import { CircleCheck, Loader, Loader2, MailCheck, RefreshCw } from "lucide-react";
+import { CircleCheck, Loader, Loader2, MailCheck, RefreshCw } from "./icons";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -127,7 +127,9 @@ export default function EmailVerificationStep({
         </h1>
         <p className="mx-auto mt-2 max-w-xs text-sm leading-5 text-[var(--onboarding-text-secondary)]">
           {t("emailVerification.checkEmailDescription")}{" "}
-          <span className="font-medium text-[var(--onboarding-text-primary)]">{email}</span>
+          <span dir="ltr" className="font-medium text-[var(--onboarding-text-primary)]">
+            {email}
+          </span>
         </p>
 
         <div

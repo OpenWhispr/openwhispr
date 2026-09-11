@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Users, Trash2, Loader2 } from "lucide-react";
+import { Plus, Users, Trash2, Loader2 } from "../icons";
 import { deleteTeam } from "../../services/spaceActions";
 import { TeamsService } from "../../services/TeamsService";
 import { loadSpaces, useSpaces } from "../../stores/noteStore";
@@ -101,7 +101,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
         </div>
         {canManage && (
           <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            <Plus className="me-1.5 h-3.5 w-3.5" />
             {t("settingsPage.workspace.teams.new")}
           </Button>
         )}
@@ -110,7 +110,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
       {!teamsLoaded ? (
         <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
       ) : loadFailed && teams.length === 0 ? (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
             {t("settingsPage.workspace.loadError.description")}
           </p>
@@ -119,10 +119,10 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
           </Button>
         </div>
       ) : (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
           {teams.length === 0 && (
             <div className="py-10 text-center">
-              <Users className="w-5 h-5 text-muted-foreground/60 mx-auto mb-2" />
+              <Users className="w-5 h-5 text-muted-foreground/70 mx-auto mb-2" />
               <p className="text-xs text-muted-foreground mb-3">
                 {t("settingsPage.workspace.teams.empty")}
               </p>
@@ -139,7 +139,9 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
             return (
               <div key={team.id} className="flex items-center gap-3 px-4 h-14">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-foreground truncate">{team.name}</p>
+                  <p dir="auto" className="text-xs font-medium text-foreground truncate">
+                    {team.name}
+                  </p>
                   {backedSpaces > 0 && (
                     <p className="text-xs text-muted-foreground/80 truncate">
                       {t("settingsPage.workspace.teams.grantsAccessToSpaces", {
@@ -159,7 +161,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
                   onClick={() => setMembersTeam(team)}
                   className="h-7 px-2 text-xs"
                 >
-                  <Users className="mr-1 h-3 w-3" />
+                  <Users className="me-1 h-3 w-3" />
                   {t("settingsPage.workspace.teams.membersButton")}
                 </Button>
                 {canManage && (

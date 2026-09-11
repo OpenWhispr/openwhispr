@@ -3,17 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./button";
 import { Textarea } from "./textarea";
-import {
-  Eye,
-  Edit3,
-  Play,
-  Save,
-  RotateCcw,
-  Copy,
-  TestTube,
-  AlertTriangle,
-  Check,
-} from "lucide-react";
+import { Eye, Edit3, Play, Save, RotateCcw, Copy, TestTube, AlertTriangle, Check } from "../icons";
 import { AlertDialog } from "./dialog";
 import { useDialogs } from "../../hooks/useDialogs";
 import { useAgentName } from "../../utils/agentName";
@@ -322,8 +312,8 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
       />
 
       {/* Tab Navigation + Content in a single panel */}
-      <div className="rounded-xl border border-border/60 dark:border-border-subtle bg-card dark:bg-surface-2 overflow-hidden">
-        <div className="flex border-b border-border/40 dark:border-border-subtle">
+      <div className="rounded-xl border border-border/70 dark:border-border-subtle bg-card dark:bg-surface-2 overflow-hidden">
+        <div className="flex border-b border-border/70 dark:border-border-subtle">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -346,11 +336,11 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
         {/* ── View Tab ── */}
         {activeTab === "current" && (
-          <div className="divide-y divide-border/40 dark:divide-border-subtle">
+          <div className="divide-y divide-border/60 dark:divide-border-subtle">
             <div className="px-5 py-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <p className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
+                  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
                     {isCustomPrompt
                       ? t("promptStudio.view.customPrompt")
                       : t("promptStudio.view.defaultPrompt")}
@@ -369,18 +359,21 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 >
                   {copiedPrompt ? (
                     <>
-                      <Check className="w-3 h-3 mr-1 text-success" />{" "}
+                      <Check className="w-3 h-3 me-1 text-success" />{" "}
                       {t("promptStudio.common.copied")}
                     </>
                   ) : (
                     <>
-                      <Copy className="w-3 h-3 mr-1" /> {t("promptStudio.common.copy")}
+                      <Copy className="w-3 h-3 me-1" /> {t("promptStudio.common.copy")}
                     </>
                   )}
                 </Button>
               </div>
-              <div className="bg-muted/30 dark:bg-surface-raised/30 border border-border/30 rounded-lg p-4 max-h-80 overflow-y-auto">
-                <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed">
+              <div className="bg-muted/30 dark:bg-surface-raised/30 border border-border/70 rounded-lg p-4 max-h-80 overflow-y-auto">
+                <pre
+                  dir="auto"
+                  className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed"
+                >
                   {currentPrompt.replace(/\{\{agentName\}\}/g, agentName)}
                 </pre>
               </div>
@@ -390,14 +383,14 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
         {/* ── Edit Tab ── */}
         {activeTab === "edit" && (
-          <div className="divide-y divide-border/40 dark:divide-border-subtle">
+          <div className="divide-y divide-border/60 dark:divide-border-subtle">
             <div className="px-5 py-4">
               <p className="text-xs text-muted-foreground leading-relaxed">
                 <span className="font-medium text-warning">
                   {t("promptStudio.edit.cautionLabel")}
                 </span>{" "}
                 {t("promptStudio.edit.cautionTextPrefix")}{" "}
-                <code className="text-xs bg-muted/50 px-1 py-0.5 rounded font-mono">
+                <code dir="ltr" className="text-xs bg-muted/50 px-1 py-0.5 rounded font-mono">
                   {"{{agentName}}"}
                 </code>{" "}
                 {t("promptStudio.edit.cautionTextSuffix")}
@@ -406,26 +399,29 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
             <div className="px-5 py-4">
               <Textarea
+                dir="auto"
                 value={editedPrompt}
                 onChange={(e) => setEditedPrompt(e.target.value)}
                 rows={16}
                 className="font-mono text-xs leading-relaxed"
                 placeholder={t("promptStudio.edit.placeholder")}
               />
-              <p className="text-xs text-muted-foreground/50 mt-2">
+              <p className="text-xs text-muted-foreground/70 mt-2">
                 {t("promptStudio.edit.agentNameLabel")}{" "}
-                <span className="font-medium text-foreground">{agentName}</span>
+                <span dir="auto" className="font-medium text-foreground">
+                  {agentName}
+                </span>
               </p>
             </div>
 
             <div className="px-5 py-4">
               <div className="flex gap-2">
                 <Button onClick={savePrompt} size="sm" className="flex-1">
-                  <Save className="w-3.5 h-3.5 mr-2" />
+                  <Save className="w-3.5 h-3.5 me-2" />
                   {t("promptStudio.common.save")}
                 </Button>
                 <Button onClick={resetToDefault} variant="outline" size="sm">
-                  <RotateCcw className="w-3.5 h-3.5 mr-2" />
+                  <RotateCcw className="w-3.5 h-3.5 me-2" />
                   {t("promptStudio.common.reset")}
                 </Button>
               </div>
@@ -491,7 +487,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 : providerConfig.label;
 
             return (
-              <div className="divide-y divide-border/40 dark:divide-border-subtle">
+              <div className="divide-y divide-border/60 dark:divide-border-subtle">
                 {!isTranslate && !isAgent && !useCleanupModel && (
                   <div className="px-5 py-4">
                     <div className="rounded-lg border border-warning/20 bg-warning/5 dark:bg-warning/10 px-4 py-3">
@@ -512,19 +508,21 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 <div className="px-5 py-4">
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
-                      <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">
+                      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider">
                         {t("promptStudio.test.modelLabel")}
                       </p>
-                      <p className="text-xs font-medium text-foreground font-mono">
+                      <p dir="ltr" className="text-xs font-medium text-foreground font-mono">
                         {displayModel}
                       </p>
                     </div>
                     <div className="h-3 w-px bg-border/40" />
                     <div className="flex items-center gap-2">
-                      <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">
+                      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider">
                         {t("promptStudio.test.providerLabel")}
                       </p>
-                      <p className="text-xs font-medium text-foreground">{displayProvider}</p>
+                      <p dir="ltr" className="text-xs font-medium text-foreground">
+                        {displayProvider}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -551,6 +549,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     )}
                   </div>
                   <Textarea
+                    dir="auto"
                     value={testText}
                     onChange={(e) => setTestText(e.target.value)}
                     rows={3}
@@ -559,7 +558,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                   />
                   {/* The agent tab always runs the agent prompt, addressed or not. */}
                   {!isAgent && (
-                    <p className="text-xs text-muted-foreground/40 mt-1.5">
+                    <p className="text-xs text-muted-foreground/70 mt-1.5">
                       {isTranslate
                         ? t("promptStudio.test.translateHint", {
                             language: getLanguageLabel(translationTargetLanguage),
@@ -580,7 +579,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     size="sm"
                     className="w-full"
                   >
-                    <Play className="w-3.5 h-3.5 mr-2" />
+                    <Play className="w-3.5 h-3.5 me-2" />
                     {isLoading ? t("promptStudio.test.processing") : t("promptStudio.test.run")}
                   </Button>
                 </div>
@@ -600,8 +599,11 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                         <Copy className="w-3 h-3 text-muted-foreground" />
                       </Button>
                     </div>
-                    <div className="bg-muted/30 dark:bg-surface-raised/30 border border-border/30 rounded-lg p-4 max-h-48 overflow-y-auto">
-                      <pre className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">
+                    <div className="bg-muted/30 dark:bg-surface-raised/30 border border-border/70 rounded-lg p-4 max-h-48 overflow-y-auto">
+                      <pre
+                        dir="auto"
+                        className="text-xs text-foreground whitespace-pre-wrap leading-relaxed"
+                      >
                         {testResult}
                       </pre>
                     </div>

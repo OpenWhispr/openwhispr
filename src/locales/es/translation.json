@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Los atajos con botones del ratón solo son compatibles con macOS por ahora.",
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
+      "holdNeedsReleaseKey": "Mantener para hablar necesita una tecla cuya liberación macOS pueda detectar: Globo, una tecla derecha como Opción derecha o un atajo con modificador. Pulsar funciona con cualquier tecla.",
       "registrationFailed": "No se pudo registrar \"{{hotkey}}\". Puede estar en uso por otra aplicación.",
       "updateFailedCheckFormat": "No se pudo actualizar el atajo a \"{{hotkey}}\". Comprueba que el formato sea válido.",
       "trySuggestions": "Prueba: {{suggestions}}",
@@ -211,11 +212,11 @@
     "rehaul": {
       "permissions": {
         "title": "Configura OpenWhispr en 3 minutos",
-        "microphoneDescription": "Convierte la voz en texto.",
-        "accessibilityDescription": "Pega texto en tu aplicación activa.",
+        "microphoneDescription": "Convierte lo que dices en texto. Solo se activa mientras grabas.",
+        "accessibilityDescription": "Pega el texto en la aplicación que estás usando.",
         "systemAudioTitle": "Audio del Sistema",
-        "systemAudioDescription": "Necesario para capturar audio en las notas de reuniones.",
-        "screenContextDescription": "Comparte el contexto de pantalla con el asistente de voz.",
+        "systemAudioDescription": "Graba a las demás personas de tus llamadas para las notas de reuniones. Solo mientras grabas.",
+        "screenContextDescription": "Deja que tu asistente de voz vea tu pantalla cuando le pides algo. Nunca se guarda.",
         "enable": "Activar",
         "enabled": "Activado"
       },
@@ -226,21 +227,21 @@
         "description": "Selecciona todos los que correspondan. Esto ayuda a OpenWhispr a reconocer los cambios de idioma con mayor precisión."
       },
       "dictationHotkey": {
-        "title": "Configura tu atajo de teclado",
-        "titleLineOne": "Configura tu",
-        "titleLineTwo": "atajo de teclado",
-        "description": "Elige un atajo de teclado para iniciar y detener el dictado desde cualquier lugar."
+        "title": "Elige tu atajo de dictado",
+        "titleLineOne": "Elige tu",
+        "titleLineTwo": "atajo de dictado",
+        "description": "Púlsalo cuando quieras hablar en vez de escribir. Funciona en cualquier aplicación.",
+        "activation": "¿Pulsar o mantener?"
       },
       "assistantHotkey": {
         "title": "Configura OpenWhispr Assistant",
         "titleLineOne": "Configura",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Di lo que necesitas y OpenWhispr Assistant escribe el resultado por ti."
+        "description": "Di lo que necesitas. OpenWhispr Assistant escribe el resultado por ti."
       },
       "hotkey": {
-        "capture": "Pulsa las teclas que quieras usar",
+        "capture": "Pulsa la tecla que quieras usar",
         "chooseAnother": "Elegir otro atajo",
-        "confirmAgain": "Pulsa {{hotkey}} otra vez para confirmar",
         "inUse": "Ese atajo ya está en uso. Elige otro.",
         "holding": "Mantén pulsado o pulsa otra tecla"
       },
@@ -249,21 +250,39 @@
         "titleLineOne": "Prueba tu",
         "titleLineTwo": "primer dictado",
         "description": "Pulsa {{hotkey}} y empieza a hablar. OpenWhispr convertirá tu voz en texto.",
-        "founder": "Hola, soy Gabe, fundador de OpenWhispr",
-        "prompt": "Prueba a decir: «Estoy probando el dictado por primera vez».",
-        "placeholder": "Tu dictado aparecerá aquí…"
+        "founder": "Hola, soy Gabe, el fundador. ¡Gracias por probar OpenWhispr!",
+        "prompt": "Haz clic en el cuadro de abajo, pulsa tu atajo y cuéntame: ¿qué te encantaría que OpenWhispr hiciera por ti?",
+        "placeholder": "Haz clic aquí y luego pulsa tu atajo. OpenWhispr escribe en cualquier cuadro de texto."
       },
       "assistantDemo": {
         "title": "Conoce OpenWhispr Assistant",
         "titleLineOne": "Te presentamos",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Di lo que necesitas y OpenWhispr Assistant escribe el resultado por ti.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "para John Doe",
-        "email": "¡Hola! ¿Te apetece un café la semana que viene? Dime qué día te viene bien.",
-        "prompt": "Responde que el martes a las 3 me va bien. Envía una invitación.",
-        "response": "Hola Eren:\n\nMe encantaría ponernos al día. El martes a las 15:00 me viene bien. Si te parece bien, te enviaré una invitación de calendario.\nCon ganas de verte,\nJohn"
+        "email": {
+          "subject": "¿Café la semana que viene?",
+          "senderName": "Maria Alvarez",
+          "recipient": "para mí",
+          "body": "¡Hola! Fue un placer conocerte ayer en el meetup. ¿Te apetece tomar un café rápido la semana que viene? Dime qué te viene bien.\n\nMaria",
+          "reply": "Responder"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente lee el correo de tu pantalla y busca huecos libres en tu calendario.",
+            "prompt": "Prueba a decir: «Responde y propón algunas horas libres de la semana que viene»."
+          },
+          "screen": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente lee el correo directamente de tu pantalla.",
+            "prompt": "Prueba a decir: «Responde que me encantaría y propón el miércoles por la tarde»."
+          },
+          "calendar": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente busca huecos libres en tu calendario y escribe la respuesta.",
+            "prompt": "Prueba a decir: «Responde a Maria y propón algunas horas libres de la semana que viene»."
+          },
+          "general": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente la escribe por ti.",
+            "prompt": "Prueba a decir: «Responde a Maria que me encantaría y propón el miércoles por la tarde»."
+          }
+        }
       },
       "demo": {
         "listening": "Escuchando…",
@@ -431,8 +450,7 @@
       "activation": "Dictado",
       "useCase": "Sobre ti",
       "meeting": "Reuniones",
-      "finish": "Listo",
-      "voiceAgent": "Asistente de voz"
+      "finish": "Listo"
     },
     "hotkey": {
       "couldNotRegisterTitle": "No se pudo registrar ese atajo",
@@ -477,22 +495,6 @@
       "hotkeyToStartStop": "{{hotkey}} para iniciar/detener",
       "holdHotkey": "Mantener {{hotkey}}",
       "textareaPlaceholder": "Haz clic aquí y usa tu atajo para dictar..."
-    },
-    "voiceAgent": {
-      "title": "Configuración del asistente de voz",
-      "description": "Habla con tu asistente de IA con una sola pulsación",
-      "hotkey": "Atajo",
-      "howItWorks": "Pulsa la tecla y di lo que quieres, por ejemplo «escribe una breve nota de agradecimiento». Si hay texto resaltado, {{agentName}} lo edita y reemplaza. Si un campo de texto editable tiene el foco, la respuesta se pega en el cursor; si no, se abre en un panel flotante. No hace falta decir «Hey {{agentName}}» antes.",
-      "test": "Pruébalo",
-      "testInstruction": "Selecciona el texto de ejemplo de abajo, pulsa {{hotkey}} y di «hazlo más corto»: la edición aparece directamente en el cuadro de texto",
-      "testSetHotkey": "Configura un atajo arriba para probarlo",
-      "sampleText": "La reunión del jueves se movió, así que sincronicemos a principios de la próxima semana para repasar el plan de lanzamiento y repartir las tareas pendientes.",
-      "examples": [
-        "Traduce al italiano: «Hablo más rápido de lo que escribo»",
-        "Escribe un correo breve a mi jefe diciéndole que quiero un ascenso, se llama Mark",
-        "¿Cuánto es 5 × 5?"
-      ],
-      "optionalNote": "Opcional: puedes configurarlo o cambiarlo en cualquier momento en los ajustes."
     },
     "connectivity": {
       "title": "No podemos conectar con OpenWhispr Cloud desde esta red",
@@ -597,8 +599,6 @@
     "update": {
       "readyTitle": "Actualización lista para instalar",
       "readyDescription": "Haz clic en 'Instalar actualización' para reiniciar con la última versión.",
-      "problemTitle": "Hubo un problema con la actualización",
-      "problemDescription": "No pudimos completar la actualización. Inténtalo más tarde.",
       "installTitle": "Instalar actualización",
       "installDescription": "OpenWhispr se reiniciará para aplicar la actualización. Se guardará el trabajo en curso.",
       "couldNotInstallTitle": "No se pudo instalar la actualización",
@@ -645,6 +645,8 @@
       "couldNotDeleteDescription": "Puede que esta transcripción ya se haya eliminado.",
       "couldNotDeleteDescriptionGeneric": "Algo salió mal. Inténtalo de nuevo.",
       "empty": "Aún no hay transcripciones",
+      "emptyDescription": "Pulsa tu atajo en cualquier app y empieza a hablar. Cada transcripción se guarda aquí de forma privada en tu dispositivo.",
+      "sectionTitle": "Transcripciones",
       "dataRetentionDisabled": "La retención de datos está desactivada. Las transcripciones y el audio no se guardan en el historial.",
       "press": "Pulsa",
       "toStart": "para empezar",
@@ -666,6 +668,7 @@
       "clearAllErrorTitle": "No se pudo borrar el historial",
       "clearAllErrorDescription": "Algo salió mal. Inténtalo de nuevo.",
       "copyText": "Copiar texto",
+      "moreActions": "Más acciones",
       "copyRawTranscript": "Copiar transcripción sin procesar",
       "deleteItem": "Eliminar",
       "viewRawTranscript": "Ver transcripción sin procesar",
@@ -828,6 +831,7 @@
     }
   },
   "transcription": {
+    "modelCard": "Ficha del modelo",
     "deleteModel": {
       "title": "Eliminar modelo",
       "description": "¿Seguro que quieres eliminar este modelo? Tendrás que descargarlo otra vez para usarlo."
@@ -914,6 +918,11 @@
         "unreachableDescription": "Tu dictado se pegó sin traducir. Revisa los ajustes de traducción.",
         "failedTitle": "La traducción falló",
         "failedDescription": "Se pegó el texto original. Puedes reintentarlo desde el Historial."
+      },
+      "pushForceStopped": {
+        "title": "Transcripción no pegada",
+        "description": "El dictado se detuvo mientras la tecla seguía pulsada, así que el texto no se pegó. Tu transcripción está en el portapapeles.",
+        "descriptionClipboardFailed": "El dictado se detuvo mientras la tecla seguía pulsada, así que el texto no se pegó y tampoco se pudo copiar al portapapeles."
       },
       "selectionEditing": {
         "notAppliedTitle": "Edición de selección no aplicada",
@@ -1104,7 +1113,8 @@
       "welcomeBack": "Bienvenido de nuevo"
     },
     "signedIn": {
-      "welcomeBack": "Bienvenido de nuevo"
+      "welcomeBack": "Bienvenido de nuevo",
+      "notYou": "¿No eres tú? Cerrar sesión"
     },
     "sso": {
       "continueWithSSO": "Iniciar sesión con SSO",
@@ -1124,7 +1134,7 @@
       "continueWithMicrosoft": "Continuar con Microsoft",
       "protocolUnavailable": "Inicio de sesión por navegador no disponible — vuelve a registrar el protocolo openwhispr:// en los ajustes de Aplicaciones predeterminadas del sistema."
     },
-    "welcomeSubtitle": "Usa tu voz para todo",
+    "welcomeSubtitle": "El poder de tu voz. En tus términos.",
     "welcomeTitle": "Bienvenido a OpenWhispr",
     "sessionExpired": "Sesión expirada"
   },
@@ -1226,7 +1236,12 @@
     "scopes": {
       "notesRead": "Leer notas",
       "notesWrite": "Crear y editar notas",
-      "transcriptionsRead": "Leer transcripciones"
+      "transcriptionsRead": "Leer transcripciones",
+      "dictionaryRead": "Leer diccionario",
+      "dictionaryWrite": "Editar diccionario",
+      "snippetsRead": "Leer snippets",
+      "snippetsWrite": "Editar snippets",
+      "transcriptionsWrite": "Transcribir audio"
     },
     "revoke": {
       "button": "Revocar",
@@ -1958,9 +1973,7 @@
         "meetingDetection": "Detección de reuniones",
         "meetingDetectionDescription": "Notificar cuando se detecta una reunión para iniciar la grabación",
         "calendarReminders": "Recordatorios del calendario",
-        "calendarRemindersDescription": "Notificar cuando una reunión programada está a punto de comenzar",
-        "updates": "Actualizaciones",
-        "updatesDescription": "Notificar cuando hay una nueva versión disponible"
+        "calendarRemindersDescription": "Notificar cuando una reunión programada está a punto de comenzar"
       },
       "clipboard": {
         "title": "Portapapeles",
@@ -2059,6 +2072,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "Actualizaciones automáticas",
+        "automaticUpdatesDescription": "Descargar e instalar actualizaciones en segundo plano",
         "badges": {
           "dev": "Dev",
           "latest": "Última",
@@ -2097,16 +2112,13 @@
           "updateAvailable": {
             "description": "Actualización disponible: v{{version}}",
             "title": "Actualización disponible"
-          },
-          "updateError": {
-            "description": "Algo salió mal con la actualización. Inténtalo de nuevo.",
-            "title": "Error de actualización"
           }
         },
         "downloadUpdate": "Descargar actualización {{version}}",
         "downloading": "Descargando... {{progress}}%",
         "installAndRestart": "Instalar y reiniciar",
         "latestVersion": "Tienes la última versión",
+        "managedByPackageManager": "Las actualizaciones se instalan a través de tu gestor de paquetes",
         "newVersion": "Hay una versión más reciente disponible",
         "newVersionAvailable": "Nueva versión disponible",
         "restarting": "Reiniciando...",
@@ -2564,7 +2576,8 @@
         "parakeet_tdt_0_6b_v3": "ASR multilingüe rápido con detección automática de idioma (25 idiomas)",
         "parakeet_unified_en_0_6b": "ASR solo en inglés con precisión de vanguardia (5,91% WER promedio)",
         "nemotron_speech_streaming_en_0_6b": "ASR en inglés por streaming de NVIDIA Nemotron",
-        "nemotron_3_5_asr_streaming_0_6b": "ASR multilingüe por streaming de NVIDIA Nemotron con detección automática de idioma (15 idiomas)"
+        "nemotron_3_5_asr_streaming_0_6b": "ASR multilingüe por streaming de NVIDIA Nemotron con detección automática de idioma (15 idiomas)",
+        "orukeet": "Parakeet ajustado para reconocimiento de voz multilingüe"
       },
       "whisper": {
         "tiny": "El más rápido, menor calidad",
@@ -2904,6 +2917,11 @@
       "reopen": "Cómo se organizan los espacios"
     },
     "folders": {
+      "defaults": {
+        "personal": "Personal",
+        "meetings": "Reuniones",
+        "videos": "Vídeos"
+      },
       "title": "Carpetas",
       "soon": "Próximamente",
       "folderName": "Nombre de la carpeta",
@@ -2942,6 +2960,10 @@
       "raw": "Sin procesar",
       "enhanced": "Mejorado",
       "saving": "Guardando",
+      "transcriptEmptyTitle": "Aún no hay grabaciones",
+      "transcriptEmptyDescription": "Pulsa grabar para empezar a transcribir. Todo lo que se diga aparecerá aquí en tiempo real.",
+      "startRecording": "Empezar a grabar",
+      "generateSummary": "Generar resumen con IA",
       "startWriting": "Comienza a escribir...",
       "staleIndicator": "El contenido ha cambiado desde la mejora",
       "live": "En vivo",
@@ -3106,6 +3128,15 @@
         "generateNotes": {
           "name": "Generar notas",
           "description": "Limpiar, estructurar y mejorar tus notas"
+        },
+        "followUpEmail": {
+          "name": "Correo de seguimiento",
+          "description": "Redacta un correo de seguimiento a partir de tus notas y la transcripción",
+          "cta": "Redactar correo de seguimiento"
+        },
+        "detailedNotes": {
+          "name": "Notas detalladas",
+          "description": "Notas de reunión precisas y completas con decisiones y tareas"
         }
       },
       "errors": {
@@ -3628,11 +3659,17 @@
       "web_searchName": "Buscar en la web",
       "get_calendar_eventsName": "Obtener eventos del calendario",
       "get_calendar_availabilityName": "Consultar disponibilidad",
+      "get_snippetName": "Obtener snippet",
+      "update_dictionaryName": "Actualizar diccionario",
+      "update_snippetsName": "Actualizar snippets",
       "search_notesStatus": "Buscando notas...",
       "web_searchStatus": "Buscando en la web...",
       "copy_to_clipboardStatus": "Copiando al portapapeles...",
       "get_calendar_eventsStatus": "Consultando calendario...",
       "get_calendar_availabilityStatus": "Consultando disponibilidad...",
+      "get_snippetStatus": "Obteniendo snippet...",
+      "update_dictionaryStatus": "Actualizando diccionario...",
+      "update_snippetsStatus": "Actualizando snippets...",
       "get_noteStatus": "Leyendo nota...",
       "create_noteStatus": "Creando nota...",
       "update_noteStatus": "Actualizando nota...",
@@ -3802,10 +3839,9 @@
   },
   "upcoming": {
     "title": "Próximamente",
-    "transcriptions": "Transcripciones",
     "now": "Ahora",
     "untitledEvent": "Evento sin título",
-    "joinAndTakeNotes": "Unirse y tomar notas",
+    "joinAndTranscribe": "Unirse y transcribir",
     "takeNotes": "Tomar notas",
     "noEventsToday": "Hoy no hay eventos",
     "noUpcomingEvents": "No hay próximos eventos",
@@ -3853,6 +3889,7 @@
         "createLink": "Crear enlace",
         "copyLink": "Copiar enlace",
         "copied": "Copiado",
+        "export": "Exportar",
         "owner": "Propietario",
         "editor": "Puede editar",
         "viewer": "Puede ver",
@@ -3893,7 +3930,6 @@
     "allSpaces": "Todos los espacios",
     "title": "Buscar",
     "description": "Buscar en notas y transcripciones",
-    "shortPlaceholder": "Buscar",
     "placeholder": "Buscar notas y transcripciones…",
     "sections": {
       "notes": "Notas",
@@ -3907,11 +3943,6 @@
       "open": "Abrir",
       "dismiss": "Cerrar"
     }
-  },
-  "updateNotification": {
-    "title": "Actualización de OpenWhispr disponible",
-    "body": "La versión {{version}} está lista para descargar",
-    "cta": "Actualizar ahora"
   },
   "permissionsGate": {
     "title": "Permisos necesarios",
