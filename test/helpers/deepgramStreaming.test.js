@@ -131,6 +131,49 @@ test("warmup presents the same scheme the session will connect with", async () =
   });
 });
 
+// Runs `schedule` with setTimeout stubbed out and hands back its callback, so a
+// timer-gated branch can be exercised at once. Scoped to the one synchronous
+// call: mocking setTimeout for any longer deadlocks the ws server's teardown.
+function captureScheduledCallback(schedule) {
+  const realSetTimeout = global.setTimeout;
+  let scheduled = null;
+  global.setTimeout = (callback) => {
+    scheduled = callback;
+    return { unref() {} };
+  };
+  try {
+    schedule();
+  } finally {
+    global.setTimeout = realSetTimeout;
+  }
+  assert.ok(scheduled, "nothing was scheduled");
+  return scheduled;
+}
+
+test("a re-warm whose options were dropped does not re-authenticate as managed", async () => {
+  await withMetadataServer(async (url, connections, authHeaders) => {
+    const streaming = new DeepgramStreaming();
+    streaming.buildWebSocketUrl = () => url;
+
+    try {
+      await streaming.warmup({ token: "byok-key", mode: "byok" });
+      assert.deepEqual(authHeaders, ["Token byok-key"]);
+
+      const rewarm = captureScheduledCallback(() => streaming.scheduleRewarm());
+      // cleanupWarmConnection() drops the saved options without cancelling the
+      // timer, and the cached token outlives them — so the re-warm still has a
+      // credential to present, just no longer any record of which kind it is.
+      streaming.cleanupWarmConnection();
+      await rewarm();
+
+      assert.equal(streaming.mode, "byok", "the re-warm renegotiated the credential mode");
+      assert.equal(streaming.warmConnection, null, "a socket was opened without a known mode");
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
 // Its only consumer is the weekly canary, not PR CI: without this, deleting the
 // export stays green for a week.
 test("the authorization scheme is exported for the canary to reuse", () => {

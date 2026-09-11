@@ -189,11 +189,11 @@ const frameDurationMs = (bytes) => (bytes / 2 / MEETING_SAMPLE_RATE) * 1000;
 
 // node:test has no default timeout, so the wait is bounded here: withheld audio
 // must fail the run rather than hang it.
-async function collectFrames({ chunkBytes, chunkCount }, assertFrames) {
+async function collectFrames(chunks, assertFrames) {
   const frames = [];
   let receivedBytes = 0;
   const allReceived = deferred();
-  const expectedBytes = chunkBytes * chunkCount;
+  const expectedBytes = chunks.reduce((total, bytes) => total + bytes, 0);
 
   await withBeginServer(
     async (url, connections) => {
@@ -207,7 +207,7 @@ async function collectFrames({ chunkBytes, chunkCount }, assertFrames) {
           mode: "byok",
           sampleRate: MEETING_SAMPLE_RATE,
         });
-        for (let i = 0; i < chunkCount; i++) streaming.sendAudio(Buffer.alloc(chunkBytes));
+        for (const bytes of chunks) streaming.sendAudio(Buffer.alloc(bytes));
         await Promise.race([
           allReceived.promise,
           new Promise((_, reject) =>
@@ -243,7 +243,7 @@ async function collectFrames({ chunkBytes, chunkCount }, assertFrames) {
 
 test("audio frames respect AssemblyAI's 50 ms floor at the meeting sample rate", async () => {
   // 480 bytes is the smallest meeting-aec-helper can hand over (one 10 ms frame).
-  await collectFrames({ chunkBytes: 480, chunkCount: 20 }, (frames) => {
+  await collectFrames(Array(20).fill(480), (frames) => {
     assert.ok(frames.length > 0, "no audio reached the server");
     for (const bytes of frames) {
       assert.ok(
@@ -257,13 +257,64 @@ test("audio frames respect AssemblyAI's 50 ms floor at the meeting sample rate",
 test("a coalesced system-audio read is split under AssemblyAI's 1000 ms ceiling", async () => {
   // A stalled main process gets one 64 KB pipe read off the system-audio helper:
   // 1365 ms at 24 kHz, which AssemblyAI rejects like an undersized frame.
-  await collectFrames({ chunkBytes: 65536, chunkCount: 1 }, (frames) => {
+  await collectFrames([65536], (frames) => {
     assert.ok(frames.length > 1, "a 1365 ms read must be split, not sent whole");
     for (const bytes of frames) {
       assert.ok(
         frameDurationMs(bytes) >= 50 && frameDurationMs(bytes) <= 1000,
         `sent a ${frameDurationMs(bytes).toFixed(1)} ms frame; AssemblyAI accepts 50-1000 ms`
       );
+    }
+  });
+});
+
+test("a sub-floor remainder is carried into the next frame, not dropped", async () => {
+  // 50000 B leaves 2000 B after the slices — under the 2400 B floor at 24 kHz, so
+  // it can only go out once the next chunk lifts it over. Without the carry it is
+  // silently discarded and 2000 B of speech never reaches the transcript, which
+  // collectFrames catches as bytes that never arrive. Asserting the tail rather
+  // than the whole shape keeps this independent of MAX_FRAME_MS.
+  await collectFrames([50000, 2400], (frames) => {
+    assert.equal(frames.at(-1), 4400, "the 2000 B tail must ride out on the next frame");
+  });
+});
+
+test("a warm connection opened at another sample rate is not reused", async () => {
+  await withBeginServer(async (url, connections) => {
+    const streaming = new AssemblyAiStreaming();
+    dialLoopback(streaming, url);
+
+    try {
+      await streaming.warmup({ token: "byok-key", mode: "byok" });
+      // The rate is pinned at open, so riding a 16 kHz warm socket with 24 kHz PCM
+      // garbles the transcript silently and re-frames audio against the wrong rate.
+      await streaming.connect({
+        token: "byok-key",
+        mode: "byok",
+        sampleRate: MEETING_SAMPLE_RATE,
+      });
+
+      assert.equal(connections.length, 2);
+      assert.match(connections[0], /sample_rate=16000/);
+      assert.match(connections[1], /sample_rate=24000/);
+      assert.equal(streaming.sessionSampleRate, MEETING_SAMPLE_RATE);
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+
+  await withBeginServer(async (url, connections) => {
+    const streaming = new AssemblyAiStreaming();
+    dialLoopback(streaming, url);
+
+    try {
+      const options = { token: "byok-key", mode: "byok", sampleRate: MEETING_SAMPLE_RATE };
+      await streaming.warmup(options);
+      await streaming.connect(options);
+
+      assert.equal(connections.length, 1, "same rate rides the warm socket");
+    } finally {
+      streaming.cleanupAll();
     }
   });
 });
