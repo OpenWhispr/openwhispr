@@ -351,7 +351,7 @@
       "ollama": "(Ollama)",
       "localAi": "(LocalAI)",
       "apiKeyOptional": "مفتاح API (اختياري)",
-      "apiKeyHelp": "اختياري. يتم إرساله كرمز Bearer للمصادقة. هذا منفصل عن مفتاح OpenAI API الخاص بك.",
+      "apiKeyHelp": "اختياري. اتركه فارغًا لاستخدام متغير البيئة المطابق، أو أدخل $OPENAI_API_KEY لإعادة استخدام اسم سر آخر في OpenWhispr. الأسماء العشوائية مثل $MY_COMPANY_KEY لا تُوسَّع. تُستورد صادرات الـ shell (مثل ~/.zshrc) عند التشغيل.",
       "applyAndRefresh": "تطبيق وتحديث",
       "queryPrefix": "سنستعلم من",
       "querySuffix": "عن النماذج المتاحة.",
@@ -3626,7 +3626,8 @@
     "tinfoil": {
       "transportNote": "يستخدم Tinfoil نموذج Voxtral Mini 4B للتفريغ المباشر (البث)، ونموذج Voxtral Small 24B للمعالجة الدفعية.",
       "docsLink": "قراءة الوثائق"
-    }
+    },
+    "apiKeyEnvHelp": "اختياري. اتركه فارغًا لاستخدام CUSTOM_TRANSCRIPTION_API_KEY، أو أدخل $OPENAI_API_KEY لإعادة استخدام مفتاح آخر. تُستورد صادرات الـ shell (مثل ~/.zshrc) عند التشغيل."
   },
   "cleanupPrompt": "التنظيف",
   "dictionarySuffix": "لاحقة القاموس",
@@ -4061,14 +4062,16 @@
     "remindLater": "ذكرني لاحقًا"
   },
   "apiKeyInput": {
-    "placeholder": "الصق مفتاح API الخاص بك",
+    "placeholder": "الصق مفتاح API أو $ENV_VAR",
     "label": "مفتاح API",
     "save": "حفظ مفتاح API",
     "cancelEdit": "إلغاء التعديل",
     "edit": "تعديل مفتاح API",
     "add": "إضافة مفتاح API",
     "editButton": "تعديل",
-    "addButton": "إضافة"
+    "addButton": "إضافة",
+    "selfReference": "استخدم اسم متغير مختلف هنا، أو اترك هذا الحقل فارغًا.",
+    "unknownRef": "يمكن الإشارة فقط إلى أسماء أسرار OpenWhispr (مثل $OPENAI_API_KEY)."
   },
   "gpu": {
     "transcriptionBanner": "اجعل التفريغ الصوتي أسرع باستخدام تسريع GPU",

@@ -1666,6 +1666,7 @@ declare global {
       // API key management
       getOpenAIKey: () => Promise<string>;
       saveOpenAIKey: (key: string) => Promise<{ success: boolean }>;
+      resolveSecretRef?: (value: string) => Promise<string>;
       getAnthropicKey: () => Promise<string | null>;
       saveAnthropicKey: (key: string) => Promise<void>;
       getUiLanguage: () => Promise<string>;

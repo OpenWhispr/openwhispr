@@ -347,6 +347,7 @@ function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderCo
   const getTestConfig = () => ({
     azureEndpoint: store.azureEndpoint,
     azureApiVersion: store.azureApiVersion,
+    azureApiKey: store.azureApiKey,
     apiKey: store.azureApiKey,
     model: store.azureDeploymentName || reasoningModel,
   });
@@ -424,6 +425,7 @@ function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderC
   const getTestConfig = () => ({
     vertexProject: store.vertexProject,
     vertexLocation: store.vertexLocation,
+    vertexApiKey: store.vertexAuthMode === "apikey" ? store.vertexApiKey : "",
     apiKey: store.vertexAuthMode === "apikey" ? store.vertexApiKey : "",
     model: reasoningModel,
   });

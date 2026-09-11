@@ -722,7 +722,7 @@
       "ollama": "（Ollama）",
       "localAi": "（LocalAI）",
       "apiKeyOptional": "API キー（任意）",
-      "apiKeyHelp": "任意。Bearer トークンとして認証に使用されます。OpenAI API キーとは別のものです。",
+      "apiKeyHelp": "任意。空欄なら対応する環境変数を使います。$OPENAI_API_KEY と入力すると別変数を再利用します。~/.zshrc などの shell export は起動時に読み込みます。",
       "applyAndRefresh": "適用して更新",
       "queryPrefix": "問い合わせ先:",
       "querySuffix": "で利用可能なモデルを取得します。",
@@ -862,7 +862,8 @@
     "tinfoil": {
       "transportNote": "Tinfoil はストリーミングに Voxtral Mini 4B を、バッチ処理に Voxtral Small 24B を使用します。",
       "docsLink": "ドキュメントを見る"
-    }
+    },
+    "apiKeyEnvHelp": "任意。空欄なら CUSTOM_TRANSCRIPTION_API_KEY を使います。$OPENAI_API_KEY と入力すると別変数を再利用します。~/.zshrc などの shell export は起動時に読み込みます。"
   },
   "hooks": {
     "audioRecording": {
@@ -3458,14 +3459,16 @@
     "remindLater": "後で通知"
   },
   "apiKeyInput": {
-    "placeholder": "API キーを入力",
+    "placeholder": "API キーまたは $ENV_VAR を貼り付け",
     "label": "API キー",
     "save": "保存",
     "cancelEdit": "編集をキャンセル",
     "edit": "編集",
     "add": "追加",
     "editButton": "編集",
-    "addButton": "追加"
+    "addButton": "追加",
+    "selfReference": "Use a different variable name here, or leave this field empty.",
+    "unknownRef": "Only OpenWhispr secret names can be referenced (for example $OPENAI_API_KEY)."
   },
   "gpu": {
     "transcriptionBanner": "GPU で文字起こしを高速化",

@@ -388,6 +388,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // BYOK API keys (get/save for every provider in the secretKeys manifest)
   ...secretKeyApi,
+  resolveSecretRef: (value) => ipcRenderer.invoke("resolve-secret-ref", value),
 
   // Clipboard functions
   checkAccessibilityPermission: (silent) =>

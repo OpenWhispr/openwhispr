@@ -4,6 +4,7 @@ import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
 import logger from "../utils/logger";
+import { classifySecretInput } from "../helpers/envRef";
 import whisperVadConstants from "../constants/whisperVad.json";
 import type {
   ChineseScriptPreference,
@@ -1351,22 +1352,96 @@ const SECRET_IPC_SAVERS = {
 
 type SecretProvider = keyof typeof SECRET_IPC_SAVERS;
 
+// The env var each secret setter writes to, used to reject a field that
+// references itself (`$OPENAI_API_KEY` in the OpenAI field resolves to nothing
+// once saved). `Record<SecretProvider, string>` makes a new entry in
+// SECRET_IPC_SAVERS a type error until its env name is listed here.
+const SAVER_ENV: Record<SecretProvider, string> = {
+  openai: "OPENAI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+  gemini: "GEMINI_API_KEY",
+  groq: "GROQ_API_KEY",
+  xai: "XAI_API_KEY",
+  mistral: "MISTRAL_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
+  cortiClientId: "CORTI_CLIENT_ID",
+  cortiClientSecret: "CORTI_CLIENT_SECRET",
+  cortiApiKey: "CORTI_API_KEY",
+  tinfoil: "TINFOIL_API_KEY",
+  deepgram: "DEEPGRAM_API_KEY",
+  assemblyai: "ASSEMBLYAI_API_KEY",
+  customTranscription: "CUSTOM_TRANSCRIPTION_API_KEY",
+  cleanupCustom: "CUSTOM_CLEANUP_API_KEY",
+  noteFormattingCustom: "NOTE_FORMATTING_CUSTOM_API_KEY",
+  translationCustom: "TRANSLATION_CUSTOM_API_KEY",
+  dictationAgentCustom: "DICTATION_AGENT_CUSTOM_API_KEY",
+  dictationAgentVisionCustom: "DICTATION_AGENT_VISION_CUSTOM_API_KEY",
+  chatAgentCustom: "CHAT_AGENT_CUSTOM_API_KEY",
+  bedrockAccessKeyId: "BEDROCK_ACCESS_KEY_ID",
+  bedrockSecretAccessKey: "BEDROCK_SECRET_ACCESS_KEY",
+  bedrockSessionToken: "BEDROCK_SESSION_TOKEN",
+  azureApiKey: "AZURE_OPENAI_API_KEY",
+  vertexApiKey: "VERTEX_API_KEY",
+};
+// The names a $VAR field may point at. Object.values(SAVER_ENV) covers every
+// provider the store can save; CUSTOM_REASONING_API_KEY is the legacy alias of
+// CUSTOM_CLEANUP_API_KEY that environment.js still reads but no setter writes.
+// Keep in lockstep with SECRET_ENV_NAMES in src/config/secretKeys.js.
+const SECRET_ENV_SET = new Set<string>([...Object.values(SAVER_ENV), "CUSTOM_REASONING_API_KEY"]);
+
+function assertSavableSecret(saver: SecretProvider, key: string, current?: string): string {
+  const trimmed = key.trim();
+  const reason = classifySecretInput(trimmed, SAVER_ENV[saver], SECRET_ENV_SET);
+  // Re-saving the $NAME already shown in the field (login-shell import) is a
+  // no-op. An empty field + `$OPENAI_API_KEY` is a user self-reference and
+  // must throw — hydration writes imported refs via setState, not setters.
+  if (reason === "self-reference" && current === trimmed) return trimmed;
+  if (reason) {
+    const err = new Error(reason) as Error & { code: string };
+    err.code = reason;
+    throw err;
+  }
+  return trimmed;
+}
+
+type SecretSaveResult = { success?: boolean; reason?: string } | void | null;
+
 const secretSaveTimers: Partial<Record<SecretProvider, ReturnType<typeof setTimeout>>> = {};
-function debouncedSaveSecret(provider: SecretProvider, key: string) {
+function debouncedSaveSecret(
+  provider: SecretProvider,
+  key: string,
+  rollback?: { storeKey: string; previous: string }
+) {
   if (!isBrowser) return;
   const timer = secretSaveTimers[provider];
   if (timer) clearTimeout(timer);
   secretSaveTimers[provider] = setTimeout(() => {
     const api = window.electronAPI;
     const save = api?.[SECRET_IPC_SAVERS[provider]] as
-      ((k: string) => Promise<unknown>) | undefined;
-    save?.(key)?.catch((err) => {
-      logger.warn(
-        "Failed to persist secret",
-        { provider, error: (err as Error).message },
-        "settings"
-      );
-    });
+      ((k: string) => Promise<SecretSaveResult>) | undefined;
+    if (!save) return;
+    save(key)
+      .then((result) => {
+        if (!result || result.success !== false) return;
+        if (rollback) {
+          const current = String(useSettingsStore.getState()[rollback.storeKey] ?? "");
+          if (current === key) {
+            useSettingsStore.setState({ [rollback.storeKey]: rollback.previous });
+          }
+        }
+        logger.warn(
+          "Rejected secret persist",
+          { provider, reason: result.reason },
+          "settings"
+        );
+      })
+      .catch((err) => {
+        logger.warn(
+          "Failed to persist secret",
+          { provider, error: (err as Error).message },
+          "settings"
+        );
+      });
   }, 250);
 }
 
@@ -1436,8 +1511,10 @@ function createSecretSetter(
   cacheProvider?: Parameters<typeof invalidateApiKeyCaches>[0]
 ) {
   return (key: string) => {
-    useSettingsStore.setState({ [storeKey]: key });
-    debouncedSaveSecret(saver, key);
+    const current = String(useSettingsStore.getState()[storeKey] ?? "");
+    const trimmed = assertSavableSecret(saver, key, current);
+    useSettingsStore.setState({ [storeKey]: trimmed });
+    debouncedSaveSecret(saver, trimmed, { storeKey, previous: current });
     invalidateApiKeyCaches(cacheProvider);
   };
 }
@@ -2137,13 +2214,17 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setMistralApiKey: createSecretSetter("mistralApiKey", "mistral", "mistral"),
   setOpenrouterApiKey: createSecretSetter("openrouterApiKey", "openrouter", "openrouter"),
   setCortiClientId: (key: string) => {
-    set({ cortiClientId: key });
-    debouncedSaveSecret("cortiClientId", key);
+    const previous = useSettingsStore.getState().cortiClientId;
+    const trimmed = assertSavableSecret("cortiClientId", key, previous);
+    set({ cortiClientId: trimmed });
+    debouncedSaveSecret("cortiClientId", trimmed, { storeKey: "cortiClientId", previous });
     invalidateApiKeyCaches("corti");
   },
   setCortiClientSecret: (key: string) => {
-    set({ cortiClientSecret: key });
-    debouncedSaveSecret("cortiClientSecret", key);
+    const previous = useSettingsStore.getState().cortiClientSecret;
+    const trimmed = assertSavableSecret("cortiClientSecret", key, previous);
+    set({ cortiClientSecret: trimmed });
+    debouncedSaveSecret("cortiClientSecret", trimmed, { storeKey: "cortiClientSecret", previous });
     invalidateApiKeyCaches("corti");
   },
   setCortiApiKey: createSecretSetter("cortiApiKey", "cortiApiKey", "corti"),
@@ -2154,13 +2235,23 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setDeepgramApiKey: createSecretSetter("deepgramApiKey", "deepgram"),
   setAssemblyaiApiKey: createSecretSetter("assemblyaiApiKey", "assemblyai"),
   setCustomTranscriptionApiKey: (key: string) => {
-    set({ customTranscriptionApiKey: key });
-    debouncedSaveSecret("customTranscription", key);
+    const previous = useSettingsStore.getState().customTranscriptionApiKey;
+    const trimmed = assertSavableSecret("customTranscription", key, previous);
+    set({ customTranscriptionApiKey: trimmed });
+    debouncedSaveSecret("customTranscription", trimmed, {
+      storeKey: "customTranscriptionApiKey",
+      previous,
+    });
     invalidateApiKeyCaches("custom");
   },
   setCleanupCustomApiKey: (key: string) => {
-    set({ cleanupCustomApiKey: key });
-    debouncedSaveSecret("cleanupCustom", key);
+    const previous = useSettingsStore.getState().cleanupCustomApiKey;
+    const trimmed = assertSavableSecret("cleanupCustom", key, previous);
+    set({ cleanupCustomApiKey: trimmed });
+    debouncedSaveSecret("cleanupCustom", trimmed, {
+      storeKey: "cleanupCustomApiKey",
+      previous,
+    });
     invalidateApiKeyCaches("custom");
   },
 
@@ -2188,18 +2279,33 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     debouncedPersistToEnv();
   },
   setBedrockAccessKeyId: (key: string) => {
-    set({ bedrockAccessKeyId: key });
-    debouncedSaveSecret("bedrockAccessKeyId", key);
+    const previous = useSettingsStore.getState().bedrockAccessKeyId;
+    const trimmed = assertSavableSecret("bedrockAccessKeyId", key, previous);
+    set({ bedrockAccessKeyId: trimmed });
+    debouncedSaveSecret("bedrockAccessKeyId", trimmed, {
+      storeKey: "bedrockAccessKeyId",
+      previous,
+    });
     debouncedPersistToEnv();
   },
   setBedrockSecretAccessKey: (key: string) => {
-    set({ bedrockSecretAccessKey: key });
-    debouncedSaveSecret("bedrockSecretAccessKey", key);
+    const previous = useSettingsStore.getState().bedrockSecretAccessKey;
+    const trimmed = assertSavableSecret("bedrockSecretAccessKey", key, previous);
+    set({ bedrockSecretAccessKey: trimmed });
+    debouncedSaveSecret("bedrockSecretAccessKey", trimmed, {
+      storeKey: "bedrockSecretAccessKey",
+      previous,
+    });
     debouncedPersistToEnv();
   },
   setBedrockSessionToken: (key: string) => {
-    set({ bedrockSessionToken: key });
-    debouncedSaveSecret("bedrockSessionToken", key);
+    const previous = useSettingsStore.getState().bedrockSessionToken;
+    const trimmed = assertSavableSecret("bedrockSessionToken", key, previous);
+    set({ bedrockSessionToken: trimmed });
+    debouncedSaveSecret("bedrockSessionToken", trimmed, {
+      storeKey: "bedrockSessionToken",
+      previous,
+    });
     debouncedPersistToEnv();
   },
   setAzureEndpoint: (value: string) => {
@@ -2209,8 +2315,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     debouncedPersistToEnv();
   },
   setAzureApiKey: (key: string) => {
-    set({ azureApiKey: key });
-    debouncedSaveSecret("azureApiKey", key);
+    const previous = useSettingsStore.getState().azureApiKey;
+    const trimmed = assertSavableSecret("azureApiKey", key, previous);
+    set({ azureApiKey: trimmed });
+    debouncedSaveSecret("azureApiKey", trimmed, { storeKey: "azureApiKey", previous });
     debouncedPersistToEnv();
   },
   setAzureDeploymentName: (value: string) => {
@@ -2242,8 +2350,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     debouncedPersistToEnv();
   },
   setVertexApiKey: (key: string) => {
-    set({ vertexApiKey: key });
-    debouncedSaveSecret("vertexApiKey", key);
+    const previous = useSettingsStore.getState().vertexApiKey;
+    const trimmed = assertSavableSecret("vertexApiKey", key, previous);
+    set({ vertexApiKey: trimmed });
+    debouncedSaveSecret("vertexApiKey", trimmed, { storeKey: "vertexApiKey", previous });
     debouncedPersistToEnv();
   },
 
@@ -2640,22 +2750,35 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   updateApiKeys: (keys: Partial<ApiKeySettings>) => {
     const s = useSettingsStore.getState();
-    if (keys.openaiApiKey !== undefined) s.setOpenaiApiKey(keys.openaiApiKey);
-    if (keys.anthropicApiKey !== undefined) s.setAnthropicApiKey(keys.anthropicApiKey);
-    if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
-    if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
-    if (keys.xaiApiKey !== undefined) s.setXaiApiKey(keys.xaiApiKey);
-    if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
-    if (keys.openrouterApiKey !== undefined) s.setOpenrouterApiKey(keys.openrouterApiKey);
-    if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
-    if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
-    if (keys.cortiApiKey !== undefined) s.setCortiApiKey(keys.cortiApiKey);
-    if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
-    if (keys.deepgramApiKey !== undefined) s.setDeepgramApiKey(keys.deepgramApiKey);
-    if (keys.assemblyaiApiKey !== undefined) s.setAssemblyaiApiKey(keys.assemblyaiApiKey);
-    if (keys.customTranscriptionApiKey !== undefined)
-      s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
-    if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
+    // Secret setters throw on a rejected $VAR (self-reference / unknown name).
+    // A bulk update must not abort halfway, so each key is applied on its own.
+    const apply = (fn: (value: string) => void, value: string | undefined) => {
+      if (value === undefined) return;
+      try {
+        fn(value);
+      } catch (error) {
+        logger.warn(
+          "Skipped invalid API key update",
+          { error: error instanceof Error ? error.message : String(error) },
+          "settings"
+        );
+      }
+    };
+    apply(s.setOpenaiApiKey, keys.openaiApiKey);
+    apply(s.setAnthropicApiKey, keys.anthropicApiKey);
+    apply(s.setGeminiApiKey, keys.geminiApiKey);
+    apply(s.setGroqApiKey, keys.groqApiKey);
+    apply(s.setXaiApiKey, keys.xaiApiKey);
+    apply(s.setMistralApiKey, keys.mistralApiKey);
+    apply(s.setOpenrouterApiKey, keys.openrouterApiKey);
+    apply(s.setCortiClientId, keys.cortiClientId);
+    apply(s.setCortiClientSecret, keys.cortiClientSecret);
+    apply(s.setCortiApiKey, keys.cortiApiKey);
+    apply(s.setTinfoilApiKey, keys.tinfoilApiKey);
+    apply(s.setDeepgramApiKey, keys.deepgramApiKey);
+    apply(s.setAssemblyaiApiKey, keys.assemblyaiApiKey);
+    apply(s.setCustomTranscriptionApiKey, keys.customTranscriptionApiKey);
+    apply(s.setCleanupCustomApiKey, keys.cleanupCustomApiKey);
   },
 
   updateChatAgentSettings: (settings: Partial<ChatAgentSettings>) => {
