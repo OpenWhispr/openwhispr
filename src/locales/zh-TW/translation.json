@@ -3056,6 +3056,10 @@
           "name": "跟進郵件",
           "description": "根據筆記和轉錄草擬一封跟進郵件",
           "cta": "草擬跟進郵件"
+        },
+        "detailedNotes": {
+          "name": "詳細筆記",
+          "description": "準確、完整的會議筆記，包含決策和行動項目"
         }
       },
       "errors": {

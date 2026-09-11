@@ -1,16 +1,17 @@
-// Built-in note actions. The database seeds these on startup and rolls a new
-// default prompt out to any row the user has not customized, so a prompt change
-// here reaches existing installs too. Built-in prompts are complete instructions:
-// the renderer sends them standalone (plus an input-format preamble) instead of
-// wrapping them in the generic note-enhancement system prompt.
+// Built-in note actions. The database seeds any that are missing on startup and
+// only rewrites a row whose prompt still equals a previous default, so a user's
+// edited prompt is never touched. Generate Notes keeps its original prompt and
+// the generic system-prompt wrapper; the newer built-ins are complete
+// instructions and are sent standalone (see STANDALONE_PROMPT_KEYS).
 
 export const GENERATE_NOTES_KEY = "notes.actions.builtin.generateNotes";
+export const DETAILED_NOTES_KEY = "notes.actions.builtin.detailedNotes";
 export const FOLLOW_UP_EMAIL_KEY = "notes.actions.builtin.followUpEmail";
 
-const LEGACY_GENERATE_NOTES_PROMPT =
+const GENERATE_NOTES_PROMPT =
   "Transform the provided content into clean, well-structured notes in markdown. Preserve the user's intent and all substantive information. Remove filler, small talk, false starts, and redundant content. For personal notes, improve grammar and structure for readability. For meeting transcripts, extract key discussion points, decisions, action items, and follow-ups.";
 
-const GENERATE_NOTES_PROMPT = `You are an expert meeting-notes editor. Convert the provided meeting material into accurate, comprehensive, and easy-to-scan notes in Markdown.
+const DETAILED_NOTES_PROMPT = `You are an expert meeting-notes editor. Convert the provided meeting material into accurate, comprehensive, and easy-to-scan notes in Markdown.
 
 The source may contain:
 - meeting context, such as the calendar title or participant names;
@@ -110,11 +111,21 @@ export const BUILTIN_ACTIONS = [
   {
     translationKey: GENERATE_NOTES_KEY,
     name: "Generate Notes",
-    description: "Turn your notes and transcript into structured meeting notes",
+    description: "Clean up, structure, and enhance your notes",
     prompt: GENERATE_NOTES_PROMPT,
-    previousPrompts: [LEGACY_GENERATE_NOTES_PROMPT],
+    // A pre-release build briefly shipped the detailed prompt under this key.
+    previousPrompts: [DETAILED_NOTES_PROMPT],
     icon: "sparkles",
     sortOrder: 0,
+  },
+  {
+    translationKey: DETAILED_NOTES_KEY,
+    name: "Detailed Notes",
+    description: "Accurate, comprehensive meeting notes with decisions and action items",
+    prompt: DETAILED_NOTES_PROMPT,
+    previousPrompts: [],
+    icon: "sparkles",
+    sortOrder: 1,
   },
   {
     translationKey: FOLLOW_UP_EMAIL_KEY,
@@ -123,7 +134,10 @@ export const BUILTIN_ACTIONS = [
     prompt: FOLLOW_UP_EMAIL_PROMPT,
     previousPrompts: [],
     icon: "mail",
-    sortOrder: 1,
+    sortOrder: 2,
   },
 ];
 
+// Built-ins whose prompt is a complete instruction set and must not be wrapped
+// in the generic system prompts.
+export const STANDALONE_PROMPT_KEYS = new Set([DETAILED_NOTES_KEY, FOLLOW_UP_EMAIL_KEY]);

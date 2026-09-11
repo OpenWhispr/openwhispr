@@ -3414,6 +3414,10 @@
           "name": "E-mail de suivi",
           "description": "Rédigez un e-mail de suivi à partir de vos notes et de la transcription",
           "cta": "Rédiger un e-mail de suivi"
+        },
+        "detailedNotes": {
+          "name": "Notes détaillées",
+          "description": "Des notes de réunion précises et complètes avec décisions et actions"
         }
       },
       "errors": {

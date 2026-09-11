@@ -3056,6 +3056,10 @@
           "name": "E-mail de acompanhamento",
           "description": "Redija um e-mail de acompanhamento a partir das notas e da transcrição",
           "cta": "Redigir e-mail de acompanhamento"
+        },
+        "detailedNotes": {
+          "name": "Notas detalhadas",
+          "description": "Notas de reunião precisas e completas com decisões e ações"
         }
       },
       "errors": {

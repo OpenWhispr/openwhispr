@@ -14,7 +14,7 @@ import { useActionProcessing } from "../../hooks/useActionProcessing";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import type { ActionItem, NoteItem } from "../../types/electron";
 import { useActions } from "../../stores/actionStore";
-import { GENERATE_NOTES_KEY } from "../../helpers/builtinActions";
+import { DETAILED_NOTES_KEY } from "../../helpers/builtinActions";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
@@ -759,7 +759,7 @@ export default function PersonalNotesView({
     });
   };
   const generateSummary = () => {
-    const action = actions.find((a) => a.translation_key === GENERATE_NOTES_KEY);
+    const action = actions.find((a) => a.translation_key === DETAILED_NOTES_KEY);
     if (action) void runNoteAction(action);
   };
 

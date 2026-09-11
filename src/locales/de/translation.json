@@ -3414,6 +3414,10 @@
           "name": "Follow-up-E-Mail",
           "description": "Entwirf eine Follow-up-E-Mail aus Notizen und Transkript",
           "cta": "Follow-up-E-Mail entwerfen"
+        },
+        "detailedNotes": {
+          "name": "Ausführliche Notizen",
+          "description": "Präzise, umfassende Meeting-Notizen mit Entscheidungen und Aufgaben"
         }
       },
       "errors": {

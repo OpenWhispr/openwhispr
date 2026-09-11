@@ -3056,6 +3056,10 @@
           "name": "跟进邮件",
           "description": "根据笔记和转写草拟一封跟进邮件",
           "cta": "草拟跟进邮件"
+        },
+        "detailedNotes": {
+          "name": "详细笔记",
+          "description": "准确、全面的会议笔记，包含决策和行动项"
         }
       },
       "errors": {

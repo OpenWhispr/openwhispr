@@ -3109,6 +3109,10 @@
           "name": "Correo de seguimiento",
           "description": "Redacta un correo de seguimiento a partir de tus notas y la transcripción",
           "cta": "Redactar correo de seguimiento"
+        },
+        "detailedNotes": {
+          "name": "Notas detalladas",
+          "description": "Notas de reunión precisas y completas con decisiones y tareas"
         }
       },
       "errors": {

@@ -3056,6 +3056,10 @@
           "name": "Email di follow-up",
           "description": "Scrivi un'email di follow-up a partire da note e trascrizione",
           "cta": "Scrivi un'email di follow-up"
+        },
+        "detailedNotes": {
+          "name": "Note dettagliate",
+          "description": "Note di riunione accurate e complete con decisioni e azioni"
         }
       },
       "errors": {

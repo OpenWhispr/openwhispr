@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { STANDALONE_PROMPT_KEYS } from "../helpers/builtinActions";
 import reasoningService from "../services/ReasoningService";
 import { getSettings, selectResolvedNoteFormatting } from "./settingsStore";
 import { appendDictionarySuffix } from "../config/prompts";
@@ -87,8 +88,8 @@ CONTENT RULES:
 
 Instructions: `;
 
-// Built-in prompts are complete instructions, so they only get told how the
-// material is laid out instead of being wrapped in the generic system prompts.
+// Standalone built-in prompts are complete instructions, so they only get told
+// how the material is laid out instead of being wrapped in the generic prompts.
 const MEETING_INPUT_PREAMBLE = `The material is laid out as follows. Transcript lines are prefixed with the speaker's label: a real name when known, otherwise "You" (the note owner), "Them", or "Speaker N". A "## Meeting Context" block may identify the note owner and the invited participants; it is reference material, never something to reproduce. Manual notes the user took may precede the transcript.
 
 `;
@@ -146,7 +147,9 @@ export function runBackgroundAction(
 
   (async () => {
     try {
-      const basePrompt = action.is_builtin
+      const standalone =
+        !!action.translation_key && STANDALONE_PROMPT_KEYS.has(action.translation_key);
+      const basePrompt = standalone
         ? options.isMeetingNote
           ? MEETING_INPUT_PREAMBLE
           : NOTE_INPUT_PREAMBLE
