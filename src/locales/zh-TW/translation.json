@@ -2651,7 +2651,8 @@
     },
     "errors": {
       "contextTooLarge": "內容過長，{{model}} 無法在這台電腦上讀取。大約需要 {{needed}} 個上下文 token，但記憶體只能容納 {{max}} 個。請改用雲端模型，或對更短的選取範圍執行該動作。",
-      "contextTooLargeGeneric": "內容過長，{{model}} 無法在這台電腦上讀取。請改用雲端模型，或對更短的選取範圍執行該動作。"
+      "contextTooLargeGeneric": "內容過長，{{model}} 無法在這台電腦上讀取。請改用雲端模型，或對更短的選取範圍執行該動作。",
+      "localServerUnavailable": "無法在這台電腦上啟動 {{model}}。請重試，或改用雲端模型。"
     }
   },
   "referral": {

@@ -2744,7 +2744,8 @@
     },
     "errors": {
       "contextTooLarge": "C’est trop long pour que {{model}} puisse le lire sur cet ordinateur. Il faut environ {{needed}} jetons de contexte, mais seuls {{max}} tiennent en mémoire. Essayez un modèle cloud ou exécutez l’action sur une sélection plus courte.",
-      "contextTooLargeGeneric": "C’est trop long pour que {{model}} puisse le lire sur cet ordinateur. Essayez un modèle cloud ou exécutez l’action sur une sélection plus courte."
+      "contextTooLargeGeneric": "C’est trop long pour que {{model}} puisse le lire sur cet ordinateur. Essayez un modèle cloud ou exécutez l’action sur une sélection plus courte.",
+      "localServerUnavailable": "Impossible de démarrer {{model}} sur cet ordinateur. Réessayez ou passez à un modèle cloud."
     }
   },
   "insights": {

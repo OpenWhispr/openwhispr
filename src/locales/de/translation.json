@@ -2744,7 +2744,8 @@
     },
     "errors": {
       "contextTooLarge": "Das ist zu lang, als dass {{model}} es auf diesem Computer lesen könnte. Es werden etwa {{needed}} Token Kontext benötigt, aber nur {{max}} passen in den Speicher. Versuchen Sie ein Cloud-Modell oder führen Sie die Aktion für eine kürzere Auswahl aus.",
-      "contextTooLargeGeneric": "Das ist zu lang, als dass {{model}} es auf diesem Computer lesen könnte. Versuchen Sie ein Cloud-Modell oder führen Sie die Aktion für eine kürzere Auswahl aus."
+      "contextTooLargeGeneric": "Das ist zu lang, als dass {{model}} es auf diesem Computer lesen könnte. Versuchen Sie ein Cloud-Modell oder führen Sie die Aktion für eine kürzere Auswahl aus.",
+      "localServerUnavailable": "{{model}} konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut oder wechseln Sie zu einem Cloud-Modell."
     }
   },
   "insights": {

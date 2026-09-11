@@ -47,8 +47,14 @@ export function buildLocalInferenceError(result: LocalInferenceFailure): LocalIn
   const error: LocalInferenceError = new Error(result.error || "Local inference failed");
   if (result.code) error.code = result.code;
 
+  const details = result.details ?? {};
   if (result.code === "CONTEXT_TOO_LARGE") {
-    Object.assign(error, contextTooLarge(result.details ?? {}));
+    Object.assign(error, contextTooLarge(details));
+  } else if (result.code === "LOCAL_SERVER_UNAVAILABLE") {
+    // The llama.cpp startup dump stays in the main-process log; only the model
+    // name crosses, so there is nothing here that could reach the user raw.
+    error.messageKey = "models.errors.localServerUnavailable";
+    error.messageParams = { model: typeof details.modelName === "string" ? details.modelName : "" };
   }
 
   return error;

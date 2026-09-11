@@ -2651,7 +2651,8 @@
     },
     "errors": {
       "contextTooLarge": "内容过长，{{model}} 无法在这台电脑上读取。大约需要 {{needed}} 个上下文 token，但内存中只能容纳 {{max}} 个。请改用云端模型，或对更短的选区执行该操作。",
-      "contextTooLargeGeneric": "内容过长，{{model}} 无法在这台电脑上读取。请改用云端模型，或对更短的选区执行该操作。"
+      "contextTooLargeGeneric": "内容过长，{{model}} 无法在这台电脑上读取。请改用云端模型，或对更短的选区执行该操作。",
+      "localServerUnavailable": "无法在这台电脑上启动 {{model}}。请重试，或改用云端模型。"
     }
   },
   "referral": {

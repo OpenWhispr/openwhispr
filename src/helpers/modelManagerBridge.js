@@ -33,10 +33,21 @@ const SERVER_CONTEXT_SIZE = BASELINE_CONTEXT_SIZE;
 // own bookkeeping.
 const CONTEXT_RESERVE_TOKENS = 512;
 
+// Context a request must leave free for its own answer. Derived in one place
+// so the size the window is chosen for and the size it is checked against can
+// never drift apart.
+const reserveFor = (maxTokens) => maxTokens + CONTEXT_RESERVE_TOKENS;
+
 // Only measure the prompt exactly when the estimate lands within this factor
 // of the running window. Below that the answer cannot change, and dictation
 // should not pay two HTTP round trips to learn nothing.
 const PREFLIGHT_MEASURE_FACTOR = 2;
+
+// The smallest answer still worth generating when the prompt has crowded the
+// window. Matches the historical floor of calculateMaxTokens, so a request
+// that gets trimmed to this is no smaller than the smallest one the app has
+// ever made. Below it, refusing beats handing back a sentence and a half.
+const MIN_OUTPUT_TOKENS = 512;
 
 function getLocalProviders() {
   return modelRegistryData.localProviders || [];
@@ -264,10 +275,12 @@ class ModelManager {
       // The GGUF is the file llama.cpp actually loads, so it outranks the
       // registry, which is wrong for at least the qwen2.5-7b entries.
       trainedContextTokens: metadata?.contextLength || modelInfo.model.contextLength || 0,
-      // Off macOS the GPU has its own memory that we do not probe, so the
-      // system-RAM budget alone is not a safe bound. Stay modest and let the
-      // existing GPU fallback ladder handle anything that still will not fit.
-      discreteGpuUnverified: process.platform !== "darwin",
+      // Anywhere but Apple Silicon the GPU may have its own memory that we do
+      // not probe, so the system-RAM budget alone is not a safe bound. Stay
+      // modest and let the GPU fallback ladder handle the rest. Intel Macs
+      // count: a discrete Radeon has a few GB of its own, and the darwin start
+      // path has no reduced-context rung to catch an over-sized window.
+      discreteGpuUnverified: process.platform !== "darwin" || process.arch !== "arm64",
     });
 
     debugLogger.info("Resolved llama-server context ceiling", {
@@ -521,28 +534,31 @@ class ModelManager {
 
   /**
    * Make sure the prompt actually fits the running window, growing it once if
-   * it does not and refusing outright if even the ceiling is too small.
+   * it does not, trading output room for the prompt if it still does not, and
+   * refusing only when no usable answer is left.
    *
    * The estimate above only picks a starting size. This is where the decision
    * becomes exact, because a wrong guess here is the bug: llama-server answers
    * an overlong prompt with a 400 whose JSON body used to reach the user.
+   *
+   * Returns the output allowance the request should actually be sent with.
    */
   async _ensurePromptFits({
     modelInfo,
-    modelPath,
     messages,
     options,
     estimatedTokens,
-    reserveTokens,
+    maxTokens,
     contextFloor,
     ceilingFor,
     startServer,
   }) {
+    const reserveTokens = reserveFor(maxTokens);
     const running = this.serverManager.contextSize || contextFloor;
 
     // Comfortably inside the window: measuring cannot change the outcome, and
     // every dictation would otherwise pay for two HTTP round trips.
-    if ((estimatedTokens + reserveTokens) * PREFLIGHT_MEASURE_FACTOR <= running) return;
+    if ((estimatedTokens + reserveTokens) * PREFLIGHT_MEASURE_FACTOR <= running) return maxTokens;
 
     const usable = (await this.serverManager.usableContextSize()) ?? running;
     const exactTokens = await this.serverManager.countPromptTokens(messages, {
@@ -557,11 +573,11 @@ class ModelManager {
         model: modelInfo.model.id,
         estimatedTokens,
       });
-      return;
+      return maxTokens;
     }
 
     const neededTokens = exactTokens + reserveTokens;
-    if (neededTokens <= usable) return;
+    if (neededTokens <= usable) return maxTokens;
 
     const { ceiling: maxContext } = await ceilingFor();
     const grown = resolveContextSize({
@@ -574,8 +590,36 @@ class ModelManager {
 
     const nowUsable =
       (await this.serverManager.usableContextSize()) ?? this.serverManager.contextSize ?? grown;
-    if (neededTokens <= nowUsable) return;
+    if (neededTokens <= nowUsable) return maxTokens;
 
+    // The window is as big as this machine allows and the prompt still does not
+    // leave room for the answer we wanted. But llama-server rejects only a
+    // prompt that fills the window on its own (`n_tokens >= n_ctx`) —
+    // overrunning during generation just ends the reply with finish_reason
+    // "length" — so a shorter answer is still a real answer, and refusing one
+    // the user could have had is the regression this preflight would otherwise
+    // introduce (#2142).
+    //
+    // No `- CONTEXT_RESERVE_TOKENS` here: that slack absorbs drift in the
+    // *estimate* that sized the window, while this is an exact count of the
+    // exact prompt. The MIN_OUTPUT_TOKENS floor below already keeps the prompt
+    // clear of the edge by the same margin, so charging it twice would only
+    // shorten the answer.
+    const affordableOutput = nowUsable - exactTokens;
+    if (!options.requireCompleteOutput && affordableOutput >= MIN_OUTPUT_TOKENS) {
+      debugLogger.info("Trimming the output allowance to fit the context window", {
+        model: modelInfo.model.id,
+        requested: maxTokens,
+        granted: affordableOutput,
+        promptTokens: exactTokens,
+        contextSize: nowUsable,
+      });
+      return affordableOutput;
+    }
+
+    // Either nothing usable is left, or the caller cannot accept a partial
+    // answer at all (a selection edit replaces the user's own text, so half of
+    // one is worse than none).
     throw new ModelError(
       `This content needs about ${neededTokens} tokens of context, but ${modelInfo.model.name} can only use ${nowUsable} on this computer.`,
       "CONTEXT_TOO_LARGE",
@@ -637,7 +681,7 @@ class ModelManager {
     const maxTokens = options.maxTokens ?? 512;
     // Whatever the prompt needs, plus room for the reply. The output reserve
     // is part of the context budget, not on top of it.
-    const reserveTokens = maxTokens + CONTEXT_RESERVE_TOKENS;
+    const reserveTokens = reserveFor(maxTokens);
     const estimatedTokens = estimateTokens(options.systemPrompt || "") + estimateTokens(prompt);
     // A caller may ask for a larger floor (selection editing does); it can
     // raise the floor but never breach the ceiling.
@@ -650,7 +694,10 @@ class ModelManager {
     };
 
     let targetContextSize = contextFloor;
-    if (estimatedTokens + reserveTokens > contextFloor) {
+    // A raised floor has to clear the ceiling too, or a caller asking for a
+    // window the machine cannot afford reopens #1203. The baseline floor needs
+    // no check, which is what keeps the GGUF read off the short-request path.
+    if (contextFloor > SERVER_CONTEXT_SIZE || estimatedTokens + reserveTokens > contextFloor) {
       const { ceiling: maxContext } = await ceilingFor();
       targetContextSize = resolveContextSize({
         needed: estimatedTokens + reserveTokens,
@@ -659,12 +706,77 @@ class ModelManager {
       });
     }
 
+    // The smallest window this machine has already refused for this model,
+    // whether by failing to start or by quietly loading something smaller.
+    // Retrying it would cost a second model load to learn the same thing.
+    let smallestRefusedContextSize = Infinity;
+    const refuse = (size) => {
+      smallestRefusedContextSize = Math.min(smallestRefusedContextSize, size);
+    };
+
     const startServer = async (contextSize) => {
+      if (this.serverManager.ready && contextSize >= smallestRefusedContextSize) return;
+
       const { cacheRamMiB } = ceiling ?? {};
-      await this.serverManager.start(
-        modelPath,
-        await this.serverStartOptions(modelInfo, { contextSize, cacheRamMiB })
-      );
+      // Only a live server already serving THIS model has a window worth
+      // coming back to. contextSize outlives a crash — llamaServer clears it
+      // in stop() alone, not when a process dies or a health check trips — and
+      // another model's window says nothing about this one.
+      const restorableContextSize =
+        this.serverManager.ready &&
+        this.serverManager.process &&
+        this.currentServerModelId === modelId
+          ? this.serverManager.contextSize
+          : null;
+      const startAt = async (size) =>
+        this.serverManager.start(
+          modelPath,
+          await this.serverStartOptions(modelInfo, { contextSize: size, cacheRamMiB })
+        );
+      // llama.cpp's startup dump is the diagnostic, so it goes to the log here
+      // and nowhere else: details crosses IPC to the renderer, which neither
+      // reads it nor should carry a stderr blob and absolute model paths.
+      const unavailable = (cause) => {
+        debugLogger.error("llama-server could not be started", {
+          model: modelId,
+          contextSize,
+          error: cause.message,
+        });
+        return new ModelError(
+          `${modelInfo.model.name} could not be started on this computer.`,
+          "LOCAL_SERVER_UNAVAILABLE",
+          { modelId, modelName: modelInfo.model.name }
+        );
+      };
+
+      try {
+        await startAt(contextSize);
+        // The GPU ladder can load a smaller window than it was asked for
+        // without ever throwing. Recording that is what stops the preflight
+        // asking for the same window again and paying a second model load to
+        // be stepped down again.
+        if (this.serverManager.contextSize < contextSize) refuse(contextSize);
+      } catch (error) {
+        refuse(contextSize);
+        // start() stops the running server before it spawns, so a grow that
+        // dies has already taken a working window with it. Come back at the
+        // one that worked rather than leaving the user with no local model.
+        if (!restorableContextSize || restorableContextSize >= contextSize) {
+          throw unavailable(error);
+        }
+
+        debugLogger.warn("llama-server failed to grow; restoring the previous context", {
+          model: modelId,
+          attempted: contextSize,
+          restoring: restorableContextSize,
+          error: error.message,
+        });
+        try {
+          await startAt(restorableContextSize);
+        } catch (restoreError) {
+          throw unavailable(restoreError);
+        }
+      }
       this.currentServerModelId = modelId;
     };
 
@@ -691,13 +803,12 @@ class ModelManager {
       });
     }
 
-    await this._ensurePromptFits({
+    const grantedMaxTokens = await this._ensurePromptFits({
       modelInfo,
-      modelPath,
       messages,
       options,
       estimatedTokens,
-      reserveTokens,
+      maxTokens,
       contextFloor,
       ceilingFor,
       startServer,
@@ -712,7 +823,9 @@ class ModelManager {
     try {
       const result = await this.serverManager.inference(messages, {
         temperature: options.temperature ?? 0.7,
-        max_tokens: options.maxTokens ?? 512,
+        // The preflight may have traded output room for prompt room; sending
+        // the original value would put the request back over the window.
+        max_tokens: grantedMaxTokens,
         disableThinking: options.disableThinking,
         requireCompleteOutput: options.requireCompleteOutput,
       });

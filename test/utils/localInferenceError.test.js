@@ -71,3 +71,18 @@ test("no llama.cpp JSON can reach the message", () => {
   // JSON in it.
   assert.equal(error.messageKey, "models.errors.contextTooLarge");
 });
+
+test("a server that will not start becomes a translatable message, not llama.cpp output", () => {
+  const error = errors.buildLocalInferenceError({
+    error: "Qwen3.5 9B could not be started on this computer.",
+    code: "LOCAL_SERVER_UNAVAILABLE",
+    details: {
+      modelName: "Qwen3.5 9B",
+      error: "llama-server process died during startup\nProcess output: ggml_metal: failed",
+    },
+  });
+
+  assert.equal(error.messageKey, "models.errors.localServerUnavailable");
+  assert.deepEqual(error.messageParams, { model: "Qwen3.5 9B" });
+  assert.ok(!error.message.includes("Process output"));
+});

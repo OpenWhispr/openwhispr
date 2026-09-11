@@ -2704,7 +2704,8 @@
     },
     "errors": {
       "contextTooLarge": "Esto es demasiado largo para que {{model}} lo lea en este equipo. Necesita unos {{needed}} tokens de contexto, pero solo caben {{max}} en la memoria. Prueba con un modelo en la nube o ejecuta la acción sobre una selección más corta.",
-      "contextTooLargeGeneric": "Esto es demasiado largo para que {{model}} lo lea en este equipo. Prueba con un modelo en la nube o ejecuta la acción sobre una selección más corta."
+      "contextTooLargeGeneric": "Esto es demasiado largo para que {{model}} lo lea en este equipo. Prueba con un modelo en la nube o ejecuta la acción sobre una selección más corta.",
+      "localServerUnavailable": "No se pudo iniciar {{model}} en este ordenador. Inténtalo de nuevo o cambia a un modelo en la nube."
     }
   },
   "referral": {
