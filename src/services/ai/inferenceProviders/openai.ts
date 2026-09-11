@@ -63,6 +63,23 @@ function rememberPreference(base: string, preference: "responses" | "chat"): voi
   } catch {}
 }
 
+const OPENCODE_HOST = "opencode.ai";
+
+/**
+ * OpenCode Go routes each conversation by a stable `x-opencode-session` id and
+ * rejects requests without one (HTTP 400 MissingSessionID). Recognised by host
+ * so a custom base such as https://opencode.ai/zen/go/v1 gets the header.
+ */
+function isOpenCodeBase(base: string): boolean {
+  try {
+    const normalized = base.includes("://") ? base : `https://${base}`;
+    const host = new URL(normalized).hostname.toLowerCase();
+    return host === OPENCODE_HOST || host.endsWith(`.${OPENCODE_HOST}`);
+  } catch {
+    return false;
+  }
+}
+
 function getEndpointCandidates(base: string): Array<{ url: string; type: "responses" | "chat" }> {
   const lower = base.toLowerCase();
 
@@ -192,6 +209,9 @@ export const openaiProvider: InferenceProvider = {
       endpointCandidates = getEndpointCandidates(openAiBase);
     }
     const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
+    // One cleanup call is one conversation: every attempt below (endpoint
+    // fallback, parameter fallback, retry) reuses the same session id.
+    const openCodeSessionId = isOpenCodeBase(openAiBase) ? crypto.randomUUID() : null;
 
     logger.logReasoning("OPENAI_ENDPOINTS", {
       base: openAiBase,
@@ -261,6 +281,7 @@ export const openaiProvider: InferenceProvider = {
                 headers: {
                   "Content-Type": "application/json",
                   ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+                  ...(openCodeSessionId ? { "x-opencode-session": openCodeSessionId } : {}),
                 },
                 body: JSON.stringify(requestBody),
                 signal: controller.signal,
