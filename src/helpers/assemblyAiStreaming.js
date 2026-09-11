@@ -11,10 +11,9 @@ const MAX_REWARM_ATTEMPTS = 10;
 const KEEPALIVE_INTERVAL_MS = 15000;
 const MIN_FRAME_MS = 50;
 const MAX_FRAME_MS = 1000;
-// AssemblyAI rejects any frame outside 50-1000 ms and closes the session, so both
-// bounds have to follow the rate the socket was opened at: Note Recording streams
-// at 24 kHz, where a frame sized against this module's 16 kHz default lasts only
-// 33 ms (#2140). Round the floor up and the ceiling down so neither can undershoot.
+// AssemblyAI closes the session on any frame outside 50-1000 ms, so both bounds
+// follow the rate the socket opened at: Note Recording streams at 24 kHz, where a
+// frame sized against this module's 16 kHz default lasts only 33 ms (#2140).
 const minFrameBytes = (sampleRate) => Math.ceil((sampleRate * 2 * MIN_FRAME_MS) / 1000);
 const maxFrameBytes = (sampleRate) => Math.floor((sampleRate * 2 * MAX_FRAME_MS) / 1000);
 
@@ -596,10 +595,9 @@ class AssemblyAiStreaming {
     this.pendingAudio = [];
     this.pendingAudioBytes = 0;
 
-    // The macOS tap and the Windows/Linux loopback helpers forward raw stdout
-    // chunks, so one read can carry far more than the nominal 100 ms when the
-    // main process stalls and the pipe coalesces. Slice to the ceiling and carry
-    // any sub-floor remainder into the next frame rather than sending it short.
+    // The native system-audio helpers forward raw stdout chunks, so one read can
+    // far exceed the nominal 100 ms when a stalled main process lets the pipe
+    // coalesce. Carry a sub-floor remainder forward rather than sending it short.
     const maxBytes = maxFrameBytes(this.sessionSampleRate);
     let offset = 0;
     while (frame.length - offset >= minBytes) {

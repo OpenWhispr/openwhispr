@@ -159,19 +159,15 @@ test("the watchdog sees every system chunk and the helper's device warning", () 
 });
 
 test("meeting connects forward the credential mode", () => {
-  // Deepgram authenticates a raw BYOK key and a managed grant token under
-  // different Authorization schemes, and the client reads which it holds from
-  // `mode`. Both meeting connectOpts are built by hand, so omitting it here
-  // silently re-authenticates Note Recording as managed (#2140).
-  // Scoped by the meeting sample rate so an unrelated connectOpts elsewhere in
-  // this file cannot drag the assertion off target, and matched without crossing
-  // a `}` so a nested literal cannot truncate the block.
+  // The Deepgram client picks its Authorization scheme from `mode`; both meeting
+  // connectOpts are built by hand, so omitting it re-authenticates Note Recording
+  // as managed (#2140). Scoped by sample rate so an unrelated connectOpts cannot
+  // drag the assertion off target.
   const connectOptsBlocks =
     source.match(/const connectOpts = \{[^}]*sampleRate: MEETING_STREAM_SAMPLE_RATE,\s*\};/g) ?? [];
   assert.equal(connectOptsBlocks.length, 2, "initial connect and reconnect each build connectOpts");
   for (const block of connectOptsBlocks) {
-    // Anchored to its own line: an unanchored match also accepts the key sitting
-    // commented out, which is exactly how this would regress during debugging.
+    // Anchored: an unanchored match also accepts the key commented out.
     assert.match(block, /^\s*mode: options\.mode,$/m);
   }
 });

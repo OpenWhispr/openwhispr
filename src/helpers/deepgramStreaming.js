@@ -68,11 +68,8 @@ const NOVA3_LANGUAGES = new Set([
 // Deepgram's net0001 idle timeout (which only resets on audio data, not KeepAlive).
 const SILENCE_FRAME = Buffer.alloc((SAMPLE_RATE / 10) * 2);
 
-// Deepgram binds the Authorization scheme to the kind of credential: a raw API
-// key — what BYOK holds — is only accepted as `Token`, while `Bearer` is for the
-// short-lived credential /v1/auth/grant mints, which is what the managed path
-// receives from the OpenWhispr API. Presenting either under the other's scheme
-// fails the handshake with 401 (#2140).
+// Deepgram binds the scheme to the credential: a raw API key (BYOK) is accepted
+// only as `Token`, `Bearer` only for what /v1/auth/grant mints (managed). #2140
 const authorizationHeader = (mode, token) => `${mode === "byok" ? "Token" : "Bearer"} ${token}`;
 
 class DeepgramStreaming {
@@ -378,9 +375,8 @@ class DeepgramStreaming {
       this.rewarmTimer = null;
       if (this.hasWarmConnection() || this.isConnected) return;
 
-      // cleanupWarmConnection() drops the saved options without cancelling this
-      // timer, and spreading a null one loses `mode` — which re-warms a BYOK key
-      // as a Bearer and 401s. scheduleProactiveRefresh snapshots for the same reason.
+      // cleanupWarmConnection() drops these without cancelling this timer, and
+      // spreading a null one loses `mode`, re-warming a BYOK key as a Bearer.
       const savedOptions = this.warmConnectionOptions;
       if (!savedOptions) {
         debugLogger.debug("Deepgram cannot re-warm: options dropped before the timer fired");

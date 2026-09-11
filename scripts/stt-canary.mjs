@@ -50,11 +50,8 @@ const SILENT_WAV = () => pcm16ToWav(Buffer.alloc(16000));
 
 // Mirrors the app's dial: openaiRealtimeStreaming.js connects with a bare
 // Bearer header; a null token means the credential already rides in the URL
-// (AssemblyAI). `authorization` wins over `token` when both are passed, and is
-// how a provider whose scheme is not Bearer hands over the client's own header,
-// so the probe cannot drift from what ships. Note this did NOT hide #2140: the
-// old probe sent the same wrong header the client did and Deepgram would have
-// rejected it — that row has simply never run, for want of a configured key.
+// (AssemblyAI). `authorization` overrides both, for a provider whose scheme is
+// not Bearer; passing the client's own header keeps the probe from drifting.
 // `awaitServerEvent` is for providers that authenticate AFTER the upgrade:
 // OpenAI opens the socket for any key and only then sends an `error` event
 // for a bad one, so resolving on `open` validates nothing (#1624 class).
@@ -269,9 +266,6 @@ const PROBES = [
       const token = await fetchRealtimeTokenForProvider("deepgram-realtime", tokenDeps(key), {
         mode: "byok",
       });
-      // Dials the exact URL the client builds, like the AssemblyAI probe below,
-      // so punctuate/interim_results/channels and the keyterm parameter nova-3
-      // renamed are all exercised rather than assumed.
       const url = new DeepgramStreaming().buildWebSocketUrl({
         sampleRate: 16000,
         keyterms: ["OpenWhispr"],
