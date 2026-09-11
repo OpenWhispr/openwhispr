@@ -10,6 +10,7 @@ const { listImportedModules } = require("../../scripts/lib/pe-imports");
 const { buildPeImage } = require("../helpers/harness/peFixture");
 const {
   BINARIES,
+  MACOS_ARM64_ONNXRUNTIME,
   SHERPA_ONNX_VERSION,
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
@@ -181,17 +182,42 @@ test("a win32 marker written before the rename is not a complete install", (t) =
   assert.equal(isCompleteInstall(marker, [exe], options), true);
 });
 
-test("non-Windows markers do not need the onnxRuntime field", (t) => {
+test("Linux markers do not need the onnxRuntime field", (t) => {
   const dir = makeBinDir(t);
-  const binary = path.join(dir, "sherpa-onnx-ws-darwin-arm64");
+  const binary = path.join(dir, "sherpa-onnx-ws-linux-x64");
   fs.writeFileSync(binary, "");
-  const marker = path.join(dir, ".sherpa-onnx-darwin-arm64.json");
+  const marker = path.join(dir, ".sherpa-onnx-linux-x64.json");
   fs.writeFileSync(marker, JSON.stringify({ version: SHERPA_ONNX_VERSION, libraries: [] }));
   assert.equal(
-    isCompleteInstall(marker, [binary], { platformArch: "darwin-arm64", binDir: dir }),
+    isCompleteInstall(marker, [binary], { platformArch: "linux-x64", binDir: dir }),
     true
   );
 });
+
+test(
+  "a macOS marker written before the arm64 ONNX Runtime slice is not a complete install",
+  { skip: process.platform !== "darwin" && "the slice is only replaced on macOS hosts" },
+  (t) => {
+    const dir = makeBinDir(t);
+    const binary = path.join(dir, "sherpa-onnx-ws-darwin-arm64");
+    fs.writeFileSync(binary, "");
+    const marker = path.join(dir, ".sherpa-onnx-darwin-arm64.json");
+    const options = { platformArch: "darwin-arm64", binDir: dir };
+
+    fs.writeFileSync(marker, JSON.stringify({ version: SHERPA_ONNX_VERSION, libraries: [] }));
+    assert.equal(isCompleteInstall(marker, [binary], options), false);
+
+    fs.writeFileSync(
+      marker,
+      JSON.stringify({
+        version: SHERPA_ONNX_VERSION,
+        libraries: [],
+        onnxRuntime: MACOS_ARM64_ONNXRUNTIME.marker,
+      })
+    );
+    assert.equal(isCompleteInstall(marker, [binary], options), true);
+  }
+);
 
 test("a failed automatic Windows repair stays incomplete and retries DLL patching", async (t) => {
   const root = makeBinDir(t);
