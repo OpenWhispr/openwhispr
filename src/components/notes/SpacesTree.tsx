@@ -97,15 +97,16 @@ const ROW_BASE_CLASS =
   "group relative flex items-center gap-1.5 rounded-md cursor-pointer select-none " +
   "transition-colors duration-150 outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
 
+// Button forces svg children to 16px; these 20px controls want the 12px icon they pass.
 const KEBAB_BUTTON_CLASS =
-  "h-5 w-5 rounded-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 " +
+  "h-5 w-5 rounded-sm [&_svg]:size-3 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 " +
   "transition-opacity text-muted-foreground/60 dark:text-muted-foreground/40 " +
   "hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8";
 
 const KEBAB_TRIGGER_CLASS = cn(KEBAB_BUTTON_CLASS, "absolute end-1.5");
 
 const HOVER_REVEAL_BUTTON_CLASS =
-  "h-5 w-5 rounded-sm opacity-0 focus-visible:opacity-100 transition-opacity " +
+  "h-5 w-5 rounded-sm [&_svg]:size-3 opacity-0 focus-visible:opacity-100 transition-opacity " +
   "text-muted-foreground/60 dark:text-muted-foreground/40 hover:text-foreground/60 " +
   "hover:bg-foreground/5 active:bg-foreground/8";
 
