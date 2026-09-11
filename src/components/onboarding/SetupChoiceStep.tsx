@@ -12,7 +12,7 @@ import {
   WandSparkles,
   WifiOff,
   Zap,
-} from "lucide-react";
+} from "../icons";
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
@@ -57,11 +57,11 @@ interface MoreSetupOption {
 // The mark is tertiary grey on the self-serve cards and the brand accent on the
 // cloud card, which is the only visual weighting between them.
 //
-// strokeWidth stays at lucide's default 2 rather than the 1.16667 the export
-// shows. Both describe the same line: Figma exports these at viewBox 0 0 14 14,
-// so its 1.16667 is already in 14px space, while lucide draws in a 24 viewBox
-// scaled down to 14 — 2 x (14/24) = 1.1667 device px, exactly the spec. Passing
-// 1.167 here applies the scale twice and renders a 0.68px hairline.
+// strokeWidth stays at the icon set's default 2 rather than the 1.16667 the
+// export shows. Both describe the same line: Figma exports these at viewBox
+// 0 0 14 14, so its 1.16667 is already in 14px space, while the icons draw in a
+// 24 viewBox scaled down to 14 — 2 x (14/24) = 1.1667 device px, exactly the
+// spec. Passing 1.167 here applies the scale twice and renders a 0.68px hairline.
 function Feature({
   icon: Icon,
   accent = false,
@@ -276,10 +276,8 @@ export default function SetupChoiceStep({
                     })}
                   </p>
                 </div>
-                {/* The four marks are the lucide originals the Figma assets were
-                    exported from, matched by their path coordinates: Laptop (not
-                    LaptopMinimal, which is a plain rect with a detached base line)
-                    and BanknoteCheck (not BadgeCheck). */}
+                {/* The four marks are the icon-set equivalents of the glyphs the
+                    Figma assets were exported from. */}
                 <ul className="flex flex-col gap-2">
                   <Feature icon={Laptop}>
                     {t("onboarding.rehaul.setupChoice.local.features.device")}

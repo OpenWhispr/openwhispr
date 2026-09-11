@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore, MAX_TRANSLATION_TARGETS } from "../../stores/settingsStore";
 import registry from "../../config/languageRegistry.json";

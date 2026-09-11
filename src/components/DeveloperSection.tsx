@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import { FolderOpen, Copy, Check } from "lucide-react";
+import { FolderOpen, Copy, Check } from "./icons";
 import { useToast } from "./ui/useToast";
 import { Toggle } from "./ui/toggle";
 import { useSettingsLayout } from "./ui/useSettingsLayout";

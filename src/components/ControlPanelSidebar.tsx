@@ -16,7 +16,7 @@ import {
   X,
   Search,
   Zap,
-} from "lucide-react";
+} from "./icons";
 import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";

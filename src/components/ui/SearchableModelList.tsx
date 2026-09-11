@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Search } from "lucide-react";
+import { Search } from "../icons";
 import { Input } from "./input";
 import { ModelCard, type ModelCardOption } from "./ModelCardList";
 import { getRemoteProviderIcon } from "../../utils/providerIcons";

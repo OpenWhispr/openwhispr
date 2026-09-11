@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Copy, Trash2, Check, Key, Loader2 } from "lucide-react";
+import { Plus, Copy, Trash2, Check, Key, Loader2 } from "../icons";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";

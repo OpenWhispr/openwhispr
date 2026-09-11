@@ -12,7 +12,7 @@ import {
   Upload,
   MessageSquare,
   ChevronDown,
-} from "lucide-react";
+} from "./icons";
 import { cn } from "./lib/utils";
 import { useDismissGuard } from "./ui/useDismissGuard";
 import {

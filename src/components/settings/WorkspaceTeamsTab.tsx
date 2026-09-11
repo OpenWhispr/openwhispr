@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Users, Trash2, Loader2 } from "lucide-react";
+import { Plus, Users, Trash2, Loader2 } from "../icons";
 import { deleteTeam } from "../../services/spaceActions";
 import { TeamsService } from "../../services/TeamsService";
 import { loadSpaces, useSpaces } from "../../stores/noteStore";

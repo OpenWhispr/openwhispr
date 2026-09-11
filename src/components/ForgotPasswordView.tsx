@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { requestPasswordReset, AUTH_URL, authClient } from "../lib/auth";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { AlertCircle, ArrowLeft, Loader2, MailCheck } from "lucide-react";
+import { AlertCircle, ArrowLeft, Loader2, MailCheck } from "./icons";
 
 interface ForgotPasswordViewProps {
   email?: string;

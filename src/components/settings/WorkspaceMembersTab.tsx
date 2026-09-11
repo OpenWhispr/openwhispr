@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Trash2, MoreVertical, Mail, X, Loader2 } from "lucide-react";
+import { Trash2, MoreVertical, Mail, X, Loader2 } from "../icons";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { InvitationsService } from "../../services/InvitationsService";

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "lucide-react";
+import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
 import { ProviderIcon } from "./ui/ProviderIcon";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";

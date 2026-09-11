@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Sparkles, Plus, ChevronRight, Zap, Loader2, Check, Monitor } from "lucide-react";
+import { Sparkles, Plus, ChevronRight, Zap, Loader2, Check, Monitor } from "../icons";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 import {

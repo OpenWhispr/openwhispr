@@ -1,5 +1,5 @@
 import * as React from "react";
-import { X, Copy, Check } from "lucide-react";
+import { X, Copy, Check } from "../icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import {

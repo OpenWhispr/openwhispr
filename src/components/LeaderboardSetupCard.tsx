@@ -1,4 +1,4 @@
-import { UserPlus, Users } from "lucide-react";
+import { UserPlus, Users } from "./icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import { Button } from "./ui/button";

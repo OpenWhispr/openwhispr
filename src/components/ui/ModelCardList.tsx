@@ -1,4 +1,4 @@
-import { Globe, Download, Trash2, X, ExternalLink } from "lucide-react";
+import { Globe, Download, Trash2, X, ExternalLink } from "../icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "./button";
 import { cn } from "../lib/utils";

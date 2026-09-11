@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Cloud, CloudUpload, Flame, Gauge, Loader2, Mic2, Trophy } from "lucide-react";
+import { BarChart3, Cloud, CloudUpload, Flame, Gauge, Loader2, Mic2, Trophy } from "./icons";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { CalendarDays, Code2, Info, Loader2, Mail, Plus, Unlink } from "lucide-react";
+import { CalendarDays, Code2, Info, Loader2, Mail, Plus, Unlink } from "./icons";
 import { Button } from "./ui/button";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Badge } from "./ui/badge";

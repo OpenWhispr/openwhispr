@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import { Minus, Square, X, Copy } from "lucide-react";
+import { Minus, Square, X, Copy } from "./icons";
 import { useWindowControls } from "../hooks/useWindowControls";
 
 export default function WindowControls() {

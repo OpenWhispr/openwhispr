@@ -37,7 +37,7 @@ import {
   Wand2,
   Upload,
   Languages,
-} from "lucide-react";
+} from "./icons";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut } from "../lib/auth";
 import { deleteAccount } from "../lib/accountDeletionRequest";

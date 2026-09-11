@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Check, Loader2, ShieldCheck, Sparkles, Users, X } from "lucide-react";
+import { Check, Loader2, ShieldCheck, Sparkles, Users, X } from "../icons";
 import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { Toggle } from "../ui/toggle";

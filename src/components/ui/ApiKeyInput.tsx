@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, X, KeyRound } from "lucide-react";
+import { Check, X, KeyRound } from "../icons";
 import { Input } from "./input";
 import logger from "../../utils/logger";
 

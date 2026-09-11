@@ -11,7 +11,7 @@ import {
   CreditCard,
   Shield,
   Users,
-} from "lucide-react";
+} from "./icons";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { AccountAvatar, SettingsSectionType } from "./SettingsPage";
 import { useAuth } from "../hooks/useAuth";

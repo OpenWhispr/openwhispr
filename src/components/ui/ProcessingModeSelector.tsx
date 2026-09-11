@@ -1,6 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cloud, Lock } from "lucide-react";
+import { Cloud, Lock } from "../icons";
 
 interface ProcessingModeSelectorProps {
   useLocalWhisper: boolean;

@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Monitor } from "lucide-react";
+import { Monitor } from "../icons";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
   isAgentAllowed,

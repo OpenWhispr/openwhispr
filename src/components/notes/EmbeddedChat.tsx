@@ -1,6 +1,6 @@
 import { useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { X, PanelRight, PanelRightClose } from "lucide-react";
+import { X, PanelRight, PanelRightClose } from "../icons";
 import { cn } from "../lib/utils";
 import { ChatMessages } from "../chat/ChatMessages";
 import { ChatInput } from "../chat/ChatInput";

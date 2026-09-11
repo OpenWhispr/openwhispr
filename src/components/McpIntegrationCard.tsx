@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, ExternalLink, Plus } from "lucide-react";
+import { Check, Copy, ExternalLink, Plus } from "./icons";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { LogoTile } from "./ui/LogoTile";

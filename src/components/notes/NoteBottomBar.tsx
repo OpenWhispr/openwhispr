@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Mic, Square, Loader2 } from "lucide-react";
+import { Mic, Square, Loader2 } from "../icons";
 import { cn } from "../lib/utils";
 import { SendIcon } from "../ui/SendIcon";
 import { LiveWaveform } from "../ui/LiveWaveform";

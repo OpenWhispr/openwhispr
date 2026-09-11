@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "lucide-react";
+import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "../icons";
 import { useTranslation } from "react-i18next";
 import ProviderConnectionTest from "./ProviderConnectionTest";
 import { Button } from "../ui/button";

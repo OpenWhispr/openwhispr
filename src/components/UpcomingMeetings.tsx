@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Calendar, ExternalLink, Loader2, Mic, Monitor, Video } from "lucide-react";
+import { Calendar, ExternalLink, Loader2, Mic, Monitor, Video } from "./icons";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import PersonAvatar from "./ui/PersonAvatar";

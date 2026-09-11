@@ -1,14 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Copy,
-  Check,
-  Search,
-  FileText,
-  ChevronDown,
-  ChevronRight,
-  CircleAlert,
-} from "lucide-react";
+import { Copy, Check, Search, FileText, ChevronDown, ChevronRight, CircleAlert } from "../icons";
 import { cn } from "../lib/utils";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import type { ToolCallInfo } from "./types";

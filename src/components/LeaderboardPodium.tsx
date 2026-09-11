@@ -1,4 +1,4 @@
-import { Crown, Medal } from "lucide-react";
+import { Crown, Medal } from "./icons";
 import type { LeaderboardMember } from "../types/electron";
 import { cn } from "./lib/utils";
 import MemberAvatar from "./MemberAvatar";

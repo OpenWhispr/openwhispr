@@ -1,4 +1,4 @@
-import { Check, Copy, Users } from "lucide-react";
+import { Check, Copy, Users } from "./icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";

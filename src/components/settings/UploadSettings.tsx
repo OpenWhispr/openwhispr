@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network, ShieldCheck } from "lucide-react";
+import { Cloud, Key, Cpu, Network, ShieldCheck } from "../icons";
 import {
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, Info, Loader2, Plus, X } from "lucide-react";
+import { ChevronRight, Info, Loader2, Plus, X } from "../icons";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, ConfirmDialog } from "../ui/dialog";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "../ui/select";
 import { Button } from "../ui/button";

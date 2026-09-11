@@ -219,7 +219,7 @@ test("macOS onboarding offers optional Screen Context setup", async (t) => {
   );
 
   assert.match(markup, /dictationAgent\.screenContext\.title/);
-  assert.match(markup, /lucide-laptop/);
+  assert.match(markup, /data-icon="laptop"/);
   assert.doesNotMatch(markup, /onboarding\.permissions\.recommended/);
   assert.equal(
     markup.match(/onboarding\.permissions\.optional/g)?.length,
@@ -291,7 +291,7 @@ test("Windows onboarding offers Screen Context as a permissionless opt-in", asyn
   );
 
   assert.match(markup, /dictationAgent\.screenContext\.title/);
-  assert.match(markup, /lucide-laptop/);
+  assert.match(markup, /data-icon="laptop"/);
   assert.equal(
     markup.match(/onboarding\.permissions\.optional/g)?.length,
     1,
@@ -328,7 +328,7 @@ test("provider setup stages mark dictation complete before Assistant", async (t)
   for (const stepId of ["byok-assistant", "local-assistant"]) {
     const markup = renderToStaticMarkup(React.createElement(SetupStageStepper, { stepId }));
 
-    assert.match(markup, /lucide-circle-check/);
-    assert.doesNotMatch(markup, /lucide-audio-lines/);
+    assert.match(markup, /data-icon="circle-check"/);
+    assert.doesNotMatch(markup, /data-icon="audio-lines"/);
   }
 });

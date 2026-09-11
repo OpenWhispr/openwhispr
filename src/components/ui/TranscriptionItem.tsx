@@ -11,7 +11,7 @@ import {
   Loader2,
   AlertCircle,
   ArchiveRestore,
-} from "lucide-react";
+} from "../icons";
 import type {
   TranscriptionItem as TranscriptionItemType,
   TranscriptionErrorCode,

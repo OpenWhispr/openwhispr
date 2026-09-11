@@ -1,4 +1,4 @@
-import { Building2, Loader2 } from "lucide-react";
+import { Building2, Loader2 } from "./icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 

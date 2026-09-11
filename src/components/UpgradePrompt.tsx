@@ -1,5 +1,5 @@
 import { Dialog, DialogContent } from "./ui/dialog";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "./icons";
 import { useTranslation } from "react-i18next";
 import { useUsage } from "../hooks/useUsage";
 import { useBillingPortal } from "../hooks/useBillingPortal";

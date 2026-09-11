@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Users, X } from "lucide-react";
+import { Users, X } from "../icons";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import PersonAvatar from "../ui/PersonAvatar";
 import type { CalendarAttendee } from "../../types/calendar";

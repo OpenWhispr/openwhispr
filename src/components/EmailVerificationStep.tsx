@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { OPENWHISPR_API_URL } from "../config/constants";
 import { authClient } from "../lib/auth";
 import { Button } from "./ui/button";
-import { CircleCheck, Loader, Loader2, MailCheck, RefreshCw } from "lucide-react";
+import { CircleCheck, Loader, Loader2, MailCheck, RefreshCw } from "./icons";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
 
 const RESEND_COOLDOWN_SECONDS = 60;

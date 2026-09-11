@@ -1,4 +1,4 @@
-import { LogIn } from "lucide-react";
+import { LogIn } from "./icons";
 import { useTranslation } from "react-i18next";
 import LeaderboardPreview from "./LeaderboardPreview";
 

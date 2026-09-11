@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Mic, Square, X } from "lucide-react";
+import { Mic, Square, X } from "../icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { SendIcon } from "../ui/SendIcon";

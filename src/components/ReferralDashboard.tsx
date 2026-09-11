@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Send, Mail, Copy, Check, Link, UserPlus, Gift, CheckCircle2, User } from "lucide-react";
+import { Send, Mail, Copy, Check, Link, UserPlus, Gift, CheckCircle2, User } from "./icons";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useToast } from "./ui/useToast";

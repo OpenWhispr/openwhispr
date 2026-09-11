@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle, Loader2, XCircle } from "lucide-react";
+import { CheckCircle, Loader2, XCircle } from "../icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import confetti from "canvas-confetti";
-import { ChevronDown, Loader2, Mic, RefreshCw, Square } from "lucide-react";
+import { ChevronDown, Loader2, Mic, RefreshCw, Square } from "../icons";
 import { Button } from "../ui/button";
 import type { OnboardingDemoEvent, OnboardingDemoKind } from "../../types/electron";
 import founderAvatar from "../../assets/onboarding-founder.webp";

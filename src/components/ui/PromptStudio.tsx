@@ -3,17 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./button";
 import { Textarea } from "./textarea";
-import {
-  Eye,
-  Edit3,
-  Play,
-  Save,
-  RotateCcw,
-  Copy,
-  TestTube,
-  AlertTriangle,
-  Check,
-} from "lucide-react";
+import { Eye, Edit3, Play, Save, RotateCcw, Copy, TestTube, AlertTriangle, Check } from "../icons";
 import { AlertDialog } from "./dialog";
 import { useDialogs } from "../../hooks/useDialogs";
 import { useAgentName } from "../../utils/agentName";

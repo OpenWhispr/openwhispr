@@ -36,7 +36,7 @@ async function createShortcutHarness(t, overrides = {}) {
 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-shortcut-setup-step-",
-    noExternal: ["react", "react-i18next", "lucide-react"],
+    noExternal: ["react", "react-i18next"],
     mockModules: {
       react: `
         export function useState(initialValue) {
@@ -61,7 +61,7 @@ async function createShortcutHarness(t, overrides = {}) {
           return { t(key, options) { return options?.hotkey ? key + ":" + options.hotkey : key; } };
         }
       `,
-      "lucide-react": `
+      "/components/icons": `
         export function Globe() { return null; }
         export function Loader2() { return null; }
       `,

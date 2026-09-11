@@ -1,4 +1,4 @@
-import { Folder, Lock, Users } from "lucide-react";
+import { Folder, Lock, Users } from "../../icons";
 import type { SpaceItem, FolderItem } from "../../../types/electron";
 
 interface ContainerIconProps {

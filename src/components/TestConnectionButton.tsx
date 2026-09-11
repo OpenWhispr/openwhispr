@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import { CheckCircle, XCircle, Loader2, Copy } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Copy } from "./icons";
 import { TechnicalErrorDetails } from "./ui/TechnicalErrorDetails";
 import type { TechnicalErrorDetailsData } from "./ui/useToast";
 

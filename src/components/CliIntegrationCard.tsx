@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, ExternalLink, Terminal } from "lucide-react";
+import { Check, Copy, ExternalLink, Terminal } from "./icons";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { CopyableCommand } from "./ui/CopyableCommand";

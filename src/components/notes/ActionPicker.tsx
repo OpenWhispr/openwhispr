@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles, ChevronDown, Settings2 } from "lucide-react";
+import { Sparkles, ChevronDown, Settings2 } from "../icons";
 import {
   DropdownMenu,
   DropdownMenuTrigger,

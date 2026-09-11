@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, Loader2, ShieldCheck } from "lucide-react";
+import { ExternalLink, Loader2, ShieldCheck } from "../icons";
 import { Button } from "../ui/button";
 import { openAdminConsole } from "../../lib/auth";
 import { isEnterpriseConsoleAvailable } from "../../lib/workspaceBilling";

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle } from "./icons";
 import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
 import UseCaseStep from "./onboarding/UseCaseStep";
 import { hasUseCaseIntent } from "./onboarding/useCases";

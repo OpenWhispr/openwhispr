@@ -1,7 +1,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./button";
-import { HelpCircle, Mail, Bug, BookOpen } from "lucide-react";
+import { HelpCircle, Mail, Bug, BookOpen } from "../icons";
 import {
   DropdownMenu,
   DropdownMenuContent,

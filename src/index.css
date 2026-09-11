@@ -59,10 +59,13 @@
      name and silently retimes every `ease-out` utility app-wide. */
   --onboarding-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
-  /* Typography */
+  /* Typography. Yowza is the brand face (Latin only, registered by brandFonts.ts
+     when the licensed files are in the build); Noto Sans carries CJK and
+     everything else, and is the fallback when Yowza is absent. */
   --font-family-sans:
-    "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    sans-serif;
+    "Yowza", "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-family-display: "Yowza Soft", var(--font-family-sans);
 
   /* Opacities */
   --opacity-subtle: 0.1;
@@ -267,12 +270,11 @@
    tokens are shared — the canvas keeps its own painted background below. */
 .onboarding-canvas,
 body:has(.onboarding-canvas) {
-  /* Inter is prepended rather than replacing the stack: the woff2 files are
-     subset by unicode-range and carry no CJK, so zh-CN/zh-TW/ja glyphs must still
-     fall through to the original fonts. Overriding the variable as well covers
-     descendants that re-declare font-family from it. */
+  /* Inter sits behind Yowza as the onboarding fallback: both are Latin-only, so
+     zh-CN/zh-TW/ja glyphs must still fall through to Noto Sans. Overriding the
+     variable as well covers descendants that re-declare font-family from it. */
   --font-family-sans:
-    "Inter Variable", "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Yowza", "Inter Variable", "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   font-family: var(--font-family-sans);
   font-optical-sizing: auto;
@@ -778,7 +780,7 @@ body:has(.onboarding-canvas) kbd {
 
 /* OpenWhispr Brand Typography */
 .brand-heading {
-  font-family: var(--font-family-sans);
+  font-family: var(--font-family-display);
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -802,7 +804,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-family-sans);
+  font-family: var(--font-family-display);
   font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1.15;
@@ -815,11 +817,10 @@ h1 {
 
 .onboarding-display-title {
   font-size: 2rem; /* 32px */
-  font-weight: 500; /* Inter Medium */
+  font-weight: 500;
   line-height: 1.2; /* 120% */
-  /* No letter-spacing on purpose. Inter's opsz build already tightens the
-     letterforms at display sizes via font-optical-sizing: auto, so manual
-     negative tracking stacked on top of that read as cramped. */
+  /* No letter-spacing on purpose: Yowza Soft is already tight at display
+     sizes, and manual negative tracking on top read as cramped. */
 }
 
 /* The compact first-run steps (auth + permissions, per COMPACT_STEPS in

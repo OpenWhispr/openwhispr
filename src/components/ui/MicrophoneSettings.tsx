@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { SettingsRow } from "./SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 import { Button } from "./button";
-import { RefreshCw, Mic } from "lucide-react";
+import { RefreshCw, Mic } from "../icons";
 import { isBuiltInMicrophone } from "../../utils/audioDeviceUtils";
 import { resolveSystemDefaultMicDevice } from "../../helpers/microphoneSelection";
 import { resolveMicDeviceSelection } from "../../helpers/micDeviceSelection";
