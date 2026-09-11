@@ -25,7 +25,8 @@ export const localProvider: InferenceProvider = {
 
     if (!result.success) {
       logger.logReasoning("LOCAL_ERROR", { model, processingTimeMs, error: result.error });
-      throw new Error(result.error);
+      // Carry the main process's i18n key (a truncated cleanup) so the toast can translate it.
+      throw Object.assign(new Error(result.error), { messageKey: result.messageKey });
     }
 
     logger.logReasoning("LOCAL_SUCCESS", {

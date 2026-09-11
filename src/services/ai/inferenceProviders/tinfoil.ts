@@ -2,7 +2,12 @@ import type { InferenceProvider } from "./types";
 import { TOKEN_LIMITS } from "../../../config/constants";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
-import { applyChatCompletionsParams, isTruncatedFinishReason } from "../chatRequestBody";
+import {
+  applyChatCompletionsParams,
+  emptyOutputError,
+  isTruncatedFinishReason,
+  truncatedOutputError,
+} from "../chatRequestBody";
 import { getTinfoilChatClient } from "../tinfoilClient";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
@@ -60,7 +65,7 @@ export const tinfoilProvider: InferenceProvider = {
       config.requireCompleteOutput &&
       response.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason))
     ) {
-      throw new Error("Model output was truncated before the selection edit completed");
+      throw truncatedOutputError();
     }
 
     logger.logReasoning("TINFOIL_RESPONSE", {
@@ -73,7 +78,7 @@ export const tinfoilProvider: InferenceProvider = {
 
     if (!responseText) {
       if (config.requireCompleteOutput) {
-        throw new Error("Model returned an empty selection edit");
+        throw emptyOutputError();
       }
       logger.logReasoning("TINFOIL_EMPTY_RESPONSE_FALLBACK", {
         model,

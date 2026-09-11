@@ -7,8 +7,10 @@ import logger from "../../../utils/logger";
 import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
 import {
   applyChatCompletionsParams,
+  emptyOutputError,
   fetchWithParamFallback,
   isTruncatedFinishReason,
+  truncatedOutputError,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
@@ -332,7 +334,7 @@ export const openaiProvider: InferenceProvider = {
         !!response?.incomplete_details ||
         response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
       if (responseIncomplete) {
-        throw new Error("Model output was truncated before the selection edit completed");
+        throw truncatedOutputError();
       }
     }
 
@@ -407,7 +409,7 @@ export const openaiProvider: InferenceProvider = {
 
     if (!responseText) {
       if (config.requireCompleteOutput) {
-        throw new Error("Model returned an empty selection edit");
+        throw emptyOutputError();
       }
       logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
         model,

@@ -245,18 +245,24 @@ function resolveReasoningRoute(
       "transcription"
     );
   }
+  // Shared by the cleanup route and the translation chain's cleanup step. Cleanup is a
+  // deterministic transform: pass temperature 0 explicitly, because the IPC-bridged
+  // providers (local bridge, Anthropic, enterprise) otherwise apply their own default.
+  // A truncated reply must fail rather than replace the dictation with its first part:
+  // the cleanup route pastes the raw transcript and the chain translates it, and both
+  // raise the cleanup-failed toast (#2091).
+  const cleanupConfig = {
+    inferenceScope: /** @type {const} */ ("dictationCleanup"),
+    disableThinking: settings.cleanupDisableThinking,
+    temperature: 0,
+    requireCompleteOutput: true,
+  };
   if (kind === "translation") {
     return {
       kind: "translation",
       model: translation.model,
       cleanupReachable,
-      cleanupConfig: {
-        inferenceScope: /** @type {const} */ ("dictationCleanup"),
-        disableThinking: settings.cleanupDisableThinking,
-        // The chain's cleanup step is the same deterministic transform — see
-        // the cleanup route below for why the value has to be explicit.
-        temperature: 0,
-      },
+      cleanupConfig,
       config: {
         ...translation.config,
         systemPrompt: resolvePrompt("translate", {
@@ -314,16 +320,7 @@ function resolveReasoningRoute(
     };
   }
   if (kind === "cleanup") {
-    return {
-      kind: "cleanup",
-      config: {
-        inferenceScope: /** @type {const} */ ("dictationCleanup"),
-        disableThinking: settings.cleanupDisableThinking,
-        // Cleanup is a deterministic transform: pass 0 explicitly, because the IPC-bridged
-        // providers (local bridge, Anthropic, enterprise) otherwise apply their own default.
-        temperature: 0,
-      },
-    };
+    return { kind: "cleanup", config: cleanupConfig };
   }
   return { kind: "skip" };
 }
@@ -2894,6 +2891,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             { ...(extra || {}), error: cleanupError.message },
             channel
           );
+          // The chain translates the raw transcript, so the dropped cleanup has to
+          // surface the same toast the cleanup route raises (#2091).
+          this.pendingCleanupFailure = cleanupFailureFromError(cleanupError);
         },
         onEmptyTranslate: () => {
           const { channel } = cleanup.log || {};

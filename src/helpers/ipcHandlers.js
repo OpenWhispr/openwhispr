@@ -4873,7 +4873,11 @@ class IPCHandlers {
               config?.requireCompleteOutput &&
               ["length", "max-tokens", "max_tokens"].includes(finishReason)
             ) {
-              throw new Error("Model output was truncated before the selection edit completed");
+              // Key mirrors TRUNCATED_OUTPUT_MESSAGE_KEY in services/ai/chatRequestBody.ts;
+              // the renderer translates the cleanup toast title from it.
+              throw Object.assign(new Error("Model output was truncated"), {
+                messageKey: "hooks.audioRecording.errorDescriptions.cleanupTruncated",
+              });
             }
 
             return { success: true, text: (generated || "").trim() };
@@ -4893,7 +4897,9 @@ class IPCHandlers {
           return {
             success: false,
             error: mapped.message,
-            messageKey: mapped.messageKey,
+            // mapEnterpriseError matches provider failures, so a truncation falls through
+            // to its generic mapping — keep the key the throw site set.
+            messageKey: err.messageKey || mapped.messageKey,
             messageParams: mapped.messageParams,
             action: mapped.action,
             actionKey: mapped.actionKey,
@@ -5186,7 +5192,7 @@ class IPCHandlers {
         const result = await LocalReasoningService.processText(text, modelId, config);
         return { success: true, text: result };
       } catch (error) {
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, messageKey: error.messageKey };
       }
     });
 
@@ -5260,16 +5266,24 @@ class IPCHandlers {
 
           const data = await response.json();
           if (config?.requireCompleteOutput && data.stop_reason === "max_tokens") {
-            throw new Error("Model output was truncated before the selection edit completed");
+            // Key mirrors TRUNCATED_OUTPUT_MESSAGE_KEY in services/ai/chatRequestBody.ts;
+            // the renderer translates the cleanup toast title from it.
+            throw Object.assign(new Error("Model output was truncated"), {
+              messageKey: "hooks.audioRecording.errorDescriptions.cleanupTruncated",
+            });
           }
           const outputText = extractAnthropicText(data);
           if (outputText === null) {
-            throw new Error(describeMissingAnthropicText(data));
+            // Key mirrors EMPTY_OUTPUT_MESSAGE_KEY in services/ai/chatRequestBody.ts;
+            // the renderer translates the cleanup toast title from it.
+            throw Object.assign(new Error(describeMissingAnthropicText(data)), {
+              messageKey: "hooks.audioRecording.errorDescriptions.cleanupEmptyReply",
+            });
           }
           return { success: true, text: outputText };
         } catch (error) {
           debugLogger.error("Anthropic reasoning error:", error);
-          return { success: false, error: error.message };
+          return { success: false, error: error.message, messageKey: error.messageKey };
         }
       }
     );

@@ -911,7 +911,9 @@
         "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
         "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator.",
         "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
-        "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text."
+        "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text.",
+        "cleanupTruncated": "The AI model ran out of room before it finished cleaning up your dictation.",
+        "cleanupEmptyReply": "The AI model returned an empty reply instead of the cleaned-up dictation."
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",

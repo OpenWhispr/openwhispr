@@ -1841,7 +1841,7 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{ success: boolean; text?: string; error?: string; messageKey?: string }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
 
       // Anthropic reasoning
@@ -1850,7 +1850,7 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{ success: boolean; text?: string; error?: string; messageKey?: string }>;
 
       // Enterprise reasoning (Bedrock, Azure, Vertex)
       processEnterpriseReasoning: (

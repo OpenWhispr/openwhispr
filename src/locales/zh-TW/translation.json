@@ -911,7 +911,9 @@
         "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
         "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。",
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
-        "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。"
+        "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。",
+        "cleanupTruncated": "AI 模型的輸出長度達到上限，未能完成聽寫清理。",
+        "cleanupEmptyReply": "AI 模型傳回空白回應，沒有產生清理後的文字。"
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",

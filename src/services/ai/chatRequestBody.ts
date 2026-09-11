@@ -71,6 +71,28 @@ export function isTruncatedFinishReason(reason: unknown): boolean {
 }
 
 /**
+ * Dictation cleanup renders these errors as the toast title, so they carry the key
+ * the renderer translates. The IPC-bridged providers (Anthropic, local llama) repeat
+ * the literal on the main-process side and hand it back with their error result.
+ */
+export const TRUNCATED_OUTPUT_MESSAGE_KEY =
+  "hooks.audioRecording.errorDescriptions.cleanupTruncated";
+const EMPTY_OUTPUT_MESSAGE_KEY = "hooks.audioRecording.errorDescriptions.cleanupEmptyReply";
+
+export function truncatedOutputError(): Error & { messageKey: string } {
+  return Object.assign(new Error("Model output was truncated"), {
+    messageKey: TRUNCATED_OUTPUT_MESSAGE_KEY,
+  });
+}
+
+/** A reply with no text at all; providers pass their own wording for the logs. */
+export function emptyOutputError(
+  message = "Model returned an empty response"
+): Error & { messageKey: string } {
+  return Object.assign(new Error(message), { messageKey: EMPTY_OUTPUT_MESSAGE_KEY });
+}
+
+/**
  * Shaped params a backend may reject by name with a 400/422. Only params this
  * module's shaping layer added are strippable — never messages or model — so a
  * retry degrades the request (model reasons when asked not to, default

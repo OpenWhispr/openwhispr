@@ -582,7 +582,13 @@ class LlamaServerManager {
                 options.requireCompleteOutput &&
                 ["length", "max_tokens"].includes(response.choices?.[0]?.finish_reason)
               ) {
-                reject(new Error("Model output was truncated before the selection edit completed"));
+                reject(
+                  // Key mirrors TRUNCATED_OUTPUT_MESSAGE_KEY in services/ai/chatRequestBody.ts;
+                  // the renderer translates the cleanup toast title from it.
+                  Object.assign(new Error("Model output was truncated"), {
+                    messageKey: "hooks.audioRecording.errorDescriptions.cleanupTruncated",
+                  })
+                );
                 return;
               }
               const message = response.choices?.[0]?.message;
