@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const { WebSocketServer } = require("ws");
 
 const AssemblyAiStreaming = require("../../src/helpers/assemblyAiStreaming");
+const { deferred } = require("./harness/deferred");
 
 async function withPrematureCloseServer(run) {
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
@@ -19,13 +20,17 @@ async function withPrematureCloseServer(run) {
 }
 
 // `connections` collects each accepted request URL so a test can count sockets
-// and read the query the client actually sent.
-async function withBeginServer(run) {
+// and read the query the client actually sent. `onAudioFrame` reports every
+// binary frame as the server receives it, for tests that assert on framing.
+async function withBeginServer(run, { onAudioFrame } = {}) {
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
   await new Promise((resolve) => server.once("listening", resolve));
   const connections = [];
   server.on("connection", (socket, request) => {
     connections.push(request.url);
+    socket.on("message", (data, isBinary) => {
+      if (isBinary) onAudioFrame?.(data);
+    });
     socket.send(JSON.stringify({ type: "Begin", id: "test-session" }));
   });
 
@@ -174,6 +179,98 @@ test("a warm connection opened for another speech model is not reused", async ()
       assert.equal(connections.length, 1, "same model rides the warm socket");
     } finally {
       streaming.cleanupAll();
+    }
+  });
+});
+
+// Note Recording streams at MEETING_STREAM_SAMPLE_RATE (24 kHz), where a frame
+// sized against the module's 16 kHz default lasts only 33 ms — under the 50 ms
+// floor AssemblyAI enforces, which closes the socket mid-meeting (#2140).
+const MEETING_SAMPLE_RATE = 24000;
+const frameDurationMs = (bytes) => (bytes / 2 / MEETING_SAMPLE_RATE) * 1000;
+
+// Collects the frames the server receives, failing rather than hanging when the
+// client withholds audio: node:test has no default timeout, so a bare await on a
+// byte count would stall CI for hours instead of going red.
+async function collectFrames({ chunkBytes, chunkCount }, assertFrames) {
+  const frames = [];
+  let receivedBytes = 0;
+  const allReceived = deferred();
+  const expectedBytes = chunkBytes * chunkCount;
+
+  await withBeginServer(
+    async (url, connections) => {
+      const streaming = new AssemblyAiStreaming();
+      // The real builder is what pins the session's sample rate, so this test
+      // must not stub it out.
+      dialLoopback(streaming, url);
+
+      try {
+        await streaming.connect({
+          token: "byok-key",
+          mode: "byok",
+          sampleRate: MEETING_SAMPLE_RATE,
+        });
+        for (let i = 0; i < chunkCount; i++) streaming.sendAudio(Buffer.alloc(chunkBytes));
+        await Promise.race([
+          allReceived.promise,
+          new Promise((_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(`only ${receivedBytes} of ${expectedBytes} bytes reached the server`)
+                ),
+              2000
+            ).unref()
+          ),
+        ]);
+
+        assert.match(
+          connections[0],
+          /sample_rate=24000/,
+          "the session must open at the meeting rate for the frame maths to mean anything"
+        );
+        assertFrames(frames);
+      } finally {
+        streaming.cleanupAll();
+      }
+    },
+    {
+      onAudioFrame: (data) => {
+        frames.push(data.length);
+        receivedBytes += data.length;
+        if (receivedBytes >= expectedBytes) allReceived.resolve();
+      },
+    }
+  );
+}
+
+test("audio frames respect AssemblyAI's 50 ms floor at the meeting sample rate", async () => {
+  // meeting-aec-helper emits one frame per mic chunk, sized to the whole 10 ms
+  // frames it had ready — 1440 or 1680 bytes for the renderer's 800-sample input.
+  // 480 bytes (a single 10 ms frame) is the smallest it can hand over.
+  await collectFrames({ chunkBytes: 480, chunkCount: 20 }, (frames) => {
+    assert.ok(frames.length > 0, "no audio reached the server");
+    for (const bytes of frames) {
+      assert.ok(
+        frameDurationMs(bytes) >= 50,
+        `sent a ${frameDurationMs(bytes).toFixed(1)} ms frame; AssemblyAI's floor is 50 ms`
+      );
+    }
+  });
+});
+
+test("a coalesced system-audio read is split under AssemblyAI's 1000 ms ceiling", async () => {
+  // audioTapManager and the Windows/Linux loopback helpers forward raw stdout
+  // chunks, so a stalled main process gets one 64 KB pipe read — 1365 ms at
+  // 24 kHz, which AssemblyAI rejects exactly like an undersized frame.
+  await collectFrames({ chunkBytes: 65536, chunkCount: 1 }, (frames) => {
+    assert.ok(frames.length > 1, "a 1365 ms read must be split, not sent whole");
+    for (const bytes of frames) {
+      assert.ok(
+        frameDurationMs(bytes) >= 50 && frameDurationMs(bytes) <= 1000,
+        `sent a ${frameDurationMs(bytes).toFixed(1)} ms frame; AssemblyAI accepts 50-1000 ms`
+      );
     }
   });
 });
