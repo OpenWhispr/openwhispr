@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Trophy, type LucideIcon } from "lucide-react";
+import { Trophy, type IconComponent } from "./icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import { Badge } from "./ui/badge";
@@ -9,7 +9,7 @@ const PREVIEW_ROWS = [92, 84, 76, 68, 61] as const;
 
 interface LeaderboardPreviewProps {
   actionDisabled?: boolean;
-  actionIcon?: LucideIcon;
+  actionIcon?: IconComponent;
   actionIconClassName?: string;
   actionLabel?: string;
   badge?: string;
@@ -18,7 +18,7 @@ interface LeaderboardPreviewProps {
   dataState?: string;
   description: string;
   helperText?: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   onAction?: () => void;
   title: string;
 }

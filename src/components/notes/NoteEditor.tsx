@@ -16,7 +16,7 @@ import {
   Check,
   Share2,
   Users,
-} from "lucide-react";
+} from "../icons";
 import ShareNoteDialog from "./ShareNoteDialog";
 import {
   canOrganizeNote,

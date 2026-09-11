@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Globe, Loader2 } from "lucide-react";
+import { Globe, Loader2 } from "../icons";
 import { HotkeyInput } from "../ui/HotkeyInput";
 import { formatHotkeyLabel } from "../../utils/hotkeys";
 import {

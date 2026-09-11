@@ -1,4 +1,4 @@
-import { MousePointerClick, MicVocal } from "lucide-react";
+import { MousePointerClick, MicVocal } from "../icons";
 import { useTranslation } from "react-i18next";
 
 type ActivationMode = "tap" | "push";

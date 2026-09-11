@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
-import { MoreHorizontal, Archive, ArchiveRestore, Trash2 } from "lucide-react";
+import { MoreHorizontal, Archive, ArchiveRestore, Trash2 } from "../icons";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,

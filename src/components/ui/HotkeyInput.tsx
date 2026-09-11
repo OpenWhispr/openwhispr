@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, Trash2 } from "../icons";
 import {
   formatHotkeyLabel,
   formatHotkeyLabelForPlatform,

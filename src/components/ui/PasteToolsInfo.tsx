@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Check, Terminal, Info } from "lucide-react";
+import { Check, Terminal, Info } from "../icons";
 import { Button } from "./button";
 import { InfoBox } from "./InfoBox";
 import type { PasteToolsResult } from "../../types/electron";

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Copy, CircleCheck, CircleX, RotateCw } from "lucide-react";
+import { Copy, CircleCheck, CircleX, RotateCw } from "../icons";
 
 interface NixOsPasteInfoProps {
   status: {

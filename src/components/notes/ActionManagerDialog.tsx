@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles, Trash2, Loader2, Plus, Zap } from "lucide-react";
+import { Sparkles, Trash2, Loader2, Plus, Zap } from "../icons";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";

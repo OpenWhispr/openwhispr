@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { ChevronDown, Search, X, Check } from "lucide-react";
+import { ChevronDown, Search, X, Check } from "../icons";
 import registry from "../../config/languageRegistry.json";
 import { LIST_SEARCH_THRESHOLD } from "../../config/constants";
 

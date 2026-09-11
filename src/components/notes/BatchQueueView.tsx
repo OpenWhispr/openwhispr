@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Check, X, Loader2, Clock, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, X, Loader2, Clock, Trash2 } from "../icons";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 import type { QueueItem } from "../../stores/batchQueueStore";

@@ -1,9 +1,9 @@
 import { Button } from "./button";
-import { Check, LucideIcon } from "lucide-react";
+import { Check, IconComponent } from "../icons";
 import { cn } from "../lib/utils";
 
 interface PermissionCardProps {
-  icon: LucideIcon;
+  icon: IconComponent;
   title: string;
   description: string;
   granted: boolean;

@@ -1,4 +1,4 @@
-import { Building2, Clock3, Globe2, UserPlus, UserRound } from "lucide-react";
+import { Building2, Clock3, Globe2, UserPlus, UserRound } from "./icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 

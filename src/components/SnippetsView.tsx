@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CornerDownLeft, Mic, Pencil, Plus, X } from "lucide-react";
+import { CornerDownLeft, Mic, Pencil, Plus, X } from "./icons";
 import {
   Dialog,
   DialogContent,

@@ -14,7 +14,7 @@ import { discoverEmailAuth } from "../lib/emailAuthDiscovery";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
-import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "lucide-react";
+import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "./icons";
 import logger from "../utils/logger";
 import { EMAIL_REGEX } from "../utils/validation";
 import { useDebouncedCallback } from "../hooks/useDebouncedCallback";

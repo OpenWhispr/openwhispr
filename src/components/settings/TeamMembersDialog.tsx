@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Loader2, LogOut } from "lucide-react";
+import { Loader2, LogOut } from "../icons";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, ConfirmDialog } from "../ui/dialog";
 import { useToast } from "../ui/useToast";
 import { useDialogs } from "../../hooks/useDialogs";

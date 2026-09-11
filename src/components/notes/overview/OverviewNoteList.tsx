@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { FileText, Plus } from "lucide-react";
+import { FileText, Plus } from "../../icons";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../../hooks/useUiLocale";
 import MemberAvatar from "../../MemberAvatar";

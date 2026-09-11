@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "../icons";
 import {
   LLM_ENTERPRISE_POLICY_PROVIDER_IDS,
   LLM_POLICY_PROVIDER_IDS,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, Plus } from "lucide-react";
+import { Check, Loader2, Plus } from "../icons";
 import {
   Dialog,
   DialogContent,

@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "./icons";
 
 interface MeetingNotificationCardProps {
   title: string;

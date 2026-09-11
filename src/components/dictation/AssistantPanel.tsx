@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, Plus, X } from "lucide-react";
+import { Check, Copy, Plus, X } from "../icons";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { Button } from "../ui/button";

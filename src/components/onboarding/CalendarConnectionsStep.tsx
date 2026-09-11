@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { CircleCheck, FileSearch, Loader2, MessageCircle, UsersRound } from "lucide-react";
+import { CircleCheck, FileSearch, Loader2, MessageCircle, UsersRound } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";

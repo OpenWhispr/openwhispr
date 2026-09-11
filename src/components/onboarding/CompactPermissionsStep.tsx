@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { CircleCheck, Laptop, LogOut } from "lucide-react";
+import { CircleCheck, Laptop, LogOut } from "../icons";
 import { useTranslation } from "react-i18next";
 // Imported (not referenced by path) so Vite fingerprints them and they resolve
 // under the packaged app's file:// origin. Authored at 88px (2x the original

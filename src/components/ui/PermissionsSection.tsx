@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Mic, Shield, Monitor } from "lucide-react";
+import { Mic, Shield, Monitor } from "../icons";
 import PermissionCard from "./PermissionCard";
 import MicPermissionWarning from "./MicPermissionWarning";
 import PasteToolsInfo from "./PasteToolsInfo";

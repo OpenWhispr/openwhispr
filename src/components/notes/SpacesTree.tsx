@@ -18,7 +18,7 @@ import {
   Smile,
   Trash2,
   Users,
-} from "lucide-react";
+} from "../icons";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,

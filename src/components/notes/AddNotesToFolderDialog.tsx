@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
-import { Search, FileText, Check } from "lucide-react";
+import { Search, FileText, Check } from "../icons";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";

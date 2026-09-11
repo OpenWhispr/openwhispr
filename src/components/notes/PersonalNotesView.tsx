@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
-import { Plus, Sparkles } from "lucide-react";
+import { Plus, Sparkles } from "../icons";
 import { useToast } from "../ui/useToast";
 import NoteEditor from "./NoteEditor";
 import SpacesTree from "./SpacesTree";

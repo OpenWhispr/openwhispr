@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown, Globe, Lock, Building2, Users } from "lucide-react";
+import { Check, ChevronDown, Globe, Lock, Building2, Users } from "../icons";
 import { cn } from "../lib/utils";
 import {
   DropdownMenu,

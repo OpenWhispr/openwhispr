@@ -1,15 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  BookOpen,
-  CornerDownLeft,
-  Download,
-  Pencil,
-  Plus,
-  Sparkles,
-  Upload,
-  X,
-} from "lucide-react";
+import { BookOpen, CornerDownLeft, Download, Pencil, Plus, Sparkles, Upload, X } from "./icons";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";

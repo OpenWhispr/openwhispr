@@ -1,8 +1,8 @@
-import { Check, LucideIcon } from "lucide-react";
+import { Check, IconComponent } from "../icons";
 import { cn } from "../lib/utils";
 
 interface OptionCardProps {
-  icon: LucideIcon;
+  icon: IconComponent;
   title: string;
   description: string;
   selected: boolean;

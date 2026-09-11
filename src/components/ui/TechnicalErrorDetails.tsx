@@ -1,4 +1,4 @@
-import { Check, Copy } from "lucide-react";
+import { Check, Copy } from "../icons";
 import type { TFunction } from "i18next";
 import type { JSX } from "react";
 import { useTranslation } from "react-i18next";

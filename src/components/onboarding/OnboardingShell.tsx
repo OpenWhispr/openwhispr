@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { OnboardingProgressState } from "./flow";
-import { Copy, Minus, Square, Undo2, X } from "lucide-react";
+import { Copy, Minus, Square, Undo2, X } from "../icons";
 import { Button } from "../ui/button";
 import { useTranslation } from "react-i18next";
 import { getPlatform } from "../../utils/platform";

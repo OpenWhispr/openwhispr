@@ -97,9 +97,9 @@ function activatePendingLocalModel(kind: PendingLocalModelKind, modelId: string)
   });
 }
 
-// The X on each row (Figma "Frame 25"), inlined rather than drawn with lucide so
+// The X on each row (Figma "Frame 25"), inlined rather than drawn with the icon set so
 // the 8px glyph inside the 24px circle and the 1.333 stroke come out exactly as
-// exported instead of needing to be back-scaled out of lucide's 24 viewBox.
+// exported instead of needing to be back-scaled out of the 24 viewBox.
 // Colours come from the app theme tokens (see the note on the <aside> below), so
 // the glyph tracks light/dark on the control panel instead of Figma's literals.
 function CancelGlyph() {

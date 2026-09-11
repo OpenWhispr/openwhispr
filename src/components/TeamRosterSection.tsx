@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Mail, X } from "lucide-react";
+import { Loader2, Mail, X } from "./icons";
 import { Button } from "./ui/button";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./ui/select";

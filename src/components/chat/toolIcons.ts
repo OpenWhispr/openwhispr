@@ -7,7 +7,7 @@ import {
   FileText,
   FilePlus,
   FilePen,
-} from "lucide-react";
+} from "../icons";
 
 export const toolIcons: Record<string, typeof Search> = {
   search_notes: Search,

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, Loader2, Plus } from "lucide-react";
+import { ExternalLink, Loader2, Plus } from "../icons";
 import { Button } from "../ui/button";
 import EnterpriseConsoleRow from "./EnterpriseConsoleRow";
 import { useBillingRefreshOnReturn } from "../../hooks/useBillingRefreshOnReturn";

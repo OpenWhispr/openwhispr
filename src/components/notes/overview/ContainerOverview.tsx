@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, UserPlus } from "lucide-react";
+import { Plus, UserPlus } from "../../icons";
 import { useTranslation } from "react-i18next";
 import InviteTeammateDialog from "../../InviteTeammateDialog";
 import { useWorkspaceStore } from "../../../stores/workspaceStore";

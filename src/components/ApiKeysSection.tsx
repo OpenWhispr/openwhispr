@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Key, Copy, Check, Trash2, Plus, Shield, AlertTriangle } from "lucide-react";
+import { Key, Copy, Check, Trash2, Plus, Shield, AlertTriangle } from "./icons";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";

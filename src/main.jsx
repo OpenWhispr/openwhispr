@@ -18,6 +18,7 @@ import i18n from "./i18n";
 // onboarding surfaces actually ask for it (see .onboarding-canvas in index.css).
 import "@fontsource-variable/inter/opsz.css";
 import "@fontsource-variable/caveat";
+import "./brandFonts";
 import "./index.css";
 
 bindDocumentLanguage(i18n, document.documentElement, import.meta.hot);

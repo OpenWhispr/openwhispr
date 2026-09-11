@@ -15,7 +15,7 @@ import {
   Share2,
   Users,
   UserPlus,
-} from "lucide-react";
+} from "./icons";
 import { useTranslation } from "react-i18next";
 import {
   ALL_TIME_METRICS,

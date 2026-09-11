@@ -8,7 +8,7 @@ import type {
   InferenceMode,
 } from "../types/electron";
 import { Button } from "./ui/button";
-import { CircleAlert, Cloud, Lock, Zap } from "lucide-react";
+import { CircleAlert, Cloud, Lock, Zap } from "./icons";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";

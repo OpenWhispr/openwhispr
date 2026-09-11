@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { AlertCircle, Check } from "lucide-react";
+import { AlertCircle, Check } from "../icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { ProviderIcon } from "../ui/ProviderIcon";

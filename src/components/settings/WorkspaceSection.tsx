@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Users, UserPlus, Trash2, LogOut, ChevronDown, Loader2 } from "lucide-react";
+import { Users, UserPlus, Trash2, LogOut, ChevronDown, Loader2 } from "../icons";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { useAuth } from "../../hooks/useAuth";

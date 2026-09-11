@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, KeyRound, Loader2 } from "lucide-react";
+import { AlertCircle, KeyRound, Loader2 } from "../icons";
 import {
   changePassword,
   hasCredentialAccount,

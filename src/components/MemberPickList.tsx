@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, Search } from "lucide-react";
+import { Check, Loader2, Search } from "./icons";
 import MemberAvatar from "./MemberAvatar";
 import { cn } from "./lib/utils";
 import { filterMemberCandidates } from "../lib/memberCandidates";

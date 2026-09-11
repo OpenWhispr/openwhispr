@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, Search, X } from "lucide-react";
+import { Check, Search, X } from "../icons";
 import OnboardingList from "./OnboardingList";
 import {
   displayOnboardingLanguageLabel,

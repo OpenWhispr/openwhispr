@@ -10,7 +10,7 @@ import {
   Plus,
   Settings,
   Link2,
-} from "lucide-react";
+} from "../icons";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";

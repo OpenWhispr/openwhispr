@@ -12,7 +12,7 @@ import {
   ChevronLeft,
   PanelLeftOpen,
   PanelLeftClose,
-} from "lucide-react";
+} from "./icons";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { RequiredModelsBanner } from "./RequiredModelsBanner";

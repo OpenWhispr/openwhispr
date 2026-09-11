@@ -1,4 +1,4 @@
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Plus } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";

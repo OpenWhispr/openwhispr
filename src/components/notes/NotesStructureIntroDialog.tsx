@@ -1,4 +1,4 @@
-import { Building2, ChevronRight, FolderOpen, Lock, Users } from "lucide-react";
+import { Building2, ChevronRight, FolderOpen, Lock, Users } from "../icons";
 import { useTranslation } from "react-i18next";
 import {
   Dialog,

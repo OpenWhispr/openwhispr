@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Check, ChevronDown, Copy } from "lucide-react";
+import { Check, ChevronDown, Copy } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { useStickToBottom } from "../../hooks/useStickToBottom";

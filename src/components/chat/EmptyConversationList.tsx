@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "../icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 

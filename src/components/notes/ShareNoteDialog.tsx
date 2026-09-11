@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, Link2, Loader2, MoreHorizontal, Users } from "lucide-react";
+import { Check, Copy, Link2, Loader2, MoreHorizontal, Users } from "../icons";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import {

@@ -1,9 +1,9 @@
 import React from "react";
-import { Check, LucideIcon } from "lucide-react";
+import { Check, IconComponent } from "../icons";
 
 interface Step {
   title: string;
-  icon: LucideIcon;
+  icon: IconComponent;
 }
 
 interface StepProgressProps {

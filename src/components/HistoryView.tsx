@@ -2,7 +2,7 @@ import { Fragment, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../hooks/useUiLocale";
 import { Button } from "./ui/button";
-import { Loader2, Sparkles, X, Mic, Trash2, Archive } from "lucide-react";
+import { Loader2, Sparkles, X, Mic, Trash2, Archive } from "./icons";
 import TranscriptionItem from "./ui/TranscriptionItem";
 import type { TranscriptionItem as TranscriptionItemType } from "../types/electron";
 import { formatHotkeyLabel, parseHotkeyList } from "../utils/hotkeys";
