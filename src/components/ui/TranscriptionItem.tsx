@@ -295,7 +295,7 @@ export default function TranscriptionItem({
           )}
         >
           <div className="min-h-0 overflow-hidden">
-            <div className="mt-2 border-t border-border/20 pt-2">
+            <div className="mt-2 border-t border-border/50 pt-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   {t("controlPanel.history.rawTranscript")}

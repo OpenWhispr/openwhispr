@@ -1006,7 +1006,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           />
         </div>
         <main className="flex-1 flex flex-col overflow-hidden p-2">
-          <div className="flex min-h-0 flex-1 flex-col overflow-clip rounded-(--radius-shell) border border-border/40 bg-background dark:border-white/6">
+          <div className="flex min-h-0 flex-1 flex-col overflow-clip rounded-(--radius-shell) border border-border bg-background dark:border-white/10">
             <ControlPanelTopBar
               title={navItems.find((item) => item.id === activeView)?.label ?? ""}
               sidebarCollapsed={sidebarCollapsed}

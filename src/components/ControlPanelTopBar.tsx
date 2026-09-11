@@ -44,7 +44,7 @@ export default function ControlPanelTopBar({
   return (
     <header
       className={cn(
-        "grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,340px)_minmax(0,1fr)] items-center gap-4 border-b border-border/40 px-3 dark:border-white/6",
+        "grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,340px)_minmax(0,1fr)] items-center gap-4 border-b border-border px-3 dark:border-white/10",
         clearTrafficLights && "ltr:ps-[76px]"
       )}
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}

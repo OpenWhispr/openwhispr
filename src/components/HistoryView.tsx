@@ -272,7 +272,7 @@ export default function HistoryView({
                         </div>
                       )}
                     </div>
-                    <div className="relative z-0 overflow-clip rounded-2xl border border-border/40 bg-card/50 divide-y divide-border/30 dark:border-white/6 dark:bg-surface-2/60">
+                    <div className="relative z-0 overflow-clip rounded-2xl border border-border/70 bg-card/50 divide-y divide-border/60 dark:border-white/10 dark:bg-surface-2/60">
                       {group.items.map((item) => (
                         <TranscriptionItem
                           key={item.id}

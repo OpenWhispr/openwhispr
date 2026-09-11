@@ -215,7 +215,7 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
   const { t, i18n } = useTranslation();
 
   return (
-    <div className="overflow-clip rounded-2xl border border-border/40 dark:border-white/6">
+    <div className="overflow-clip rounded-2xl border border-border/70 dark:border-white/10">
       <div
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium",
@@ -235,7 +235,7 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
             {t("upcoming.noEventsToday")}
           </p>
         ) : (
-          <div className="divide-y divide-border/30">
+          <div className="divide-y divide-border/60">
             {group.items.map((event) => (
               <EventRow key={event.id} event={event} isNow={isNowFn(event)} />
             ))}
@@ -258,7 +258,7 @@ function SidebarCard({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center rounded-2xl border border-border/40 bg-card/50 px-4 py-6 text-center dark:border-white/6 dark:bg-surface-2/60">
+    <div className="flex flex-col items-center rounded-2xl border border-border/70 bg-card/50 px-4 py-6 text-center dark:border-white/10 dark:bg-surface-2/60">
       <Icon size={20} className="mb-2 text-muted-foreground/40" />
       {title && <p className="text-xs font-medium text-foreground/80">{title}</p>}
       {description && (

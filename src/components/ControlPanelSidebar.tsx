@@ -10,9 +10,9 @@ import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNa
 export type { ControlPanelView };
 
 const rowIconClass =
-  "shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150";
+  "shrink-0 text-foreground/70 group-hover:text-foreground/90 dark:text-foreground/65 dark:group-hover:text-foreground/85 transition-colors duration-150";
 const rowLabelClass =
-  "text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150";
+  "text-xs text-foreground/90 group-hover:text-foreground dark:text-foreground/85 dark:group-hover:text-foreground transition-colors duration-150";
 const rowButtonClass =
   "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-start outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
 
@@ -87,7 +87,7 @@ export default function ControlPanelSidebar({
                   "shrink-0 transition-colors duration-150",
                   isActive
                     ? "text-primary"
-                    : "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/55 dark:group-hover:text-foreground/70"
+                    : "text-foreground/70 group-hover:text-foreground/90 dark:text-foreground/65 dark:group-hover:text-foreground/85"
                 )}
               />
               <span
@@ -95,7 +95,7 @@ export default function ControlPanelSidebar({
                   "text-xs transition-colors duration-150",
                   isActive
                     ? "text-foreground font-medium"
-                    : "text-foreground/80 group-hover:text-foreground dark:text-foreground/75 dark:group-hover:text-foreground/90"
+                    : "text-foreground/90 group-hover:text-foreground dark:text-foreground/85 dark:group-hover:text-foreground"
                 )}
               >
                 {item.label}

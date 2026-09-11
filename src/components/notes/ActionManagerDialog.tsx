@@ -117,7 +117,7 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
 
         <div className="flex h-120">
           {/* Left panel — action list */}
-          <div className="w-56 shrink-0 border-e border-border/15 dark:border-white/4 flex flex-col bg-card/50 dark:bg-surface-1/30">
+          <div className="w-56 shrink-0 border-e border-border dark:border-white/10 flex flex-col bg-card/50 dark:bg-surface-1/30">
             {/* List header */}
             <div className="flex items-center justify-between px-3 pt-3.5 pb-2">
               <span className="text-xs font-semibold tracking-tight text-foreground/70">
