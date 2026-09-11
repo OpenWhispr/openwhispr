@@ -117,7 +117,7 @@
       "extractDir": "sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01",
       "descriptionKey": "models.descriptions.cohere.cohere_transcribe_03_2026"
     },
-    "orukeet-v0.1.0-q8": {
+    "orukeet-v0.1.0": {
       "name": "Orukeet",
       "description": "Multilingual Parakeet fine-tune with frozen Gabor kernels",
       "descriptionKey": "models.descriptions.parakeet.orukeet",

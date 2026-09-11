@@ -423,7 +423,7 @@ test("choosing a local model records it in the resume draft", async (t) => {
 });
 
 test("Oruk installs and activates Orukeet through the existing parakeet download flow", async (t) => {
-  const modelId = "orukeet-v0.1.0-q8";
+  const modelId = "orukeet-v0.1.0";
   const setup = await createSetupHarness(t);
   await setup.chooseProvider("oruk");
   assert.match(textContent(setup.row(modelId)), /common\.recommended/);

@@ -1,4 +1,3 @@
-import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { ProviderIcon } from "../ui/ProviderIcon";
@@ -8,6 +7,7 @@ import {
   getWhisperModelInfo,
   modelRegistry,
 } from "../../models/ModelRegistry";
+import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
   consumePendingLocalModel,

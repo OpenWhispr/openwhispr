@@ -1,9 +1,3 @@
-import {
-  LOCAL_ASR_ORGANIZATIONS,
-  getASRModelOrganization,
-  getSelectedASROrganization,
-  usesParakeetManager,
-} from "../helpers/localASROrganization";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -40,6 +34,12 @@ import {
   type TranscriptionPolicyContext,
 } from "../stores/policyRules";
 import { usePolicySnapshot } from "../hooks/usePolicy";
+import {
+  LOCAL_ASR_ORGANIZATIONS,
+  getASRModelOrganization,
+  getSelectedASROrganization,
+  usesParakeetManager,
+} from "../helpers/localASROrganization";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { createExternalLinkHandler } from "../utils/externalLinks";
