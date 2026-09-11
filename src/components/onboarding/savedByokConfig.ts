@@ -40,7 +40,7 @@ const endpointConfig = (baseUrl: string, model: string, keyless = false): SavedB
 // writes cloudTranscriptionMode "byok" for Local.
 function resolveSavedDictation(s: SavedByokSnapshot): SavedByokConfig | null {
   if (isSelfHostedTranscription(s)) {
-    return endpointConfig(s.remoteTranscriptionUrl.trim(), s.remoteTranscriptionModel.trim(), true);
+    return endpointConfig(s.remoteTranscriptionUrl.trim(), s.remoteTranscriptionModel, true);
   }
   if (s.useLocalWhisper) return null;
   if (s.transcriptionMode !== "providers" && s.transcriptionMode !== "self-hosted") return null;

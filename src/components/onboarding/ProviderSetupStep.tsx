@@ -49,7 +49,6 @@ import {
   isBlankByokDraft,
   resolveSavedByokConfig,
   selfHostedRemoteTranscriptionUrl,
-  type SavedByokConfig,
 } from "./savedByokConfig";
 
 export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
@@ -329,20 +328,23 @@ export function ByokProviderStep({
   );
   // The session's draft wins; without one (onboarding was restarted, or an older build
   // left it blank) the step reopens on what the user already saved, the same order
-  // LocalModelSetupStep uses.
-  const [seed] = useState<SavedByokConfig | null>(() =>
-    resumeState && !isBlankByokDraft(resumeState)
-      ? { draft: resumeState, keyless: false }
-      : resolveSavedByokConfig(stepId, store)
-  );
+  // LocalModelSetupStep uses. Key-less comes from saved settings either way: the draft
+  // never records keys, and a remount reopens from the draft the first mount wrote.
+  const [seed] = useState(() => {
+    const saved = resolveSavedByokConfig(stepId, store);
+    return {
+      draft: resumeState && !isBlankByokDraft(resumeState) ? resumeState : saved?.draft,
+      keyless: saved?.keyless ?? false,
+    };
+  });
   const initialProviderData = providers.find(
-    (provider) => provider.id === seed?.draft.selectedProvider
+    (provider) => provider.id === seed.draft?.selectedProvider
   );
   const initialProvider = initialProviderData?.id ?? "";
   const initialModel = initialProviderData?.models?.some(
-    (model) => model.id === seed?.draft.selectedModel
+    (model) => model.id === seed.draft?.selectedModel
   )
-    ? (seed?.draft.selectedModel ?? "")
+    ? (seed.draft?.selectedModel ?? "")
     : pickDefaultModelId(initialProviderData);
   const initiallySelfHosted = selfHostedRequested && selfHostedAllowed;
   // Hosted and self-hosted share the key field, so each mode shows its own saved key.
@@ -351,7 +353,7 @@ export function ByokProviderStep({
   const credentialFor = (selfHostedMode: boolean, providerId: string) => {
     if (!selfHostedMode) return providerCredential(providerId, store).value;
     if (assistant) return store.chatAgentCustomApiKey;
-    return seed?.keyless ? "" : store.customTranscriptionApiKey;
+    return seed.keyless ? "" : store.customTranscriptionApiKey;
   };
   const [selfHosted, setSelfHosted] = useState(initiallySelfHosted);
   const [selectedProvider, setSelectedProvider] = useState(initialProvider);
@@ -359,8 +361,8 @@ export function ByokProviderStep({
   const [draftApiKey, setDraftApiKey] = useState(() =>
     credentialFor(initiallySelfHosted, initialProvider)
   );
-  const [draftBaseUrl, setDraftBaseUrl] = useState(seed?.draft.baseUrl ?? "");
-  const [draftCustomModel, setDraftCustomModel] = useState(seed?.draft.customModel ?? "");
+  const [draftBaseUrl, setDraftBaseUrl] = useState(seed.draft?.baseUrl ?? "");
+  const [draftCustomModel, setDraftCustomModel] = useState(seed.draft?.customModel ?? "");
   const [draftCortiClientId, setDraftCortiClientId] = useState(
     initialProvider === "corti" ? store.cortiClientId : ""
   );

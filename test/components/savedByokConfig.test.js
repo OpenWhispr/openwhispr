@@ -98,6 +98,19 @@ test("the Settings self-hosted server reopens as a key-less endpoint and wins ov
   });
 });
 
+test("the Settings self-hosted server wins over a stale local flag, as in the router", async () => {
+  const { resolveSavedByokConfig } = await load();
+  const saved = resolveSavedByokConfig("byok-dictation", {
+    ...(await firstRun()),
+    transcriptionMode: "self-hosted",
+    useLocalWhisper: true,
+    remoteTranscriptionUrl: "http://192.168.1.5:8178",
+    remoteTranscriptionModel: "large-v3",
+  });
+  assert.equal(saved?.draft.baseUrl, "http://192.168.1.5:8178");
+  assert.equal(saved?.keyless, true);
+});
+
 test("a custom endpoint reopens under either mode it is filed under", async () => {
   const { resolveSavedByokConfig } = await load();
   for (const transcriptionMode of ["providers", "self-hosted"]) {

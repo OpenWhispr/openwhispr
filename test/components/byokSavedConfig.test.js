@@ -174,6 +174,44 @@ async function routeAfterOnboardingSave(step) {
   return resolveTranscriptionRoute({ settings: step.state() });
 }
 
+// A workspace policy arriving while the card is open, as policyStore applies it.
+async function applyTranscriptionPolicy(step, transcription) {
+  const { usePolicyStore } = await step.vite.ssrLoadModule("/stores/policyStore.ts");
+  await React.act(async () =>
+    usePolicyStore.setState({
+      status: "managed",
+      appVersion: "1.10.0",
+      policy: {
+        version: 1,
+        transcription,
+        llm: { allowedModes: [], allowedByokProviders: [], allowedEnterpriseProviders: [] },
+        features: { agentEnabled: false, webSearchEnabled: false },
+        sharing: { externalLinkSharing: "disabled" },
+        dataRetention: {
+          audioRetentionMaxDays: null,
+          localHistoryMode: "user_choice",
+          cloudBackupAllowed: false,
+        },
+        minAppVersion: null,
+      },
+    })
+  );
+}
+
+test("a first run opens blank", async (t) => {
+  await t.test("hosted", async (t) => {
+    const step = await mountByokStep(t, {});
+    assert.deepEqual(step.selectValues(), [undefined, undefined]);
+    assert.equal(step.value(PLACEHOLDER.hostedKey), "");
+  });
+
+  await t.test("self-hosted", async (t) => {
+    const step = await mountByokStep(t, { selfHostedRequested: true });
+    assert.equal(step.value(PLACEHOLDER.endpoint), "");
+    assert.equal(step.value(PLACEHOLDER.modelId), "");
+  });
+});
+
 test("a saved hosted provider reopens with its model and key, and the draft stays key-free", async (t) => {
   const step = await mountByokStep(t, {
     settings: HOSTED_GROQ,
@@ -217,6 +255,34 @@ test("the Settings self-hosted server reopens without a leftover custom key", as
   assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
 });
 
+test("a remount from the saved draft keeps a Settings self-hosted server key-less", async (t) => {
+  const mountSettingsServer = (t, resumeState) =>
+    mountByokStep(t, {
+      selfHostedRequested: true,
+      settings: SETTINGS_SELF_HOSTED,
+      secrets: { customTranscriptionApiKey: "sk-stale-custom-key" },
+      resumeState,
+    });
+  let draft;
+
+  await t.test("the first visit writes the draft", async (t) => {
+    const step = await mountSettingsServer(t);
+    draft = (await step.unmountForDrafts()).at(-1);
+    assert.equal(draft.baseUrl, "http://192.168.1.5:8178");
+  });
+
+  // Back from the next step, or a reload, reopens the step from that draft.
+  await t.test("the remount stays key-less and saves back to the same server", async (t) => {
+    const step = await mountSettingsServer(t, draft);
+    assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
+
+    await step.passConnectionTest();
+    await step.proceed();
+    assert.equal(step.state().remoteTranscriptionUrl, "http://192.168.1.5:8178");
+    assert.equal((await routeAfterOnboardingSave(step)).provider, "self-hosted");
+  });
+});
+
 test("a saved assistant endpoint reopens with its key", async (t) => {
   const step = await mountByokStep(t, {
     stepId: "byok-assistant",
@@ -232,6 +298,21 @@ test("a saved assistant endpoint reopens with its key", async (t) => {
   assert.equal(step.value(PLACEHOLDER.endpoint), "http://127.0.0.1:1234/v1");
   assert.equal(step.value(PLACEHOLDER.modelId), "llm-proxy-test");
   assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-agent-key");
+});
+
+test("a saved hosted assistant provider reopens with its model and key", async (t) => {
+  const step = await mountByokStep(t, {
+    stepId: "byok-assistant",
+    settings: {
+      chatAgentMode: "providers",
+      chatAgentProvider: "anthropic",
+      chatAgentModel: "claude-sonnet-5",
+    },
+    secrets: { anthropicApiKey: "sk-ant-saved-key" },
+  });
+
+  assert.deepEqual(step.selectValues(), ["anthropic", "claude-sonnet-5"]);
+  assert.equal(step.value(PLACEHOLDER.hostedKey), "sk-ant-saved-key");
 });
 
 test("an in-progress draft wins over saved settings, and a blank one falls back to them", async (t) => {
@@ -294,35 +375,47 @@ test("a key that loads after mount fills an empty field but never replaces typed
   });
 });
 
-test("a seeded provider that policy removes after mount cannot be saved", async (t) => {
+test("policy removing self-hosting mid-step keeps the hosted half and loads its key", async (t) => {
   const step = await mountByokStep(t, {
+    selfHostedRequested: true,
     settings: HOSTED_GROQ,
-    secrets: { groqApiKey: "gsk-saved-key" },
+    secrets: { groqApiKey: "gsk-saved-key", customTranscriptionApiKey: "sk-custom-key" },
   });
-  await step.passConnectionTest();
-  assert.equal(step.proceedDisabled(), false);
+  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-custom-key");
 
-  const { usePolicyStore } = await step.vite.ssrLoadModule("/stores/policyStore.ts");
-  await React.act(async () =>
-    usePolicyStore.setState({
-      status: "managed",
-      appVersion: "1.10.0",
-      policy: {
-        version: 1,
-        transcription: { allowedModes: ["providers"], allowedByokProviders: ["openai"] },
-        llm: { allowedModes: [], allowedByokProviders: [], allowedEnterpriseProviders: [] },
-        features: { agentEnabled: false, webSearchEnabled: false },
-        sharing: { externalLinkSharing: "disabled" },
-        dataRetention: {
-          audioRetentionMaxDays: null,
-          localHistoryMode: "user_choice",
-          cloudBackupAllowed: false,
-        },
-        minAppVersion: null,
+  await applyTranscriptionPolicy(step, {
+    allowedModes: ["providers"],
+    allowedByokProviders: ["groq"],
+  });
+  assert.deepEqual(step.selectValues(), ["groq", "whisper-large-v3-turbo"]);
+  assert.equal(step.value(PLACEHOLDER.hostedKey), "gsk-saved-key");
+});
+
+test("a seeded provider that policy removes after mount cannot be saved", async (t) => {
+  for (const [name, settings, secrets] of [
+    ["an API-key provider", HOSTED_GROQ, { groqApiKey: "gsk-saved-key" }],
+    [
+      "Corti",
+      {
+        ...HOSTED_GROQ,
+        cloudTranscriptionProvider: "corti",
+        cloudTranscriptionModel: "corti-transcribe",
       },
-    })
-  );
-  assert.equal(step.proceedDisabled(), true);
+      { cortiClientId: "corti-client-id", cortiClientSecret: "corti-client-secret" },
+    ],
+  ]) {
+    await t.test(name, async (t) => {
+      const step = await mountByokStep(t, { settings, secrets });
+      await step.passConnectionTest();
+      assert.equal(step.proceedDisabled(), false);
+
+      await applyTranscriptionPolicy(step, {
+        allowedModes: ["providers"],
+        allowedByokProviders: ["openai"],
+      });
+      assert.equal(step.proceedDisabled(), true);
+    });
+  }
 });
 
 test("a key-less endpoint saved over a hosted setup keeps its model and routes to it", async (t) => {
