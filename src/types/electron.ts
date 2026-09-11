@@ -807,6 +807,8 @@ export interface ScreenRecordingAccessResult {
   needsRelaunch?: boolean;
 }
 
+export type CloudReasonPurpose = "cleanup" | "assistant" | "translation" | "noteFormatting";
+
 export interface ScreenContextImage {
   mediaType: string;
   /** Base64 image bytes, no data-URL prefix. */
@@ -2328,6 +2330,7 @@ declare global {
           systemPrompt?: string;
           requestPurpose?: "agent";
           promptMode?: "cleanup" | "agent";
+          purpose?: CloudReasonPurpose;
           screenContext?: ScreenContextImage;
           language?: string;
           locale?: string;

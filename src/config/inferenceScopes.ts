@@ -1,4 +1,5 @@
 import type { SettingsState } from "../stores/settingsStore";
+import type { CloudReasonPurpose } from "../types/electron";
 
 export interface InferenceScopeStoreKeys {
   mode: keyof SettingsState;
@@ -14,10 +15,13 @@ export interface InferenceScopeStoreKeys {
 export interface InferenceScopeDefinition {
   storeKeys: InferenceScopeStoreKeys;
   fallbackScope?: string;
+  /** Server-side fallback chain OpenWhispr Cloud answers this scope on. */
+  cloudPurpose: CloudReasonPurpose;
 }
 
 export const INFERENCE_SCOPES = {
   dictationCleanup: {
+    cloudPurpose: "cleanup",
     storeKeys: {
       mode: "cleanupMode",
       provider: "cleanupProvider",
@@ -30,6 +34,7 @@ export const INFERENCE_SCOPES = {
     },
   },
   dictationAgent: {
+    cloudPurpose: "assistant",
     storeKeys: {
       mode: "dictationAgentMode",
       provider: "dictationAgentProvider",
@@ -45,6 +50,7 @@ export const INFERENCE_SCOPES = {
   // context screenshot. Unset fields resolve to the dictationAgent scope, and
   // the UI offers only cloud/BYOK modes, so remoteUrl is deliberately absent.
   dictationAgentVision: {
+    cloudPurpose: "assistant",
     storeKeys: {
       mode: "dictationAgentVisionMode",
       provider: "dictationAgentVisionProvider",
@@ -57,6 +63,7 @@ export const INFERENCE_SCOPES = {
     fallbackScope: "dictationAgent",
   },
   noteFormatting: {
+    cloudPurpose: "noteFormatting",
     storeKeys: {
       mode: "noteFormattingMode",
       provider: "noteFormattingProvider",
@@ -73,6 +80,7 @@ export const INFERENCE_SCOPES = {
   // The voice assistant panel's spoken commands, like selection edits, run on
   // dictationAgent(Vision) — see resolveChatStreamingInference.
   chatIntelligence: {
+    cloudPurpose: "assistant",
     storeKeys: {
       mode: "chatAgentMode",
       provider: "chatAgentProvider",
@@ -85,6 +93,7 @@ export const INFERENCE_SCOPES = {
     },
   },
   dictationTranslation: {
+    cloudPurpose: "translation",
     storeKeys: {
       mode: "translationMode",
       provider: "translationProvider",

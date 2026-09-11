@@ -2830,6 +2830,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const res = await window.electronAPI.cloudReason(currentText, {
             agentName,
             promptMode: "cleanup",
+            purpose: "cleanup",
             customDictionary: getDictionaryHintWords(settings),
             customPrompt: this.getCustomPrompt(),
             language: this.getCleanupLanguage(settings),
@@ -3308,6 +3309,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             const res = await window.electronAPI.cloudReason(processedText, {
               agentName,
               promptMode: "cleanup",
+              purpose: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
               customPrompt: this.getCustomPrompt(),
               language: this.getCleanupLanguage(settings),
@@ -4995,6 +4997,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             const res = await window.electronAPI.cloudReason(finalText, {
               agentName,
               promptMode: "cleanup",
+              purpose: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
               customPrompt: this.getCustomPrompt(),
               language: this.getCleanupLanguage(stSettings),

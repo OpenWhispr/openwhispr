@@ -1,4 +1,5 @@
 import type { InferenceProvider } from "./types";
+import { INFERENCE_SCOPES } from "../../../config/inferenceScopes";
 import { withSessionRefresh } from "../../../lib/auth";
 import { getSettings } from "../../../stores/settingsStore";
 import logger from "../../../utils/logger";
@@ -20,8 +21,8 @@ export const openwhisprProvider: InferenceProvider = {
     // "agent" only rides with a screenshot (which already requires the new
     // API) — older servers reject unknown promptMode values, so plain agent
     // requests omit it. Explicit "cleanup" stops the server flipping to the
-    // action prompt on an agent-name mention. Distinct from requestPurpose,
-    // which declares intent for org-policy enforcement.
+    // action prompt on an agent-name mention. Distinct from requestPurpose
+    // (org-policy enforcement) and purpose (the server's model chain).
     const promptMode = config.systemPrompt
       ? config.screenContext
         ? "agent"
@@ -36,6 +37,9 @@ export const openwhisprProvider: InferenceProvider = {
         systemPrompt: config.systemPrompt,
         requestPurpose: config.requiresAgent ? "agent" : undefined,
         promptMode,
+        purpose: config.inferenceScope
+          ? INFERENCE_SCOPES[config.inferenceScope].cloudPurpose
+          : undefined,
         screenContext: config.screenContext,
         language: config.language || ctx.getPreferredLanguage(),
         locale: ctx.getUiLanguage(),

@@ -2,7 +2,11 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Monitor } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules";
+import {
+  isAgentAllowed,
+  isModeAllowedByPolicy,
+  isScreenContextAllowed,
+} from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { useAgentName } from "../../utils/agentName";
 import { useDialogs } from "../../hooks/useDialogs";
@@ -34,6 +38,9 @@ export default function DictationAgentSettings() {
   } = useScreenRecordingPermission();
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
+  const visionOverrideAllowed = usePolicyStore((state) =>
+    isModeAllowedByPolicy(state, "llm", "providers")
+  );
   // Display the effective value: an org that forces the feature off shows the
   // toggle off while the raw preference survives for when the policy lifts.
   const screenContextActive = voiceAgentScreenContext && screenContextAllowed;
@@ -192,7 +199,7 @@ export default function DictationAgentSettings() {
                 />
               </SettingsRow>
             </SettingsPanelRow>
-            {screenContextActive && (
+            {screenContextActive && visionOverrideAllowed && (
               <SettingsPanelRow>
                 <SettingsRow
                   label={t("dictationAgent.screenContext.visionModel")}
@@ -221,11 +228,8 @@ export default function DictationAgentSettings() {
               {t("dictationAgent.screenContext.relaunchHint")}
             </p>
           )}
-          {screenContextActive && useDictationAgentVisionModel && (
-            <InferenceConfigEditor
-              scope="dictationAgentVision"
-              allowedModes={["openwhispr", "providers"]}
-            />
+          {screenContextActive && visionOverrideAllowed && useDictationAgentVisionModel && (
+            <InferenceConfigEditor scope="dictationAgentVision" allowedModes={["providers"]} />
           )}
         </div>
       )}

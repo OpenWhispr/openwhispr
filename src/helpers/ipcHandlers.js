@@ -9091,6 +9091,7 @@ class IPCHandlers {
             systemPrompt: opts.systemPrompt,
             requestPurpose: opts.requestPurpose,
             promptMode: opts.promptMode,
+            purpose: opts.purpose,
             screenContext: opts.screenContext,
             language: opts.language,
             locale: opts.locale,

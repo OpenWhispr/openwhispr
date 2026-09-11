@@ -967,7 +967,6 @@ export interface SettingsState
 
   setVoiceAgentScreenContext: (value: boolean) => void;
   setUseDictationAgentVisionModel: (value: boolean) => void;
-  setDictationAgentVisionMode: (mode: InferenceMode) => void;
   setDictationAgentVisionProvider: (value: string) => void;
   setDictationAgentVisionModel: (value: string) => void;
   setDictationAgentVisionCloudMode: (value: string) => void;
@@ -1876,11 +1875,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   voiceAgentScreenContext: readBoolean("voiceAgentScreenContext", false),
   useDictationAgentVisionModel: readBoolean("useDictationAgentVisionModel", false),
-  dictationAgentVisionMode: (() => {
-    const v = readString("dictationAgentVisionMode", "openwhispr");
-    if (v === "openwhispr" || v === "providers") return v as InferenceMode;
-    return "openwhispr" as InferenceMode;
-  })(),
+  // Cloud already vision-routes screenshot commands, so the override is BYOK-only.
+  dictationAgentVisionMode: "providers" as InferenceMode,
   dictationAgentVisionProvider: readString("dictationAgentVisionProvider", ""),
   dictationAgentVisionModel: readString("dictationAgentVisionModel", ""),
   dictationAgentVisionCloudMode: readString("dictationAgentVisionCloudMode", "openwhispr"),
@@ -1918,9 +1914,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
   setUseDictationAgentVisionModel: createBooleanSetter("useDictationAgentVisionModel"),
-  setDictationAgentVisionMode: createStringSetter("dictationAgentVisionMode") as (
-    mode: InferenceMode
-  ) => void,
   setDictationAgentVisionProvider: createStringSetter("dictationAgentVisionProvider"),
   setDictationAgentVisionModel: createStringSetter("dictationAgentVisionModel"),
   setDictationAgentVisionCloudMode: createStringSetter("dictationAgentVisionCloudMode"),
