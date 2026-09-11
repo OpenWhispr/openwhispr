@@ -10,10 +10,13 @@ const REWARM_DELAY_MS = 2000;
 const MAX_REWARM_ATTEMPTS = 10;
 const KEEPALIVE_INTERVAL_MS = 15000;
 const MIN_FRAME_MS = 50;
-const MAX_FRAME_MS = 1000;
-// AssemblyAI closes the session on any frame outside 50-1000 ms, so both bounds
-// follow the rate the socket opened at: Note Recording streams at 24 kHz, where a
-// frame sized against this module's 16 kHz default lasts only 33 ms (#2140).
+// AssemblyAI hard-closes the session outside 50-1000 ms but documents 50-250 ms
+// as the supported shape, so the split targets the recommended ceiling: 1000 would
+// put the first slice of a coalesced read exactly on the limit it exists to avoid.
+const MAX_FRAME_MS = 250;
+// Both bounds follow the rate the socket opened at: Note Recording streams at
+// 24 kHz, where a frame sized against this module's 16 kHz default lasts only
+// 33 ms (#2140).
 const minFrameBytes = (sampleRate) => Math.ceil((sampleRate * 2 * MIN_FRAME_MS) / 1000);
 const maxFrameBytes = (sampleRate) => Math.floor((sampleRate * 2 * MAX_FRAME_MS) / 1000);
 

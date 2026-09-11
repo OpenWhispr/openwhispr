@@ -254,15 +254,16 @@ test("audio frames respect AssemblyAI's 50 ms floor at the meeting sample rate",
   });
 });
 
-test("a coalesced system-audio read is split under AssemblyAI's 1000 ms ceiling", async () => {
+test("a coalesced system-audio read is split inside AssemblyAI's frame window", async () => {
   // A stalled main process gets one 64 KB pipe read off the system-audio helper:
-  // 1365 ms at 24 kHz, which AssemblyAI rejects like an undersized frame.
+  // 1365 ms at 24 kHz, which AssemblyAI rejects like an undersized frame. The
+  // slices target the documented 250 ms ceiling, not the 1000 ms hard limit.
   await collectFrames([65536], (frames) => {
     assert.ok(frames.length > 1, "a 1365 ms read must be split, not sent whole");
     for (const bytes of frames) {
       assert.ok(
-        frameDurationMs(bytes) >= 50 && frameDurationMs(bytes) <= 1000,
-        `sent a ${frameDurationMs(bytes).toFixed(1)} ms frame; AssemblyAI accepts 50-1000 ms`
+        frameDurationMs(bytes) >= 50 && frameDurationMs(bytes) <= 250,
+        `sent a ${frameDurationMs(bytes).toFixed(1)} ms frame; AssemblyAI documents 50-250 ms`
       );
     }
   });
