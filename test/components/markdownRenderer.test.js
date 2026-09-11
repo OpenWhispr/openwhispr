@@ -61,3 +61,29 @@ test("non-table markdown is unchanged", async (t) => {
   assert.ok(html.includes("<strong"), "bold still renders");
   assert.ok(html.includes("<code"), "inline code still renders");
 });
+
+test("GFM extras the plugin enables render as elements, not literal syntax", async (t) => {
+  const html = await renderMarkdown(
+    t,
+    "~~gone~~ and https://openwhispr.com\n\n- [ ] open\n- [x] done\n"
+  );
+
+  assert.ok(html.includes("<del"), "strikethrough renders as del");
+  assert.ok(!html.includes("~~"), "no literal tildes survive");
+  assert.ok(
+    html.includes('href="https://openwhispr.com"'),
+    "a bare URL is autolinked"
+  );
+  assert.equal((html.match(/type="checkbox"/g) || []).length, 2, "task list renders two checkboxes");
+});
+
+test("URL sanitisation is unchanged with the plugin enabled", async (t) => {
+  const html = await renderMarkdown(
+    t,
+    "[click](javascript:alert(1)) [data](data:text/html,hi) <img src=x onerror=alert(1)>\n"
+  );
+
+  assert.ok(!html.includes("javascript:"), "javascript: href is stripped");
+  assert.ok(!html.includes("data:text"), "data: href is stripped");
+  assert.ok(!html.includes("<img"), "raw HTML stays escaped");
+});
