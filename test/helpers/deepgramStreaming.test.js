@@ -67,6 +67,86 @@ test("a warm connection is reused only within the same credential mode", async (
   });
 });
 
+// Keeps the real query string (language, keyterms) while dialing the loopback server.
+function dialLoopback(streaming, url) {
+  const buildRealUrl = streaming.buildWebSocketUrl.bind(streaming);
+  streaming.buildWebSocketUrl = (options) =>
+    buildRealUrl(options).replace("wss://api.deepgram.com/v1/listen", url);
+}
+
+test("a warm connection opened for another language is not reused", async () => {
+  await withMetadataServer(async (url, connections) => {
+    const streaming = new DeepgramStreaming();
+    dialLoopback(streaming, url);
+
+    try {
+      // Dictation warms on the UI language: warmupStreamingConnection() runs at
+      // startup and after each transcription, before setTranslationRequested()
+      // can say a translation wants the source language instead. The URL pins
+      // that language — and with it nova-3 vs nova-2 — for the whole session.
+      await streaming.warmup({ token: "byok-key", mode: "byok", language: "en" });
+      await streaming.connect({ token: "byok-key", mode: "byok", language: "fr" });
+
+      assert.equal(connections.length, 2, "the English warm socket was reused for French");
+      assert.match(connections[0], /language=en/);
+      assert.match(connections[1], /language=fr/);
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+
+  await withMetadataServer(async (url, connections) => {
+    const streaming = new DeepgramStreaming();
+    dialLoopback(streaming, url);
+
+    try {
+      const options = { token: "byok-key", mode: "byok", language: "en" };
+      await streaming.warmup(options);
+      await streaming.connect(options);
+
+      assert.equal(connections.length, 1, "same language rides the warm socket");
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
+test("a warm connection opened for other keyterms is not reused", async () => {
+  await withMetadataServer(async (url, connections) => {
+    const streaming = new DeepgramStreaming();
+    dialLoopback(streaming, url);
+
+    try {
+      await streaming.warmup({ token: "byok-key", mode: "byok", keyterms: ["Whispr"] });
+      await streaming.connect({ token: "byok-key", mode: "byok", keyterms: ["Whispr", "Qdrant"] });
+
+      assert.equal(connections.length, 2, "a dictionary edit must reach the socket");
+      assert.match(connections[1], /keyterm=Qdrant/);
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
+test("a warm connection is reused when the two option sets build the same URL", async () => {
+  // buildWebSocketUrl folds "auto" into no language and skips empty keyterms, so
+  // the guard has to fold them the same way — otherwise every dictation cold
+  // starts and the warm socket stops buying anything.
+  await withMetadataServer(async (url, connections) => {
+    const streaming = new DeepgramStreaming();
+    dialLoopback(streaming, url);
+
+    try {
+      await streaming.warmup({ token: "byok-key", mode: "byok", language: "auto" });
+      await streaming.connect({ token: "byok-key", mode: "byok", keyterms: [] });
+
+      assert.equal(connections.length, 1, "an identical URL must ride the warm socket");
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
 test("adopting a different mode before a warmup drops the other mode's token", async () => {
   await withMetadataServer(async (url) => {
     const streaming = new DeepgramStreaming();

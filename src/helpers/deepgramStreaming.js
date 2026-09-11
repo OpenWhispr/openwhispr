@@ -72,6 +72,17 @@ const SILENCE_FRAME = Buffer.alloc((SAMPLE_RATE / 10) * 2);
 // only as `Token`, `Bearer` only for what /v1/auth/grant mints (managed). #2140
 const authorizationHeader = (mode, token) => `${mode === "byok" ? "Token" : "Bearer"} ${token}`;
 
+// Everything buildWebSocketUrl pins on the socket, folded the way it folds it, so
+// a warm connection can be compared against the session that wants to ride it.
+// Dictation warms on the UI language before it can know a translation wants the
+// source language, and the dictionary can be edited between the two.
+const urlIdentity = (options) =>
+  JSON.stringify([
+    options.sampleRate || SAMPLE_RATE,
+    options.language && options.language !== "auto" ? options.language : null,
+    (options.keyterms || []).filter(Boolean),
+  ]);
+
 class DeepgramStreaming {
   constructor() {
     this.ws = null;
@@ -614,6 +625,20 @@ class DeepgramStreaming {
     } else {
       this.coldStartBuffer = [];
       this.coldStartBufferSize = 0;
+    }
+
+    // The socket carries these for its whole life, so riding a warm one opened
+    // for other values transcribes the session under them — silently, since
+    // Deepgram has no reason to object to the audio.
+    if (
+      this.hasWarmConnection() &&
+      urlIdentity(this.warmConnectionOptions) !== urlIdentity(options)
+    ) {
+      debugLogger.debug("Deepgram warm connection differs, cold-starting", {
+        warm: urlIdentity(this.warmConnectionOptions),
+        requested: urlIdentity(options),
+      });
+      this.cleanupWarmConnection();
     }
 
     if (!forceNew && this.hasWarmConnection()) {
