@@ -1,5 +1,4 @@
 import type { InferenceProvider } from "./types";
-import { getCloudModel } from "../../../models/ModelRegistry";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
@@ -13,17 +12,35 @@ interface GeminiResponse {
     content?: { parts?: Array<{ text?: string; thought?: boolean }> };
     finishReason?: string;
   }>;
-  usageMetadata?: { totalTokenCount?: number };
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    thoughtsTokenCount?: number;
+    totalTokenCount?: number;
+  };
 }
 
 interface GeminiGenerationConfig {
   temperature: number;
   maxOutputTokens: number;
   thinkingConfig?: {
-    thinkingLevel: "minimal" | "low" | "medium" | "high";
+    thinkingLevel?: "minimal" | "low";
+    thinkingBudget?: number;
     includeThoughts: boolean;
   };
 }
+
+// Thinking controls differ by model: Pro cannot use minimal, and 2.5 uses budgets.
+const minimalThinking: Record<string, GeminiGenerationConfig["thinkingConfig"]> = {
+  "gemini-3.5-flash": { thinkingLevel: "minimal", includeThoughts: false },
+  "gemini-3.5-flash-lite": { thinkingLevel: "minimal", includeThoughts: false },
+  "gemini-3.1-flash-lite": { thinkingLevel: "minimal", includeThoughts: false },
+  "gemini-3-flash-preview": { thinkingLevel: "minimal", includeThoughts: false },
+  "gemini-3.1-pro-preview": { thinkingLevel: "low", includeThoughts: false },
+  "gemini-2.5-flash": { thinkingBudget: 0, includeThoughts: false },
+  "gemini-2.5-flash-lite": { thinkingBudget: 0, includeThoughts: false },
+  "gemini-2.5-pro": { thinkingBudget: 128, includeThoughts: false },
+};
 
 export const geminiProvider: InferenceProvider = {
   id: "gemini",
@@ -36,27 +53,29 @@ export const geminiProvider: InferenceProvider = {
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
 
+    const isGemini = model.startsWith("gemini-");
+    const isGemini3 = model.startsWith("gemini-3-") || model.startsWith("gemini-3.");
     const generationConfig: GeminiGenerationConfig = {
-      temperature: config.temperature ?? (config.systemPrompt ? 0.3 : 0),
+      // Google recommends 1.0 for Gemini 3 to avoid low-temperature looping.
+      // Cleanup defers here; explicit overrides still win.
+      // https://ai.google.dev/gemini-api/docs/gemini-3#temperature
+      temperature: config.temperature ?? (isGemini3 ? 1 : config.systemPrompt ? 0.3 : 0),
+      // This cap includes thoughts. Leave headroom and scale for long transcripts.
       maxOutputTokens:
-        config.maxTokens ||
-        Math.max(
-          2000,
-          ctx.calculateMaxTokens(
-            text.length,
-            TOKEN_LIMITS.MIN_TOKENS_GEMINI,
-            TOKEN_LIMITS.MAX_TOKENS_GEMINI,
-            TOKEN_LIMITS.TOKEN_MULTIPLIER
-          )
+        config.maxTokens ??
+        Math.min(
+          isGemini ? 65536 : TOKEN_LIMITS.MAX_TOKENS_GEMINI,
+          Math.max(8192, text.length * TOKEN_LIMITS.TOKEN_MULTIPLIER + 4096)
         ),
     };
 
-    if (config.disableThinking === true && getCloudModel(model)?.supportsThinking) {
-      generationConfig.thinkingConfig = { thinkingLevel: "minimal", includeThoughts: false };
+    if (config.disableThinking === true && minimalThinking[model]) {
+      generationConfig.thinkingConfig = minimalThinking[model];
     }
 
     const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
-      { text: `${systemPrompt}\n\n${userContent}` },
+      // Keep the existing inline instructions for non-Gemini models (e.g. Gemma).
+      { text: isGemini ? userContent : `${systemPrompt}\n\n${userContent}` },
     ];
     if (config.screenContext) {
       parts.push({
@@ -67,22 +86,20 @@ export const geminiProvider: InferenceProvider = {
       });
     }
     const requestBody = {
+      ...(isGemini ? { systemInstruction: { parts: [{ text: systemPrompt }] } } : {}),
       contents: [{ parts }],
       generationConfig,
     };
 
     const response = await withRetry(async () => {
+      // Metadata only: body previews can leak transcript text or base64 screenshots.
       logger.logReasoning("GEMINI_REQUEST", {
         endpoint: `${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`,
         model,
         hasApiKey: !!apiKey,
         hasScreenContext: !!config.screenContext,
-        // A short prompt could let the 200-char preview reach into the base64
-        // image part — preview the text part only, never the full body.
-        requestBody: JSON.stringify({
-          ...requestBody,
-          contents: [{ parts: [parts[0]] }],
-        }).substring(0, 200),
+        generationConfig,
+        textLength: text.length,
       });
 
       const controller = new AbortController();
@@ -123,6 +140,8 @@ export const geminiProvider: InferenceProvider = {
           hasResponse: !!jsonResponse,
           hasCandidates: !!jsonResponse?.candidates,
           candidatesLength: jsonResponse?.candidates?.length || 0,
+          finishReason: jsonResponse?.candidates?.[0]?.finishReason,
+          usageMetadata: jsonResponse?.usageMetadata,
         });
         return jsonResponse;
       } catch (error) {
@@ -136,8 +155,11 @@ export const geminiProvider: InferenceProvider = {
     }, createApiRetryStrategy());
 
     const candidate = response.candidates?.[0];
-    if (config.requireCompleteOutput && candidate?.finishReason === "MAX_TOKENS") {
-      throw new Error("Model output was truncated before the selection edit completed");
+    // Outside withRetry: don't repeat cutoffs/blocks; cleanup falls back to the original.
+    if (candidate?.finishReason !== "STOP") {
+      throw new Error(
+        `Gemini returned incomplete output (${candidate?.finishReason || "missing finish reason"})`
+      );
     }
     const responseText = extractGeminiText(candidate);
     if (!responseText) {
@@ -145,13 +167,9 @@ export const geminiProvider: InferenceProvider = {
         model,
         finishReason: candidate?.finishReason,
       });
-      if (candidate?.finishReason === "MAX_TOKENS") {
-        throw new Error(
-          "Gemini reached token limit before generating response. Try a shorter input or increase max tokens."
-        );
-      }
       throw new Error("Gemini returned empty response");
     }
+
     logger.logReasoning("GEMINI_RESPONSE", {
       model,
       responseLength: responseText.length,

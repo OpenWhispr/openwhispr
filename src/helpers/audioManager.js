@@ -203,6 +203,11 @@ function resolveReasoningRoute(
 ) {
   const wakeWordLanguage = resolveWakeWordLanguage(settings, detectedLanguage, text);
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
+  // Pin cleanup to 0 where supported; bridges otherwise default to 0.7 (local)
+  // or 0.3 (Anthropic/enterprise). Zero does not guarantee determinism.
+  // Direct Gemini owns its defaults (3: 1.0, older: 0); check mode to ignore stale providers.
+  const cleanupTemperature =
+    cleanup.mode === "providers" && cleanup.provider === "gemini" ? undefined : 0;
   const cleanupReachable =
     !!settings.useCleanupModel && (!!cleanup.model?.trim() || isCloudCleanupMode());
   const agent = resolveDictationAgentInference(settings, {
@@ -251,9 +256,8 @@ function resolveReasoningRoute(
       cleanupConfig: {
         inferenceScope: /** @type {const} */ ("dictationCleanup"),
         disableThinking: settings.cleanupDisableThinking,
-        // The chain's cleanup step is the same deterministic transform — see
-        // the cleanup route below for why the value has to be explicit.
-        temperature: 0,
+        // Match ordinary cleanup without changing the translation step's defaults.
+        temperature: cleanupTemperature,
       },
       config: {
         ...translation.config,
@@ -315,9 +319,7 @@ function resolveReasoningRoute(
       config: {
         inferenceScope: /** @type {const} */ ("dictationCleanup"),
         disableThinking: settings.cleanupDisableThinking,
-        // Cleanup is a deterministic transform: pass 0 explicitly, because the IPC-bridged
-        // providers (local bridge, Anthropic, enterprise) otherwise apply their own default.
-        temperature: 0,
+        temperature: cleanupTemperature,
       },
     };
   }
