@@ -1588,6 +1588,7 @@
       "transcriptEmptyTitle": "لم يتم تسجيل أي شيء بعد",
       "transcriptEmptyDescription": "اضغط على تسجيل لبدء النسخ. كل ما يُقال يظهر هنا لحظيًا.",
       "startRecording": "بدء التسجيل",
+      "generateSummary": "إنشاء ملخص بالذكاء الاصطناعي",
       "startWriting": "ابدأ الكتابة...",
       "staleIndicator": "تم تغيير المحتوى منذ التحسين",
       "live": "مباشر",
@@ -1774,6 +1775,11 @@
         "generateNotes": {
           "name": "إنشاء ملاحظات",
           "description": "تنظيف وتنظيم وتحسين ملاحظاتك"
+        },
+        "followUpEmail": {
+          "name": "بريد متابعة",
+          "description": "صِغ بريد متابعة من ملاحظاتك والنص المكتوب",
+          "cta": "صياغة بريد متابعة"
         }
       },
       "errors": {

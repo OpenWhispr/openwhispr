@@ -16,6 +16,8 @@ interface NoteBottomBarProps {
   onInputFocus?: () => void;
   askDisabled?: boolean;
   actionPicker?: React.ReactNode;
+  /** One centred call to action floated above the ask capsule. */
+  callout?: React.ReactNode;
   hideInput?: boolean;
 }
 
@@ -25,6 +27,7 @@ export default function NoteBottomBar({
   onInputFocus,
   askDisabled,
   actionPicker,
+  callout,
   hideInput,
 }: NoteBottomBarProps) {
   const { t } = useTranslation();
@@ -83,6 +86,9 @@ export default function NoteBottomBar({
       ref={containerRef}
       className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-4 pt-6 pointer-events-none bg-gradient-to-t from-background from-45% to-transparent"
     >
+      {callout && !hideInput && (
+        <div className="pointer-events-auto mb-3 flex justify-center">{callout}</div>
+      )}
       <div className="flex items-end pointer-events-auto w-full max-w-[600px] mx-auto">
         <div
           aria-hidden={hideInput}

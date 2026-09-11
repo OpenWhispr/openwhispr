@@ -2886,6 +2886,7 @@
       "transcriptEmptyTitle": "尚未錄製任何內容",
       "transcriptEmptyDescription": "點擊錄製開始轉錄。所說的內容會即時顯示在這裡。",
       "startRecording": "開始錄製",
+      "generateSummary": "產生 AI 摘要",
       "startWriting": "開始撰寫...",
       "staleIndicator": "內容在增強後已變更",
       "live": "即時",
@@ -3050,6 +3051,11 @@
         "generateNotes": {
           "name": "生成筆記",
           "description": "清理、結構化和增強您的筆記"
+        },
+        "followUpEmail": {
+          "name": "跟進郵件",
+          "description": "根據筆記和轉錄草擬一封跟進郵件",
+          "cta": "草擬跟進郵件"
         }
       },
       "errors": {

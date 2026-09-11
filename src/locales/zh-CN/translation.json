@@ -2886,6 +2886,7 @@
       "transcriptEmptyTitle": "尚未录制任何内容",
       "transcriptEmptyDescription": "点击录制开始转写。所说的内容会实时显示在这里。",
       "startRecording": "开始录制",
+      "generateSummary": "生成 AI 摘要",
       "startWriting": "开始书写...",
       "staleIndicator": "内容在增强后已更改",
       "live": "实时",
@@ -3050,6 +3051,11 @@
         "generateNotes": {
           "name": "生成笔记",
           "description": "清理、结构化和增强您的笔记"
+        },
+        "followUpEmail": {
+          "name": "跟进邮件",
+          "description": "根据笔记和转写草拟一封跟进邮件",
+          "cta": "草拟跟进邮件"
         }
       },
       "errors": {

@@ -87,6 +87,15 @@ CONTENT RULES:
 
 Instructions: `;
 
+// Built-in prompts are complete instructions, so they only get told how the
+// material is laid out instead of being wrapped in the generic system prompts.
+const MEETING_INPUT_PREAMBLE = `The material is laid out as follows. Transcript lines are prefixed with the speaker's label: a real name when known, otherwise "You" (the note owner), "Them", or "Speaker N". A "## Meeting Context" block may identify the note owner and the invited participants; it is reference material, never something to reproduce. Manual notes the user took may precede the transcript.
+
+`;
+const NOTE_INPUT_PREAMBLE = `The material is the user's own notes, possibly voice-transcribed, rough, or unstructured. There is no transcript.
+
+`;
+
 export interface RunActionOptions {
   isCloudMode: boolean;
   modelId: string;
@@ -137,7 +146,13 @@ export function runBackgroundAction(
 
   (async () => {
     try {
-      const basePrompt = options.isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
+      const basePrompt = action.is_builtin
+        ? options.isMeetingNote
+          ? MEETING_INPUT_PREAMBLE
+          : NOTE_INPUT_PREAMBLE
+        : options.isMeetingNote
+          ? MEETING_SYSTEM_PROMPT
+          : BASE_SYSTEM_PROMPT;
       const providerOverrides = buildNoteFormattingOverrides(noteFormatting, options.isCloudMode);
       const systemPrompt = appendDictionarySuffix(
         basePrompt + action.prompt,

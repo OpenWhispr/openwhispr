@@ -2886,6 +2886,7 @@
       "transcriptEmptyTitle": "Nada gravado ainda",
       "transcriptEmptyDescription": "Toque em gravar para começar a transcrever. Tudo o que for dito aparece aqui em tempo real.",
       "startRecording": "Começar a gravar",
+      "generateSummary": "Gerar resumo com IA",
       "startWriting": "Comece a escrever...",
       "staleIndicator": "O conteúdo mudou desde o aprimoramento",
       "live": "Ao vivo",
@@ -3050,6 +3051,11 @@
         "generateNotes": {
           "name": "Gerar notas",
           "description": "Limpar, estruturar e aprimorar suas notas"
+        },
+        "followUpEmail": {
+          "name": "E-mail de acompanhamento",
+          "description": "Redija um e-mail de acompanhamento a partir das notas e da transcrição",
+          "cta": "Redigir e-mail de acompanhamento"
         }
       },
       "errors": {

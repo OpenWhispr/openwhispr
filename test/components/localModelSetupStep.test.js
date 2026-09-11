@@ -38,6 +38,7 @@ async function createSetupHarness(
     selectedModel = "",
     resumeState,
     capability = { supported: true },
+    freshInstall = false,
   } = {}
 ) {
   let unmount = async () => {};
@@ -120,6 +121,13 @@ async function createSetupHarness(
     chatAgentModel: assistant ? selectedModel : "",
     chatAgentMode: "local",
   });
+  // The store setter also persists the choice; only a fresh install has no key.
+  if (!assistant && !freshInstall) {
+    localStorage.setItem(
+      "localTranscriptionProvider",
+      provider === "nvidia" ? "nvidia" : "whisper"
+    );
+  }
   const { LocalModelSetupStep } = await vite.ssrLoadModule(
     "/components/onboarding/ProviderSetupStep.tsx"
   );
@@ -277,6 +285,12 @@ for (const fixture of [
     assert.equal(setup.canProceed(), true);
   });
 }
+
+test("a fresh install opens the local dictation step on Oruk with Orukeet offered", async (t) => {
+  const setup = await createSetupHarness(t, { freshInstall: true });
+  assert.ok(setup.row("orukeet-v0.1.0"));
+  assert.throws(() => setup.row("base"));
+});
 
 test("an explicit installed-model choice supersedes an earlier pending download", async (t) => {
   const setup = await createSetupHarness(t, { assistant: true, installed: { llm: [SECOND_LLM] } });

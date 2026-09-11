@@ -3228,6 +3228,7 @@
       "transcriptEmptyTitle": "Noch nichts aufgenommen",
       "transcriptEmptyDescription": "Drücke auf Aufnahme, um mit der Transkription zu beginnen. Alles Gesagte erscheint hier in Echtzeit.",
       "startRecording": "Aufnahme starten",
+      "generateSummary": "KI-Zusammenfassung erstellen",
       "startWriting": "Schreibe los...",
       "staleIndicator": "Der Inhalt hat sich seit der Verbesserung geändert",
       "live": "Live",
@@ -3408,6 +3409,11 @@
         "generateNotes": {
           "name": "Notizen generieren",
           "description": "Notizen bereinigen, strukturieren und verbessern"
+        },
+        "followUpEmail": {
+          "name": "Follow-up-E-Mail",
+          "description": "Entwirf eine Follow-up-E-Mail aus Notizen und Transkript",
+          "cta": "Follow-up-E-Mail entwerfen"
         }
       },
       "errors": {

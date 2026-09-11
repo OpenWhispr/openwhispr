@@ -84,6 +84,16 @@ export function getActionName(
     : action.name;
 }
 
+/** Verb-form label for the ask bar button; falls back to the action name. */
+export function getActionCta(
+  action: { name: string; translation_key?: string },
+  t: TFunction
+): string {
+  return action.translation_key
+    ? t(`${action.translation_key}.cta`, { defaultValue: getActionName(action, t) })
+    : action.name;
+}
+
 export function getActionDescription(
   action: { description: string; translation_key?: string },
   t: TFunction

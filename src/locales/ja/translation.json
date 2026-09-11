@@ -2794,6 +2794,7 @@
       "transcriptEmptyTitle": "まだ録音がありません",
       "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
       "startRecording": "録音を開始",
+      "generateSummary": "AI要約を生成",
       "startWriting": "書き始める..."
     },
     "participants": {
@@ -2836,6 +2837,11 @@
         "generateNotes": {
           "name": "ノートを生成",
           "description": "ノートを整理、構成、強化する"
+        },
+        "followUpEmail": {
+          "name": "フォローアップメール",
+          "description": "メモと文字起こしからフォローアップメールを作成",
+          "cta": "フォローアップメールを作成"
         }
       },
       "errors": {

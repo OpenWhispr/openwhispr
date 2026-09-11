@@ -186,6 +186,8 @@ interface NoteEditorProps {
   onExportTranscript?: (format: "txt" | "srt" | "json" | "md") => void;
   enhancement?: Enhancement;
   actionPicker?: React.ReactNode;
+  /** Runs the built-in Generate Notes action; enables the post-recording summary pill. */
+  onGenerateSummary?: () => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   diarizationSessionId?: string | null;
@@ -218,6 +220,7 @@ export default function NoteEditor({
   onExportTranscript,
   enhancement,
   actionPicker,
+  onGenerateSummary,
   actionProcessingState,
   actionName,
   diarizationSessionId,
@@ -395,6 +398,15 @@ export default function NoteEditor({
   }, [diarizedSegments, note.transcript]);
 
   const hasChatSegments = displaySegments.length > 0;
+  // A finished recording with no AI summary yet offers one from the transcript view.
+  const showSummaryCallout =
+    viewMode === "transcript" &&
+    !isRecording &&
+    hasChatSegments &&
+    !enhancement &&
+    canEditNote &&
+    !!onGenerateSummary &&
+    actionProcessingState !== "processing";
 
   const knownSpeakers = useMemo(
     () => buildKnownSpeakers(speakerProfiles, displaySegments, speakerMappings),
@@ -1224,6 +1236,14 @@ export default function NoteEditor({
             onAskSubmit={handleAskSubmit}
             onInputFocus={handleChatInputFocus}
             actionPicker={isRecording || !canEditNote ? undefined : actionPicker}
+            callout={
+              showSummaryCallout && (
+                <Button className="h-9 gap-2 px-4 text-sm" onClick={onGenerateSummary}>
+                  <AlignLeft size={16} />
+                  {t("notes.editor.generateSummary")}
+                </Button>
+              )
+            }
             hideInput={chatMode !== "hidden"}
           />
           {chatMode === "floating" && (

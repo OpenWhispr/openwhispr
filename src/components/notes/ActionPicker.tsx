@@ -13,9 +13,15 @@ import {
   useActions,
   initializeActions,
   getActionName,
+  getActionCta,
   getActionDescription,
 } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
+import { FOLLOW_UP_EMAIL_KEY } from "../../helpers/builtinActions";
+
+// Keyed fresh so the follow-up email default reaches installs that had
+// "Generate Notes" remembered under the old key.
+const ASK_BAR_ACTION_KEY = "askBarActionId";
 
 interface ActionPickerProps {
   onRunAction: (action: ActionItem) => void;
@@ -31,7 +37,7 @@ export default function ActionPicker({
   const { t } = useTranslation();
   const actions = useActions();
   const [lastUsedId, setLastUsedId] = useState<number | null>(() => {
-    const stored = localStorage.getItem("lastUsedActionId");
+    const stored = localStorage.getItem(ASK_BAR_ACTION_KEY);
     return stored ? Number(stored) : null;
   });
 
@@ -39,11 +45,15 @@ export default function ActionPicker({
     initializeActions();
   }, []);
 
-  const activeAction = actions.find((a) => a.id === lastUsedId) ?? actions[0] ?? null;
+  const activeAction =
+    actions.find((a) => a.id === lastUsedId) ??
+    actions.find((a) => a.translation_key === FOLLOW_UP_EMAIL_KEY) ??
+    actions[0] ??
+    null;
 
   const handleRun = (action: ActionItem) => {
     setLastUsedId(action.id);
-    localStorage.setItem("lastUsedActionId", String(action.id));
+    localStorage.setItem(ASK_BAR_ACTION_KEY, String(action.id));
     onRunAction(action);
   };
 
@@ -74,7 +84,7 @@ export default function ActionPicker({
       >
         <Sparkles size={11} />
         <span className="text-[11px] font-semibold tracking-tight">
-          {getActionName(activeAction, t)}
+          {getActionCta(activeAction, t)}
         </span>
       </button>
 

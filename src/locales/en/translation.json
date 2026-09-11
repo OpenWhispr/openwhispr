@@ -3228,6 +3228,7 @@
       "transcriptEmptyTitle": "Nothing recorded yet",
       "transcriptEmptyDescription": "Hit record to start transcribing. Everything said shows up here as it happens.",
       "startRecording": "Start recording",
+      "generateSummary": "Generate AI Summary",
       "startWriting": "Start writing...",
       "staleIndicator": "Content has changed since enhancement",
       "live": "Live",
@@ -3408,6 +3409,11 @@
         "generateNotes": {
           "name": "Generate Notes",
           "description": "Clean up, structure, and enhance your notes"
+        },
+        "followUpEmail": {
+          "name": "Follow-up email",
+          "description": "Draft a follow-up email from your notes and transcript",
+          "cta": "Draft a follow-up email"
         }
       },
       "errors": {
