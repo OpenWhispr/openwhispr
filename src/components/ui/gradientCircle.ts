@@ -1,7 +1,8 @@
-// Brand gradient from the Figma mic/send assets (#5B81E4 → #154BD4 → #163992, top-right to
-// bottom-left), read as glass like the app icon: a specular dome in the top-left corner over
-// the gradient, plus the rim/inner-glow stack in --shadow-brand-glass (bright top edge, hairline,
-// darker bottom edge). transform-gpu keeps each circle on its own compositing layer from first
-// paint — without it, Chromium can flash a black first frame when one mounts over backdrop-blur.
+// Brand blue as glass, matched to the app icon: a light-to-mid sky gradient (a touch darker
+// than the icon so white content stays crisp) under the rim stack in --shadow-brand-glass
+// (bright top edge, hairline, darker bottom edge). Shared by the mic/send buttons and the
+// upcoming-events today header. transform-gpu keeps each circle on its own compositing layer
+// from first paint — without it, Chromium can flash a black first frame when one mounts over
+// backdrop-blur.
 export const GRADIENT_CIRCLE =
-  "bg-[radial-gradient(120%_90%_at_30%_0%,rgba(255,255,255,0.32),rgba(255,255,255,0)_55%),linear-gradient(221deg,#5B81E4_0%,#154BD4_55%,#163992_100%)] shadow-(--shadow-brand-glass) text-white transform-gpu";
+  "bg-[linear-gradient(180deg,#5588F0_0%,#3466E2_100%)] shadow-(--shadow-brand-glass) text-white transform-gpu";

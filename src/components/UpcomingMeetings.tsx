@@ -234,11 +234,20 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
   const { t, i18n } = useTranslation();
 
   return (
-    <div className="overflow-clip rounded-2xl border border-border/70 dark:border-white/10">
+    <div
+      className={cn(
+        "rounded-2xl border border-border/70 dark:border-white/10",
+        !group.isToday && "overflow-clip"
+      )}
+    >
       <div
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium",
-          group.isToday ? GRADIENT_CIRCLE : "bg-surface-3 text-foreground dark:bg-surface-2"
+          // Today's glass strip sits over the card's hairline on three sides so the blue meets
+          // the rounded edge directly instead of being outlined in grey.
+          group.isToday
+            ? cn(GRADIENT_CIRCLE, "-mx-px -mt-px rounded-t-2xl")
+            : "bg-surface-3 text-foreground dark:bg-surface-2"
         )}
       >
         <Calendar size={12} className="shrink-0" />
@@ -250,7 +259,7 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
           })}
         </span>
       </div>
-      <div className="bg-background px-2 dark:bg-surface-2/60">
+      <div className="rounded-b-[15px] bg-background px-2 dark:bg-surface-2/60">
         {group.items.length === 0 ? (
           <p className="px-1 py-3 text-xs text-muted-foreground/70">
             {t("upcoming.noEventsToday")}
