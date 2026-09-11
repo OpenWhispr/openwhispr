@@ -3834,7 +3834,6 @@
   },
   "commandSearch": {
     "allSpaces": "所有空間",
-    "topBarPlaceholder": "搜尋任何筆記或功能",
     "title": "搜尋",
     "description": "搜尋筆記與轉錄",
     "placeholder": "搜尋筆記與轉錄…",

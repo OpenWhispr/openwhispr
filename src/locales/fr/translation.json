@@ -3958,7 +3958,6 @@
   },
   "commandSearch": {
     "allSpaces": "Tous les espaces",
-    "topBarPlaceholder": "Rechercher une note ou une fonctionnalité",
     "title": "Rechercher",
     "description": "Rechercher dans les notes et transcriptions",
     "placeholder": "Rechercher notes et transcriptions…",

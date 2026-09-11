@@ -3834,7 +3834,6 @@
   },
   "commandSearch": {
     "allSpaces": "所有空间",
-    "topBarPlaceholder": "搜索任意笔记或功能",
     "title": "搜索",
     "description": "搜索笔记和转录",
     "placeholder": "搜索笔记和转录…",

@@ -3958,7 +3958,6 @@
   },
   "commandSearch": {
     "allSpaces": "All spaces",
-    "topBarPlaceholder": "Search for any note or feature",
     "title": "Search",
     "description": "Search across notes and transcripts",
     "placeholder": "Search notes and transcripts…",

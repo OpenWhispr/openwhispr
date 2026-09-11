@@ -33,8 +33,8 @@ function formatTimeRange(locale: string, startTime: string, endTime: string): st
   return `${format(startTime)} – ${format(endTime)}`;
 }
 
-// Today plus the next two days with events; the rail answers "what's next", not "what's this week".
-const MAX_DAY_CARDS = 3;
+// Today plus the next days that have events, capped at a working week.
+const MAX_DAY_CARDS = 5;
 // Avatars shown before the "+N" overflow pill.
 const MAX_STACKED_AVATARS = 2;
 

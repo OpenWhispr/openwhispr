@@ -3958,7 +3958,6 @@
   },
   "commandSearch": {
     "allSpaces": "Alle Bereiche",
-    "topBarPlaceholder": "Notizen oder Funktionen suchen",
     "title": "Suche",
     "description": "In Notizen und Transkripten suchen",
     "placeholder": "Notizen und Transkripte durchsuchen…",

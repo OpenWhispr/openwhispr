@@ -927,28 +927,27 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         onJoined={() => setActiveView("personal-notes")}
       />
 
-      {showSearch && (
-        <Suspense fallback={null}>
-          <CommandSearch
-            open={showSearch}
-            onOpenChange={setShowSearch}
-            transcriptions={history}
-            onNoteSelect={(id, folderId, spaceId) => {
-              if (folderId != null) setActiveFolderId(folderId);
-              else if (spaceId != null) navigateToContainer(spaceId, null);
-              setActiveNoteId(id);
-              setActiveView("personal-notes");
-            }}
-            onContainerSelect={(spaceId, folderId) => {
-              navigateToContainer(spaceId, folderId);
-              setActiveView("personal-notes");
-            }}
-            onTranscriptSelect={() => {
-              setActiveView("home");
-            }}
-          />
-        </Suspense>
-      )}
+      {/* Always mounted so the palette chunk is warm and Radix can play its exit animation. */}
+      <Suspense fallback={null}>
+        <CommandSearch
+          open={showSearch}
+          onOpenChange={setShowSearch}
+          transcriptions={history}
+          onNoteSelect={(id, folderId, spaceId) => {
+            if (folderId != null) setActiveFolderId(folderId);
+            else if (spaceId != null) navigateToContainer(spaceId, null);
+            setActiveNoteId(id);
+            setActiveView("personal-notes");
+          }}
+          onContainerSelect={(spaceId, folderId) => {
+            navigateToContainer(spaceId, folderId);
+            setActiveView("personal-notes");
+          }}
+          onTranscriptSelect={() => {
+            setActiveView("home");
+          }}
+        />
+      </Suspense>
 
       <div className="flex flex-1 overflow-hidden relative">
         <div

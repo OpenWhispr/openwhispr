@@ -225,7 +225,7 @@ export default function TranscriptionItem({
                 {t("controlPanel.history.transcriptionFailed")}
               </p>
               {item.error_message && (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                <p className="mt-0.5 text-xs leading-relaxed wrap-break-word text-muted-foreground">
                   {item.error_message}
                 </p>
               )}

@@ -3834,7 +3834,6 @@
   },
   "commandSearch": {
     "allSpaces": "Tutti gli spazi",
-    "topBarPlaceholder": "Cerca una nota o una funzione",
     "title": "Cerca",
     "description": "Cerca tra note e trascrizioni",
     "placeholder": "Cerca note e trascrizioni…",

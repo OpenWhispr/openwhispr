@@ -100,7 +100,7 @@ export default function ControlPanelTopBar({
         >
           <Search size={14} className="shrink-0 text-muted-foreground/70" />
           <span className="flex-1 truncate text-[13px] text-muted-foreground/70">
-            {t("commandSearch.topBarPlaceholder")}
+            {t("commandSearch.placeholder")}
           </span>
           <kbd
             dir="ltr"

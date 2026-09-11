@@ -3834,7 +3834,6 @@
   },
   "commandSearch": {
     "allSpaces": "すべてのスペース",
-    "topBarPlaceholder": "ノートや機能を検索",
     "title": "検索",
     "description": "ノートと文字起こしを検索",
     "placeholder": "ノートと文字起こしを検索…",
