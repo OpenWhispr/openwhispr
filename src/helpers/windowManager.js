@@ -80,15 +80,10 @@ class WindowManager {
         this.meetingDetectionEngine.handleNotificationTimeout(notification);
       }
     });
-    this.updateNotificationWindow = null;
-    this._pendingUpdateNotificationData = null;
-    this._deferredUpdateNotificationInfo = null;
-    this._updateNotificationDismissed = false;
     this.notificationPrefs = {
       notificationsEnabled: true,
       notifyMeetingDetection: true,
       notifyCalendarReminders: true,
-      notifyUpdates: true,
     };
     this.tray = null;
     this.hotkeyManager = new HotkeyManager();
@@ -1555,9 +1550,6 @@ class WindowManager {
     this.hideDictationPanel();
     this._onboardingActive = false;
     if (!this._floatingIconAutoHide) this.showDictationPanel();
-    const deferredUpdate = this._deferredUpdateNotificationInfo;
-    this._deferredUpdateNotificationInfo = null;
-    if (deferredUpdate) void this.showUpdateNotification(deferredUpdate);
     return true;
   }
 
@@ -1566,11 +1558,6 @@ class WindowManager {
     this.hideTranscriptionPreview();
     this.hideAgentDictationPill();
     this.dismissMeetingNotification({ flushQueued: false });
-
-    if (this._pendingUpdateNotificationData) {
-      this._deferredUpdateNotificationInfo = { ...this._pendingUpdateNotificationData };
-    }
-    this.dismissUpdateNotification({ persistent: false });
   }
 
   beginOnboardingDemo(kind) {
@@ -2057,7 +2044,9 @@ class WindowManager {
       win.setIgnoreMouseEvents(true, { forward: true });
     }
 
-    WindowPositionUtil.setupAlwaysOnTop(win);
+    // Notifications must clear every other window, including our own floating
+    // dictation panel and assistant pill.
+    WindowPositionUtil.setupAlwaysOnTop(win, { level: "screen-saver" });
 
     this._pendingNotificationData = promptData;
 
@@ -2193,109 +2182,6 @@ class WindowManager {
   isMeetingNotificationSender(sender) {
     const win = this.notificationWindow;
     return !!win && !win.isDestroyed() && win.webContents === sender;
-  }
-
-  async showUpdateNotification(info) {
-    if (this._onboardingActive) {
-      this._deferredUpdateNotificationInfo = info;
-      return false;
-    }
-    this._deferredUpdateNotificationInfo = null;
-    if (this._updateNotificationDismissed) return;
-    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
-      this.updateNotificationWindow.close();
-      this.updateNotificationWindow = null;
-    }
-    if (this._updateNotificationAutoDismiss) {
-      clearTimeout(this._updateNotificationAutoDismiss);
-      this._updateNotificationAutoDismiss = null;
-    }
-
-    const display = screen.getPrimaryDisplay();
-    const position = WindowPositionUtil.getNotificationPosition(display);
-
-    const win = new BrowserWindow({
-      ...NOTIFICATION_WINDOW_CONFIG,
-      ...position,
-    });
-    this.updateNotificationWindow = win;
-    this._pendingUpdateNotificationData = {
-      version: info?.version,
-      releaseDate: info?.releaseDate,
-    };
-
-    WindowPositionUtil.setupAlwaysOnTop(win);
-
-    try {
-      if (process.env.NODE_ENV === "development") {
-        await DevServerManager.waitForDevServer();
-        await win.loadURL(`${DevServerManager.DEV_SERVER_URL}?update-notification=true`);
-      } else {
-        const fileInfo = DevServerManager.getAppFilePath(false);
-        await win.loadFile(fileInfo.path, {
-          query: { ...fileInfo.query, "update-notification": "true" },
-        });
-      }
-    } catch (error) {
-      // Entering onboarding closes any in-flight normal-app popup. Its aborted
-      // load is expected, and the saved update is replayed once the gate opens.
-      if (this._onboardingActive || this.updateNotificationWindow !== win) return false;
-      throw error;
-    }
-
-    if (this._onboardingActive || this.updateNotificationWindow !== win) return false;
-
-    this._updateNotificationReadyFallback = setTimeout(() => {
-      this._updateNotificationReadyFallback = null;
-      if (this._onboardingActive || this.updateNotificationWindow !== win || win.isDestroyed())
-        return;
-      win.webContents.send("update-notification-data", this._pendingUpdateNotificationData);
-      win.showInactive();
-    }, 3000);
-
-    this._updateNotificationAutoDismiss = setTimeout(() => {
-      this.dismissUpdateNotification({ persistent: false });
-    }, 5000);
-
-    win.on("closed", () => {
-      if (this.updateNotificationWindow !== win) return;
-      this.updateNotificationWindow = null;
-      if (this._updateNotificationAutoDismiss) {
-        clearTimeout(this._updateNotificationAutoDismiss);
-        this._updateNotificationAutoDismiss = null;
-      }
-    });
-  }
-
-  showUpdateNotificationWindow() {
-    if (this._onboardingActive) return;
-    if (this._updateNotificationReadyFallback) {
-      clearTimeout(this._updateNotificationReadyFallback);
-      this._updateNotificationReadyFallback = null;
-    }
-    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
-      this.updateNotificationWindow.showInactive();
-    }
-  }
-
-  dismissUpdateNotification({ persistent = true } = {}) {
-    this._pendingUpdateNotificationData = null;
-    if (persistent) {
-      this._updateNotificationDismissed = true;
-      this._deferredUpdateNotificationInfo = null;
-    }
-    if (this._updateNotificationReadyFallback) {
-      clearTimeout(this._updateNotificationReadyFallback);
-      this._updateNotificationReadyFallback = null;
-    }
-    if (this._updateNotificationAutoDismiss) {
-      clearTimeout(this._updateNotificationAutoDismiss);
-      this._updateNotificationAutoDismiss = null;
-    }
-    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
-      this.updateNotificationWindow.close();
-    }
-    this.updateNotificationWindow = null;
   }
 
   sendToControlPanel(channel, data) {

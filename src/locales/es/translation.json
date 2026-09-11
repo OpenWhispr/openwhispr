@@ -580,8 +580,6 @@
     "update": {
       "readyTitle": "Actualización lista para instalar",
       "readyDescription": "Haz clic en 'Instalar actualización' para reiniciar con la última versión.",
-      "problemTitle": "Hubo un problema con la actualización",
-      "problemDescription": "No pudimos completar la actualización. Inténtalo más tarde.",
       "installTitle": "Instalar actualización",
       "installDescription": "OpenWhispr se reiniciará para aplicar la actualización. Se guardará el trabajo en curso.",
       "couldNotInstallTitle": "No se pudo instalar la actualización",
@@ -1218,7 +1216,12 @@
     "scopes": {
       "notesRead": "Leer notas",
       "notesWrite": "Crear y editar notas",
-      "transcriptionsRead": "Leer transcripciones"
+      "transcriptionsRead": "Leer transcripciones",
+      "dictionaryRead": "Leer diccionario",
+      "dictionaryWrite": "Editar diccionario",
+      "snippetsRead": "Leer snippets",
+      "snippetsWrite": "Editar snippets",
+      "transcriptionsWrite": "Transcribir audio"
     },
     "revoke": {
       "button": "Revocar",
@@ -1950,9 +1953,7 @@
         "meetingDetection": "Detección de reuniones",
         "meetingDetectionDescription": "Notificar cuando se detecta una reunión para iniciar la grabación",
         "calendarReminders": "Recordatorios del calendario",
-        "calendarRemindersDescription": "Notificar cuando una reunión programada está a punto de comenzar",
-        "updates": "Actualizaciones",
-        "updatesDescription": "Notificar cuando hay una nueva versión disponible"
+        "calendarRemindersDescription": "Notificar cuando una reunión programada está a punto de comenzar"
       },
       "clipboard": {
         "title": "Portapapeles",
@@ -2051,6 +2052,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "Actualizaciones automáticas",
+        "automaticUpdatesDescription": "Descargar e instalar actualizaciones en segundo plano",
         "badges": {
           "dev": "Dev",
           "latest": "Última",
@@ -2089,16 +2092,13 @@
           "updateAvailable": {
             "description": "Actualización disponible: v{{version}}",
             "title": "Actualización disponible"
-          },
-          "updateError": {
-            "description": "Algo salió mal con la actualización. Inténtalo de nuevo.",
-            "title": "Error de actualización"
           }
         },
         "downloadUpdate": "Descargar actualización {{version}}",
         "downloading": "Descargando... {{progress}}%",
         "installAndRestart": "Instalar y reiniciar",
         "latestVersion": "Tienes la última versión",
+        "managedByPackageManager": "Las actualizaciones se instalan a través de tu gestor de paquetes",
         "newVersion": "Hay una versión más reciente disponible",
         "newVersionAvailable": "Nueva versión disponible",
         "restarting": "Reiniciando...",
@@ -3625,11 +3625,17 @@
       "web_searchName": "Buscar en la web",
       "get_calendar_eventsName": "Obtener eventos del calendario",
       "get_calendar_availabilityName": "Consultar disponibilidad",
+      "get_snippetName": "Obtener snippet",
+      "update_dictionaryName": "Actualizar diccionario",
+      "update_snippetsName": "Actualizar snippets",
       "search_notesStatus": "Buscando notas...",
       "web_searchStatus": "Buscando en la web...",
       "copy_to_clipboardStatus": "Copiando al portapapeles...",
       "get_calendar_eventsStatus": "Consultando calendario...",
       "get_calendar_availabilityStatus": "Consultando disponibilidad...",
+      "get_snippetStatus": "Obteniendo snippet...",
+      "update_dictionaryStatus": "Actualizando diccionario...",
+      "update_snippetsStatus": "Actualizando snippets...",
       "get_noteStatus": "Leyendo nota...",
       "create_noteStatus": "Creando nota...",
       "update_noteStatus": "Actualizando nota...",
@@ -3903,11 +3909,6 @@
       "open": "Abrir",
       "dismiss": "Cerrar"
     }
-  },
-  "updateNotification": {
-    "title": "Actualización de OpenWhispr disponible",
-    "body": "La versión {{version}} está lista para descargar",
-    "cta": "Actualizar ahora"
   },
   "permissionsGate": {
     "title": "Permisos necesarios",

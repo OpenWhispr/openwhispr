@@ -1235,8 +1235,8 @@ export default function SettingsPage({
     setNotifyMeetingDetection,
     notifyCalendarReminders,
     setNotifyCalendarReminders,
-    notifyUpdates,
-    setNotifyUpdates,
+    autoUpdatesEnabled,
+    setAutoUpdatesEnabled,
     audioCuesEnabled,
     setAudioCuesEnabled,
     pauseMediaOnDictation,
@@ -1340,8 +1340,6 @@ export default function SettingsPage({
     downloadUpdate,
     installUpdate: installUpdateAction,
     getAppVersion,
-    error: updateError,
-    clearError: clearUpdateError,
   } = useUpdater();
 
   const isUpdateAvailable =
@@ -1614,9 +1612,8 @@ export default function SettingsPage({
       notificationsEnabled,
       notifyMeetingDetection,
       notifyCalendarReminders,
-      notifyUpdates,
     });
-  }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders, notifyUpdates]);
+  }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders]);
 
   const handleAutoStartChange = async (enabled: boolean) => {
     if (!window.electronAPI?.setAutoStartEnabled) return;
@@ -1719,16 +1716,6 @@ export default function SettingsPage({
     });
     return () => cleanup?.();
   }, [toast, t, setActivationMode]);
-
-  useEffect(() => {
-    if (updateError) {
-      showAlertDialog({
-        title: t("settingsPage.general.updates.dialogs.updateError.title"),
-        description: t("settingsPage.general.updates.dialogs.updateError.description"),
-      });
-      clearUpdateError();
-    }
-  }, [updateError, showAlertDialog, clearUpdateError, t]);
 
   useEffect(() => {
     if (installInitiated) {
@@ -3170,18 +3157,6 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.general.notifications.updates")}
-                    description={t("settingsPage.general.notifications.updatesDescription")}
-                  >
-                    <Toggle
-                      checked={notifyUpdates}
-                      onChange={setNotifyUpdates}
-                      disabled={!notificationsEnabled}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 
@@ -4570,9 +4545,11 @@ EOF`,
                     description={
                       updateStatus.isDevelopment
                         ? t("settingsPage.general.updates.devMode")
-                        : isUpdateAvailable
-                          ? t("settingsPage.general.updates.newVersionAvailable")
-                          : t("settingsPage.general.updates.latestVersion")
+                        : !updateStatus.isSupported
+                          ? t("settingsPage.general.updates.managedByPackageManager")
+                          : isUpdateAvailable
+                            ? t("settingsPage.general.updates.newVersionAvailable")
+                            : t("settingsPage.general.updates.latestVersion")
                     }
                   >
                     <div className="flex items-center gap-2.5">
@@ -4599,6 +4576,17 @@ EOF`,
                   </SettingsRow>
                 </SettingsPanelRow>
 
+                {updateStatus.isSupported && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.general.updates.automaticUpdates")}
+                      description={t("settingsPage.general.updates.automaticUpdatesDescription")}
+                    >
+                      <Toggle checked={autoUpdatesEnabled} onChange={setAutoUpdatesEnabled} />
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
+
                 <SettingsPanelRow>
                   <div className="space-y-2.5">
                     <Button
@@ -4613,9 +4601,20 @@ EOF`,
                               ),
                             });
                           }
-                        } catch {}
+                        } catch {
+                          showAlertDialog({
+                            title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
+                            description: t(
+                              "settingsPage.general.updates.dialogs.checkFailed.description"
+                            ),
+                          });
+                        }
                       }}
-                      disabled={checkingForUpdates || updateStatus.isDevelopment}
+                      disabled={
+                        checkingForUpdates ||
+                        updateStatus.isDevelopment ||
+                        !updateStatus.isSupported
+                      }
                       variant="outline"
                       className="w-full"
                       size="sm"

@@ -580,8 +580,6 @@
     "update": {
       "readyTitle": "Aggiornamento pronto da installare",
       "readyDescription": "Fai clic su 'Installa aggiornamento' per riavviare con l'ultima versione.",
-      "problemTitle": "Si è verificato un problema con l'aggiornamento",
-      "problemDescription": "Non siamo riusciti a completare l'aggiornamento. Riprova più tardi.",
       "installTitle": "Installa aggiornamento",
       "installDescription": "OpenWhispr verrà riavviato per applicare l'aggiornamento. Il lavoro in corso verrà salvato.",
       "couldNotInstallTitle": "Impossibile installare l'aggiornamento",
@@ -1902,9 +1900,7 @@
         "meetingDetection": "Rilevamento riunioni",
         "meetingDetectionDescription": "Avvisa quando viene rilevata una riunione per avviare la registrazione",
         "calendarReminders": "Promemoria calendario",
-        "calendarRemindersDescription": "Avvisa quando una riunione programmata sta per iniziare",
-        "updates": "Aggiornamenti app",
-        "updatesDescription": "Avvisa quando è disponibile una nuova versione"
+        "calendarRemindersDescription": "Avvisa quando una riunione programmata sta per iniziare"
       },
       "clipboard": {
         "title": "Appunti",
@@ -2003,6 +1999,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "Aggiornamenti automatici",
+        "automaticUpdatesDescription": "Scarica e installa gli aggiornamenti in background",
         "badges": {
           "dev": "Dev",
           "latest": "Aggiornato",
@@ -2041,16 +2039,13 @@
           "updateAvailable": {
             "description": "Aggiornamento disponibile: v{{version}}",
             "title": "Aggiornamento disponibile"
-          },
-          "updateError": {
-            "description": "Qualcosa è andato storto con l'aggiornamento. Riprova.",
-            "title": "Errore di aggiornamento"
           }
         },
         "downloadUpdate": "Scarica aggiornamento {{version}}",
         "downloading": "Download in corso... {{progress}}%",
         "installAndRestart": "Installa e riavvia",
         "latestVersion": "Hai già l'ultima versione",
+        "managedByPackageManager": "Gli aggiornamenti vengono installati tramite il gestore pacchetti",
         "newVersion": "È disponibile una versione più recente",
         "newVersionAvailable": "Nuova versione disponibile",
         "restarting": "Riavvio...",
@@ -3577,11 +3572,17 @@
       "web_searchName": "Cerca sul web",
       "get_calendar_eventsName": "Ottieni eventi del calendario",
       "get_calendar_availabilityName": "Verifica disponibilità",
+      "get_snippetName": "Ottieni snippet",
+      "update_dictionaryName": "Aggiorna dizionario",
+      "update_snippetsName": "Aggiorna snippet",
       "search_notesStatus": "Ricerca nelle note...",
       "web_searchStatus": "Ricerca sul web...",
       "copy_to_clipboardStatus": "Copia negli appunti...",
       "get_calendar_eventsStatus": "Controllo del calendario...",
       "get_calendar_availabilityStatus": "Controllo della disponibilità...",
+      "get_snippetStatus": "Recupero dello snippet...",
+      "update_dictionaryStatus": "Aggiornamento del dizionario...",
+      "update_snippetsStatus": "Aggiornamento degli snippet...",
       "get_noteStatus": "Lettura della nota...",
       "create_noteStatus": "Creazione della nota...",
       "update_noteStatus": "Aggiornamento della nota...",
@@ -3856,11 +3857,6 @@
       "dismiss": "Chiudi"
     }
   },
-  "updateNotification": {
-    "title": "Aggiornamento OpenWhispr disponibile",
-    "body": "La versione {{version}} è pronta per il download",
-    "cta": "Aggiorna ora"
-  },
   "permissionsGate": {
     "title": "Autorizzazioni necessarie",
     "description": "OpenWhispr ha bisogno di alcune autorizzazioni per funzionare su questo computer.",
@@ -3898,7 +3894,12 @@
     "scopes": {
       "notesRead": "Leggi note",
       "notesWrite": "Crea e modifica note",
-      "transcriptionsRead": "Leggi trascrizioni"
+      "transcriptionsRead": "Leggi trascrizioni",
+      "dictionaryRead": "Leggi dizionario",
+      "dictionaryWrite": "Modifica dizionario",
+      "snippetsRead": "Leggi snippet",
+      "snippetsWrite": "Modifica snippet",
+      "transcriptionsWrite": "Trascrivi audio"
     },
     "revoke": {
       "button": "Revoca",

@@ -355,11 +355,13 @@ class WindowPositionUtil {
     return { ...WindowPositionUtil.clampToWorkArea(bounds, display), width, height };
   }
 
-  static setupAlwaysOnTop(window) {
+  // `level` only applies on macOS; Windows and Linux already use the strongest
+  // level their window managers honor.
+  static setupAlwaysOnTop(window, { level = "floating" } = {}) {
     if (process.platform === "darwin") {
       // macOS: Use panel level for proper floating behavior
       // This ensures the window stays on top across spaces and fullscreen apps
-      window.setAlwaysOnTop(true, "floating", 1);
+      window.setAlwaysOnTop(true, level, 1);
       // Re-applying the collection behavior when nothing drifted makes the
       // window server momentarily pull the window out of the active Space,
       // which blinks the entire visible window. Enforce calls land on hot
@@ -376,7 +378,7 @@ class WindowPositionUtil {
       }
 
       if (window.isVisible()) {
-        window.setAlwaysOnTop(true, "floating", 1);
+        window.setAlwaysOnTop(true, level, 1);
       }
     } else if (process.platform === "win32") {
       window.setAlwaysOnTop(true, "pop-up-menu");

@@ -580,8 +580,6 @@
     "update": {
       "readyTitle": "更新已准备就绪",
       "readyDescription": "点击“安装更新”以重启并安装最新版本。",
-      "problemTitle": "更新遇到问题",
-      "problemDescription": "无法完成更新，请稍后再试。",
       "installTitle": "安装更新",
       "installDescription": "OpenWhispr 将重启以应用更新。当前进行中的工作将被保存。",
       "couldNotInstallTitle": "无法安装更新",
@@ -1902,9 +1900,7 @@
         "meetingDetection": "会议检测",
         "meetingDetectionDescription": "检测到会议时通知您以便开始录音",
         "calendarReminders": "日历提醒",
-        "calendarRemindersDescription": "预定会议即将开始时通知您",
-        "updates": "应用更新",
-        "updatesDescription": "有新版本可用时通知您"
+        "calendarRemindersDescription": "预定会议即将开始时通知您"
       },
       "clipboard": {
         "title": "剪贴板",
@@ -2003,6 +1999,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "自动更新",
+        "automaticUpdatesDescription": "在后台下载并安装更新",
         "badges": {
           "dev": "开发版",
           "latest": "最新",
@@ -2041,16 +2039,13 @@
           "updateAvailable": {
             "description": "有可用更新：v{{version}}",
             "title": "有可用更新"
-          },
-          "updateError": {
-            "description": "更新出错，请重试。",
-            "title": "更新错误"
           }
         },
         "downloadUpdate": "下载更新 {{version}}",
         "downloading": "下载中... {{progress}}%",
         "installAndRestart": "安装并重启",
         "latestVersion": "你已经是最新版本",
+        "managedByPackageManager": "更新通过您的包管理器安装",
         "newVersion": "有更新的版本可用",
         "newVersionAvailable": "有新版本可用",
         "restarting": "正在重启...",
@@ -3577,11 +3572,17 @@
       "web_searchName": "网页搜索",
       "get_calendar_eventsName": "获取日历事件",
       "get_calendar_availabilityName": "查看空闲时间",
+      "get_snippetName": "获取片段",
+      "update_dictionaryName": "更新词典",
+      "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜索笔记...",
       "web_searchStatus": "正在搜索网页...",
       "copy_to_clipboardStatus": "正在复制到剪贴板...",
       "get_calendar_eventsStatus": "正在查看日历...",
       "get_calendar_availabilityStatus": "正在查看空闲时间...",
+      "get_snippetStatus": "正在获取片段...",
+      "update_dictionaryStatus": "正在更新词典...",
+      "update_snippetsStatus": "正在更新片段...",
       "get_noteStatus": "正在读取笔记...",
       "create_noteStatus": "正在创建笔记...",
       "update_noteStatus": "正在更新笔记...",
@@ -3856,11 +3857,6 @@
       "dismiss": "关闭"
     }
   },
-  "updateNotification": {
-    "title": "OpenWhispr 有可用更新",
-    "body": "版本 {{version}} 已可下载",
-    "cta": "立即更新"
-  },
   "permissionsGate": {
     "title": "需要权限",
     "description": "OpenWhispr 需要一些权限才能在此电脑上正常运行。",
@@ -3898,7 +3894,12 @@
     "scopes": {
       "notesRead": "读取笔记",
       "notesWrite": "创建和编辑笔记",
-      "transcriptionsRead": "读取转录"
+      "transcriptionsRead": "读取转录",
+      "dictionaryRead": "读取词典",
+      "dictionaryWrite": "编辑词典",
+      "snippetsRead": "读取片段",
+      "snippetsWrite": "编辑片段",
+      "transcriptionsWrite": "转录音频"
     },
     "revoke": {
       "button": "撤销",

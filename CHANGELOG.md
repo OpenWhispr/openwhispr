@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Transcribe files from the terminal with your local models.** The CLI bridge gains `POST /v1/transcribe`, which takes a file path and runs whichever local model the app is set to use (whisper.cpp, Parakeet, Nemotron, or Cohere), and `GET /v1/transcribe/models`, which lists downloaded models. Audio never crosses the bridge; the app reads the file itself. Powers `openwhispr transcribe <file>` in `@openwhispr/cli` 0.3.0.
+
+### Changed
+
+- **Automatic updates replace the update popup.** A new Automatic updates toggle under Settings → System downloads updates in the background and installs them when the app next quits. It is on for new installs; existing installs keep today's flow until they opt in: the app still checks for updates, and the sidebar Update Available button and Settings → System let you download and install by hand. The update-available popup window and the App updates notification toggle are gone. On Linux the toggle and the check only appear for AppImage installs, since deb, rpm and tar.gz packages are updated by the package manager.
+
+### Fixed
+
+- **Back to notes works in narrow windows.** The button only handled meeting mode, so with a note open in a narrow window it did nothing. It now returns to the notes list.
+- **No more update error popups.** A failed background update check used to raise a modal the next time Settings opened, and a destructive toast in the control panel. Background failures are now silent and retried on the next check; only a manual Check for Updates reports its own failure inline.
+- **Smoother notification swipe.** The meeting notification card follows your pointer, fades as it goes, and leaves through the edge you dragged it toward. The window no longer shows scrollbars mid-animation, and on macOS it now sits above every other window, including OpenWhispr's own floating panels.
+
 ## [1.10.0] - 2026-09-10
 
 Managed enterprise speech-to-text arrives for workspaces on Azure OpenAI or AI Foundry: a deployment an administrator distributes to every member, with no API keys on user machines. Transcription also gains streaming from Deepgram, AssemblyAI and Gemini Live, Cohere Transcribe as a local engine, and gpt-transcribe as the OpenAI default now that whisper-1 and the gpt-4o transcribe models are on their way out. Onboarding was rebuilt to preserve progress, Insights gains an opt-in leaderboard, and Astra and Fable 5.1 join the reasoning models.

@@ -467,8 +467,6 @@
     "update": {
       "readyTitle": "التحديث جاهز للتثبيت",
       "readyDescription": "انقر فوق «تثبيت التحديث» لإعادة التشغيل باستخدام أحدث إصدار.",
-      "problemTitle": "واجه التحديث مشكلة",
-      "problemDescription": "لم نتمكن من إكمال التحديث. يرجى المحاولة مرة أخرى لاحقًا.",
       "installTitle": "تثبيت التحديث",
       "installDescription": "سيتم إعادة تشغيل OpenWhispr لتطبيق التحديث. سيتم حفظ أي عمل قيد التقدم.",
       "couldNotInstallTitle": "تعذر تثبيت التحديث",
@@ -1066,7 +1064,12 @@
     "scopes": {
       "notesRead": "قراءة الملاحظات",
       "notesWrite": "إنشاء وتعديل الملاحظات",
-      "transcriptionsRead": "قراءة النصوص المفرَّغة"
+      "transcriptionsRead": "قراءة النصوص المفرَّغة",
+      "dictionaryRead": "قراءة القاموس",
+      "dictionaryWrite": "تعديل القاموس",
+      "snippetsRead": "قراءة المقتطفات",
+      "snippetsWrite": "تعديل المقتطفات",
+      "transcriptionsWrite": "تحويل الصوت إلى نص"
     },
     "revoke": {
       "button": "إبطال",
@@ -1226,11 +1229,17 @@
       "web_searchName": "البحث في الويب",
       "get_calendar_eventsName": "الحصول على أحداث التقويم",
       "get_calendar_availabilityName": "التحقق من الأوقات المتاحة في التقويم",
+      "get_snippetName": "الحصول على المقتطف",
+      "update_dictionaryName": "تحديث القاموس",
+      "update_snippetsName": "تحديث المقتطفات",
       "search_notesStatus": "جاري البحث في الملاحظات...",
       "web_searchStatus": "جاري البحث في الويب...",
       "copy_to_clipboardStatus": "جاري النسخ إلى الحافظة...",
       "get_calendar_eventsStatus": "جاري التحقق من التقويم...",
       "get_calendar_availabilityStatus": "جاري التحقق من الأوقات المتاحة...",
+      "get_snippetStatus": "جاري جلب المقتطف...",
+      "update_dictionaryStatus": "جاري تحديث القاموس...",
+      "update_snippetsStatus": "جاري تحديث المقتطفات...",
       "get_noteStatus": "جاري قراءة الملاحظة...",
       "create_noteStatus": "جاري إنشاء الملاحظة...",
       "update_noteStatus": "جاري تحديث الملاحظة...",
@@ -2916,9 +2925,7 @@
         "meetingDetection": "اكتشاف الاجتماع",
         "meetingDetectionDescription": "إعلام عند اكتشاف اجتماع حتى تتمكن من بدء التسجيل",
         "calendarReminders": "تذكيرات التقويم",
-        "calendarRemindersDescription": "إعلام عند اقتراب موعد بدء اجتماع مجدول",
-        "updates": "تحديثات التطبيق",
-        "updatesDescription": "إعلام عند توفر إصدار جديد"
+        "calendarRemindersDescription": "إعلام عند اقتراب موعد بدء اجتماع مجدول"
       },
       "clipboard": {
         "title": "الحافظة",
@@ -3017,6 +3024,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "التحديثات التلقائية",
+        "automaticUpdatesDescription": "تنزيل التحديثات وتثبيتها في الخلفية",
         "badges": {
           "dev": "تطوير",
           "latest": "الأحدث",
@@ -3055,16 +3064,13 @@
           "updateAvailable": {
             "description": "التحديث متاح: v{{version}}",
             "title": "تحديث متاح"
-          },
-          "updateError": {
-            "description": "حدث خطأ ما في التحديث. يرجى المحاولة مرة أخرى.",
-            "title": "خطأ في التحديث"
           }
         },
         "downloadUpdate": "تنزيل التحديث {{version}}",
         "downloading": "جاري التنزيل... {{progress}}%",
         "installAndRestart": "تثبيت وإعادة التشغيل",
         "latestVersion": "أنت تستخدم أحدث إصدار",
+        "managedByPackageManager": "يتم تثبيت التحديثات عبر مدير الحزم لديك",
         "newVersion": "يتوفر إصدار أحدث",
         "newVersionAvailable": "يتوفر إصدار جديد",
         "restarting": "جاري إعادة التشغيل...",
@@ -4105,11 +4111,6 @@
       "open": "فتح",
       "dismiss": "تجاهل"
     }
-  },
-  "updateNotification": {
-    "title": "تحديث OpenWhispr متوفر",
-    "body": "الإصدار {{version}} جاهز للتنزيل",
-    "cta": "تحديث الآن"
   },
   "permissionsGate": {
     "title": "الأذونات مطلوبة",
