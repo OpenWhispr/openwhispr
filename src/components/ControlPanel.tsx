@@ -635,12 +635,22 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     settings.translationSourceLanguage,
                     settings.translationTargetLanguage
                   ),
-                  onCleanupError: (cleanupError: Error) =>
+                  onCleanupError: (cleanupError: Error & { messageKey?: string }) => {
                     logger.warn(
                       "Cleanup step failed in translation chain, translating raw transcript",
                       { error: cleanupError.message },
                       "transcription"
-                    ),
+                    );
+                    // The chain still translates the raw transcript, so say why cleanup
+                    // was dropped rather than reporting a clean success (#2091).
+                    toast({
+                      title: t("app.toasts.cleanupFailed.title"),
+                      description: cleanupError.messageKey
+                        ? t(cleanupError.messageKey)
+                        : cleanupError.message,
+                      variant: "destructive",
+                    });
+                  },
                   onEmptyTranslate: () =>
                     logger.warn(
                       "Translation step returned empty text, keeping previous text",
@@ -690,6 +700,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const agentName = getAgentName();
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,
+                  requireCompleteOutput: true,
                 });
                 if (hasTextContent(reasonedText) && reasonedText !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
@@ -702,8 +713,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   }
                 }
               }
-            } catch {
-              // Reasoning failed — keep the raw STT result
+            } catch (cleanupError) {
+              // The row keeps its raw transcript, so the retry must not look like it
+              // cleaned anything — report why, the way dictation does (#2091).
+              const failure = cleanupError as Error & { messageKey?: string };
+              toast({
+                title: t("app.toasts.cleanupFailed.title"),
+                description: failure.messageKey ? t(failure.messageKey) : failure.message,
+                variant: "destructive",
+              });
             }
           }
 

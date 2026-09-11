@@ -6,6 +6,7 @@ import {
   applyChatCompletionsParams,
   emptyResponseError,
   isTruncatedFinishReason,
+  truncatedOutputError,
 } from "../chatRequestBody";
 import { getTinfoilChatClient } from "../tinfoilClient";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
@@ -64,7 +65,7 @@ export const tinfoilProvider: InferenceProvider = {
       isTruncatedFinishReason(choice?.finish_reason)
     );
     if (config.requireCompleteOutput && responseIncomplete) {
-      throw new Error("Model output was truncated before the selection edit completed");
+      throw truncatedOutputError();
     }
 
     logger.logReasoning("TINFOIL_RESPONSE", {

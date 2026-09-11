@@ -31,6 +31,7 @@ import {
   emptyResponseError,
   fetchWithParamFallback,
   isTruncatedFinishReason,
+  truncatedOutputError,
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
@@ -416,7 +417,7 @@ class ReasoningService extends BaseReasoningService {
 
     const choice = response.choices[0];
     if (config.requireCompleteOutput && isTruncatedFinishReason(choice?.finish_reason)) {
-      throw new Error("Model output was truncated before the selection edit completed");
+      throw truncatedOutputError();
     }
     // Reasoning models leak <think> blocks into non-streamed output; strip them
     // unless the user explicitly enabled thinking (same default as streaming).

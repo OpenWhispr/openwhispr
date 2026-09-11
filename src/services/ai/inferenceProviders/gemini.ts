@@ -6,6 +6,7 @@ import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.
 import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { extractApiErrorMessage } from "../apiErrorMessage";
+import { emptyOutputError, truncatedOutputError } from "../chatRequestBody";
 import logger from "../../../utils/logger";
 
 interface GeminiResponse {
@@ -140,7 +141,7 @@ export const geminiProvider: InferenceProvider = {
 
     const candidate = response.candidates?.[0];
     if (config.requireCompleteOutput && candidate?.finishReason === "MAX_TOKENS") {
-      throw new Error("Model output was truncated before the selection edit completed");
+      throw truncatedOutputError();
     }
     const responseText = extractGeminiText(candidate);
     if (!responseText) {
@@ -149,11 +150,12 @@ export const geminiProvider: InferenceProvider = {
         finishReason: candidate?.finishReason,
       });
       if (candidate?.finishReason === "MAX_TOKENS") {
-        throw new Error(
+        // Same cause as the truncation check above: the cap hit before any text arrived.
+        throw truncatedOutputError(
           "Gemini reached token limit before generating response. Try a shorter input or increase max tokens."
         );
       }
-      throw new Error("Gemini returned empty response");
+      throw emptyOutputError("Gemini returned empty response");
     }
     logger.logReasoning("GEMINI_RESPONSE", {
       model,

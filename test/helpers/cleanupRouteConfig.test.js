@@ -6,14 +6,16 @@ const { loadAudioManager } = require("./harness/audioManager");
 // IPC-bridged providers: local llama-server (`?? 0.7`), Anthropic and
 // enterprise (`?? 0.3`) read `config.temperature` and otherwise keep their own
 // default. Without this the "cleanup is deterministic" rule only held on the
-// chat-completions transports and Gemini.
+// chat-completions transports and Gemini. They also require complete output, so
+// a reply cut off at the token limit fails instead of replacing the dictation
+// with its first part (#2091).
 async function loadRouteResolver(t) {
   const { vite } = await loadAudioManager(t, {
-    cachePrefix: "openwhispr-cleanup-temperature-test-",
-    settingsKey: "__cleanupTemperatureSettings",
+    cachePrefix: "openwhispr-cleanup-route-config-test-",
+    settingsKey: "__cleanupRouteConfigSettings",
     mockModules: {
       "/stores/settingsStore": `
-        export const getSettings = () => globalThis.__cleanupTemperatureSettings;
+        export const getSettings = () => globalThis.__cleanupRouteConfigSettings;
         export const getEffectiveCleanupModel = () => "cleanup-model";
         export const selectResolvedLLMConfig = () => ({ model: "cleanup-model" });
         export const isCloudCleanupMode = () => false;
@@ -56,7 +58,7 @@ async function loadRouteResolver(t) {
     resolveReasoningRoute(text, settings, "Jarvis", voiceAgentRequested, translationRequested);
 }
 
-test("the cleanup route pins temperature 0", async (t) => {
+test("the cleanup route pins temperature 0 and requires complete output", async (t) => {
   const resolveRoute = await loadRouteResolver(t);
 
   const route = resolveRoute("so um clean this up");
@@ -64,9 +66,10 @@ test("the cleanup route pins temperature 0", async (t) => {
   assert.equal(route.kind, "cleanup");
   assert.equal(route.config.inferenceScope, "dictationCleanup");
   assert.equal(route.config.temperature, 0);
+  assert.equal(route.config.requireCompleteOutput, true);
 });
 
-test("the translation chain's cleanup step pins temperature 0 too", async (t) => {
+test("the translation chain's cleanup step pins the same config", async (t) => {
   const resolveRoute = await loadRouteResolver(t);
 
   const route = resolveRoute("so um translate this", { translationRequested: true });
@@ -74,13 +77,15 @@ test("the translation chain's cleanup step pins temperature 0 too", async (t) =>
   assert.equal(route.kind, "translation");
   assert.equal(route.cleanupConfig.inferenceScope, "dictationCleanup");
   assert.equal(route.cleanupConfig.temperature, 0);
+  assert.equal(route.cleanupConfig.requireCompleteOutput, true);
 });
 
-test("the agent route keeps its provider default temperature", async (t) => {
+test("the agent route keeps its provider defaults", async (t) => {
   const resolveRoute = await loadRouteResolver(t);
 
   const route = resolveRoute("Jarvis, what is on my calendar", { voiceAgentRequested: true });
 
   assert.equal(route.kind, "agent");
   assert.equal(route.config.temperature, undefined);
+  assert.equal(route.config.requireCompleteOutput, undefined);
 });

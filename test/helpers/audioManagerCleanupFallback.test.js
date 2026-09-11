@@ -101,6 +101,88 @@ test("cleanup failure details ride the raw result instead of notifying before pa
   assert.deepEqual(manager._takePendingResultExtras(), {});
 });
 
+// The chain translates the raw transcript when cleanup fails, so the dropped cleanup
+// has to reach the same toast the plain cleanup route raises (#2091).
+test("a truncated cleanup inside the translation chain still reports the failure", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-audio-translation-cleanup-",
+    settingsKey: "__audioTranslationCleanupSettings",
+    settings: {
+      useCleanupModel: true,
+      cleanupProvider: "gemini",
+      cleanupMode: "providers",
+      cleanupDisableThinking: true,
+      useDictationAgent: false,
+      useDictationTranslation: true,
+      translationSourceLanguage: "en",
+      translationTargetLanguage: "es",
+      preferredLanguage: "en",
+    },
+    mockModules: {
+      "/stores/settingsStore": `
+        export const getSettings = () => globalThis.__audioTranslationCleanupSettings;
+        export const getEffectiveCleanupModel = () => "gemini-3-flash-preview";
+        export const selectResolvedLLMConfig = () => ({
+          mode: "providers",
+          provider: "gemini",
+          model: "gemini-3-flash-preview"
+        });
+        export const isCloudCleanupMode = () => false;
+        export const isCloudDictationAgentMode = () => false;
+        export const isCloudTranslationMode = () => false;
+        export const useSettingsStore = { subscribe: () => () => {} };
+      `,
+      "/dictationAgentInference": `
+        export const resolveDictationAgentInference = () => ({
+          reachable: false, model: "", displayProvider: "none", config: {}
+        });
+        export const resolveDictationAgentVisionInference = () => ({
+          active: false, model: "", config: {}
+        });
+      `,
+      "/dictationTranslationInference": `
+        export const resolveDictationTranslationInference = () => ({
+          reachable: true,
+          model: "gemini-3-flash-preview",
+          displayProvider: "gemini",
+          config: { provider: "gemini" }
+        });
+      `,
+      "/config/prompts": `
+        export const resolvePrompt = () => "translate prompt";
+        export const appendScreenContextSuffix = (prompt) => prompt;
+        export const wrapCleanupTranscript = (text) => text;
+        export const getCleanupSystemPrompt = () => "cleanup prompt";
+      `,
+    },
+  });
+
+  const truncated = Object.assign(new Error("Model output was truncated"), {
+    messageKey: "hooks.audioRecording.errorDescriptions.cleanupTruncated",
+  });
+  const manager = createManager({
+    voiceAgentRequested: false,
+    translationRequested: true,
+    pendingCleanupFailure: null,
+    pendingAssistantConversation: null,
+    pendingSelectionEdit: null,
+    isReasoningAvailable: async () => true,
+    notifyTranslationFallback: () => {},
+    // The cleanup step is the only call in the chain that requires complete output.
+    processWithReasoningModel: async (_text, _model, _agentName, config) => {
+      if (config?.requireCompleteOutput) throw truncated;
+      return "dictado traducido";
+    },
+  });
+
+  const text = await manager.processTranscriptionCore("original dictation", "local");
+
+  assert.equal(text, "dictado traducido");
+  assert.deepEqual(manager._takePendingResultExtras(), {
+    cleanupFailure: { message: truncated.message, messageKey: truncated.messageKey },
+  });
+});
+
 test("safePaste returns false when the preload reports that no text was pasted", async (t) => {
   const { createManager, window } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-audio-cleanup-paste-outcome-",

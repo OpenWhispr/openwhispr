@@ -10,6 +10,7 @@ import {
   emptyResponseError,
   fetchWithParamFallback,
   isTruncatedFinishReason,
+  truncatedOutputError,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
@@ -342,7 +343,7 @@ export const openaiProvider: InferenceProvider = {
       !!response?.incomplete_details ||
       response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
     if (config.requireCompleteOutput && responseIncomplete) {
-      throw new Error("Model output was truncated before the selection edit completed");
+      throw truncatedOutputError();
     }
 
     logger.logReasoning("OPENAI_RAW_RESPONSE", {

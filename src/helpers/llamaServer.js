@@ -765,7 +765,10 @@ class LlamaServerManager {
                 options.requireCompleteOutput &&
                 ["length", "max_tokens"].includes(response.choices?.[0]?.finish_reason)
               ) {
-                reject(new Error("Model output was truncated before the selection edit completed"));
+                // The renderer maps the code to the cleanup toast's wording (#2091).
+                const error = new Error("Model output was truncated");
+                error.code = "OUTPUT_TRUNCATED";
+                reject(error);
                 return;
               }
               const message = response.choices?.[0]?.message;
