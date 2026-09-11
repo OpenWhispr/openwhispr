@@ -3871,6 +3871,7 @@ class IPCHandlers {
     // exits, so a relaunched dev instance would have no renderer: just quit there.
     ipcMain.handle("relaunch-app", () => {
       if (process.env.NODE_ENV !== "development") {
+        this.updateManager.deferInstallOnQuit();
         const { execPath, args } = getRelaunchOptions({
           argv: process.argv,
           protocol: this.oauthProtocol,

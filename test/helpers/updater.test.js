@@ -144,6 +144,17 @@ test("with automatic updates off, an available update waits for the user", () =>
   manager.cleanup();
 });
 
+test("a relaunch leaves a downloaded update uninstalled on that quit", () => {
+  const autoUpdater = makeAutoUpdater();
+  const manager = createUpdateManager(autoUpdater);
+  assert.equal(autoUpdater.autoInstallOnAppQuit, true);
+
+  manager.deferInstallOnQuit();
+  assert.equal(autoUpdater.autoInstallOnAppQuit, false);
+
+  manager.cleanup();
+});
+
 test("enabling automatic updates after the startup check found one starts the download", () => {
   const autoUpdater = makeAutoUpdater();
   const manager = createUpdateManager(autoUpdater);
