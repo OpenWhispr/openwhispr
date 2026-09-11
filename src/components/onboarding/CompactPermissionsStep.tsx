@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { CircleCheck, Laptop, LogOut } from "../icons";
 import { useTranslation } from "react-i18next";
+import { Button } from "../ui/button";
 // Imported (not referenced by path) so Vite fingerprints them and they resolve
 // under the packaged app's file:// origin. Authored at 88px (2x the original
 // 44px slot; the row has since tightened to a 40px slot), with their rounded
@@ -269,14 +270,14 @@ export default function CompactPermissionsStep({
             </button>
           )}
 
-          <button
+          <Button
             type="button"
             onClick={onContinue}
             disabled={!requiredGranted}
-            className="onboarding-pressable h-10 flex-1 rounded-full bg-[var(--onboarding-accent)] px-5 text-sm font-medium text-[var(--onboarding-accent-foreground)] transition-colors hover:bg-[var(--onboarding-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)]"
+            className="h-10 flex-1 px-5 text-sm"
           >
             {t("common.continue")}
-          </button>
+          </Button>
         </div>
       </div>
     </CompactOnboardingFrame>

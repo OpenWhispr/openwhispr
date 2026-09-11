@@ -107,6 +107,10 @@
   --shadow-brand-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.16),
     inset 0 -1px 1px rgba(0, 0, 0, 0.12);
+  /* The fill under that rim: Button default, mic/send circles, the onboarding brand tile. */
+  --gradient-brand-glass: linear-gradient(180deg, #5588f0 0%, #3466e2 100%);
+  /* The brand tile floats over the onboarding hero, so it adds a soft coloured lift. */
+  --shadow-brand-tile: var(--shadow-brand-glass), 0 10px 24px -8px rgb(52 102 226 / 0.45);
 }
 
 .dark {
@@ -169,6 +173,7 @@
   --shadow-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.05),
     0 2px 12px rgba(0, 0, 0, 0.35);
+  --shadow-brand-tile: var(--shadow-brand-glass), 0 10px 24px -8px rgb(0 0 0 / 0.6);
 }
 
 @layer base {
@@ -289,10 +294,9 @@ body:has(.onboarding-canvas) {
   font-family: var(--font-family-sans);
   font-optical-sizing: auto;
 
-  /* Onboarding design tokens, straight from the Figma library. The accent is
-     #4079ED, which is close to but NOT Tailwind's blue-500 (#3b82f6) — bind
-     these rather than re-typing the literals. */
-  --onboarding-accent: #4079ed;
+  /* Onboarding design tokens from the Figma library, except the accent: that is
+     the app's one brand blue, so both themes resolve it through --color-primary. */
+  --onboarding-accent: var(--color-primary);
   --onboarding-accent-foreground: #ffffff;
   /* Hover on a filled accent means "darker" on light and "lighter" on dark, so the
      mix target is a token rather than a literal `black` in the utility class. */
@@ -324,7 +328,7 @@ body:has(.onboarding-canvas) {
   --onboarding-inverse-text: #ffffff;
   /* Status. Kept separate from the accent so a failed provider test never reads
      as a brand colour. */
-  --onboarding-link: #2563eb;
+  --onboarding-link: var(--color-link);
   --onboarding-danger: #ef4444;
   --onboarding-success: #22c55e;
   /* Keycap. The cap is lit from above, so it needs its own top/bottom pair rather
@@ -349,10 +353,6 @@ body:has(.onboarding-canvas) {
 .dark .onboarding-canvas,
 .dark:has(.onboarding-canvas),
 body.dark:has(.onboarding-canvas) {
-  /* Lifted off #4079ED: the Figma accent is tuned against white and goes muddy on
-     a near-black surface, so dark takes the same hue a few steps brighter to hold
-     the 4.5:1 it has in light. */
-  --onboarding-accent: #6f9bf5;
   /* White, same as light: a filled brand CTA reads as the brand in both themes,
      and flipping its label to near-black made the dark-mode buttons look like a
      different component. */
@@ -373,7 +373,6 @@ body.dark:has(.onboarding-canvas) {
   --onboarding-inverse-surface: #f5f5f5;
   --onboarding-inverse-surface-secondary: #d4d4d4;
   --onboarding-inverse-text: #0a0a0a;
-  --onboarding-link: #7ba6f7;
   --onboarding-danger: #f87171;
   --onboarding-success: #4ade80;
   --onboarding-keycap-top: #3a3a3a;
@@ -415,8 +414,6 @@ body.dark:has(.onboarding-canvas) {
   --color-muted: var(--onboarding-surface-secondary);
   --color-muted-foreground: var(--onboarding-text-secondary);
   --color-border: var(--onboarding-control-border);
-  --color-primary: var(--onboarding-accent);
-  --color-primary-foreground: var(--onboarding-accent-foreground);
   --color-ring: var(--onboarding-accent);
   background-color: var(--onboarding-surface);
   /* Supplied full-width artwork replaces the generated corner washes. Keeping
@@ -716,30 +713,33 @@ body.dark:has(.onboarding-canvas) {
   background-image: none;
 }
 
-/* The indigo-to-white hero ramp is a baked Bayer 16x16 ordered dither (2px
-   cells, 5 steps along the ramp) rather than a CSS gradient plus a dot grid.
-   The ramp is purely vertical, so one Bayer period — 16 cells at 2px = 32px —
-   tiles horizontally with no seam, and the whole strip costs ~250 bytes.
-   background-size pins it to 1 image px per CSS px so the cells stay square;
-   image-rendering keeps them hard-edged on fractional device pixel ratios
-   instead of resampling the dither into mush. The background-image URL is set
-   inline from an imported asset (see CompactOnboardingFrame) so Vite
-   fingerprints it and it resolves under the packaged file:// origin — which is
-   also why the theme swap reads two inline custom properties instead of naming
-   the files here. The strips are 32px-wide Bayer-dither gradients, one per
-   theme, baked into src/assets/onboarding-hero-dither{,-dark}.webp. */
+/* Compact-frame hero: a brand-blue band that dithers into the page surface.
+   Drawn from --color-primary so it follows the theme; the dot layer fades in
+   as the solid fades out. */
 .onboarding-compact-hero {
-  background-image: var(--onboarding-hero-dither-light);
-  background-repeat: repeat-x;
-  background-size: 32px 100%;
-  image-rendering: pixelated;
+  background: linear-gradient(
+    color-mix(in srgb, var(--color-primary) 88%, white),
+    var(--color-primary) 70%,
+    transparent
+  );
 }
 
-/* The dark strip resolves into --onboarding-surface rather than white, so it has
-   to be a separate asset — a filter or blend on the light one would take the
-   indigo with it. */
-.dark .onboarding-compact-hero {
-  background-image: var(--onboarding-hero-dither-dark);
+.onboarding-compact-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 2px 2px, var(--color-primary) 1.3px, transparent 1.5px) 0
+    0 / 4px 4px;
+  mask-image: linear-gradient(transparent 55%, #000 72%, #000 84%, transparent);
+}
+
+/* Primary Buttons in onboarding disable into the quiet capsule (sunken fill,
+   tertiary text) instead of fading the glass. */
+.onboarding-canvas [data-slot="button"][data-variant="default"]:disabled {
+  opacity: 1;
+  background: var(--onboarding-surface-tertiary);
+  box-shadow: none;
+  color: var(--onboarding-text-tertiary);
 }
 
 /* The classic typing indicator: each dot hops and brightens in turn, so with a
@@ -851,6 +851,11 @@ h1 {
   border-color: transparent !important;
   background-color: var(--onboarding-surface-secondary) !important;
   color: var(--onboarding-text-primary) !important;
+}
+
+/* Focus is the brand ring, not a stroke: the field stays borderless at rest. */
+.onboarding-canvas .onboarding-light-input:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent) !important;
 }
 
 .onboarding-canvas .onboarding-light-input::placeholder {
