@@ -1038,17 +1038,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? "onboarding.rehaul.assistantDemo.title"
                   : "onboarding.rehaul.dictationDemo.title"
               )}
+              // The assistant demo's card is tall, so its title runs one line to
+              // leave the reply box room without a scroll.
               titleLines={
                 assistant
-                  ? [
-                      t("onboarding.rehaul.assistantDemo.titleLineOne"),
-                      t("onboarding.rehaul.assistantDemo.titleLineTwo"),
-                    ]
+                  ? undefined
                   : [
                       t("onboarding.rehaul.dictationDemo.titleLineOne"),
                       t("onboarding.rehaul.dictationDemo.titleLineTwo"),
                     ]
               }
+              wideTitle={assistant}
               description={<DemoHotkeyDescription text={description} hotkey={hotkeyInstruction} />}
             />
             <DemoStep

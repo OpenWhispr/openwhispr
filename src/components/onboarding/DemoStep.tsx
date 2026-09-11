@@ -346,7 +346,7 @@ export default function DemoStep({
     <div
       // One compact width for both demos keeps the two steps from stepping in
       // and out as the flow moves between them.
-      className="relative mx-auto mt-6 w-full max-w-lg"
+      className="relative mx-auto mt-5 w-full max-w-lg"
     >
       {successful && kind === "dictation" && <ConfettiLayer />}
 
@@ -439,7 +439,7 @@ function EmailThread({ body, children }: { body: string; children: ReactNode }) 
 
   return (
     <article className="overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-start">
-      <header className="flex items-center gap-2.5 border-b border-[var(--onboarding-control-border)] px-4 py-2.5">
+      <header className="flex items-center gap-2.5 border-b border-[var(--onboarding-control-border)] px-4 py-2">
         <img
           src={gmailMark}
           alt=""
@@ -455,7 +455,7 @@ function EmailThread({ body, children }: { body: string; children: ReactNode }) 
         </h2>
       </header>
 
-      <div className="flex gap-3 px-4 pb-4 pt-3.5">
+      <div className="flex gap-3 px-4 py-3">
         {/* Letter avatar, the way a mail client draws a sender without a photo. */}
         <span
           aria-hidden="true"
@@ -471,7 +471,7 @@ function EmailThread({ body, children }: { body: string; children: ReactNode }) 
             {t("onboarding.rehaul.assistantDemo.email.recipient")}
             <ChevronDown className="size-3 shrink-0" strokeWidth={1.5} aria-hidden="true" />
           </p>
-          <p className="mt-2.5 whitespace-pre-line text-sm leading-[1.5] text-[var(--onboarding-text-primary)]">
+          <p className="mt-2 whitespace-pre-line text-sm leading-[1.5] text-[var(--onboarding-text-primary)]">
             {body}
           </p>
         </div>
@@ -480,7 +480,7 @@ function EmailThread({ body, children }: { body: string; children: ReactNode }) 
       <div
         role="group"
         aria-label={t("onboarding.rehaul.assistantDemo.email.reply")}
-        className="flex gap-3 border-t border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-4 py-3.5"
+        className="flex gap-3 border-t border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-4 py-3"
       >
         <span
           aria-hidden="true"
@@ -537,9 +537,10 @@ function VoiceSurface({
 
   return (
     <div
-      // Shared by both demos; the assistant variant fills the row beside its avatar.
-      className={`relative flex h-36 flex-col rounded-[14px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-3 ${
-        embedded ? "min-w-0 flex-1" : ""
+      // Shared by both demos; the assistant variant fills the row beside its
+      // avatar and runs taller, so a few-sentence reply shows without scrolling.
+      className={`relative flex flex-col rounded-[14px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-3 ${
+        embedded ? "h-52 min-w-0 flex-1" : "h-36"
       }`}
     >
       {transcript && (
