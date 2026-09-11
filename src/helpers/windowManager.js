@@ -3,6 +3,7 @@ const debugLogger = require("./debugLogger");
 // Aliased: this class has an openExternalUrl method wrapping the helper.
 const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
 const HotkeyManager = require("./hotkeyManager");
+const TriggerManager = require("./triggerManager");
 const { isGlobeLikeHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
 const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
@@ -86,7 +87,7 @@ class WindowManager {
       notifyCalendarReminders: true,
     };
     this.tray = null;
-    this.hotkeyManager = new HotkeyManager();
+    this.hotkeyManager = new TriggerManager();
     this.dragManager = new DragManager();
     this._mainWindowPlacementCoordinator = new MainWindowPlacementCoordinator();
     this.isQuitting = false;

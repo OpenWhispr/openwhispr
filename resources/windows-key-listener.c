@@ -16,6 +16,7 @@
 #include <string.h>
 
 static HHOOK g_hook = NULL;
+static int g_mouseButton = 0;
 static DWORD g_targetVk = 0;
 static BOOL g_isKeyDown = FALSE;
 
@@ -320,6 +321,28 @@ DWORD ParseCompoundHotkey(const char* hotkey) {
     return mainKeyVk;
 }
 
+// Mouse hooks only report transitions and always pass the physical event on.
+LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode == HC_ACTION) {
+        MSLLHOOKSTRUCT* data = (MSLLHOOKSTRUCT*)lParam;
+        int button = 0;
+        BOOL down = FALSE;
+        if (wParam == WM_MBUTTONDOWN || wParam == WM_MBUTTONUP) {
+            button = 3;
+            down = wParam == WM_MBUTTONDOWN;
+        } else if (wParam == WM_XBUTTONDOWN || wParam == WM_XBUTTONUP) {
+            button = HIWORD(data->mouseData) == XBUTTON1 ? 4 : 5;
+            down = wParam == WM_XBUTTONDOWN;
+        }
+        if (!(data->flags & LLMHF_INJECTED) && button == g_mouseButton && down != g_isKeyDown) {
+            g_isKeyDown = down;
+            printf(down ? "KEY_DOWN\n" : "KEY_UP\n");
+            fflush(stdout);
+        }
+    }
+    return CallNextHookEx(g_hook, nCode, wParam, lParam);
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <key>\n", argv[0]);
@@ -332,12 +355,15 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    g_targetVk = ParseCompoundHotkey(argv[1]);
+    if (_stricmp(argv[1], "MouseButton3") == 0) g_mouseButton = 3;
+    if (_stricmp(argv[1], "MouseButton4") == 0) g_mouseButton = 4;
+    if (_stricmp(argv[1], "MouseButton5") == 0) g_mouseButton = 5;
+    g_targetVk = g_mouseButton ? 0 : ParseCompoundHotkey(argv[1]);
     if (g_targetVk == 0 && (g_requireCtrl || g_requireAlt || g_requireShift || g_requireWin)) {
         g_useModifiersOnly = TRUE;
     }
 
-    if (g_targetVk == 0 && !g_useModifiersOnly) {
+    if (g_targetVk == 0 && !g_useModifiersOnly && !g_mouseButton) {
         fprintf(stderr, "Error: Invalid key '%s'\n", argv[1]);
         return 1;
     }
@@ -350,7 +376,9 @@ int main(int argc, char* argv[]) {
     SetConsoleCtrlHandler(ConsoleHandler, TRUE);
 
     // Install the low-level keyboard hook
-    g_hook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, NULL, 0);
+    g_hook = g_mouseButton
+        ? SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, NULL, 0)
+        : SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, NULL, 0);
     if (!g_hook) {
         fprintf(stderr, "Error: Failed to install keyboard hook (error %lu)\n", GetLastError());
         return 1;

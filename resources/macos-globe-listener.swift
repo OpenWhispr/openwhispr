@@ -212,6 +212,8 @@ let releases: [(NSEvent.ModifierFlags, String)] = [
 
 func mouseButtonName(_ buttonNumber: Int) -> String? {
     switch buttonNumber {
+    case 2:
+        return "MouseButton3"
     case 3:
         return "MouseButton4"
     case 4:
@@ -228,7 +230,8 @@ func emitMouseEvent(_ type: CGEventType, _ event: CGEvent) -> Bool {
     guard let buttonName = mouseButtonName(buttonNumber) else { return false }
 
     emit(type == .otherMouseDown ? "MOUSE_BUTTON_DOWN:\(buttonName)" : "MOUSE_BUTTON_UP:\(buttonName)")
-    return suppressedMouseButtons.contains(buttonName)
+    // Observe without swallowing the click in the foreground application.
+    return false
 }
 
 let mouseEventMask =
@@ -257,7 +260,7 @@ func updateMouseEventTap() {
     guard let tap = CGEvent.tapCreate(
         tap: .cgSessionEventTap,
         place: .headInsertEventTap,
-        options: .defaultTap,
+        options: .listenOnly,
         eventsOfInterest: CGEventMask(mouseEventMask),
         callback: { _, type, event, _ in
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {

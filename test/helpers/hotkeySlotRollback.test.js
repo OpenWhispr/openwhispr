@@ -7,6 +7,7 @@ const assert = require("node:assert/strict");
 const registered = new Map();
 require.cache[require.resolve("electron")] = {
   exports: {
+    app: { isPackaged: false },
     globalShortcut: {
       register(accelerator, callback) {
         if (accelerator.includes("BAD") || registered.has(accelerator)) return false;
