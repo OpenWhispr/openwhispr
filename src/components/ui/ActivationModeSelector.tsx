@@ -46,13 +46,15 @@ export function ActivationModeSelector({
   const styles = STYLES[variant];
 
   return (
-    <div className={`relative flex transition-colors duration-200 ${styles.track}`}>
-      {/* Sliding indicator: the track's padding is the inset on every side. */}
+    // Two equal columns sized to the wider option, so the half-width indicator
+    // always covers exactly one of them.
+    <div className={`relative grid grid-cols-2 transition-colors duration-200 ${styles.track}`}>
+      {/* Sliding indicator: anchored at the track's inner edge and exactly half
+          the inner width, so one full-width translate lands it under the second
+          option with no arithmetic on the padding. */}
       <div
-        className={`absolute inset-y-[var(--inset)] w-[calc(50%-var(--inset))] transition-transform duration-200 ease-out ${styles.indicator} ${
-          value === "push"
-            ? "translate-x-[calc(100%+var(--inset)*2)] rtl:-translate-x-[calc(100%+var(--inset)*2)]"
-            : "translate-x-0"
+        className={`absolute inset-y-[var(--inset)] start-[var(--inset)] w-[calc(50%-var(--inset))] transition-transform duration-200 ease-out ${styles.indicator} ${
+          value === "push" ? "translate-x-full rtl:-translate-x-full" : "translate-x-0"
         }`}
         style={{ "--inset": variant === "onboarding" ? "4px" : "2px" } as React.CSSProperties}
       />
@@ -71,7 +73,7 @@ export function ActivationModeSelector({
             aria-label={disabledReason ? `${label}: ${disabledReason}` : undefined}
             aria-pressed={value === mode}
             onClick={() => onChange(mode)}
-            className={`relative z-10 flex flex-1 items-center justify-center font-medium transition-colors duration-150 ${styles.button} ${
+            className={`relative z-10 flex items-center justify-center font-medium transition-colors duration-150 ${styles.button} ${
               disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
             } ${value === mode ? styles.selected : styles.unselected}`}
           >
