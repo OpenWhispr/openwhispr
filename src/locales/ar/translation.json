@@ -1065,7 +1065,8 @@
       "dictionaryRead": "قراءة القاموس",
       "dictionaryWrite": "تعديل القاموس",
       "snippetsRead": "قراءة المقتطفات",
-      "snippetsWrite": "تعديل المقتطفات"
+      "snippetsWrite": "تعديل المقتطفات",
+      "transcriptionsWrite": "تحويل الصوت إلى نص"
     },
     "revoke": {
       "button": "إبطال",

@@ -3894,7 +3894,8 @@
       "dictionaryRead": "辞書を読み取り",
       "dictionaryWrite": "辞書を編集",
       "snippetsRead": "スニペットを読み取り",
-      "snippetsWrite": "スニペットを編集"
+      "snippetsWrite": "スニペットを編集",
+      "transcriptionsWrite": "音声を文字起こし"
     },
     "revoke": {
       "button": "取り消し",

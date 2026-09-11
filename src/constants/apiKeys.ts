@@ -9,6 +9,7 @@ export const API_SCOPES = [
   "dictionary:write",
   "snippets:read",
   "snippets:write",
+  "transcriptions:write",
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -32,6 +33,7 @@ export const API_SCOPE_I18N_KEY: Record<ApiScope, string> = {
   "dictionary:write": "dictionaryWrite",
   "snippets:read": "snippetsRead",
   "snippets:write": "snippetsWrite",
+  "transcriptions:write": "transcriptionsWrite",
 };
 
 export interface ApiKeyExpiryOption {

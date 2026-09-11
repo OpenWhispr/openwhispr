@@ -1259,7 +1259,8 @@
       "dictionaryRead": "Lire le dictionnaire",
       "dictionaryWrite": "Modifier le dictionnaire",
       "snippetsRead": "Lire les snippets",
-      "snippetsWrite": "Modifier les snippets"
+      "snippetsWrite": "Modifier les snippets",
+      "transcriptionsWrite": "Transcrire l'audio"
     },
     "revoke": {
       "button": "Révoquer",
