@@ -1055,7 +1055,7 @@ export default function NoteEditor({
                     )}
                   >
                     <Sparkles size={12} />
-                    {t("notes.editor.enhanced")}
+                    {t("notes.editor.aiSummary")}
                     {enhancement.isStale && (
                       <span
                         className="h-1 w-1 rounded-full bg-amber-400/60"

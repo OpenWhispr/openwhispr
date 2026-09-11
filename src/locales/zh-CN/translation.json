@@ -2901,7 +2901,7 @@
       "asJson": "导出为 JSON (.json)",
       "asTranscriptMarkdown": "导出为 Markdown (.md)",
       "raw": "原始内容",
-      "enhanced": "增强内容",
+      "aiSummary": "AI 摘要",
       "saving": "保存中",
       "transcriptEmptyTitle": "尚未录制任何内容",
       "transcriptEmptyDescription": "点击录制开始转写。所说的内容会实时显示在这里。",

@@ -3243,7 +3243,7 @@
       "asJson": "Als JSON (.json)",
       "asTranscriptMarkdown": "Als Markdown (.md)",
       "raw": "Roh",
-      "enhanced": "Verbessert",
+      "aiSummary": "KI-Zusammenfassung",
       "saving": "Wird gespeichert",
       "transcriptEmptyTitle": "Noch nichts aufgenommen",
       "transcriptEmptyDescription": "Drücke auf Aufnahme, um mit der Transkription zu beginnen. Alles Gesagte erscheint hier in Echtzeit.",

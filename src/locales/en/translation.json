@@ -3243,7 +3243,7 @@
       "asJson": "As JSON (.json)",
       "asTranscriptMarkdown": "As Markdown (.md)",
       "raw": "Raw",
-      "enhanced": "Enhanced",
+      "aiSummary": "AI Summary",
       "saving": "Saving",
       "transcriptEmptyTitle": "Nothing recorded yet",
       "transcriptEmptyDescription": "Hit record to start transcribing. Everything said shows up here as it happens.",

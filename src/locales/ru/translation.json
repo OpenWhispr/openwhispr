@@ -2923,7 +2923,7 @@
       "asJson": "Как JSON (.json)",
       "asTranscriptMarkdown": "Как Markdown (.md)",
       "raw": "Исходный",
-      "enhanced": "Улучшенный",
+      "aiSummary": "ИИ-сводка",
       "saving": "Сохранение",
       "transcriptEmptyTitle": "Пока ничего не записано",
       "transcriptEmptyDescription": "Нажмите «Запись», чтобы начать транскрипцию. Всё сказанное появится здесь в реальном времени.",

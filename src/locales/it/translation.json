@@ -2901,7 +2901,7 @@
       "asJson": "Come JSON (.json)",
       "asTranscriptMarkdown": "Come Markdown (.md)",
       "raw": "Originale",
-      "enhanced": "Migliorato",
+      "aiSummary": "Riepilogo AI",
       "saving": "Salvataggio",
       "transcriptEmptyTitle": "Nessuna registrazione",
       "transcriptEmptyDescription": "Premi registra per iniziare a trascrivere. Tutto ciò che viene detto compare qui in tempo reale.",

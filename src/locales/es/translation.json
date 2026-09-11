@@ -2954,7 +2954,7 @@
       "asJson": "Como JSON (.json)",
       "asTranscriptMarkdown": "Como Markdown (.md)",
       "raw": "Sin procesar",
-      "enhanced": "Mejorado",
+      "aiSummary": "Resumen con IA",
       "saving": "Guardando",
       "transcriptEmptyTitle": "Aún no hay grabaciones",
       "transcriptEmptyDescription": "Pulsa grabar para empezar a transcribir. Todo lo que se diga aparecerá aquí en tiempo real.",

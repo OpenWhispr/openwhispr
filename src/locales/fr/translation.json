@@ -3243,7 +3243,7 @@
       "asJson": "En JSON (.json)",
       "asTranscriptMarkdown": "En Markdown (.md)",
       "raw": "Brut",
-      "enhanced": "Amélioré",
+      "aiSummary": "Résumé IA",
       "saving": "Enregistrement",
       "transcriptEmptyTitle": "Rien d'enregistré pour l'instant",
       "transcriptEmptyDescription": "Lancez l'enregistrement pour commencer la transcription. Tout ce qui est dit s'affiche ici en direct.",

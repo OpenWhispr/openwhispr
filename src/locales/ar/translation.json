@@ -1584,7 +1584,7 @@
       "asJson": "بصيغة JSON (.json)",
       "asTranscriptMarkdown": "بصيغة Markdown (.md)",
       "raw": "خام",
-      "enhanced": "مُحسّن",
+      "aiSummary": "ملخص بالذكاء الاصطناعي",
       "saving": "جاري الحفظ",
       "transcriptEmptyTitle": "لم يتم تسجيل أي شيء بعد",
       "transcriptEmptyDescription": "اضغط على تسجيل لبدء النسخ. كل ما يُقال يظهر هنا لحظيًا.",
