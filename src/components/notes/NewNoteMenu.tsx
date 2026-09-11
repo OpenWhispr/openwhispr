@@ -17,6 +17,15 @@ import { cn } from "../lib/utils";
 import { useCanCreateTeamSpace } from "../../hooks/useCanCreateTeamSpace";
 import CreateSpaceDialog from "./CreateSpaceDialog";
 
+// Matched to the search bar it sits beside: the same translucent fill that
+// lifts on hover, under the same hairline. The note's Share control keeps its
+// own pill, so these apply to this instance of the shared split button rather
+// than to the definition both share.
+const SOFT_GROUP_CLASS = "bg-foreground/4 dark:bg-white/5";
+const SOFT_SEGMENT_CLASS =
+  "hover:bg-foreground/6 focus-visible:bg-foreground/6 focus-visible:ring-1 focus-visible:ring-primary/30 dark:hover:bg-white/8 dark:focus-visible:bg-white/8";
+const SOFT_DIVIDER_CLASS = "bg-foreground/8";
+
 interface NewNoteMenuProps {
   onNewNote: () => void;
   /** Opens a new chat in the Chat tab; omitted when policy turns the assistant off. */
@@ -40,22 +49,26 @@ export default function NewNoteMenu({ onNewNote, onNewChat }: NewNoteMenuProps) 
 
   return (
     <>
-      <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-8")}>
+      <div className={cn(SPLIT_BUTTON_GROUP_CLASS, SOFT_GROUP_CLASS, "h-8")}>
         <button
           type="button"
           onClick={onNewNote}
-          className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "gap-1.5 whitespace-nowrap ps-3 pe-3.5")}
+          className={cn(
+            SPLIT_BUTTON_SEGMENT_CLASS,
+            SOFT_SEGMENT_CLASS,
+            "gap-1.5 whitespace-nowrap ps-3 pe-3.5"
+          )}
         >
           <Plus size={14} />
           {t("notes.list.newNote")}
         </button>
-        <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
+        <span aria-hidden="true" className={cn(SPLIT_BUTTON_DIVIDER_CLASS, SOFT_DIVIDER_CLASS)} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
               aria-label={t("notes.createMenu.chooseType")}
-              className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-8 justify-center")}
+              className={cn(SPLIT_BUTTON_SEGMENT_CLASS, SOFT_SEGMENT_CLASS, "w-8 justify-center")}
             >
               <ChevronDown size={14} />
             </button>
