@@ -74,6 +74,9 @@ function setPlatform(platform) {
 beforeEach((t) => {
   t.mock.method(console, "log", () => {});
   t.mock.method(console, "error", () => {});
+  // The updater is unsupported on Linux outside an AppImage, so a test that
+  // does not pick a platform would never check for updates on a Linux CI runner.
+  setPlatform("darwin");
 });
 
 afterEach(() => {
