@@ -211,11 +211,11 @@
     "rehaul": {
       "permissions": {
         "title": "Set up OpenWhispr in 3 minutes",
-        "microphoneDescription": "Turns speech into text.",
-        "accessibilityDescription": "Pastes text into your active app.",
+        "microphoneDescription": "Hears you while you dictate. Only listens after you press your hotkey.",
+        "accessibilityDescription": "Pastes your finished text into the app you’re working in.",
         "systemAudioTitle": "System Audio",
-        "systemAudioDescription": "Required for capturing audio in Meeting Notes.",
-        "screenContextDescription": "Lets your voice assistant see what’s on your screen. Never stored.",
+        "systemAudioDescription": "Lets Meeting Notes hear the other people on your call. Only while you’re recording.",
+        "screenContextDescription": "Lets your voice assistant see what’s on your screen when you ask it something. Never stored.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -1110,7 +1110,8 @@
       "welcomeBack": "Welcome back"
     },
     "signedIn": {
-      "welcomeBack": "Welcome back"
+      "welcomeBack": "Welcome back",
+      "notYou": "Not you? Log out"
     },
     "sso": {
       "continueWithSSO": "Sign in with SSO",

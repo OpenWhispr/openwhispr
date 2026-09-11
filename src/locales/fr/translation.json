@@ -211,11 +211,11 @@
     "rehaul": {
       "permissions": {
         "title": "Configurez OpenWhispr en 3 minutes",
-        "microphoneDescription": "Transforme la voix en texte.",
-        "accessibilityDescription": "Colle le texte dans votre application active.",
+        "microphoneDescription": "Vous écoute pendant la dictée. Ne s’active qu’après l’appui sur votre raccourci.",
+        "accessibilityDescription": "Colle le texte final dans l’application où vous travaillez.",
         "systemAudioTitle": "Audio Système",
-        "systemAudioDescription": "Nécessaire pour capturer l’audio dans les notes de réunion.",
-        "screenContextDescription": "Permet à votre assistant vocal de voir ce qui s’affiche à l’écran. Jamais enregistré.",
+        "systemAudioDescription": "Permet aux notes de réunion d’entendre les autres participants de l’appel. Uniquement pendant l’enregistrement.",
+        "screenContextDescription": "Permet à votre assistant vocal de voir ce qui s’affiche à l’écran quand vous lui demandez quelque chose. Jamais enregistré.",
         "enable": "Activer",
         "enabled": "Activé"
       },
@@ -1110,7 +1110,8 @@
       "welcomeBack": "Bon retour"
     },
     "signedIn": {
-      "welcomeBack": "Bon retour"
+      "welcomeBack": "Bon retour",
+      "notYou": "Ce n’est pas vous ? Se déconnecter"
     },
     "sso": {
       "continueWithSSO": "Se connecter avec le SSO",

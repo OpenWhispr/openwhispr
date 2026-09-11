@@ -557,19 +557,3 @@ test("a session written before the resume flags infers its hotkey confirmations"
   assert.equal(past.resume.dictationDemoCompleted, false);
   assert.equal(past.resume.assistantDemoCompleted, false);
 });
-
-test("only a signed-in account holder is offered a logout during onboarding", async () => {
-  const { shouldOfferOnboardingLogout } = await load();
-
-  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: true, authPath: "account" }), true);
-
-  // Guests have no account to leave.
-  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: "guest" }), false);
-  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: true, authPath: "guest" }), false);
-
-  // The legacy migration labels any pre-v2 session past the auth step "account"
-  // without anyone signing in, and Log out wipes the session, localSetupPending and
-  // the pending model selections — unconfirmed, for someone with nothing to log out of.
-  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: "account" }), false);
-  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: null }), false);
-});

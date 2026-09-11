@@ -290,22 +290,6 @@ export function isSetupDecisionStep(stepId: OnboardingStepId, route: OnboardingS
   return stepId === decisionStep;
 }
 
-/**
- * Whether the permissions step offers Log out. `authPath` alone is not the
- * question: migrateLegacyOnboardingStep labels any pre-v2 session past the auth
- * step "account" without anyone having signed in, and the action clears the
- * session, localSetupPending and the pending model selections without confirming.
- */
-export function shouldOfferOnboardingLogout({
-  isSignedIn,
-  authPath,
-}: {
-  isSignedIn: boolean;
-  authPath: OnboardingAuthPath;
-}): boolean {
-  return isSignedIn && authPath === "account";
-}
-
 export function isOnboardingStepId(value: unknown): value is OnboardingStepId {
   return typeof value === "string" && KNOWN_STEPS.has(value as OnboardingStepId);
 }

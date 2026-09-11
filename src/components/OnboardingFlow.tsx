@@ -55,7 +55,6 @@ import {
   resetOnboardingProgress,
   resolveEnterpriseWorkspaceForOnboarding,
   shouldInitializeMacAccessibilityFeatures,
-  shouldOfferOnboardingLogout,
   shouldSkipOnboardingSetupChoice,
   type OnboardingAuthDraft,
   type OnboardingByokDraft,
@@ -116,6 +115,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     resetOnboardingProgress(localStorage);
     window.location.reload();
   }, []);
+  // Set by Back on the permissions step. A signed-in user normally completes the
+  // auth step on sight; one who asked to return to it gets the welcome screen,
+  // where Log out lives.
+  const [returnedToAuth, setReturnedToAuth] = useState(false);
 
   const { dictationHotkeyConfirmed, assistantHotkeyConfirmed } = session.resume;
   const [dictationHotkey, setDictationHotkey] = useState(() =>
@@ -786,14 +789,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <CompactAuthenticationFlow
               resumeState={session.resume.auth}
               onResumeStateChange={updateAuthResumeState}
+              autoContinue={!returnedToAuth}
+              onSignOut={() => void handleLogout()}
               onContinueWithoutAccount={() => {
                 // Guests continue onto their route's permissions step — jumping
                 // straight to setup-choice would skip the permission grants and
                 // hotkey the guest route exists to guarantee (see flow.ts).
+                setReturnedToAuth(false);
                 setAuthPath("guest");
                 goTo("permissions");
               }}
               onAuthComplete={() => {
+                setReturnedToAuth(false);
                 setAuthPath("account");
                 goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
               }}
@@ -837,9 +844,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 : undefined
             }
-            onLogout={
-              shouldOfferOnboardingLogout({ isSignedIn, authPath: session.authPath })
-                ? handleLogout
+            onBack={
+              session.history.length > 0
+                ? () => {
+                    setReturnedToAuth(true);
+                    goBack();
+                  }
                 : undefined
             }
             onContinue={() => void continueFromCurrentStep()}

@@ -162,28 +162,28 @@ test("Linux onboarding shows paste-tool installation and recheck guidance", asyn
   assertGuidancePrecedesActions(markup, "sudo apt install xdotool");
 });
 
-test("permissions replaces Back with Logout, keeps Continue at the bottom, and gates it on microphone access", async (t) => {
+test("permissions offers Back ahead of Continue and gates Continue on microphone access", async (t) => {
   const vite = await createOnboardingRenderer(t, "darwin");
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
     "/components/onboarding/CompactPermissionsStep.tsx"
   );
 
-  const render = (micPermissionGranted, onLogout) =>
+  const render = (micPermissionGranted, onBack) =>
     renderToStaticMarkup(
       React.createElement(CompactPermissionsStep, {
         permissions: permissions({ micPermissionGranted }),
         systemAudio,
         screenContext,
-        onLogout,
+        onBack,
         onContinue: noop,
       })
     );
 
-  const blocked = render(false, asyncNoop);
-  assert.doesNotMatch(blocked, />common\.back<\/button>/);
+  const blocked = render(false, noop);
+  assert.doesNotMatch(blocked, /common\.logout/);
   assert.ok(
-    blocked.indexOf("common.logout") < blocked.indexOf("common.continue"),
-    "Logout takes the place Back had, ahead of Continue"
+    blocked.indexOf("common.back") < blocked.indexOf("common.continue"),
+    "Back sits ahead of Continue"
   );
   // Continue is part of the step now rather than an overlay above it, so it
   // follows the permission rows in the DOM, and so in tab order.
@@ -193,16 +193,13 @@ test("permissions replaces Back with Logout, keeps Continue at the bottom, and g
   );
   assert.match(blocked, /<button[^>]*\bdisabled=""[^>]*>common\.continue<\/button>/);
 
-  const ready = render(true, asyncNoop);
+  const ready = render(true, noop);
   assert.match(ready, /<button[^>]*>common\.continue<\/button>/);
   assert.doesNotMatch(ready, /\bdisabled=""[^>]*>common\.continue/);
 
-  // Guests reach this step without ever signing in, so they get no Logout.
-  const guest = render(true);
-  assert.doesNotMatch(guest, /common\.logout/);
-  assert.match(guest, /common\.continue/);
+  // With nothing to return to (a resumed session with no history), Back is gone.
+  assert.doesNotMatch(render(true, undefined), /common\.back/);
 });
-
 test("macOS onboarding offers optional Screen Context setup", async (t) => {
   const vite = await createOnboardingRenderer(t, "darwin");
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(

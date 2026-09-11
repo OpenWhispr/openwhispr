@@ -190,11 +190,11 @@
     "rehaul": {
       "permissions": {
         "title": "Configure o OpenWhispr em 3 minutos",
-        "microphoneDescription": "Transforma voz em texto.",
-        "accessibilityDescription": "Cola o texto no app ativo.",
+        "microphoneDescription": "Ouve você enquanto dita. Só é ativado quando você pressiona seu atalho.",
+        "accessibilityDescription": "Cola o texto final no app em que você está trabalhando.",
         "systemAudioTitle": "Áudio do Sistema",
-        "systemAudioDescription": "Necessário para capturar áudio nas notas de reunião.",
-        "screenContextDescription": "Permite que seu assistente de voz veja o que está na sua tela. Nunca é salvo.",
+        "systemAudioDescription": "Permite que as notas de reunião ouçam as outras pessoas da chamada. Só durante a gravação.",
+        "screenContextDescription": "Permite que seu assistente de voz veja o que está na sua tela quando você pede algo. Nunca é salvo.",
         "enable": "Ativar",
         "enabled": "Ativado"
       },
@@ -1090,7 +1090,8 @@
       "welcomeBack": "Que bom ter você de volta"
     },
     "signedIn": {
-      "welcomeBack": "Que bom ter você de volta"
+      "welcomeBack": "Que bom ter você de volta",
+      "notYou": "Não é você? Sair"
     },
     "sso": {
       "continueWithSSO": "Entrar com SSO",
