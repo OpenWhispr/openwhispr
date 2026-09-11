@@ -2,6 +2,7 @@ const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = 
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const { isRestorablePasteTarget } = require("./windowsPasteTarget");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
@@ -590,25 +591,6 @@ async function chunkedCloudTranscribe({
       debugLogger.warn("Failed to cleanup chunk dir", { error: cleanupErr.message });
     }
   }
-}
-
-// Windows only: whether an HWND captured at record start is one of our own
-// BrowserWindows. The tray's menu-owner window is ours but is not one of them,
-// and restoring it at paste time would pull the foreground onto OpenWhispr and
-// drop the keystroke.
-function isOwnBrowserWindowHandle(hwndHex) {
-  let handle;
-  try {
-    handle = BigInt(`0x${String(hwndHex).replace(/^0x/i, "")}`);
-  } catch {
-    return false;
-  }
-  return BrowserWindow.getAllWindows().some((win) => {
-    if (win.isDestroyed()) return false;
-    const buffer = win.getNativeWindowHandle();
-    const value = buffer.length >= 8 ? buffer.readBigUInt64LE(0) : BigInt(buffer.readUInt32LE(0));
-    return value === handle;
-  });
 }
 
 class IPCHandlers {
@@ -3073,14 +3055,17 @@ class IPCHandlers {
         process.platform === "win32"
           ? ((await this.selectionManager?.getWinTarget?.()) ?? null)
           : null;
-      // A dictation started from the tray captures our own menu-owner window, and
-      // restoring that would pull the foreground onto OpenWhispr and drop the
-      // keystroke. Our real windows stay valid targets.
-      const ownWindowCapture =
-        !!winTarget &&
-        (winTarget.exeName || "").toLowerCase() === path.basename(process.execPath).toLowerCase() &&
-        !isOwnBrowserWindowHandle(winTarget.id);
-      const targetWindow = winTarget && !ownWindowCapture ? winTarget.id : null;
+      const targetWindow =
+        winTarget &&
+        isRestorablePasteTarget({
+          target: winTarget,
+          ownExeName: path.basename(process.execPath),
+          ownWindowHandles: BrowserWindow.getAllWindows()
+            .filter((win) => !win.isDestroyed())
+            .map((win) => win.getNativeWindowHandle()),
+        })
+          ? winTarget.id
+          : null;
 
       const pasteResult = await this.clipboardManager.pasteText(textToPaste, {
         ...options,

@@ -811,11 +811,12 @@ test("the tray's quick actions ask the renderer without showing or focusing the 
   manager.sendStartMeeting();
   assert.deepEqual(events, ["open-assistant-panel", "start-meeting"]);
 
-  // Capturing a hotkey swallows the meeting request, like the hotkey paths.
+  // Capturing a hotkey swallows both, like every other input path.
   const capturingEvents = [];
   const capturing = createNormalWindowManager();
   capturing.mainWindow = fakeMainWindow(capturingEvents);
   capturing.hotkeyManager.isInListeningMode = () => true;
   capturing.sendStartMeeting();
+  capturing.sendOpenAssistantPanel();
   assert.deepEqual(capturingEvents, []);
 });

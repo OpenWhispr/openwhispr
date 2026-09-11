@@ -377,32 +377,47 @@ export default function App() {
     return () => unsubscribe?.();
   }, [isRecording, isPreparing, isProcessing, cancelRecording, cancelProcessing]);
 
-  // The tray's Ask Assistant is the pill menu's action, so it follows the pill
-  // menu's availability: agent allowed, not recording, no panel mounted.
+  // The tray's Ask Assistant and Start meeting recording. The pill menu hides
+  // those items when policy or a live recording rules them out; the tray always
+  // shows them, so the refusal happens here — before a panel opens or a note
+  // exists. A policy refusal says why, with the pill surfaced so it is visible.
+  const refuseByPolicy = useCallback(
+    (messageKey) => {
+      void window.electronAPI?.showDictationPanel?.();
+      toast({ title: t(messageKey), variant: "default" });
+    },
+    [toast, t]
+  );
+
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onOpenAssistantPanel?.(() => {
-      if (!agentAllowed || isRecording || assistant.mounted || liveTranscript.mounted) return;
       setIsCommandMenuOpen(false);
+      if (!agentAllowed) {
+        refuseByPolicy("common.policyAgentRestricted");
+        return;
+      }
+      // A recording or the transcript panel owns the pill; openPanel itself is a
+      // no-op once the assistant panel is up.
+      if (isRecording || liveTranscript.mounted) return;
       void openAssistantPanel();
     });
     return () => unsubscribe?.();
-  }, [agentAllowed, isRecording, assistant.mounted, liveTranscript.mounted, openAssistantPanel]);
+  }, [agentAllowed, isRecording, liveTranscript.mounted, openAssistantPanel, refuseByPolicy]);
 
-  // The tray's Start meeting recording. The pill menu hides the item when policy
-  // blocks meeting transcription; the tray can't, so the refusal happens here —
-  // before a note exists — with the pill surfaced so the explanation is visible.
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onStartMeeting?.(() => {
       setIsCommandMenuOpen(false);
       if (!meetingAllowed) {
-        void window.electronAPI?.showDictationPanel?.();
-        toast({ title: t("notes.meeting.restrictedByOrg"), variant: "default" });
+        refuseByPolicy("notes.meeting.restrictedByOrg");
         return;
       }
+      // The pill menu hides this while dictating: a meeting would capture the
+      // microphone the live dictation is already holding.
+      if (isRecording) return;
       void window.electronAPI.startManualMeeting?.();
     });
     return () => unsubscribe?.();
-  }, [meetingAllowed, toast, t]);
+  }, [meetingAllowed, isRecording, refuseByPolicy]);
 
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {

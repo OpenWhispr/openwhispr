@@ -30,9 +30,10 @@ export default function NewNoteMenu({ onNewNote, onNewChat }: NewNoteMenuProps) 
   const [createSpaceOpen, setCreateSpaceOpen] = useState(false);
   const itemChosenRef = useRef(false);
 
-  // Each item hands focus to what it opens (the chat input, the space dialog), so only
-  // those closes keep it; dismissing the menu still returns focus to the chevron.
-  const chooseItem = (action: () => void) => () => {
+  // The chat input and the space dialog take focus themselves, so those closes
+  // keep it. A new note focuses nothing (the editor mounts fresh), and dismissing
+  // the menu returns focus to the chevron, as Radix does by default.
+  const keepFocus = (action: () => void) => () => {
     itemChosenRef.current = true;
     action();
   };
@@ -69,12 +70,12 @@ export default function NewNoteMenu({ onNewNote, onNewChat }: NewNoteMenuProps) 
               event.preventDefault();
             }}
           >
-            <DropdownMenuItem onSelect={chooseItem(onNewNote)} className="gap-2.5">
+            <DropdownMenuItem onSelect={onNewNote} className="gap-2.5">
               <NotebookPen className="h-4 w-4" />
               {t("notes.createMenu.note")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={chooseItem(onNewChat)} className="gap-2.5">
+            <DropdownMenuItem onSelect={keepFocus(onNewChat)} className="gap-2.5">
               <MessageSquare className="h-4 w-4" />
               {t("notes.createMenu.assistantChat")}
             </DropdownMenuItem>
@@ -82,7 +83,7 @@ export default function NewNoteMenu({ onNewNote, onNewChat }: NewNoteMenuProps) 
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onSelect={chooseItem(() => setCreateSpaceOpen(true))}
+                  onSelect={keepFocus(() => setCreateSpaceOpen(true))}
                   className="gap-2.5"
                 >
                   <Users className="h-4 w-4" />

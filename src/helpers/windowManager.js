@@ -1010,6 +1010,7 @@ class WindowManager {
   // here. An accepted assistant command surfaces the pill itself through
   // setAssistantPanelOpen, and a meeting comes back through start-manual-meeting.
   sendOpenAssistantPanel() {
+    if (this.hotkeyManager.isInListeningMode()) return;
     if (!this._isOnboardingInputAllowed("assistant")) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("open-assistant-panel");
