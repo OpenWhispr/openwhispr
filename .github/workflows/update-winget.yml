@@ -4,12 +4,26 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to submit (e.g. v1.10.1). Defaults to the newest stable app release."
+        required: false
+        type: string
 
 permissions:
   contents: read
 
+# Two releases published back to back would otherwise race two komac
+# submissions against the same fork branch.
+concurrency:
+  group: update-winget
+  cancel-in-progress: false
+
 jobs:
   update-winget:
+    # winget-releaser handles stable releases only, so skip prereleases here
+    # rather than letting the version guard below fail the run.
+    if: github.event_name != 'release' || !github.event.release.prerelease
     runs-on: ubuntu-latest
     steps:
       - name: Get release version
@@ -19,11 +33,18 @@ jobs:
           GH_REPO: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
           if [ "$EVENT_NAME" = "release" ]; then
             version="$RELEASE_TAG"
+          elif [ -n "$INPUT_TAG" ]; then
+            version="$INPUT_TAG"
           else
-            version=$(gh release view --json tagName -q .tagName)
+            # Not `gh release view`: it resolves to /releases/latest, which
+            # ignores tag shape, and this repo interleaves helper-binary
+            # releases (windows-mic-listener-v1.1.0, ...) with app releases.
+            version=$(gh release list --limit 50 --exclude-drafts --exclude-pre-releases \
+              --json tagName --jq 'map(.tagName) | map(select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))) | first')
           fi
           version="${version#v}"
           if ! echo "$version" | grep -qP '^\d+\.\d+\.\d+$'; then
@@ -33,7 +54,9 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Submit to winget-pkgs
-        uses: vedantmgoyal9/winget-releaser@v2
+        # Pinned to a commit: a moving tag on a third-party action would be
+        # handed a PAT that can write to every public repo the owner can reach.
+        uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
         with:
           identifier: OpenWhispr.OpenWhispr
           release-tag: v${{ steps.release.outputs.version }}
