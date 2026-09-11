@@ -50,7 +50,15 @@ function redirect(res, params) {
 //   specific callback-page code) to reject.
 // - errorParam — query-param name for the hosted desktop-callback page
 //   (e.g. "gcal_error"); the success param is derived from the same prefix.
-function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
+// - redirectHost — hostname put in the redirect_uri sent to the provider
+//   (default "127.0.0.1", the RFC 8252-recommended IP literal). The server
+//   always binds to 127.0.0.1 regardless, so "localhost" still reaches it.
+//   Microsoft Entra's redirect URI registration UI only accepts "localhost"
+//   for the http scheme — registering the 127.0.0.1 literal requires editing
+//   the app manifest directly — so Microsoft's flow overrides this to avoid
+//   an AADSTS50011 redirect_uri mismatch against a registration most devs
+//   never think to add.
+function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam, redirectHost = "127.0.0.1" }) {
   const connectedParam = errorParam.replace(/_error$/, "_connected");
 
   return new Promise((resolve, reject) => {
@@ -97,7 +105,7 @@ function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
         }
 
         callbackClaimed = true;
-        const redirectUri = `http://127.0.0.1:${server.address().port}`;
+        const redirectUri = `http://${redirectHost}:${server.address().port}`;
         const result = await handleCallback(code, redirectUri, codeVerifier);
 
         redirect(res, { [connectedParam]: "true" });
@@ -120,7 +128,7 @@ function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
 
     server.listen(0, "127.0.0.1", () => {
       const port = server.address().port;
-      const redirectUri = `http://127.0.0.1:${port}`;
+      const redirectUri = `http://${redirectHost}:${port}`;
       // Fire-and-forget like the shell.openExternal call it replaced: a failed
       // browser launch surfaces as the flow timeout.
       openExternalUrl(buildAuthUrl(redirectUri, state, codeChallenge)).catch(() => {});
