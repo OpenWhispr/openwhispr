@@ -2741,6 +2741,11 @@
         "liquidai_lfm2_5_350m_q8_0": "Ultra-light model for fast dictation cleanup",
         "liquidai_lfm2_5_230m_q8_0": "Tiny model, instant cleanup on modest hardware"
       }
+    },
+    "errors": {
+      "contextTooLarge": "This is too long for {{model}} to read on this computer. It needs about {{needed}} tokens of context, but only {{max}} fit in memory. Try a cloud model, or run the action on a shorter selection.",
+      "contextTooLargeGeneric": "This is too long for {{model}} to read on this computer. Try a cloud model, or run the action on a shorter selection.",
+      "localServerUnavailable": "{{model}} couldn't be started on this computer. Try again, or switch to a cloud model."
     }
   },
   "sidebar": {

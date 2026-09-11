@@ -88,3 +88,33 @@ test("Gemini provider preserves complete-output truncation errors before extract
     /Model output was truncated before the selection edit completed/
   );
 });
+
+test("a caller's output budget cannot shrink the one Gemini would have computed", async (t) => {
+  // Note formatting pins maxTokens so the local path can price it against the
+  // context window. On Gemini that short-circuited a computed allowance of up
+  // to 8192 and halved long summaries — on the provider with the most room.
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  let requestBody = null;
+  globalThis.fetch = async (_url, init) => {
+    requestBody = JSON.parse(init.body);
+    return new Response(JSON.stringify(createGeminiResponse([{ text: "ok" }])), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const { geminiProvider } = await load();
+  await geminiProvider.call({
+    text: "a long meeting transcript",
+    model: "gemini-2.5-flash",
+    agentName: null,
+    config: { systemPrompt: "Write meeting notes.", maxTokens: 4096 },
+    ctx: { ...providerContext, calculateMaxTokens: () => 8192 },
+  });
+
+  assert.equal(requestBody.generationConfig.maxOutputTokens, 8192);
+});

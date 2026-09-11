@@ -18,7 +18,7 @@ export default function BackgroundActionToastListener() {
     for (const event of consumeErrorEvents()) {
       toast({
         title: t("notes.enhance.title"),
-        description: event.message,
+        description: event.messageKey ? t(event.messageKey, event.messageParams) : event.message,
         variant: "destructive",
       });
     }

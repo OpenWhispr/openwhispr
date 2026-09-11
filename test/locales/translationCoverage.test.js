@@ -10,6 +10,9 @@ const LOCALES = path.join(SRC, "locales");
 const NAMESPACES = ["translation", "prompts"];
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
 const T_CALL = /\bt\(\s*(['"`])([A-Za-z0-9_.-]+)\1/g;
+// messageKey values are passed to t() as a variable, so the T_CALL scan
+// cannot see them and a typo would render as the raw key string.
+const MESSAGE_KEY = /\bmessageKey\s*[:=]\s*(['"`])([A-Za-z0-9_.-]+)\1/g;
 const INTERPOLATION = /\{\{\s*([\w.]+)/g;
 const ARABIC_PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"];
 const ARABIC_PLURAL_BASES = [
@@ -179,6 +182,23 @@ test("interpolation variables match en in every language", () => {
       }
     }
   }
+});
+
+test("every messageKey literal resolves in en", () => {
+  const keys = new Set();
+  for (const namespace of NAMESPACES) {
+    for (const key of flatten(load("en", namespace)).keys()) keys.add(key);
+  }
+
+  const missing = [];
+  for (const file of sourceFiles(SRC)) {
+    const source = fs.readFileSync(file, "utf8");
+    for (const [, , key] of source.matchAll(MESSAGE_KEY)) {
+      if (!keys.has(stripPlural(key))) missing.push(`${key} (${path.relative(SRC, file)})`);
+    }
+  }
+
+  assert.deepEqual(missing, [], `unresolved messageKey values:\n${missing.join("\n")}`);
 });
 
 test("Arabic defines every CLDR plural category for each counted message", () => {

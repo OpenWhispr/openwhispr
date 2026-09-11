@@ -38,17 +38,20 @@ export const geminiProvider: InferenceProvider = {
 
     const generationConfig: GeminiGenerationConfig = {
       temperature: config.temperature ?? (config.systemPrompt ? 0.3 : 0),
-      maxOutputTokens:
-        config.maxTokens ||
-        Math.max(
-          2000,
-          ctx.calculateMaxTokens(
-            text.length,
-            TOKEN_LIMITS.MIN_TOKENS_GEMINI,
-            TOKEN_LIMITS.MAX_TOKENS_GEMINI,
-            TOKEN_LIMITS.TOKEN_MULTIPLIER
-          )
-        ),
+      // A caller's budget raises this ceiling, never lowers it: note formatting
+      // pins maxTokens so the local path can price it against the context
+      // window, and letting that short-circuit Gemini's own allowance halved
+      // long summaries on the provider with the most room to give (#2142).
+      maxOutputTokens: Math.max(
+        config.maxTokens || 0,
+        2000,
+        ctx.calculateMaxTokens(
+          text.length,
+          TOKEN_LIMITS.MIN_TOKENS_GEMINI,
+          TOKEN_LIMITS.MAX_TOKENS_GEMINI,
+          TOKEN_LIMITS.TOKEN_MULTIPLIER
+        )
+      ),
     };
 
     if (config.disableThinking === true && getCloudModel(model)?.supportsThinking) {

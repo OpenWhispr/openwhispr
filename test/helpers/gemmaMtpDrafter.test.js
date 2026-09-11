@@ -123,6 +123,9 @@ test("deleteModel removes the drafter alongside the main file, ignoring a missin
   });
 });
 
+// Context size is the third restart trigger; it is covered in
+// test/helpers/llamaServerContext.test.js. Every start() here passes the same
+// (default) context, so this file isolates the model/drafter dimension.
 test("llama-server start restarts only when model or drafter presence changes", async () => {
   const LlamaServerManager = require("../../src/helpers/llamaServer.js");
   const manager = new LlamaServerManager();

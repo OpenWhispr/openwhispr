@@ -9,6 +9,7 @@ const { getSafeTempDir } = require("./safeTempDir");
 const { app } = require("electron");
 const sidecarPidFile = require("./sidecarPidFile");
 const { BIN_SUBDIR: LLAMA_VULKAN_BIN_SUBDIR } = require("./llamaVulkanManager");
+const { BASELINE_CONTEXT_SIZE } = require("./llamaContextPolicy");
 
 // Range kept clear of cliBridge (8200-8219) to avoid port-bind collisions.
 const PORT_RANGE_START = 8221;
@@ -21,6 +22,51 @@ const STARTUP_POLL_INTERVAL_MS = 500;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_CONTEXT_SIZE = 4096;
+const PREFLIGHT_TIMEOUT_MS = 10000;
+
+/**
+ * llama-server reports a prompt that overflows the context as a 400 whose body
+ * is a JSON blob. Surfacing that verbatim is how customers ended up reading
+ * llama.cpp internals in a toast (#2142), so it becomes a typed error carrying
+ * the two numbers callers actually need.
+ */
+/** Same argv with --ctx-size rewritten; used by the context step-down rung. */
+function withContextSize(args, contextSize) {
+  const index = args.indexOf("--ctx-size");
+  if (index === -1) return args;
+  const copy = [...args];
+  copy[index + 1] = String(contextSize);
+  return copy;
+}
+
+function buildResponseError(statusCode, body) {
+  if (statusCode === 400) {
+    try {
+      const parsed = JSON.parse(body)?.error;
+      const isOverflow =
+        parsed?.type === "exceed_context_size_error" ||
+        /exceeds the available context size/i.test(parsed?.message || "");
+
+      if (isOverflow) {
+        const neededTokens = Number(parsed.n_prompt_tokens) || null;
+        const maxContextTokens = Number(parsed.n_ctx) || null;
+        const error = new Error(
+          neededTokens && maxContextTokens
+            ? `The request needs ${neededTokens} tokens of context but the model is running with ${maxContextTokens}.`
+            : "The request is longer than the context this model is running with."
+        );
+        error.code = "CONTEXT_TOO_LARGE";
+        error.neededTokens = neededTokens;
+        error.maxContextTokens = maxContextTokens;
+        return error;
+      }
+    } catch {
+      // Not JSON, or not the shape we expect: fall through to the generic error.
+    }
+  }
+
+  return new Error(`llama-server returned status ${statusCode}: ${body}`);
+}
 
 class LlamaServerManager {
   constructor() {
@@ -32,6 +78,13 @@ class LlamaServerManager {
     // the start() restart check); activeDraftModelPath is the one that actually loaded.
     this.draftModelPath = null;
     this.activeDraftModelPath = null;
+    // The context that actually loaded, which the GPU ladder may step down
+    // below the requested one.
+    this.activeContextSize = null;
+    // The context the running server was started with. Grows on demand and is
+    // only reset by stop(), so a short request cannot shrink a window a long
+    // one just paid to open. See #2142.
+    this.contextSize = null;
     this.startupPromise = null;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
@@ -124,7 +177,13 @@ class LlamaServerManager {
     // A change in drafter presence for the same model must still restart the
     // server so the new speculative-decoding flags take effect.
     const requestedDraftPath = options.draftModelPath || null;
-    if (this.ready && this.modelPath === modelPath && this.draftModelPath === requestedDraftPath)
+    const requestedContextSize = options.contextSize || DEFAULT_CONTEXT_SIZE;
+    if (
+      this.ready &&
+      this.modelPath === modelPath &&
+      this.draftModelPath === requestedDraftPath &&
+      requestedContextSize <= (this.contextSize || 0)
+    )
       return;
 
     if (this.process) {
@@ -134,9 +193,38 @@ class LlamaServerManager {
     this.startupPromise = this._doStart(modelPath, options);
     try {
       await this.startupPromise;
+      // The ladder may have stepped the context down to get a GPU rung to
+      // start; record what loaded, not what was asked for.
+      this.contextSize = this.activeContextSize ?? requestedContextSize;
     } finally {
       this.startupPromise = null;
     }
+  }
+
+  _buildBaseArgs(modelPath, port, options = {}) {
+    const args = [
+      "--model",
+      modelPath,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--threads",
+      String(options.threads || 4),
+      // Unset, this defaults to the model's full trained context (128K+),
+      // whose KV cache can exceed total RAM with --fit disabled. See #1203.
+      // Sized per request against a memory budget by llamaContextPolicy.
+      "--ctx-size",
+      String(options.contextSize || DEFAULT_CONTEXT_SIZE),
+      "--jinja",
+    ];
+
+    // llama-server otherwise reserves 8192 MiB of host RAM for the prompt
+    // cache, on top of the KV cache, which would undo the memory budget. Cap
+    // it rather than disabling it: 0 forces a full re-prefill every request.
+    if (options.cacheRamMiB) args.push("--cache-ram", String(options.cacheRamMiB));
+
+    return args;
   }
 
   async _doStart(modelPath, options = {}) {
@@ -151,21 +239,8 @@ class LlamaServerManager {
     this.draftModelPath = options.draftModelPath || null;
     this.activeDraftModelPath = null;
 
-    const baseArgs = [
-      "--model",
-      modelPath,
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(this.port),
-      "--threads",
-      String(options.threads || 4),
-      // Unset, this defaults to the model's full trained context (128K+),
-      // whose KV cache can exceed total RAM with --fit disabled. See #1203.
-      "--ctx-size",
-      String(options.contextSize || DEFAULT_CONTEXT_SIZE),
-      "--jinja",
-    ];
+    this.activeContextSize = options.contextSize || DEFAULT_CONTEXT_SIZE;
+    const baseArgs = this._buildBaseArgs(modelPath, this.port, options);
 
     // Draft flags stay separate from baseArgs so the fallback ladder can retry without
     // them when a stale (pre-b9763) binary rejects the MTP args at parse time.
@@ -209,6 +284,7 @@ class LlamaServerManager {
     const gpuArgs = [...baseArgs, "--n-gpu-layers", String(options.gpuLayers ?? 99)];
     const cpuArgs = baseArgs;
     const hasDraft = draftArgs.length > 0;
+    const requestedContext = options.contextSize || DEFAULT_CONTEXT_SIZE;
 
     // Degrade ladder: GPU+MTP, then GPU alone (a live GPU beats speculation), then
     // CPU+MTP (the bundled pin normally accepts the flags), then plain CPU. The
@@ -234,6 +310,25 @@ class LlamaServerManager {
         timeout: VULKAN_STARTUP_TIMEOUT_MS,
         attemptMsg: "Attempting Vulkan backend startup",
       },
+      // A context sized against system RAM can still be too big for a
+      // discrete GPU's own memory, which the app does not probe. Halving it is
+      // far cheaper than the 10-30x cost of dropping to CPU, so try that
+      // first. Omitted entirely when there is nothing to step down to, so a
+      // baseline start keeps today's exact ladder.
+      ...(requestedContext > BASELINE_CONTEXT_SIZE && binaryPaths.vulkan
+        ? [
+            {
+              backend: "vulkan",
+              name: "Vulkan (reduced context)",
+              binary: binaryPaths.vulkan,
+              args: withContextSize(gpuArgs, BASELINE_CONTEXT_SIZE),
+              mtp: false,
+              contextSize: BASELINE_CONTEXT_SIZE,
+              timeout: VULKAN_STARTUP_TIMEOUT_MS,
+              attemptMsg: "Attempting Vulkan backend startup with a reduced context",
+            },
+          ]
+        : []),
       {
         backend: "cpu",
         name: "CPU",
@@ -272,6 +367,10 @@ class LlamaServerManager {
         );
         this.activeBackend = rung.backend;
         this.activeDraftModelPath = rung.mtp ? this.draftModelPath : null;
+        // Without this the preflight would believe the full context is
+        // available and send a prompt the server cannot take.
+        this.activeContextSize = rung.contextSize ?? requestedContext;
+        this.contextSize = this.activeContextSize;
         return;
       } catch (err) {
         lastError = err;
@@ -523,6 +622,90 @@ class LlamaServerManager {
     }
   }
 
+  /**
+   * Small JSON round-trip against the running server.
+   *
+   * Resolves null on any failure rather than rejecting: these calls exist to
+   * make a decision more precise, so a broken one must degrade to the estimate
+   * and never fail the user's request.
+   */
+  _requestJson(path, body = null, timeoutMs = PREFLIGHT_TIMEOUT_MS) {
+    return new Promise((resolve) => {
+      const payload = body === null ? null : JSON.stringify(body);
+      const req = http.request(
+        {
+          hostname: "127.0.0.1",
+          port: this.port,
+          path,
+          method: payload === null ? "GET" : "POST",
+          headers: payload
+            ? {
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(payload),
+              }
+            : {},
+          timeout: timeoutMs,
+        },
+        (res) => {
+          let data = "";
+          res.on("data", (chunk) => {
+            data += chunk;
+          });
+          res.on("end", () => {
+            if (res.statusCode !== 200) return resolve(null);
+            try {
+              resolve(JSON.parse(data));
+            } catch {
+              resolve(null);
+            }
+          });
+        }
+      );
+
+      req.on("error", () => resolve(null));
+      req.on("timeout", () => {
+        req.destroy();
+        resolve(null);
+      });
+      if (payload) req.write(payload);
+      req.end();
+    });
+  }
+
+  /**
+   * The context window actually in force, which is not always what we asked
+   * for: a concurrent caller can join an in-flight start that used a smaller
+   * size. Returns null when it cannot be read.
+   */
+  async usableContextSize() {
+    if (!this.ready || !this.process) return null;
+    const props = await this._requestJson("/props");
+    const contextSize = props?.default_generation_settings?.n_ctx;
+    return Number.isFinite(contextSize) && contextSize > 0 ? contextSize : null;
+  }
+
+  /**
+   * Exact token count for the prompt as the server will actually see it, chat
+   * template included. Roughly 15 ms for an 85 KB prompt, which is cheap
+   * enough to make the difference between a right-sized window and a 400.
+   */
+  async countPromptTokens(messages, options = {}) {
+    if (!this.ready || !this.process) return null;
+
+    const payload = { messages };
+    // Must mirror inference() exactly, or we would price a different prompt
+    // than the one we go on to send.
+    if (options.disableThinking !== false) {
+      payload.chat_template_kwargs = { enable_thinking: false };
+    }
+
+    const templated = await this._requestJson("/apply-template", payload);
+    if (typeof templated?.prompt !== "string") return null;
+
+    const tokenized = await this._requestJson("/tokenize", { content: templated.prompt });
+    return Array.isArray(tokenized?.tokens) ? tokenized.tokens.length : null;
+  }
+
   async inference(messages, options = {}) {
     if (!this.ready || !this.process) {
       throw new Error("llama-server is not running");
@@ -572,7 +755,7 @@ class LlamaServerManager {
             });
 
             if (res.statusCode !== 200) {
-              reject(new Error(`llama-server returned status ${res.statusCode}: ${data}`));
+              reject(buildResponseError(res.statusCode, data));
               return;
             }
 
@@ -614,6 +797,7 @@ class LlamaServerManager {
 
     if (!this.process) {
       this.ready = false;
+      this.contextSize = null;
       return;
     }
 
@@ -651,6 +835,8 @@ class LlamaServerManager {
     this.draftModelPath = null;
     this.activeDraftModelPath = null;
     this.activeBackend = null;
+    this.contextSize = null;
+    this.activeContextSize = null;
   }
 
   getStatus() {
