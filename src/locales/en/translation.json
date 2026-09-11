@@ -215,7 +215,7 @@
         "accessibilityDescription": "Pastes your finished text into the app you’re working in.",
         "systemAudioTitle": "System Audio",
         "systemAudioDescription": "Lets Meeting Notes hear the other people on your call. Only while you’re recording.",
-        "screenContextDescription": "Lets your voice assistant see what’s on your screen when you ask it something. Never stored.",
+        "screenContextDescription": "Lets your voice assistant see your screen when you ask it something. Never stored.",
         "enable": "Enable",
         "enabled": "Enabled"
       },

@@ -214,8 +214,8 @@
         "microphoneDescription": "Ti ascolta mentre detti. Si attiva solo dopo che premi la tua scorciatoia.",
         "accessibilityDescription": "Incolla il testo finale nell’app in cui stai lavorando.",
         "systemAudioTitle": "Audio di Sistema",
-        "systemAudioDescription": "Permette alle note delle riunioni di sentire gli altri partecipanti alla chiamata. Solo durante la registrazione.",
-        "screenContextDescription": "Permette al tuo assistente vocale di vedere cosa c’è sullo schermo quando gli chiedi qualcosa. Mai salvato.",
+        "systemAudioDescription": "Lascia che le note delle riunioni sentano gli altri. Solo durante la registrazione.",
+        "screenContextDescription": "Mostra lo schermo al tuo assistente vocale quando gli chiedi qualcosa. Mai salvato.",
         "enable": "Attiva",
         "enabled": "Attivato"
       },

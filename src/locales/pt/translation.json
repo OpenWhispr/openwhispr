@@ -193,8 +193,8 @@
         "microphoneDescription": "Ouve você enquanto dita. Só é ativado quando você pressiona seu atalho.",
         "accessibilityDescription": "Cola o texto final no app em que você está trabalhando.",
         "systemAudioTitle": "Áudio do Sistema",
-        "systemAudioDescription": "Permite que as notas de reunião ouçam as outras pessoas da chamada. Só durante a gravação.",
-        "screenContextDescription": "Permite que seu assistente de voz veja o que está na sua tela quando você pede algo. Nunca é salvo.",
+        "systemAudioDescription": "Deixa as notas de reunião ouvirem as outras pessoas da chamada. Só durante a gravação.",
+        "screenContextDescription": "Deixa seu assistente de voz ver sua tela quando você pede algo. Nunca é salvo.",
         "enable": "Ativar",
         "enabled": "Ativado"
       },

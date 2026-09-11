@@ -211,11 +211,11 @@
     "rehaul": {
       "permissions": {
         "title": "OpenWhispr in 3 Minuten einrichten",
-        "microphoneDescription": "Hört zu, während Sie diktieren. Nimmt erst auf, wenn Sie Ihre Tastenkombination drücken.",
+        "microphoneDescription": "Hört zu, während Sie diktieren. Nur nach Druck auf Ihre Tastenkombination.",
         "accessibilityDescription": "Fügt den fertigen Text in die App ein, in der Sie gerade arbeiten.",
         "systemAudioTitle": "Systemaudio",
-        "systemAudioDescription": "Lässt Meeting Notes die anderen Teilnehmer Ihres Gesprächs hören. Nur während der Aufnahme.",
-        "screenContextDescription": "Lässt Ihren Sprachassistenten sehen, was auf Ihrem Bildschirm ist, wenn Sie ihn etwas fragen. Wird nie gespeichert.",
+        "systemAudioDescription": "Lässt Meeting Notes die anderen in Ihrem Gespräch hören. Nur während der Aufnahme.",
+        "screenContextDescription": "Lässt Ihren Sprachassistenten Ihren Bildschirm sehen, wenn Sie fragen. Nie gespeichert.",
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },

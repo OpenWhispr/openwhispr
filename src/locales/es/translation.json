@@ -214,8 +214,8 @@
         "microphoneDescription": "Te escucha mientras dictas. Solo se activa cuando pulsas tu atajo.",
         "accessibilityDescription": "Pega el texto final en la aplicación en la que estás trabajando.",
         "systemAudioTitle": "Audio del Sistema",
-        "systemAudioDescription": "Permite que las notas de reuniones escuchen a los demás participantes de la llamada. Solo mientras grabas.",
-        "screenContextDescription": "Permite que tu asistente de voz vea lo que hay en tu pantalla cuando le pides algo. Nunca se guarda.",
+        "systemAudioDescription": "Deja que las notas de reuniones oigan a los demás en la llamada. Solo mientras grabas.",
+        "screenContextDescription": "Deja que tu asistente de voz vea tu pantalla cuando le pides algo. Nunca se guarda.",
         "enable": "Activar",
         "enabled": "Activado"
       },
