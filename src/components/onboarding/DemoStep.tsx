@@ -7,7 +7,10 @@ import { Button } from "../ui/button";
 import { toolIcons } from "../chat/toolIcons";
 import { VoicePill, type VoicePillState } from "../dictation/VoicePill";
 import { useListeningEntrancePhase } from "../../hooks/useListeningEntrancePhase";
-import { resolveListeningEntrancePresentation } from "../../helpers/voicePillPresentation";
+import {
+  resolveListeningEntrancePresentation,
+  resolveVoiceActivityPresentation,
+} from "../../helpers/voicePillPresentation";
 import type {
   OnboardingDemoEvent,
   OnboardingDemoKind,
@@ -156,11 +159,14 @@ const isListening = (status: OnboardingDemoStatus | undefined) =>
 
 function DemoVoicePill({
   status,
+  agent = false,
   getLevel,
   stopLabel,
   onStop,
 }: {
   status: OnboardingDemoStatus | undefined;
+  /** The assistant demo: purple identity and thinking glow. */
+  agent?: boolean;
   getLevel: () => number | null;
   stopLabel: string;
   onStop: () => void;
@@ -169,17 +175,26 @@ function DemoVoicePill({
   const busy = status === "processing" || status === "replying";
   const phase = useListeningEntrancePhase(listening);
   const entrance = resolveListeningEntrancePresentation({ isRecording: listening, phase });
-  // The presentation helper is untyped JS; while listening it always names the
-  // recording state.
-  const state: VoicePillState = listening ? "recording" : busy ? "processing" : "idle";
+  // Processing collapses to the logo and lights the Signal glow, exactly as the
+  // dictation window's pill does — blue for dictation, purple while the
+  // assistant thinks.
+  const activity = resolveVoiceActivityPresentation({
+    isRecording: listening,
+    isProcessing: busy,
+    isAssistantVoice: agent,
+    assistantThinking: agent && status === "replying",
+  });
+  // The presentation helpers are untyped JS; their active state is one of ours.
+  const state = (entrance.activeState ?? activity.activeState ?? "idle") as VoicePillState;
 
   return (
     <VoicePill
       variant="floating"
       state={state}
-      expanded={entrance.compactPill || busy}
+      expanded={listening ? entrance.compactPill : activity.compactPill}
       collapseToLogo={entrance.collapseToLogo}
       waveformVisible={entrance.waveformVisible}
+      agentMode={agent && (listening || busy)}
       horizontalDirection="left"
       getAudioLevel={getLevel}
       role={listening ? "button" : "status"}
@@ -397,6 +412,7 @@ export default function DemoStep({
             event={effectiveEvent}
             transcript={transcript}
             getLevel={getLevel}
+            agent
             listeningLabel={listeningLabel}
             processingLabel={processingLabel}
             stopLabel={stopLabel}
@@ -486,6 +502,7 @@ function VoiceSurface({
   event,
   transcript,
   getLevel,
+  agent = false,
   listeningLabel,
   processingLabel,
   stopLabel,
@@ -502,6 +519,7 @@ function VoiceSurface({
   /** What was heard, shown above the reply while the assistant answers it. */
   transcript?: string;
   getLevel: () => number | null;
+  agent?: boolean;
   listeningLabel: string;
   processingLabel: string;
   stopLabel: string;
@@ -550,7 +568,13 @@ function VoiceSurface({
       />
       {/* Anchored to the corner so the pill grows into the card, leftward. */}
       <div className="absolute bottom-2 end-2 flex justify-end">
-        <DemoVoicePill status={status} getLevel={getLevel} stopLabel={stopLabel} onStop={onStop} />
+        <DemoVoicePill
+          status={status}
+          agent={agent}
+          getLevel={getLevel}
+          stopLabel={stopLabel}
+          onStop={onStop}
+        />
       </div>
       <div
         className="absolute bottom-3 start-3 max-w-[15rem] text-xs text-[var(--onboarding-text-secondary)]"
