@@ -579,7 +579,16 @@
     },
     "update": {
       "readyTitle": "Update bereit zur Installation",
-      "readyDescription": "Klicken Sie auf 'Update installieren', um mit der neuesten Version neu zu starten."
+      "readyDescription": "Klicken Sie auf 'Update installieren', um mit der neuesten Version neu zu starten.",
+      "installTitle": "Update installieren",
+      "installDescription": "OpenWhispr startet neu, um das Update anzuwenden. Laufende Arbeit wird gespeichert.",
+      "couldNotInstallTitle": "Update konnte nicht installiert werden",
+      "couldNotInstallDescription": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+      "couldNotDownloadTitle": "Update konnte nicht heruntergeladen werden",
+      "couldNotDownloadDescription": "Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+      "installing": "Wird installiert...",
+      "installButton": "Update installieren",
+      "availableButton": "Update verfügbar"
     },
     "limit": {
       "weeklyTitle": "Wochenlimit erreicht",

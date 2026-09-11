@@ -558,7 +558,16 @@
     },
     "update": {
       "readyTitle": "Atualização pronta para instalar",
-      "readyDescription": "Clique em 'Instalar atualização' para reiniciar com a versão mais recente."
+      "readyDescription": "Clique em 'Instalar atualização' para reiniciar com a versão mais recente.",
+      "installTitle": "Instalar atualização",
+      "installDescription": "O OpenWhispr será reiniciado para aplicar a atualização. O trabalho em andamento será salvo.",
+      "couldNotInstallTitle": "Não foi possível instalar a atualização",
+      "couldNotInstallDescription": "Algo deu errado. Tente novamente.",
+      "couldNotDownloadTitle": "Não foi possível baixar a atualização",
+      "couldNotDownloadDescription": "Verifique sua conexão e tente novamente.",
+      "installing": "Instalando...",
+      "installButton": "Instalar atualização",
+      "availableButton": "Atualização disponível"
     },
     "limit": {
       "weeklyTitle": "Limite semanal atingido",

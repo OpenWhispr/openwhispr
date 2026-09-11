@@ -579,7 +579,16 @@
     },
     "update": {
       "readyTitle": "Mise à jour prête à installer",
-      "readyDescription": "Cliquez sur « Installer la mise à jour » pour redémarrer avec la dernière version."
+      "readyDescription": "Cliquez sur « Installer la mise à jour » pour redémarrer avec la dernière version.",
+      "installTitle": "Installer la mise à jour",
+      "installDescription": "OpenWhispr va redémarrer pour appliquer la mise à jour. Le travail en cours sera sauvegardé.",
+      "couldNotInstallTitle": "Impossible d'installer la mise à jour",
+      "couldNotInstallDescription": "Une erreur est survenue. Veuillez réessayer.",
+      "couldNotDownloadTitle": "Impossible de télécharger la mise à jour",
+      "couldNotDownloadDescription": "Vérifiez votre connexion internet puis réessayez.",
+      "installing": "Installation...",
+      "installButton": "Installer la mise à jour",
+      "availableButton": "Mise à jour disponible"
     },
     "limit": {
       "weeklyTitle": "Limite hebdomadaire atteinte",

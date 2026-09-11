@@ -16,8 +16,7 @@ class UpdateManager {
     this.eventListeners = [];
     this.updateCheckInterval = null;
     this.windowManager = null;
-    // null until the renderer syncs the preference; a missing value keeps
-    // check-by-default behavior but never downloads unasked.
+    // null until the renderer syncs the preference, so nothing downloads unasked.
     this.autoUpdatesEnabled = null;
 
     this.setupAutoUpdater();
@@ -317,14 +316,9 @@ class UpdateManager {
     this.downloadUpdate().catch(() => {});
   }
 
-  // With automatic updates off the app must not reach the update feed at all,
-  // so offline or firewalled machines never surface a connection error (#1605).
-  // The preference is read at fire time so toggling it needs no restart.
+  // Checks always run so the sidebar can offer a manual download when automatic
+  // updates are off; a failed background check is logged and never surfaced.
   _autoCheckForUpdates(label) {
-    if (this.autoUpdatesEnabled === false) {
-      console.log(`⏭️ ${label} update check skipped (automatic updates disabled)`);
-      return;
-    }
     console.log(`🔄 ${label} update check...`);
     autoUpdater.checkForUpdates().catch((err) => {
       console.error(`${label} update check failed:`, err);

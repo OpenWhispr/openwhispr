@@ -579,7 +579,16 @@
     },
     "update": {
       "readyTitle": "更新已準備就緒",
-      "readyDescription": "點擊「安裝更新」以重新啟動並套用最新版本。"
+      "readyDescription": "點擊「安裝更新」以重新啟動並套用最新版本。",
+      "installTitle": "安裝更新",
+      "installDescription": "OpenWhispr 將重新啟動以套用更新。進行中的工作會自動儲存。",
+      "couldNotInstallTitle": "無法安裝更新",
+      "couldNotInstallDescription": "發生錯誤，請再試一次。",
+      "couldNotDownloadTitle": "無法下載更新",
+      "couldNotDownloadDescription": "請檢查你的網路連線後再試一次。",
+      "installing": "安裝中...",
+      "installButton": "安裝更新",
+      "availableButton": "有可用更新"
     },
     "limit": {
       "weeklyTitle": "已達每週使用上限",

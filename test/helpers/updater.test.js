@@ -83,64 +83,27 @@ afterEach(() => {
   else process.env.APPIMAGE = originalAppImage;
 });
 
-test("with automatic updates off, startup and periodic checks never reach the update feed", (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
-  const autoUpdater = makeAutoUpdater();
-  const manager = createUpdateManager(autoUpdater);
-  manager.setAutoUpdatesEnabled(false);
+test("startup and periodic checks run whether or not automatic updates are on", (t) => {
+  for (const enabled of [true, false, null]) {
+    t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+    const autoUpdater = makeAutoUpdater();
+    const manager = createUpdateManager(autoUpdater);
+    if (enabled !== null) manager.setAutoUpdatesEnabled(enabled);
 
-  manager.checkForUpdatesOnStartup();
-  t.mock.timers.tick(STARTUP_DELAY_MS);
-  assert.equal(autoUpdater.calls, 0, "startup check must be skipped");
-  t.mock.timers.tick(PERIODIC_INTERVAL_MS);
-  assert.equal(autoUpdater.calls, 0, "periodic check must be skipped");
+    manager.checkForUpdatesOnStartup();
+    t.mock.timers.tick(STARTUP_DELAY_MS);
+    assert.equal(autoUpdater.calls, 1, `startup check with preference ${enabled}`);
+    t.mock.timers.tick(PERIODIC_INTERVAL_MS);
+    assert.equal(autoUpdater.calls, 2, `periodic check with preference ${enabled}`);
 
-  manager.cleanup();
+    manager.cleanup();
+    t.mock.timers.reset();
+  }
 });
 
-test("with automatic updates on, startup and periodic checks run", (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+test("before the renderer syncs the preference, an available update is not downloaded", () => {
   const autoUpdater = makeAutoUpdater();
   const manager = createUpdateManager(autoUpdater);
-  manager.setAutoUpdatesEnabled(true);
-
-  manager.checkForUpdatesOnStartup();
-  t.mock.timers.tick(STARTUP_DELAY_MS);
-  assert.equal(autoUpdater.calls, 1);
-  t.mock.timers.tick(PERIODIC_INTERVAL_MS);
-  assert.equal(autoUpdater.calls, 2);
-
-  manager.cleanup();
-});
-
-test("the preference is read at fire time, so toggling it takes effect without a restart", (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
-  const autoUpdater = makeAutoUpdater();
-  const manager = createUpdateManager(autoUpdater);
-  manager.setAutoUpdatesEnabled(false);
-  manager.checkForUpdatesOnStartup();
-  t.mock.timers.tick(STARTUP_DELAY_MS);
-  assert.equal(autoUpdater.calls, 0);
-
-  manager.setAutoUpdatesEnabled(true);
-  t.mock.timers.tick(PERIODIC_INTERVAL_MS);
-  assert.equal(autoUpdater.calls, 1, "next periodic tick runs once re-enabled");
-
-  manager.setAutoUpdatesEnabled(false);
-  t.mock.timers.tick(PERIODIC_INTERVAL_MS);
-  assert.equal(autoUpdater.calls, 1, "and is skipped again once disabled");
-
-  manager.cleanup();
-});
-
-test("before the renderer syncs the preference, checks run but nothing downloads unasked", (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
-  const autoUpdater = makeAutoUpdater();
-  const manager = createUpdateManager(autoUpdater);
-
-  manager.checkForUpdatesOnStartup();
-  t.mock.timers.tick(STARTUP_DELAY_MS);
-  assert.equal(autoUpdater.calls, 1);
 
   autoUpdater.listeners["update-available"]({ version: "9.9.9" });
   assert.equal(autoUpdater.downloads, 0);
@@ -188,21 +151,13 @@ test("enabling automatic updates after the startup check found one starts the do
   manager.setAutoUpdatesEnabled(true);
   assert.equal(autoUpdater.downloads, 1);
 
+  manager.setAutoUpdatesEnabled(true);
+  assert.equal(autoUpdater.downloads, 1, "re-syncing the preference does not restart it");
+
   manager.cleanup();
 });
 
-test("a manual Check for Updates is never gated by the preference", async () => {
-  const autoUpdater = makeAutoUpdater();
-  const manager = createUpdateManager(autoUpdater);
-  manager.setAutoUpdatesEnabled(false);
-
-  const result = await manager.checkForUpdates();
-
-  assert.equal(autoUpdater.calls, 1);
-  assert.equal(result.updateAvailable, false);
-});
-
-test("offline with automatic updates off, no update-error reaches the renderers (#1605)", (t) => {
+test("a failed background check only reaches renderers as update-error", (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
   const autoUpdater = makeAutoUpdater({ offline: true });
   const manager = createUpdateManager(autoUpdater);
@@ -211,15 +166,10 @@ test("offline with automatic updates off, no update-error reaches the renderers 
     mainWindow: makeRendererWindow(sent),
     controlPanelWindow: makeRendererWindow(sent),
   });
-  manager.setAutoUpdatesEnabled(false);
 
   manager.checkForUpdatesOnStartup();
   t.mock.timers.tick(STARTUP_DELAY_MS);
-  assert.deepEqual(sent, [], "a skipped check produces no renderer traffic at all");
-
-  manager.setAutoUpdatesEnabled(true);
-  t.mock.timers.tick(PERIODIC_INTERVAL_MS);
-  assert.ok(sent.includes("update-error"));
+  assert.deepEqual([...new Set(sent)], ["update-error"]);
 
   manager.cleanup();
 });

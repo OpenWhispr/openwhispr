@@ -466,7 +466,16 @@
     },
     "update": {
       "readyTitle": "التحديث جاهز للتثبيت",
-      "readyDescription": "انقر فوق «تثبيت التحديث» لإعادة التشغيل باستخدام أحدث إصدار."
+      "readyDescription": "انقر فوق «تثبيت التحديث» لإعادة التشغيل باستخدام أحدث إصدار.",
+      "installTitle": "تثبيت التحديث",
+      "installDescription": "سيتم إعادة تشغيل OpenWhispr لتطبيق التحديث. سيتم حفظ أي عمل قيد التقدم.",
+      "couldNotInstallTitle": "تعذر تثبيت التحديث",
+      "couldNotInstallDescription": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+      "couldNotDownloadTitle": "تعذر تنزيل التحديث",
+      "couldNotDownloadDescription": "تحقق من اتصالك بالإنترنت وحاول مرة أخرى.",
+      "installing": "جاري التثبيت...",
+      "installButton": "تثبيت التحديث",
+      "availableButton": "التحديث متاح"
     },
     "limit": {
       "weeklyTitle": "تم الوصول إلى الحد الأسبوعي",
