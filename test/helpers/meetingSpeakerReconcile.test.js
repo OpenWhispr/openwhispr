@@ -222,13 +222,13 @@ test("speaker expectation reports cap as other-speaker count in every system-mod
   );
   assert.deepEqual(
     resolve({ observedSpeakerIds: new Set(["speaker_0", "speaker_1"]) }),
-    { numSpeakers: 2, cap: 2 },
-    "observed ids are already other-speaker ids"
+    { numSpeakers: -1, cap: 7 },
+    "Auto does not freeze provisional live labels into an exact count"
   );
   assert.deepEqual(
     resolve({}),
-    { numSpeakers: -1, cap: 1 },
-    "the default total of 2 means a single other speaker, not 2"
+    { numSpeakers: -1, cap: 7 },
+    "Auto reserves one of the supported slots for the local microphone"
   );
 });
 
@@ -244,7 +244,7 @@ test("mic mode counts the user among the expected speakers", () => {
   );
   assert.deepEqual(
     resolve({ diarizedSource: "mic" }),
-    { numSpeakers: -1, cap: 2 },
-    "the no-signal fallback caps at the default expected total, user included"
+    { numSpeakers: -1, cap: 8 },
+    "Auto uses the supported maximum, including the user"
   );
 });

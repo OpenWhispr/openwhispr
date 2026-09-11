@@ -953,7 +953,7 @@ class IPCHandlers {
   }
 
   _resolveNoteExpectedSpeakerCount(note) {
-    return this._noteExpectedSpeakerCountOrNull(note) ?? DEFAULT_EXPECTED_SPEAKER_COUNT;
+    return this._noteExpectedSpeakerCountOrNull(note) ?? 0;
   }
 
   _resolveInitialMeetingSpeakerConfig(noteId) {
@@ -3663,10 +3663,7 @@ class IPCHandlers {
         if (!realPath) return { success: false, error: "File path not allowed" };
         filePath = realPath;
 
-        const numSpeakers = Math.min(
-          MAX_SPEAKER_COUNT,
-          Math.max(-1, Math.round(Number(options.numSpeakers) || -1))
-        );
+        const numSpeakers = normalizeStoredSpeakerCount(options.numSpeakers) ?? -1;
 
         const { convertToWav } = require("./ffmpegUtils");
         const { getSafeTempDir } = require("./safeTempDir");
@@ -7297,7 +7294,7 @@ class IPCHandlers {
 
     const resolveSessionMaxSpeakers = () => {
       const count = this.activeMeetingSpeakerConfig?.expectedCount;
-      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
+      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : MAX_SPEAKER_COUNT;
       return Math.max(1, total - 1);
     };
 
@@ -11316,13 +11313,18 @@ class IPCHandlers {
     ipcMain.handle("meeting-set-session-speaker-config", async (_event, payload) => {
       try {
         const enabled = payload?.enabled !== false;
-        const expectedCount = Math.max(
-          1,
-          Math.min(
-            MAX_SPEAKER_COUNT,
-            Number(payload?.expectedCount) || DEFAULT_EXPECTED_SPEAKER_COUNT
-          )
-        );
+        const rawCount = payload?.expectedCount;
+        if (
+          rawCount != null &&
+          rawCount !== 0 &&
+          (!Number.isInteger(rawCount) || rawCount < 1 || rawCount > MAX_SPEAKER_COUNT)
+        ) {
+          return {
+            success: false,
+            error: "Participant count must be Auto or an integer from 1 to " + MAX_SPEAKER_COUNT,
+          };
+        }
+        const expectedCount = rawCount ?? 0;
         // Only a stepper-set count is explicit; the diarization toggle reuses this
         // channel and must not freeze the count against roster-driven refreshes.
         this.activeMeetingSpeakerConfig = {
@@ -11333,7 +11335,7 @@ class IPCHandlers {
         liveSpeakerIdentifier.setEnabled(enabled);
         // Live identification only labels other speakers (the mic track is "you"),
         // so cap at expectedCount - 1 to match resolveSessionMaxSpeakers().
-        liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
+        liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, (expectedCount || MAX_SPEAKER_COUNT) - 1));
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -11918,7 +11920,7 @@ class IPCHandlers {
     // mid-meeting postdate the config snapshot taken at recording start.
     let expectedTotal = sessionConfig?.explicit ? sessionConfig.expectedCount : null;
 
-    if (!expectedTotal && noteId != null) {
+    if (!sessionConfig?.explicit && !expectedTotal && noteId != null) {
       try {
         expectedTotal = this._noteExpectedSpeakerCountOrNull(this.databaseManager.getNote(noteId));
       } catch (_) {
@@ -11937,18 +11939,14 @@ class IPCHandlers {
       return { numSpeakers, cap: numSpeakers };
     }
 
-    if (observedSpeakerIds.size >= 2) {
-      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
-      return { numSpeakers, cap: numSpeakers };
-    }
-
+    // Auto must not turn provisional live labels into a fixed speaker count.
     if (micMode) {
-      return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
+      return { numSpeakers: -1, cap: MAX_SPEAKER_COUNT };
     }
 
     // Only system audio reaches the diarizer (the mic track is "you"), so the cap
     // counts other speakers — same total - 1 basis as the branches above.
-    return { numSpeakers: -1, cap: Math.max(1, DEFAULT_EXPECTED_SPEAKER_COUNT - 1) };
+    return { numSpeakers: -1, cap: Math.max(1, MAX_SPEAKER_COUNT - 1) };
   }
 
   _startOrSkipDiarization(
@@ -12007,10 +12005,9 @@ class IPCHandlers {
           observedSpeakerIds,
           diarizedSource,
         });
-        let diarizationSegments = await this.diarizationManager.diarize(
-          tmpWav,
-          numSpeakers > 0 ? { numSpeakers } : {}
-        );
+        let diarizationSegments = await this.diarizationManager.diarize(tmpWav, {
+          maxSpeakers: cap,
+        });
         if (cap != null) {
           diarizationSegments = this.diarizationManager.capSpeakerClusters(
             diarizationSegments,

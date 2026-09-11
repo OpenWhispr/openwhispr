@@ -917,16 +917,18 @@ export function MeetingTranscriptChat({
               <div className="flex items-center gap-0.5 rounded-md border border-border bg-surface-2/60">
                 <button
                   onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount - 1)}
-                  disabled={sessionExpectedCount <= 1}
+                  disabled={sessionExpectedCount <= 0}
                   className="px-1.5 py-0.5 rounded-s-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                   aria-label={t("notes.speaker.pill.decAria")}
                 >
                   −
                 </button>
                 <span className="px-1.5 tabular-nums" aria-live="polite">
-                  {sessionExpectedCount === 1
-                    ? t("notes.speaker.pill.justYou")
-                    : sessionExpectedCount}
+                  {sessionExpectedCount === 0
+                    ? t("notes.speaker.pill.auto")
+                    : sessionExpectedCount === 1
+                      ? t("notes.speaker.pill.justYou")
+                      : sessionExpectedCount}
                 </span>
                 <button
                   onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount + 1)}

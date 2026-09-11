@@ -443,7 +443,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   completedDiarization: null,
   sessionDiarizationEnabled:
     (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ?? true,
-  sessionExpectedCount: DEFAULT_EXPECTED_SPEAKER_COUNT,
+  sessionExpectedCount: 0,
   userTouchedStepper: false,
   error: null,
   errorNonce: 0,
@@ -496,7 +496,8 @@ export function setSessionDiarizationEnabled(enabled: boolean): void {
 }
 
 export function setSessionExpectedCount(count: number): void {
-  const clamped = Math.max(1, Math.min(MAX_SPEAKER_COUNT, count));
+  if (!Number.isInteger(count) || count < 0 || count > MAX_SPEAKER_COUNT) return;
+  const clamped = count;
   useMeetingRecordingStore.setState({
     sessionExpectedCount: clamped,
     userTouchedStepper: true,
@@ -504,7 +505,7 @@ export function setSessionExpectedCount(count: number): void {
   pushConfig(useMeetingRecordingStore.getState().sessionDiarizationEnabled, clamped, true);
   const noteId = useMeetingRecordingStore.getState().recordingNoteId;
   if (noteId != null) {
-    window.electronAPI?.updateNote?.(noteId, { expected_speaker_count: clamped });
+    window.electronAPI?.updateNote?.(noteId, { expected_speaker_count: clamped || null });
   }
 }
 
@@ -596,7 +597,7 @@ function reserveSpeakerIndex(speakerId?: string) {
 // backend cap so live labels can't climb past the count the user expects.
 function mintPlaceholderSpeakerId(): string {
   const expected = useMeetingRecordingStore.getState().sessionExpectedCount;
-  const cap = Math.max(1, expected - 1);
+  const cap = Math.max(1, (expected || MAX_SPEAKER_COUNT) - 1);
   const index = Math.min(nextPlaceholderSpeakerIndex, cap - 1);
   nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, index + 1);
   return `speaker_${index}`;
@@ -784,10 +785,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       args.diarizationEnabled ??
       (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ??
       true;
-    const initialCount = Math.max(
-      1,
-      Math.min(MAX_SPEAKER_COUNT, args.expectedCount ?? DEFAULT_EXPECTED_SPEAKER_COUNT)
-    );
+    const initialCount = Math.max(0, Math.min(MAX_SPEAKER_COUNT, args.expectedCount ?? 0));
 
     logger.info("Meeting transcription starting...", {}, "meeting");
     const seed = args.seedSegments ?? [];
