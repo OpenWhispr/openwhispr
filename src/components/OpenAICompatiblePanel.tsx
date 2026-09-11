@@ -7,6 +7,7 @@ import ModelCardList from "./ui/ModelCardList";
 import SearchableModelList, { MODEL_SEARCH_THRESHOLD } from "./ui/SearchableModelList";
 import { buildApiUrl, getModelListBaseCandidates, normalizeBaseUrl } from "../config/constants";
 import { isSecureHttpEndpoint } from "../utils/urlUtils";
+import { resolveApiKey } from "../utils/resolveApiKey";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 
 interface ModelOption {
@@ -109,7 +110,7 @@ export default function OpenAICompatiblePanel({
         setModelsError(null);
       }
 
-      const trimmedKey = apiKey?.trim();
+      const trimmedKey = await resolveApiKey(apiKey);
       const effectiveKey = trimmedKey && trimmedKey.length > 0 ? trimmedKey : undefined;
       let activeBase = normalized;
 
