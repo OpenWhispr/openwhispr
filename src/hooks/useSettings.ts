@@ -9,7 +9,11 @@ import type {
   SelfHostedType,
 } from "../types/electron";
 import type { Snippet } from "../utils/snippets";
-import { effectiveAudioRetentionDays } from "../stores/policyRules";
+import {
+  effectiveAudioRetentionDays,
+  effectiveLocalHistoryEnabled,
+  isLocalHistoryPolicyResolved,
+} from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 
 export interface TranscriptionSettings {
@@ -185,16 +189,31 @@ function useSettingsInternal() {
   }, []);
 
   // Retention periods are enforced by the main process cleanup sweep
-  const { audioRetentionDays, transcriptRetentionDays } = store;
+  const { audioRetentionDays, transcriptRetentionDays, dataRetentionEnabled } = store;
   const enforcedAudioRetentionDays = usePolicyStore((policyState) =>
     effectiveAudioRetentionDays(policyState, audioRetentionDays)
   );
+  // Sent alongside the periods because the main process reconstructs Insights
+  // history from stored transcripts, and that must answer to the same switch.
+  const enforcedDataRetentionEnabled = usePolicyStore((policyState) =>
+    effectiveLocalHistoryEnabled(policyState, dataRetentionEnabled)
+  );
+  // Reported alongside the value because history reconstruction reads that
+  // switch as consent, and until the policy settles it is only a default.
+  const localHistoryPolicyResolved = usePolicyStore(isLocalHistoryPolicyResolved);
   useEffect(() => {
     window.electronAPI?.syncRetentionSettings?.({
       audioRetentionDays: enforcedAudioRetentionDays,
       transcriptRetentionDays,
+      dataRetentionEnabled: enforcedDataRetentionEnabled,
+      localHistoryPolicyResolved,
     });
-  }, [enforcedAudioRetentionDays, transcriptRetentionDays]);
+  }, [
+    enforcedAudioRetentionDays,
+    transcriptRetentionDays,
+    enforcedDataRetentionEnabled,
+    localHistoryPolicyResolved,
+  ]);
 
   // Sync startup pre-warming preferences to main process
   const {

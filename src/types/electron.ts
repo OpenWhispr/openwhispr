@@ -212,6 +212,7 @@ export interface AnalyticsSummary {
   longestStreakDays: number;
   wpmCoveragePercent: number;
   daily: AnalyticsDailyBucket[];
+  historyBackfillRetryRequired?: boolean;
 }
 
 export type LeaderboardMetric =
@@ -1263,6 +1264,7 @@ declare global {
           errorMessage?: string | null;
           errorCode?: TranscriptionErrorCode;
           clientTranscriptionId?: string;
+          analyticsOccurredAt?: string;
         }
       ) => Promise<{ id: number; success: boolean; transcription?: TranscriptionItem }>;
       getTranscriptions: (
@@ -1327,6 +1329,8 @@ declare global {
       syncRetentionSettings?: (settings: {
         audioRetentionDays: number;
         transcriptRetentionDays: number;
+        dataRetentionEnabled: boolean;
+        localHistoryPolicyResolved: boolean;
       }) => void;
       retryTranscription: (
         id: number,
