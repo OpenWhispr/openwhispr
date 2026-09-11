@@ -7,6 +7,7 @@ import {
   Sparkles,
   AlignLeft,
   MessageSquareText,
+  Mic,
   LinkIcon,
   Link2,
   Lock,
@@ -58,6 +59,8 @@ import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
 import NoteRecordControl, { RecordingWave } from "./NoteRecordControl";
+import EmptyStateCard from "../ui/EmptyStateCard";
+import { Button } from "../ui/button";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
@@ -392,7 +395,6 @@ export default function NoteEditor({
   }, [diarizedSegments, note.transcript]);
 
   const hasChatSegments = displaySegments.length > 0;
-  const hasTranscriptView = hasMeetingTranscript || hasChatSegments || isRecording;
 
   const knownSpeakers = useMemo(
     () => buildKnownSpeakers(speakerProfiles, displaySegments, speakerMappings),
@@ -1004,13 +1006,11 @@ export default function NoteEditor({
                   data-segment-button
                   data-segment-value="transcript"
                   onClick={() => setViewMode("transcript")}
-                  disabled={!hasTranscriptView}
                   className={cn(
                     SEGMENT_BUTTON_CLASS,
                     viewMode === "transcript"
                       ? "text-foreground"
-                      : "text-foreground/60 hover:text-foreground/80",
-                    "disabled:cursor-default disabled:text-foreground/35 disabled:hover:text-foreground/35"
+                      : "text-foreground/60 hover:text-foreground/80"
                   )}
                 >
                   {isRecording ? <RecordingWave /> : <MessageSquareText size={12} />}
@@ -1165,6 +1165,20 @@ export default function NoteEditor({
               )
             ) : viewMode === "transcript" && hasMeetingTranscript ? (
               <RichTextEditor value={note.transcript || ""} disabled />
+            ) : viewMode === "transcript" ? (
+              <EmptyStateCard
+                icon={Mic}
+                title={t("notes.editor.transcriptEmptyTitle")}
+                description={t("notes.editor.transcriptEmptyDescription")}
+                className="mt-2"
+              >
+                {canEditNote && recordingAllowed && (
+                  <Button size="sm" onClick={onStartRecording} disabled={isProcessing}>
+                    <Mic size={13} />
+                    {t("notes.editor.startRecording")}
+                  </Button>
+                )}
+              </EmptyStateCard>
             ) : viewMode === "enhanced" && enhancement ? (
               <RichTextEditor
                 value={enhancement.content}

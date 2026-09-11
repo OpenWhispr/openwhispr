@@ -2796,6 +2796,9 @@
       "raw": "元のテキスト",
       "enhanced": "強化済み",
       "saving": "保存中",
+      "transcriptEmptyTitle": "まだ録音がありません",
+      "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
+      "startRecording": "録音を開始",
       "startWriting": "書き始める..."
     },
     "participants": {

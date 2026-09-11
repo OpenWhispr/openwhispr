@@ -17,6 +17,9 @@ function readMeetingMicLevel(): number {
   return analyserRms(analyser, micLevelBuf);
 }
 
+// Same near-opaque surface the ask bar wears while recording, so the two capsules match.
+const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
+
 const WAVE_BAR_HEIGHTS = [6, 12, 9, 11];
 
 /** Four-bar pulse shown in the Transcript tab while a recording is running. */
@@ -75,13 +78,27 @@ export default function NoteRecordControl({
           onClick={onStop}
           aria-label={t("notes.editor.stop")}
           title={t("notes.editor.stop")}
-          className="flex h-[30px] w-full items-center gap-2 rounded-full bg-foreground ps-1 pe-3 text-background transition-colors duration-150 hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          className={cn(
+            "group flex h-[30px] w-full items-center gap-2 rounded-full ps-1 pe-3",
+            RECORDING_SURFACE,
+            "border border-primary/15 transition-[border-color] duration-200 hover:border-primary/30",
+            "dark:border-primary/25 dark:hover:border-primary/40",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          )}
         >
-          <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-background text-foreground">
+          <span
+            className={cn(
+              "flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full",
+              GRADIENT_CIRCLE,
+              "transition-[filter] duration-150 group-hover:brightness-110"
+            )}
+          >
             <Square size={8} fill="currentColor" />
           </span>
           <LiveWaveform readLevel={readMeetingMicLevel} bars={10} className="h-3.5 flex-1" />
-          <span className="shrink-0 text-xs font-medium tabular-nums">{formatMmSs(elapsed)}</span>
+          <span className="shrink-0 text-xs font-medium tabular-nums text-foreground/85">
+            {formatMmSs(elapsed)}
+          </span>
         </button>
       ) : (
         <button
