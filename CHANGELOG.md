@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Voice Assistant on OpenWhispr Cloud with a stray "Separate vision model" switch.** On a managed workspace, an override that was switched on but never given a model was shown with an invented provider and model, and every screenshot command went to that provider without a key, failing with "OpenAI API key not configured". Workspace policy no longer invents a target for an override the user never configured, and a chosen override that policy moves to another provider is cleared rather than repointed, so it asks to be picked again. Screenshot commands now stay on OpenWhispr Cloud while the assistant runs there; the separate BYOK vision model is offered, and applies, only when the assistant runs elsewhere. A failed assistant request is now written to the debug log.
+
 ## [1.10.0] - 2026-09-11
 
 The desktop app gets a new look: an inset content container with a top bar and ⌘K search, a redesigned Home and note editor, the Yowza brand font and Nucleo icons, and one brand-blue glass surface for every primary action, onboarding included. Notes start recording the moment you create them, offer an AI summary when a recording ends, and gain Detailed Notes and Follow-up email as built-in actions. Orukeet arrives as the recommended local speech-to-text model and local models run up to three times faster on Apple silicon. Managed enterprise speech-to-text lands for workspaces on Azure OpenAI or AI Foundry, transcription gains streaming from Deepgram, AssemblyAI and Gemini Live plus Cohere Transcribe as a local engine, gpt-transcribe becomes the OpenAI default, onboarding was rebuilt and reordered, Insights gains an opt-in leaderboard and backfilled history, updates install themselves, Arabic joins as the eleventh UI language, and Astra and Fable 5.1 join the reasoning models.

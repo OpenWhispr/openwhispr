@@ -80,26 +80,41 @@ test("a managed policy never invents a target for an unconfigured vision overrid
   });
 });
 
-test("a managed policy still clamps a vision override the user configured", async (t) => {
-  const { useSettingsStore, selectPolicyEffectiveSettings } = await loadStore(
-    t,
-    {
-      ...unconfiguredOverride,
-      dictationAgentMode: "providers",
-      dictationAgentProvider: "anthropic",
-      dictationAgentModel: "claude-sonnet-4-5",
-      dictationAgentVisionProvider: "gemini",
-      dictationAgentVisionModel: "gemini-2.5-flash",
-    },
-    "openwhispr-policy-vision-clamped-test-"
-  );
+test("a policy that moves a configured override's provider clears its model", async (t) => {
+  const { useSettingsStore, selectPolicyEffectiveSettings, resolveChatStreamingInference } =
+    await loadStore(
+      t,
+      {
+        ...unconfiguredOverride,
+        dictationAgentMode: "providers",
+        dictationAgentProvider: "anthropic",
+        dictationAgentModel: "claude-sonnet-4-5",
+        dictationAgentVisionProvider: "gemini",
+        dictationAgentVisionModel: "gemini-2.5-flash",
+      },
+      "openwhispr-policy-vision-clamped-test-"
+    );
 
+  // Anthropic stays allowed, so the assistant itself is untouched; only the
+  // override's Gemini choice is outside the policy.
   const effective = selectPolicyEffectiveSettings(
     useSettingsStore.getState(),
-    managedByokPolicy(["openai"])
+    managedByokPolicy(["openai", "anthropic"])
   );
 
-  assert.equal(effective.dictationAgentVisionProvider, "openai");
-  assert.notEqual(effective.dictationAgentVisionModel, "gemini-2.5-flash");
-  assert.ok(effective.dictationAgentVisionModel, "a clamped provider gets its default model");
+  await t.test("the picker lands on the allowed provider with nothing chosen", () => {
+    assert.equal(effective.dictationAgentVisionProvider, "openai");
+    assert.equal(effective.dictationAgentVisionModel, "");
+  });
+
+  await t.test("the override goes inert instead of routing to a keyless default", () => {
+    const { config } = resolveChatStreamingInference(effective, {
+      inferenceScope: "dictationAgent",
+      hasScreenContext: true,
+      isProviderImageWired: () => true,
+    });
+
+    assert.equal(config.scope, "dictationAgent");
+    assert.equal(config.provider, "anthropic");
+  });
 });

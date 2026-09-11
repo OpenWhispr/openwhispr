@@ -19,8 +19,11 @@ export interface InferenceScopeDefinition {
   cloudPurpose: CloudReasonPurpose;
   /**
    * Inert until the user picks its own model, inheriting the fallback scope
-   * meanwhile. Policy clamps a chosen target but never invents one: that would
-   * switch the override on and capture requests for a provider with no key.
+   * meanwhile. Policy never invents that choice, and a policy that moves the
+   * chosen provider clears the model so the override asks to be picked again:
+   * an invented target would switch the override on and capture requests for
+   * a provider with no key. Only for scopes whose every offered mode needs a
+   * model, since a cloud mode counts as chosen with none.
    */
   optional?: true;
 }

@@ -572,6 +572,8 @@ export function useChatStreaming({
               scope: llmConfig.scope,
               mode: llmMode,
               provider: llmConfig.provider,
+              model: llmConfig.model,
+              attachScreenContext,
               error: (error as Error).message,
             },
             "reasoning"

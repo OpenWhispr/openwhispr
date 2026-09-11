@@ -487,3 +487,16 @@ test("a screenshot command stays on the cloud when the assistant runs there", ()
   assert.equal(config.mode, "openwhispr");
   assert.equal(attachScreenContext, true, "the cloud keeps the screenshot");
 });
+
+test("the vision override is offered in every assistant mode except OpenWhispr Cloud", async () => {
+  const { visionOverrideOffered } = await load();
+
+  assert.equal(visionOverrideOffered({ ...panelSettings, ...cloudAssistant }), false);
+  for (const dictationAgentMode of ["providers", "local", "self-hosted", "enterprise"]) {
+    assert.equal(
+      visionOverrideOffered({ ...panelSettings, dictationAgentMode }),
+      true,
+      dictationAgentMode
+    );
+  }
+});
