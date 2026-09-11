@@ -273,7 +273,14 @@ test("a remount from the saved draft keeps a Settings self-hosted server key-les
 
   // Back from the next step, or a reload, reopens the step from that draft.
   await t.test("the remount stays key-less and saves back to the same server", async (t) => {
+    assert.ok(draft, "the first visit has to write the draft this remount reopens");
     const step = await mountSettingsServer(t, draft);
+    assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
+    // Every other place the key is chosen keeps it empty too: a mode round trip and a
+    // key that arrives late.
+    await step.toggleSelfHosted();
+    await step.toggleSelfHosted();
+    await step.setStore({ customTranscriptionApiKey: "sk-late-stale-key" });
     assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
 
     await step.passConnectionTest();
