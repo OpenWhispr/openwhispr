@@ -152,8 +152,9 @@ function buildModelEndpoints(base) {
 }
 
 function resolveProviderRequest(config) {
+  const { usableSecret } = require("./envRef.cjs");
   const provider = String(config?.provider || "").toLowerCase();
-  const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
+  const apiKey = usableSecret(typeof config?.apiKey === "string" ? config.apiKey : "");
   let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
 
   if (provider === "openai") {
