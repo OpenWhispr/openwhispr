@@ -25,4 +25,8 @@ test("the assistant demo request carries the email and asks for the bare reply",
   assert.match(request, /Address Maria by name/);
   assert.match(request, /no markdown/);
   assert.match(request, /Do not sign a name or a company/);
+  // The demo has no follow-up turn, so the clarifying question the calendar
+  // tool's instructions otherwise call for has to be pre-answered.
+  assert.match(request, /never ask the user a question back/);
+  assert.match(request, /weekdays next week between 9:00 and 17:00/);
 });
