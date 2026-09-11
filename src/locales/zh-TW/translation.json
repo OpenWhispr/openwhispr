@@ -722,7 +722,7 @@
       "ollama": "（Ollama）",
       "localAi": "（LocalAI）",
       "apiKeyOptional": "API Key（選填）",
-      "apiKeyHelp": "選填。作為 Bearer token 傳送以進行驗證。這與你的 OpenAI API Key 無關。",
+      "apiKeyHelp": "選填。留空則使用對應環境變數，或輸入 $OPENAI_API_KEY。啟動時會匯入 shell 匯出的變數（例如 ~/.zshrc）。",
       "applyAndRefresh": "套用並重新整理",
       "queryPrefix": "我們將查詢",
       "querySuffix": "以取得可用模型。",
@@ -862,7 +862,8 @@
     "tinfoil": {
       "transportNote": "Tinfoil 串流轉錄使用 Voxtral Mini 4B，批次轉錄使用 Voxtral Small 24B。",
       "docsLink": "查看文件"
-    }
+    },
+    "apiKeyEnvHelp": "選填。留空則使用 CUSTOM_TRANSCRIPTION_API_KEY，或輸入 $OPENAI_API_KEY。啟動時會匯入 shell 匯出的變數（例如 ~/.zshrc）。"
   },
   "hooks": {
     "audioRecording": {
@@ -3458,14 +3459,16 @@
     "remindLater": "稍後提醒我"
   },
   "apiKeyInput": {
-    "placeholder": "輸入你的 API Key",
+    "placeholder": "貼上 API Key 或 $ENV_VAR",
     "label": "API Key",
     "save": "儲存",
     "cancelEdit": "取消編輯",
     "edit": "編輯",
     "add": "新增",
     "editButton": "編輯金鑰",
-    "addButton": "新增金鑰"
+    "addButton": "新增金鑰",
+    "selfReference": "Use a different variable name here, or leave this field empty.",
+    "unknownRef": "Only OpenWhispr secret names can be referenced (for example $OPENAI_API_KEY)."
   },
   "gpu": {
     "transcriptionBanner": "使用 GPU 加速轉錄",

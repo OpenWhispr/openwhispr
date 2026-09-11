@@ -722,7 +722,7 @@
       "ollama": "(Ollama)",
       "localAi": "(LocalAI)",
       "apiKeyOptional": "API-Schlüssel (optional)",
-      "apiKeyHelp": "Optional. Wird als Bearer-Token zur Authentifizierung gesendet. Getrennt von Ihrem OpenAI-API-Schlüssel.",
+      "apiKeyHelp": "Optional. Leer lassen, um die passende Umgebungsvariable zu nutzen, oder $OPENAI_API_KEY eingeben. Shell-Exporte (z. B. ~/.zshrc) werden beim Start gelesen.",
       "applyAndRefresh": "Anwenden & aktualisieren",
       "queryPrefix": "Wir fragen",
       "querySuffix": "nach verfügbaren Modellen ab.",
@@ -862,7 +862,8 @@
     "tinfoil": {
       "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
       "docsLink": "Zur Dokumentation"
-    }
+    },
+    "apiKeyEnvHelp": "Optional. Leer lassen für CUSTOM_TRANSCRIPTION_API_KEY, oder $OPENAI_API_KEY eingeben. Shell-Exporte (z. B. ~/.zshrc) werden beim Start gelesen."
   },
   "hooks": {
     "audioRecording": {
@@ -3627,14 +3628,16 @@
     "remindLater": "Später erinnern"
   },
   "apiKeyInput": {
-    "placeholder": "API-Schlüssel eingeben",
+    "placeholder": "API-Schlüssel oder $ENV_VAR einfügen",
     "label": "API-Schlüssel",
     "save": "Speichern",
     "cancelEdit": "Bearbeitung abbrechen",
     "edit": "Bearbeiten",
     "add": "Hinzufügen",
     "editButton": "Bearbeiten",
-    "addButton": "Hinzufügen"
+    "addButton": "Hinzufügen",
+    "selfReference": "Use a different variable name here, or leave this field empty.",
+    "unknownRef": "Only OpenWhispr secret names can be referenced (for example $OPENAI_API_KEY)."
   },
   "gpu": {
     "transcriptionBanner": "Transkription mit GPU beschleunigen",

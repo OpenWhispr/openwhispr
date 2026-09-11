@@ -352,6 +352,9 @@ export function ByokProviderStep({
     initialProvider === "corti" ? store.cortiClientSecret : ""
   );
   const [connected, setConnected] = useState(false);
+  // Set when commitAndProceed's store writes reject a $VAR reference, so the
+  // step stays put with an explanation instead of advancing on a failed save.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     onConnectionChange(false);
@@ -443,42 +446,65 @@ export function ByokProviderStep({
       ? Boolean(draftCortiClientId.trim() && draftCortiClientSecret.trim() && selectedModel)
       : Boolean(selectedProvider && selectedModel && testingKey.trim());
 
+  // Secret setters reject a $VAR that points at themselves or at a name that is
+  // not an OpenWhispr secret, and they throw to say so. Every branch therefore
+  // writes the API key *first*: a rejected reference then leaves the URL, model
+  // and mode untouched instead of half-configuring the provider, and the step
+  // stays put with saveError rendered under the button.
   const commitAndProceed = () => {
-    if (selfHosted) {
-      // The connection test parses scheme-less input as https
-      // (providerConnectionTest.js), so commit the same URL it validated —
-      // the runtime's isSecureHttpEndpoint gate rejects a bare host.
-      const committedBaseUrl = draftBaseUrl.includes("://")
-        ? draftBaseUrl.trim()
-        : `https://${draftBaseUrl.trim()}`;
-      if (assistant) {
-        store.setChatAgentRemoteUrl(committedBaseUrl);
-        store.setChatAgentCustomApiKey(draftApiKey);
-        store.setChatAgentModel(draftCustomModel);
-        store.setChatAgentMode("self-hosted");
-        store.setChatAgentProvider("custom");
-      } else {
-        store.setCloudTranscriptionBaseUrl(committedBaseUrl);
-        store.setCustomTranscriptionApiKey(draftApiKey);
-        store.setCloudTranscriptionModel(draftCustomModel);
-        store.switchCloudTranscriptionProvider("dictation", "custom");
-        store.setCloudTranscriptionMode("byok");
-      }
-    } else if (assistant) {
-      knownCredential.set(draftApiKey);
-      store.setChatAgentMode("providers");
-      store.switchReasoningProvider("chatIntelligence", selectedProvider, selectedModel);
-      store.setChatAgentModel(selectedModel);
-    } else {
-      if (isCortiTranscription) {
-        store.setCortiClientId(draftCortiClientId);
-        store.setCortiClientSecret(draftCortiClientSecret);
-      } else {
+    try {
+      if (selfHosted) {
+        // The connection test parses scheme-less input as https
+        // (providerConnectionTest.js), so commit the same URL it validated —
+        // the runtime's isSecureHttpEndpoint gate rejects a bare host.
+        const committedBaseUrl = draftBaseUrl.includes("://")
+          ? draftBaseUrl.trim()
+          : `https://${draftBaseUrl.trim()}`;
+        if (assistant) {
+          store.setChatAgentCustomApiKey(draftApiKey);
+          store.setChatAgentRemoteUrl(committedBaseUrl);
+          store.setChatAgentModel(draftCustomModel);
+          store.setChatAgentMode("self-hosted");
+          store.setChatAgentProvider("custom");
+        } else {
+          store.setCustomTranscriptionApiKey(draftApiKey);
+          store.setCloudTranscriptionBaseUrl(committedBaseUrl);
+          store.setCloudTranscriptionModel(draftCustomModel);
+          store.switchCloudTranscriptionProvider("dictation", "custom");
+          store.setCloudTranscriptionMode("byok");
+        }
+      } else if (assistant) {
         knownCredential.set(draftApiKey);
+        store.setChatAgentMode("providers");
+        store.switchReasoningProvider("chatIntelligence", selectedProvider, selectedModel);
+        store.setChatAgentModel(selectedModel);
+      } else {
+        if (isCortiTranscription) {
+          store.setCortiClientId(draftCortiClientId);
+          store.setCortiClientSecret(draftCortiClientSecret);
+        } else {
+          knownCredential.set(draftApiKey);
+        }
+        store.setCloudTranscriptionMode("byok");
+        store.switchCloudTranscriptionProvider("dictation", selectedProvider);
+        store.setCloudTranscriptionModel(selectedModel);
       }
-      store.setCloudTranscriptionMode("byok");
-      store.switchCloudTranscriptionProvider("dictation", selectedProvider);
-      store.setCloudTranscriptionModel(selectedModel);
+      setSaveError(null);
+    } catch (err) {
+      const code = (err as Error & { code?: string }).code;
+      setSaveError(
+        code === "self-reference"
+          ? t("apiKeyInput.selfReference", {
+              defaultValue: "Use a different variable name here, or leave this field empty.",
+            })
+          : code === "unknown-ref"
+            ? t("apiKeyInput.unknownRef", {
+                defaultValue:
+                  "Only OpenWhispr secret names can be referenced (for example $OPENAI_API_KEY).",
+              })
+            : (err as Error).message
+      );
+      return;
     }
     onProceed();
   };
@@ -690,6 +716,11 @@ export function ByokProviderStep({
         >
           {t("onboarding.rehaul.provider.proceed")}
         </StepPrimaryAction>
+        {saveError && (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            {saveError}
+          </p>
+        )}
       </div>
     </section>
   );

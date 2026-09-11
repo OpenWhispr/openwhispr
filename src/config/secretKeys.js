@@ -119,4 +119,24 @@ const BYOK_API_KEYS = [
   },
 ];
 
-module.exports = { BYOK_API_KEYS };
+// Non-BYOK secrets that $VAR references may point at. Keep in lockstep with
+// EnvironmentManager.SECRET_KEYS (the extra names beyond BYOK_API_KEYS).
+// Deepgram and AssemblyAI live in BYOK_API_KEYS now, so they must not be
+// repeated here — SECRET_ENV_NAMES feeds PERSISTED_KEYS and a duplicate would
+// write the same line to .env twice.
+const EXTRA_SECRET_ENV = [
+  "CORTI_CLIENT_ID",
+  "CORTI_CLIENT_SECRET",
+  "CUSTOM_TRANSCRIPTION_API_KEY",
+  "CUSTOM_CLEANUP_API_KEY",
+  "CUSTOM_REASONING_API_KEY",
+  "BEDROCK_ACCESS_KEY_ID",
+  "BEDROCK_SECRET_ACCESS_KEY",
+  "BEDROCK_SESSION_TOKEN",
+  "AZURE_OPENAI_API_KEY",
+  "VERTEX_API_KEY",
+];
+
+const SECRET_ENV_NAMES = [...BYOK_API_KEYS.map((k) => k.env), ...EXTRA_SECRET_ENV];
+
+module.exports = { BYOK_API_KEYS, EXTRA_SECRET_ENV, SECRET_ENV_NAMES };

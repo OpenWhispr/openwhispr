@@ -16,7 +16,7 @@ const REALTIME_TOKEN_PROVIDERS = {
     streams
   ) => {
     if (options.mode === "byok") {
-      const apiKey = environmentManager.getAssemblyAIKey();
+      const apiKey = require("./envRef.cjs").usableSecret(environmentManager.getAssemblyAIKey());
       if (!apiKey) {
         throw new Error("No AssemblyAI API key configured. Add your key in Settings.");
       }
@@ -43,7 +43,7 @@ const REALTIME_TOKEN_PROVIDERS = {
 
   "deepgram-realtime": async ({ environmentManager, postServerToken }, options, streams) => {
     if (options.mode === "byok") {
-      const apiKey = environmentManager.getDeepgramKey();
+      const apiKey = require("./envRef.cjs").usableSecret(environmentManager.getDeepgramKey());
       if (!apiKey) {
         throw new Error("No Deepgram API key configured. Add your key in Settings.");
       }
