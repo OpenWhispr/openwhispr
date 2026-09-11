@@ -784,12 +784,16 @@ test("manual meeting starts fail closed like the meeting hotkey", async () => {
   assert.equal(starts, 1);
 });
 
-test("the tray's Ask Assistant focuses the pill before asking for the panel", () => {
+// The renderer owns the policy and recording state these tray items are gated on,
+// so nothing may be shown, focused, or created before it accepts.
+test("the tray's quick actions ask the renderer without showing or focusing the pill", () => {
   const fakeMainWindow = (events) => ({
     isDestroyed: () => false,
     isMinimized: () => false,
     isVisible: () => true,
     focus: () => events.push("focus"),
+    show: () => events.push("show"),
+    showInactive: () => events.push("show"),
     webContents: { send: (channel) => events.push(channel) },
   });
 
@@ -797,11 +801,21 @@ test("the tray's Ask Assistant focuses the pill before asking for the panel", ()
   const onboarding = new WindowManager();
   onboarding.mainWindow = fakeMainWindow(onboardingEvents);
   onboarding.sendOpenAssistantPanel();
+  onboarding.sendStartMeeting();
   assert.deepEqual(onboardingEvents, []);
 
   const events = [];
   const manager = createNormalWindowManager();
   manager.mainWindow = fakeMainWindow(events);
   manager.sendOpenAssistantPanel();
-  assert.deepEqual(events, ["focus", "open-assistant-panel"]);
+  manager.sendStartMeeting();
+  assert.deepEqual(events, ["open-assistant-panel", "start-meeting"]);
+
+  // Capturing a hotkey swallows the meeting request, like the hotkey paths.
+  const capturingEvents = [];
+  const capturing = createNormalWindowManager();
+  capturing.mainWindow = fakeMainWindow(capturingEvents);
+  capturing.hotkeyManager.isInListeningMode = () => true;
+  capturing.sendStartMeeting();
+  assert.deepEqual(capturingEvents, []);
 });

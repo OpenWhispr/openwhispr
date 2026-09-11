@@ -385,6 +385,7 @@ class MeetingDetectionEngine {
     autoEndEligible,
     ownerWebContents,
     systemAudioAvailable = false,
+    noteId = null,
   }) {
     this._clearAutoEndRecovery();
     if (this._recordingSession) this._deactivateAutoEnd();
@@ -394,6 +395,9 @@ class MeetingDetectionEngine {
       autoEndEligible: autoEndEligible === true,
       ownerWebContents,
       systemAudioAvailable: systemAudioAvailable === true,
+      // Lets a second manual start surface this recording instead of opening a
+      // new note over it.
+      noteId,
     };
     this._syncMeetingProcessDetector();
 
@@ -674,6 +678,15 @@ class MeetingDetectionEngine {
 
   async startManualMeeting() {
     debugLogger.info("Starting manual meeting", {}, "meeting");
+
+    // A live meeting already owns a note: a second start would leave the recording
+    // running in it behind a new, empty one. Surface the live note instead.
+    if (this._recordingSession) {
+      const { noteId } = this._recordingSession;
+      debugLogger.info("Manual meeting ignored — a recording is live", { noteId }, "meeting");
+      if (noteId != null) await this.windowManager.queueNoteNavigation({ noteId });
+      return;
+    }
 
     const activeEvents = this.databaseManager.getActiveEvents();
     if (activeEvents?.length > 0) {

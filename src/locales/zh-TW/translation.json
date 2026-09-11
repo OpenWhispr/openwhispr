@@ -2890,7 +2890,7 @@
     "createMenu": {
       "note": "筆記",
       "assistantChat": "助理聊天",
-      "sharedSpace": "共用空間",
+      "teamSpace": "團隊空間",
       "chooseType": "選擇要建立的內容"
     },
     "editor": {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, MessageSquare, NotebookPen, Plus, Users } from "../icons";
 import {
@@ -28,6 +28,14 @@ export default function NewNoteMenu({ onNewNote, onNewChat }: NewNoteMenuProps) 
   const { t } = useTranslation();
   const canCreateTeamSpace = useCanCreateTeamSpace();
   const [createSpaceOpen, setCreateSpaceOpen] = useState(false);
+  const itemChosenRef = useRef(false);
+
+  // Each item hands focus to what it opens (the chat input, the space dialog), so only
+  // those closes keep it; dismissing the menu still returns focus to the chevron.
+  const chooseItem = (action: () => void) => () => {
+    itemChosenRef.current = true;
+    action();
+  };
 
   return (
     <>
@@ -55,25 +63,30 @@ export default function NewNoteMenu({ onNewNote, onNewChat }: NewNoteMenuProps) 
             align="end"
             sideOffset={6}
             className="min-w-44"
-            // Each item hands focus to what it opens (the chat input, the space dialog);
-            // don't pull it back to the chevron.
-            onCloseAutoFocus={(event) => event.preventDefault()}
+            onCloseAutoFocus={(event) => {
+              if (!itemChosenRef.current) return;
+              itemChosenRef.current = false;
+              event.preventDefault();
+            }}
           >
-            <DropdownMenuItem onSelect={onNewNote} className="gap-2.5">
+            <DropdownMenuItem onSelect={chooseItem(onNewNote)} className="gap-2.5">
               <NotebookPen className="h-4 w-4" />
               {t("notes.createMenu.note")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onNewChat} className="gap-2.5">
+            <DropdownMenuItem onSelect={chooseItem(onNewChat)} className="gap-2.5">
               <MessageSquare className="h-4 w-4" />
               {t("notes.createMenu.assistantChat")}
             </DropdownMenuItem>
             {canCreateTeamSpace && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setCreateSpaceOpen(true)} className="gap-2.5">
+                <DropdownMenuItem
+                  onSelect={chooseItem(() => setCreateSpaceOpen(true))}
+                  className="gap-2.5"
+                >
                   <Users className="h-4 w-4" />
-                  {t("notes.createMenu.sharedSpace")}
+                  {t("notes.createMenu.teamSpace")}
                 </DropdownMenuItem>
               </>
             )}

@@ -145,10 +145,16 @@ class SelectionManager {
   // same reason captureSelectedText does: the stop-press probe can still be
   // running when fast transcription reaches the paste.
   async getWinTargetHwnd() {
+    return (await this.getWinTarget())?.id ?? null;
+  }
+
+  // The same capture with its window identity, for callers that must judge
+  // whether the captured window is a sensible paste target.
+  async getWinTarget() {
     while (this._captureTargetPromise) {
       await this._captureTargetPromise;
     }
-    return this.lastTarget?.kind === "win-hwnd" ? this.lastTarget.id : null;
+    return this.lastTarget?.kind === "win-hwnd" ? this.lastTarget : null;
   }
 
   async captureSelectedText(options = {}) {

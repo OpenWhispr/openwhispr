@@ -253,11 +253,17 @@ class TrayManager {
 
   buildContextMenuTemplate() {
     const dictationVisible = this.windowManager?.isDictationPanelVisible?.() ?? false;
+    const dictating = this.windowManager?.isDictating?.() ?? false;
 
     return [
       {
-        label: i18nMain.t("app.commandMenu.startListening"),
-        click: () => this.windowManager?.sendStartDictation(),
+        label: dictating
+          ? i18nMain.t("app.commandMenu.stopListening")
+          : i18nMain.t("app.commandMenu.startListening"),
+        click: () =>
+          dictating
+            ? this.windowManager?.sendStopDictation()
+            : this.windowManager?.sendStartDictation(),
       },
       {
         label: i18nMain.t("app.commandMenu.askAssistant"),
@@ -265,7 +271,7 @@ class TrayManager {
       },
       {
         label: i18nMain.t("app.commandMenu.startMeetingRecording"),
-        click: () => void this.windowManager?.startManualMeeting(),
+        click: () => this.windowManager?.sendStartMeeting(),
       },
       { type: "separator" },
       {

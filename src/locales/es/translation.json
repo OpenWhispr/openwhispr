@@ -2943,7 +2943,7 @@
     "createMenu": {
       "note": "Nota",
       "assistantChat": "Chat con el asistente",
-      "sharedSpace": "Espacio compartido",
+      "teamSpace": "Espacio de equipo",
       "chooseType": "Elegir qué crear"
     },
     "editor": {

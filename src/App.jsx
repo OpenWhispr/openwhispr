@@ -383,10 +383,26 @@ export default function App() {
     const unsubscribe = window.electronAPI?.onOpenAssistantPanel?.(() => {
       if (!agentAllowed || isRecording || assistant.mounted || liveTranscript.mounted) return;
       setIsCommandMenuOpen(false);
-      openAssistantPanel();
+      void openAssistantPanel();
     });
     return () => unsubscribe?.();
   }, [agentAllowed, isRecording, assistant.mounted, liveTranscript.mounted, openAssistantPanel]);
+
+  // The tray's Start meeting recording. The pill menu hides the item when policy
+  // blocks meeting transcription; the tray can't, so the refusal happens here —
+  // before a note exists — with the pill surfaced so the explanation is visible.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onStartMeeting?.(() => {
+      setIsCommandMenuOpen(false);
+      if (!meetingAllowed) {
+        void window.electronAPI?.showDictationPanel?.();
+        toast({ title: t("notes.meeting.restrictedByOrg"), variant: "default" });
+        return;
+      }
+      void window.electronAPI.startManualMeeting?.();
+    });
+    return () => unsubscribe?.();
+  }, [meetingAllowed, toast, t]);
 
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {
@@ -747,11 +763,11 @@ export default function App() {
               }}
               onAskAssistant={() => {
                 setIsCommandMenuOpen(false);
-                openAssistantPanel();
+                void openAssistantPanel();
               }}
               onStartMeeting={() => {
                 setIsCommandMenuOpen(false);
-                window.electronAPI.startManualMeeting();
+                void window.electronAPI.startManualMeeting?.();
               }}
               onHide={() => {
                 setIsCommandMenuOpen(false);

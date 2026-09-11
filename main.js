@@ -1331,6 +1331,9 @@ async function startApp() {
 
   trayManager.setWindows(windowManager.mainWindow, windowManager.controlPanelWindow);
   trayManager.setWindowManager(windowManager);
+  // The tray's listen item is a toggle, so it has to rebuild when dictation
+  // starts or stops.
+  windowManager.onDictationStateChanged = () => trayManager.updateTrayMenu();
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
   await trayManager.createTray();
 

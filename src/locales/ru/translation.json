@@ -2912,7 +2912,7 @@
     "createMenu": {
       "note": "Заметка",
       "assistantChat": "Чат с помощником",
-      "sharedSpace": "Общее пространство",
+      "teamSpace": "Командное пространство",
       "chooseType": "Выбрать, что создать"
     },
     "editor": {

@@ -2921,7 +2921,7 @@
     "createMenu": {
       "note": "ノート",
       "assistantChat": "アシスタントとのチャット",
-      "sharedSpace": "共有スペース",
+      "teamSpace": "チームスペース",
       "chooseType": "作成する項目を選択"
     },
     "upload": {

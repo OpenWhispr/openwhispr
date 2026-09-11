@@ -3232,7 +3232,7 @@
     "createMenu": {
       "note": "Notiz",
       "assistantChat": "Assistent-Chat",
-      "sharedSpace": "Geteilter Bereich",
+      "teamSpace": "Team-Bereich",
       "chooseType": "Auswählen, was erstellt werden soll"
     },
     "editor": {

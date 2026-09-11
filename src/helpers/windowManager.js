@@ -949,6 +949,12 @@ class WindowManager {
     this._isDictatingToggle = isDictationRecording(nextState);
     this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     this._sendAgentDictationPillState();
+    this.onDictationStateChanged?.();
+  }
+
+  // The tray's listen item is a toggle over this state, like the pill's.
+  isDictating() {
+    return this._isDictatingToggle;
   }
 
   _sendAgentDictationPillState() {
@@ -998,13 +1004,21 @@ class WindowManager {
     this._sendDictationToggle("toggle-translation", "translation");
   }
 
-  // The pill's Ask Assistant for surfaces outside the pill (the tray); the
-  // renderer applies the pill menu's availability rules on arrival.
+  // The pill's Ask Assistant and Start meeting recording for surfaces outside the
+  // pill (the tray). Only the renderer knows the policy and recording state the
+  // pill menu gates those items on, so it decides; nothing is shown or created
+  // here. An accepted assistant command surfaces the pill itself through
+  // setAssistantPanelOpen, and a meeting comes back through start-manual-meeting.
   sendOpenAssistantPanel() {
     if (!this._isOnboardingInputAllowed("assistant")) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
-    this.showDictationPanel({ focus: true });
     this.mainWindow.webContents.send("open-assistant-panel");
+  }
+
+  sendStartMeeting() {
+    if (this.hotkeyManager.isInListeningMode() || !this.isMeetingInputAllowed()) return;
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("start-meeting");
   }
 
   sendStartDictation() {

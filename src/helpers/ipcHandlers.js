@@ -592,6 +592,25 @@ async function chunkedCloudTranscribe({
   }
 }
 
+// Windows only: whether an HWND captured at record start is one of our own
+// BrowserWindows. The tray's menu-owner window is ours but is not one of them,
+// and restoring it at paste time would pull the foreground onto OpenWhispr and
+// drop the keystroke.
+function isOwnBrowserWindowHandle(hwndHex) {
+  let handle;
+  try {
+    handle = BigInt(`0x${String(hwndHex).replace(/^0x/i, "")}`);
+  } catch {
+    return false;
+  }
+  return BrowserWindow.getAllWindows().some((win) => {
+    if (win.isDestroyed()) return false;
+    const buffer = win.getNativeWindowHandle();
+    const value = buffer.length >= 8 ? buffer.readBigUInt64LE(0) : BigInt(buffer.readUInt32LE(0));
+    return value === handle;
+  });
+}
+
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
@@ -3050,10 +3069,18 @@ class IPCHandlers {
       // paste lands in the field the user was dictating into, not wherever focus
       // drifted during transcription (#859). macOS handles this via
       // activateTargetPid above; Linux re-detects the target inside pasteLinux.
-      const targetWindow =
+      const winTarget =
         process.platform === "win32"
-          ? ((await this.selectionManager?.getWinTargetHwnd?.()) ?? null)
+          ? ((await this.selectionManager?.getWinTarget?.()) ?? null)
           : null;
+      // A dictation started from the tray captures our own menu-owner window, and
+      // restoring that would pull the foreground onto OpenWhispr and drop the
+      // keystroke. Our real windows stay valid targets.
+      const ownWindowCapture =
+        !!winTarget &&
+        (winTarget.exeName || "").toLowerCase() === path.basename(process.execPath).toLowerCase() &&
+        !isOwnBrowserWindowHandle(winTarget.id);
+      const targetWindow = winTarget && !ownWindowCapture ? winTarget.id : null;
 
       const pasteResult = await this.clipboardManager.pasteText(textToPaste, {
         ...options,
@@ -8426,6 +8453,7 @@ class IPCHandlers {
           sessionId: recordingSessionId,
           autoEndEligible: options.autoEndEligible === true,
           ownerWebContents: event.sender,
+          noteId: options.noteId ?? null,
           // Renderer loopback may still fail after main chooses its strategy.
           // Auto-end stays fail-safe until the renderer confirms a real source.
           systemAudioAvailable: false,

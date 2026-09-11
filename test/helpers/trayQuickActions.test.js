@@ -13,17 +13,23 @@ Module._load = function loadTrayWithStubs(request, parent, isMain) {
 const TrayManager = require("../../src/helpers/tray");
 Module._load = originalLoad;
 
-test("the tray menu leads with the dictation pill's quick actions", () => {
-  const calls = [];
+function createTrayManager(calls, { dictating = false } = {}) {
   const trayManager = new TrayManager();
   trayManager.windowManager = {
     isDictationPanelVisible: () => false,
-    sendStartDictation: () => calls.push("dictation"),
+    isDictating: () => dictating,
+    sendStartDictation: () => calls.push("start-dictation"),
+    sendStopDictation: () => calls.push("stop-dictation"),
     sendOpenAssistantPanel: () => calls.push("assistant"),
-    startManualMeeting: async () => calls.push("meeting"),
+    sendStartMeeting: () => calls.push("meeting"),
   };
+  return trayManager;
+}
 
-  const [listen, assistant, meeting, separator] = trayManager.buildContextMenuTemplate();
+test("the tray menu leads with the dictation pill's quick actions", () => {
+  const calls = [];
+  const [listen, assistant, meeting, separator] =
+    createTrayManager(calls).buildContextMenuTemplate();
 
   assert.deepEqual(
     [listen.label, assistant.label, meeting.label, separator.type],
@@ -38,5 +44,16 @@ test("the tray menu leads with the dictation pill's quick actions", () => {
   listen.click();
   assistant.click();
   meeting.click();
-  assert.deepEqual(calls, ["dictation", "assistant", "meeting"]);
+  // Both go to the renderer, which owns the policy and recording state the pill
+  // menu gates these items on.
+  assert.deepEqual(calls, ["start-dictation", "assistant", "meeting"]);
+});
+
+test("the tray's listen item stops the recording it reflects", () => {
+  const calls = [];
+  const [listen] = createTrayManager(calls, { dictating: true }).buildContextMenuTemplate();
+
+  assert.equal(listen.label, "app.commandMenu.stopListening");
+  listen.click();
+  assert.deepEqual(calls, ["stop-dictation"]);
 });

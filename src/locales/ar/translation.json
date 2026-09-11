@@ -1574,7 +1574,7 @@
     "createMenu": {
       "note": "ملاحظة",
       "assistantChat": "دردشة مع المساعد",
-      "sharedSpace": "مساحة مشتركة",
+      "teamSpace": "مساحة فريق",
       "chooseType": "اختر ما تريد إنشاءه"
     },
     "editor": {
