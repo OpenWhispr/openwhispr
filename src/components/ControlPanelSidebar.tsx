@@ -4,6 +4,7 @@ import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
+import { Button } from "./ui/button";
 import type { UpsellDecision } from "../lib/upsell";
 import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
 
@@ -118,12 +119,9 @@ export default function ControlPanelSidebar({
               <p className="text-[11px] leading-snug text-muted-foreground mb-2.5">
                 {t("sidebar.limitReachedDescription")}
               </p>
-              <button
-                onClick={onUpgrade}
-                className="w-full h-7 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
-              >
+              <Button size="sm" onClick={onUpgrade} className="h-7 w-full text-xs">
                 {t("sidebar.viewPlans")}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -163,12 +161,9 @@ export default function ControlPanelSidebar({
                 </div>
               ))}
             </div>
-            <button
-              onClick={onUpgrade}
-              className="w-full h-7 rounded-full bg-[#4079ed] text-white text-xs font-medium hover:bg-[#3568d9] active:bg-[#2f5dc4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4079ed]/40 transition-colors"
-            >
+            <Button size="sm" onClick={onUpgrade} className="h-7 w-full text-xs">
               {t("sidebar.learnMore")}
-            </button>
+            </Button>
           </div>
         </div>
       )}

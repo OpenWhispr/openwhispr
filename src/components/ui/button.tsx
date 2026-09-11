@@ -3,6 +3,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
+import { BRAND_GLASS_SURFACE } from "./gradientCircle";
 
 const buttonVariants = cva(
   [
@@ -16,15 +17,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Primary CTA — ultra-premium with subtle depth
+        // Primary CTA — brand glass capsule
         default: [
-          "relative text-primary-foreground font-semibold tracking-[0.005em]",
-          "bg-primary",
-          "border border-primary/60",
-          "shadow-sm",
-          "hover:bg-primary/95 hover:shadow",
-          "active:bg-primary/85 active:scale-[0.985]",
-          "transition-[background-color,border-color,color,transform] duration-200 ease-out",
+          "relative rounded-full font-semibold tracking-[0.005em]",
+          BRAND_GLASS_SURFACE,
+          "hover:brightness-110",
+          "active:brightness-95 active:scale-[0.985]",
+          "transition-[filter,transform] duration-200 ease-out",
         ].join(" "),
 
         // Success — uses design tokens

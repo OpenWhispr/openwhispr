@@ -1,4 +1,6 @@
 import { X } from "./icons";
+import { cn } from "./lib/utils";
+import { BRAND_GLASS_SURFACE } from "./ui/gradientCircle";
 
 interface MeetingNotificationCardProps {
   title: string;
@@ -87,7 +89,10 @@ export function MeetingNotificationCard({
 
         <button
           onClick={onStart}
-          className="shrink-0 whitespace-nowrap bg-primary text-primary-foreground hover:bg-primary/90 text-[11px] font-medium px-2.5 py-1 rounded-md transition-colors"
+          className={cn(
+            BRAND_GLASS_SURFACE,
+            "shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium transition-[filter] hover:brightness-110 active:brightness-95"
+          )}
         >
           {startLabel}
         </button>

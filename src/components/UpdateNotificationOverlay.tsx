@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { cn } from "./lib/utils";
+import { BRAND_GLASS_SURFACE } from "./ui/gradientCircle";
 import { useTranslation } from "react-i18next";
 import { X } from "./icons";
 
@@ -101,7 +103,10 @@ export default function UpdateNotificationOverlay() {
 
           <button
             onClick={() => respond("update")}
-            className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80 text-[11px] font-medium px-2.5 py-1 rounded-md transition-colors"
+            className={cn(
+              BRAND_GLASS_SURFACE,
+              "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition-[filter] hover:brightness-110 active:brightness-95"
+            )}
           >
             {t("updateNotification.cta")}
           </button>
