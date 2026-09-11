@@ -1063,7 +1063,11 @@
     "scopes": {
       "notesRead": "قراءة الملاحظات",
       "notesWrite": "إنشاء وتعديل الملاحظات",
-      "transcriptionsRead": "قراءة النصوص المفرَّغة"
+      "transcriptionsRead": "قراءة النصوص المفرَّغة",
+      "dictionaryRead": "قراءة القاموس",
+      "dictionaryWrite": "تعديل القاموس",
+      "snippetsRead": "قراءة المقتطفات",
+      "snippetsWrite": "تعديل المقتطفات"
     },
     "revoke": {
       "button": "إبطال",
@@ -1223,11 +1227,17 @@
       "web_searchName": "البحث في الويب",
       "get_calendar_eventsName": "الحصول على أحداث التقويم",
       "get_calendar_availabilityName": "التحقق من الأوقات المتاحة في التقويم",
+      "get_snippetName": "الحصول على المقتطف",
+      "update_dictionaryName": "تحديث القاموس",
+      "update_snippetsName": "تحديث المقتطفات",
       "search_notesStatus": "جاري البحث في الملاحظات...",
       "web_searchStatus": "جاري البحث في الويب...",
       "copy_to_clipboardStatus": "جاري النسخ إلى الحافظة...",
       "get_calendar_eventsStatus": "جاري التحقق من التقويم...",
       "get_calendar_availabilityStatus": "جاري التحقق من الأوقات المتاحة...",
+      "get_snippetStatus": "جاري جلب المقتطف...",
+      "update_dictionaryStatus": "جاري تحديث القاموس...",
+      "update_snippetsStatus": "جاري تحديث المقتطفات...",
       "get_noteStatus": "جاري قراءة الملاحظة...",
       "create_noteStatus": "جاري إنشاء الملاحظة...",
       "update_noteStatus": "جاري تحديث الملاحظة...",

@@ -1257,7 +1257,11 @@
     "scopes": {
       "notesRead": "Notizen lesen",
       "notesWrite": "Notizen erstellen und bearbeiten",
-      "transcriptionsRead": "Transkriptionen lesen"
+      "transcriptionsRead": "Transkriptionen lesen",
+      "dictionaryRead": "Wörterbuch lesen",
+      "dictionaryWrite": "Wörterbuch bearbeiten",
+      "snippetsRead": "Snippets lesen",
+      "snippetsWrite": "Snippets bearbeiten"
     },
     "revoke": {
       "button": "Widerrufen",
@@ -3737,11 +3741,17 @@
       "web_searchName": "Websuche",
       "get_calendar_eventsName": "Kalendertermine abrufen",
       "get_calendar_availabilityName": "Verfügbarkeit prüfen",
+      "get_snippetName": "Snippet abrufen",
+      "update_dictionaryName": "Wörterbuch aktualisieren",
+      "update_snippetsName": "Snippets aktualisieren",
       "search_notesStatus": "Notizen werden durchsucht...",
       "web_searchStatus": "Websuche...",
       "copy_to_clipboardStatus": "In Zwischenablage kopieren...",
       "get_calendar_eventsStatus": "Kalender wird geprüft...",
       "get_calendar_availabilityStatus": "Verfügbarkeit wird geprüft...",
+      "get_snippetStatus": "Snippet wird abgerufen...",
+      "update_dictionaryStatus": "Wörterbuch wird aktualisiert...",
+      "update_snippetsStatus": "Snippets werden aktualisiert...",
       "get_noteStatus": "Notiz wird gelesen...",
       "create_noteStatus": "Notiz wird erstellt...",
       "update_noteStatus": "Notiz wird aktualisiert...",

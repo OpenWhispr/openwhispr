@@ -3572,11 +3572,17 @@
       "web_searchName": "網頁搜尋",
       "get_calendar_eventsName": "取得行事曆事件",
       "get_calendar_availabilityName": "查看可用時段",
+      "get_snippetName": "取得片段",
+      "update_dictionaryName": "更新字典",
+      "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜尋筆記...",
       "web_searchStatus": "正在搜尋網頁...",
       "copy_to_clipboardStatus": "正在複製到剪貼簿...",
       "get_calendar_eventsStatus": "正在查看行事曆...",
       "get_calendar_availabilityStatus": "正在查看可用時段...",
+      "get_snippetStatus": "正在取得片段...",
+      "update_dictionaryStatus": "正在更新字典...",
+      "update_snippetsStatus": "正在更新片段...",
       "get_noteStatus": "正在讀取筆記...",
       "create_noteStatus": "正在建立筆記...",
       "update_noteStatus": "正在更新筆記...",
@@ -3894,7 +3900,11 @@
     "scopes": {
       "notesRead": "讀取筆記",
       "notesWrite": "建立與編輯筆記",
-      "transcriptionsRead": "讀取轉錄"
+      "transcriptionsRead": "讀取轉錄",
+      "dictionaryRead": "讀取字典",
+      "dictionaryWrite": "編輯字典",
+      "snippetsRead": "讀取片段",
+      "snippetsWrite": "編輯片段"
     },
     "revoke": {
       "button": "撤銷",

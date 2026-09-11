@@ -3572,11 +3572,17 @@
       "web_searchName": "ウェブ検索",
       "get_calendar_eventsName": "カレンダーの予定を取得",
       "get_calendar_availabilityName": "空き時間を確認",
+      "get_snippetName": "スニペットを取得",
+      "update_dictionaryName": "辞書を更新",
+      "update_snippetsName": "スニペットを更新",
       "search_notesStatus": "ノートを検索中...",
       "web_searchStatus": "ウェブを検索中...",
       "copy_to_clipboardStatus": "クリップボードにコピー中...",
       "get_calendar_eventsStatus": "カレンダーを確認中...",
       "get_calendar_availabilityStatus": "空き時間を確認中...",
+      "get_snippetStatus": "スニペットを取得中...",
+      "update_dictionaryStatus": "辞書を更新中...",
+      "update_snippetsStatus": "スニペットを更新中...",
       "get_noteStatus": "ノートを読み込み中...",
       "create_noteStatus": "ノートを作成中...",
       "update_noteStatus": "ノートを更新中...",
@@ -3894,7 +3900,11 @@
     "scopes": {
       "notesRead": "ノートの読み取り",
       "notesWrite": "ノートの作成と編集",
-      "transcriptionsRead": "文字起こしの読み取り"
+      "transcriptionsRead": "文字起こしの読み取り",
+      "dictionaryRead": "辞書を読み取り",
+      "dictionaryWrite": "辞書を編集",
+      "snippetsRead": "スニペットを読み取り",
+      "snippetsWrite": "スニペットを編集"
     },
     "revoke": {
       "button": "取り消し",

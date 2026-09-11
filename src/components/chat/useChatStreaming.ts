@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
 import { isEnterpriseProvider } from "../../models/ModelRegistry";
 import { providerSupportsImages } from "../../services/ai/inferenceProviders";
-import { getSettings } from "../../stores/settingsStore";
+import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
 import {
   isAgentAllowed,
@@ -294,7 +294,9 @@ export function useChatStreaming({
         const calendarConnected =
           settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
         const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
-        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}`;
+        // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
+        const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
+        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
@@ -304,6 +306,13 @@ export function useChatStreaming({
             cloudBackupEnabled: settings.cloudBackupEnabled,
             searchScope: scope,
             webSearchEnabled,
+            vocabulary: {
+              getDictionary: () => getSettings().customDictionary,
+              updateDictionary: (changes) =>
+                useSettingsStore.getState().updateCustomDictionary(changes),
+              getSnippets: () => getSettings().snippets,
+              setSnippets: (snippets) => useSettingsStore.getState().setSnippets(snippets),
+            },
           });
           toolRegistryRef.current = { key: cacheKey, registry };
         }

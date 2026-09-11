@@ -3618,11 +3618,17 @@
       "web_searchName": "Поиск в интернете",
       "get_calendar_eventsName": "Получить события календаря",
       "get_calendar_availabilityName": "Проверить доступность",
+      "get_snippetName": "Получить сниппет",
+      "update_dictionaryName": "Обновить словарь",
+      "update_snippetsName": "Обновить сниппеты",
       "search_notesStatus": "Поиск в заметках...",
       "web_searchStatus": "Поиск в интернете...",
       "copy_to_clipboardStatus": "Копирование в буфер обмена...",
       "get_calendar_eventsStatus": "Проверка календаря...",
       "get_calendar_availabilityStatus": "Проверка доступности...",
+      "get_snippetStatus": "Получение сниппета...",
+      "update_dictionaryStatus": "Обновление словаря...",
+      "update_snippetsStatus": "Обновление сниппетов...",
       "get_noteStatus": "Чтение заметки...",
       "create_noteStatus": "Создание заметки...",
       "update_noteStatus": "Обновление заметки...",
@@ -3940,7 +3946,11 @@
     "scopes": {
       "notesRead": "Чтение заметок",
       "notesWrite": "Создание и редактирование заметок",
-      "transcriptionsRead": "Чтение транскрипций"
+      "transcriptionsRead": "Чтение транскрипций",
+      "dictionaryRead": "Чтение словаря",
+      "dictionaryWrite": "Изменение словаря",
+      "snippetsRead": "Чтение сниппетов",
+      "snippetsWrite": "Изменение сниппетов"
     },
     "revoke": {
       "button": "Отозвать",
