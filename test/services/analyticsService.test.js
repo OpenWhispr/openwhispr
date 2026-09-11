@@ -1011,11 +1011,113 @@ test("rejected version-zero history survives an API rollback and syncs after rec
   const vite = await createRendererServer(t);
   const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
 
+  const realNow = Date.now;
+  t.after(() => {
+    Date.now = realNow;
+  });
+
   assert.equal(await syncPendingAnalytics(), 2);
   assert.deepEqual([...retired].sort(), ["history-stored", "invalid-live-event"]);
 
+  // Refused history backs off instead of riding every pass, so recovery lands
+  // on the first pass after that window rather than on the very next one.
+  Date.now = () => realNow() + 2 * 60 * 60 * 1000;
+
   assert.equal(await syncPendingAnalytics(), 1);
   assert.equal(retired.has("history-rejected-by-old-api"), true);
+});
+
+test("an API without version-zero support is not re-asked on every pass", async (t) => {
+  const pending = [{ ...EVENT, event_id: "history-row", counter_version: 0 }];
+  const posts = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => null,
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async () => pending,
+        markAnalyticsEventsSynced: async (eventIds) => ({
+          success: true,
+          updated: eventIds.length,
+        }),
+        cloudApiRequest: async (request) => {
+          posts.push(request.body.events.map((event) => event.event_id));
+          // The shipped API before version-zero support: the row fails
+          // validation, so it is echoed into both lists and never stored.
+          return {
+            success: true,
+            data: { accepted: ["history-row"], rejected: ["history-row"] },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  await syncPendingAnalytics();
+  await syncPendingAnalytics();
+  await syncPendingAnalytics();
+
+  assert.deepEqual(
+    posts,
+    [["history-row"]],
+    "one refusal is enough -- the row stays pending, but stops riding every pass"
+  );
+});
+
+// getPendingAnalyticsEvents orders (counter_version = 0) ASC, occurred_at ASC,
+// so live events always precede history. The early return in runAnalyticsPass
+// depends on that, so the stub has to reproduce it rather than insertion order.
+const inQueueOrder = (events) =>
+  [...events].sort(
+    (a, b) =>
+      Number(a.counter_version === 0) - Number(b.counter_version === 0) ||
+      a.occurred_at.localeCompare(b.occurred_at)
+  );
+
+test("live events keep uploading while history is backing off", async (t) => {
+  const retired = new Set();
+  const pending = [
+    { ...EVENT, event_id: "live-row", counter_version: 1 },
+    { ...EVENT, event_id: "history-row", counter_version: 0 },
+  ];
+  const posts = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => null,
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async () =>
+          inQueueOrder(pending.filter((event) => !retired.has(event.event_id))),
+        markAnalyticsEventsSynced: async (eventIds) => {
+          eventIds.forEach((eventId) => retired.add(eventId));
+          return { success: true, updated: eventIds.length };
+        },
+        cloudApiRequest: async (request) => {
+          const ids = request.body.events.map((event) => event.event_id);
+          posts.push(ids);
+          return {
+            success: true,
+            data: { accepted: ids, rejected: ids.filter((id) => id === "history-row") },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  await syncPendingAnalytics();
+  retired.delete("live-row");
+  pending.push({ ...EVENT, event_id: "live-row-2", counter_version: 1 });
+  await syncPendingAnalytics();
+
+  assert.deepEqual(
+    posts[1],
+    ["live-row", "live-row-2"],
+    "the second pass carries current activity and leaves the refused history behind"
+  );
 });
 
 test("a capable API can permanently retire invalid version-zero history", async (t) => {

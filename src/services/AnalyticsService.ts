@@ -20,6 +20,15 @@ const BATCH_SIZE = 200;
 // backfill. What is left over stays pending and still counts as moved work,
 // which keeps the ambient pass cadence tight until the queue is empty.
 const MAX_BATCHES_PER_PASS = 5;
+// How long to leave reconstructed history alone after an API refuses the
+// version it is uploaded at. Short enough that a deploy is picked up within the
+// hour, long enough that a deployment which will never support it costs a
+// couple of dozen requests a day instead of one per pass. A capable answer
+// clears it early, but only a batch that is actually sent can carry one -- on a
+// queue of pure history there is nothing to ride along, so recovery there waits
+// out the window.
+const HISTORICAL_RETRY_COOLDOWN_MS = 60 * 60 * 1000;
+let historicalRetryBlockedUntil = 0;
 export const ANALYTICS_SUMMARY_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const ANALYTICS_REMOTE_REFRESH_DEBOUNCE_MS = 250;
 const requestedHistoryBackfillAccounts = new Set<string>();
@@ -229,6 +238,17 @@ async function runAnalyticsPass({
     if (fresh.length === 0) return synced;
     for (const event of fresh) offered.add(event.event_id);
 
+    // An API that predates version zero refuses it identically every time, and
+    // only a deploy can change that answer -- so re-offering those rows on the
+    // ambient pass, on every window focus and after every dictation just repeats
+    // one refusal forever. Back off from history alone: it sorts last, so a
+    // batch that still holds live events is unaffected.
+    const uploadable =
+      Date.now() < historicalRetryBlockedUntil
+        ? fresh.filter((event) => event.counter_version !== ANALYTICS_HISTORICAL_COUNTER_VERSION)
+        : fresh;
+    if (uploadable.length === 0) return synced;
+
     // `accepted` is an ack list, not a list of stored rows. Only a capable API
     // can distinguish a permanently invalid version-zero row from an older
     // deployment rejecting that version altogether. Keep those ids pending
@@ -238,11 +258,11 @@ async function runAnalyticsPass({
       accepted?: string[];
       rejected?: string[];
       supportsHistoricalCounterVersion?: boolean;
-    }>("/api/analytics/events/batch", { events: fresh }, context);
+    }>("/api/analytics/events/batch", { events: uploadable }, context);
     const accepted = Array.isArray(result?.accepted) ? result.accepted : [];
     const rejected = new Set(Array.isArray(result?.rejected) ? result.rejected : []);
     const historicalEventIds = new Set(
-      fresh
+      uploadable
         .filter((event) => event.counter_version === ANALYTICS_HISTORICAL_COUNTER_VERSION)
         .map((event) => event.event_id)
     );
@@ -250,6 +270,16 @@ async function runAnalyticsPass({
       result?.supportsHistoricalCounterVersion === true
         ? accepted
         : accepted.filter((eventId) => !rejected.has(eventId) || !historicalEventIds.has(eventId));
+    // Any history this answer did not take arms the backoff, not just an
+    // explicit rejection: an older response shape simply omits the rows it
+    // refused. Clearing on the capable answer has to come first, so a capable
+    // API can still retire a genuinely invalid row without arming anything.
+    const acknowledgedIds = new Set(acknowledged);
+    if (result?.supportsHistoricalCounterVersion === true) {
+      historicalRetryBlockedUntil = 0;
+    } else if ([...historicalEventIds].some((eventId) => !acknowledgedIds.has(eventId))) {
+      historicalRetryBlockedUntil = Date.now() + HISTORICAL_RETRY_COOLDOWN_MS;
+    }
 
     const { updated } = await window.electronAPI.markAnalyticsEventsSynced(acknowledged, context);
     synced += updated;
