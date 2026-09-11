@@ -579,9 +579,7 @@
     },
     "update": {
       "readyTitle": "アップデートの準備完了",
-      "readyDescription": "「アップデートをインストール」をクリックして最新バージョンで再起動します。",
-      "problemTitle": "アップデートで問題が発生しました",
-      "problemDescription": "アップデートを完了できませんでした。後でもう一度お試しください。"
+      "readyDescription": "「アップデートをインストール」をクリックして最新バージョンで再起動します。"
     },
     "limit": {
       "weeklyTitle": "週間の利用上限に達しました",
@@ -2030,10 +2028,6 @@
           "updateAvailable": {
             "description": "アップデートあり: v{{version}}",
             "title": "アップデートあり"
-          },
-          "updateError": {
-            "description": "アップデート中に問題が発生しました。もう一度お試しください。",
-            "title": "アップデートエラー"
           }
         },
         "downloadUpdate": "アップデート v{{version}} をダウンロード",

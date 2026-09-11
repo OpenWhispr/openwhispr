@@ -155,7 +155,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
   );
   const updateReadyToastShown = useRef(false);
-  const updateErrorToastShown = useRef<Error | null>(null);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
   const { useCleanupModel } = useSettings();
@@ -174,7 +173,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     isPastDue: usage?.isPastDue ?? false,
   });
 
-  const { status: updateStatus, isDownloading, error: updateError } = useUpdater();
+  const { status: updateStatus, isDownloading } = useUpdater();
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
   const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
@@ -309,20 +308,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       updateReadyToastShown.current = false;
     }
   }, [updateStatus.updateDownloaded, isDownloading, toast, t]);
-
-  useEffect(() => {
-    if (updateError && updateError !== updateErrorToastShown.current) {
-      updateErrorToastShown.current = updateError;
-      toast({
-        title: t("controlPanel.update.problemTitle"),
-        description: t("controlPanel.update.problemDescription"),
-        variant: "destructive",
-      });
-    }
-    if (!updateError) {
-      updateErrorToastShown.current = null;
-    }
-  }, [updateError, toast, t]);
 
   useEffect(() => {
     const dispose = window.electronAPI?.onLimitReached?.(

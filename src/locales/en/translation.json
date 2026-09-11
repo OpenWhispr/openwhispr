@@ -579,9 +579,7 @@
     },
     "update": {
       "readyTitle": "Update ready to install",
-      "readyDescription": "Click 'Install Update' to restart with the latest version.",
-      "problemTitle": "Update ran into a problem",
-      "problemDescription": "We couldn't complete the update. Please try again later."
+      "readyDescription": "Click 'Install Update' to restart with the latest version."
     },
     "limit": {
       "weeklyTitle": "Weekly limit reached",
@@ -2319,10 +2317,6 @@
           "updateAvailable": {
             "description": "Update available: v{{version}}",
             "title": "Update Available"
-          },
-          "updateError": {
-            "description": "Something went wrong with the update. Please try again.",
-            "title": "Update Error"
           }
         },
         "downloadUpdate": "Download Update {{version}}",

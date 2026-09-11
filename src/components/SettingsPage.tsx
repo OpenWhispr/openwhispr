@@ -1340,8 +1340,6 @@ export default function SettingsPage({
     downloadUpdate,
     installUpdate: installUpdateAction,
     getAppVersion,
-    error: updateError,
-    clearError: clearUpdateError,
   } = useUpdater();
 
   const isUpdateAvailable =
@@ -1718,16 +1716,6 @@ export default function SettingsPage({
     });
     return () => cleanup?.();
   }, [toast, t, setActivationMode]);
-
-  useEffect(() => {
-    if (updateError) {
-      showAlertDialog({
-        title: t("settingsPage.general.updates.dialogs.updateError.title"),
-        description: t("settingsPage.general.updates.dialogs.updateError.description"),
-      });
-      clearUpdateError();
-    }
-  }, [updateError, showAlertDialog, clearUpdateError, t]);
 
   useEffect(() => {
     if (installInitiated) {
@@ -4613,7 +4601,14 @@ EOF`,
                               ),
                             });
                           }
-                        } catch {}
+                        } catch {
+                          showAlertDialog({
+                            title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
+                            description: t(
+                              "settingsPage.general.updates.dialogs.checkFailed.description"
+                            ),
+                          });
+                        }
                       }}
                       disabled={
                         checkingForUpdates ||

@@ -579,9 +579,7 @@
     },
     "update": {
       "readyTitle": "Update bereit zur Installation",
-      "readyDescription": "Klicken Sie auf 'Update installieren', um mit der neuesten Version neu zu starten.",
-      "problemTitle": "Beim Update ist ein Problem aufgetreten",
-      "problemDescription": "Das Update konnte nicht abgeschlossen werden. Bitte versuchen Sie es später erneut."
+      "readyDescription": "Klicken Sie auf 'Update installieren', um mit der neuesten Version neu zu starten."
     },
     "limit": {
       "weeklyTitle": "Wochenlimit erreicht",
@@ -2319,10 +2317,6 @@
           "updateAvailable": {
             "description": "Update verfügbar: v{{version}}",
             "title": "Update verfügbar"
-          },
-          "updateError": {
-            "description": "Beim Update ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.",
-            "title": "Update-Fehler"
           }
         },
         "downloadUpdate": "Update {{version}} herunterladen",

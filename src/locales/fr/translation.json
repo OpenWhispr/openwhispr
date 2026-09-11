@@ -579,9 +579,7 @@
     },
     "update": {
       "readyTitle": "Mise à jour prête à installer",
-      "readyDescription": "Cliquez sur « Installer la mise à jour » pour redémarrer avec la dernière version.",
-      "problemTitle": "Problème pendant la mise à jour",
-      "problemDescription": "Nous n'avons pas pu terminer la mise à jour. Réessayez plus tard."
+      "readyDescription": "Cliquez sur « Installer la mise à jour » pour redémarrer avec la dernière version."
     },
     "limit": {
       "weeklyTitle": "Limite hebdomadaire atteinte",
@@ -2319,10 +2317,6 @@
           "updateAvailable": {
             "description": "Mise à jour disponible : v{{version}}",
             "title": "Mise à jour disponible"
-          },
-          "updateError": {
-            "description": "Un problème est survenu pendant la mise à jour. Veuillez réessayer.",
-            "title": "Erreur de mise à jour"
           }
         },
         "downloadUpdate": "Télécharger la mise à jour {{version}}",

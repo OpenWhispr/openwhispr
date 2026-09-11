@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Back to notes works in narrow windows.** The button only handled meeting mode, so with a note open in a narrow window it did nothing. It now returns to the notes list.
+- **No more update error popups.** A failed background update check used to raise a modal the next time Settings opened, and a destructive toast in the control panel. Background failures are now silent and retried on the next check; only a manual Check for Updates reports its own failure inline.
 - **Smoother notification swipe.** The meeting notification card follows your pointer, fades as it goes, and leaves through the edge you dragged it toward. The window no longer shows scrollbars mid-animation, and on macOS it now sits above every other window, including OpenWhispr's own floating panels.
 
 ## [1.10.0] - 2026-09-10

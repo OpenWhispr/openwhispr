@@ -579,9 +579,7 @@
     },
     "update": {
       "readyTitle": "更新已准备就绪",
-      "readyDescription": "点击“安装更新”以重启并安装最新版本。",
-      "problemTitle": "更新遇到问题",
-      "problemDescription": "无法完成更新，请稍后再试。"
+      "readyDescription": "点击“安装更新”以重启并安装最新版本。"
     },
     "limit": {
       "weeklyTitle": "已达到周限额",
@@ -2030,10 +2028,6 @@
           "updateAvailable": {
             "description": "有可用更新：v{{version}}",
             "title": "有可用更新"
-          },
-          "updateError": {
-            "description": "更新出错，请重试。",
-            "title": "更新错误"
           }
         },
         "downloadUpdate": "下载更新 {{version}}",

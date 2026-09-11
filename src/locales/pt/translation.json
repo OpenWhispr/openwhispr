@@ -558,9 +558,7 @@
     },
     "update": {
       "readyTitle": "Atualização pronta para instalar",
-      "readyDescription": "Clique em 'Instalar atualização' para reiniciar com a versão mais recente.",
-      "problemTitle": "Houve um problema na atualização",
-      "problemDescription": "Não foi possível concluir a atualização. Tente novamente mais tarde."
+      "readyDescription": "Clique em 'Instalar atualização' para reiniciar com a versão mais recente."
     },
     "limit": {
       "weeklyTitle": "Limite semanal atingido",
@@ -2009,10 +2007,6 @@
           "updateAvailable": {
             "description": "Atualização disponível: v{{version}}",
             "title": "Atualização disponível"
-          },
-          "updateError": {
-            "description": "Algo deu errado com a atualização. Tente novamente.",
-            "title": "Erro de atualização"
           }
         },
         "downloadUpdate": "Baixar atualização {{version}}",

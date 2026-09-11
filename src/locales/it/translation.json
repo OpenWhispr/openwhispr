@@ -579,9 +579,7 @@
     },
     "update": {
       "readyTitle": "Aggiornamento pronto da installare",
-      "readyDescription": "Fai clic su 'Installa aggiornamento' per riavviare con l'ultima versione.",
-      "problemTitle": "Si è verificato un problema con l'aggiornamento",
-      "problemDescription": "Non siamo riusciti a completare l'aggiornamento. Riprova più tardi."
+      "readyDescription": "Fai clic su 'Installa aggiornamento' per riavviare con l'ultima versione."
     },
     "limit": {
       "weeklyTitle": "Limite settimanale raggiunto",
@@ -2030,10 +2028,6 @@
           "updateAvailable": {
             "description": "Aggiornamento disponibile: v{{version}}",
             "title": "Aggiornamento disponibile"
-          },
-          "updateError": {
-            "description": "Qualcosa è andato storto con l'aggiornamento. Riprova.",
-            "title": "Errore di aggiornamento"
           }
         },
         "downloadUpdate": "Scarica aggiornamento {{version}}",
