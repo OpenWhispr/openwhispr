@@ -3,6 +3,7 @@ export { ArrowLeftOutline24 } from "./ArrowLeftOutline24";
 export { ArrowRightOutline24 } from "./ArrowRightOutline24";
 export { ArrowRotateClockwiseOutline24 } from "./ArrowRotateClockwiseOutline24";
 export { ArrowTurnLeftOutline24 } from "./ArrowTurnLeftOutline24";
+export { ArrowUpOutline24 } from "./ArrowUpOutline24";
 export { ArrowsOppositeDirectionYOutline24 } from "./ArrowsOppositeDirectionYOutline24";
 export { AwardMedalOutline24 } from "./AwardMedalOutline24";
 export { BoltOutline24 } from "./BoltOutline24";
