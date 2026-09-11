@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Mic, Square, Loader2 } from "../icons";
+import { Mic, Square, Loader2 } from "../icons";
 import { cn } from "../lib/utils";
+import { SendIcon } from "../ui/SendIcon";
 import { LiveWaveform } from "../ui/LiveWaveform";
 import { analyserRms } from "../../utils/audioLevel";
 import { GRADIENT_CIRCLE } from "../ui/gradientCircle";
@@ -229,25 +230,25 @@ export default function NoteBottomBar({
             )}
           />
 
-          {!hasText && !isExpanded && actionPicker && (
+          {hasText ? (
+            <button
+              onClick={handleSubmit}
+              disabled={askDisabled}
+              className={cn(
+                "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
+                "animate-[scale-in_0.15s_ease-out_backwards]",
+                "transition-all duration-150",
+                "hover:brightness-110",
+                "active:scale-90",
+                "disabled:opacity-30"
+              )}
+              aria-label={t("embeddedChat.send")}
+            >
+              <SendIcon size={28} className="block rtl:scale-x-[-1]" />
+            </button>
+          ) : !isExpanded ? (
             <div className="shrink-0">{actionPicker}</div>
-          )}
-          {/* Always present so the capsule has a stable end cap; quiet until there is text to send. */}
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={askDisabled || !hasText}
-            aria-label={t("embeddedChat.send")}
-            className={cn(
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-full outline-none",
-              "transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-primary/30",
-              hasText
-                ? "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95"
-                : "bg-foreground/8 text-foreground/45 dark:bg-white/10"
-            )}
-          >
-            <ArrowUp size={14} strokeWidth={2.2} />
-          </button>
+          ) : null}
         </div>
       </div>
     </div>

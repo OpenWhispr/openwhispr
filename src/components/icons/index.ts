@@ -12,7 +12,6 @@ export const Archive = createIcon("archive", Nucleo.BoxArchiveOutline24);
 export const ArchiveRestore = createIcon("archive-restore", Nucleo.ArchiveExportOutline24);
 export const ArrowLeft = createIcon("arrow-left", Nucleo.ArrowLeftOutline24);
 export const ArrowRight = createIcon("arrow-right", Nucleo.ArrowRightOutline24);
-export const ArrowUp = createIcon("arrow-up", Nucleo.ArrowUpOutline24);
 export const ArrowUpDown = createIcon("arrow-up-down", Nucleo.ArrowsOppositeDirectionYOutline24);
 export const AudioLines = createIcon("audio-lines", Nucleo.WaveformLinesOutline24);
 export const BanknoteCheck = createIcon("banknote-check", Nucleo.MoneyBillOutline24);
