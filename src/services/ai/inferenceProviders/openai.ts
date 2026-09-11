@@ -14,6 +14,7 @@ import { detectEndpointDialect } from "../thinkingSuppressionDialects";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
+import { openCodeSessionHeaders } from "../openCodeSession";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const PROBE_TIMEOUT_MS = 2_000;
@@ -192,6 +193,9 @@ export const openaiProvider: InferenceProvider = {
       endpointCandidates = getEndpointCandidates(openAiBase);
     }
     const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
+    // One cleanup call is one conversation: every attempt below (endpoint
+    // fallback, parameter fallback, retry) reuses the same session id.
+    const openCodeHeaders = openCodeSessionHeaders(openAiBase);
 
     logger.logReasoning("OPENAI_ENDPOINTS", {
       base: openAiBase,
@@ -261,6 +265,7 @@ export const openaiProvider: InferenceProvider = {
                 headers: {
                   "Content-Type": "application/json",
                   ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+                  ...openCodeHeaders,
                 },
                 body: JSON.stringify(requestBody),
                 signal: controller.signal,
