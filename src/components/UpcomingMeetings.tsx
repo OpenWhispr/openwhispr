@@ -33,6 +33,11 @@ function formatTimeRange(locale: string, startTime: string, endTime: string): st
   return `${format(startTime)} – ${format(endTime)}`;
 }
 
+// Today plus the next two days with events; the rail answers "what's next", not "what's this week".
+const MAX_DAY_CARDS = 3;
+// Avatars shown before the "+N" overflow pill.
+const MAX_STACKED_AVATARS = 2;
+
 interface DayGroup {
   key: string;
   date: Date;
@@ -60,8 +65,11 @@ function groupEventsByDay(events: CalendarEvent[], now: Date): DayGroup[] {
   if (groups.length > 0 && !groups.some((g) => g.isToday)) {
     groups.unshift({ key: now.toDateString(), date: now, isToday: true, items: [] });
   }
-  return groups;
+  return groups.slice(0, MAX_DAY_CARDS);
 }
+
+const ATTENDEE_COUNT_PILL_CLASS =
+  "flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-surface-3 px-0.5 text-[9px] font-medium tabular-nums text-muted-foreground ring-1 ring-background";
 
 const RSVP_DOT: Record<string, string> = {
   accepted: "bg-green-500",
@@ -87,20 +95,20 @@ function AttendeePopover({
       <PopoverTrigger asChild>
         <button
           aria-label={`${attendees.length} ${t("notes.participants.attendees")}`}
-          className="flex shrink-0 items-center -space-x-1.5 rounded-full pt-0.5 outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring/40"
+          className="flex shrink-0 items-center -space-x-1 rounded-full outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring/40"
         >
-          {attendees.slice(0, 3).map((a) => (
+          {attendees.slice(0, MAX_STACKED_AVATARS).map((a) => (
             <PersonAvatar
               key={a.email}
               email={a.email}
               displayName={a.displayName}
-              size={16}
+              size={18}
               className="ring-1 ring-background"
             />
           ))}
-          {attendees.length > 3 && (
-            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-0.5 text-[9px] font-medium text-muted-foreground ring-1 ring-background">
-              +{attendees.length - 3}
+          {attendees.length > MAX_STACKED_AVATARS && (
+            <span className={ATTENDEE_COUNT_PILL_CLASS}>
+              +{attendees.length - MAX_STACKED_AVATARS}
             </span>
           )}
         </button>
@@ -164,101 +172,76 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
   };
 
   return (
-    <div
-      className={cn(
-        "group/event border-s-2 ps-2.5",
-        isNow ? "border-green-500/60" : "border-primary/25"
-      )}
-    >
-      <div className="flex items-start gap-2">
-        <p
-          dir="auto"
-          className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-foreground line-clamp-2"
-        >
+    <div className="flex items-center gap-3 px-1 py-2">
+      {attendees.length > 1 ? (
+        <AttendeePopover
+          event={event}
+          attendees={attendees}
+          timeRange={timeRange}
+          joinUrl={joinUrl}
+        />
+      ) : event.attendees_count > 1 ? (
+        <span className={ATTENDEE_COUNT_PILL_CLASS}>+{event.attendees_count - 1}</span>
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <p dir="auto" className="truncate text-sm font-medium leading-tight text-foreground">
           {event.summary || t("upcoming.untitledEvent")}
         </p>
-        {attendees.length > 1 ? (
-          <AttendeePopover
-            event={event}
-            attendees={attendees}
-            timeRange={timeRange}
-            joinUrl={joinUrl}
-          />
-        ) : event.attendees_count > 1 ? (
-          <span className="shrink-0 pt-0.5 text-[11px] tabular-nums text-muted-foreground/70">
-            +{event.attendees_count - 1}
-          </span>
-        ) : null}
-      </div>
-      <div className="mt-1 flex items-center justify-between gap-2">
         {isNow ? (
-          <span className="flex items-center gap-1.5">
+          <span className="mt-1 flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-green-500 opacity-75" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
             </span>
-            <span className="text-[11px] font-medium tabular-nums text-green-600 dark:text-green-400">
+            <span className="text-xs font-medium text-green-600 dark:text-green-400">
               {t("upcoming.now")}
             </span>
           </span>
         ) : (
-          <span className="text-[11px] tabular-nums text-muted-foreground">{timeRange}</span>
+          <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{timeRange}</p>
         )}
-        <Button
-          size="sm"
-          variant={isNow ? "default" : "ghost"}
-          onClick={startNotes}
-          className={cn(
-            "h-6 min-w-0 gap-1 px-2 text-[11px] font-medium",
-            !isNow &&
-              "text-muted-foreground opacity-0 transition-opacity duration-150 hover:text-foreground focus-visible:opacity-100 group-hover/event:opacity-100"
-          )}
-        >
-          {joinUrl ? (
-            <Video size={11} className="shrink-0" />
-          ) : (
-            <Mic size={11} className="shrink-0" />
-          )}
-          <span className="truncate">
-            {joinUrl ? t("upcoming.joinAndTakeNotes") : t("upcoming.takeNotes")}
-          </span>
-        </Button>
       </div>
+      {isNow && (
+        <Button size="sm" onClick={startNotes} className="h-7 shrink-0 gap-1.5 rounded-full px-3">
+          {joinUrl ? <Video size={12} /> : <Mic size={12} />}
+          {joinUrl ? t("upcoming.joinAndTakeNotes") : t("upcoming.takeNotes")}
+        </Button>
+      )}
     </div>
   );
 }
 
 function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEvent) => boolean }) {
   const { t, i18n } = useTranslation();
-  const locale = i18n.language;
 
   return (
-    <div className="rounded-lg border border-border/40 bg-card/50 px-3 py-2.5 dark:border-border-subtle/60 dark:bg-surface-2/60">
-      <div className="flex items-center gap-2 pb-2">
-        <span className="text-[22px] font-semibold leading-none tabular-nums text-foreground">
-          {group.date.getDate()}
+    <div className="overflow-clip rounded-2xl border border-border/40 dark:border-white/6">
+      <div
+        className={cn(
+          "flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium",
+          group.isToday
+            ? "bg-primary text-primary-foreground"
+            : "bg-surface-3 text-foreground dark:bg-surface-2"
+        )}
+      >
+        <Calendar size={12} className="shrink-0" />
+        <span>
+          {group.date.toLocaleDateString(i18n.language, { day: "numeric", month: "short" })}
         </span>
-        <div className="flex flex-col justify-center">
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium leading-tight text-foreground">
-            {group.date.toLocaleDateString(locale, { month: "long" })}
-            {group.isToday && <span className="h-1 w-1 rounded-full bg-red-500" />}
-          </span>
-          <span className="text-[10px] leading-tight text-muted-foreground">
-            {group.date.toLocaleDateString(locale, { weekday: "short" })}
-          </span>
-        </div>
       </div>
-      {group.items.length === 0 ? (
-        <div className="border-s-2 border-border/40 ps-2.5 text-xs text-muted-foreground/60">
-          {t("upcoming.noEventsToday")}
-        </div>
-      ) : (
-        <div className="space-y-2.5">
-          {group.items.map((event) => (
-            <EventRow key={event.id} event={event} isNow={isNowFn(event)} />
-          ))}
-        </div>
-      )}
+      <div className="bg-background px-2 dark:bg-surface-2/60">
+        {group.items.length === 0 ? (
+          <p className="px-1 py-3 text-xs text-muted-foreground/60">
+            {t("upcoming.noEventsToday")}
+          </p>
+        ) : (
+          <div className="divide-y divide-border/30">
+            {group.items.map((event) => (
+              <EventRow key={event.id} event={event} isNow={isNowFn(event)} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -275,7 +258,7 @@ function SidebarCard({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center rounded-lg border border-border bg-card/50 px-4 py-6 text-center dark:bg-surface-2/60">
+    <div className="flex flex-col items-center rounded-2xl border border-border/40 bg-card/50 px-4 py-6 text-center dark:border-white/6 dark:bg-surface-2/60">
       <Icon size={20} className="mb-2 text-muted-foreground/40" />
       {title && <p className="text-xs font-medium text-foreground/80">{title}</p>}
       {description && (
@@ -306,14 +289,8 @@ export default function UpcomingMeetings({
   };
 
   return (
-    <div className="w-64 sticky top-0 self-start max-h-screen overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center gap-1.5 pb-2.5">
-        <Calendar size={12} className="text-muted-foreground" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {t("upcoming.title")}
-        </span>
-      </div>
+    <div>
+      <p className="pt-2 pb-2.5 text-sm text-muted-foreground">{t("upcoming.title")}</p>
 
       {/* Loading state */}
       {isLoading && (
@@ -369,7 +346,7 @@ export default function UpcomingMeetings({
 
       {/* Day cards */}
       {!isLoading && isConnected && groupedEvents.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {groupedEvents.map((group) => (
             <DayCard key={group.key} group={group} isNowFn={isNowFn} />
           ))}

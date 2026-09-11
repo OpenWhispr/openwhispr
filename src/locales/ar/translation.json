@@ -514,6 +514,7 @@
         "yesterday": "أمس"
       },
       "copyText": "نسخ النص",
+      "moreActions": "مزيد من الإجراءات",
       "copyRawTranscript": "نسخ النص المفرَّغ الخام",
       "deleteItem": "حذف",
       "viewRawTranscript": "عرض النص المفرَّغ الخام",
@@ -1364,7 +1365,6 @@
   },
   "upcoming": {
     "title": "القادم",
-    "transcriptions": "التفريغات الصوتية",
     "now": "الآن",
     "untitledEvent": "حدث بدون عنوان",
     "joinAndTakeNotes": "انضمام وتدوين ملاحظات",

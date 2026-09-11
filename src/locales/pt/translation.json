@@ -619,6 +619,7 @@
       "clearAllErrorTitle": "Não foi possível limpar o histórico",
       "clearAllErrorDescription": "Algo deu errado. Tente novamente.",
       "copyText": "Copiar texto",
+      "moreActions": "Mais ações",
       "copyRawTranscript": "Copiar transcrição bruta",
       "deleteItem": "Excluir",
       "viewRawTranscript": "Ver transcrição bruta",
@@ -3745,7 +3746,6 @@
   },
   "upcoming": {
     "title": "Em breve",
-    "transcriptions": "Transcrições",
     "now": "Agora",
     "untitledEvent": "Evento sem título",
     "joinAndTakeNotes": "Entrar e fazer anotações",

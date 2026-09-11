@@ -640,6 +640,7 @@
       "clearAllErrorTitle": "無法清除歷史紀錄",
       "clearAllErrorDescription": "發生錯誤，請重試。",
       "copyText": "複製文字",
+      "moreActions": "更多操作",
       "copyRawTranscript": "複製原始轉錄",
       "deleteItem": "刪除",
       "viewRawTranscript": "檢視原始轉錄",
@@ -3745,7 +3746,6 @@
   },
   "upcoming": {
     "title": "即將開始",
-    "transcriptions": "轉錄",
     "now": "進行中",
     "untitledEvent": "無標題事件",
     "joinAndTakeNotes": "加入並記筆記",

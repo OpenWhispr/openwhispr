@@ -640,6 +640,7 @@
       "clearAllErrorTitle": "Не удалось очистить историю",
       "clearAllErrorDescription": "Что-то пошло не так. Попробуйте ещё раз.",
       "copyText": "Копировать текст",
+      "moreActions": "Другие действия",
       "copyRawTranscript": "Копировать исходную расшифровку",
       "deleteItem": "Удалить",
       "viewRawTranscript": "Показать исходную расшифровку",
@@ -3791,7 +3792,6 @@
   },
   "upcoming": {
     "title": "Скоро",
-    "transcriptions": "Транскрипции",
     "now": "Сейчас",
     "untitledEvent": "Без названия",
     "joinAndTakeNotes": "Присоединиться и вести заметки",

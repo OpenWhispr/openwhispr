@@ -640,6 +640,7 @@
       "clearAllErrorTitle": "履歴を削除できませんでした",
       "clearAllErrorDescription": "問題が発生しました。もう一度お試しください。",
       "copyText": "テキストをコピー",
+      "moreActions": "その他の操作",
       "copyRawTranscript": "生の文字起こしをコピー",
       "deleteItem": "削除",
       "viewRawTranscript": "生の文字起こしを表示",
@@ -3745,7 +3746,6 @@
   },
   "upcoming": {
     "title": "今後の予定",
-    "transcriptions": "文字起こし",
     "now": "進行中",
     "untitledEvent": "無題のイベント",
     "joinAndTakeNotes": "参加してメモを取る",

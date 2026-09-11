@@ -627,6 +627,7 @@
         "yesterday": "Hier"
       },
       "copyText": "Copier le texte",
+      "moreActions": "Plus d’actions",
       "copyRawTranscript": "Copier la transcription brute",
       "deleteItem": "Supprimer",
       "viewRawTranscript": "Voir la transcription brute",
@@ -1142,7 +1143,6 @@
   },
   "upcoming": {
     "title": "À venir",
-    "transcriptions": "Transcriptions",
     "now": "En cours",
     "untitledEvent": "Événement sans titre",
     "joinAndTakeNotes": "Rejoindre et noter",

@@ -649,6 +649,7 @@
       "clearAllErrorTitle": "No se pudo borrar el historial",
       "clearAllErrorDescription": "Algo salió mal. Inténtalo de nuevo.",
       "copyText": "Copiar texto",
+      "moreActions": "Más acciones",
       "copyRawTranscript": "Copiar transcripción sin procesar",
       "deleteItem": "Eliminar",
       "viewRawTranscript": "Ver transcripción sin procesar",
@@ -3793,7 +3794,6 @@
   },
   "upcoming": {
     "title": "Próximamente",
-    "transcriptions": "Transcripciones",
     "now": "Ahora",
     "untitledEvent": "Evento sin título",
     "joinAndTakeNotes": "Unirse y tomar notas",

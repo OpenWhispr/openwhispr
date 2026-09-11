@@ -130,14 +130,8 @@ export default function HistoryView({
           </div>
         )}
 
-        <div className="flex gap-6">
+        <div className="flex gap-8">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 pb-2.5">
-              <Mic size={12} className="text-muted-foreground" />
-              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                {t("upcoming.transcriptions")}
-              </span>
-            </div>
             {!dataRetentionEnabled && (
               <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 px-3.5 py-2.5 flex items-center gap-2.5">
                 <span className="text-amber-600 dark:text-amber-400 shrink-0 text-sm">⊘</span>
@@ -262,11 +256,9 @@ export default function HistoryView({
             ) : (
               <div className="group">
                 {groupedHistory.map((group, index) => (
-                  <div key={group.label} className={index > 0 ? "mt-4" : ""}>
-                    <div className="sticky -top-1 z-10 -mx-4 px-5 pt-2 pb-2 bg-background flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground uppercase tracking-wide">
-                        {group.label}
-                      </span>
+                  <div key={group.label} className={index > 0 ? "mt-6" : ""}>
+                    <div className="sticky -top-1 z-10 -mx-4 px-4 pt-2 pb-2.5 bg-background flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">{group.label}</span>
                       {index === 0 && (
                         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
                           {discardedToggle}
@@ -280,7 +272,7 @@ export default function HistoryView({
                         </div>
                       )}
                     </div>
-                    <div className="space-y-1.5 relative z-0">
+                    <div className="relative z-0 overflow-clip rounded-2xl border border-border/40 bg-card/50 divide-y divide-border/30 dark:border-white/6 dark:bg-surface-2/60">
                       {group.items.map((item) => (
                         <TranscriptionItem
                           key={item.id}
@@ -299,15 +291,13 @@ export default function HistoryView({
             )}
           </div>
 
-          <div className="w-64 shrink-0 hidden sm:block">
-            <div className="sticky top-4">
-              <UpcomingMeetings
-                events={events}
-                isLoading={eventsLoading}
-                isConnected={isConnected}
-                onConnectCalendar={onOpenIntegrations}
-              />
-            </div>
+          <div className="hidden w-80 shrink-0 md:block">
+            <UpcomingMeetings
+              events={events}
+              isLoading={eventsLoading}
+              isConnected={isConnected}
+              onConnectCalendar={onOpenIntegrations}
+            />
           </div>
         </div>
       </div>

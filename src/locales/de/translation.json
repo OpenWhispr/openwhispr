@@ -627,6 +627,7 @@
         "yesterday": "Gestern"
       },
       "copyText": "Text kopieren",
+      "moreActions": "Weitere Aktionen",
       "copyRawTranscript": "Rohtranskript kopieren",
       "deleteItem": "Löschen",
       "viewRawTranscript": "Rohtranskript anzeigen",
@@ -1142,7 +1143,6 @@
   },
   "upcoming": {
     "title": "Demnächst",
-    "transcriptions": "Transkriptionen",
     "now": "Jetzt",
     "untitledEvent": "Unbenanntes Ereignis",
     "joinAndTakeNotes": "Beitreten & Notizen",

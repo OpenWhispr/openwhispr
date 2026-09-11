@@ -640,6 +640,7 @@
       "clearAllErrorTitle": "Impossibile cancellare la cronologia",
       "clearAllErrorDescription": "Qualcosa è andato storto. Riprova.",
       "copyText": "Copia testo",
+      "moreActions": "Altre azioni",
       "copyRawTranscript": "Copia trascrizione grezza",
       "deleteItem": "Elimina",
       "viewRawTranscript": "Visualizza trascrizione grezza",
@@ -3745,7 +3746,6 @@
   },
   "upcoming": {
     "title": "In arrivo",
-    "transcriptions": "Trascrizioni",
     "now": "In corso",
     "untitledEvent": "Evento senza titolo",
     "joinAndTakeNotes": "Partecipa e prendi note",

@@ -627,6 +627,7 @@
         "yesterday": "Yesterday"
       },
       "copyText": "Copy text",
+      "moreActions": "More actions",
       "copyRawTranscript": "Copy raw transcript",
       "deleteItem": "Delete",
       "viewRawTranscript": "View raw transcript",
@@ -1142,7 +1143,6 @@
   },
   "upcoming": {
     "title": "Coming up",
-    "transcriptions": "Transcriptions",
     "now": "Now",
     "untitledEvent": "Untitled Event",
     "joinAndTakeNotes": "Join & take notes",
