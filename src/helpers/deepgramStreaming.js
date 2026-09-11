@@ -68,6 +68,21 @@ const NOVA3_LANGUAGES = new Set([
 // Deepgram's net0001 idle timeout (which only resets on audio data, not KeepAlive).
 const SILENCE_FRAME = Buffer.alloc((SAMPLE_RATE / 10) * 2);
 
+// Deepgram binds the scheme to the credential: a raw API key (BYOK) is accepted
+// only as `Token`, `Bearer` only for what /v1/auth/grant mints (managed). #2140
+const authorizationHeader = (mode, token) => `${mode === "byok" ? "Token" : "Bearer"} ${token}`;
+
+// Everything buildWebSocketUrl pins on the socket, folded the way it folds it, so
+// a warm connection can be compared against the session that wants to ride it.
+// Dictation warms on the UI language before it can know a translation wants the
+// source language, and the dictionary can be edited between the two.
+const urlIdentity = (options) =>
+  JSON.stringify([
+    options.sampleRate || SAMPLE_RATE,
+    options.language && options.language !== "auto" ? options.language : null,
+    (options.keyterms || []).filter(Boolean),
+  ]);
+
 class DeepgramStreaming {
   constructor() {
     this.ws = null;
@@ -286,7 +301,7 @@ class DeepgramStreaming {
       }, WEBSOCKET_TIMEOUT_MS);
 
       this.warmConnection = new WebSocket(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: authorizationHeader(this.mode, token) },
       });
 
       this.warmConnection.on("open", () => {
@@ -371,6 +386,14 @@ class DeepgramStreaming {
       this.rewarmTimer = null;
       if (this.hasWarmConnection() || this.isConnected) return;
 
+      // cleanupWarmConnection() drops these without cancelling this timer, and
+      // spreading a null one loses `mode`, re-warming a BYOK key as a Bearer.
+      const savedOptions = this.warmConnectionOptions;
+      if (!savedOptions) {
+        debugLogger.debug("Deepgram cannot re-warm: options dropped before the timer fired");
+        return;
+      }
+
       let token = this.getCachedToken();
       if (!token && this.tokenRefreshFn) {
         try {
@@ -387,7 +410,7 @@ class DeepgramStreaming {
         return;
       }
 
-      this.warmup({ ...this.warmConnectionOptions, token }).catch((err) => {
+      this.warmup({ ...savedOptions, token }).catch((err) => {
         debugLogger.debug("Deepgram auto re-warm failed", { error: err.message });
       });
     }, delay);
@@ -604,6 +627,20 @@ class DeepgramStreaming {
       this.coldStartBufferSize = 0;
     }
 
+    // The socket carries these for its whole life, so riding a warm one opened
+    // for other values transcribes the session under them — silently, since
+    // Deepgram has no reason to object to the audio.
+    if (
+      this.hasWarmConnection() &&
+      urlIdentity(this.warmConnectionOptions) !== urlIdentity(options)
+    ) {
+      debugLogger.debug("Deepgram warm connection differs, cold-starting", {
+        warm: urlIdentity(this.warmConnectionOptions),
+        requested: urlIdentity(options),
+      });
+      this.cleanupWarmConnection();
+    }
+
     if (!forceNew && this.hasWarmConnection()) {
       if (this.useWarmConnection()) {
         this.startLivenessCheck();
@@ -625,7 +662,7 @@ class DeepgramStreaming {
       }, WEBSOCKET_TIMEOUT_MS);
 
       this.ws = new WebSocket(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: authorizationHeader(this.mode, token) },
       });
 
       this.ws.on("open", () => {
@@ -929,3 +966,4 @@ class DeepgramStreaming {
 }
 
 module.exports = DeepgramStreaming;
+module.exports.authorizationHeader = authorizationHeader;

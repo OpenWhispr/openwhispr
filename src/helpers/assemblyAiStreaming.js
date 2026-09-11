@@ -10,7 +10,15 @@ const REWARM_DELAY_MS = 2000;
 const MAX_REWARM_ATTEMPTS = 10;
 const KEEPALIVE_INTERVAL_MS = 15000;
 const MIN_FRAME_MS = 50;
-const MIN_FRAME_BYTES = (SAMPLE_RATE * 2 * MIN_FRAME_MS) / 1000;
+// AssemblyAI hard-closes the session outside 50-1000 ms but documents 50-250 ms
+// as the supported shape, so the split targets the recommended ceiling: 1000 would
+// put the first slice of a coalesced read exactly on the limit it exists to avoid.
+const MAX_FRAME_MS = 250;
+// Both bounds follow the rate the socket opened at: Note Recording streams at
+// 24 kHz, where a frame sized against this module's 16 kHz default lasts only
+// 33 ms (#2140).
+const minFrameBytes = (sampleRate) => Math.ceil((sampleRate * 2 * MIN_FRAME_MS) / 1000);
+const maxFrameBytes = (sampleRate) => Math.floor((sampleRate * 2 * MAX_FRAME_MS) / 1000);
 
 class AssemblyAiStreaming {
   constructor() {
@@ -38,6 +46,7 @@ class AssemblyAiStreaming {
     this.warmConnectionOptions = null;
     this.warmSessionId = null;
     this.requestedModel = null;
+    this.sessionSampleRate = SAMPLE_RATE;
     this.rewarmAttempts = 0;
     this.rewarmTimer = null;
     this.keepAliveInterval = null;
@@ -50,6 +59,7 @@ class AssemblyAiStreaming {
 
   buildWebSocketUrl(options) {
     const sampleRate = options.sampleRate || SAMPLE_RATE;
+    this.sessionSampleRate = sampleRate;
     const params = new URLSearchParams({
       sample_rate: String(sampleRate),
       encoding: "pcm_s16le",
@@ -351,11 +361,15 @@ class AssemblyAiStreaming {
     // warning could never fire for the model actually requested.
     if (
       this.hasWarmConnection() &&
-      (this.warmConnectionOptions.model || null) !== (options.model || null)
+      ((this.warmConnectionOptions.model || null) !== (options.model || null) ||
+        (this.warmConnectionOptions.sampleRate || SAMPLE_RATE) !==
+          (options.sampleRate || SAMPLE_RATE))
     ) {
-      debugLogger.debug("AssemblyAI warm connection model differs, cold-starting", {
+      debugLogger.debug("AssemblyAI warm connection differs, cold-starting", {
         warm: this.warmConnectionOptions.model || null,
         requested: options.model || null,
+        warmSampleRate: this.warmConnectionOptions.sampleRate || SAMPLE_RATE,
+        requestedSampleRate: options.sampleRate || SAMPLE_RATE,
       });
       this.cleanupWarmConnection();
     }
@@ -575,14 +589,30 @@ class AssemblyAiStreaming {
 
     this.pendingAudio.push(pcmBuffer);
     this.pendingAudioBytes += pcmBuffer.length;
-    if (this.pendingAudioBytes < MIN_FRAME_BYTES) {
+    const minBytes = minFrameBytes(this.sessionSampleRate);
+    if (this.pendingAudioBytes < minBytes) {
       return true;
     }
 
     const frame = Buffer.concat(this.pendingAudio, this.pendingAudioBytes);
     this.pendingAudio = [];
     this.pendingAudioBytes = 0;
-    this.ws.send(frame);
+
+    // The native system-audio helpers forward raw stdout chunks, so one read can
+    // far exceed the nominal 100 ms when a stalled main process lets the pipe
+    // coalesce. Carry a sub-floor remainder forward rather than sending it short.
+    const maxBytes = maxFrameBytes(this.sessionSampleRate);
+    let offset = 0;
+    while (frame.length - offset >= minBytes) {
+      const end = Math.min(offset + maxBytes, frame.length);
+      this.ws.send(frame.subarray(offset, end));
+      offset = end;
+    }
+    if (offset < frame.length) {
+      const remainder = frame.subarray(offset);
+      this.pendingAudio.push(remainder);
+      this.pendingAudioBytes = remainder.length;
+    }
     return true;
   }
 
