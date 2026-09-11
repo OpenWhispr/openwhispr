@@ -17,7 +17,7 @@ import {
   Loader2,
   AlertCircle,
   ArchiveRestore,
-  MoreHorizontal,
+  MoreVertical,
 } from "../icons";
 import type {
   TranscriptionItem as TranscriptionItemType,
@@ -148,7 +148,7 @@ export default function TranscriptionItem({
   return (
     <div
       className={cn(
-        "px-4 py-3 transition-colors duration-150",
+        "group px-4 py-3 transition-colors duration-150",
         isFailed
           ? "bg-destructive/5"
           : isDiscarded
@@ -160,7 +160,15 @@ export default function TranscriptionItem({
     >
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs tabular-nums text-muted-foreground">{formattedTime}</span>
-        <div className="-me-1.5 flex items-center gap-1">
+        <div
+          className={cn(
+            "-me-1.5 flex items-center gap-1 transition-opacity duration-150",
+            // Actions surface on hover, keyboard focus, or while the menu is open; failed and
+            // discarded rows keep them visible because recovery is the point of the row.
+            isTranscribed &&
+              "opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100"
+          )}
+        >
           {isTranscribed && (
             <Tooltip content={t("controlPanel.history.copyText")}>
               <Button
@@ -185,7 +193,7 @@ export default function TranscriptionItem({
                 {isRetrying ? (
                   <Loader2 size={13} className="animate-spin" />
                 ) : (
-                  <MoreHorizontal size={13} />
+                  <MoreVertical size={13} />
                 )}
               </Button>
             </DropdownMenuTrigger>
