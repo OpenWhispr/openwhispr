@@ -172,7 +172,7 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
   };
 
   return (
-    <div className="flex items-center gap-3 px-1 py-2">
+    <div className="group/event flex items-center gap-3 px-1 py-2">
       {attendees.length > 1 ? (
         <AttendeePopover
           event={event}
@@ -201,12 +201,20 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
           <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{timeRange}</p>
         )}
       </div>
-      {isNow && (
-        <Button size="sm" onClick={startNotes} className="h-7 shrink-0 gap-1.5 rounded-full px-3">
-          {joinUrl ? <Video size={12} /> : <Mic size={12} />}
-          {joinUrl ? t("upcoming.joinAndTakeNotes") : t("upcoming.takeNotes")}
-        </Button>
-      )}
+      {/* Always shown once the meeting is live; otherwise revealed on hover so you can join early. */}
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={startNotes}
+        className={cn(
+          "h-7 shrink-0 gap-1.5 rounded-full bg-surface-3 px-3 text-xs text-foreground hover:bg-surface-raised dark:bg-surface-2 dark:hover:bg-surface-3",
+          !isNow &&
+            "opacity-0 transition-opacity duration-150 group-hover/event:opacity-100 focus-visible:opacity-100"
+        )}
+      >
+        {joinUrl ? <Video size={12} /> : <Mic size={12} />}
+        {joinUrl ? t("upcoming.joinAndTranscribe") : t("upcoming.takeNotes")}
+      </Button>
     </div>
   );
 }
