@@ -891,7 +891,6 @@
         "managedRouteInvalid": "Die verwaltete Transkription konnte aufgrund einer Konfigurationsabweichung nicht gestartet werden. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
         "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator.",
         "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
-        "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
         "providerKeyMissing": "Für Ihren Transkriptionsanbieter ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprache zu Text hinzu."
       },
       "translationFallback": {
@@ -3959,9 +3958,9 @@
   },
   "commandSearch": {
     "allSpaces": "Alle Bereiche",
+    "topBarPlaceholder": "Notizen oder Funktionen suchen",
     "title": "Suche",
     "description": "In Notizen und Transkripten suchen",
-    "shortPlaceholder": "Suche",
     "placeholder": "Notizen und Transkripte durchsuchen…",
     "sections": {
       "notes": "Notizen",

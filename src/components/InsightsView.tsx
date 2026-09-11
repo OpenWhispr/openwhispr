@@ -430,12 +430,8 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
     : t("insights.onDevice");
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-6 py-8">
-      <h1 className="text-base! font-semibold! leading-none! tracking-normal! text-foreground">
-        {t("insights.title")}
-      </h1>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6 flex flex-1 flex-col">
+    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-6 py-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-1 flex-col">
         <div className="flex min-h-8 items-center justify-between gap-4">
           <TabsList className="h-7 p-0.5 rounded-[7px]">
             <TabsTrigger value="usage" className="h-6 px-2.5 text-xs rounded-[5px]">

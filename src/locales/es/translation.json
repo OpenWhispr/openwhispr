@@ -891,7 +891,6 @@
         "managedRouteInvalid": "La transcripción gestionada no pudo iniciarse debido a una discrepancia de configuración. Inténtalo de nuevo o contacta a tu administrador.",
         "managedAuthRejected": "Las credenciales de transcripción gestionada de tu organización fueron rechazadas. Contacta a tu administrador.",
         "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
-        "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
         "providerKeyMissing": "No hay ninguna clave de API configurada para tu proveedor de transcripción. Añádela en Ajustes → Voz a texto."
       },
       "translationFallback": {
@@ -3883,9 +3882,9 @@
   },
   "commandSearch": {
     "allSpaces": "Todos los espacios",
+    "topBarPlaceholder": "Busca cualquier nota o función",
     "title": "Buscar",
     "description": "Buscar en notas y transcripciones",
-    "shortPlaceholder": "Buscar",
     "placeholder": "Buscar notas y transcripciones…",
     "sections": {
       "notes": "Notas",

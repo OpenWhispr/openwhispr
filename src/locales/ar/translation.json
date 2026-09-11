@@ -4084,9 +4084,9 @@
   },
   "commandSearch": {
     "allSpaces": "جميع المساحات",
+    "topBarPlaceholder": "ابحث عن أي ملاحظة أو ميزة",
     "title": "البحث",
     "description": "البحث في جميع الملاحظات والنصوص المفرَّغة",
-    "shortPlaceholder": "بحث",
     "placeholder": "البحث في الملاحظات والنصوص المفرَّغة...",
     "sections": {
       "notes": "الملاحظات",

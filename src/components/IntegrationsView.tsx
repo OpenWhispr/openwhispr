@@ -358,10 +358,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
 
   return (
     <div className="max-w-lg mx-auto w-full px-6 py-6 space-y-5">
-      <div>
-        <h2 className="text-base font-semibold text-foreground">{t("integrations.title")}</h2>
-        <p className="text-xs text-muted-foreground/70 mt-0.5">{t("integrations.description")}</p>
-      </div>
+      <p className="text-xs text-muted-foreground/70">{t("integrations.description")}</p>
 
       <div>
         <SectionLabel>{t("integrations.sections.calendar")}</SectionLabel>

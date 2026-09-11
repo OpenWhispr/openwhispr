@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import PersonAvatar from "./ui/PersonAvatar";
 import { cn } from "./lib/utils";
 import type { CalendarAttendee, CalendarEvent } from "../types/calendar";
+import { parseAttendees } from "../utils/calendarAttendees";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import { getMeetingJoinUrl } from "../helpers/meetingJoinUrl";
@@ -25,16 +26,6 @@ const openJoinUrl = (url: string) => {
     window.open(url, "_blank");
   }
 };
-
-function parseAttendees(event: CalendarEvent): CalendarAttendee[] {
-  if (!event.attendees) return [];
-  try {
-    const parsed = JSON.parse(event.attendees);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
 
 function formatTimeRange(locale: string, startTime: string, endTime: string): string {
   const format = (value: string) =>

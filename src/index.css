@@ -42,6 +42,8 @@
   --color-surface-2: #ffffff;
   --color-surface-3: #f5f5f5;
   --color-surface-raised: #f0f0f0;
+  /* Main-window backdrop behind the sidebar and the inset content container. */
+  --color-surface-window: #f7f7f7;
 
   /* Border states — light mode equivalents */
   --color-border-subtle: #e5e5e5;
@@ -78,6 +80,7 @@
   --radius-md: 0.375rem; /* 6px - standard */
   --radius-lg: 0.5rem; /* 8px - cards, panels */
   --radius-xl: 0.625rem; /* 10px - large cards */
+  --radius-shell: 0.75rem; /* 12px - the inset content container in the main window */
 
   /* Custom Light Mode Brand Colors (Parchment Theme) */
   --color-parchment-bg: #f9f6f1;
@@ -136,6 +139,7 @@
   --color-surface-2: oklch(0.27 0.008 260);
   --color-surface-3: oklch(0.3 0.009 260);
   --color-surface-raised: oklch(0.33 0.01 260);
+  --color-surface-window: oklch(0.19 0.005 260);
 
   /* Border states */
   --color-border-subtle: oklch(0.33 0.006 260);

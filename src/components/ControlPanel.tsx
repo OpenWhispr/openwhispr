@@ -3,16 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
-import {
-  Download,
-  RefreshCw,
-  Loader2,
-  AlertTriangle,
-  Zap,
-  ChevronLeft,
-  PanelLeftOpen,
-  PanelLeftClose,
-} from "./icons";
+import { Download, RefreshCw, Loader2, AlertTriangle, Zap } from "./icons";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { RequiredModelsBanner } from "./RequiredModelsBanner";
@@ -55,10 +46,11 @@ import {
   useIsNarrowWindow,
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
-import ControlPanelSidebar, { type ControlPanelView } from "./ControlPanelSidebar";
+import ControlPanelSidebar from "./ControlPanelSidebar";
+import ControlPanelTopBar from "./ControlPanelTopBar";
+import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
-import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
@@ -97,9 +89,6 @@ const SIDEBAR_WIDTH_PX = 192;
 // Bump to force a one-time full semantic reindex on next launch (see the
 // reindex effect for the per-version history).
 const SEMANTIC_REINDEX_VERSION = 2;
-
-const toggleIconClass =
-  "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150 rtl:scale-x-[-1]";
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
@@ -140,6 +129,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  const navItems = useControlPanelNavItems();
   const {
     collapsed: sidebarCollapsed,
     peek: sidebarPeek,
@@ -860,7 +850,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   };
 
   return (
-    <div className="h-screen bg-background flex flex-col">
+    <div className="h-screen bg-surface-window flex flex-col">
       <MeetingRecordingMount />
       <MeetingRecordingPill
         activeView={activeView}
@@ -981,7 +971,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           <ControlPanelSidebar
             activeView={activeView}
             onViewChange={setActiveView}
-            onOpenSearch={() => setShowSearch(true)}
             onOpenSettings={() => {
               setSettingsSection(undefined);
               setShowSettings(true);
@@ -1017,253 +1006,210 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             }
           />
         </div>
-        <main className="flex-1 flex flex-col overflow-hidden">
-          <div
-            className="flex items-center justify-between w-full h-10 shrink-0"
-            style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-          >
-            {isSidePanelLayout && (
-              <div
-                className={platform === "darwin" ? "ltr:ml-[84px] rtl:mr-2 mt-[16px]" : "ms-2"}
-                data-no-window-drag=""
-                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-              >
-                <Button
-                  variant="outline-flat"
-                  size="sm"
-                  onClick={handleExitMeetingMode}
-                  className="h-7 px-2.5 ps-1.5 gap-1"
-                >
-                  <ChevronLeft size={14} strokeWidth={1.8} className="rtl:rotate-180" />
-                  {t("controlPanel.backToNotes")}
-                </Button>
-              </div>
-            )}
-            <div className="flex-1" />
-            {platform !== "darwin" && (
-              <div
-                className="pe-1"
-                data-no-window-drag=""
-                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-              >
-                <WindowControls />
-              </div>
-            )}
-          </div>
-          <div className="flex-1 overflow-y-auto pt-1">
-            {updateRequiredByOrg && (
-              <div className="max-w-3xl mx-auto w-full mb-3">
-                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
-                  <div className="flex items-start gap-3">
-                    <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                      <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
-                        {t("controlPanel.updateRequiredByOrg.title")}
-                      </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-300/80">
-                        <BidiInterpolatedText
-                          text={t("controlPanel.updateRequiredByOrg.description", {
-                            version: BIDI_VALUE_TOKEN,
-                          })}
-                          value={policyMinAppVersion}
-                        />
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            <RequiredModelsBanner />
-            {usage?.isPastDue && activeView === "home" && (
-              <div className="max-w-3xl mx-auto w-full mb-3">
-                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
-                  <div className="flex items-start gap-3">
-                    <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                      <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
-                        {t("controlPanel.billing.pastDueTitle")}
-                      </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-300/80 mb-2">
-                        {t("controlPanel.billing.bannerDescription", {
-                          limit: usage.limit.toLocaleString(),
-                        })}
-                      </p>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => {
-                          setSettingsSection("account");
-                          setShowSettings(true);
-                        }}
-                      >
-                        {t("controlPanel.billing.updatePayment")}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            {(gpuAccelAvailable.transcription || gpuAccelAvailable.intelligence) &&
-              activeView === "home" &&
-              !gpuBannerDismissed && (
+        <main className="flex-1 flex flex-col overflow-hidden p-2">
+          <div className="flex min-h-0 flex-1 flex-col overflow-clip rounded-(--radius-shell) border border-border/40 bg-background dark:border-white/6">
+            <ControlPanelTopBar
+              title={navItems.find((item) => item.id === activeView)?.label ?? ""}
+              sidebarCollapsed={sidebarCollapsed}
+              onToggleSidebar={toggleSidebar}
+              onToggleMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
+              onToggleMouseLeave={sidebarCollapsed ? leaveSidebarToggle : undefined}
+              onOpenSearch={() => setShowSearch(true)}
+              isSidePanelLayout={isSidePanelLayout}
+              onExitSidePanel={handleExitMeetingMode}
+            />
+            <div className="flex-1 overflow-y-auto pt-1">
+              {updateRequiredByOrg && (
                 <div className="max-w-3xl mx-auto w-full mb-3">
-                  <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
+                  <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
                     <div className="flex items-start gap-3">
-                      <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
-                        <Zap size={16} className="text-primary" />
+                      <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                        <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground mb-0.5">
-                          {t("controlPanel.gpu.bannerTitle")}
+                        <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
+                          {t("controlPanel.updateRequiredByOrg.title")}
                         </p>
-                        <p className="text-xs text-muted-foreground mb-2">
-                          {t("controlPanel.gpu.bannerDescription")}
+                        <p className="text-xs text-amber-700 dark:text-amber-300/80">
+                          <BidiInterpolatedText
+                            text={t("controlPanel.updateRequiredByOrg.description", {
+                              version: BIDI_VALUE_TOKEN,
+                            })}
+                            value={policyMinAppVersion}
+                          />
                         </p>
-                        <div className="flex items-center gap-3">
-                          <Button
-                            variant="default"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => {
-                              setSettingsSection(
-                                gpuAccelAvailable.transcription
-                                  ? "transcription"
-                                  : gpuAccelAvailable.intelligence === "dictationAgent"
-                                    ? "dictationAgent"
-                                    : "intelligence"
-                              );
-                              setShowSettings(true);
-                            }}
-                          >
-                            {t("controlPanel.gpu.enableButton")}
-                          </Button>
-                          <button
-                            onClick={() => {
-                              setGpuBannerDismissed(true);
-                              localStorage.setItem("gpuBannerDismissedUnified", "true");
-                            }}
-                            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            {t("controlPanel.gpu.dismissButton")}
-                          </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <RequiredModelsBanner />
+              {usage?.isPastDue && activeView === "home" && (
+                <div className="max-w-3xl mx-auto w-full mb-3">
+                  <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                        <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
+                          {t("controlPanel.billing.pastDueTitle")}
+                        </p>
+                        <p className="text-xs text-amber-700 dark:text-amber-300/80 mb-2">
+                          {t("controlPanel.billing.bannerDescription", {
+                            limit: usage.limit.toLocaleString(),
+                          })}
+                        </p>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            setSettingsSection("account");
+                            setShowSettings(true);
+                          }}
+                        >
+                          {t("controlPanel.billing.updatePayment")}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {(gpuAccelAvailable.transcription || gpuAccelAvailable.intelligence) &&
+                activeView === "home" &&
+                !gpuBannerDismissed && (
+                  <div className="max-w-3xl mx-auto w-full mb-3">
+                    <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
+                      <div className="flex items-start gap-3">
+                        <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
+                          <Zap size={16} className="text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-foreground mb-0.5">
+                            {t("controlPanel.gpu.bannerTitle")}
+                          </p>
+                          <p className="text-xs text-muted-foreground mb-2">
+                            {t("controlPanel.gpu.bannerDescription")}
+                          </p>
+                          <div className="flex items-center gap-3">
+                            <Button
+                              variant="default"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                setSettingsSection(
+                                  gpuAccelAvailable.transcription
+                                    ? "transcription"
+                                    : gpuAccelAvailable.intelligence === "dictationAgent"
+                                      ? "dictationAgent"
+                                      : "intelligence"
+                                );
+                                setShowSettings(true);
+                              }}
+                            >
+                              {t("controlPanel.gpu.enableButton")}
+                            </Button>
+                            <button
+                              onClick={() => {
+                                setGpuBannerDismissed(true);
+                                localStorage.setItem("gpuBannerDismissedUnified", "true");
+                              }}
+                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              {t("controlPanel.gpu.dismissButton")}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
+              {activeView === "home" && (
+                <HistoryView
+                  history={history}
+                  isLoading={isLoading}
+                  hotkey={hotkey}
+                  aiCTADismissed={aiCTADismissed}
+                  setAiCTADismissed={setAiCTADismissed}
+                  useCleanupModel={useCleanupModel}
+                  copyToClipboard={copyToClipboard}
+                  deleteTranscription={deleteTranscription}
+                  clearAllTranscriptions={clearAllTranscriptions}
+                  onShowAudioInFolder={showAudioInFolder}
+                  onRetryTranscription={retryTranscription}
+                  showDiscarded={showDiscarded}
+                  onToggleDiscarded={toggleShowDiscarded}
+                  onOpenSettings={(section) => {
+                    setSettingsSection(section);
+                    setShowSettings(true);
+                  }}
+                  onOpenIntegrations={() => setActiveView("integrations")}
+                />
               )}
-            {activeView === "home" && (
-              <HistoryView
-                history={history}
-                isLoading={isLoading}
-                hotkey={hotkey}
-                aiCTADismissed={aiCTADismissed}
-                setAiCTADismissed={setAiCTADismissed}
-                useCleanupModel={useCleanupModel}
-                copyToClipboard={copyToClipboard}
-                deleteTranscription={deleteTranscription}
-                clearAllTranscriptions={clearAllTranscriptions}
-                onShowAudioInFolder={showAudioInFolder}
-                onRetryTranscription={retryTranscription}
-                showDiscarded={showDiscarded}
-                onToggleDiscarded={toggleShowDiscarded}
-                onOpenSettings={(section) => {
-                  setSettingsSection(section);
-                  setShowSettings(true);
-                }}
-                onOpenIntegrations={() => setActiveView("integrations")}
-              />
-            )}
-            {activeView === "insights" && (
-              <Suspense fallback={null}>
-                <InsightsView
-                  onSignIn={() => {
-                    setSettingsSection("account");
-                    setShowSettings(true);
-                  }}
-                />
-              </Suspense>
-            )}
-            {activeView === "chat" && agentAllowedByPolicy && (
-              <Suspense fallback={null}>
-                <ChatView />
-              </Suspense>
-            )}
-            {activeView === "personal-notes" && (
-              <Suspense fallback={null}>
-                <PersonalNotesView
-                  onOpenSettings={(section) => {
-                    setSettingsSection(section);
-                    setShowSettings(true);
-                  }}
-                  meetingRecordingRequest={meetingRecordingRequest}
-                  onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
-                  invitationEntry={invitationNotesEntry}
-                  onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
-                />
-              </Suspense>
-            )}
-            {activeView === "dictionary" && (
-              <Suspense fallback={null}>
-                <DictionaryView />
-              </Suspense>
-            )}
-            {activeView === "upload" && policyActionsAllowed && (
-              <Suspense fallback={null}>
-                <UploadAudioView
-                  onNoteCreated={(noteId, folderId) => {
-                    setActiveNoteId(noteId);
-                    if (folderId) setActiveFolderId(folderId);
-                    setActiveView("personal-notes");
-                  }}
-                  onOpenSettings={(section) => {
-                    setSettingsSection(section);
-                    setShowSettings(true);
-                  }}
-                />
-              </Suspense>
-            )}
-            {activeView === "integrations" && (
-              <Suspense fallback={null}>
-                <IntegrationsView
-                  isPaid={usage?.hasPaidAccessOptimistic ?? false}
-                  onUpgrade={() => {
-                    setSettingsSection("plansBilling");
-                    setShowSettings(true);
-                  }}
-                />
-              </Suspense>
-            )}
+              {activeView === "insights" && (
+                <Suspense fallback={null}>
+                  <InsightsView
+                    onSignIn={() => {
+                      setSettingsSection("account");
+                      setShowSettings(true);
+                    }}
+                  />
+                </Suspense>
+              )}
+              {activeView === "chat" && agentAllowedByPolicy && (
+                <Suspense fallback={null}>
+                  <ChatView />
+                </Suspense>
+              )}
+              {activeView === "personal-notes" && (
+                <Suspense fallback={null}>
+                  <PersonalNotesView
+                    onOpenSettings={(section) => {
+                      setSettingsSection(section);
+                      setShowSettings(true);
+                    }}
+                    meetingRecordingRequest={meetingRecordingRequest}
+                    onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
+                    invitationEntry={invitationNotesEntry}
+                    onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
+                  />
+                </Suspense>
+              )}
+              {activeView === "dictionary" && (
+                <Suspense fallback={null}>
+                  <DictionaryView />
+                </Suspense>
+              )}
+              {activeView === "upload" && policyActionsAllowed && (
+                <Suspense fallback={null}>
+                  <UploadAudioView
+                    onNoteCreated={(noteId, folderId) => {
+                      setActiveNoteId(noteId);
+                      if (folderId) setActiveFolderId(folderId);
+                      setActiveView("personal-notes");
+                    }}
+                    onOpenSettings={(section) => {
+                      setSettingsSection(section);
+                      setShowSettings(true);
+                    }}
+                  />
+                </Suspense>
+              )}
+              {activeView === "integrations" && (
+                <Suspense fallback={null}>
+                  <IntegrationsView
+                    isPaid={usage?.hasPaidAccessOptimistic ?? false}
+                    onUpgrade={() => {
+                      setSettingsSection("plansBilling");
+                      setShowSettings(true);
+                    }}
+                  />
+                </Suspense>
+              )}
+            </div>
           </div>
         </main>
-        {!isSidePanelLayout && (
-          <div
-            className={`absolute z-40 flex h-10 items-center ${
-              platform === "darwin" ? "ltr:left-21 rtl:right-2 top-2" : "start-2 top-0"
-            }`}
-            data-no-window-drag=""
-            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-            onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
-            onMouseLeave={sidebarCollapsed ? leaveSidebarToggle : undefined}
-          >
-            <button
-              onClick={toggleSidebar}
-              aria-label={sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")}
-              className="group flex items-center justify-center h-7 w-7 rounded-md outline-none hover:bg-foreground/5 dark:hover:bg-white/5 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
-            >
-              {sidebarCollapsed ? (
-                <PanelLeftOpen size={15} className={toggleIconClass} />
-              ) : (
-                <PanelLeftClose size={15} className={toggleIconClass} />
-              )}
-            </button>
-          </div>
-        )}
       </div>
       <BackgroundActionToastListener />
       <SpaceSyncToastListener />

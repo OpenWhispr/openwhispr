@@ -891,7 +891,6 @@
         "managedRouteInvalid": "La transcription gérée n'a pas pu démarrer en raison d'une incohérence de configuration. Réessayez ou contactez votre administrateur.",
         "managedAuthRejected": "Les identifiants de transcription gérée de votre organisation ont été refusés. Contactez votre administrateur.",
         "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives.",
-        "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives.",
         "providerKeyMissing": "Aucune clé API n'est définie pour votre fournisseur de transcription. Ajoutez-la dans Réglages → Parole en texte."
       },
       "translationFallback": {
@@ -3959,9 +3958,9 @@
   },
   "commandSearch": {
     "allSpaces": "Tous les espaces",
+    "topBarPlaceholder": "Rechercher une note ou une fonctionnalité",
     "title": "Rechercher",
     "description": "Rechercher dans les notes et transcriptions",
-    "shortPlaceholder": "Rechercher",
     "placeholder": "Rechercher notes et transcriptions…",
     "sections": {
       "notes": "Notes",

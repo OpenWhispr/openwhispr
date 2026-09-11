@@ -891,7 +891,6 @@
         "managedRouteInvalid": "由于配置不匹配，托管转录无法启动。请重试或联系管理员。",
         "managedAuthRejected": "您组织的托管转录凭证被拒绝。请联系管理员。",
         "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
-        "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
         "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。"
       },
       "translationFallback": {
@@ -3835,9 +3834,9 @@
   },
   "commandSearch": {
     "allSpaces": "所有空间",
+    "topBarPlaceholder": "搜索任意笔记或功能",
     "title": "搜索",
     "description": "搜索笔记和转录",
-    "shortPlaceholder": "搜索",
     "placeholder": "搜索笔记和转录…",
     "sections": {
       "notes": "笔记",

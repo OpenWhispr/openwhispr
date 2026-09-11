@@ -891,7 +891,6 @@
         "managedRouteInvalid": "設定の不一致により、マネージド文字起こしを開始できませんでした。もう一度お試しいただくか、管理者にお問い合わせください。",
         "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。",
         "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
-        "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
         "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。"
       },
       "translationFallback": {
@@ -3835,9 +3834,9 @@
   },
   "commandSearch": {
     "allSpaces": "すべてのスペース",
+    "topBarPlaceholder": "ノートや機能を検索",
     "title": "検索",
     "description": "ノートと文字起こしを検索",
-    "shortPlaceholder": "検索",
     "placeholder": "ノートと文字起こしを検索…",
     "sections": {
       "notes": "ノート",
