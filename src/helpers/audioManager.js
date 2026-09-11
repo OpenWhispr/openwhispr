@@ -563,13 +563,7 @@ class AudioManager {
 
     // Invalidate the pinned mic device when the OS adds/removes/suspends inputs.
     // Otherwise wake-after-idle keeps requesting a stale deviceId that yields silence.
-    this._onDeviceChange = () => {
-      this.cachedMicDeviceId = null;
-      this._micWarmedAt = 0;
-      this.rejectedMicDeviceId = null;
-      this.cancelPreparedMicCapture();
-      this.micStreamHold.drop();
-    };
+    this._onDeviceChange = () => this._handleDeviceChange();
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
     this.recordingStartTime = null;
     this.reasoningAvailabilityCache = { value: false, expiresAt: 0 };
@@ -587,6 +581,7 @@ class AudioManager {
     this.streamingTextDebounce = null;
     this.cachedMicDeviceId = null;
     this.rejectedMicDeviceId = null;
+    this._refreshSystemDefaultOnNextResolve = false;
     this.persistentAudioContext = null;
     this.workletModuleLoaded = false;
     this.workletBlobUrl = null;
@@ -984,6 +979,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async getAudioConstraints(forceDefaultMic = false, refreshSystemDefault = false) {
     const settings = getSettings();
+    const refreshDefault = refreshSystemDefault || this._refreshSystemDefaultOnNextResolve === true;
+    this._refreshSystemDefaultOnNextResolve = false;
 
     // All browser audio processing disabled to avoid OS-level side-effects.
     // AGC off: Chromium's AGC on Windows mutates the system mic volume via WASAPI (#476).
@@ -998,7 +995,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     if (
       !forceDefaultMic &&
-      !refreshSystemDefault &&
+      !refreshDefault &&
       this.cachedMicDeviceId &&
       this.cachedMicDeviceId !== this.rejectedMicDeviceId
     ) {
@@ -1011,7 +1008,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const resolution = await resolvePreferredMicrophone({
         settings,
         forceSystemDefault: forceDefaultMic,
-        refreshSystemDefault: forceDefaultMic || refreshSystemDefault,
+        refreshSystemDefault: forceDefaultMic || refreshDefault,
       });
       const deviceId = resolution.device?.deviceId;
 
@@ -1108,6 +1105,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   cancelPreparedMicCapture() {
     this.preparedMicCapture.cancel();
+  }
+
+  _handleDeviceChange() {
+    this.cachedMicDeviceId = null;
+    this._micWarmedAt = 0;
+    this.rejectedMicDeviceId = null;
+    // Dropping the pin is not enough. The main process caches the OS default's
+    // *name* for 30s, so a resolution in that window would match the name the
+    // device had before the change and re-pin the old microphone — which then
+    // survives until the next device change, if one ever comes.
+    this._refreshSystemDefaultOnNextResolve = true;
+    this.cancelPreparedMicCapture();
+    this.micStreamHold.drop();
   }
 
   // Tells the main process whether this renderer is holding the mic open outside

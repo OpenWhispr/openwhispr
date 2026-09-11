@@ -63,3 +63,22 @@ test("legacy microphone preferences retain their behavior", async () => {
   );
   assert.equal(getMicrophoneSelectionMode({ preferBuiltInMic: false }), "system");
 });
+
+test("system mode ignores Chromium's Windows 'communications' alias when matching the native default", async () => {
+  const { isCacheableMicrophoneResolution, resolveMicrophoneSelection } =
+    await import("../../src/helpers/microphoneSelection.js");
+  const expected = mic("9f2c1e5a7b3d", "Microphone (Realtek(R) Audio)");
+  const result = resolveMicrophoneSelection(
+    [
+      mic("default", "Default - Microphone (Realtek(R) Audio)"),
+      mic("communications", "Communications - Microphone (Realtek(R) Audio)"),
+      expected,
+    ],
+    { microphoneSelectionMode: "system" },
+    { name: "Microphone (Realtek(R) Audio)" }
+  );
+
+  assert.equal(result.device, expected);
+  assert.equal(result.status, "native-exact");
+  assert.equal(isCacheableMicrophoneResolution(result), true);
+});

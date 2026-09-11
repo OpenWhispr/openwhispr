@@ -163,6 +163,8 @@ function createSystemDefaultMicrophoneResolver({
 } = {}) {
   let cache = null;
   let cachedAt = 0;
+  let pending = null;
+  let generation = 0;
 
   const resolveDarwin = async () => {
     const helper = resolveBinary("macos-mic-listener", "audio");
@@ -200,8 +202,18 @@ function createSystemDefaultMicrophoneResolver({
     return parsePactlSources(sources, defaultSourceName);
   };
 
-  return async ({ refresh = false } = {}) => {
-    if (!refresh && cache && now() - cachedAt < CACHE_TTL_MS) return cache;
+  const lookup = async () => {
+    const issued = ++generation;
+    // A lookup overtaken by a newer one still answers its own caller, but must
+    // not put its older answer back in the cache — that is precisely the
+    // staleness the newer (refresh) lookup was issued to escape.
+    const commit = (value) => {
+      if (issued === generation) {
+        cache = value;
+        cachedAt = now();
+      }
+      return value;
+    };
 
     try {
       let result = null;
@@ -209,20 +221,37 @@ function createSystemDefaultMicrophoneResolver({
       else if (platform === "win32") result = await resolveWindows();
       else if (platform === "linux") result = await resolveLinux();
 
-      cache = result
-        ? { ...result, platform, source: "system" }
-        : { name: "", platform, source: "unavailable" };
-      cachedAt = now();
-      return cache;
+      return commit(
+        result
+          ? { ...result, platform, source: "system" }
+          : { name: "", platform, source: "unavailable" }
+      );
     } catch (error) {
       debugLogger.debug(
         "Failed to resolve the system default microphone",
         { platform, error: error.message },
         "audio"
       );
-      cache = { name: "", platform, source: "unavailable" };
-      cachedAt = now();
-      return cache;
+      return commit({ name: "", platform, source: "unavailable" });
+    }
+  };
+
+  return async ({ refresh = false } = {}) => {
+    if (!refresh) {
+      if (cache && now() - cachedAt < CACHE_TTL_MS) return cache;
+      // The cache is only written once a lookup settles, so without this a burst
+      // of callers each start their own — and on Windows each one is a separate
+      // PowerShell process compiling the C# helper from source. A refresh never
+      // joins: its caller asked precisely because the in-flight answer is stale.
+      if (pending) return pending;
+    }
+
+    const inFlight = lookup();
+    pending = inFlight;
+    try {
+      return await inFlight;
+    } finally {
+      if (pending === inFlight) pending = null;
     }
   };
 }
