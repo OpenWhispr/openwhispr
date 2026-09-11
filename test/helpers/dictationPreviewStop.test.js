@@ -108,7 +108,7 @@ function scenario(t, { decode, stream, online = false } = {}) {
     })
   );
   const invoke = (channel, ...args) => handlers.get(channel)({}, ...args);
-  const start = (model = "orukeet-v0.1.0-q8") =>
+  const start = (model = "orukeet-v0.1.0") =>
     invoke("start-dictation-preview", {
       provider: "nvidia",
       model,
@@ -143,7 +143,7 @@ test("offline stop skips pending preview audio while final audio still reaches t
   assert.equal(s.calls.held.length, 1);
   const finalAudio = Buffer.from("the complete MediaRecorder recording, including pre-roll");
   const result = await s.invoke("transcribe-local-parakeet", finalAudio, {
-    model: "orukeet-v0.1.0-q8",
+    model: "orukeet-v0.1.0",
     language: "en",
   });
   assert.equal(result.text, "recognized");
@@ -188,7 +188,7 @@ test("a cancelled preview cannot append or release the next session's in-flight 
   assert.deepEqual(s.calls.appended, ["current session"]);
   assert.deepEqual(
     s.calls.decode.map(({ options }) => options.model),
-    ["orukeet-v0.1.0-q8", "parakeet-tdt-0.6b-v3"]
+    ["orukeet-v0.1.0", "parakeet-tdt-0.6b-v3"]
   );
 });
 

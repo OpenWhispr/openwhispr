@@ -24,7 +24,7 @@ for (const streamingCommit of [false, true]) {
     window.electronAPI.transcribeLocalParakeet = async (buffer, options) => {
       calls.push("final-decode");
       assert.deepEqual(new Uint8Array(buffer), bytes);
-      assert.equal(options.model, "orukeet-v0.1.0-q8");
+      assert.equal(options.model, "orukeet-v0.1.0");
       return { success: true, text: "complete recording" };
     };
     let finalResult;
@@ -43,7 +43,7 @@ for (const streamingCommit of [false, true]) {
       async processAudio(blob, metadata) {
         assert.strictEqual(blob, recording);
         assert.equal(metadata.streamedText, undefined);
-        finalResult = await this.processWithLocalParakeet(blob, "orukeet-v0.1.0-q8", metadata);
+        finalResult = await this.processWithLocalParakeet(blob, "orukeet-v0.1.0", metadata);
       },
     });
 

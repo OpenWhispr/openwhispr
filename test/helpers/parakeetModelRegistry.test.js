@@ -96,7 +96,7 @@ test("cohere language resolution maps app languages to supported codes", () => {
 
 test("only verified offline NeMo models skip sherpa metadata detection", () => {
   assert.equal(getSherpaModelType("parakeet-tdt-0.6b-v3"), "nemo_transducer");
-  assert.equal(getSherpaModelType("orukeet-v0.1.0-q8"), "nemo_transducer");
+  assert.equal(getSherpaModelType("orukeet-v0.1.0"), "nemo_transducer");
   assert.equal(getSherpaModelType("parakeet-unified-en-0.6b"), null);
   assert.equal(getSherpaModelType("cohere-transcribe-03-2026"), null);
   assert.equal(getSherpaModelType("nemotron-speech-streaming-en-0.6b"), null);
@@ -110,7 +110,7 @@ test("sherpa provider check covers nvidia and cohere only", () => {
 });
 
 test("Orukeet uses the existing Parakeet TDT v3 runtime and model layout", () => {
-  const id = "orukeet-v0.1.0-q8";
+  const id = "orukeet-v0.1.0";
   const model = modelData.parakeetModels[id];
   const stock = modelData.parakeetModels["parakeet-tdt-0.6b-v3"];
   assert.equal(model.name, "Orukeet");

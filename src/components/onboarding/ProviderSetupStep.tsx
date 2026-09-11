@@ -1,9 +1,3 @@
-import {
-  LOCAL_ASR_ORGANIZATIONS,
-  getASRModelOrganization,
-  getSelectedASROrganization,
-  usesParakeetManager,
-} from "../../helpers/localASROrganization";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -29,6 +23,12 @@ import {
   type CloudProviderData,
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
+import {
+  LOCAL_ASR_ORGANIZATIONS,
+  getASRModelOrganization,
+  getSelectedASROrganization,
+  usesParakeetManager,
+} from "../../helpers/localASROrganization";
 import { pickDefaultModelId } from "../../models/providerDefaultModel";
 import {
   RESUME_DRAFT_PERSIST_DELAY_MS,

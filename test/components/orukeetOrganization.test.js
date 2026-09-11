@@ -38,7 +38,7 @@ test("onboarding restores an Oruk draft without mixing NVIDIA models", async (t)
     vite,
     React.createElement(LocalModelSetupStep, {
       stepId: "local-dictation",
-      resumeState: { provider: "oruk", modelId: "orukeet-v0.1.0-q8" },
+      resumeState: { provider: "oruk", modelId: "orukeet-v0.1.0" },
       onReadinessChange: noop,
       onProceed: noop,
       onSkip: noop,
@@ -58,7 +58,7 @@ test("all three model pickers restore the Oruk tab from the persisted Orukeet ch
       React.createElement(Picker, {
         transcriptionContext,
         selectedLocalProvider: "nvidia",
-        selectedLocalModel: "orukeet-v0.1.0-q8",
+        selectedLocalModel: "orukeet-v0.1.0",
         useLocalWhisper: true,
         onLocalModelSelect: noop,
         onModeChange: noop,
@@ -117,7 +117,7 @@ test("Oruk's model-picker tab follows the same unsupported-macOS fallback as Par
   function Harness() {
     tree = Picker({
       selectedLocalProvider: "nvidia",
-      selectedLocalModel: "orukeet-v0.1.0-q8",
+      selectedLocalModel: "orukeet-v0.1.0",
       useLocalWhisper: true,
       onLocalModelSelect: noop,
       onLocalProviderSelect: (provider) => selectedProviders.push(provider),

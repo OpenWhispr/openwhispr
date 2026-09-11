@@ -1,10 +1,10 @@
-import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AlertCircle, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { useModelDownload } from "../../hooks/useModelDownload";
+import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { getParakeetModels, getWhisperModels } from "../../models/ModelRegistry";
 import { SETUP_CARD_CLASS } from "./ProviderSetupStep";
 

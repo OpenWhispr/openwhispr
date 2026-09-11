@@ -61,7 +61,7 @@ async function startupArgs(modelName, runtime = "offline", language = null, regi
   return calls[0];
 }
 
-for (const modelName of ["parakeet-tdt-0.6b-v3", "orukeet-v0.1.0-q8"]) {
+for (const modelName of ["parakeet-tdt-0.6b-v3", "orukeet-v0.1.0"]) {
   test(`${modelName} starts the offline server with the NeMo decoder hint`, async () => {
     const { binary, args } = await startupArgs(modelName);
     assert.equal(binary, "sherpa-offline");
@@ -96,7 +96,7 @@ test("Cohere keeps its language-specific startup arguments", async () => {
 });
 
 test("online startup preserves its scheduling flags and omits offline decoder hints", async () => {
-  for (const modelName of ["nemotron-speech-streaming-en-0.6b", "orukeet-v0.1.0-q8"]) {
+  for (const modelName of ["nemotron-speech-streaming-en-0.6b", "orukeet-v0.1.0"]) {
     const { binary, args } = await startupArgs(modelName, "online");
     assert.equal(binary, "sherpa-online");
     assert.ok(!args.some((arg) => arg.startsWith("--model-type=")));
