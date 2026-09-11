@@ -101,6 +101,10 @@
   --shadow-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.45),
     0 2px 10px rgba(15, 23, 42, 0.06);
+  /* Same rim on brand-blue surfaces (mic/send buttons, today header): the app
+     icon's glass. Softer than --shadow-glass because it sits on colour. */
+  --shadow-brand-glass:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 .dark {

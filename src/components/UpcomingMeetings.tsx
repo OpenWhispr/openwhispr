@@ -4,6 +4,7 @@ import { Calendar, ExternalLink, Loader2, Mic, Monitor, Video } from "./icons";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import PersonAvatar from "./ui/PersonAvatar";
+import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { cn } from "./lib/utils";
 import type { CalendarAttendee, CalendarEvent } from "../types/calendar";
 import { parseAttendees } from "../utils/calendarAttendees";
@@ -237,9 +238,7 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
       <div
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium",
-          group.isToday
-            ? "bg-primary text-primary-foreground"
-            : "bg-surface-3 text-foreground dark:bg-surface-2"
+          group.isToday ? GRADIENT_CIRCLE : "bg-surface-3 text-foreground dark:bg-surface-2"
         )}
       >
         <Calendar size={12} className="shrink-0" />
