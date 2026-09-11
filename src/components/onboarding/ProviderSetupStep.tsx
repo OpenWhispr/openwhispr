@@ -45,11 +45,7 @@ import {
   rememberPendingLocalModel,
 } from "./pendingLocalModels";
 import { isLocalStageDownloadActive } from "./localDownloadState";
-import {
-  isBlankByokDraft,
-  resolveSavedByokConfig,
-  selfHostedRemoteTranscriptionUrl,
-} from "./savedByokConfig";
+import { isBlankByokDraft, resolveSavedByokConfig } from "./savedByokConfig";
 
 export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
   const { t } = useTranslation();
@@ -490,19 +486,23 @@ export function ByokProviderStep({
         store.setChatAgentModel(draftCustomModel);
         store.setChatAgentMode("self-hosted");
         store.setChatAgentProvider("custom");
-      } else {
+      } else if (draftApiKey.trim()) {
+        // Only the Custom route sends the key; a Settings server left in place would win.
         store.setCloudTranscriptionBaseUrl(committedBaseUrl);
         store.setCustomTranscriptionApiKey(draftApiKey);
         // Switch before setting the model: a switch files the current model under the
         // outgoing provider and loads the incoming one's, replacing what was typed here.
         store.switchCloudTranscriptionProvider("dictation", "custom");
         store.setCloudTranscriptionModel(draftCustomModel);
-        const remoteUrl = selfHostedRemoteTranscriptionUrl(committedBaseUrl, draftApiKey);
-        store.setRemoteTranscriptionUrl(remoteUrl);
-        if (remoteUrl) {
-          store.setRemoteTranscriptionModel(draftCustomModel);
-          store.setRemoteTranscriptionType("openai-compatible");
-        }
+        store.setRemoteTranscriptionUrl("");
+        store.setCloudTranscriptionMode("byok");
+      } else {
+        // Saved as the Settings self-hosted server, so the Custom URL, key and model are
+        // kept. Custom is still the provider: byok + custom derives the self-hosted mode.
+        store.switchCloudTranscriptionProvider("dictation", "custom");
+        store.setRemoteTranscriptionUrl(committedBaseUrl);
+        store.setRemoteTranscriptionModel(draftCustomModel);
+        store.setRemoteTranscriptionType("openai-compatible");
         store.setCloudTranscriptionMode("byok");
       }
     } else if (assistant) {

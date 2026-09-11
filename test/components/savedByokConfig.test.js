@@ -241,11 +241,3 @@ test("a draft is blank only when every field is empty", async () => {
     assert.equal(isBlankByokDraft({ ...blank, [field]: "x" }), false, field);
   }
 });
-
-test("only a key-less self-hosted endpoint is mirrored into remoteTranscriptionUrl", async () => {
-  const { selfHostedRemoteTranscriptionUrl } = await load();
-  const url = "http://127.0.0.1:8791/v1";
-  assert.equal(selfHostedRemoteTranscriptionUrl(url, ""), url);
-  assert.equal(selfHostedRemoteTranscriptionUrl(url, "   "), url);
-  assert.equal(selfHostedRemoteTranscriptionUrl(url, "sk-proxy"), "");
-});

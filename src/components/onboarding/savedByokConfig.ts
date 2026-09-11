@@ -85,13 +85,3 @@ export function resolveSavedByokConfig(
 export function isBlankByokDraft(draft: OnboardingByokDraft): boolean {
   return !(draft.selectedProvider || draft.selectedModel || draft.baseUrl || draft.customModel);
 }
-
-/**
- * The remoteTranscriptionUrl stored with a self-hosted dictation endpoint saved in
- * onboarding. Without a key it is mirrored, as migrateProviderSettings does, so Settings
- * and upload show it; both routes send the same request. With a key it is cleared: only
- * the custom route authenticates, and a leftover URL would win over it.
- */
-export function selfHostedRemoteTranscriptionUrl(committedUrl: string, apiKey: string): string {
-  return apiKey.trim() ? "" : committedUrl;
-}

@@ -174,6 +174,23 @@ async function routeAfterOnboardingSave(step) {
   return resolveTranscriptionRoute({ settings: step.state() });
 }
 
+// As UploadAudioView hands it to resolveFileTranscriptionRoute: the upload scope plus
+// the shared self-hosted fields.
+async function uploadRoute(step) {
+  const { selectResolvedUploadTranscription } = await step.vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const state = step.state();
+  const { resolveTranscriptionRoute } = await loadTranscriptionRoute();
+  return resolveTranscriptionRoute({
+    settings: {
+      ...selectResolvedUploadTranscription(state),
+      remoteTranscriptionUrl: state.remoteTranscriptionUrl,
+      remoteTranscriptionModel: state.remoteTranscriptionModel,
+    },
+  });
+}
+
 // A workspace policy arriving while the card is open, as policyStore applies it.
 async function applyTranscriptionPolicy(step, transcription) {
   const { usePolicyStore } = await step.vite.ssrLoadModule("/stores/policyStore.ts");
@@ -434,6 +451,7 @@ test("a key-less endpoint saved over a hosted setup keeps its model and routes t
       cloudTranscriptionModel: "gpt-4o-mini-transcribe",
     },
   });
+  const customBaseUrl = step.state().cloudTranscriptionBaseUrl;
   await step.type(PLACEHOLDER.endpoint, "http://127.0.0.1:8791/v1");
   await step.type(PLACEHOLDER.modelId, "whisper-proxy-test");
   await step.passConnectionTest();
@@ -441,19 +459,77 @@ test("a key-less endpoint saved over a hosted setup keeps its model and routes t
 
   const state = step.state();
   assert.equal(state.cloudTranscriptionProvider, "custom");
-  assert.equal(state.cloudTranscriptionModel, "whisper-proxy-test");
+  assert.equal(state.cloudTranscriptionBaseUrl, customBaseUrl, "the Custom slot is left alone");
   assert.equal(
     state.transcriptionModelByProvider["dictation:openai"],
     "gpt-4o-mini-transcribe",
-    "the typed model must not be filed under the previous provider"
+    "the hosted model stays filed under its provider"
   );
   assert.equal(state.remoteTranscriptionUrl, "http://127.0.0.1:8791/v1");
   assert.equal(state.remoteTranscriptionModel, "whisper-proxy-test");
+  assert.equal(state.remoteTranscriptionType, "openai-compatible");
 
   const route = await routeAfterOnboardingSave(step);
   assert.equal(route.provider, "self-hosted");
   assert.equal(route.endpoint, "http://127.0.0.1:8791/v1/audio/transcriptions");
   assert.equal(route.model, "whisper-proxy-test");
+  assert.deepEqual(route.auth, { scheme: "none", keyRef: null });
+
+  const upload = await uploadRoute(step);
+  assert.equal(upload.provider, "self-hosted");
+  assert.equal(upload.model, "whisper-proxy-test");
+  assert.deepEqual(upload.auth, { scheme: "none", keyRef: null });
+});
+
+test("re-confirming the Settings self-hosted server keeps an unused custom endpoint and its key", async (t) => {
+  const step = await mountByokStep(t, {
+    selfHostedRequested: true,
+    settings: {
+      ...CUSTOM_ENDPOINT,
+      remoteTranscriptionUrl: SETTINGS_SELF_HOSTED.remoteTranscriptionUrl,
+      remoteTranscriptionModel: SETTINGS_SELF_HOSTED.remoteTranscriptionModel,
+    },
+    secrets: { customTranscriptionApiKey: "sk-unused-custom-key" },
+  });
+  assert.equal(step.value(PLACEHOLDER.endpoint), "http://192.168.1.5:8178");
+  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
+  await step.passConnectionTest();
+  await step.proceed();
+
+  const state = step.state();
+  assert.equal(state.cloudTranscriptionBaseUrl, "https://stt.example.com/v1");
+  assert.equal(state.customTranscriptionApiKey, "sk-unused-custom-key");
+  assert.equal(state.cloudTranscriptionModel, "parasail-whisper");
+  assert.equal(state.remoteTranscriptionUrl, "http://192.168.1.5:8178");
+
+  const route = await routeAfterOnboardingSave(step);
+  assert.equal(route.provider, "self-hosted");
+  assert.equal(route.model, "large-v3");
+  assert.deepEqual(route.auth, { scheme: "none", keyRef: null });
+});
+
+test("clearing a reopened custom key saves a key-less server and leaves the stored key unused", async (t) => {
+  for (const cleared of ["", "   "]) {
+    await t.test(JSON.stringify(cleared), async (t) => {
+      const step = await mountByokStep(t, {
+        selfHostedRequested: true,
+        settings: CUSTOM_ENDPOINT,
+        secrets: { customTranscriptionApiKey: "sk-saved-custom-key" },
+      });
+      assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-saved-custom-key");
+      await step.type(PLACEHOLDER.selfHostedKey, cleared);
+      await step.passConnectionTest();
+      await step.proceed();
+
+      const state = step.state();
+      assert.equal(state.customTranscriptionApiKey, "sk-saved-custom-key");
+      assert.equal(state.remoteTranscriptionUrl, "https://stt.example.com/v1");
+      const route = await routeAfterOnboardingSave(step);
+      assert.equal(route.provider, "self-hosted");
+      assert.equal(route.model, "parasail-whisper");
+      assert.deepEqual(route.auth, { scheme: "none", keyRef: null });
+    });
+  }
 });
 
 test("an endpoint saved with a key replaces a Settings self-hosted server and authenticates", async (t) => {
