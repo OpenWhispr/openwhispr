@@ -2,6 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const crypto = require("crypto");
 const {
   cleanupFiles,
   downloadFile,
@@ -29,6 +30,18 @@ const GITHUB_RELEASE_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/downl
 // and sherpa-onnx picks them up.
 const WINDOWS_ONNXRUNTIME_UPSTREAM_NAME = "onnxruntime.dll";
 const WINDOWS_ONNXRUNTIME_PRIVATE_NAME = "ow-onnxrt.dll";
+
+// sherpa-onnx's macOS archives bundle a universal2 libonnxruntime whose arm64
+// slice runs INT8 models ~3x slower than the arm64-only build of the same
+// version from the same maintainer (the zip sherpa-onnx's own
+// cmake/onnxruntime-osx-arm64.cmake pins). On macOS hosts we swap that slice
+// in and keep the x86_64 slice, so the file stays universal2.
+const MACOS_ARM64_ONNXRUNTIME = {
+  url: "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/onnxruntime-osx-arm64-1.27.0.zip",
+  sha256: "5f05b2653eb0af852dab46c85778f0e012c514ed2e71a6dbb9c9550434b0a514",
+  libraryName: "libonnxruntime.1.27.0.dylib",
+  marker: "arm64-1.27.0", // recorded in the install marker so older installs re-extract
+};
 
 // Binary configurations for each platform
 // Note: macOS uses universal2 builds that work on both arm64 and x64
@@ -81,10 +94,45 @@ const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 const VERSIONED_LIB_PATTERN = /^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/;
 const REQUIRED_MACOS_ARCHITECTURES = ["x86_64", "arm64"];
 
+// Both macOS targets install the same libonnxruntime file; lipo needs a macOS host.
+function isMacosHostTarget(platformArch) {
+  return process.platform === "darwin" && platformArch.startsWith("darwin");
+}
+
 // Upstream 1.13.4 ships an invalid arm64 signature on libonnxruntime; dyld SIGKILLs unsigned loads.
 function adhocSign(filePath, platformArch) {
   if (process.platform !== "darwin" || !platformArch.startsWith("darwin")) return;
   execFileSync("codesign", ["--force", "--sign", "-", filePath], { stdio: "ignore" });
+}
+
+async function replaceMacosArm64OnnxRuntime(libraryPath, platformArch) {
+  const { url, sha256, libraryName } = MACOS_ARM64_ONNXRUNTIME;
+  if (path.basename(libraryPath) !== libraryName) {
+    throw new Error(
+      `sherpa-onnx ships ${path.basename(libraryPath)}; update MACOS_ARM64_ONNXRUNTIME to match`
+    );
+  }
+  const zipPath = `${libraryPath}.arm64.zip`;
+  const extractDir = `${libraryPath}.arm64`;
+  const x86Path = `${libraryPath}.x86_64`;
+  try {
+    console.log(`  ${platformArch}: Downloading arm64 ONNX Runtime from ${url}`);
+    await downloadFile(url, zipPath);
+    const actual = crypto.createHash("sha256").update(fs.readFileSync(zipPath)).digest("hex");
+    if (actual !== sha256) throw new Error(`arm64 ONNX Runtime sha256 mismatch: ${actual}`);
+    execFileSync("unzip", ["-q", "-o", zipPath, "-d", extractDir], { stdio: "ignore" });
+    const arm64Path = findLibrariesInDir(extractDir, "*.dylib").find(
+      (file) => path.basename(file) === libraryName
+    );
+    if (!arm64Path) throw new Error(`${libraryName} missing from arm64 ONNX Runtime zip`);
+    execFileSync("lipo", ["-thin", "x86_64", libraryPath, "-output", x86Path]);
+    execFileSync("lipo", ["-create", x86Path, arm64Path, "-output", libraryPath]);
+    console.log(`  ${platformArch}: Replaced arm64 slice of ${libraryName}`);
+  } finally {
+    for (const file of [zipPath, extractDir, x86Path]) {
+      fs.rmSync(file, { recursive: true, force: true });
+    }
+  }
 }
 
 function getDownloadUrl(archiveName) {
@@ -250,8 +298,12 @@ function isCompleteInstall(markerPath, binaryPaths, { platformArch, binDir = BIN
     if (marker.libraries.some((lib) => !fs.existsSync(path.join(binDir, lib)))) return false;
     // A win32 marker without this field predates the rename: the exes on disk
     // still import onnxruntime.dll and must be re-extracted.
+    if (platformArch.startsWith("win32")) {
+      return marker.onnxRuntime === WINDOWS_ONNXRUNTIME_PRIVATE_NAME;
+    }
+    // A macOS marker without this field still holds the slow universal2 slice.
     return (
-      !platformArch.startsWith("win32") || marker.onnxRuntime === WINDOWS_ONNXRUNTIME_PRIVATE_NAME
+      !isMacosHostTarget(platformArch) || marker.onnxRuntime === MACOS_ARM64_ONNXRUNTIME.marker
     );
   } catch {
     return false;
@@ -325,6 +377,9 @@ async function downloadBinary(platformArch, config, isForce = false) {
         fs.rmSync(destPath, { force: true });
         fs.copyFileSync(libPath, destPath);
         setExecutable(destPath);
+        if (isMacosHostTarget(platformArch) && versionMatch?.[1] === "libonnxruntime") {
+          await replaceMacosArm64OnnxRuntime(destPath, platformArch);
+        }
         adhocSign(destPath, platformArch);
         copiedLibraries.push(libName);
         console.log(`  ${platformArch}: Copied library ${libName}`);
@@ -364,6 +419,7 @@ async function downloadBinary(platformArch, config, isForce = false) {
         version: SHERPA_ONNX_VERSION,
         libraries: shippedLibraries,
         ...(isWindowsTarget ? { onnxRuntime: WINDOWS_ONNXRUNTIME_PRIVATE_NAME } : {}),
+        ...(isMacosHostTarget(platformArch) ? { onnxRuntime: MACOS_ARM64_ONNXRUNTIME.marker } : {}),
       })
     );
     return true;
@@ -443,6 +499,7 @@ async function main() {
 // Export config for potential imports
 module.exports = {
   SHERPA_ONNX_VERSION,
+  MACOS_ARM64_ONNXRUNTIME,
   BINARIES,
   BIN_DIR,
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
