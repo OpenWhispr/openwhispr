@@ -456,9 +456,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     []
   );
 
-  const handleExitMeetingMode = useCallback(() => {
-    window.electronAPI?.restoreFromMeetingMode?.();
-  }, []);
+  // The side-panel layout is shared by meeting mode and by a note opened in a
+  // narrow window, so leaving it means different things in each case.
+  const handleExitSidePanel = useCallback(() => {
+    if (isMeetingMode) window.electronAPI?.restoreFromMeetingMode?.();
+    else setActiveNoteId(null);
+  }, [isMeetingMode]);
 
   const copyToClipboard = useCallback(
     async (text: string) => {
@@ -931,7 +934,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <Button
                   variant="outline-flat"
                   size="sm"
-                  onClick={handleExitMeetingMode}
+                  onClick={handleExitSidePanel}
                   className="h-7 px-2.5 ps-1.5 gap-1"
                 >
                   <ChevronLeft size={14} strokeWidth={1.8} className="rtl:rotate-180" />

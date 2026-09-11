@@ -2044,7 +2044,9 @@ class WindowManager {
       win.setIgnoreMouseEvents(true, { forward: true });
     }
 
-    WindowPositionUtil.setupAlwaysOnTop(win);
+    // Notifications must clear every other window, including our own floating
+    // dictation panel and assistant pill.
+    WindowPositionUtil.setupAlwaysOnTop(win, { level: "screen-saver" });
 
     this._pendingNotificationData = promptData;
 
