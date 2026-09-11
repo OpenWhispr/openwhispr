@@ -22,6 +22,41 @@ const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_CONTEXT_SIZE = 4096;
 
+/**
+ * llama-server reports a prompt that overflows the context as a 400 whose body
+ * is a JSON blob. Surfacing that verbatim is how customers ended up reading
+ * llama.cpp internals in a toast (#2142), so it becomes a typed error carrying
+ * the two numbers callers actually need.
+ */
+function buildResponseError(statusCode, body) {
+  if (statusCode === 400) {
+    try {
+      const parsed = JSON.parse(body)?.error;
+      const isOverflow =
+        parsed?.type === "exceed_context_size_error" ||
+        /exceeds the available context size/i.test(parsed?.message || "");
+
+      if (isOverflow) {
+        const neededTokens = Number(parsed.n_prompt_tokens) || null;
+        const maxContextTokens = Number(parsed.n_ctx) || null;
+        const error = new Error(
+          neededTokens && maxContextTokens
+            ? `The request needs ${neededTokens} tokens of context but the model is running with ${maxContextTokens}.`
+            : "The request is longer than the context this model is running with."
+        );
+        error.code = "CONTEXT_TOO_LARGE";
+        error.neededTokens = neededTokens;
+        error.maxContextTokens = maxContextTokens;
+        return error;
+      }
+    } catch {
+      // Not JSON, or not the shape we expect: fall through to the generic error.
+    }
+  }
+
+  return new Error(`llama-server returned status ${statusCode}: ${body}`);
+}
+
 class LlamaServerManager {
   constructor() {
     this.process = null;
@@ -32,6 +67,10 @@ class LlamaServerManager {
     // the start() restart check); activeDraftModelPath is the one that actually loaded.
     this.draftModelPath = null;
     this.activeDraftModelPath = null;
+    // The context the running server was started with. Grows on demand and is
+    // only reset by stop(), so a short request cannot shrink a window a long
+    // one just paid to open. See #2142.
+    this.contextSize = null;
     this.startupPromise = null;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
@@ -124,7 +163,13 @@ class LlamaServerManager {
     // A change in drafter presence for the same model must still restart the
     // server so the new speculative-decoding flags take effect.
     const requestedDraftPath = options.draftModelPath || null;
-    if (this.ready && this.modelPath === modelPath && this.draftModelPath === requestedDraftPath)
+    const requestedContextSize = options.contextSize || DEFAULT_CONTEXT_SIZE;
+    if (
+      this.ready &&
+      this.modelPath === modelPath &&
+      this.draftModelPath === requestedDraftPath &&
+      requestedContextSize <= (this.contextSize || 0)
+    )
       return;
 
     if (this.process) {
@@ -134,9 +179,36 @@ class LlamaServerManager {
     this.startupPromise = this._doStart(modelPath, options);
     try {
       await this.startupPromise;
+      this.contextSize = requestedContextSize;
     } finally {
       this.startupPromise = null;
     }
+  }
+
+  _buildBaseArgs(modelPath, port, options = {}) {
+    const args = [
+      "--model",
+      modelPath,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--threads",
+      String(options.threads || 4),
+      // Unset, this defaults to the model's full trained context (128K+),
+      // whose KV cache can exceed total RAM with --fit disabled. See #1203.
+      // Sized per request against a memory budget by llamaContextPolicy.
+      "--ctx-size",
+      String(options.contextSize || DEFAULT_CONTEXT_SIZE),
+      "--jinja",
+    ];
+
+    // llama-server otherwise reserves 8192 MiB of host RAM for the prompt
+    // cache, on top of the KV cache, which would undo the memory budget. Cap
+    // it rather than disabling it: 0 forces a full re-prefill every request.
+    if (options.cacheRamMiB) args.push("--cache-ram", String(options.cacheRamMiB));
+
+    return args;
   }
 
   async _doStart(modelPath, options = {}) {
@@ -151,21 +223,7 @@ class LlamaServerManager {
     this.draftModelPath = options.draftModelPath || null;
     this.activeDraftModelPath = null;
 
-    const baseArgs = [
-      "--model",
-      modelPath,
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(this.port),
-      "--threads",
-      String(options.threads || 4),
-      // Unset, this defaults to the model's full trained context (128K+),
-      // whose KV cache can exceed total RAM with --fit disabled. See #1203.
-      "--ctx-size",
-      String(options.contextSize || DEFAULT_CONTEXT_SIZE),
-      "--jinja",
-    ];
+    const baseArgs = this._buildBaseArgs(modelPath, this.port, options);
 
     // Draft flags stay separate from baseArgs so the fallback ladder can retry without
     // them when a stale (pre-b9763) binary rejects the MTP args at parse time.
@@ -572,7 +630,7 @@ class LlamaServerManager {
             });
 
             if (res.statusCode !== 200) {
-              reject(new Error(`llama-server returned status ${res.statusCode}: ${data}`));
+              reject(buildResponseError(res.statusCode, data));
               return;
             }
 
@@ -614,6 +672,7 @@ class LlamaServerManager {
 
     if (!this.process) {
       this.ready = false;
+      this.contextSize = null;
       return;
     }
 
@@ -651,6 +710,7 @@ class LlamaServerManager {
     this.draftModelPath = null;
     this.activeDraftModelPath = null;
     this.activeBackend = null;
+    this.contextSize = null;
   }
 
   getStatus() {
