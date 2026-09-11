@@ -1,4 +1,5 @@
 const { readPolicyResponseError, toPolicyFailure } = require("./policyResponseError");
+const { checkCloudPreconditions } = require("./cloudPreconditions");
 
 function createCloudConfigRequestHandler({
   getApiUrl,
@@ -9,13 +10,19 @@ function createCloudConfigRequestHandler({
   configPath,
 }) {
   return async function handleCloudConfigRequest(event) {
+    // No API URL (local-only install) and no auth header (session not ready at
+    // first paint) are expected states, not failures. Returning them at debug
+    // level keeps a healthy launch quiet; a thrown error would land in the
+    // catch below and log at error level on every startup.
+    const apiUrl = getApiUrl();
+    const authHeader = apiUrl ? await getAuthHeader(event) : {};
+    const gate = checkCloudPreconditions(apiUrl, authHeader);
+    if (!gate.ok) {
+      logger?.debug?.(`${configPath} unavailable`, { code: gate.result.code });
+      return gate.result;
+    }
+
     try {
-      const apiUrl = getApiUrl();
-      if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-      const authHeader = await getAuthHeader(event);
-      if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
       const response = await proxyFetch(`${apiUrl}/api/${configPath}`, {
         headers: withPolicyHeaders(authHeader),
       });
