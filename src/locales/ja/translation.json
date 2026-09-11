@@ -249,7 +249,7 @@
         "titleLineOne": "最初の",
         "titleLineTwo": "ディクテーションを試す",
         "description": "{{hotkey}} を押して話し始めてください。OpenWhispr が音声をテキストに変換します。",
-        "founder": "こんにちは、創業者のゲイブです。OpenWhispr を試してくれてありがとう。",
+        "founder": "こんにちは、創業者のゲイブです。OpenWhispr を試してくれてありがとう！",
         "prompt": "下のボックスをクリックしてショートカットを押し、教えてください。OpenWhispr に何をしてほしいですか？",
         "placeholder": "ここをクリックしてからショートカットを押してください。OpenWhispr はどんなテキスト欄にも入力します。"
       },

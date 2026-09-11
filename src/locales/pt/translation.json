@@ -228,7 +228,7 @@
         "titleLineOne": "Experimente seu",
         "titleLineTwo": "primeiro ditado",
         "description": "Pressione {{hotkey}} e comece a falar. O OpenWhispr vai transformar sua voz em texto.",
-        "founder": "Oi, eu sou o Gabe, o fundador. Obrigado por experimentar o OpenWhispr.",
+        "founder": "Oi, eu sou o Gabe, o fundador. Obrigado por experimentar o OpenWhispr!",
         "prompt": "Clique na caixa abaixo, pressione seu atalho e me conte: o que você adoraria que o OpenWhispr fizesse por você?",
         "placeholder": "Clique aqui e depois pressione seu atalho. O OpenWhispr digita em qualquer caixa de texto."
       },

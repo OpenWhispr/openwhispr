@@ -249,7 +249,7 @@
         "titleLineOne": "Prova la tua",
         "titleLineTwo": "prima dettatura",
         "description": "Premi {{hotkey}} e inizia a parlare. OpenWhispr trasformerà la tua voce in testo.",
-        "founder": "Ciao, sono Gabe, il fondatore. Grazie per provare OpenWhispr.",
+        "founder": "Ciao, sono Gabe, il fondatore. Grazie per provare OpenWhispr!",
         "prompt": "Clicca nel riquadro qui sotto, premi la tua scorciatoia e dimmi: cosa vorresti che OpenWhispr facesse per te?",
         "placeholder": "Clicca qui, poi premi la tua scorciatoia. OpenWhispr scrive in qualsiasi campo di testo."
       },

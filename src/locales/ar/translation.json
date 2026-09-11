@@ -1939,7 +1939,7 @@
         "titleLineOne": "جرب",
         "titleLineTwo": "إملاءك الأول",
         "description": "اضغط على {{hotkey}} وابدأ في التحدث. سيقوم OpenWhispr بتحويل صوتك إلى نص.",
-        "founder": "مرحبًا، أنا غيب (Gabe)، المؤسس. شكرًا لتجربتك OpenWhispr.",
+        "founder": "مرحبًا، أنا غيب (Gabe)، المؤسس. شكرًا لتجربتك OpenWhispr!",
         "prompt": "انقر في المربع أدناه، واضغط على اختصارك، وأخبرني: ماذا تود أن يفعل OpenWhispr من أجلك؟",
         "placeholder": "انقر هنا ثم اضغط على اختصارك. يكتب OpenWhispr في أي مربع نص."
       },

@@ -249,7 +249,7 @@
         "titleLineOne": "試試你的",
         "titleLineTwo": "第一次語音輸入",
         "description": "按 {{hotkey}} 開始說話，OpenWhispr 會把你的語音轉成文字。",
-        "founder": "你好，我是創辦人 Gabe。感謝你試用 OpenWhispr。",
+        "founder": "你好，我是創辦人 Gabe。感謝你試用 OpenWhispr！",
         "prompt": "點一下下面的輸入框，按下快速鍵，然後告訴我：你希望 OpenWhispr 為你做些什麼？",
         "placeholder": "點一下這裡，然後按下快速鍵。OpenWhispr 可以在任何文字框中輸入。"
       },

@@ -249,7 +249,7 @@
         "titleLineOne": "Probieren Sie Ihr",
         "titleLineTwo": "erstes Diktat aus",
         "description": "Drücken Sie {{hotkey}} und sprechen Sie los. OpenWhispr wandelt Ihre Stimme in Text um.",
-        "founder": "Hallo, ich bin Gabe, der Gründer. Danke, dass Sie OpenWhispr ausprobieren.",
+        "founder": "Hallo, ich bin Gabe, der Gründer. Danke, dass Sie OpenWhispr ausprobieren!",
         "prompt": "Klicken Sie in das Feld unten, drücken Sie Ihr Tastenkürzel und sagen Sie mir: Was soll OpenWhispr für Sie tun?",
         "placeholder": "Klicken Sie hier und drücken Sie dann Ihr Tastenkürzel. OpenWhispr schreibt in jedes Textfeld."
       },

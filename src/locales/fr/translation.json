@@ -249,7 +249,7 @@
         "titleLineOne": "Essayez votre",
         "titleLineTwo": "première dictée",
         "description": "Appuyez sur {{hotkey}} et parlez. OpenWhispr transformera votre voix en texte.",
-        "founder": "Bonjour, je suis Gabe, le fondateur. Merci d’essayer OpenWhispr.",
+        "founder": "Bonjour, je suis Gabe, le fondateur. Merci d’essayer OpenWhispr !",
         "prompt": "Cliquez dans le champ ci-dessous, appuyez sur votre raccourci et dites-moi : qu’aimeriez-vous qu’OpenWhispr fasse pour vous ?",
         "placeholder": "Cliquez ici, puis appuyez sur votre raccourci. OpenWhispr écrit dans n’importe quel champ de texte."
       },
