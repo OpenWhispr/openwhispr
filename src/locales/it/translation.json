@@ -215,7 +215,7 @@
         "accessibilityDescription": "Incolla il testo nell’app attiva.",
         "systemAudioTitle": "Audio di Sistema",
         "systemAudioDescription": "Necessario per acquisire l’audio nelle note delle riunioni.",
-        "screenContextDescription": "Condividi il contesto dello schermo con l’assistente vocale.",
+        "screenContextDescription": "Permette al tuo assistente vocale di vedere cosa c’è sullo schermo. Mai salvato.",
         "enable": "Attiva",
         "enabled": "Attivato"
       },
@@ -257,13 +257,31 @@
         "title": "Scopri OpenWhispr Assistant",
         "titleLineOne": "Ecco",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Pronuncia una richiesta e OpenWhispr Assistant scrive il risultato per te.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "a John Doe",
-        "email": "Ciao! Ti va un caffè la settimana prossima? Fammi sapere quando ti è comodo.",
-        "prompt": "Rispondi che martedì alle 15 va bene. Invia un invito.",
-        "response": "Ciao Eren,\n\nmi farebbe piacere sentirci. Martedì alle 15 per me va benissimo. Se ti va bene, ti invierò un invito sul calendario.\nA presto,\nJohn"
+        "email": {
+          "subject": "Un caffè la prossima settimana?",
+          "senderName": "Maria Alvarez",
+          "recipient": "a me",
+          "body": "Ciao! È stato un piacere conoscerti ieri al meetup. Ti andrebbe un caffè veloce la prossima settimana? Fammi sapere quando ti va bene.\n\nMaria",
+          "reply": "Rispondi"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Premi {{hotkey}} e chiedi una risposta. L’assistente legge l’e-mail sullo schermo e cerca gli orari liberi nel tuo calendario.",
+            "prompt": "Prova a dire: «Rispondi e proponi alcuni orari liberi della prossima settimana»."
+          },
+          "screen": {
+            "description": "Premi {{hotkey}} e chiedi una risposta. L’assistente legge l’e-mail direttamente dal tuo schermo.",
+            "prompt": "Prova a dire: «Rispondi che mi farebbe piacere e proponi mercoledì pomeriggio»."
+          },
+          "calendar": {
+            "description": "Premi {{hotkey}} e chiedi una risposta. L’assistente cerca gli orari liberi nel tuo calendario e scrive la risposta.",
+            "prompt": "Prova a dire: «Rispondi a Maria e proponi alcuni orari liberi della prossima settimana»."
+          },
+          "general": {
+            "description": "Premi {{hotkey}} e chiedi una risposta. L’assistente la scrive per te.",
+            "prompt": "Prova a dire: «Rispondi a Maria che mi farebbe piacere e proponi mercoledì pomeriggio»."
+          }
+        }
       },
       "demo": {
         "listening": "In ascolto…",

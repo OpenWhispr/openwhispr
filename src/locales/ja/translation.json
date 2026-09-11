@@ -215,7 +215,7 @@
         "accessibilityDescription": "アクティブなアプリにテキストを貼り付けます。",
         "systemAudioTitle": "システムオーディオ",
         "systemAudioDescription": "会議メモで音声を取り込むために必要です。",
-        "screenContextDescription": "画面コンテキストを音声アシスタントと共有します。",
+        "screenContextDescription": "音声アシスタントが画面の内容を見られるようにします。保存は一切されません。",
         "enable": "有効にする",
         "enabled": "有効"
       },
@@ -257,13 +257,31 @@
         "title": "OpenWhispr Assistant を使ってみる",
         "titleLineOne": "ご紹介します",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "話しかけるだけで、OpenWhispr Assistant が結果を書き上げます。",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "John Doe 宛て",
-        "email": "こんにちは！来週コーヒーでもどうですか？ご都合を教えてください。",
-        "prompt": "火曜の15時で大丈夫だと返信して。招待を送って。",
-        "response": "エレンさん\n\nぜひ近況をお話ししたいです。火曜日の15時で大丈夫です。ご都合がよければ、カレンダーの招待をお送りします。\n楽しみにしています。\nジョン"
+        "email": {
+          "subject": "来週コーヒーでも？",
+          "senderName": "マリア・アルバレス",
+          "recipient": "宛先: 自分",
+          "body": "こんにちは！昨日のミートアップでお会いできてうれしかったです。来週、少しコーヒーでもご一緒しませんか？ご都合の良い日時を教えてください。\n\nマリア",
+          "reply": "返信"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "{{hotkey}} を押して返信を頼んでください。アシスタントが画面上のメールを読み取り、カレンダーで空き時間を確認します。",
+            "prompt": "「返信して、来週の空いている時間をいくつか提案して」と話してみてください。"
+          },
+          "screen": {
+            "description": "{{hotkey}} を押して返信を頼んでください。アシスタントが画面上のメールをそのまま読み取ります。",
+            "prompt": "「ぜひと返信して、水曜日の午後を提案して」と話してみてください。"
+          },
+          "calendar": {
+            "description": "{{hotkey}} を押して返信を頼んでください。アシスタントがカレンダーで空き時間を確認し、返信を書きます。",
+            "prompt": "「マリアに返信して、来週の空いている時間をいくつか提案して」と話してみてください。"
+          },
+          "general": {
+            "description": "{{hotkey}} を押して返信を頼んでください。アシスタントが代わりに書きます。",
+            "prompt": "「マリアにぜひと返信して、水曜日の午後を提案して」と話してみてください。"
+          }
+        }
       },
       "demo": {
         "listening": "聞き取り中…",

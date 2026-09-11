@@ -65,6 +65,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const {
     onToggle,
     onAssistantCommand,
+    onOnboardingAssistantCommand,
     dismissDictationError,
     onDictationError,
     getAssistantSelectionContext,
@@ -82,6 +83,10 @@ export const useAudioRecording = (toast, options = {}) => {
   const onAssistantCommandRef = useRef(onAssistantCommand);
   useEffect(() => {
     onAssistantCommandRef.current = onAssistantCommand;
+  });
+  const onOnboardingAssistantCommandRef = useRef(onOnboardingAssistantCommand);
+  useEffect(() => {
+    onOnboardingAssistantCommandRef.current = onOnboardingAssistantCommand;
   });
   const onShowTranscriptRef = useRef(onShowTranscript);
   useEffect(() => {
@@ -494,27 +499,31 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           setTranscript(result.text);
-          onDemoEventRef.current?.({
-            kind: demoKindRef.current,
-            status: "success",
-            text: result.text,
-          });
           if (result.assistantConversation) {
-            // The onboarding demo owns the transcript/result surface. Opening
-            // the normal Assistant panel here would cover the flow even though
-            // the main-process onboarding gate correctly hid normal surfaces.
+            window.electronAPI?.hideDictationPreview?.();
+            const { screenContext, transcript, selectedContext, deliverySessionId } =
+              result.assistantConversation;
+            const command = {
+              text: expandSnippets(transcript, getSettings().snippets),
+              attachment: screenContext
+                ? { image: screenContext.data, mediaType: screenContext.mediaType }
+                : null,
+            };
             if (localStorage.getItem("onboardingCompleted") !== "true") {
-              window.electronAPI?.hideDictationPreview?.();
+              // The onboarding demo owns the result surface: the assistant panel
+              // would cover the flow, so a headless responder answers instead
+              // and streams the reply back through the demo events. The demo
+              // stays in "processing" until that reply completes.
+              onDemoEventRef.current?.({
+                kind: demoKindRef.current,
+                status: "processing",
+                text: command.text,
+              });
+              onOnboardingAssistantCommandRef.current?.(command);
             } else {
-              window.electronAPI?.hideDictationPreview?.();
-              const { screenContext, transcript, selectedContext, deliverySessionId } =
-                result.assistantConversation;
               const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
               onAssistantCommandRef.current?.({
-                text: expandSnippets(transcript, getSettings().snippets),
-                attachment: screenContext
-                  ? { image: screenContext.data, mediaType: screenContext.mediaType }
-                  : null,
+                ...command,
                 selectedContext: selectedContext ?? null,
                 delivery: createAssistantResponseDelivery({
                   autoPasteEnabled,
@@ -525,6 +534,11 @@ export const useAudioRecording = (toast, options = {}) => {
               });
             }
           } else {
+            onDemoEventRef.current?.({
+              kind: demoKindRef.current,
+              status: "success",
+              text: result.text,
+            });
             window.electronAPI?.completeDictationPreview?.({ text: result.text });
           }
 

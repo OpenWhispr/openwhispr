@@ -215,7 +215,7 @@
         "accessibilityDescription": "Fügt Text in deine aktive App ein.",
         "systemAudioTitle": "Systemaudio",
         "systemAudioDescription": "Erforderlich, um Audio für Besprechungsnotizen aufzunehmen.",
-        "screenContextDescription": "Bildschirmkontext mit dem Sprachassistenten teilen.",
+        "screenContextDescription": "Lässt Ihren Sprachassistenten sehen, was auf Ihrem Bildschirm ist. Wird nie gespeichert.",
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },
@@ -257,13 +257,31 @@
         "title": "OpenWhispr Assistant kennenlernen",
         "titleLineOne": "Das ist",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Sprechen Sie eine Anfrage aus, und OpenWhispr Assistant schreibt das Ergebnis für Sie.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "an John Doe",
-        "email": "Hey! Hast du nächste Woche Zeit für einen Kaffee? Sag mir, was dir passt.",
-        "prompt": "Antworte, dass Dienstag um 15 Uhr passt. Sende eine Einladung.",
-        "response": "Hallo Eren,\n\nich würde mich gern austauschen. Dienstag um 15 Uhr passt mir gut. Wenn es dir passt, schicke ich dir eine Kalendereinladung.\nIch freue mich darauf,\nJohn"
+        "email": {
+          "subject": "Kaffee nächste Woche?",
+          "senderName": "Maria Alvarez",
+          "recipient": "an mich",
+          "body": "Hallo! Es war schön, dich gestern beim Meetup kennenzulernen. Hättest du nächste Woche Zeit für einen kurzen Kaffee? Sag mir einfach, was dir passt.\n\nMaria",
+          "reply": "Antworten"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Drücken Sie {{hotkey}} und bitten Sie um eine Antwort. Der Assistent liest die E-Mail auf Ihrem Bildschirm und prüft Ihren Kalender auf freie Zeiten.",
+            "prompt": "Sagen Sie zum Beispiel: „Antworte und schlage ein paar freie Termine nächste Woche vor.“"
+          },
+          "screen": {
+            "description": "Drücken Sie {{hotkey}} und bitten Sie um eine Antwort. Der Assistent liest die E-Mail direkt von Ihrem Bildschirm.",
+            "prompt": "Sagen Sie zum Beispiel: „Antworte, dass ich gern komme, und schlage Mittwochnachmittag vor.“"
+          },
+          "calendar": {
+            "description": "Drücken Sie {{hotkey}} und bitten Sie um eine Antwort. Der Assistent prüft Ihren Kalender auf freie Zeiten und schreibt die Antwort.",
+            "prompt": "Sagen Sie zum Beispiel: „Antworte Maria und schlage ein paar freie Termine nächste Woche vor.“"
+          },
+          "general": {
+            "description": "Drücken Sie {{hotkey}} und bitten Sie um eine Antwort. Der Assistent schreibt sie für Sie.",
+            "prompt": "Sagen Sie zum Beispiel: „Antworte Maria, dass ich gern komme, und schlage Mittwochnachmittag vor.“"
+          }
+        }
       },
       "demo": {
         "listening": "Höre zu…",

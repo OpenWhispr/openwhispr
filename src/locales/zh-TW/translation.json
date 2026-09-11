@@ -215,7 +215,7 @@
         "accessibilityDescription": "將文字貼到目前的 App。",
         "systemAudioTitle": "系統音訊",
         "systemAudioDescription": "在會議筆記中擷取音訊時必需。",
-        "screenContextDescription": "與語音助理分享螢幕內容。",
+        "screenContextDescription": "讓語音助理看到你螢幕上的內容。絕不儲存。",
         "enable": "啟用",
         "enabled": "已啟用"
       },
@@ -257,13 +257,31 @@
         "title": "認識 OpenWhispr Assistant",
         "titleLineOne": "來認識",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "說出你的需求，OpenWhispr Assistant 就會為你寫好結果。",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "寄給 John Doe",
-        "email": "嗨！下週一起喝杯咖啡嗎？告訴我你什麼時候方便。",
-        "prompt": "回覆說週二下午 3 點可以。傳送一個邀請。",
-        "response": "你好，Eren：\n\n很想和你聊聊近況。週二下午 3 點對我來說很合適。如果你方便，我會發送行事曆邀請。\n期待見面，\nJohn"
+        "email": {
+          "subject": "下週喝杯咖啡？",
+          "senderName": "Maria Alvarez",
+          "recipient": "寄給我",
+          "body": "嗨！很高興昨天在聚會上認識你。下週有空一起喝杯咖啡嗎？告訴我你什麼時間方便。\n\nMaria",
+          "reply": "回覆"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "按 {{hotkey}} 並請它回覆。助理會讀取螢幕上的郵件，並在你的行事曆中查找空閒時間。",
+            "prompt": "試著說：「回覆並建議幾個我下週有空的時間。」"
+          },
+          "screen": {
+            "description": "按 {{hotkey}} 並請它回覆。助理會直接從你的螢幕讀取這封郵件。",
+            "prompt": "試著說：「回覆說我很願意，並建議週三下午。」"
+          },
+          "calendar": {
+            "description": "按 {{hotkey}} 並請它回覆。助理會在你的行事曆中查找空閒時間並寫好回覆。",
+            "prompt": "試著說：「回覆 Maria 並建議幾個我下週有空的時間。」"
+          },
+          "general": {
+            "description": "按 {{hotkey}} 並請它回覆。助理會替你寫好。",
+            "prompt": "試著說：「回覆 Maria 說我很願意，並建議週三下午。」"
+          }
+        }
       },
       "demo": {
         "listening": "正在聆聽…",

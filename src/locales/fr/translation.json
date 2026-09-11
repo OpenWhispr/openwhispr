@@ -215,7 +215,7 @@
         "accessibilityDescription": "Colle le texte dans votre application active.",
         "systemAudioTitle": "Audio Système",
         "systemAudioDescription": "Nécessaire pour capturer l’audio dans les notes de réunion.",
-        "screenContextDescription": "Partagez le contexte de l’écran avec l’assistant vocal.",
+        "screenContextDescription": "Permet à votre assistant vocal de voir ce qui s’affiche à l’écran. Jamais enregistré.",
         "enable": "Activer",
         "enabled": "Activé"
       },
@@ -257,13 +257,31 @@
         "title": "Découvrez OpenWhispr Assistant",
         "titleLineOne": "Découvrez",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Formulez une demande et OpenWhispr Assistant rédige le résultat pour vous.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "à John Doe",
-        "email": "Salut ! Un café la semaine prochaine ? Dis-moi ce qui t’arrange.",
-        "prompt": "Réponds que mardi à 15 h me convient. Envoie une invitation.",
-        "response": "Bonjour Eren,\n\nJ’aimerais beaucoup qu’on se retrouve. Mardi à 15 h me convient bien. Si cela te va, je t’enverrai une invitation d’agenda.\nAu plaisir,\nJohn"
+        "email": {
+          "subject": "Un café la semaine prochaine ?",
+          "senderName": "Maria Alvarez",
+          "recipient": "à moi",
+          "body": "Bonjour ! Ravie de vous avoir rencontré au meetup hier. Seriez-vous disponible pour un café rapide la semaine prochaine ? Dites-moi ce qui vous convient.\n\nMaria",
+          "reply": "Répondre"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Appuyez sur {{hotkey}} et demandez une réponse. L’assistant lit l’e-mail affiché à l’écran et cherche vos créneaux libres dans votre agenda.",
+            "prompt": "Essayez de dire : « Réponds en proposant quelques créneaux libres la semaine prochaine. »"
+          },
+          "screen": {
+            "description": "Appuyez sur {{hotkey}} et demandez une réponse. L’assistant lit l’e-mail directement sur votre écran.",
+            "prompt": "Essayez de dire : « Réponds que ce serait avec plaisir et propose mercredi après-midi. »"
+          },
+          "calendar": {
+            "description": "Appuyez sur {{hotkey}} et demandez une réponse. L’assistant cherche vos créneaux libres dans votre agenda et rédige la réponse.",
+            "prompt": "Essayez de dire : « Réponds à Maria en proposant quelques créneaux libres la semaine prochaine. »"
+          },
+          "general": {
+            "description": "Appuyez sur {{hotkey}} et demandez une réponse. L’assistant la rédige pour vous.",
+            "prompt": "Essayez de dire : « Réponds à Maria que ce serait avec plaisir et propose mercredi après-midi. »"
+          }
+        }
       },
       "demo": {
         "listening": "Écoute…",

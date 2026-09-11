@@ -1055,13 +1055,22 @@ export interface ConversationCreateAckResult {
 }
 
 export type OnboardingDemoKind = "dictation" | "assistant";
-export type OnboardingDemoStatus = "listening" | "processing" | "partial" | "success" | "error";
+/**
+ * "partial" carries a streaming transcript. "processing" carries the finished
+ * transcript once the assistant demo hands it to the model, and "replying"
+ * carries the reply as it streams, so the demo card can show what was heard
+ * before what was written.
+ */
+export type OnboardingDemoStatus =
+  "listening" | "processing" | "partial" | "replying" | "success" | "error";
 export interface OnboardingDemoEvent {
   demoId: string;
   kind: OnboardingDemoKind;
   status: OnboardingDemoStatus;
   text?: string;
   message?: string;
+  /** Tool the assistant is running while it replies (a tool registry name). */
+  tool?: string;
 }
 
 export interface ReferralItem {

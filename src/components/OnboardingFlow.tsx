@@ -50,6 +50,7 @@ import {
   getNotesFooterAction,
   getOnboardingProgress,
   getOnboardingRoute,
+  isSetupDecisionStep,
   reconcileStepWithRoute,
   resetOnboardingProgress,
   resolveEnterpriseWorkspaceForOnboarding,
@@ -65,6 +66,7 @@ import {
 } from "./onboarding/flow";
 import { useOnboardingSession } from "./onboarding/useOnboardingSession";
 import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
+import { resolveAssistantDemoScenario } from "./onboarding/assistantDemoScenario";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 
@@ -246,13 +248,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     session.authPath === "account" &&
     (!workspacesLoaded ||
       (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)));
-  const notesFooterAction = getNotesFooterAction({
-    workspaceResolutionPending,
-    hasConnectedCalendar:
-      settingsStore.gcalAccounts.length > 0 ||
-      settingsStore.mcalAccounts.length > 0 ||
-      (platform === "darwin" && settingsStore.appleCalendarConnected),
-  });
+  const hasConnectedCalendar =
+    settingsStore.gcalAccounts.length > 0 ||
+    settingsStore.mcalAccounts.length > 0 ||
+    (platform === "darwin" && settingsStore.appleCalendarConnected);
 
   // The setting turns on only once the permission is actually granted, so an
   // Enable click whose System Settings grant is abandoned can't leave screen
@@ -310,6 +309,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
   const compact = COMPACT_STEPS.has(currentStepId);
+  const setupDecisionPending =
+    workspaceResolutionPending && isSetupDecisionStep(currentStepId, route);
+  const notesFooterAction = getNotesFooterAction({ setupDecisionPending, hasConnectedCalendar });
+  // Screen context only reaches the model once macOS has been relaunched after
+  // the grant; until then the demo must not promise the assistant can see the card.
+  const screenContextActive =
+    agentAllowed &&
+    screenContextAllowed &&
+    settingsStore.voiceAgentScreenContext &&
+    screenRecordingGranted &&
+    !screenRecordingNeedsRelaunch;
   const permissions = usePermissions(
     (dialog) => setPermissionAlert({ title: dialog.title, description: dialog.description }),
     {
@@ -550,9 +560,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     ]
   );
 
-  // Sessions saved on the old setup-choice step reconcile back to Notes once an
-  // Enterprise workspace is confirmed. Finish them without writing provider or
-  // model settings, just as if Notes had been their final step originally.
+  // Sessions saved on the old setup-choice step reconcile back to the last
+  // guided step once an Enterprise workspace is confirmed. Finish them without
+  // writing provider or model settings, just as if that had been their final
+  // step originally.
   useEffect(() => {
     if (!skipSetupChoiceForEnterprise || session.currentStepId !== "setup-choice" || isFinishing) {
       return;
@@ -638,7 +649,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const continueFromCurrentStep = useCallback(async () => {
     // A banner from an earlier failed attempt must not outlive the retry.
     setFatalError(null);
-    if (currentStepId === "notes" && workspaceResolutionPending) return;
+    if (setupDecisionPending) return;
     if (currentStepId === "permissions") {
       if (platform === "darwin" && !permissions.accessibilityPermissionGranted) {
         setAccessibilitySkipped(true);
@@ -723,7 +734,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     syncUseCases,
     t,
     withExtraDictationHotkeys,
-    workspaceResolutionPending,
+    setupDecisionPending,
     skipSetupChoiceForEnterprise,
   ]);
 
@@ -975,12 +986,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "dictation-demo":
       case "assistant-demo": {
         const assistant = currentStepId === "assistant-demo";
+        const scenario = resolveAssistantDemoScenario({
+          calendarConnected: hasConnectedCalendar,
+          screenContextActive,
+        });
         const hotkeyInstruction = formatHotkeyInstruction(
           assistant ? assistantHotkey : dictationHotkey
         );
         const description = t(
           assistant
-            ? "onboarding.rehaul.assistantDemo.description"
+            ? `onboarding.rehaul.assistantDemo.scenarios.${scenario}.description`
             : activationMode === "push"
               ? "onboarding.activation.holdHotkey"
               : "onboarding.rehaul.dictationDemo.description",
@@ -1007,25 +1022,19 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                       t("onboarding.rehaul.dictationDemo.titleLineTwo"),
                     ]
               }
-              description={
-                assistant ? (
-                  description
-                ) : (
-                  <DemoHotkeyDescription text={description} hotkey={hotkeyInstruction} />
-                )
-              }
+              description={<DemoHotkeyDescription text={description} hotkey={hotkeyInstruction} />}
             />
             <DemoStep
               kind={assistant ? "assistant" : "dictation"}
               initialSuccessful={assistant ? assistantDemoSuccess : dictationDemoSuccess}
               firstMessage={t(
                 assistant
-                  ? "onboarding.rehaul.assistantDemo.email"
+                  ? "onboarding.rehaul.assistantDemo.email.body"
                   : "onboarding.rehaul.dictationDemo.founder"
               )}
               secondMessage={t(
                 assistant
-                  ? "onboarding.rehaul.assistantDemo.prompt"
+                  ? `onboarding.rehaul.assistantDemo.scenarios.${scenario}.prompt`
                   : "onboarding.rehaul.dictationDemo.prompt"
               )}
               // Only the dictation demo renders this: the assistant card passes
@@ -1035,10 +1044,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               processingLabel={t("onboarding.rehaul.demo.processing")}
               stopLabel={t("onboarding.rehaul.demo.stop")}
               retryLabel={t("common.retry")}
-              assistantResponse={t("onboarding.rehaul.assistantDemo.response")}
-              assistantSenderName={t("onboarding.rehaul.assistantDemo.senderName")}
-              assistantSenderEmail={t("onboarding.rehaul.assistantDemo.senderEmail")}
-              assistantRecipientLabel={t("onboarding.rehaul.assistantDemo.recipientLabel")}
               onSuccessChange={assistant ? setAssistantDemoSuccess : setDictationDemoSuccess}
             />
           </div>
@@ -1172,11 +1177,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     hasShellNavigation &&
     !choiceStep &&
     !inlineProviderStep &&
-    (!inlineGatedStep || canContinue) &&
+    (!inlineGatedStep || canContinue || setupDecisionPending) &&
     (!notesStep || notesFooterAction !== "skip");
   // Practice remains skippable if it cannot complete. Calendar connections are
   // optional, so Notes starts with Skip and replaces it with Continue on connect.
-  const showsSkip = (demoStep && !canContinue) || (notesStep && notesFooterAction === "skip");
+  // While the setup decision is pending, a disabled Continue stands in for Skip.
+  const showsSkip =
+    !setupDecisionPending &&
+    ((demoStep && !canContinue) || (notesStep && notesFooterAction === "skip"));
 
   return (
     <>
@@ -1203,9 +1211,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }
         skipLabel={t("common.skip")}
         continueDisabled={!canContinue}
-        continueLoading={
-          isFinishing || isRegistering || (notesStep && notesFooterAction === "loading")
-        }
+        continueLoading={isFinishing || isRegistering || setupDecisionPending}
         progress={getOnboardingProgress(currentStepId, route)}
         // Label Back only when it is the sole footer action. Unlike the source
         // commit, this branch also has demo Skip, so Back stays icon-only there.

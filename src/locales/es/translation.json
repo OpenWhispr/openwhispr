@@ -215,7 +215,7 @@
         "accessibilityDescription": "Pega texto en tu aplicación activa.",
         "systemAudioTitle": "Audio del Sistema",
         "systemAudioDescription": "Necesario para capturar audio en las notas de reuniones.",
-        "screenContextDescription": "Comparte el contexto de pantalla con el asistente de voz.",
+        "screenContextDescription": "Permite que tu asistente de voz vea lo que hay en tu pantalla. Nunca se guarda.",
         "enable": "Activar",
         "enabled": "Activado"
       },
@@ -257,13 +257,31 @@
         "title": "Conoce OpenWhispr Assistant",
         "titleLineOne": "Te presentamos",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Di lo que necesitas y OpenWhispr Assistant escribe el resultado por ti.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "para John Doe",
-        "email": "¡Hola! ¿Te apetece un café la semana que viene? Dime qué día te viene bien.",
-        "prompt": "Responde que el martes a las 3 me va bien. Envía una invitación.",
-        "response": "Hola Eren:\n\nMe encantaría ponernos al día. El martes a las 15:00 me viene bien. Si te parece bien, te enviaré una invitación de calendario.\nCon ganas de verte,\nJohn"
+        "email": {
+          "subject": "¿Café la semana que viene?",
+          "senderName": "Maria Alvarez",
+          "recipient": "para mí",
+          "body": "¡Hola! Fue un placer conocerte ayer en el meetup. ¿Te apetece tomar un café rápido la semana que viene? Dime qué te viene bien.\n\nMaria",
+          "reply": "Responder"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente lee el correo de tu pantalla y busca huecos libres en tu calendario.",
+            "prompt": "Prueba a decir: «Responde y propón algunas horas libres de la semana que viene»."
+          },
+          "screen": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente lee el correo directamente de tu pantalla.",
+            "prompt": "Prueba a decir: «Responde que me encantaría y propón el miércoles por la tarde»."
+          },
+          "calendar": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente busca huecos libres en tu calendario y escribe la respuesta.",
+            "prompt": "Prueba a decir: «Responde a Maria y propón algunas horas libres de la semana que viene»."
+          },
+          "general": {
+            "description": "Pulsa {{hotkey}} y pide una respuesta. El asistente la escribe por ti.",
+            "prompt": "Prueba a decir: «Responde a Maria que me encantaría y propón el miércoles por la tarde»."
+          }
+        }
       },
       "demo": {
         "listening": "Escuchando…",

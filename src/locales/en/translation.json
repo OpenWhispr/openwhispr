@@ -215,7 +215,7 @@
         "accessibilityDescription": "Pastes text into your active app.",
         "systemAudioTitle": "System Audio",
         "systemAudioDescription": "Required for capturing audio in Meeting Notes.",
-        "screenContextDescription": "Share screen context with Voice Assistant.",
+        "screenContextDescription": "Lets your voice assistant see what’s on your screen. Never stored.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -257,13 +257,31 @@
         "title": "Meet OpenWhispr Assistant",
         "titleLineOne": "Meet",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "to John Doe",
-        "email": "Hey! Want to grab coffee next week? Let me know what works for you.",
-        "prompt": "Reply that Tuesday at 3 works. Send an invite.",
-        "response": "Hi Eren,\n\nI’d love to catch up. Tuesday at 3 PM works well for me. If that suits you, I’ll send over a calendar invite.\nLooking forward to it,\nJohn"
+        "email": {
+          "subject": "Coffee next week?",
+          "senderName": "Maria Alvarez",
+          "recipient": "to me",
+          "body": "Hi! It was great meeting you at the meetup yesterday. Would you be up for a quick coffee sometime next week? Let me know what works for you.\n\nMaria",
+          "reply": "Reply"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant reads the email on your screen and checks your calendar for free times.",
+            "prompt": "Try saying: “Reply and suggest a few times next week when I’m free.”"
+          },
+          "screen": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant reads the email right off your screen.",
+            "prompt": "Try saying: “Reply that I’d love to, and suggest Wednesday afternoon.”"
+          },
+          "calendar": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant checks your calendar for free times and writes the answer.",
+            "prompt": "Try saying: “Reply to Maria and suggest a few times next week when I’m free.”"
+          },
+          "general": {
+            "description": "Press {{hotkey}} and ask for a reply. The assistant writes it for you.",
+            "prompt": "Try saying: “Reply to Maria that I’d love to, and suggest Wednesday afternoon.”"
+          }
+        }
       },
       "demo": {
         "listening": "Listening…",

@@ -2,12 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import confetti from "canvas-confetti";
-import { ChevronDown, Loader2, Mic, RefreshCw, Square } from "../icons";
+import { ChevronDown, CornerDownLeft, Loader2, Mic, RefreshCw, Sparkles, Square } from "../icons";
 import { Button } from "../ui/button";
+import { toolIcons } from "../chat/toolIcons";
 import type { OnboardingDemoEvent, OnboardingDemoKind } from "../../types/electron";
 import founderAvatar from "../../assets/onboarding-founder.webp";
-import emailSenderAvatar from "../../assets/onboarding-email-sender.webp";
-import assistantAvatar from "../../assets/onboarding-assistant-dog.webp";
+import gmailMark from "../../assets/icons/gmail.svg";
 
 /**
  * The dictation success celebration: canvas-confetti's "school pride" effect —
@@ -143,27 +143,33 @@ function FounderBubble({ children }: { children: ReactNode }) {
 // index.css clamps the duration, and `both` leaves the bubble visible either way.
 const BUBBLE_IN = { animation: "agent-message-in 220ms ease-out both" } as const;
 
+function TypingDots() {
+  // A 40x20 row of 8px dots on 16px centers (so an 8px gap) in light/text-tertiary.
+  return (
+    <span className="flex h-5 items-center gap-2">
+      {[0, 1, 2].map((index) => (
+        <span
+          key={index}
+          className="onboarding-typing-dot size-1.5 rounded-full bg-[var(--onboarding-text-tertiary)]"
+          style={{ animationDelay: `${index * 160}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
+
 function TypingBubble() {
   const { t } = useTranslation();
 
   return (
     // Figma "Onboarding / Frame 25": pill on light/surface-stroke, radius 38,
-    // 10/20 padding, hugging a 40x20 row of 8px dots on 16px centers (so an 8px
-    // gap) in light/text-tertiary.
+    // 10/20 padding, hugging the dots row.
     <div
       className="flex items-center rounded-[38px] bg-[var(--onboarding-control-border)] px-4 py-2"
       style={BUBBLE_IN}
       aria-label={t("onboarding.rehaul.demo.typing")}
     >
-      <span className="flex h-5 items-center gap-2">
-        {[0, 1, 2].map((index) => (
-          <span
-            key={index}
-            className="onboarding-typing-dot size-1.5 rounded-full bg-[var(--onboarding-text-tertiary)]"
-            style={{ animationDelay: `${index * 160}ms` }}
-          />
-        ))}
-      </span>
+      <TypingDots />
     </div>
   );
 }
@@ -177,10 +183,6 @@ interface DemoStepProps {
   processingLabel: string;
   stopLabel: string;
   retryLabel: string;
-  assistantResponse?: string;
-  assistantSenderName?: string;
-  assistantSenderEmail?: string;
-  assistantRecipientLabel?: string;
   onSuccessChange: (successful: boolean) => void;
   initialSuccessful?: boolean;
 }
@@ -194,16 +196,14 @@ export default function DemoStep({
   processingLabel,
   stopLabel,
   retryLabel,
-  assistantResponse,
-  assistantSenderName,
-  assistantSenderEmail,
-  assistantRecipientLabel,
   onSuccessChange,
   initialSuccessful = false,
 }: DemoStepProps) {
   const [messageCount, setMessageCount] = useState(0);
   const [event, setEvent] = useState<OnboardingDemoEvent | null>(null);
   const [draft, setDraft] = useState("");
+  // Assistant demo only: what the user said, shown above the reply it produced.
+  const [transcript, setTranscript] = useState("");
   const [demoId, setDemoId] = useState(() => crypto.randomUUID());
   const [restoredSuccessful, setRestoredSuccessful] = useState(initialSuccessful);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -225,7 +225,14 @@ export default function DemoStep({
       if (payload.demoId !== demoId || payload.kind !== kind) return;
       setRestoredSuccessful(false);
       setEvent(payload);
-      if (payload.text) setDraft(payload.text);
+      if (payload.text) {
+        // The assistant demo hears first and writes second: transcript text
+        // (live partials, then the final handed to the model) stays out of the
+        // reply box, which only ever holds the streamed answer.
+        const heard = payload.status === "partial" || payload.status === "processing";
+        if (kind === "assistant" && heard) setTranscript(payload.text);
+        else setDraft(payload.text);
+      }
       if (payload.status === "success") onSuccessChange(true);
     });
     return () => {
@@ -239,6 +246,7 @@ export default function DemoStep({
     onSuccessChange(false);
     setEvent(null);
     setDraft("");
+    setTranscript("");
     setMessageCount(0);
     setDemoId(crypto.randomUUID());
   };
@@ -246,8 +254,8 @@ export default function DemoStep({
   const effectiveEvent: OnboardingDemoEvent | null = restoredSuccessful
     ? { demoId, kind, status: "success" }
     : event;
-  const status = effectiveEvent?.status;
-  const successful = status === "success";
+  const successful = effectiveEvent?.status === "success";
+  const stop = () => void window.electronAPI?.stopOnboardingDemo?.(demoId);
 
   return (
     <div
@@ -301,81 +309,98 @@ export default function DemoStep({
               stopLabel={stopLabel}
               retryLabel={retryLabel}
               onRetry={retry}
-              onStop={() => void window.electronAPI?.stopOnboardingDemo?.(demoId)}
+              onStop={stop}
             />
           )}
         </div>
       ) : (
-        // No shadow: the tokenized stroke carries the edge of the compact card.
-        <article className="flex h-[340px] flex-col gap-5 rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-4 text-start">
-          {/* Frame 2147259013: 44px avatar, 16 gap, and a column that keeps the
-              body copy on the text's left edge rather than the avatar's. */}
-          <div className="flex gap-3">
-            <img
-              src={emailSenderAvatar}
-              alt=""
-              aria-hidden="true"
-              width={44}
-              height={44}
-              decoding="async"
-              draggable={false}
-              className="size-10 shrink-0 rounded-full object-cover"
-            />
-            <div className="flex min-w-0 flex-1 flex-col gap-4">
-              <div className="flex flex-col gap-1">
-                <p className="flex min-w-0 gap-1 text-sm leading-[1.4]">
-                  <span className="font-medium text-[var(--onboarding-text-primary)]">
-                    {assistantSenderName}
-                  </span>
-                  <span dir="ltr" className="truncate text-[var(--onboarding-text-secondary)]">
-                    &lt;{assistantSenderEmail}&gt;
-                  </span>
-                </p>
-                <p className="flex items-center gap-[5px] text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
-                  {assistantRecipientLabel}
-                  <ChevronDown
-                    className="size-4 shrink-0 text-[var(--onboarding-text-primary)]"
-                    strokeWidth={1.333}
-                  />
-                </p>
-              </div>
-              <p className="text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
-                {firstMessage}
-              </p>
-            </div>
-          </div>
-
-          {/* Frame 2147259014: the reply row repeats the 44px avatar and 16 gap so
-              the input card lines up with the mail body above it. */}
-          <div className="flex gap-3">
-            <img
-              src={assistantAvatar}
-              alt=""
-              aria-hidden="true"
-              width={44}
-              height={44}
-              decoding="async"
-              draggable={false}
-              className="size-10 shrink-0 rounded-full object-cover"
-            />
-            <VoiceSurface
-              inputRef={inputRef}
-              value={draft || (successful ? (assistantResponse ?? "") : "")}
-              onChange={setDraft}
-              placeholder={secondMessage}
-              event={effectiveEvent}
-              listeningLabel={listeningLabel}
-              processingLabel={processingLabel}
-              stopLabel={stopLabel}
-              retryLabel={retryLabel}
-              onRetry={retry}
-              onStop={() => void window.electronAPI?.stopOnboardingDemo?.(demoId)}
-              embedded
-            />
-          </div>
-        </article>
+        <EmailThread body={firstMessage}>
+          <VoiceSurface
+            inputRef={inputRef}
+            value={draft}
+            onChange={setDraft}
+            // Once the request has been heard, the suggestion has done its job.
+            placeholder={transcript ? "" : secondMessage}
+            event={effectiveEvent}
+            transcript={transcript}
+            listeningLabel={listeningLabel}
+            processingLabel={processingLabel}
+            stopLabel={stopLabel}
+            retryLabel={retryLabel}
+            onRetry={retry}
+            onStop={stop}
+            embedded
+          />
+        </EmailThread>
       )}
     </div>
+  );
+}
+
+/**
+ * The assistant demo's stage: one message in a mail client, with the reply
+ * composer as the voice surface. The card is what the assistant sees when
+ * screen context is on, so the sender's name and the ask are spelled out in
+ * plain text rather than baked into artwork.
+ */
+function EmailThread({ body, children }: { body: string; children: ReactNode }) {
+  const { t } = useTranslation();
+  const senderName = t("onboarding.rehaul.assistantDemo.email.senderName");
+
+  return (
+    <article className="overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-start">
+      <header className="flex items-center gap-2.5 border-b border-[var(--onboarding-control-border)] px-4 py-2.5">
+        <img
+          src={gmailMark}
+          alt=""
+          aria-hidden="true"
+          width={16}
+          height={12}
+          decoding="async"
+          draggable={false}
+          className="h-3 w-4 shrink-0 select-none"
+        />
+        <h2 className="truncate text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
+          {t("onboarding.rehaul.assistantDemo.email.subject")}
+        </h2>
+      </header>
+
+      <div className="flex gap-3 px-4 pb-4 pt-3.5">
+        {/* Letter avatar, the way a mail client draws a sender without a photo. */}
+        <span
+          aria-hidden="true"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] text-sm font-semibold text-[var(--onboarding-accent)]"
+        >
+          {senderName.trim().charAt(0)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
+            {senderName}
+          </p>
+          <p className="flex items-center gap-1 text-xs leading-[1.4] text-[var(--onboarding-text-secondary)]">
+            {t("onboarding.rehaul.assistantDemo.email.recipient")}
+            <ChevronDown className="size-3 shrink-0" strokeWidth={1.5} aria-hidden="true" />
+          </p>
+          <p className="mt-2.5 whitespace-pre-line text-sm leading-[1.5] text-[var(--onboarding-text-primary)]">
+            {body}
+          </p>
+        </div>
+      </div>
+
+      <div
+        role="group"
+        aria-label={t("onboarding.rehaul.assistantDemo.email.reply")}
+        className="flex gap-3 border-t border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-4 py-3.5"
+      >
+        <span
+          aria-hidden="true"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-secondary)]"
+        >
+          <CornerDownLeft className="size-4" strokeWidth={1.8} />
+        </span>
+        {children}
+      </div>
+    </article>
   );
 }
 
@@ -385,6 +410,7 @@ function VoiceSurface({
   onChange,
   placeholder,
   event,
+  transcript,
   listeningLabel,
   processingLabel,
   stopLabel,
@@ -398,6 +424,8 @@ function VoiceSurface({
   onChange: (value: string) => void;
   placeholder: string;
   event: OnboardingDemoEvent | null;
+  /** What was heard, shown above the reply while the assistant answers it. */
+  transcript?: string;
   listeningLabel: string;
   processingLabel: string;
   stopLabel: string;
@@ -406,6 +434,13 @@ function VoiceSurface({
   onStop: () => void;
   embedded?: boolean;
 }) {
+  const { t } = useTranslation();
+  const status = event?.status;
+  // The transcript has been handed to the model and no token has landed yet.
+  const awaitingReply =
+    (status === "processing" || status === "replying") && !!transcript && !value;
+  const ToolIcon = event?.tool ? (toolIcons[event.tool] ?? Sparkles) : null;
+
   return (
     <div
       // Shared by both demos; the assistant variant fills the row beside its avatar.
@@ -413,6 +448,17 @@ function VoiceSurface({
         embedded ? "min-w-0 flex-1" : ""
       }`}
     >
+      {transcript && (
+        <p className="mb-1.5 flex items-start gap-1.5 pe-10 text-xs italic leading-[1.4] text-[var(--onboarding-text-secondary)]">
+          <Mic className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+          <span className="line-clamp-2">{transcript}</span>
+        </p>
+      )}
+      {awaitingReply && (
+        <span className="mb-1" aria-label={t("onboarding.rehaul.demo.typing")}>
+          <TypingDots />
+        </span>
+      )}
       <textarea
         dir="auto"
         ref={inputRef}
@@ -428,16 +474,16 @@ function VoiceSurface({
       />
       <button
         type="button"
-        disabled={event?.status !== "listening"}
+        disabled={status !== "listening"}
         onClick={onStop}
         aria-label={stopLabel}
-        title={event?.status === "listening" ? stopLabel : undefined}
+        title={status === "listening" ? stopLabel : undefined}
         // Figma places the 32px control 10 from the card's bottom-right corner.
         className="absolute bottom-2.5 end-2.5 flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)] transition-colors hover:bg-[var(--onboarding-inverse-surface-secondary)] disabled:cursor-default disabled:hover:bg-[var(--onboarding-inverse-surface)]"
       >
-        {event?.status === "processing" ? (
+        {status === "processing" || status === "replying" ? (
           <Loader2 className="size-4 animate-spin" />
-        ) : event?.status === "listening" ? (
+        ) : status === "listening" ? (
           <Square className="size-3.5 fill-current" />
         ) : (
           <Mic className="size-4" />
@@ -447,9 +493,19 @@ function VoiceSurface({
         className="absolute bottom-3 start-3 max-w-[15rem] text-xs text-[var(--onboarding-text-secondary)]"
         aria-live="polite"
       >
-        {event?.status === "listening" && listeningLabel}
-        {event?.status === "processing" && processingLabel}
-        {event?.status === "error" && (
+        {status === "listening" && listeningLabel}
+        {status === "processing" && !transcript && processingLabel}
+        {ToolIcon && event?.tool && (
+          // The assistant is mid-tool (checking the calendar, say): name it, so
+          // the pause reads as work rather than a stall.
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onboarding-surface-secondary)] px-2 py-1 text-[var(--onboarding-text-primary)]">
+            <ToolIcon className="size-3.5 shrink-0" aria-hidden="true" />
+            {t(`agentMode.tools.${event.tool}Status`, {
+              defaultValue: t(`agentMode.tools.${event.tool}Name`, { defaultValue: event.tool }),
+            })}
+          </span>
+        )}
+        {status === "error" && (
           <span className="inline-flex items-center gap-1 text-[var(--onboarding-danger)]">
             {event.message}
             <Button type="button" variant="ghost" size="sm" onClick={onRetry}>
