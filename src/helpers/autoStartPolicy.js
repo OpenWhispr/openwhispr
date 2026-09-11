@@ -1,4 +1,4 @@
-// Launch-at-login decisions, kept free of Electron so they can be unit-tested.
+// Launch-at-login and relaunch decisions, kept free of Electron so they can be unit-tested.
 //
 // A login launch should come up in the tray, and Windows has no way to ask for
 // that (macOS' openAsHidden is macOS-only and a no-op on macOS 13+). So the login
@@ -45,10 +45,19 @@ function wasLaunchedHidden({ platform, argv, loginItemSettings }) {
   return argv.includes(HIDDEN_LAUNCH_FLAG);
 }
 
+// A relaunch is the user restarting us, so it must not inherit the flag that sent a
+// login launch to the tray. On AppImage, execPath is the FUSE mount, which is gone
+// once this process exits, so the relaunch has to start the AppImage file itself.
+function getRelaunchOptions({ argv, appImagePath }) {
+  const args = argv.slice(1).filter((arg) => arg !== HIDDEN_LAUNCH_FLAG);
+  return appImagePath ? { execPath: appImagePath, args } : { args };
+}
+
 module.exports = {
   HIDDEN_LAUNCH_FLAG,
   getLoginItemArgs,
   resolveAutoStartState,
   needsHiddenFlagMigration,
   wasLaunchedHidden,
+  getRelaunchOptions,
 };

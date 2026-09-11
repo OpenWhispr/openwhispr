@@ -79,6 +79,7 @@ const diarizationHost = (endpoint) => {
 };
 const { resolveLocalServerNeeds } = require("./localServerPolicy");
 const autoStart = require("./autoStart");
+const { getRelaunchOptions } = require("./autoStartPolicy");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
@@ -4056,6 +4057,19 @@ class IPCHandlers {
       }
 
       return { success: errors.length === 0, message: "Cleanup completed", errors };
+    });
+
+    // cleanup-app leaves the database closed and local services stopped, and nothing
+    // reopens them in this process, so the renderer follows it with a full relaunch.
+    ipcMain.handle("relaunch-app", () => {
+      // `npm run dev` stops the Vite server once Electron exits, so a relaunched dev
+      // instance would come up without its renderer. Just quit there.
+      if (process.env.NODE_ENV !== "development") {
+        app.relaunch(
+          getRelaunchOptions({ argv: process.argv, appImagePath: process.env.APPIMAGE })
+        );
+      }
+      app.quit();
     });
 
     ipcMain.handle("update-hotkey", async (event, hotkey) => {
