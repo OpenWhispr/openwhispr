@@ -316,6 +316,12 @@ export const useAudioRecording = (toast, options = {}) => {
   useEffect(() => {
     audioManagerRef.current = new AudioManager();
 
+    // Resolve and pin the input device now rather than on the first hotkey press.
+    // On Windows that resolution shells out to PowerShell, and prepareMicCapture
+    // waits on it before opening the mic — so leaving it to the first press puts
+    // seconds between the hotkey and the recording the user can see.
+    void audioManagerRef.current.cacheMicrophoneDeviceId?.();
+
     // Reset stale main-process state after a renderer reload or crash recovery.
     reportLifecycle("idle");
 

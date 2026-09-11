@@ -3,6 +3,14 @@ import { resolveMicDeviceSelection } from "./micDeviceSelection";
 
 export const MICROPHONE_SELECTION_MODES = ["system", "built-in", "specific"];
 
+// Chromium publishes the OS default input twice on Windows — as "default" and as
+// the "communications" role alias — both carrying the real device's own label.
+// They are aliases, not candidates: matching against them makes every Windows mic
+// tie with itself, so the unique-match branches below bail to the "default" id,
+// which isCacheableMicrophoneResolution rejects. The resolution is then re-run on
+// every mic open, and with it the slow Windows system-default lookup.
+const CHROMIUM_ALIAS_DEVICE_IDS = new Set(["default", "communications"]);
+
 export function getMicrophoneSelectionMode(settings = {}) {
   if (MICROPHONE_SELECTION_MODES.includes(settings.microphoneSelectionMode)) {
     return settings.microphoneSelectionMode;
@@ -30,7 +38,7 @@ function comparableLabel(label) {
 export function resolveSystemDefaultMicDevice(devices, systemDefault) {
   const inputs = devices.filter((device) => device.kind === "audioinput");
   const chromiumDefault = inputs.find((device) => device.deviceId === "default") || null;
-  const physicalInputs = inputs.filter((device) => device.deviceId !== "default");
+  const physicalInputs = inputs.filter((device) => !CHROMIUM_ALIAS_DEVICE_IDS.has(device.deviceId));
   const nativeName = systemDefault?.name?.trim();
 
   if (nativeName) {
