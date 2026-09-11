@@ -94,7 +94,7 @@ const FOLDER_INPUT_CLASS =
   "w-full h-6 bg-foreground/5 dark:bg-white/5 rounded px-2 text-xs text-foreground outline-none border border-primary/30 focus:border-primary/50";
 
 const ROW_BASE_CLASS =
-  "group relative flex items-center gap-1.5 rounded-md cursor-pointer select-none " +
+  "group relative flex items-center gap-2 rounded-md cursor-pointer select-none " +
   "transition-colors duration-150 outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
 
 // Button forces svg children to 16px; these 20px controls want the 12px icon they pass.
@@ -196,14 +196,14 @@ function SectionHeader({
   isDropSuccess?: boolean;
 }) {
   const labelClassName =
-    "text-[10px] font-semibold uppercase tracking-wide text-foreground/60 select-none";
+    "text-[11px] font-medium uppercase tracking-[0.08em] text-foreground/55 select-none";
 
   return (
     <div
       role="none"
       {...dropHandlers}
       className={cn(
-        "group flex items-center justify-between h-6 px-2 mt-1 rounded-md",
+        "group flex items-center justify-between h-7 px-2 rounded-md",
         isDragOver && DROP_TARGET_CLASS,
         isDropSuccess && DROP_SUCCESS_CLASS,
         className
@@ -215,11 +215,11 @@ function SectionHeader({
           type="button"
           aria-expanded={expanded}
           onClick={onToggle}
-          className="flex h-full min-w-0 items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring/30"
+          className="flex h-full min-w-0 items-center gap-2 rounded-sm outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring/30"
         >
           <span
             aria-hidden="true"
-            className="relative h-3.5 w-3.5 flex items-center justify-center shrink-0"
+            className="relative h-4 w-4 flex items-center justify-center shrink-0"
           >
             {icon && (
               <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover:opacity-0">
@@ -227,7 +227,7 @@ function SectionHeader({
               </span>
             )}
             <ChevronRight
-              size={11}
+              size={12}
               className={cn(
                 "text-foreground/60 transition-all duration-150",
                 expanded ? "rotate-90" : "rtl:rotate-180",
@@ -452,7 +452,7 @@ function SpaceRow({
       style={treeRowActionClearanceStyle()}
       className={cn(
         ROW_BASE_CLASS,
-        "h-[30px] px-2",
+        "h-7 px-2",
         isActive
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4",
@@ -466,7 +466,7 @@ function SpaceRow({
         icon={
           isPrivate ? (
             <Lock
-              size={13}
+              size={14}
               className={cn(
                 "transition-colors duration-150",
                 isActive ? "text-primary" : "text-foreground/55 dark:text-foreground/45"
@@ -478,7 +478,7 @@ function SpaceRow({
             </span>
           ) : (
             <Users
-              size={13}
+              size={14}
               className={cn(
                 "transition-colors duration-150",
                 isDragOver || isActive
@@ -492,7 +492,7 @@ function SpaceRow({
       <span
         dir="auto"
         className={cn(
-          "text-xs truncate flex-1 transition-colors duration-150",
+          "text-[13px] truncate flex-1 transition-colors duration-150",
           isDragOver || isActive ? "text-foreground font-medium" : "text-foreground/85"
         )}
       >
@@ -677,7 +677,7 @@ function FolderRow({
         onToggle={onToggle}
         icon={
           <Folder
-            size={13}
+            size={14}
             className={cn(
               "transition-colors duration-150",
               isDragOver || isActive ? "text-primary" : "text-foreground/55 dark:text-foreground/45"
@@ -688,7 +688,7 @@ function FolderRow({
       <span
         dir="auto"
         className={cn(
-          "text-xs truncate flex-1 transition-colors duration-150",
+          "text-[13px] truncate flex-1 transition-colors duration-150",
           isDragOver || isActive
             ? "text-foreground font-medium"
             : "text-foreground/85 group-hover:text-foreground"
@@ -949,7 +949,7 @@ function NoteLeaf({
       )}
     >
       <FileText
-        size={13}
+        size={14}
         className={cn(
           "shrink-0 transition-colors duration-150",
           isActive
@@ -960,7 +960,7 @@ function NoteLeaf({
       <span
         dir="auto"
         className={cn(
-          "text-xs truncate flex-1 transition-colors duration-150",
+          "text-[13px] truncate flex-1 transition-colors duration-150",
           isActive
             ? "text-foreground font-medium"
             : "text-foreground/85 group-hover:text-foreground"
@@ -2081,7 +2081,7 @@ export default function SpacesTree({
         <div role="none" className="group/section">
           <SectionHeader
             label={t("notes.spaces.privateSpaces")}
-            icon={<Lock size={11} className="text-foreground/55" />}
+            icon={<Lock size={12} className="text-foreground/55" />}
             expanded={privateSectionExpanded}
             onToggle={() => {
               if (privateSpace) toggleContainerExpanded(spaceContainerKey(privateSpace.id));
@@ -2127,7 +2127,7 @@ export default function SpacesTree({
                   ? t("workspaces.switcher.workspaces")
                   : t("notes.spaces.teamSpaces")
               }
-              className="mt-3"
+              className="mt-4"
               action={
                 <div className="flex items-center gap-px">
                   {onShowStructureIntro && (

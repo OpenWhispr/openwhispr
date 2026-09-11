@@ -12,7 +12,7 @@ export type { ControlPanelView };
 const rowIconClass =
   "shrink-0 text-foreground/70 group-hover:text-foreground/90 dark:text-foreground/65 dark:group-hover:text-foreground/85 transition-colors duration-150";
 const rowLabelClass =
-  "text-xs text-foreground/90 group-hover:text-foreground dark:text-foreground/85 dark:group-hover:text-foreground transition-colors duration-150";
+  "text-[13px] text-foreground/90 group-hover:text-foreground dark:text-foreground/85 dark:group-hover:text-foreground transition-colors duration-150";
 const rowButtonClass =
   "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-start outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
 
@@ -82,7 +82,7 @@ export default function ControlPanelSidebar({
               )}
             >
               <Icon
-                size={15}
+                size={16}
                 className={cn(
                   "shrink-0 transition-colors duration-150",
                   isActive
@@ -92,7 +92,7 @@ export default function ControlPanelSidebar({
               />
               <span
                 className={cn(
-                  "text-xs transition-colors duration-150",
+                  "text-[13px] transition-colors duration-150",
                   isActive
                     ? "text-foreground font-medium"
                     : "text-foreground/90 group-hover:text-foreground dark:text-foreground/85 dark:group-hover:text-foreground"
@@ -186,7 +186,7 @@ export default function ControlPanelSidebar({
             aria-label={t("sidebar.referral")}
             className={rowButtonClass}
           >
-            <Gift size={15} className={rowIconClass} />
+            <Gift size={16} className={rowIconClass} />
             <span className={rowLabelClass}>{t("sidebar.referral")}</span>
           </button>
         )}
@@ -196,14 +196,14 @@ export default function ControlPanelSidebar({
           aria-label={t("sidebar.settings")}
           className={rowButtonClass}
         >
-          <Settings size={15} className={rowIconClass} />
+          <Settings size={16} className={rowIconClass} />
           <span className={rowLabelClass}>{t("sidebar.settings")}</span>
         </button>
 
         <SupportDropdown
           trigger={
             <button aria-label={t("sidebar.support")} className={rowButtonClass}>
-              <HelpCircle size={15} className={rowIconClass} />
+              <HelpCircle size={16} className={rowIconClass} />
               <span className={rowLabelClass}>{t("sidebar.support")}</span>
             </button>
           }

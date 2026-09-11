@@ -1017,7 +1017,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               isSidePanelLayout={isSidePanelLayout}
               onExitSidePanel={handleExitMeetingMode}
             />
-            <div className="scrollbar-hidden flex-1 overflow-y-auto pt-1">
+            <div className="scrollbar-hidden flex-1 overflow-y-auto">
               {updateRequiredByOrg && (
                 <div className="max-w-3xl mx-auto w-full mb-3">
                   <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
