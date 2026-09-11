@@ -1,4 +1,4 @@
-import type { Snippet } from "../../utils/snippets";
+import { MAX_SNIPPET_TRIGGER_LENGTH, type Snippet } from "../../utils/snippets";
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
 import { cleanWordList } from "./dictionaryTool";
 
@@ -62,7 +62,9 @@ function parseSnippetInputs(values: unknown): Snippet[] {
     const raw = value as Partial<Snippet> | null;
     const trigger = typeof raw?.trigger === "string" ? raw.trigger.trim() : "";
     const replacement = typeof raw?.replacement === "string" ? raw.replacement.trim() : "";
-    if (trigger && replacement) byKey.set(normalizeTrigger(trigger), { trigger, replacement });
+    if (trigger && trigger.length <= MAX_SNIPPET_TRIGGER_LENGTH && replacement) {
+      byKey.set(normalizeTrigger(trigger), { trigger, replacement });
+    }
   }
   return [...byKey.values()];
 }
@@ -117,7 +119,7 @@ export function createUpdateSnippetsTool(actions: SnippetActions): ToolDefinitio
           data: null,
           displayText: notFound.length
             ? `No snippet with trigger ${quoteList(notFound)}`
-            : "Nothing to change: each snippet needs a trigger and replacement text",
+            : `Nothing to change: each snippet needs a trigger of at most ${MAX_SNIPPET_TRIGGER_LENGTH} characters and replacement text`,
         };
       }
 

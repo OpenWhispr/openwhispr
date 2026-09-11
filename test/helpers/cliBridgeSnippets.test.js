@@ -122,6 +122,17 @@ test("POST /v1/snippets/update broadcasts the new list to renderers", async (t) 
   assert.deepEqual(ctx.broadcasts[0].payload, [signOff]);
 });
 
+test("POST /v1/snippets/update counts only snippets the database stored", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
+
+  const tooLong = { trigger: "x".repeat(101), replacement: "dropped" };
+  const result = call(ctx.bridge, "POST", "/v1/snippets/update", { add: [tooLong, signOff] });
+
+  assert.equal(result.data.added, 1);
+  assert.deepEqual(ctx.db.getSnippets(), [signOff]);
+});
+
 test("POST /v1/snippets/update rejects malformed and empty requests", (t) => {
   const ctx = createBridge(t);
   if (!ctx) return;

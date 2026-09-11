@@ -437,10 +437,13 @@ class CliBridge {
         db.setSnippets([...kept, ...add]);
         const snippets = db.getSnippets();
         setImmediate(() => broadcastToWindows("snippets-updated", snippets));
+        // setSnippets drops entries it cannot store (e.g. over-long triggers),
+        // so count what landed rather than what was sent.
+        const storedKeys = new Set(snippets.map((s) => lower(s.trigger)));
         return {
           data: {
             snippets,
-            added: add.length,
+            added: add.filter((s) => storedKeys.has(lower(s.trigger))).length,
             removed: current.filter((s) => removeKeys.has(lower(s.trigger))).length,
           },
         };

@@ -116,10 +116,12 @@ test("update_snippets refuses incomplete snippets and unknown triggers without w
   const tool = createUpdateSnippetsTool(actions);
 
   const incomplete = await tool.execute({ add: [{ trigger: "intro" }] });
+  const tooLong = await tool.execute({ add: [{ trigger: "x".repeat(101), replacement: "y" }] });
   const unknown = await tool.execute({ remove: ["outro"] });
 
   assert.equal(writes.length, 0);
   assert.equal(incomplete.success, false);
+  assert.equal(tooLong.success, false);
   assert.equal(unknown.success, false);
   assert.equal(unknown.displayText, 'No snippet with trigger "outro"');
 });
