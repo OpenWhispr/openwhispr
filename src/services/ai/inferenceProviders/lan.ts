@@ -3,6 +3,7 @@ import { buildApiUrl } from "../../../config/constants";
 import { getSettings } from "../../../stores/settingsStore";
 import logger from "../../../utils/logger";
 import { resolveSelfHostedOpenAIBase } from "../openaiBase";
+import { resolveApiKey } from "../../../utils/resolveApiKey";
 
 export const lanProvider: InferenceProvider = {
   id: "lan",
@@ -19,7 +20,8 @@ export const lanProvider: InferenceProvider = {
       // panel is only hydrated at startup, so a key saved in the control panel
       // later would not be sent.
       const apiKey =
-        config.customApiKey?.trim() || (isAgentCall ? "" : await ctx.getApiKey("custom"));
+        (await resolveApiKey(config.customApiKey)) ||
+        (isAgentCall ? "" : await ctx.getApiKey("custom"));
       const resolvedModel = model?.trim() || "default";
       return await ctx.callChatCompletionsApi(
         endpoint,

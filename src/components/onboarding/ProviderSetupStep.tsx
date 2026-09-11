@@ -419,6 +419,7 @@ export function ByokProviderStep({
     seed.provider === "corti" ? store.cortiClientSecret : ""
   );
   const [endpointFocused, setEndpointFocused] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // The card the saved setup picked goes on the session once, at mount (both deps are
   // stable), so the draft this visit writes reopens on it; later switches report
@@ -553,49 +554,72 @@ export function ByokProviderStep({
     if (!isWindowSwitchBlur(event)) setEndpointFocused(false);
   };
 
+  // Secret setters reject a $VAR that points at themselves or at a name that is
+  // not an OpenWhispr secret, and they throw to say so. Every branch therefore
+  // writes the API key *first*: a rejected reference then leaves the URL, model
+  // and mode untouched instead of half-configuring the provider, and the step
+  // stays put with saveError rendered under the button.
   const commitAndProceed = () => {
-    if (selfHosted) {
-      const committedBaseUrl = withHttpsScheme(draftBaseUrl);
-      if (assistant) {
-        store.setChatAgentRemoteUrl(committedBaseUrl);
-        store.setChatAgentCustomApiKey(draftApiKey);
-        store.setChatAgentModel(draftCustomModel);
-        store.setChatAgentMode("self-hosted");
-        store.setChatAgentProvider("custom");
-      } else if (draftApiKey.trim()) {
-        store.setCloudTranscriptionBaseUrl(committedBaseUrl);
-        store.setCustomTranscriptionApiKey(draftApiKey);
-        // Switch before setting the model: a switch files the current model under the
-        // outgoing provider and loads the incoming one's, replacing what was typed here.
-        store.switchCloudTranscriptionProvider("dictation", "custom");
-        store.setCloudTranscriptionModel(draftCustomModel);
-        // A Settings server routes ahead of the keyed Custom endpoint, and sends no key.
-        store.setRemoteTranscriptionUrl("");
-        store.setCloudTranscriptionMode("byok");
-      } else {
-        // Key-less, so it is the Settings self-hosted server; the Custom endpoint and its
-        // key stay as they were. byok + custom is what derives the self-hosted mode.
-        store.switchCloudTranscriptionProvider("dictation", "custom");
-        store.setRemoteTranscriptionUrl(committedBaseUrl);
-        store.setRemoteTranscriptionModel(draftCustomModel);
-        store.setRemoteTranscriptionType("openai-compatible");
-        store.setCloudTranscriptionMode("byok");
-      }
-    } else if (assistant) {
-      knownCredential.set(draftApiKey);
-      store.setChatAgentMode("providers");
-      store.switchReasoningProvider("chatIntelligence", selectedProvider, selectedModel);
-      store.setChatAgentModel(selectedModel);
-    } else {
-      if (isCortiTranscription) {
-        store.setCortiClientId(draftCortiClientId);
-        store.setCortiClientSecret(draftCortiClientSecret);
-      } else {
+    try {
+      if (selfHosted) {
+        const committedBaseUrl = withHttpsScheme(draftBaseUrl);
+        if (assistant) {
+          store.setChatAgentCustomApiKey(draftApiKey);
+          store.setChatAgentRemoteUrl(committedBaseUrl);
+          store.setChatAgentModel(draftCustomModel);
+          store.setChatAgentMode("self-hosted");
+          store.setChatAgentProvider("custom");
+        } else if (draftApiKey.trim()) {
+          store.setCustomTranscriptionApiKey(draftApiKey);
+          store.setCloudTranscriptionBaseUrl(committedBaseUrl);
+          // Switch before setting the model: a switch files the current model under the
+          // outgoing provider and loads the incoming one's, replacing what was typed here.
+          store.switchCloudTranscriptionProvider("dictation", "custom");
+          store.setCloudTranscriptionModel(draftCustomModel);
+          // A Settings server routes ahead of the keyed Custom endpoint, and sends no key.
+          store.setRemoteTranscriptionUrl("");
+          store.setCloudTranscriptionMode("byok");
+        } else {
+          // Key-less, so it is the Settings self-hosted server; the Custom endpoint and its
+          // key stay as they were. byok + custom is what derives the self-hosted mode.
+          store.switchCloudTranscriptionProvider("dictation", "custom");
+          store.setRemoteTranscriptionUrl(committedBaseUrl);
+          store.setRemoteTranscriptionModel(draftCustomModel);
+          store.setRemoteTranscriptionType("openai-compatible");
+          store.setCloudTranscriptionMode("byok");
+        }
+      } else if (assistant) {
         knownCredential.set(draftApiKey);
+        store.setChatAgentMode("providers");
+        store.switchReasoningProvider("chatIntelligence", selectedProvider, selectedModel);
+        store.setChatAgentModel(selectedModel);
+      } else {
+        if (isCortiTranscription) {
+          store.setCortiClientId(draftCortiClientId);
+          store.setCortiClientSecret(draftCortiClientSecret);
+        } else {
+          knownCredential.set(draftApiKey);
+        }
+        store.setCloudTranscriptionMode("byok");
+        store.switchCloudTranscriptionProvider("dictation", selectedProvider);
+        store.setCloudTranscriptionModel(selectedModel);
       }
-      store.setCloudTranscriptionMode("byok");
-      store.switchCloudTranscriptionProvider("dictation", selectedProvider);
-      store.setCloudTranscriptionModel(selectedModel);
+      setSaveError(null);
+    } catch (err) {
+      const code = (err as Error & { code?: string }).code;
+      setSaveError(
+        code === "self-reference"
+          ? t("apiKeyInput.selfReference", {
+              defaultValue: "Use a different variable name here, or leave this field empty.",
+            })
+          : code === "unknown-ref"
+            ? t("apiKeyInput.unknownRef", {
+                defaultValue:
+                  "Only OpenWhispr secret names can be referenced (for example $OPENAI_API_KEY).",
+              })
+            : (err as Error).message
+      );
+      return;
     }
     onProceed();
   };
@@ -771,6 +795,11 @@ export function ByokProviderStep({
         <StepPrimaryAction onClick={commitAndProceed} disabled={!usable} className="mt-4! w-full">
           {t("onboarding.rehaul.provider.proceed")}
         </StepPrimaryAction>
+        {saveError && (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            {saveError}
+          </p>
+        )}
       </div>
 
       <ConnectionCheckAnnouncer announcement={check.announcement} />
