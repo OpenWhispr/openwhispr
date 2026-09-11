@@ -580,8 +580,6 @@
     "update": {
       "readyTitle": "アップデートの準備完了",
       "readyDescription": "「アップデートをインストール」をクリックして最新バージョンで再起動します。",
-      "problemTitle": "アップデートで問題が発生しました",
-      "problemDescription": "アップデートを完了できませんでした。後でもう一度お試しください。",
       "installTitle": "アップデートをインストール",
       "installDescription": "OpenWhispr はアップデートを適用するために再起動します。作業中のデータは保存されます。",
       "couldNotInstallTitle": "アップデートをインストールできませんでした",
@@ -1900,9 +1898,7 @@
         "meetingDetection": "会議の検出",
         "meetingDetectionDescription": "会議が検出されたときに通知して録音を開始できるようにする",
         "calendarReminders": "カレンダーリマインダー",
-        "calendarRemindersDescription": "予定された会議がまもなく始まるときに通知する",
-        "updates": "アプリの更新",
-        "updatesDescription": "新しいバージョンが利用可能になったときに通知する"
+        "calendarRemindersDescription": "予定された会議がまもなく始まるときに通知する"
       },
       "clipboard": {
         "title": "クリップボード",
@@ -2001,6 +1997,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "自動アップデート",
+        "automaticUpdatesDescription": "アップデートをバックグラウンドでダウンロードしてインストールします",
         "badges": {
           "dev": "開発版",
           "latest": "最新",
@@ -2039,16 +2037,13 @@
           "updateAvailable": {
             "description": "アップデートあり: v{{version}}",
             "title": "アップデートあり"
-          },
-          "updateError": {
-            "description": "アップデート中に問題が発生しました。もう一度お試しください。",
-            "title": "アップデートエラー"
           }
         },
         "downloadUpdate": "アップデート v{{version}} をダウンロード",
         "downloading": "ダウンロード中... {{progress}}%",
         "installAndRestart": "インストールして再起動",
         "latestVersion": "最新バージョンをお使いです",
+        "managedByPackageManager": "アップデートはパッケージマネージャーから行われます",
         "newVersion": "新しいバージョンがあります",
         "newVersionAvailable": "新しいバージョンが利用可能",
         "restarting": "再起動中...",
@@ -3857,11 +3852,6 @@
       "open": "開く",
       "dismiss": "閉じる"
     }
-  },
-  "updateNotification": {
-    "title": "OpenWhispr のアップデートあり",
-    "body": "バージョン {{version}} がダウンロード可能です",
-    "cta": "今すぐ更新"
   },
   "permissionsGate": {
     "title": "権限が必要です",

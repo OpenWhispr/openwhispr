@@ -563,6 +563,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   markBundleMigrationDismissed: () => ipcRenderer.invoke("mark-bundle-migration-dismissed"),
   getUpdateStatus: () => ipcRenderer.invoke("get-update-status"),
   getUpdateInfo: () => ipcRenderer.invoke("get-update-info"),
+  setAutoUpdatesEnabled: (enabled) => ipcRenderer.invoke("set-auto-updates-enabled", enabled),
 
   // Update event listeners
   onUpdateAvailable: registerListener("update-available"),
@@ -1349,12 +1350,4 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "note-navigation-pending",
     (callback) => () => callback()
   ),
-
-  onUpdateNotificationData: registerListener(
-    "update-notification-data",
-    (callback) => (_event, data) => callback(data)
-  ),
-  getUpdateNotificationData: () => ipcRenderer.invoke("get-update-notification-data"),
-  updateNotificationReady: () => ipcRenderer.invoke("update-notification-ready"),
-  updateNotificationRespond: (action) => ipcRenderer.invoke("update-notification-respond", action),
 });

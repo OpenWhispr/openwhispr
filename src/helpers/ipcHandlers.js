@@ -10181,6 +10181,11 @@ class IPCHandlers {
       return this.updateManager.getUpdateInfo();
     });
 
+    ipcMain.handle("set-auto-updates-enabled", async (_event, enabled) => {
+      this.updateManager.setAutoUpdatesEnabled(enabled === true);
+      return { success: true };
+    });
+
     const fetchStreamingToken = async (event) => {
       const apiUrl = getApiUrl();
       if (!apiUrl) {
@@ -11248,7 +11253,6 @@ class IPCHandlers {
       "notificationsEnabled",
       "notifyMeetingDetection",
       "notifyCalendarReminders",
-      "notifyUpdates",
     ]);
 
     ipcMain.handle("sync-notification-preferences", async (_event, prefs) => {
@@ -11360,26 +11364,6 @@ class IPCHandlers {
 
     ipcMain.handle("meeting-notification-ready", async (event) => {
       this.windowManager?.showNotificationWindow(event.sender);
-    });
-
-    ipcMain.handle("get-update-notification-data", async () => {
-      return this.windowManager?._pendingUpdateNotificationData ?? null;
-    });
-
-    ipcMain.handle("update-notification-ready", async () => {
-      this.windowManager?.showUpdateNotificationWindow();
-    });
-
-    ipcMain.handle("update-notification-respond", async (_event, action) => {
-      this.windowManager?.dismissUpdateNotification();
-      if (action === "update") {
-        try {
-          await this.updateManager?.downloadUpdate();
-        } catch (error) {
-          console.error("Failed to start update download from notification:", error);
-        }
-      }
-      return { success: true };
     });
 
     // Note files (markdown mirror) handlers

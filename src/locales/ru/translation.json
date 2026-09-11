@@ -580,8 +580,6 @@
     "update": {
       "readyTitle": "Обновление готово к установке",
       "readyDescription": "Нажмите «Установить обновление», чтобы перезапустить приложение с новой версией.",
-      "problemTitle": "Проблема с обновлением",
-      "problemDescription": "Не удалось завершить обновление. Попробуйте позже.",
       "installTitle": "Установить обновление",
       "installDescription": "OpenWhispr перезапустится для применения обновления. Текущая работа будет сохранена.",
       "couldNotInstallTitle": "Не удалось установить обновление",
@@ -1904,9 +1902,7 @@
         "meetingDetection": "Обнаружение встреч",
         "meetingDetectionDescription": "Уведомлять при обнаружении встречи для начала записи",
         "calendarReminders": "Напоминания календаря",
-        "calendarRemindersDescription": "Уведомлять, когда запланированная встреча скоро начнётся",
-        "updates": "Обновления приложения",
-        "updatesDescription": "Уведомлять о доступности новой версии"
+        "calendarRemindersDescription": "Уведомлять, когда запланированная встреча скоро начнётся"
       },
       "clipboard": {
         "title": "Буфер обмена",
@@ -2005,6 +2001,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "Автоматические обновления",
+        "automaticUpdatesDescription": "Загружать и устанавливать обновления в фоновом режиме",
         "badges": {
           "dev": "Dev",
           "latest": "Последняя",
@@ -2043,16 +2041,13 @@
           "updateAvailable": {
             "description": "Доступно обновление: v{{version}}",
             "title": "Доступно обновление"
-          },
-          "updateError": {
-            "description": "Произошла ошибка при обновлении. Попробуйте ещё раз.",
-            "title": "Ошибка обновления"
           }
         },
         "downloadUpdate": "Скачать обновление {{version}}",
         "downloading": "Загрузка... {{progress}}%",
         "installAndRestart": "Установить и перезапустить",
         "latestVersion": "У вас установлена последняя версия",
+        "managedByPackageManager": "Обновления устанавливаются через ваш менеджер пакетов",
         "newVersion": "Доступна новая версия",
         "newVersionAvailable": "Доступна новая версия",
         "restarting": "Перезапуск...",
@@ -3903,11 +3898,6 @@
       "open": "Открыть",
       "dismiss": "Закрыть"
     }
-  },
-  "updateNotification": {
-    "title": "Доступно обновление OpenWhispr",
-    "body": "Версия {{version}} готова к загрузке",
-    "cta": "Обновить"
   },
   "permissionsGate": {
     "title": "Требуются разрешения",

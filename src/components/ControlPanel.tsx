@@ -164,7 +164,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
   );
   const updateReadyToastShown = useRef(false);
-  const updateErrorToastShown = useRef<Error | null>(null);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
   const { useCleanupModel } = useSettings();
@@ -190,7 +189,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     isInstalling,
     downloadUpdate,
     installUpdate,
-    error: updateError,
   } = useUpdater();
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
@@ -328,20 +326,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [updateStatus.updateDownloaded, isDownloading, toast, t]);
 
   useEffect(() => {
-    if (updateError && updateError !== updateErrorToastShown.current) {
-      updateErrorToastShown.current = updateError;
-      toast({
-        title: t("controlPanel.update.problemTitle"),
-        description: t("controlPanel.update.problemDescription"),
-        variant: "destructive",
-      });
-    }
-    if (!updateError) {
-      updateErrorToastShown.current = null;
-    }
-  }, [updateError, toast, t]);
-
-  useEffect(() => {
     const dispose = window.electronAPI?.onLimitReached?.(
       (data: { wordsUsed: number; limit: number }) => {
         if (!hasShownUpgradePrompt.current) {
@@ -473,9 +457,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     []
   );
 
-  const handleExitMeetingMode = useCallback(() => {
-    window.electronAPI?.restoreFromMeetingMode?.();
-  }, []);
+  // The side-panel layout is shared by meeting mode and by a note opened in a
+  // narrow window, so leaving it means different things in each case.
+  const handleExitSidePanel = useCallback(() => {
+    if (isMeetingMode) window.electronAPI?.restoreFromMeetingMode?.();
+    else setActiveNoteId(null);
+  }, [isMeetingMode]);
 
   const copyToClipboard = useCallback(
     async (text: string) => {
@@ -1031,7 +1018,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <Button
                   variant="outline-flat"
                   size="sm"
-                  onClick={handleExitMeetingMode}
+                  onClick={handleExitSidePanel}
                   className="h-7 px-2.5 ps-1.5 gap-1"
                 >
                   <ChevronLeft size={14} strokeWidth={1.8} className="rtl:rotate-180" />

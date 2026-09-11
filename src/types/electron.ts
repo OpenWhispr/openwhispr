@@ -828,6 +828,7 @@ export interface UpdateStatusResult {
   updateAvailable: boolean;
   updateDownloaded: boolean;
   isDevelopment: boolean;
+  isSupported: boolean;
 }
 
 export interface UpdateInfoResult {
@@ -1969,6 +1970,7 @@ declare global {
       markBundleMigrationDismissed: () => Promise<void>;
       getUpdateStatus: () => Promise<UpdateStatusResult>;
       getUpdateInfo: () => Promise<UpdateInfoResult | null>;
+      setAutoUpdatesEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
 
       // Update event listeners
       onUpdateAvailable: (callback: (event: any, info: any) => void) => () => void;
@@ -3150,15 +3152,6 @@ declare global {
         folderId: number | null;
       } | null>;
       onNoteNavigationPending?: (callback: () => void) => () => void;
-      onUpdateNotificationData?: (
-        callback: (data: { version: string; releaseDate?: string }) => void
-      ) => () => void;
-      getUpdateNotificationData?: () => Promise<{
-        version: string;
-        releaseDate?: string;
-      } | null>;
-      updateNotificationReady?: () => Promise<void>;
-      updateNotificationRespond?: (action: string) => Promise<{ success: boolean }>;
       onPreviewText?: (callback: (text: string) => void) => () => void;
       onPreviewAppend?: (callback: (text: string) => void) => () => void;
       onPreviewHold?: (callback: (payload: { showCleanup: boolean }) => void) => () => void;
