@@ -5,6 +5,13 @@ const load = () => import("../../src/services/ai/inferenceProviders/openai.ts");
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+// openai.ts caches the winning endpoint per base in a module-level Map, so a base
+// shared between tests would make them order-dependent: the first test's fallback
+// pins "chat" and the next one never attempts /responses. One base per test.
+const APEX_BASE = "https://opencode.ai/zen/go/v1";
+const SUBDOMAIN_BASE = "https://api.opencode.ai/zen/go/v1";
+const OTHER_BASE = "https://responses-only.example/v1";
+
 function makeCtx() {
   return {
     getApiKey: async () => "test-key",
@@ -68,19 +75,22 @@ async function callWithBase(baseUrl) {
   });
 }
 
+const sessionIdsOf = (requests) =>
+  requests.filter((r) => r.method === "POST").map((r) => r.headers["x-opencode-session"]);
+
 test("OpenCode Go requests carry one stable x-opencode-session id per call", async (t) => {
   const requests = [];
   installFetchRecorder(t, requests);
 
-  const result = await callWithBase("https://opencode.ai/zen/go/v1");
+  const result = await callWithBase(APEX_BASE);
   assert.equal(result, "Cleaned");
 
   const posts = requests.filter((r) => r.method === "POST");
   assert.deepEqual(
     posts.map((r) => r.endpoint),
-    ["https://opencode.ai/zen/go/v1/responses", "https://opencode.ai/zen/go/v1/chat/completions"]
+    [`${APEX_BASE}/responses`, `${APEX_BASE}/chat/completions`]
   );
-  const ids = posts.map((r) => r.headers["x-opencode-session"]);
+  const ids = sessionIdsOf(requests);
   assert.match(ids[0], UUID_RE);
   // The endpoint fallback belongs to the same conversation, so the id is reused.
   assert.equal(ids[1], ids[0]);
@@ -91,24 +101,33 @@ test("a second call is a new conversation with a different session id", async (t
   const requests = [];
   installFetchRecorder(t, requests);
 
-  await callWithBase("https://opencode.ai/zen/go/v1");
-  const firstIds = new Set(requests.filter((r) => r.method === "POST").map((r) => r.headers["x-opencode-session"]));
+  await callWithBase(SUBDOMAIN_BASE);
+  const firstCallIds = sessionIdsOf(requests);
   requests.length = 0;
-  await callWithBase("https://opencode.ai/zen/go/v1");
-  const secondIds = new Set(requests.filter((r) => r.method === "POST").map((r) => r.headers["x-opencode-session"]));
+  await callWithBase(SUBDOMAIN_BASE);
+  const secondCallIds = sessionIdsOf(requests);
 
-  assert.equal(firstIds.size, 1);
-  assert.equal(secondIds.size, 1);
-  assert.notDeepEqual([...firstIds], [...secondIds]);
+  // The first call pays the /responses fallback, so it proves per-call stability;
+  // the second reuses the remembered endpoint and is a single request.
+  assert.equal(firstCallIds.length, 2);
+  assert.equal(new Set(firstCallIds).size, 1);
+  assert.equal(new Set(secondCallIds).size, 1);
+  assert.match(secondCallIds[0], UUID_RE);
+  assert.notEqual(secondCallIds[0], firstCallIds[0]);
 });
 
 test("other custom endpoints do not get the OpenCode header", async (t) => {
   const requests = [];
   installFetchRecorder(t, requests);
 
-  await callWithBase("https://responses-only.example/v1");
+  await callWithBase(OTHER_BASE);
 
-  for (const r of requests.filter((r) => r.method === "POST")) {
+  const posts = requests.filter((r) => r.method === "POST");
+  assert.deepEqual(
+    posts.map((r) => r.endpoint),
+    [`${OTHER_BASE}/responses`, `${OTHER_BASE}/chat/completions`]
+  );
+  for (const r of posts) {
     assert.equal("x-opencode-session" in r.headers, false, `${r.endpoint} carried the header`);
   }
 });
