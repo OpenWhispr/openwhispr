@@ -10,7 +10,7 @@ export default function MentionChip({ node }: NodeViewProps) {
       <span
         data-mention
         title={email ?? undefined}
-        className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-foreground/4 dark:bg-white/6 px-1 py-px text-[0.85em] font-medium leading-tight text-foreground/80 whitespace-nowrap"
+        className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-foreground/4 dark:bg-white/6 px-1 py-px text-[0.85em] font-medium leading-tight text-foreground/80 whitespace-nowrap"
       >
         <PersonAvatar email={email} displayName={label} size={13} />
         {label}

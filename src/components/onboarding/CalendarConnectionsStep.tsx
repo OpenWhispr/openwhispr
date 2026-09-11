@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CircleCheck, FileSearch, Loader2, MessageCircle, UsersRound } from "../icons";
 import { useTranslation } from "react-i18next";
+import { Button } from "../ui/button";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
@@ -225,17 +226,17 @@ export default function CalendarConnectionsStep() {
                 {t(`integrations.${provider.id}Calendar.connected`)}
               </span>
             ) : (
-              <button
+              <Button
                 type="button"
                 disabled={connecting !== null}
                 onClick={() => void connect(provider.id)}
-                className="onboarding-pressable inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[38px] bg-[var(--onboarding-inverse-surface)] px-3 py-1.5 text-xs font-medium leading-[1.4] text-[var(--onboarding-inverse-text)] hover:bg-[var(--onboarding-inverse-surface-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:opacity-60"
+                className="h-8 shrink-0 gap-1.5 rounded-[38px] px-3 text-xs"
               >
                 {connecting === provider.id && (
                   <Loader2 className="size-3.5 shrink-0 animate-spin" />
                 )}
                 {t("onboarding.rehaul.notes.connectors.connect")}
-              </button>
+              </Button>
             )}
           </div>
         ))}

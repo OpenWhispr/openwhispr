@@ -636,6 +636,8 @@
       "couldNotDeleteDescription": "Questa trascrizione potrebbe essere già stata rimossa.",
       "couldNotDeleteDescriptionGeneric": "Qualcosa è andato storto. Riprova.",
       "empty": "Nessuna trascrizione",
+      "emptyDescription": "Premi la scorciatoia in qualsiasi app e inizia a parlare. Ogni trascrizione viene salvata qui, in privato, sul tuo dispositivo.",
+      "sectionTitle": "Trascrizioni",
       "dataRetentionDisabled": "La conservazione dei dati è disattivata. Trascrizioni e audio non vengono salvati nella cronologia.",
       "press": "Premi",
       "toStart": "per iniziare",
@@ -657,6 +659,7 @@
       "clearAllErrorTitle": "Impossibile cancellare la cronologia",
       "clearAllErrorDescription": "Qualcosa è andato storto. Riprova.",
       "copyText": "Copia testo",
+      "moreActions": "Altre azioni",
       "copyRawTranscript": "Copia trascrizione grezza",
       "deleteItem": "Elimina",
       "viewRawTranscript": "Visualizza trascrizione grezza",
@@ -908,7 +911,6 @@
         "managedRouteInvalid": "La trascrizione gestita non è potuta partire per un'incoerenza di configurazione. Riprova o contatta l'amministratore.",
         "managedAuthRejected": "Le credenziali di trascrizione gestita della tua organizzazione sono state rifiutate. Contatta l'amministratore.",
         "streamingOnlyProvider": "Questo provider supporta solo la trascrizione dal vivo. Scegli un altro provider per i caricamenti di file e i nuovi tentativi.",
-        "streamingOnlyProvider": "Questo provider supporta solo la trascrizione dal vivo. Scegli un altro provider per i caricamenti di file e i nuovi tentativi.",
         "providerKeyMissing": "Nessuna chiave API impostata per il tuo provider di trascrizione. Aggiungila in Impostazioni → Da voce a testo."
       },
       "translationFallback": {
@@ -1133,7 +1135,7 @@
       "continueWithMicrosoft": "Continua con Microsoft",
       "protocolUnavailable": "Accesso dal browser non disponibile — registra di nuovo il protocollo openwhispr:// nelle impostazioni Applicazioni predefinite del sistema."
     },
-    "welcomeSubtitle": "Usa la tua voce per tutto",
+    "welcomeSubtitle": "Il potere della tua voce. Alle tue condizioni.",
     "welcomeTitle": "Benvenuto in OpenWhispr"
   },
   "cleanupPrompt": "Correzione",
@@ -2901,6 +2903,10 @@
       "raw": "Originale",
       "enhanced": "Migliorato",
       "saving": "Salvataggio",
+      "transcriptEmptyTitle": "Nessuna registrazione",
+      "transcriptEmptyDescription": "Premi registra per iniziare a trascrivere. Tutto ciò che viene detto compare qui in tempo reale.",
+      "startRecording": "Avvia registrazione",
+      "generateSummary": "Genera riepilogo AI",
       "startWriting": "Inizia a scrivere...",
       "staleIndicator": "Il contenuto è cambiato dall'ultimo miglioramento",
       "live": "Dal vivo",
@@ -3065,6 +3071,15 @@
         "generateNotes": {
           "name": "Genera note",
           "description": "Pulire, strutturare e migliorare le note"
+        },
+        "followUpEmail": {
+          "name": "Email di follow-up",
+          "description": "Scrivi un'email di follow-up a partire da note e trascrizione",
+          "cta": "Scrivi un'email di follow-up"
+        },
+        "detailedNotes": {
+          "name": "Note dettagliate",
+          "description": "Note di riunione accurate e complete con decisioni e azioni"
         }
       },
       "errors": {
@@ -3767,10 +3782,9 @@
   },
   "upcoming": {
     "title": "In arrivo",
-    "transcriptions": "Trascrizioni",
     "now": "In corso",
     "untitledEvent": "Evento senza titolo",
-    "joinAndTakeNotes": "Partecipa e prendi note",
+    "joinAndTranscribe": "Partecipa e trascrivi",
     "takeNotes": "Prendi note",
     "noEventsToday": "Nessun evento oggi",
     "noUpcomingEvents": "Nessun evento in programma",
@@ -3818,6 +3832,7 @@
         "createLink": "Crea link",
         "copyLink": "Copia link",
         "copied": "Copiato",
+        "export": "Esporta",
         "owner": "Proprietario",
         "editor": "Può modificare",
         "viewer": "Può visualizzare",
@@ -3858,7 +3873,6 @@
     "allSpaces": "Tutti gli spazi",
     "title": "Cerca",
     "description": "Cerca tra note e trascrizioni",
-    "shortPlaceholder": "Cerca",
     "placeholder": "Cerca note e trascrizioni…",
     "sections": {
       "notes": "Note",

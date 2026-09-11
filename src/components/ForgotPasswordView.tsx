@@ -87,7 +87,7 @@ export default function ForgotPasswordView({
               setIsSuccess(false);
               setEmail("");
             }}
-            className="h-10 w-full rounded-full border-transparent bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)] shadow-none hover:opacity-90"
+            className="h-10 w-full"
           >
             <span className="text-sm font-medium">{t("forgotPassword.success.tryAnother")}</span>
           </Button>
@@ -136,11 +136,7 @@ export default function ForgotPasswordView({
           </div>
         )}
 
-        <Button
-          type="submit"
-          disabled={isSubmitting || !email.trim()}
-          className="h-10 w-full rounded-full border-transparent bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)] shadow-none hover:opacity-90 disabled:border-transparent disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)] disabled:opacity-100"
-        >
+        <Button type="submit" disabled={isSubmitting || !email.trim()} className="h-10 w-full">
           {isSubmitting ? (
             <>
               <Loader2 className="size-3.5 animate-spin" />

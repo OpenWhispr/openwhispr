@@ -636,6 +636,8 @@
       "couldNotDeleteDescription": "This transcription may have already been removed.",
       "couldNotDeleteDescriptionGeneric": "Something went wrong. Please try again.",
       "empty": "No transcriptions yet",
+      "emptyDescription": "Press your hotkey in any app and start talking. Every transcription is saved privately here on your device.",
+      "sectionTitle": "Transcriptions",
       "dataRetentionDisabled": "Data retention is off. Transcriptions and audio are not saved to history.",
       "press": "Press",
       "toStart": "to start",
@@ -644,6 +646,7 @@
         "yesterday": "Yesterday"
       },
       "copyText": "Copy text",
+      "moreActions": "More actions",
       "copyRawTranscript": "Copy raw transcript",
       "deleteItem": "Delete",
       "viewRawTranscript": "View raw transcript",
@@ -908,7 +911,6 @@
         "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
         "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator.",
         "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
-        "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
         "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text."
       },
       "translationFallback": {
@@ -1132,7 +1134,7 @@
       "continueWithMicrosoft": "Continue with Microsoft",
       "protocolUnavailable": "Browser sign-in unavailable — re-register the openwhispr:// protocol in your system's Default Apps settings."
     },
-    "welcomeSubtitle": "Use voice for everything",
+    "welcomeSubtitle": "The power of your voice. On your terms.",
     "welcomeTitle": "Welcome to OpenWhispr",
     "sessionExpired": "Session expired. Please restart the sign-up process."
   },
@@ -1161,10 +1163,9 @@
   },
   "upcoming": {
     "title": "Coming up",
-    "transcriptions": "Transcriptions",
     "now": "Now",
     "untitledEvent": "Untitled Event",
-    "joinAndTakeNotes": "Join & take notes",
+    "joinAndTranscribe": "Join & transcribe",
     "takeNotes": "Take notes",
     "noEventsToday": "No events today",
     "noUpcomingEvents": "No upcoming events",
@@ -3244,6 +3245,10 @@
       "raw": "Raw",
       "enhanced": "Enhanced",
       "saving": "Saving",
+      "transcriptEmptyTitle": "Nothing recorded yet",
+      "transcriptEmptyDescription": "Hit record to start transcribing. Everything said shows up here as it happens.",
+      "startRecording": "Start recording",
+      "generateSummary": "Generate AI Summary",
       "startWriting": "Start writing...",
       "staleIndicator": "Content has changed since enhancement",
       "live": "Live",
@@ -3424,6 +3429,15 @@
         "generateNotes": {
           "name": "Generate Notes",
           "description": "Clean up, structure, and enhance your notes"
+        },
+        "followUpEmail": {
+          "name": "Follow-up email",
+          "description": "Draft a follow-up email from your notes and transcript",
+          "cta": "Draft a follow-up email"
+        },
+        "detailedNotes": {
+          "name": "Detailed Notes",
+          "description": "Accurate, comprehensive meeting notes with decisions and action items"
         }
       },
       "errors": {
@@ -3947,6 +3961,7 @@
         "createLink": "Create link",
         "copyLink": "Copy link",
         "copied": "Copied",
+        "export": "Export",
         "owner": "Owner",
         "editor": "Can edit",
         "viewer": "Can view",
@@ -3987,7 +4002,6 @@
     "allSpaces": "All spaces",
     "title": "Search",
     "description": "Search across notes and transcripts",
-    "shortPlaceholder": "Search",
     "placeholder": "Search notes and transcripts…",
     "sections": {
       "notes": "Notes",

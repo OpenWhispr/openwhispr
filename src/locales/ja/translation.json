@@ -636,6 +636,8 @@
       "couldNotDeleteDescription": "この文字起こしは既に削除されている可能性があります。",
       "couldNotDeleteDescriptionGeneric": "問題が発生しました。もう一度お試しください。",
       "empty": "文字起こし履歴はまだありません",
+      "emptyDescription": "どのアプリでもホットキーを押して話し始めてください。すべての文字起こしは、このデバイス上にプライベートに保存されます。",
+      "sectionTitle": "文字起こし",
       "dataRetentionDisabled": "データ保持が無効です。文字起こしと音声は履歴に保存されません。",
       "press": "押してください",
       "toStart": "開始するには",
@@ -657,6 +659,7 @@
       "clearAllErrorTitle": "履歴を削除できませんでした",
       "clearAllErrorDescription": "問題が発生しました。もう一度お試しください。",
       "copyText": "テキストをコピー",
+      "moreActions": "その他の操作",
       "copyRawTranscript": "生の文字起こしをコピー",
       "deleteItem": "削除",
       "viewRawTranscript": "生の文字起こしを表示",
@@ -908,7 +911,6 @@
         "managedRouteInvalid": "設定の不一致により、マネージド文字起こしを開始できませんでした。もう一度お試しいただくか、管理者にお問い合わせください。",
         "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。",
         "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
-        "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
         "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。"
       },
       "translationFallback": {
@@ -1133,7 +1135,7 @@
       "continueWithMicrosoft": "Microsoft で続ける",
       "protocolUnavailable": "ブラウザでのサインインを利用できません — システムの「既定のアプリ」設定で openwhispr:// プロトコルを再登録してください。"
     },
-    "welcomeSubtitle": "すべてを声で",
+    "welcomeSubtitle": "あなたの声の力を、あなたのやり方で。",
     "welcomeTitle": "OpenWhispr へようこそ"
   },
   "cleanupPrompt": "クリーンアップ",
@@ -2809,6 +2811,10 @@
       "raw": "元のテキスト",
       "enhanced": "強化済み",
       "saving": "保存中",
+      "transcriptEmptyTitle": "まだ録音がありません",
+      "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
+      "startRecording": "録音を開始",
+      "generateSummary": "AI要約を生成",
       "startWriting": "書き始める..."
     },
     "participants": {
@@ -2851,6 +2857,15 @@
         "generateNotes": {
           "name": "ノートを生成",
           "description": "ノートを整理、構成、強化する"
+        },
+        "followUpEmail": {
+          "name": "フォローアップメール",
+          "description": "メモと文字起こしからフォローアップメールを作成",
+          "cta": "フォローアップメールを作成"
+        },
+        "detailedNotes": {
+          "name": "詳細ノート",
+          "description": "決定事項とアクションを含む正確で網羅的な会議ノート"
         }
       },
       "errors": {
@@ -3767,10 +3782,9 @@
   },
   "upcoming": {
     "title": "今後の予定",
-    "transcriptions": "文字起こし",
     "now": "進行中",
     "untitledEvent": "無題のイベント",
-    "joinAndTakeNotes": "参加してメモを取る",
+    "joinAndTranscribe": "参加して文字起こし",
     "takeNotes": "メモを取る",
     "noEventsToday": "今日の予定はありません",
     "noUpcomingEvents": "今後の予定はありません",
@@ -3818,6 +3832,7 @@
         "createLink": "リンクを作成",
         "copyLink": "リンクをコピー",
         "copied": "コピーしました",
+        "export": "エクスポート",
         "owner": "オーナー",
         "editor": "編集可能",
         "viewer": "閲覧可能",
@@ -3858,7 +3873,6 @@
     "allSpaces": "すべてのスペース",
     "title": "検索",
     "description": "ノートと文字起こしを検索",
-    "shortPlaceholder": "検索",
     "placeholder": "ノートと文字起こしを検索…",
     "sections": {
       "notes": "ノート",

@@ -2,13 +2,13 @@ import type { CSSProperties, ReactNode } from "react";
 import type { OnboardingProgressState } from "./flow";
 import { Copy, Minus, Square, Undo2, X } from "../icons";
 import { Button } from "../ui/button";
+import { BRAND_GLASS_SURFACE } from "../ui/gradientCircle";
+import { cn } from "../lib/utils";
 import { useTranslation } from "react-i18next";
 import { getPlatform } from "../../utils/platform";
 import { useWindowControls } from "../../hooks/useWindowControls";
 // Imported (not referenced by path) so Vite fingerprints it and it resolves
 // under the packaged app's file:// origin. See .onboarding-compact-hero.
-import heroDither from "@/assets/onboarding-hero-dither.webp";
-import heroDitherDark from "@/assets/onboarding-hero-dither-dark.webp";
 import onboardingBackgroundLight from "@/assets/onboarding-bg-light.svg";
 import onboardingBackgroundDark from "@/assets/onboarding-bg-dark.svg";
 
@@ -332,9 +332,7 @@ export default function OnboardingShell({
                   type="button"
                   onClick={onContinue}
                   disabled={continueDisabled || continueLoading}
-                  // Flat brand fill with no shadow or stroke. It shares the same
-                  // compact height as the Back and Skip controls.
-                  className="h-9 gap-3 rounded-[38px] border-0 bg-[var(--onboarding-accent)] px-5 py-2 text-sm font-medium leading-[1.4] tracking-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none! disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)] disabled:opacity-100!"
+                  className="h-9 rounded-[38px] px-5 text-sm"
                 >
                   {continueLoading ? t("common.loading") : (continueLabel ?? t("common.continue"))}
                 </Button>
@@ -361,20 +359,17 @@ export function CompactOnboardingFrame({
 
   return (
     <section className="relative flex h-full min-h-screen w-full flex-col overflow-hidden bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]">
-      <div
-        className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-52"
-        // Both strips are handed over as custom properties and .onboarding-compact-hero
-        // picks one per theme; the URLs have to come from here because only an import
-        // gets fingerprinted by Vite and resolves under the packaged file:// origin.
-        style={
-          {
-            "--onboarding-hero-dither-light": `url(${heroDither})`,
-            "--onboarding-hero-dither-dark": `url(${heroDitherDark})`,
-          } as CSSProperties
-        }
-      />
+      <div className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-33" />
       {showBrandMark && (
-        <BrandMark className="pointer-events-none absolute left-1/2 top-13 z-10 size-28 -translate-x-1/2 text-white" />
+        <div
+          className={cn(
+            "pointer-events-none absolute left-1/2 top-23 z-10 flex size-19 -translate-x-1/2 items-center justify-center rounded-[20px]",
+            BRAND_GLASS_SURFACE,
+            "shadow-(--shadow-brand-tile)"
+          )}
+        >
+          <BrandMark className="size-13" />
+        </div>
       )}
 
       {/* The compact BrowserWindow is the authored 480x624 surface. This layer
@@ -386,7 +381,7 @@ export function CompactOnboardingFrame({
       </div>
 
       {showLegalNotice && (
-        <p className="relative z-10 mx-auto mt-auto w-full max-w-xs shrink-0 px-2 pb-4 pt-5 text-center text-sm leading-5 text-[var(--onboarding-text-secondary)]">
+        <p className="relative z-10 mx-auto mt-auto w-full max-w-sm shrink-0 px-2 pb-4 pt-5 text-center text-xs leading-[18px] text-[var(--onboarding-text-secondary)]">
           {t("auth.legal.prefix")}{" "}
           <a
             href="https://openwhispr.com/terms"

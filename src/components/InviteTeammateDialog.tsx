@@ -171,7 +171,7 @@ export default function InviteTeammateDialog({
                     "outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
                     role === r
                       ? "border-primary/40 bg-primary/8"
-                      : "border-border/60 hover:bg-foreground/4"
+                      : "border-border/70 hover:bg-foreground/4"
                   )}
                 >
                   <span

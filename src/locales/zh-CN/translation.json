@@ -636,6 +636,8 @@
       "couldNotDeleteDescription": "此转录记录可能已被删除。",
       "couldNotDeleteDescriptionGeneric": "出了点问题，请重试。",
       "empty": "暂无转录记录",
+      "emptyDescription": "在任意应用中按下快捷键开始说话。每条转写都会私密地保存在你的设备上。",
+      "sectionTitle": "转写记录",
       "dataRetentionDisabled": "数据保留已关闭。转录和音频不会保存到历史记录。",
       "press": "按下",
       "toStart": "开始",
@@ -657,6 +659,7 @@
       "clearAllErrorTitle": "无法清除历史记录",
       "clearAllErrorDescription": "出了点问题，请重试。",
       "copyText": "复制文本",
+      "moreActions": "更多操作",
       "copyRawTranscript": "复制原始转录",
       "deleteItem": "删除",
       "viewRawTranscript": "查看原始转录",
@@ -908,7 +911,6 @@
         "managedRouteInvalid": "由于配置不匹配，托管转录无法启动。请重试或联系管理员。",
         "managedAuthRejected": "您组织的托管转录凭证被拒绝。请联系管理员。",
         "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
-        "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
         "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。"
       },
       "translationFallback": {
@@ -1132,7 +1134,7 @@
       "continueWithMicrosoft": "使用 Microsoft 继续",
       "protocolUnavailable": "无法通过浏览器登录 — 请在系统的“默认应用”设置中重新注册 openwhispr:// 协议。"
     },
-    "welcomeSubtitle": "用语音完成一切",
+    "welcomeSubtitle": "你的声音，由你掌控。",
     "welcomeTitle": "欢迎使用 OpenWhispr",
     "sessionExpired": "会话已过期，请重新登录。"
   },
@@ -2901,6 +2903,10 @@
       "raw": "原始内容",
       "enhanced": "增强内容",
       "saving": "保存中",
+      "transcriptEmptyTitle": "尚未录制任何内容",
+      "transcriptEmptyDescription": "点击录制开始转写。所说的内容会实时显示在这里。",
+      "startRecording": "开始录制",
+      "generateSummary": "生成 AI 摘要",
       "startWriting": "开始书写...",
       "staleIndicator": "内容在增强后已更改",
       "live": "实时",
@@ -3065,6 +3071,15 @@
         "generateNotes": {
           "name": "生成笔记",
           "description": "清理、结构化和增强您的笔记"
+        },
+        "followUpEmail": {
+          "name": "跟进邮件",
+          "description": "根据笔记和转写草拟一封跟进邮件",
+          "cta": "草拟跟进邮件"
+        },
+        "detailedNotes": {
+          "name": "详细笔记",
+          "description": "准确、全面的会议笔记，包含决策和行动项"
         }
       },
       "errors": {
@@ -3767,10 +3782,9 @@
   },
   "upcoming": {
     "title": "即将开始",
-    "transcriptions": "转录",
     "now": "进行中",
     "untitledEvent": "无标题事件",
-    "joinAndTakeNotes": "加入并记笔记",
+    "joinAndTranscribe": "加入并转录",
     "takeNotes": "记笔记",
     "noEventsToday": "今天没有日程",
     "noUpcomingEvents": "暂无即将开始的日程",
@@ -3818,6 +3832,7 @@
         "createLink": "创建链接",
         "copyLink": "复制链接",
         "copied": "已复制",
+        "export": "导出",
         "owner": "所有者",
         "editor": "可编辑",
         "viewer": "可查看",
@@ -3858,7 +3873,6 @@
     "allSpaces": "所有空间",
     "title": "搜索",
     "description": "搜索笔记和转录",
-    "shortPlaceholder": "搜索",
     "placeholder": "搜索笔记和转录…",
     "sections": {
       "notes": "笔记",

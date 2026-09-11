@@ -636,6 +636,8 @@
       "couldNotDeleteDescription": "Cette transcription a peut-être déjà été supprimée.",
       "couldNotDeleteDescriptionGeneric": "Une erreur est survenue. Veuillez réessayer.",
       "empty": "Aucune transcription pour le moment",
+      "emptyDescription": "Appuyez sur votre raccourci dans n’importe quelle app et parlez. Chaque transcription est enregistrée ici, en privé, sur votre appareil.",
+      "sectionTitle": "Transcriptions",
       "dataRetentionDisabled": "La conservation des données est désactivée. Les transcriptions et l'audio ne sont pas sauvegardés dans l'historique.",
       "press": "Appuyez sur",
       "toStart": "pour démarrer",
@@ -644,6 +646,7 @@
         "yesterday": "Hier"
       },
       "copyText": "Copier le texte",
+      "moreActions": "Plus d’actions",
       "copyRawTranscript": "Copier la transcription brute",
       "deleteItem": "Supprimer",
       "viewRawTranscript": "Voir la transcription brute",
@@ -908,7 +911,6 @@
         "managedRouteInvalid": "La transcription gérée n'a pas pu démarrer en raison d'une incohérence de configuration. Réessayez ou contactez votre administrateur.",
         "managedAuthRejected": "Les identifiants de transcription gérée de votre organisation ont été refusés. Contactez votre administrateur.",
         "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives.",
-        "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives.",
         "providerKeyMissing": "Aucune clé API n'est définie pour votre fournisseur de transcription. Ajoutez-la dans Réglages → Parole en texte."
       },
       "translationFallback": {
@@ -1132,7 +1134,7 @@
       "continueWithMicrosoft": "Continuer avec Microsoft",
       "protocolUnavailable": "Connexion par navigateur indisponible — réenregistrez le protocole openwhispr:// dans les paramètres Applications par défaut du système."
     },
-    "welcomeSubtitle": "Utilisez votre voix pour tout",
+    "welcomeSubtitle": "Le pouvoir de votre voix. À vos conditions.",
     "welcomeTitle": "Bienvenue sur OpenWhispr",
     "sessionExpired": "Session expirée. Veuillez relancer le processus d'inscription."
   },
@@ -1161,10 +1163,9 @@
   },
   "upcoming": {
     "title": "À venir",
-    "transcriptions": "Transcriptions",
     "now": "En cours",
     "untitledEvent": "Événement sans titre",
-    "joinAndTakeNotes": "Rejoindre et noter",
+    "joinAndTranscribe": "Rejoindre et transcrire",
     "takeNotes": "Prendre des notes",
     "noEventsToday": "Aucun événement aujourd'hui",
     "noUpcomingEvents": "Aucun événement à venir",
@@ -3244,6 +3245,10 @@
       "raw": "Brut",
       "enhanced": "Amélioré",
       "saving": "Enregistrement",
+      "transcriptEmptyTitle": "Rien d'enregistré pour l'instant",
+      "transcriptEmptyDescription": "Lancez l'enregistrement pour commencer la transcription. Tout ce qui est dit s'affiche ici en direct.",
+      "startRecording": "Démarrer l'enregistrement",
+      "generateSummary": "Générer un résumé IA",
       "startWriting": "Commencez à écrire...",
       "staleIndicator": "Le contenu a changé depuis l'amélioration",
       "live": "En direct",
@@ -3424,6 +3429,15 @@
         "generateNotes": {
           "name": "Générer des notes",
           "description": "Nettoyer, structurer et améliorer vos notes"
+        },
+        "followUpEmail": {
+          "name": "E-mail de suivi",
+          "description": "Rédigez un e-mail de suivi à partir de vos notes et de la transcription",
+          "cta": "Rédiger un e-mail de suivi"
+        },
+        "detailedNotes": {
+          "name": "Notes détaillées",
+          "description": "Des notes de réunion précises et complètes avec décisions et actions"
         }
       },
       "errors": {
@@ -3947,6 +3961,7 @@
         "createLink": "Créer un lien",
         "copyLink": "Copier le lien",
         "copied": "Copié",
+        "export": "Exporter",
         "owner": "Propriétaire",
         "editor": "Peut modifier",
         "viewer": "Peut consulter",
@@ -3987,7 +4002,6 @@
     "allSpaces": "Tous les espaces",
     "title": "Rechercher",
     "description": "Rechercher dans les notes et transcriptions",
-    "shortPlaceholder": "Rechercher",
     "placeholder": "Rechercher notes et transcriptions…",
     "sections": {
       "notes": "Notes",

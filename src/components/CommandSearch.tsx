@@ -333,7 +333,7 @@ export default function CommandSearch({
           }}
           className={cn(
             "fixed left-[50%] top-[18%] z-50 w-full max-w-xl translate-x-[-50%]",
-            "rounded-xl border border-border/60 bg-card shadow-2xl overflow-hidden",
+            "rounded-xl border border-border/70 bg-card shadow-2xl overflow-hidden",
             "dark:bg-surface-2 dark:border-border dark:shadow-modal",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -350,15 +350,15 @@ export default function CommandSearch({
           </DialogPrimitive.Description>
 
           {/* Search input */}
-          <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-border/40">
-            <Search size={14} className="shrink-0 text-muted-foreground/50" />
+          <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-border/70">
+            <Search size={14} className="shrink-0 text-muted-foreground/70" />
             {!isConversationsMode && spaces.length > 1 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
                     className={cn(
-                      "flex items-center gap-1 shrink-0 rounded-md border border-border/50 bg-muted/40",
+                      "flex items-center gap-1 shrink-0 rounded-md border border-border/70 bg-muted/40",
                       "px-1.5 py-0.5 text-[11px] transition-colors outline-none",
                       scopeSpace ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                     )}
@@ -370,7 +370,7 @@ export default function CommandSearch({
                         t("commandSearch.allSpaces")
                       )}
                     </span>
-                    <ChevronDown size={11} className="shrink-0 text-muted-foreground/50" />
+                    <ChevronDown size={11} className="shrink-0 text-muted-foreground/70" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -400,7 +400,7 @@ export default function CommandSearch({
               onKeyDown={handleKeyDown}
               placeholder={isConversationsMode ? t("chat.search") : t("commandSearch.placeholder")}
               autoFocus
-              className="flex-1 text-sm text-foreground placeholder:text-muted-foreground/40"
+              className="flex-1 text-sm text-foreground placeholder:text-muted-foreground/70"
               style={{
                 background: "transparent",
                 border: "none",
@@ -412,7 +412,7 @@ export default function CommandSearch({
             {query && (
               <button
                 onClick={() => setQuery("")}
-                className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors outline-none"
+                className="text-[11px] text-muted-foreground/70 hover:text-muted-foreground transition-colors outline-none"
               >
                 ✕
               </button>
@@ -423,7 +423,7 @@ export default function CommandSearch({
           <div ref={listRef} className="overflow-y-auto max-h-[340px] p-1.5">
             {!hasResults ? (
               <div className="flex items-center justify-center py-10">
-                <p className="text-xs text-muted-foreground/50">
+                <p className="text-xs text-muted-foreground/70">
                   {query.trim()
                     ? t("commandSearch.noResults")
                     : isConversationsMode
@@ -450,7 +450,7 @@ export default function CommandSearch({
                     size={13}
                     className={cn(
                       "shrink-0 mt-px transition-colors",
-                      selectedIndex === idx ? "text-primary" : "text-muted-foreground/40"
+                      selectedIndex === idx ? "text-primary" : "text-muted-foreground/70"
                     )}
                   />
                   <div className="flex-1 min-w-0">
@@ -463,7 +463,7 @@ export default function CommandSearch({
                       </p>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
+                  <span className="text-[10px] text-muted-foreground/70 tabular-nums shrink-0">
                     {formatRelativeTime(conv.updated_at, t, locale)}
                   </span>
                 </button>
@@ -553,7 +553,7 @@ export default function CommandSearch({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center gap-4 px-3.5 py-2 border-t border-border/30 bg-muted/15">
+          <div className="flex items-center gap-4 px-3.5 py-2 border-t border-border/70 bg-muted/15">
             <FooterHint keys={["↑", "↓"]} label={t("commandSearch.footer.navigate")} />
             <FooterHint keys={["↵"]} label={t("commandSearch.footer.open")} />
             <FooterHint keys={["Esc"]} label={t("commandSearch.footer.dismiss")} />
@@ -567,8 +567,8 @@ export default function CommandSearch({
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1">
-      <span className="text-muted-foreground/45">{icon}</span>
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/50">
+      <span className="text-muted-foreground/70">{icon}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
         {label}
       </span>
     </div>
@@ -595,7 +595,7 @@ function ContainerRow({
   const { space } = target;
   const iconClass = cn(
     "shrink-0 transition-colors",
-    isSelected ? "text-primary" : "text-muted-foreground/40"
+    isSelected ? "text-primary" : "text-muted-foreground/70"
   );
   return (
     <button
@@ -627,7 +627,7 @@ function ContainerRow({
       {showSpaceHint && space && (
         <span
           dir="auto"
-          className="text-[10px] text-muted-foreground/45 truncate shrink-0 max-w-32"
+          className="text-[10px] text-muted-foreground/70 truncate shrink-0 max-w-32"
         >
           {spaceLabel(space)}
         </span>
@@ -675,7 +675,7 @@ function NoteRow({
         size={13}
         className={cn(
           "shrink-0 mt-px transition-colors",
-          isSelected ? "text-primary" : "text-muted-foreground/40"
+          isSelected ? "text-primary" : "text-muted-foreground/70"
         )}
       />
       <div className="flex-1 min-w-0">
@@ -683,7 +683,7 @@ function NoteRow({
           dir="auto"
           className={cn(
             "text-xs font-medium truncate",
-            note.title ? "text-foreground" : "italic text-muted-foreground/50"
+            note.title ? "text-foreground" : "italic text-muted-foreground/70"
           )}
         >
           {note.title || t("notes.list.untitled")}
@@ -691,11 +691,11 @@ function NoteRow({
         {(breadcrumb || preview) && (
           <p className="text-[10px] truncate mt-px">
             {breadcrumb && (
-              <span dir="auto" className="text-muted-foreground/45">
+              <span dir="auto" className="text-muted-foreground/70">
                 {breadcrumb}
               </span>
             )}
-            {breadcrumb && preview && <span className="text-muted-foreground/35"> · </span>}
+            {breadcrumb && preview && <span className="text-muted-foreground/70"> · </span>}
             {preview && (
               <span dir="auto" className="text-muted-foreground/55">
                 {preview}
@@ -704,7 +704,7 @@ function NoteRow({
           </p>
         )}
       </div>
-      <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
+      <span className="text-[10px] text-muted-foreground/70 tabular-nums shrink-0">
         {formatRelativeTime(note.updated_at, t, locale)}
       </span>
     </button>
@@ -745,13 +745,13 @@ function TranscriptRow({
         size={13}
         className={cn(
           "shrink-0 mt-px transition-colors",
-          isSelected ? "text-primary" : "text-muted-foreground/40"
+          isSelected ? "text-primary" : "text-muted-foreground/70"
         )}
       />
       <p dir="auto" className="flex-1 text-xs text-foreground/75 truncate min-w-0">
         {transcript.text}
       </p>
-      <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
+      <span className="text-[10px] text-muted-foreground/70 tabular-nums shrink-0">
         {formatRelativeTime(transcript.created_at, t, locale)}
       </span>
     </button>
@@ -765,13 +765,13 @@ function FooterHint({ keys, label }: { keys: string[]; label: string }) {
         {keys.map((k) => (
           <kbd
             key={k}
-            className="text-[10px] px-1 py-px rounded border border-border/40 bg-muted/50 text-muted-foreground/55 font-mono leading-tight"
+            className="text-[10px] px-1 py-px rounded border border-border/70 bg-muted/50 text-muted-foreground/55 font-mono leading-tight"
           >
             {k}
           </kbd>
         ))}
       </span>
-      <span className="text-[10px] text-muted-foreground/40 ms-0.5">{label}</span>
+      <span className="text-[10px] text-muted-foreground/70 ms-0.5">{label}</span>
     </div>
   );
 }

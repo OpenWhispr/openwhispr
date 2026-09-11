@@ -118,7 +118,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
           </p>
         </div>
         {error ? (
-          <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-6 text-center">
+          <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-6 text-center">
             <p className="text-xs font-medium text-foreground mb-1">
               {t("settingsPage.workspace.loadError.title")}
             </p>
@@ -131,8 +131,8 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
             </Button>
           </div>
         ) : (
-          <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-6 text-center">
-            <Users className="w-5 h-5 text-muted-foreground/60 mx-auto mb-2" />
+          <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-6 text-center">
+            <Users className="w-5 h-5 text-muted-foreground/70 mx-auto mb-2" />
             <p className="text-xs font-medium text-foreground mb-1">
               {t("settingsPage.workspace.empty.title")}
             </p>
@@ -199,7 +199,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
         </div>
       </div>
 
-      <div className="border-b border-border/40 dark:border-border-subtle/60 -mx-1">
+      <div className="border-b border-border/70 dark:border-border-subtle/60 -mx-1">
         <div role="tablist" className="flex gap-0.5 px-1">
           {visibleTabs.map((id) => (
             <button

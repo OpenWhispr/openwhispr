@@ -149,7 +149,7 @@ export default function CreateTeamDialog({
               {t("settingsPage.workspace.teams.addMembersLabel")}
             </label>
             {membersError ? (
-              <div className="rounded border border-border/70 dark:border-border-subtle/50 px-3 py-2.5 flex items-center justify-between gap-2">
+              <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
                   {t("settingsPage.workspace.members.loadError")}
                 </p>

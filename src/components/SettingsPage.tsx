@@ -205,7 +205,7 @@ function SettingsPanel({
 }) {
   return (
     <div
-      className={`rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm divide-y divide-border/30 dark:divide-border-subtle/50 ${className}`}
+      className={`rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm divide-y divide-border/60 dark:divide-border-subtle/50 ${className}`}
     >
       {children}
     </div>
@@ -752,7 +752,7 @@ function TranscriptionSection({
           </div>
         </div>
         {managed.mode !== "managed_required" && managed.allowManualSetup && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
             <Button
               type="button"
               variant="ghost"
@@ -1122,7 +1122,7 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
   if (!loaded || gpus.length < 2) return null;
 
   return (
-    <div className="border-t border-border/40 pt-4 mt-4">
+    <div className="border-t border-border/70 pt-4 mt-4">
       <SectionHeader
         title={t(`settingsPage.${purpose}.gpuDevice.title`)}
         description={t(`settingsPage.${purpose}.gpuDevice.description`)}
@@ -2555,7 +2555,7 @@ export default function SettingsPage({
                           !usage?.isTrial &&
                           !isWorkspaceCovered
                           ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
-                          : "border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
+                          : "border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
                       )}
                     >
                       <p className="text-xs font-semibold text-foreground">
@@ -2578,7 +2578,7 @@ export default function SettingsPage({
                           feature.startsWith("## ") ? (
                             <li
                               key={i}
-                              className={`text-[8px] font-semibold uppercase tracking-wide text-muted-foreground/60 ${i > 0 ? "pt-1.5" : ""}`}
+                              className={`text-[8px] font-semibold uppercase tracking-wide text-muted-foreground/70 ${i > 0 ? "pt-1.5" : ""}`}
                             >
                               {feature.slice(3)}
                             </li>
@@ -2804,7 +2804,7 @@ export default function SettingsPage({
                       )}
                     </div>
 
-                    <div className="rounded-md border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
+                    <div className="rounded-md border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
                       <p className="text-xs font-semibold text-foreground">
                         {t("settingsPage.account.pricing.enterprise.name")}
                       </p>
@@ -2928,7 +2928,7 @@ export default function SettingsPage({
                         </DialogDescription>
                       </DialogHeader>
                       {switchPreview && (
-                        <div className="rounded-lg border border-border/50 dark:border-border-subtle/60 overflow-hidden">
+                        <div className="rounded-lg border border-border/70 dark:border-border-subtle/60 overflow-hidden">
                           <div className="flex justify-between items-center px-3 py-2.5 bg-muted/40 dark:bg-surface-2/50">
                             <span className="text-xs text-muted-foreground">
                               {switchPreview.immediateAmount < 0
@@ -2949,7 +2949,7 @@ export default function SettingsPage({
                               )}
                             </span>
                           </div>
-                          <div className="divide-y divide-border/40">
+                          <div className="divide-y divide-border/60">
                             <div className="flex justify-between items-center px-3 py-2">
                               <span className="text-xs text-muted-foreground">
                                 {t("settingsPage.account.pricing.confirmSwitch.newPrice")}
@@ -4097,7 +4097,7 @@ EOF`,
                     maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
                 </SettingsPanelRow>
-                <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/40 dark:border-white/5">
+                <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/70 dark:border-white/10">
                   <span className="text-xs text-muted-foreground/80">
                     {t("settingsPage.general.meetingHotkey.layoutLabel")}
                   </span>
@@ -4316,7 +4316,7 @@ EOF`,
             </div>
 
             {/* Audio Retention */}
-            <div className="border-t border-border/40 pt-6">
+            <div className="border-t border-border/70 pt-6">
               <SectionHeader
                 title={t("settingsPage.privacy.audioRetention")}
                 description={t("settingsPage.privacy.audioRetentionDescription")}
@@ -4385,7 +4385,7 @@ EOF`,
             </div>
 
             {/* Data Retention */}
-            <div className="border-t border-border/40 pt-6">
+            <div className="border-t border-border/70 pt-6">
               <SettingsPanel>
                 <SettingsPanelRow>
                   <SettingsRow
@@ -4441,7 +4441,7 @@ EOF`,
             </div>
 
             {/* Permissions */}
-            <div className="border-t border-border/40 pt-6">
+            <div className="border-t border-border/70 pt-6">
               <SectionHeader
                 title={t("settingsPage.permissions.title")}
                 description={t("settingsPage.permissions.description")}
@@ -4720,7 +4720,7 @@ EOF`,
                   </div>
 
                   {updateInfo?.releaseNotes && (
-                    <div className="mt-4 pt-4 border-t border-border/30">
+                    <div className="mt-4 pt-4 border-t border-border/70">
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                         <BidiInterpolatedText
                           text={t("settingsPage.general.updates.whatsNew", {
@@ -4740,12 +4740,12 @@ EOF`,
             </div>
 
             {/* Developer Tools */}
-            <div className="border-t border-border/40 pt-6">
+            <div className="border-t border-border/70 pt-6">
               <DeveloperSection />
             </div>
 
             {/* Data Management */}
-            <div className="border-t border-border/40 pt-6">
+            <div className="border-t border-border/70 pt-6">
               <SectionHeader
                 title={t("settingsPage.developer.dataManagementTitle")}
                 description={t("settingsPage.developer.dataManagementDescription")}
@@ -4983,7 +4983,7 @@ EOF`,
                   }}
                   toast={toast}
                 />
-                <div className="border-t border-border/40 pt-6">
+                <div className="border-t border-border/70 pt-6">
                   <SectionHeader
                     title={t("settingsPage.prompts.title")}
                     description={t("settingsPage.prompts.description")}

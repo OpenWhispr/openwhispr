@@ -92,7 +92,7 @@ export default function ProviderConnectionTest({
             type="button"
             onClick={() => void testConnection()}
             disabled={status === "testing"}
-            className="h-7 gap-1 rounded-full border-[var(--onboarding-inverse-surface)]! bg-[var(--onboarding-inverse-surface)] px-2 text-[0.5625rem] font-normal text-[var(--onboarding-inverse-text)] shadow-none! hover:bg-[var(--onboarding-inverse-surface-secondary)] focus-visible:ring-0 disabled:opacity-70"
+            className="h-7 gap-1 px-2 text-[0.5625rem]"
           >
             {status === "testing" && <Loader2 className="size-3 animate-spin" />}
             {status === "success" && <CheckCircle className="size-3" />}

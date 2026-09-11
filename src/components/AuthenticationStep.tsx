@@ -75,14 +75,14 @@ function ProviderTile({
       disabled={disabled}
       title={title}
       aria-label={label}
-      className="flex h-13 min-w-0 flex-1 flex-col items-center justify-center gap-1.5 rounded-xl bg-[var(--onboarding-surface-secondary)] px-2 text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_40%,transparent)] disabled:pointer-events-none disabled:opacity-100"
+      className="flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-[var(--onboarding-surface-secondary)] px-2 text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_40%,transparent)] disabled:pointer-events-none disabled:opacity-100"
     >
       {loading ? (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       ) : (
         <Icon className="size-4" />
       )}
-      <span className="truncate text-sm font-normal">{label}</span>
+      <span className="truncate text-[13px]">{label}</span>
     </button>
   );
 }
@@ -423,7 +423,7 @@ export default function AuthenticationStep({
   if (!AUTH_URL || !authClient) {
     return (
       <CompactOnboardingFrame embedded={embedded}>
-        <div className={`${frameInset("pt-44")} text-center`}>
+        <div className={`${frameInset("pt-48")} text-center`}>
           <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
           <p className="mt-3 text-base text-muted-foreground">{t("auth.welcomeSubtitle")}</p>
           <div className="mt-8 rounded-xl border border-warning/20 bg-warning/5 p-3 text-sm text-warning">
@@ -473,7 +473,7 @@ export default function AuthenticationStep({
   if (forgotPasswordOpen) {
     return (
       <CompactOnboardingFrame embedded={embedded}>
-        <div className={frameInset("pt-42")}>
+        <div className={frameInset("pt-48")}>
           <ForgotPasswordView email={email} onBack={handleBackFromForgotPassword} />
         </div>
       </CompactOnboardingFrame>
@@ -483,7 +483,7 @@ export default function AuthenticationStep({
   if (showSSOEmailStep) {
     return (
       <CompactOnboardingFrame embedded={embedded}>
-        <div className={`${frameInset("pt-38")} text-center`}>
+        <div className={`${frameInset("pt-48")} text-center`}>
           <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
           <p className="mt-2 text-base text-[var(--onboarding-text-secondary)]">
             {t("auth.welcomeSubtitle")}
@@ -516,7 +516,7 @@ export default function AuthenticationStep({
             <Button
               type="submit"
               disabled={!email.trim() || isSSOLoading || !oauthProtocolRegistered}
-              className="h-10 w-full rounded-full border-transparent bg-[var(--onboarding-inverse-surface)] text-base font-normal text-[var(--onboarding-inverse-text)] shadow-none hover:opacity-90 disabled:border-transparent disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)] disabled:opacity-100"
+              className="h-10 w-full text-[15px]"
             >
               {isSSOLoading ? <Loader2 className="size-4 animate-spin" /> : null}
               {isSSOLoading
@@ -631,7 +631,7 @@ export default function AuthenticationStep({
   if (authMode !== null) {
     return (
       <CompactOnboardingFrame embedded={embedded}>
-        <div className={`${frameInset("pt-38")} text-center`}>
+        <div className={`${frameInset("pt-48")} text-center`}>
           <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
           <p className="mt-2 text-base text-[var(--onboarding-text-secondary)]">
             {t("auth.welcomeSubtitle")}
@@ -722,7 +722,7 @@ export default function AuthenticationStep({
             <Button
               type="submit"
               disabled={isSubmitting || !password}
-              className="h-10 w-full rounded-full border-transparent bg-[var(--onboarding-inverse-surface)] text-base font-normal text-[var(--onboarding-inverse-text)] shadow-none hover:opacity-90 disabled:border-transparent disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)] disabled:opacity-100"
+              className="h-10 w-full text-[15px]"
             >
               {isSubmitting ? (
                 <>
@@ -804,9 +804,9 @@ export default function AuthenticationStep({
 
   return (
     <CompactOnboardingFrame embedded={embedded}>
-      <div className={`${frameInset("pt-38")} text-center`}>
+      <div className={`${frameInset("pt-48")} text-center`}>
         <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
-        <p className="mt-2 text-base text-[var(--onboarding-text-secondary)]">
+        <p className="mt-2.5 text-[15px] text-[var(--onboarding-text-secondary)]">
           {t("auth.welcomeSubtitle")}
         </p>
 
@@ -815,7 +815,7 @@ export default function AuthenticationStep({
             event.preventDefault();
             handleEmailContinue();
           }}
-          className="mt-3 space-y-3"
+          className="mt-5 space-y-3"
         >
           <Input
             dir="ltr"
@@ -830,11 +830,7 @@ export default function AuthenticationStep({
           <Button
             type="submit"
             disabled={!email.trim() || busy}
-            className={`h-10 w-full rounded-full border-transparent bg-[var(--onboarding-inverse-surface)] text-base font-normal text-[var(--onboarding-inverse-text)] shadow-none hover:opacity-90 disabled:border-transparent disabled:opacity-100 ${
-              email.trim()
-                ? ""
-                : "disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)]"
-            }`}
+            className="h-10 w-full text-[15px]"
           >
             {isCheckingEmail ? <Loader2 className="size-4 animate-spin" /> : null}
             {isCheckingEmail
@@ -843,9 +839,11 @@ export default function AuthenticationStep({
           </Button>
         </form>
 
-        <p className="pb-3 pt-4 text-sm font-normal uppercase text-[var(--onboarding-text-secondary)]">
+        <div className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--onboarding-text-secondary)]">
+          <span className="h-px flex-1 bg-[var(--onboarding-control-border)]" />
           {t("auth.common.or")}
-        </p>
+          <span className="h-px flex-1 bg-[var(--onboarding-control-border)]" />
+        </div>
 
         <div className="flex gap-3">
           {providers.map((provider) => (
@@ -875,18 +873,14 @@ export default function AuthenticationStep({
         )}
 
         {onContinueWithoutAccount && (
-          <div className="pt-5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onContinueWithoutAccount}
-              className="w-full rounded-full text-base font-normal text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-hover)] hover:text-[var(--onboarding-text-primary)]"
-              disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
-            >
-              {t("auth.emailStep.continueWithoutAccount")}
-            </Button>
-          </div>
+          <button
+            type="button"
+            onClick={onContinueWithoutAccount}
+            className="mt-5 text-sm text-[var(--onboarding-text-secondary)] underline-offset-4 transition-colors hover:text-[var(--onboarding-text-primary)] hover:underline disabled:opacity-50"
+            disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
+          >
+            {t("auth.emailStep.continueWithoutAccount")}
+          </button>
         )}
       </div>
     </CompactOnboardingFrame>

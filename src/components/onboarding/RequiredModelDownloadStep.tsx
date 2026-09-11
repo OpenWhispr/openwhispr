@@ -147,7 +147,7 @@ export function RequiredModelDownloadStep({
                 <Button
                   type="button"
                   onClick={() => startDownload(modelId)}
-                  className="-me-2 h-7 gap-1.5 rounded-full border-0! bg-[var(--onboarding-accent)] px-2.5 text-xs font-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none!"
+                  className="-me-2 h-7 gap-1.5 px-2.5 text-xs"
                 >
                   {t("common.retry")}
                 </Button>

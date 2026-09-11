@@ -3,6 +3,12 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./button";
 import { Tooltip } from "./tooltip";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./dropdown-menu";
+import {
   Copy,
   Trash2,
   FileText,
@@ -11,6 +17,7 @@ import {
   Loader2,
   AlertCircle,
   ArchiveRestore,
+  MoreVertical,
 } from "../icons";
 import type {
   TranscriptionItem as TranscriptionItemType,
@@ -22,10 +29,21 @@ import { formatMmSs } from "../../utils/formatDuration";
 
 const platform = getCachedPlatform();
 
+const ACTION_BUTTON_CLASS =
+  "h-7 w-7 rounded-full text-muted-foreground/70 hover:text-foreground hover:bg-foreground/6 dark:hover:bg-white/6";
+
 function getShowInFolderKey(): string {
   if (platform === "win32") return "controlPanel.history.showInFolderWindows";
   if (platform === "linux") return "controlPanel.history.showInFolderLinux";
   return "controlPanel.history.showInFolder";
+}
+
+interface MenuAction {
+  key: string;
+  icon: typeof Copy;
+  label: string;
+  onSelect: () => void;
+  destructive?: boolean;
 }
 
 interface TranscriptionItemProps {
@@ -46,7 +64,6 @@ export default function TranscriptionItem({
   onOpenSettings,
 }: TranscriptionItemProps) {
   const { t, i18n } = useTranslation();
-  const [isHovered, setIsHovered] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -71,14 +88,13 @@ export default function TranscriptionItem({
 
   const isFailed = item.status === "failed";
   const isDiscarded = item.status === "discarded";
+  const isTranscribed = !isFailed && !isDiscarded;
   const discardedDuration =
     item.audio_duration_ms && item.audio_duration_ms > 0
       ? formatMmSs(Math.round(item.audio_duration_ms / 1000))
       : null;
   const rawText = item.raw_text;
-  const hasRawText = rawText !== null;
   const hasAudio = item.has_audio === 1;
-  const showUtilityGroup = hasRawText || hasAudio;
 
   const errorCode = item.error_code as TranscriptionErrorCode;
   const isConfigError =
@@ -89,47 +105,137 @@ export default function TranscriptionItem({
   const isLimitError = errorCode === "LIMIT_REACHED";
   const isOfflineError = errorCode === "OFFLINE";
 
+  const retryLabel = t(
+    item.route_kind === "translation"
+      ? "controlPanel.history.retryTranslationMode"
+      : "controlPanel.history.retryTranscription"
+  );
+
+  // Copy stays visible as the one-tap action; everything else lives in the menu.
+  const candidateActions: (MenuAction | false)[] = [
+    isDiscarded &&
+      hasAudio && {
+        key: "recover",
+        icon: ArchiveRestore,
+        label: t("controlPanel.history.discarded.recover"),
+        onSelect: handleRetry,
+      },
+    !isDiscarded &&
+      hasAudio && { key: "retry", icon: RotateCcw, label: retryLabel, onSelect: handleRetry },
+    isTranscribed &&
+      rawText !== null && {
+        key: "raw",
+        icon: FileText,
+        label: t("controlPanel.history.viewRawTranscript"),
+        onSelect: () => setIsExpanded((expanded) => !expanded),
+      },
+    hasAudio && {
+      key: "folder",
+      icon: FolderOpen,
+      label: t(getShowInFolderKey()),
+      onSelect: () => onShowAudioInFolder?.(item.id),
+    },
+    {
+      key: "delete",
+      icon: Trash2,
+      label: t("controlPanel.history.deleteItem"),
+      onSelect: () => onDelete(item.id),
+      destructive: true,
+    },
+  ];
+  const menuActions = candidateActions.filter((action): action is MenuAction => action !== false);
+
   return (
     <div
       className={cn(
-        "group rounded-md border px-3 py-2.5 transition-colors duration-150",
+        "group/row px-4 py-3 transition-colors duration-150",
         isFailed
-          ? "border-destructive/30 bg-destructive/5 hover:bg-destructive/10"
+          ? "bg-destructive/5"
           : isDiscarded
-            ? "border-border/30 bg-muted/20 hover:bg-muted/30 opacity-80"
-            : "border-border/40 dark:border-border-subtle/60 bg-card/50 dark:bg-surface-2/60 hover:bg-muted/30 dark:hover:bg-surface-2/80",
-        // Translation rows get a 2px primary accent; ps-[11px] keeps text aligned with 1px-bordered rows.
-        item.route_kind === "translation" && "border-s-2 border-s-primary/70 ps-[11px]"
+            ? "bg-muted/20 opacity-80"
+            : "hover:bg-muted/20 dark:hover:bg-white/2",
+        // Translation rows get a 2px primary accent; ps-[14px] keeps text aligned with the other rows.
+        item.route_kind === "translation" && "border-s-2 border-s-primary/70 ps-[14px]"
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="flex items-start gap-3">
-        {formattedTime && (
-          <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums pt-0.5">
-            {formattedTime}
-          </span>
-        )}
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs tabular-nums text-muted-foreground">{formattedTime}</span>
+        <div
+          className={cn(
+            "-me-1.5 flex items-center gap-1 transition-opacity duration-150",
+            // Actions surface on hover, keyboard focus, or while the menu is open; failed and
+            // discarded rows keep them visible because recovery is the point of the row.
+            isTranscribed &&
+              "opacity-0 group-hover/row:opacity-100 has-[:focus-visible]:opacity-100 has-[[data-state=open]]:opacity-100"
+          )}
+        >
+          {isTranscribed && (
+            <Tooltip content={t("controlPanel.history.copyText")}>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => onCopy(item.text)}
+                className={ACTION_BUTTON_CLASS}
+              >
+                <Copy size={13} />
+              </Button>
+            </Tooltip>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                disabled={isRetrying}
+                aria-label={t("controlPanel.history.moreActions")}
+                className={ACTION_BUTTON_CLASS}
+              >
+                {isRetrying ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <MoreVertical size={13} />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {menuActions.map(({ key, icon: Icon, label, onSelect, destructive }) => (
+                <DropdownMenuItem
+                  key={key}
+                  onSelect={onSelect}
+                  className={cn(
+                    "gap-2.5",
+                    destructive && "text-destructive focus:bg-destructive/8 focus:text-destructive"
+                  )}
+                >
+                  <Icon size={14} className="shrink-0 opacity-70" />
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
 
+      <div className="mt-1.5">
         {isFailed ? (
-          <div className="flex-1 min-w-0 flex items-start gap-2">
-            <AlertCircle size={14} className="shrink-0 text-destructive mt-0.5" />
+          <div className="flex items-start gap-2">
+            <AlertCircle size={14} className="mt-0.5 shrink-0 text-destructive" />
             <div className="min-w-0">
-              <p className="text-sm text-destructive font-medium">
+              <p className="text-sm font-medium text-destructive">
                 {t("controlPanel.history.transcriptionFailed")}
               </p>
               {item.error_message && (
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                <p className="mt-0.5 text-xs leading-relaxed wrap-break-word text-muted-foreground">
                   {item.error_message}
                 </p>
               )}
               {isConfigError && (
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {hasAudio ? (
                     <>
                       <button
                         onClick={() => onOpenSettings?.()}
-                        className="text-primary hover:underline cursor-pointer"
+                        className="cursor-pointer text-primary hover:underline"
                       >
                         {t("controlPanel.history.failedCtaSettings")}
                       </button>{" "}
@@ -138,7 +244,7 @@ export default function TranscriptionItem({
                   ) : (
                     <button
                       onClick={() => onOpenSettings?.()}
-                      className="text-primary hover:underline cursor-pointer"
+                      className="cursor-pointer text-primary hover:underline"
                     >
                       {t("controlPanel.history.failedCtaSettingsOnly")}
                     </button>
@@ -146,23 +252,23 @@ export default function TranscriptionItem({
                 </p>
               )}
               {isLimitError && (
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {t("controlPanel.history.failedLimitReached")}
                 </p>
               )}
               {isOfflineError && (
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {t("controlPanel.history.failedOffline")}
                 </p>
               )}
             </div>
           </div>
         ) : isDiscarded ? (
-          <div className="flex-1 min-w-0 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               {t("controlPanel.history.discarded.badge")}
             </span>
-            <span className="text-sm text-muted-foreground truncate">
+            <span className="truncate text-sm text-muted-foreground">
               {discardedDuration
                 ? t("controlPanel.history.discarded.recordingWithDuration", {
                     duration: discardedDuration,
@@ -173,135 +279,14 @@ export default function TranscriptionItem({
         ) : (
           <p
             dir="auto"
-            className="flex-1 min-w-0 text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap"
+            className="text-base leading-normal wrap-break-word whitespace-pre-wrap text-foreground"
           >
             {item.text}
           </p>
         )}
-
-        <div
-          className={cn(
-            "flex items-center gap-0.5 shrink-0 transition-opacity duration-150",
-            isFailed || isDiscarded ? "opacity-100" : isHovered ? "opacity-100" : "opacity-0"
-          )}
-        >
-          {isDiscarded && hasAudio && (
-            <Tooltip content={t("controlPanel.history.discarded.recover")}>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handleRetry}
-                disabled={isRetrying}
-                className="h-6 w-6 rounded-sm text-muted-foreground hover:text-primary hover:bg-primary/10"
-              >
-                {isRetrying ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <ArchiveRestore size={12} />
-                )}
-              </Button>
-            </Tooltip>
-          )}
-          {isFailed && hasAudio && (
-            <Tooltip
-              content={t(
-                item.route_kind === "translation"
-                  ? "controlPanel.history.retryTranslationMode"
-                  : "controlPanel.history.retryTranscription"
-              )}
-            >
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handleRetry}
-                disabled={isRetrying}
-                className="h-6 w-6 rounded-sm text-destructive hover:text-destructive hover:bg-destructive/10"
-              >
-                {isRetrying ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <RotateCcw size={12} />
-                )}
-              </Button>
-            </Tooltip>
-          )}
-          {!isFailed && !isDiscarded && hasRawText && (
-            <Tooltip content={t("controlPanel.history.viewRawTranscript")}>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setIsExpanded(!isExpanded)}
-                className={cn(
-                  "h-6 w-6 rounded-sm text-muted-foreground hover:text-primary hover:bg-primary/10",
-                  isExpanded && "text-primary"
-                )}
-              >
-                <FileText size={12} />
-              </Button>
-            </Tooltip>
-          )}
-          {hasAudio && (
-            <Tooltip content={t(getShowInFolderKey())}>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => onShowAudioInFolder?.(item.id)}
-                className="h-6 w-6 rounded-sm text-muted-foreground hover:text-primary hover:bg-primary/10"
-              >
-                <FolderOpen size={12} />
-              </Button>
-            </Tooltip>
-          )}
-          {!isFailed && !isDiscarded && hasAudio && (
-            <Tooltip
-              content={t(
-                item.route_kind === "translation"
-                  ? "controlPanel.history.retryTranslationMode"
-                  : "controlPanel.history.retryTranscription"
-              )}
-            >
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handleRetry}
-                disabled={isRetrying}
-                className="h-6 w-6 rounded-sm text-muted-foreground hover:text-primary hover:bg-primary/10"
-              >
-                {isRetrying ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <RotateCcw size={12} />
-                )}
-              </Button>
-            </Tooltip>
-          )}
-          {showUtilityGroup && <div className="w-px h-3 bg-border/30" />}
-          {!isFailed && !isDiscarded && (
-            <Tooltip content={t("controlPanel.history.copyText")}>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => onCopy(item.text)}
-                className="h-6 w-6 rounded-sm text-muted-foreground hover:text-foreground hover:bg-foreground/10"
-              >
-                <Copy size={12} />
-              </Button>
-            </Tooltip>
-          )}
-          <Tooltip content={t("controlPanel.history.deleteItem")}>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => onDelete(item.id)}
-              className="h-6 w-6 rounded-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            >
-              <Trash2 size={12} />
-            </Button>
-          </Tooltip>
-        </div>
       </div>
 
-      {!isFailed && !isDiscarded && rawText !== null && (
+      {isTranscribed && rawText !== null && (
         <div
           inert={!isExpanded}
           className={cn(
@@ -310,9 +295,9 @@ export default function TranscriptionItem({
           )}
         >
           <div className="min-h-0 overflow-hidden">
-            <div className="border-t border-border/20 mt-2 pt-2">
+            <div className="mt-2 border-t border-border/70 pt-2">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   {t("controlPanel.history.rawTranscript")}
                 </span>
                 <Tooltip content={t("controlPanel.history.copyRawTranscript")}>
@@ -320,17 +305,17 @@ export default function TranscriptionItem({
                     size="icon"
                     variant="ghost"
                     onClick={() => onCopy(rawText)}
-                    className="h-5 w-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-foreground/10"
+                    className="h-5 w-5 rounded-sm text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
                   >
                     <Copy size={10} />
                   </Button>
                 </Tooltip>
               </div>
-              <p dir="auto" className="text-xs text-muted-foreground/80 leading-relaxed mt-1">
+              <p dir="auto" className="mt-1 text-xs leading-relaxed text-muted-foreground/80">
                 {rawText}
               </p>
               {rawText === item.text && (
-                <p className="text-[10px] text-muted-foreground/50 italic mt-1">
+                <p className="mt-1 text-[10px] italic text-muted-foreground/70">
                   {t("controlPanel.history.noAiProcessing")}
                 </p>
               )}

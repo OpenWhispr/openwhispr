@@ -504,6 +504,8 @@
       "couldNotDeleteDescription": "ربما تمت إزالة هذا النص المفرَّغ بالفعل.",
       "couldNotDeleteDescriptionGeneric": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "empty": "لا توجد أي نصوص مفرَّغة حتى الآن",
+      "emptyDescription": "اضغط مفتاح الاختصار في أي تطبيق وابدأ الحديث. يُحفظ كل نص هنا بخصوصية على جهازك.",
+      "sectionTitle": "النصوص المكتوبة",
       "dataRetentionDisabled": "الاحتفاظ بالبيانات قيد الإيقاف. لا يتم حفظ النصوص المفرَّغة والصوت في السجل.",
       "press": "اضغط",
       "toStart": "للبدء",
@@ -512,6 +514,7 @@
         "yesterday": "أمس"
       },
       "copyText": "نسخ النص",
+      "moreActions": "مزيد من الإجراءات",
       "copyRawTranscript": "نسخ النص المفرَّغ الخام",
       "deleteItem": "حذف",
       "viewRawTranscript": "عرض النص المفرَّغ الخام",
@@ -756,7 +759,7 @@
       "continueWithMicrosoft": "المتابعة باستخدام Microsoft",
       "protocolUnavailable": "تسجيل الدخول عبر المتصفح غير متوفر — أعد تسجيل بروتوكول openwhispr:// في إعدادات التطبيقات الافتراضية بنظامك."
     },
-    "welcomeSubtitle": "استخدم صوتك لكل شيء",
+    "welcomeSubtitle": "قوة صوتك. بشروطك.",
     "welcomeTitle": "مرحبًا بك في OpenWhispr",
     "sessionExpired": "انتهت الجلسة. يرجى إعادة بدء عملية التسجيل."
   },
@@ -1265,6 +1268,7 @@
         "createLink": "إنشاء رابط",
         "copyLink": "نسخ الرابط",
         "copied": "تم النسخ",
+        "export": "تصدير",
         "owner": "المالك",
         "editor": "يمكنه التعديل",
         "viewer": "يمكنه العرض",
@@ -1374,10 +1378,9 @@
   },
   "upcoming": {
     "title": "القادم",
-    "transcriptions": "التفريغات الصوتية",
     "now": "الآن",
     "untitledEvent": "حدث بدون عنوان",
-    "joinAndTakeNotes": "انضمام وتدوين ملاحظات",
+    "joinAndTranscribe": "انضمام وتفريغ صوتي",
     "takeNotes": "تدوين ملاحظات",
     "noEventsToday": "لا توجد أحداث اليوم",
     "noUpcomingEvents": "لا توجد أحداث قادمة",
@@ -1583,6 +1586,10 @@
       "raw": "خام",
       "enhanced": "مُحسّن",
       "saving": "جاري الحفظ",
+      "transcriptEmptyTitle": "لم يتم تسجيل أي شيء بعد",
+      "transcriptEmptyDescription": "اضغط على تسجيل لبدء النسخ. كل ما يُقال يظهر هنا لحظيًا.",
+      "startRecording": "بدء التسجيل",
+      "generateSummary": "إنشاء ملخص بالذكاء الاصطناعي",
       "startWriting": "ابدأ الكتابة...",
       "staleIndicator": "تم تغيير المحتوى منذ التحسين",
       "live": "مباشر",
@@ -1769,6 +1776,15 @@
         "generateNotes": {
           "name": "إنشاء ملاحظات",
           "description": "تنظيف وتنظيم وتحسين ملاحظاتك"
+        },
+        "followUpEmail": {
+          "name": "بريد متابعة",
+          "description": "صِغ بريد متابعة من ملاحظاتك والنص المكتوب",
+          "cta": "صياغة بريد متابعة"
+        },
+        "detailedNotes": {
+          "name": "ملاحظات مفصلة",
+          "description": "ملاحظات اجتماع دقيقة وشاملة تتضمن القرارات والمهام"
         }
       },
       "errors": {
@@ -4112,7 +4128,6 @@
     "allSpaces": "جميع المساحات",
     "title": "البحث",
     "description": "البحث في جميع الملاحظات والنصوص المفرَّغة",
-    "shortPlaceholder": "بحث",
     "placeholder": "البحث في الملاحظات والنصوص المفرَّغة...",
     "sections": {
       "notes": "الملاحظات",

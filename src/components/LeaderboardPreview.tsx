@@ -44,12 +44,12 @@ export default function LeaderboardPreview({
     <section
       data-leaderboard-state={dataState}
       className={cn(
-        "relative min-h-96 overflow-hidden rounded-2xl border border-border/50 bg-card/70 dark:border-white/8",
+        "relative min-h-96 overflow-hidden rounded-2xl border border-border/70 bg-card/70 dark:border-white/10",
         className
       )}
     >
       <div className="pointer-events-none select-none opacity-35 blur-[1px]" aria-hidden="true">
-        <div className="flex items-center gap-2 border-b border-border/40 px-5 py-4">
+        <div className="flex items-center gap-2 border-b border-border/70 px-5 py-4">
           <Trophy size={17} className="text-amber-500" />
           <div className="h-4 w-28 rounded bg-foreground/20" />
         </div>
@@ -59,7 +59,7 @@ export default function LeaderboardPreview({
             <div
               key={rank}
               className={cn(
-                "flex flex-col items-center rounded-xl border border-border/40 bg-background/40 px-3 py-4",
+                "flex flex-col items-center rounded-xl border border-border/70 bg-background/40 px-3 py-4",
                 rank === 1 && "py-6"
               )}
             >
@@ -72,7 +72,7 @@ export default function LeaderboardPreview({
           ))}
         </div>
 
-        <div className="border-t border-border/40 px-5 py-3">
+        <div className="border-t border-border/70 px-5 py-3">
           <div className="mb-2 grid grid-cols-[3rem_1fr_6rem] gap-3 text-[10px] uppercase tracking-wide text-muted-foreground">
             <span>{t("insights.leaderboard.rank")}</span>
             <span>{t("insights.leaderboard.member")}</span>
@@ -81,7 +81,7 @@ export default function LeaderboardPreview({
           {PREVIEW_ROWS.map((width, index) => (
             <div
               key={width}
-              className="grid grid-cols-[3rem_1fr_6rem] items-center gap-3 border-t border-border/30 py-3"
+              className="grid grid-cols-[3rem_1fr_6rem] items-center gap-3 border-t border-border/70 py-3"
             >
               <span className="text-xs tabular-nums text-muted-foreground">{index + 1}</span>
               <div className="flex items-center gap-2.5">
@@ -95,7 +95,7 @@ export default function LeaderboardPreview({
       </div>
 
       <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-background/20 via-background/60 to-background/90 p-6 backdrop-blur-[2px]">
-        <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-background/95 p-6 text-center shadow-xl">
+        <div className="w-full max-w-sm rounded-2xl border border-border/70 bg-background/95 p-6 text-center shadow-xl">
           <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Icon size={20} />
           </div>

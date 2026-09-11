@@ -2,22 +2,22 @@ import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps 
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import {
-  Download,
   Loader2,
   FileText,
   Sparkles,
   AlignLeft,
   MessageSquareText,
-  Calendar,
+  Mic,
   LinkIcon,
+  Link2,
+  Lock,
   FolderOpen,
   Search,
   Plus,
   Check,
-  Share2,
   Users,
 } from "../icons";
-import ShareNoteDialog from "./ShareNoteDialog";
+import ShareNoteDialog, { type NoteExportOption } from "./ShareNoteDialog";
 import {
   canOrganizeNote,
   noteCapabilities,
@@ -58,6 +58,9 @@ import type { NoteItem, FolderItem } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
+import NoteRecordControl, { RecordingWave } from "./NoteRecordControl";
+import EmptyStateCard from "../ui/EmptyStateCard";
+import { Button } from "../ui/button";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
@@ -71,10 +74,25 @@ import {
 import NoteParticipants from "./NoteParticipants";
 import type { CalendarAttendee } from "../../types/calendar";
 import { observeFloatingChatLayout } from "./floatingChatLayout";
-import { defaultFolderDisplayName, folderMatchesQuery } from "./shared";
+import { NOTE_META_CHIP_CLASS, defaultFolderDisplayName, folderMatchesQuery } from "./shared";
 
-const CHIP_BUTTON_CLASS =
-  "inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
+const SEGMENT_BUTTON_CLASS =
+  "relative z-1 flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors duration-150";
+const SHARE_GROUP_CLASS =
+  "flex h-[30px] items-stretch overflow-hidden rounded-full border border-border bg-surface-3 dark:border-white/10 dark:bg-surface-2";
+const SHARE_SEGMENT_CLASS =
+  "flex items-center text-xs font-medium text-foreground/80 outline-none transition-colors duration-150 hover:bg-surface-raised hover:text-foreground focus-visible:bg-surface-raised dark:hover:bg-surface-3";
+
+const TRANSCRIPT_EXPORT_LABEL_KEYS = {
+  txt: "notes.editor.asTranscriptText",
+  srt: "notes.editor.asSubtitles",
+  md: "notes.editor.asTranscriptMarkdown",
+  json: "notes.editor.asJson",
+} as const;
+const NOTE_EXPORT_LABEL_KEYS = {
+  md: "notes.editor.asMarkdown",
+  txt: "notes.editor.asPlainText",
+} as const;
 
 export interface Enhancement {
   content: string;
@@ -168,6 +186,8 @@ interface NoteEditorProps {
   onExportTranscript?: (format: "txt" | "srt" | "json" | "md") => void;
   enhancement?: Enhancement;
   actionPicker?: React.ReactNode;
+  /** Runs the built-in Generate Notes action; enables the post-recording summary pill. */
+  onGenerateSummary?: () => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   diarizationSessionId?: string | null;
@@ -200,6 +220,7 @@ export default function NoteEditor({
   onExportTranscript,
   enhancement,
   actionPicker,
+  onGenerateSummary,
   actionProcessingState,
   actionName,
   diarizationSessionId,
@@ -225,6 +246,7 @@ export default function NoteEditor({
   const [newFolderName, setNewFolderName] = useState("");
   const [isDiarizing, setIsDiarizing] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareIntent, setShareIntent] = useState<"open" | "copy-link">("open");
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const [aclRetryVersion, setAclRetryVersion] = useState(0);
   const [aclRequest, setAclRequest] = useState<{
@@ -256,10 +278,6 @@ export default function NoteEditor({
     locallyOwned: ownsNote(note, user?.id),
   });
   const shareCapabilities = noteCapabilities(notePermission);
-  const canShare =
-    isSignedIn &&
-    (!note.cloud_id || isTeamNote || aclState === "loaded") &&
-    shareCapabilities.canShare;
   const canEditNote = shareCapabilities.canEdit;
   // Re-filing is owner-only on shared personal notes (a denied folder_id
   // PATCH would fork an unexpected Personal copy); team members keep
@@ -356,7 +374,6 @@ export default function NoteEditor({
   });
   const titleRef = useRef<HTMLDivElement>(null);
   const prevNoteIdRef = useRef<number>(note.id);
-  const autoShowDoneRef = useRef(false);
 
   const segmentContainerRef = useRef<HTMLDivElement>(null);
   const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({ opacity: 0 });
@@ -381,6 +398,15 @@ export default function NoteEditor({
   }, [diarizedSegments, note.transcript]);
 
   const hasChatSegments = displaySegments.length > 0;
+  // A finished recording with no AI summary yet offers one from the transcript view.
+  const showSummaryCallout =
+    viewMode === "transcript" &&
+    !isRecording &&
+    hasChatSegments &&
+    !enhancement &&
+    canEditNote &&
+    !!onGenerateSummary &&
+    actionProcessingState !== "processing";
 
   const knownSpeakers = useMemo(
     () => buildKnownSpeakers(speakerProfiles, displaySegments, speakerMappings),
@@ -464,22 +490,19 @@ export default function NoteEditor({
   useEffect(() => {
     if (note.id !== prevNoteIdRef.current) {
       prevNoteIdRef.current = note.id;
-      autoShowDoneRef.current = false;
       return scheduleUiUpdate(() => {
         setChatMode("hidden");
         setDiarizedSegments(null);
         setIsDiarizing(false);
         setSpeakerMappings({});
-        if (!isRecording) {
-          setViewMode("raw");
-        }
+        setViewMode("raw");
         if (titleRef.current && titleRef.current.textContent !== note.title) {
           titleRef.current.textContent = note.title || "";
         }
         editorRef.current?.commands.focus();
       });
     }
-  }, [isRecording, note.id, note.title, scheduleUiUpdate]);
+  }, [note.id, note.title, scheduleUiUpdate]);
 
   useEffect(() => {
     window.electronAPI?.getSpeakerMappings?.(note.id).then((mappings) => {
@@ -489,17 +512,6 @@ export default function NoteEditor({
     });
     refreshSpeakerProfiles();
   }, [note.id, refreshSpeakerProfiles]);
-
-  useEffect(() => {
-    if (
-      !autoShowDoneRef.current &&
-      embeddedChat.activeConversationId &&
-      embeddedChat.messages.length > 0
-    ) {
-      autoShowDoneRef.current = true;
-      return scheduleUiUpdate(() => setChatMode("floating"));
-    }
-  }, [embeddedChat.activeConversationId, embeddedChat.messages.length, scheduleUiUpdate]);
 
   useEffect(() => {
     if (titleRef.current && titleRef.current.textContent !== note.title) {
@@ -700,14 +712,6 @@ export default function NoteEditor({
     document.execCommand("insertText", false, text);
   }, []);
 
-  const prevRecordingRef = useRef(false);
-  useEffect(() => {
-    if (isRecording && !prevRecordingRef.current) {
-      scheduleUiUpdate(() => setViewMode("transcript"));
-    }
-    prevRecordingRef.current = isRecording;
-  }, [isRecording, scheduleUiUpdate]);
-
   const contentScrollRef = useRef<HTMLDivElement>(null);
 
   const getActiveScroller = useCallback((root: HTMLDivElement): HTMLElement | null => {
@@ -796,10 +800,31 @@ export default function NoteEditor({
   const noteDate = formatNoteDate(note.created_at, locale);
   const shortDate = formatShortDate(note.created_at, locale);
 
+  const openShare = useCallback((intent: "open" | "copy-link") => {
+    setShareIntent(intent);
+    setShareDialogOpen(true);
+  }, []);
+
+  const exportOptions = useMemo<NoteExportOption[]>(() => {
+    if (viewMode === "transcript" && onExportTranscript) {
+      return (["txt", "srt", "md", "json"] as const).map((format) => ({
+        id: format,
+        label: t(TRANSCRIPT_EXPORT_LABEL_KEYS[format]),
+        onSelect: () => onExportTranscript(format),
+      }));
+    }
+    if (!onExportNote) return [];
+    return (["md", "txt"] as const).map((format) => ({
+      id: format,
+      label: t(NOTE_EXPORT_LABEL_KEYS[format]),
+      onSelect: () => onExportNote(format),
+    }));
+  }, [viewMode, onExportTranscript, onExportNote, t]);
+
   return (
     <div className="flex h-full min-h-0">
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="px-5 pt-4 pb-0">
+        <div className="px-5 pt-5 pb-0">
           <div
             dir="auto"
             ref={titleRef}
@@ -809,55 +834,51 @@ export default function NoteEditor({
             onKeyDown={handleTitleKeyDown}
             onPaste={handleTitlePaste}
             data-placeholder={t("notes.editor.untitled")}
-            className="text-base font-semibold text-foreground bg-transparent outline-none tracking-[-0.01em] empty:before:content-[attr(data-placeholder)] empty:before:text-foreground/15 empty:before:pointer-events-none"
+            className="text-3xl font-medium leading-tight text-foreground bg-transparent outline-none tracking-[-0.01em] empty:before:content-[attr(data-placeholder)] empty:before:text-foreground/45 empty:before:pointer-events-none"
             role="textbox"
             aria-label={t("notes.editor.noteTitle")}
           />
-          <div className="flex items-center gap-2 mt-1.5">
-            {shortDate && (
-              <span
-                className="inline-flex items-center gap-1.5 text-[11px] text-foreground/50 dark:text-foreground/35"
-                title={noteDate}
-              >
-                <Calendar size={11} className="shrink-0" />
-                {shortDate}
-              </span>
-            )}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <NoteParticipants
+              noteId={note.id}
+              participants={parsedParticipants}
+              dateLabel={shortDate || undefined}
+              dateTitle={noteDate}
+            />
             {calendarEventName && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] text-foreground/50 dark:text-foreground/35">
-                <LinkIcon size={11} className="shrink-0" />
-                <span className="truncate max-w-40">{calendarEventName}</span>
+              <span className={cn(NOTE_META_CHIP_CLASS, "cursor-default")}>
+                <LinkIcon size={14} className="shrink-0 text-foreground/60" />
+                <span className="max-w-40 truncate">{calendarEventName}</span>
               </span>
             )}
-            <NoteParticipants noteId={note.id} participants={parsedParticipants} />
             {isTeamNote && space && (
               <>
                 <button
                   type="button"
                   onClick={() => navigateToContainer(space.id, null)}
-                  className={CHIP_BUTTON_CLASS}
+                  className={NOTE_META_CHIP_CLASS}
                 >
                   {space.emoji ? (
                     <span className="text-[11px] leading-none shrink-0" aria-hidden="true">
                       {space.emoji}
                     </span>
                   ) : (
-                    <Users size={11} className="shrink-0" />
+                    <Users size={14} className="shrink-0 text-foreground/60" />
                   )}
                   <span dir="auto" className="truncate max-w-32">
                     {space.name}
                   </span>
                 </button>
                 {folders && onMoveToFolder && (canMoveToFolders || folderName) && (
-                  <span aria-hidden="true" className="text-[11px] text-foreground/25">
+                  <span aria-hidden="true" className="text-xs text-foreground/45">
                     /
                   </span>
                 )}
               </>
             )}
             {folders && onMoveToFolder && !canMoveToFolders && folderName && (
-              <span className={cn(CHIP_BUTTON_CLASS, "cursor-default")}>
-                <FolderOpen size={11} className="shrink-0" />
+              <span className={cn(NOTE_META_CHIP_CLASS, "cursor-default")}>
+                <FolderOpen size={14} className="shrink-0 text-foreground/60" />
                 <span dir="auto">{folderName}</span>
               </span>
             )}
@@ -872,8 +893,8 @@ export default function NoteEditor({
                 }}
               >
                 <DropdownMenuTrigger asChild>
-                  <button className={CHIP_BUTTON_CLASS}>
-                    <FolderOpen size={11} className="shrink-0" />
+                  <button className={NOTE_META_CHIP_CLASS}>
+                    <FolderOpen size={14} className="shrink-0 text-foreground/60" />
                     {folderName ? <span dir="auto">{folderName}</span> : t("notes.editor.noFolder")}
                   </button>
                 </DropdownMenuTrigger>
@@ -883,7 +904,7 @@ export default function NoteEditor({
                       <div className="relative px-1.5 py-0.5">
                         <Search
                           size={9}
-                          className="absolute start-3.5 top-1/2 -translate-y-1/2 text-foreground/15 pointer-events-none"
+                          className="absolute start-3.5 top-1/2 -translate-y-1/2 text-foreground/45 pointer-events-none"
                         />
                         <input
                           dir="auto"
@@ -891,7 +912,7 @@ export default function NoteEditor({
                           onChange={(e) => setFolderSearch(e.target.value)}
                           onKeyDown={(e) => e.stopPropagation()}
                           placeholder={t("notes.context.searchFolders")}
-                          className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
+                          className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
                         />
                       </div>
                       <DropdownMenuSeparator />
@@ -907,7 +928,7 @@ export default function NoteEditor({
                           onClick={() => onMoveToFolder(note.id, folder.id)}
                           className="text-xs gap-2 rounded-md px-2 py-1.5"
                         >
-                          <FolderOpen size={11} className="text-foreground/30 shrink-0" />
+                          <FolderOpen size={11} className="text-foreground/45 shrink-0" />
                           <span dir="auto" className="truncate flex-1">
                             {defaultFolderDisplayName(folder, t)}
                           </span>
@@ -916,7 +937,7 @@ export default function NoteEditor({
                       );
                     })}
                     {folderSearch && filteredFolders.length === 0 && (
-                      <p className="text-xs text-foreground/20 text-center py-1.5">
+                      <p className="text-xs text-foreground/45 text-center py-1.5">
                         {t("notes.context.noResults")}
                       </p>
                     )}
@@ -944,7 +965,7 @@ export default function NoteEditor({
                               }
                             }}
                             placeholder={t("notes.folders.folderName")}
-                            className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/20 outline-none border-none appearance-none"
+                            className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
                           />
                         </div>
                       ) : (
@@ -953,7 +974,7 @@ export default function NoteEditor({
                             e.preventDefault();
                             setIsCreatingFolder(true);
                           }}
-                          className="text-xs gap-2 rounded-md px-2 py-1.5 text-foreground/40"
+                          className="text-xs gap-2 rounded-md px-2 py-1.5 text-foreground/45"
                         >
                           <Plus size={10} />
                           {t("notes.context.newFolder")}
@@ -969,172 +990,111 @@ export default function NoteEditor({
                 type="button"
                 onClick={() => setMembersDialogOpen(true)}
                 aria-label={t("notes.spaces.teamsMembers.title", { space: space.name })}
-                className={CHIP_BUTTON_CLASS}
+                className={NOTE_META_CHIP_CLASS}
               >
-                <Users size={11} className="shrink-0" />
+                <Users size={14} className="shrink-0 text-foreground/60" />
                 {/* member_count tracks explicit rosters only — the audience always includes the viewer */}
                 {Math.max(1, space.member_count ?? 1)}
               </button>
             )}
             {isSaving && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-foreground/30 dark:text-foreground/15 tabular-nums">
-                <Loader2 size={8} className="animate-spin" />
+              <span className="inline-flex items-center gap-1 text-xs text-foreground/45 tabular-nums">
+                <Loader2 size={10} className="animate-spin" />
                 {t("notes.editor.saving")}
               </span>
             )}
-            <div className="flex-1" />
-            <div className="flex items-center gap-1">
-              {(enhancement || hasMeetingTranscript || hasChatSegments || isRecording) && (
+          </div>
+          <div className="mt-5 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center">
+              <div
+                ref={segmentContainerRef}
+                className="relative flex shrink-0 items-center rounded-full bg-surface-3 p-0.5 dark:bg-surface-2"
+              >
                 <div
-                  ref={segmentContainerRef}
-                  className="relative flex items-center shrink-0 rounded-md bg-foreground/3 dark:bg-white/3 p-0.5"
-                >
-                  <div
-                    className="absolute top-0.5 left-0 rounded bg-background dark:bg-surface-2 shadow-sm transition-[width,height,transform,opacity] duration-200 ease-out pointer-events-none"
-                    style={indicatorStyle}
-                  />
-                  {(hasMeetingTranscript || hasChatSegments || isRecording) && (
-                    <button
-                      data-segment-button
-                      data-segment-value="transcript"
-                      onClick={() => setViewMode("transcript")}
-                      className={cn(
-                        "relative z-1 px-1.5 h-5 rounded text-xs font-medium transition-colors duration-150 flex items-center gap-1",
-                        viewMode === "transcript"
-                          ? "text-foreground/60"
-                          : "text-foreground/25 hover:text-foreground/40"
-                      )}
-                    >
-                      <MessageSquareText size={10} />
-                      {t("notes.editor.transcript")}
-                    </button>
+                  className="pointer-events-none absolute top-0.5 left-0 rounded-full bg-background shadow-sm transition-[width,height,transform,opacity] duration-200 ease-out dark:bg-surface-3"
+                  style={indicatorStyle}
+                />
+                <button
+                  data-segment-button
+                  data-segment-value="transcript"
+                  onClick={() => setViewMode("transcript")}
+                  className={cn(
+                    SEGMENT_BUTTON_CLASS,
+                    viewMode === "transcript"
+                      ? "text-foreground"
+                      : "text-foreground/60 hover:text-foreground/80"
                   )}
+                >
+                  {isRecording ? <RecordingWave /> : <MessageSquareText size={12} />}
+                  {t("notes.editor.transcript")}
+                </button>
+                <button
+                  data-segment-button
+                  data-segment-value="raw"
+                  onClick={() => setViewMode("raw")}
+                  className={cn(
+                    SEGMENT_BUTTON_CLASS,
+                    viewMode === "raw"
+                      ? "text-foreground"
+                      : "text-foreground/60 hover:text-foreground/80"
+                  )}
+                >
+                  <AlignLeft size={12} />
+                  {t("notes.editor.notes")}
+                </button>
+                {enhancement && (
                   <button
                     data-segment-button
-                    data-segment-value="raw"
-                    onClick={() => setViewMode("raw")}
+                    data-segment-value="enhanced"
+                    onClick={() => setViewMode("enhanced")}
                     className={cn(
-                      "relative z-1 px-1.5 h-5 rounded text-xs font-medium transition-colors duration-150 flex items-center gap-1",
-                      viewMode === "raw"
-                        ? "text-foreground/60"
-                        : "text-foreground/25 hover:text-foreground/40"
+                      SEGMENT_BUTTON_CLASS,
+                      viewMode === "enhanced"
+                        ? "text-foreground"
+                        : "text-foreground/60 hover:text-foreground/80"
                     )}
                   >
-                    <AlignLeft size={10} />
-                    {t("notes.editor.notes")}
+                    <Sparkles size={12} />
+                    {t("notes.editor.enhanced")}
+                    {enhancement.isStale && (
+                      <span
+                        className="h-1 w-1 rounded-full bg-amber-400/60"
+                        title={t("notes.editor.staleIndicator")}
+                      />
+                    )}
                   </button>
-                  {enhancement && (
-                    <button
-                      data-segment-button
-                      data-segment-value="enhanced"
-                      onClick={() => setViewMode("enhanced")}
-                      className={cn(
-                        "relative z-1 px-1.5 h-5 rounded text-xs font-medium transition-colors duration-150 flex items-center gap-1",
-                        viewMode === "enhanced"
-                          ? "text-foreground/60"
-                          : "text-foreground/25 hover:text-foreground/40"
-                      )}
-                    >
-                      <Sparkles size={9} />
-                      {t("notes.editor.enhanced")}
-                      {enhancement.isStale && (
-                        <span
-                          className="w-1 h-1 rounded-full bg-amber-400/60"
-                          title={t("notes.editor.staleIndicator")}
-                        />
-                      )}
-                    </button>
-                  )}
-                </div>
+                )}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {canEditNote && (
+                <NoteRecordControl
+                  isRecording={isRecording}
+                  isProcessing={isProcessing}
+                  disabled={!recordingAllowed}
+                  onStart={onStartRecording}
+                  onStop={onStopRecording}
+                />
               )}
-              {canShare && (
+              <div className={SHARE_GROUP_CLASS}>
                 <button
                   type="button"
-                  onClick={() => setShareDialogOpen(true)}
-                  className={cn(
-                    "shrink-0 h-6 w-6 flex items-center justify-center rounded-md",
-                    "bg-foreground/4 dark:bg-white/5",
-                    "hover:bg-foreground/8 dark:hover:bg-white/10",
-                    "active:bg-foreground/12 dark:active:bg-white/15",
-                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                    "transition-colors duration-150"
-                  )}
-                  aria-label={t("noteEditor.share.button")}
+                  onClick={() => openShare("open")}
+                  className={cn(SHARE_SEGMENT_CLASS, "gap-1.5 ps-2.5 pe-3")}
                 >
-                  <Share2
-                    size={11}
-                    className={cn(
-                      "transition-colors",
-                      isShared
-                        ? "text-blue-600 dark:text-blue-400"
-                        : "text-foreground/50 dark:text-foreground/40"
-                    )}
-                  />
+                  <Lock size={13} className={isShared ? "text-primary" : "text-foreground/60"} />
+                  {t("noteEditor.share.button")}
                 </button>
-              )}
-              {(onExportNote || onExportTranscript) && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className="shrink-0 h-6 w-6 flex items-center justify-center rounded-md bg-foreground/4 dark:bg-white/5 text-foreground/50 dark:text-foreground/40 hover:text-foreground/70 hover:bg-foreground/8 dark:hover:text-foreground/60 dark:hover:bg-white/8 transition-colors duration-150"
-                      aria-label={t("notes.editor.export")}
-                    >
-                      <Download size={11} />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" sideOffset={4}>
-                    {viewMode === "transcript" && onExportTranscript ? (
-                      <>
-                        <DropdownMenuItem
-                          onClick={() => onExportTranscript("txt")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asTranscriptText")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onExportTranscript("srt")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asSubtitles")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onExportTranscript("md")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asTranscriptMarkdown")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onExportTranscript("json")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asJson")}
-                        </DropdownMenuItem>
-                      </>
-                    ) : (
-                      <>
-                        <DropdownMenuItem
-                          onClick={() => onExportNote?.("md")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asMarkdown")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onExportNote?.("txt")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asPlainText")}
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+                <span aria-hidden="true" className="my-1.5 w-px bg-border dark:bg-white/10" />
+                <button
+                  type="button"
+                  onClick={() => openShare("copy-link")}
+                  aria-label={t("noteEditor.share.dialog.copyLink")}
+                  className={cn(SHARE_SEGMENT_CLASS, "w-[30px] justify-center")}
+                >
+                  <Link2 size={13} className="text-foreground/60" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1152,7 +1112,7 @@ export default function NoteEditor({
             <p className="text-[11px] text-foreground/50 flex-1 truncate">
               {t("notes.spaces.conflictBanner")}
               {conflictEditorName && (
-                <span className="text-foreground/30">
+                <span className="text-foreground/45">
                   {" "}
                   {t("notes.spaces.editedBy", {
                     name: conflictEditorName,
@@ -1169,7 +1129,7 @@ export default function NoteEditor({
             </button>
             <button
               onClick={handleConflictKeep}
-              className="text-[11px] font-medium text-foreground/35 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
             >
               {t("notes.spaces.conflictKeep")}
             </button>
@@ -1217,6 +1177,20 @@ export default function NoteEditor({
               )
             ) : viewMode === "transcript" && hasMeetingTranscript ? (
               <RichTextEditor value={note.transcript || ""} disabled />
+            ) : viewMode === "transcript" ? (
+              <EmptyStateCard
+                icon={Mic}
+                title={t("notes.editor.transcriptEmptyTitle")}
+                description={t("notes.editor.transcriptEmptyDescription")}
+                className="mt-2"
+              >
+                {canEditNote && recordingAllowed && (
+                  <Button size="sm" onClick={onStartRecording} disabled={isProcessing}>
+                    <Mic size={13} />
+                    {t("notes.editor.startRecording")}
+                  </Button>
+                )}
+              </EmptyStateCard>
             ) : viewMode === "enhanced" && enhancement ? (
               <RichTextEditor
                 value={enhancement.content}
@@ -1259,14 +1233,17 @@ export default function NoteEditor({
           )}
           <NoteBottomBar
             isRecording={isRecording}
-            isProcessing={isProcessing}
-            recordingDisabled={!recordingAllowed}
-            onStartRecording={onStartRecording}
-            onStopRecording={onStopRecording}
             onAskSubmit={handleAskSubmit}
             onInputFocus={handleChatInputFocus}
-            canRecord={canEditNote}
             actionPicker={isRecording || !canEditNote ? undefined : actionPicker}
+            callout={
+              showSummaryCallout && (
+                <Button className="h-9 gap-2 px-4 text-sm" onClick={onGenerateSummary}>
+                  <AlignLeft size={16} />
+                  {t("notes.editor.generateSummary")}
+                </Button>
+              )
+            }
             hideInput={chatMode !== "hidden"}
           />
           {chatMode === "floating" && (
@@ -1300,9 +1277,13 @@ export default function NoteEditor({
           onNewChat={embeddedChat.startNewChat}
         />
       )}
-      {canShare && (
-        <ShareNoteDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={note} />
-      )}
+      <ShareNoteDialog
+        open={shareDialogOpen}
+        onOpenChange={setShareDialogOpen}
+        note={note}
+        exportOptions={exportOptions}
+        copyLinkOnOpen={shareIntent === "copy-link"}
+      />
       {isTeamNote && space?.cloud_space_id && (
         <SpaceMembersDialog
           space={space}

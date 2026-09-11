@@ -16,7 +16,7 @@ export default function ProcessingModeSelector({
   const { t } = useTranslation();
   return (
     <div
-      className={`relative flex p-0.5 rounded-lg bg-white/5 dark:bg-white/3 border border-white/10 dark:border-white/5 ${className}`}
+      className={`relative flex p-0.5 rounded-lg bg-white/5 dark:bg-white/3 border border-white/10 dark:border-white/10 ${className}`}
     >
       {/* Sliding indicator */}
       <div

@@ -92,7 +92,7 @@ export default function UpgradePrompt({
           />
         </div>
 
-        <p className="text-xs text-muted-foreground/60 text-center">
+        <p className="text-xs text-muted-foreground/70 text-center">
           {t("upgradePrompt.rollingWeeklyLimit")}
         </p>
       </DialogContent>
@@ -127,7 +127,7 @@ function OptionCard({
         <div className="font-medium text-foreground">{title}</div>
         <div className="text-sm text-muted-foreground">{description}</div>
       </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 rtl:rotate-180" />
+      <ChevronRight className="h-4 w-4 text-muted-foreground/70 shrink-0 rtl:rotate-180" />
     </button>
   );
 }

@@ -110,7 +110,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
       {!teamsLoaded ? (
         <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
       ) : loadFailed && teams.length === 0 ? (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
             {t("settingsPage.workspace.loadError.description")}
           </p>
@@ -119,10 +119,10 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
           </Button>
         </div>
       ) : (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
           {teams.length === 0 && (
             <div className="py-10 text-center">
-              <Users className="w-5 h-5 text-muted-foreground/60 mx-auto mb-2" />
+              <Users className="w-5 h-5 text-muted-foreground/70 mx-auto mb-2" />
               <p className="text-xs text-muted-foreground mb-3">
                 {t("settingsPage.workspace.teams.empty")}
               </p>

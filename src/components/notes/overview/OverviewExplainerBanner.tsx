@@ -27,7 +27,7 @@ export function OverviewExplainerBanner({ kind }: OverviewExplainerBannerProps) 
           setVisible(false);
         }}
         aria-label={t("notes.overview.banner.dismiss")}
-        className="absolute top-2.5 end-2.5 h-5 w-5 flex items-center justify-center rounded-sm text-foreground/30 hover:text-foreground/60 hover:bg-foreground/6 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+        className="absolute top-2.5 end-2.5 h-5 w-5 flex items-center justify-center rounded-sm text-foreground/45 hover:text-foreground/60 hover:bg-foreground/6 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
       >
         <X size={12} />
       </button>

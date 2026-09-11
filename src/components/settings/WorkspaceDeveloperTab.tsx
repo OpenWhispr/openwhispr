@@ -182,7 +182,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
         </Button>
       </div>
 
-      <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+      <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
         {loadError && (
           <div className="px-4 py-6 flex items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
@@ -195,7 +195,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
         )}
         {!loadError && keys.length === 0 && (
           <div className="py-10 text-center">
-            <Key className="w-5 h-5 text-muted-foreground/60 mx-auto mb-2" />
+            <Key className="w-5 h-5 text-muted-foreground/70 mx-auto mb-2" />
             <p className="text-xs text-muted-foreground">
               {t("settingsPage.workspace.developer.empty")}
             </p>
@@ -273,7 +273,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
                             "focus-visible:ring-1 focus-visible:ring-primary/30",
                             checked
                               ? "border-primary/40 bg-primary/8 text-foreground"
-                              : "border-border/60 text-muted-foreground hover:bg-foreground/4 hover:text-foreground"
+                              : "border-border/70 text-muted-foreground hover:bg-foreground/4 hover:text-foreground"
                           )}
                         >
                           {t(
@@ -336,7 +336,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
           </DialogHeader>
           <div
             dir="ltr"
-            className="rounded-md border border-border/60 bg-foreground/4 dark:bg-white/4 p-3 font-mono text-xs break-all"
+            className="rounded-md border border-border/70 bg-foreground/4 dark:bg-white/4 p-3 font-mono text-xs break-all"
           >
             {newKey?.key}
           </div>

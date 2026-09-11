@@ -13,9 +13,15 @@ import {
   useActions,
   initializeActions,
   getActionName,
+  getActionCta,
   getActionDescription,
 } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
+import { FOLLOW_UP_EMAIL_KEY } from "../../helpers/builtinActions";
+
+// Keyed fresh so the follow-up email default reaches installs that had
+// "Generate Notes" remembered under the old key.
+const ASK_BAR_ACTION_KEY = "askBarActionId";
 
 interface ActionPickerProps {
   onRunAction: (action: ActionItem) => void;
@@ -31,7 +37,7 @@ export default function ActionPicker({
   const { t } = useTranslation();
   const actions = useActions();
   const [lastUsedId, setLastUsedId] = useState<number | null>(() => {
-    const stored = localStorage.getItem("lastUsedActionId");
+    const stored = localStorage.getItem(ASK_BAR_ACTION_KEY);
     return stored ? Number(stored) : null;
   });
 
@@ -39,11 +45,15 @@ export default function ActionPicker({
     initializeActions();
   }, []);
 
-  const activeAction = actions.find((a) => a.id === lastUsedId) ?? actions[0] ?? null;
+  const activeAction =
+    actions.find((a) => a.id === lastUsedId) ??
+    actions.find((a) => a.translation_key === FOLLOW_UP_EMAIL_KEY) ??
+    actions[0] ??
+    null;
 
   const handleRun = (action: ActionItem) => {
     setLastUsedId(action.id);
-    localStorage.setItem("lastUsedActionId", String(action.id));
+    localStorage.setItem(ASK_BAR_ACTION_KEY, String(action.id));
     onRunAction(action);
   };
 
@@ -74,7 +84,7 @@ export default function ActionPicker({
       >
         <Sparkles size={11} />
         <span className="text-[11px] font-semibold tracking-tight">
-          {getActionName(activeAction, t)}
+          {getActionCta(activeAction, t)}
         </span>
       </button>
 
@@ -85,7 +95,7 @@ export default function ActionPicker({
             aria-label={t("notes.actions.selectAction")}
             className={cn(
               "flex items-center justify-center h-7 w-6 pe-0.5",
-              "border-s border-black/6 dark:border-white/8",
+              "border-s border-black/6 dark:border-white/10",
               "text-accent/40 dark:text-accent/30",
               "transition-colors duration-150",
               "hover:bg-accent/8 dark:hover:bg-accent/12",
@@ -109,7 +119,7 @@ export default function ActionPicker({
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{getActionName(action, t)}</div>
                 {action.description && (
-                  <div className="text-xs text-muted-foreground/50 truncate">
+                  <div className="text-xs text-muted-foreground/70 truncate">
                     {getActionDescription(action, t)}
                   </div>
                 )}
@@ -119,7 +129,7 @@ export default function ActionPicker({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={onManageActions}
-            className="text-xs gap-2.5 rounded-md px-2.5 py-1.5 text-muted-foreground/60"
+            className="text-xs gap-2.5 rounded-md px-2.5 py-1.5 text-muted-foreground/70"
           >
             <Settings2 size={12} />
             {t("notes.actions.manage")}

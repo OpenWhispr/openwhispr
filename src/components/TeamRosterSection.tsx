@@ -131,7 +131,7 @@ export default function TeamRosterSection({
       {loading && members.length === 0 ? (
         <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
       ) : loadFailed && members.length === 0 ? (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
             {t("settingsPage.workspace.members.loadError")}
           </p>
@@ -140,7 +140,7 @@ export default function TeamRosterSection({
           </Button>
         </div>
       ) : (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50 max-h-64 overflow-y-auto">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50 max-h-64 overflow-y-auto">
           {members.map((member) => {
             const isSelf = member.user_id === currentUserId;
             const isBusy = busyUserIds.has(member.user_id);

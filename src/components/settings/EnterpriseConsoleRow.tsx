@@ -26,7 +26,7 @@ export default function EnterpriseConsoleRow({ workspace }: { workspace: Workspa
   }
 
   return (
-    <div className="rounded-md border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-3 flex items-center justify-between gap-3">
+    <div className="rounded-md border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-3 flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
         <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
         <div className="min-w-0">

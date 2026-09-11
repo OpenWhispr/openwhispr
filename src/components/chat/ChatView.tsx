@@ -21,7 +21,7 @@ function NewChatEmptyState() {
   return (
     <div className="flex flex-col items-center justify-center h-full -mt-6 select-none">
       <ChatEmptyIllustration />
-      <p className="text-xs text-foreground/50 dark:text-foreground/25 text-center max-w-48 mt-4">
+      <p className="text-xs text-foreground/50 dark:text-foreground/45 text-center max-w-48 mt-4">
         {t("chat.newChatEmpty")}
       </p>
     </div>
@@ -149,7 +149,7 @@ export default function ChatView() {
         </Suspense>
       )}
       <div className="flex h-full">
-        <div className="w-56 min-w-50 shrink-0 border-e border-border/15 dark:border-white/6">
+        <div className="w-56 min-w-50 shrink-0 border-e border-border dark:border-white/10">
           <ConversationList
             activeConversationId={activeConversationId}
             onSelectConversation={handleSelectConversation}

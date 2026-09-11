@@ -634,7 +634,7 @@ export function HotkeyInput({
           e.stopPropagation();
           onClear();
         }}
-        className="rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 transition-opacity duration-150 text-muted-foreground/50 hover:text-destructive cursor-pointer"
+        className="rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 transition-opacity duration-150 text-muted-foreground/70 hover:text-destructive cursor-pointer"
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
@@ -738,7 +738,7 @@ export function HotkeyInput({
                 hotkeyParts.map((part, i) => (
                   <React.Fragment key={part}>
                     {i > 0 && (
-                      <span className="text-muted-foreground/40 text-lg font-light">+</span>
+                      <span className="text-muted-foreground/70 text-lg font-light">+</span>
                     )}
                     <kbd className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-sm font-semibold text-foreground shadow-sm">
                       {part}
@@ -761,7 +761,7 @@ export function HotkeyInput({
                 </kbd>
               )}
             </div>
-            <span className="text-xs text-muted-foreground/60 group-hover:text-muted-foreground transition-colors">
+            <span className="text-xs text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
               {t("hotkeyInput.clickToChange")}
             </span>
           </div>
@@ -856,7 +856,7 @@ export function HotkeyInput({
                 <div dir="ltr" className="flex items-center gap-1">
                   {hotkeyParts.map((part, i) => (
                     <React.Fragment key={part}>
-                      {i > 0 && <span className="text-muted-foreground/30 text-xs">+</span>}
+                      {i > 0 && <span className="text-muted-foreground/70 text-xs">+</span>}
                       <kbd className="px-2 py-0.5 bg-surface-raised border border-border rounded-sm text-xs font-semibold text-foreground">
                         {part}
                       </kbd>
@@ -881,7 +881,7 @@ export function HotkeyInput({
                   {displayValue}
                 </kbd>
               )}
-              <span className="text-xs text-muted-foreground/50">
+              <span className="text-xs text-muted-foreground/70">
                 {t("hotkeyInput.clickToChangeLower")}
               </span>
               {clearButton}

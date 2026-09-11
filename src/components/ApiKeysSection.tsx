@@ -115,7 +115,7 @@ export default function ApiKeysSection() {
         <SettingsPanel>
           <SettingsPanelRow>
             <div className="flex flex-col items-center py-4 text-center">
-              <Key className="h-5 w-5 text-muted-foreground/40 mb-2" />
+              <Key className="h-5 w-5 text-muted-foreground/70 mb-2" />
               <p className="text-xs text-muted-foreground mb-3">{t("apiKeysSection.empty")}</p>
               <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
                 <Plus className="h-3.5 w-3.5 me-1.5" />
@@ -136,7 +136,7 @@ export default function ApiKeysSection() {
                     </span>
                     <code
                       dir="ltr"
-                      className="text-[10px] font-mono text-muted-foreground/60 shrink-0"
+                      className="text-[10px] font-mono text-muted-foreground/70 shrink-0"
                     >
                       {apiKey.key_prefix}...
                     </code>
@@ -149,7 +149,7 @@ export default function ApiKeysSection() {
                           {t(`apiKeysSection.scopes.${API_SCOPE_I18N_KEY[scope as ApiScope]}`)}
                         </Badge>
                       ))}
-                    <span className="text-[10px] text-muted-foreground/50 ms-1">
+                    <span className="text-[10px] text-muted-foreground/70 ms-1">
                       {apiKey.last_used_at
                         ? t("apiKeysSection.lastUsed", {
                             time: formatRelativeTime(apiKey.last_used_at),
@@ -172,7 +172,7 @@ export default function ApiKeysSection() {
 
           {keys.length >= MAX_API_KEYS && (
             <SettingsPanelRow>
-              <p className="text-[10px] text-muted-foreground/50 text-center">
+              <p className="text-[10px] text-muted-foreground/70 text-center">
                 {t("apiKeysSection.maxKeysReached", { max: MAX_API_KEYS })}
               </p>
             </SettingsPanelRow>
@@ -304,7 +304,7 @@ function CreateKeyDialog({
             </DialogHeader>
 
             <div className="space-y-3">
-              <div className="rounded-lg border border-border/50 bg-muted/30 dark:bg-surface-raised/30 p-3">
+              <div className="rounded-lg border border-border/70 bg-muted/30 dark:bg-surface-raised/30 p-3">
                 <code
                   dir="ltr"
                   className="text-xs font-mono text-foreground break-all select-all leading-relaxed"

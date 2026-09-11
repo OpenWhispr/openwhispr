@@ -11,6 +11,7 @@ const { parseEventTime } = require("./calendarAvailability");
 // keeps the cloud created_at but lets timestamp default to the local pull, so
 // a naive value must never outrank created_at when dating a historical row.
 const { hasExplicitTimeZone, parseDbTimestamp, toDbTimestamp } = require("./dbTimestamp");
+const { BUILTIN_ACTIONS, GENERATE_NOTES_KEY } = require("./builtinActions");
 const {
   ANALYTICS_COUNTER_VERSION,
   ANALYTICS_HISTORY_BACKFILL_VERSION,
@@ -522,33 +523,41 @@ class DatabaseManager {
         "CREATE INDEX IF NOT EXISTS idx_agent_conversations_container ON agent_conversations(space_id, folder_id)"
       );
 
-      const actionCount = this.db.prepare("SELECT COUNT(*) as count FROM actions").get();
-      if (actionCount.count === 0) {
-        this.db
-          .prepare(
-            "INSERT INTO actions (name, description, prompt, icon, is_builtin, sort_order, translation_key) VALUES (?, ?, ?, ?, 1, 0, ?)"
-          )
-          .run(
-            "Generate Notes",
-            "Clean up, structure, and enhance your notes",
-            "Transform the provided content into clean, well-structured notes in markdown. Preserve the user's intent and all substantive information. Remove filler, small talk, false starts, and redundant content. For personal notes, improve grammar and structure for readability. For meeting transcripts, extract key discussion points, decisions, action items, and follow-ups.",
-            "sparkles",
-            "notes.actions.builtin.generateNotes"
-          );
-      }
-
-      // Migrate built-in action to "Generate Notes"
+      // Pre-2026 installs carry one built-in row under an older key: rename it to
+      // Generate Notes so the loop below recognizes and upgrades it.
+      const builtinKeys = BUILTIN_ACTIONS.map((action) => action.translationKey);
       this.db
         .prepare(
-          "UPDATE actions SET name = ?, description = ?, prompt = ?, translation_key = ? WHERE is_builtin = 1 AND translation_key != ?"
+          `UPDATE actions SET translation_key = ? WHERE is_builtin = 1 AND (translation_key IS NULL OR translation_key NOT IN (${builtinKeys.map(() => "?").join(", ")}))`
         )
-        .run(
-          "Generate Notes",
-          "Clean up, structure, and enhance your notes",
-          "Transform the provided content into clean, well-structured notes in markdown. Preserve the user's intent and all substantive information. Remove filler, small talk, false starts, and redundant content. For personal notes, improve grammar and structure for readability. For meeting transcripts, extract key discussion points, decisions, action items, and follow-ups.",
-          "notes.actions.builtin.generateNotes",
-          "notes.actions.builtin.generateNotes"
-        );
+        .run(GENERATE_NOTES_KEY, ...builtinKeys);
+
+      // Built-in actions: insert any that are missing, and roll a new default prompt
+      // out to rows whose prompt is still a previous default (never a user edit).
+      const selectBuiltin = this.db.prepare(
+        "SELECT id, prompt FROM actions WHERE is_builtin = 1 AND translation_key = ?"
+      );
+      const insertBuiltin = this.db.prepare(
+        "INSERT INTO actions (name, description, prompt, icon, is_builtin, sort_order, translation_key) VALUES (?, ?, ?, ?, 1, ?, ?)"
+      );
+      const upgradeBuiltin = this.db.prepare(
+        "UPDATE actions SET name = ?, description = ?, prompt = ? WHERE id = ?"
+      );
+      for (const action of BUILTIN_ACTIONS) {
+        const existing = selectBuiltin.get(action.translationKey);
+        if (!existing) {
+          insertBuiltin.run(
+            action.name,
+            action.description,
+            action.prompt,
+            action.icon,
+            action.sortOrder,
+            action.translationKey
+          );
+        } else if (action.previousPrompts.includes(existing.prompt)) {
+          upgradeBuiltin.run(action.name, action.description, action.prompt, existing.id);
+        }
+      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS google_calendar_tokens (

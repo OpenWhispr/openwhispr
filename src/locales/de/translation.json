@@ -636,6 +636,8 @@
       "couldNotDeleteDescription": "Diese Transkription wurde möglicherweise bereits entfernt.",
       "couldNotDeleteDescriptionGeneric": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "empty": "Noch keine Transkriptionen",
+      "emptyDescription": "Drücke deinen Hotkey in einer beliebigen App und sprich los. Jede Transkription wird hier privat auf deinem Gerät gespeichert.",
+      "sectionTitle": "Transkriptionen",
       "dataRetentionDisabled": "Datenaufbewahrung ist deaktiviert. Transkriptionen und Audio werden nicht im Verlauf gespeichert.",
       "press": "Drücken Sie",
       "toStart": "zum Starten",
@@ -644,6 +646,7 @@
         "yesterday": "Gestern"
       },
       "copyText": "Text kopieren",
+      "moreActions": "Weitere Aktionen",
       "copyRawTranscript": "Rohtranskript kopieren",
       "deleteItem": "Löschen",
       "viewRawTranscript": "Rohtranskript anzeigen",
@@ -908,7 +911,6 @@
         "managedRouteInvalid": "Die verwaltete Transkription konnte aufgrund einer Konfigurationsabweichung nicht gestartet werden. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
         "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator.",
         "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
-        "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
         "providerKeyMissing": "Für Ihren Transkriptionsanbieter ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprache zu Text hinzu."
       },
       "translationFallback": {
@@ -1132,7 +1134,7 @@
       "continueWithMicrosoft": "Weiter mit Microsoft",
       "protocolUnavailable": "Browser-Anmeldung nicht verfügbar — registrieren Sie das openwhispr://-Protokoll in den Standardanwendungs-Einstellungen Ihres Systems erneut."
     },
-    "welcomeSubtitle": "Nutzen Sie Ihre Stimme für alles",
+    "welcomeSubtitle": "Die Kraft Ihrer Stimme. Zu Ihren Bedingungen.",
     "welcomeTitle": "Willkommen bei OpenWhispr",
     "sessionExpired": "Sitzung abgelaufen"
   },
@@ -1161,10 +1163,9 @@
   },
   "upcoming": {
     "title": "Demnächst",
-    "transcriptions": "Transkriptionen",
     "now": "Jetzt",
     "untitledEvent": "Unbenanntes Ereignis",
-    "joinAndTakeNotes": "Beitreten & Notizen",
+    "joinAndTranscribe": "Beitreten & transkribieren",
     "takeNotes": "Notizen machen",
     "noEventsToday": "Heute keine Termine",
     "noUpcomingEvents": "Keine anstehenden Termine",
@@ -3244,6 +3245,10 @@
       "raw": "Roh",
       "enhanced": "Verbessert",
       "saving": "Wird gespeichert",
+      "transcriptEmptyTitle": "Noch nichts aufgenommen",
+      "transcriptEmptyDescription": "Drücke auf Aufnahme, um mit der Transkription zu beginnen. Alles Gesagte erscheint hier in Echtzeit.",
+      "startRecording": "Aufnahme starten",
+      "generateSummary": "KI-Zusammenfassung erstellen",
       "startWriting": "Schreibe los...",
       "staleIndicator": "Der Inhalt hat sich seit der Verbesserung geändert",
       "live": "Live",
@@ -3424,6 +3429,15 @@
         "generateNotes": {
           "name": "Notizen generieren",
           "description": "Notizen bereinigen, strukturieren und verbessern"
+        },
+        "followUpEmail": {
+          "name": "Follow-up-E-Mail",
+          "description": "Entwirf eine Follow-up-E-Mail aus Notizen und Transkript",
+          "cta": "Follow-up-E-Mail entwerfen"
+        },
+        "detailedNotes": {
+          "name": "Ausführliche Notizen",
+          "description": "Präzise, umfassende Meeting-Notizen mit Entscheidungen und Aufgaben"
         }
       },
       "errors": {
@@ -3947,6 +3961,7 @@
         "createLink": "Link erstellen",
         "copyLink": "Link kopieren",
         "copied": "Kopiert",
+        "export": "Exportieren",
         "owner": "Eigentümer",
         "editor": "Kann bearbeiten",
         "viewer": "Kann ansehen",
@@ -3987,7 +4002,6 @@
     "allSpaces": "Alle Bereiche",
     "title": "Suche",
     "description": "In Notizen und Transkripten suchen",
-    "shortPlaceholder": "Suche",
     "placeholder": "Notizen und Transkripte durchsuchen…",
     "sections": {
       "notes": "Notizen",

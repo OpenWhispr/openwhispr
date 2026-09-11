@@ -254,7 +254,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
       {membersLoading && members.length === 0 ? (
         <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
       ) : membersError && members.length === 0 ? (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
             {t("settingsPage.workspace.members.loadError")}
           </p>
@@ -263,7 +263,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
           </Button>
         </div>
       ) : (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
           {members.map((member) => (
             <div key={member.user_id} className="flex items-center gap-3 px-4 h-14">
               <MemberAvatar name={member.name} email={member.email} image={member.image} />
@@ -326,7 +326,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
       )}
 
       {canManage && invitationsError && (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-3 flex items-center justify-between gap-2">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-3 flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
             {t("settingsPage.workspace.invites.loadError")}
           </p>
@@ -341,7 +341,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
           <h4 className="text-xs font-semibold text-foreground mb-2">
             {t("settingsPage.workspace.joinRequests.title")}
           </h4>
-          <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+          <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
             {joinRequests.map((request) => (
               <div key={request.id} className="flex items-center gap-3 px-4 h-12">
                 <MemberAvatar
@@ -391,7 +391,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
           <h4 className="text-xs font-semibold text-foreground mb-2">
             {t("settingsPage.workspace.invites.title")}
           </h4>
-          <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+          <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
             {invitations.map((inv) => {
               const daysLeft = invitationDaysLeft(inv);
               const expired = daysLeft <= 0;

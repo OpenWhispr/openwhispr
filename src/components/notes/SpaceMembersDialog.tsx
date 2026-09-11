@@ -251,7 +251,7 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
           </DialogHeader>
 
           {teamsError && space.workspace_id && (
-            <div className="rounded border border-border/70 dark:border-border-subtle/50 px-3 py-2.5 flex items-center justify-between gap-2">
+            <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">{t("notes.spaces.teams.loadError")}</p>
               <Button
                 variant="ghost"
@@ -298,7 +298,7 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
                       size={12}
                       aria-hidden="true"
                       className={cn(
-                        "shrink-0 text-foreground/40 transition-transform duration-150",
+                        "shrink-0 text-foreground/45 transition-transform duration-150",
                         expanded ? "rotate-90" : "rtl:rotate-180"
                       )}
                     />
@@ -306,7 +306,7 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
                       {teamRef.name}
                     </span>
                     {memberCount != null && (
-                      <span className="ms-auto text-[10px] text-foreground/40 shrink-0">
+                      <span className="ms-auto text-[10px] text-foreground/45 shrink-0">
                         {t("settingsPage.workspace.teams.memberCount", { count: memberCount })}
                       </span>
                     )}
@@ -335,7 +335,7 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
                       </SelectContent>
                     </Select>
                   ) : (
-                    <span className="text-[10px] text-foreground/40 shrink-0 px-1">
+                    <span className="text-[10px] text-foreground/45 shrink-0 px-1">
                       {t(
                         (teamRef.access ?? "admin") === "admin"
                           ? "notes.spaces.teamsMembers.accessAdmin"

@@ -132,7 +132,7 @@ export default function SidebarModal<T extends string>({
 
               {/* Sidebar */}
               <div
-                className={`${actualSidebarWidth} shrink-0 border-e border-border/40 dark:border-border-subtle flex flex-col bg-surface-1 dark:bg-surface-0 transition-[width] duration-200 ease-out`}
+                className={`${actualSidebarWidth} shrink-0 border-e border-border/70 dark:border-border-subtle flex flex-col bg-surface-1 dark:bg-surface-0 transition-[width] duration-200 ease-out`}
               >
                 {/* Identity / custom header */}
                 {header && !isCompact && <div className="px-4 pt-5 pb-1">{header}</div>}
@@ -189,7 +189,7 @@ export default function SidebarModal<T extends string>({
                                   {item.shortcut && !item.badge && (
                                     <kbd
                                       dir="ltr"
-                                      className="ms-auto text-xs text-muted-foreground/25 font-mono shrink-0"
+                                      className="ms-auto text-xs text-muted-foreground/70 font-mono shrink-0"
                                     >
                                       {item.shortcut}
                                     </kbd>
@@ -210,7 +210,7 @@ export default function SidebarModal<T extends string>({
                 {/* Footer / version */}
                 {version && (
                   <div
-                    className={`border-t border-border/20 dark:border-border-subtle ${
+                    className={`border-t border-border/70 dark:border-border-subtle ${
                       isCompact ? "flex justify-center py-2.5" : "px-3 py-2.5"
                     }`}
                   >
@@ -219,7 +219,7 @@ export default function SidebarModal<T extends string>({
                       {!isCompact && (
                         <span
                           dir="ltr"
-                          className="text-xs text-muted-foreground/40 tabular-nums tracking-wide"
+                          className="text-xs text-muted-foreground/70 tabular-nums tracking-wide"
                         >
                           v{version}
                         </span>

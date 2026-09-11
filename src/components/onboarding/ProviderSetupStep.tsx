@@ -28,6 +28,7 @@ import {
   getASRModelOrganization,
   getSelectedASROrganization,
   usesParakeetManager,
+  DEFAULT_LOCAL_ASR_SELECTION,
 } from "../../helpers/localASROrganization";
 import { pickDefaultModelId } from "../../models/providerDefaultModel";
 import {
@@ -111,7 +112,7 @@ function StepPrimaryAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`h-9 rounded-[38px] border-0 bg-[var(--onboarding-accent)] px-5 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none! disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-secondary)] disabled:opacity-100! ${className}`}
+      className="h-9 rounded-[38px] px-5 text-sm"
     >
       {children}
     </Button>
@@ -236,6 +237,13 @@ function resolveInitialLocalSelection(
   store: ReturnType<typeof useSettingsStore.getState>
 ): OnboardingLocalModelDraft {
   const pending = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
+  // A fresh install has never picked a local provider (the store only falls back
+  // to whisper); open on the recommended Oruk model instead of that fallback.
+  const hasChosenLocalASR =
+    !!store.parakeetModel || localStorage.getItem("localTranscriptionProvider") !== null;
+  if (!assistant && !resumeState && !pending && !hasChosenLocalASR) {
+    return DEFAULT_LOCAL_ASR_SELECTION;
+  }
   const savedProvider = assistant
     ? modelRegistry.getProvider(store.chatAgentProvider)
       ? store.chatAgentProvider
@@ -1075,7 +1083,7 @@ export function LocalModelSetupStep({
                 <Button
                   type="button"
                   onClick={() => chooseInstalledModel(model.id)}
-                  className="h-8 gap-1.5 rounded-full border-0! bg-[var(--onboarding-accent)] px-3 text-sm font-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none!"
+                  className="h-8 gap-1.5 px-3 text-sm"
                 >
                   {t("onboarding.rehaul.local.use")}
                 </Button>
@@ -1083,7 +1091,7 @@ export function LocalModelSetupStep({
                 <Button
                   type="button"
                   onClick={() => downloadModel(model.id)}
-                  className="h-8 gap-1.5 rounded-full border-[var(--onboarding-inverse-surface)]! bg-[var(--onboarding-inverse-surface)] px-3 text-sm font-normal text-[var(--onboarding-inverse-text)] shadow-none! hover:bg-[var(--onboarding-inverse-surface-secondary)] hover:shadow-none! disabled:bg-[var(--onboarding-surface-tertiary-hover)] disabled:opacity-100"
+                  className="h-8 gap-1.5 px-3 text-sm"
                 >
                   <Download className="size-3.5" />
                   {t("onboarding.rehaul.local.download")}

@@ -636,6 +636,8 @@
       "couldNotDeleteDescription": "這筆轉錄記錄可能已被移除。",
       "couldNotDeleteDescriptionGeneric": "發生錯誤，請再試一次。",
       "empty": "目前沒有轉錄記錄",
+      "emptyDescription": "在任何應用程式中按下快捷鍵開始說話。每則轉錄都會私密地儲存在你的裝置上。",
+      "sectionTitle": "轉錄記錄",
       "dataRetentionDisabled": "資料保留已關閉。轉錄和音訊不會儲存至歷史記錄。",
       "press": "按下",
       "toStart": "開始",
@@ -657,6 +659,7 @@
       "clearAllErrorTitle": "無法清除歷史紀錄",
       "clearAllErrorDescription": "發生錯誤，請重試。",
       "copyText": "複製文字",
+      "moreActions": "更多操作",
       "copyRawTranscript": "複製原始轉錄",
       "deleteItem": "刪除",
       "viewRawTranscript": "檢視原始轉錄",
@@ -908,7 +911,6 @@
         "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
         "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。",
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
-        "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
         "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。"
       },
       "translationFallback": {
@@ -1132,7 +1134,7 @@
       "continueWithMicrosoft": "使用 Microsoft 繼續",
       "protocolUnavailable": "無法透過瀏覽器登入 — 請在系統的「預設應用程式」設定中重新註冊 openwhispr:// 協定。"
     },
-    "welcomeSubtitle": "用語音完成一切",
+    "welcomeSubtitle": "你的聲音，由你掌控。",
     "welcomeTitle": "歡迎使用 OpenWhispr",
     "sessionExpired": "工作階段已過期，請重新登入。"
   },
@@ -2901,6 +2903,10 @@
       "raw": "原始",
       "enhanced": "已增強",
       "saving": "儲存中",
+      "transcriptEmptyTitle": "尚未錄製任何內容",
+      "transcriptEmptyDescription": "點擊錄製開始轉錄。所說的內容會即時顯示在這裡。",
+      "startRecording": "開始錄製",
+      "generateSummary": "產生 AI 摘要",
       "startWriting": "開始撰寫...",
       "staleIndicator": "內容在增強後已變更",
       "live": "即時",
@@ -3065,6 +3071,15 @@
         "generateNotes": {
           "name": "生成筆記",
           "description": "清理、結構化和增強您的筆記"
+        },
+        "followUpEmail": {
+          "name": "跟進郵件",
+          "description": "根據筆記和轉錄草擬一封跟進郵件",
+          "cta": "草擬跟進郵件"
+        },
+        "detailedNotes": {
+          "name": "詳細筆記",
+          "description": "準確、完整的會議筆記，包含決策和行動項目"
         }
       },
       "errors": {
@@ -3767,10 +3782,9 @@
   },
   "upcoming": {
     "title": "即將開始",
-    "transcriptions": "轉錄",
     "now": "進行中",
     "untitledEvent": "無標題事件",
-    "joinAndTakeNotes": "加入並記筆記",
+    "joinAndTranscribe": "加入並轉錄",
     "takeNotes": "記筆記",
     "noEventsToday": "今天沒有行程",
     "noUpcomingEvents": "暫無即將開始的行程",
@@ -3818,6 +3832,7 @@
         "createLink": "建立連結",
         "copyLink": "複製連結",
         "copied": "已複製",
+        "export": "匯出",
         "owner": "擁有者",
         "editor": "可編輯",
         "viewer": "可檢視",
@@ -3858,7 +3873,6 @@
     "allSpaces": "所有空間",
     "title": "搜尋",
     "description": "搜尋筆記與轉錄",
-    "shortPlaceholder": "搜尋",
     "placeholder": "搜尋筆記與轉錄…",
     "sections": {
       "notes": "筆記",

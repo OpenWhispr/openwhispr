@@ -272,7 +272,7 @@ export default function CreateSpaceDialog({
           </DialogHeader>
 
           {workspacesFailed ? (
-            <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-3">
+            <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-medium text-foreground">
                   {t("settingsPage.workspace.loadError.title")}
@@ -375,7 +375,7 @@ export default function CreateSpaceDialog({
                   {t("notes.spaces.teams.assignLabel")}
                 </p>
                 {teamsError && teams.length === 0 ? (
-                  <div className="rounded border border-border/70 dark:border-border-subtle/50 px-3 py-2.5 flex items-center justify-between gap-2">
+                  <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
                     <p className="text-xs text-muted-foreground">
                       {t("notes.spaces.teams.loadError")}
                     </p>
@@ -395,7 +395,7 @@ export default function CreateSpaceDialog({
                 ) : (
                   <>
                     {teams.length > 0 && (
-                      <div className="rounded border border-border/70 dark:border-border-subtle/50 overflow-y-auto max-h-36 p-1">
+                      <div className="rounded border border-border/70 dark:border-border-subtle/60 overflow-y-auto max-h-36 p-1">
                         {teams.map((team) => {
                           const isSelected = selectedTeamIds.has(team.id);
                           return (
@@ -414,7 +414,7 @@ export default function CreateSpaceDialog({
                               <span dir="auto" className="text-xs text-foreground truncate flex-1">
                                 {team.name}
                               </span>
-                              <span className="text-[10px] text-foreground/40 shrink-0">
+                              <span className="text-[10px] text-foreground/45 shrink-0">
                                 {t("settingsPage.workspace.teams.memberCount", {
                                   count: team.member_count ?? 0,
                                 })}
@@ -426,7 +426,7 @@ export default function CreateSpaceDialog({
                       </div>
                     )}
                     {newTeamOpen ? (
-                      <div className="rounded border border-border/70 dark:border-border-subtle/50 p-2.5 space-y-2">
+                      <div className="rounded border border-border/70 dark:border-border-subtle/60 p-2.5 space-y-2">
                         <div className="space-y-1.5">
                           <label
                             htmlFor="create-space-new-team-name"

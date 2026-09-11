@@ -1,4 +1,6 @@
 import { X } from "./icons";
+import { cn } from "./lib/utils";
+import { BRAND_GLASS_SURFACE } from "./ui/gradientCircle";
 
 interface MeetingNotificationCardProps {
   title: string;
@@ -37,7 +39,7 @@ export function MeetingNotificationCard({
       className={[
         "relative",
         "bg-card/95 dark:bg-surface-2/95 backdrop-blur-xl",
-        "border border-border/40 dark:border-border-subtle/40",
+        "border border-border/70 dark:border-border-subtle/60",
         "rounded-xl shadow-lg p-2.5",
         className,
       ].join(" ")}
@@ -50,7 +52,7 @@ export function MeetingNotificationCard({
           className={[
             "absolute -left-2.5 -top-2.5 z-10 size-6 rounded-full",
             "flex items-center justify-center",
-            "bg-card dark:bg-surface-2 border border-border/40 dark:border-border-subtle/40 shadow-sm",
+            "bg-card dark:bg-surface-2 border border-border/70 dark:border-border-subtle/60 shadow-sm",
             "text-muted-foreground/70 hover:text-foreground hover:bg-muted",
             "transition-all duration-150",
             closeVisible ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none",
@@ -87,7 +89,10 @@ export function MeetingNotificationCard({
 
         <button
           onClick={onStart}
-          className="shrink-0 whitespace-nowrap bg-primary text-primary-foreground hover:bg-primary/90 text-[11px] font-medium px-2.5 py-1 rounded-md transition-colors"
+          className={cn(
+            BRAND_GLASS_SURFACE,
+            "shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium transition-[filter] hover:brightness-110 active:brightness-95"
+          )}
         >
           {startLabel}
         </button>
