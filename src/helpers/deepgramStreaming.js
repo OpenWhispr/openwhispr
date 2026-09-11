@@ -68,6 +68,13 @@ const NOVA3_LANGUAGES = new Set([
 // Deepgram's net0001 idle timeout (which only resets on audio data, not KeepAlive).
 const SILENCE_FRAME = Buffer.alloc((SAMPLE_RATE / 10) * 2);
 
+// Deepgram binds the Authorization scheme to the kind of credential: a raw API
+// key — what BYOK holds — is only accepted as `Token`, while `Bearer` is for the
+// short-lived credential /v1/auth/grant mints, which is what the managed path
+// receives from the OpenWhispr API. Presenting either under the other's scheme
+// fails the handshake with 401 (#2140).
+const authorizationHeader = (mode, token) => `${mode === "byok" ? "Token" : "Bearer"} ${token}`;
+
 class DeepgramStreaming {
   constructor() {
     this.ws = null;
@@ -286,7 +293,7 @@ class DeepgramStreaming {
       }, WEBSOCKET_TIMEOUT_MS);
 
       this.warmConnection = new WebSocket(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: authorizationHeader(this.mode, token) },
       });
 
       this.warmConnection.on("open", () => {
@@ -371,6 +378,15 @@ class DeepgramStreaming {
       this.rewarmTimer = null;
       if (this.hasWarmConnection() || this.isConnected) return;
 
+      // cleanupWarmConnection() drops the saved options without cancelling this
+      // timer, and spreading a null one loses `mode` — which re-warms a BYOK key
+      // as a Bearer and 401s. scheduleProactiveRefresh snapshots for the same reason.
+      const savedOptions = this.warmConnectionOptions;
+      if (!savedOptions) {
+        debugLogger.debug("Deepgram cannot re-warm: options dropped before the timer fired");
+        return;
+      }
+
       let token = this.getCachedToken();
       if (!token && this.tokenRefreshFn) {
         try {
@@ -387,7 +403,7 @@ class DeepgramStreaming {
         return;
       }
 
-      this.warmup({ ...this.warmConnectionOptions, token }).catch((err) => {
+      this.warmup({ ...savedOptions, token }).catch((err) => {
         debugLogger.debug("Deepgram auto re-warm failed", { error: err.message });
       });
     }, delay);
@@ -625,7 +641,7 @@ class DeepgramStreaming {
       }, WEBSOCKET_TIMEOUT_MS);
 
       this.ws = new WebSocket(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: authorizationHeader(this.mode, token) },
       });
 
       this.ws.on("open", () => {
@@ -929,3 +945,4 @@ class DeepgramStreaming {
 }
 
 module.exports = DeepgramStreaming;
+module.exports.authorizationHeader = authorizationHeader;

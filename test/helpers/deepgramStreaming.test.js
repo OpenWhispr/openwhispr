@@ -6,17 +6,21 @@ const DeepgramStreaming = require("../../src/helpers/deepgramStreaming");
 
 // Loopback Deepgram: warmup resolves on the socket opening, connect on the
 // first server message, so every accepted socket answers with Metadata.
+// `authHeaders` mirrors `connections` so a test can read the credential the
+// client presented at the handshake.
 async function withMetadataServer(run) {
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
   await new Promise((resolve) => server.once("listening", resolve));
   const connections = [];
+  const authHeaders = [];
   server.on("connection", (socket, request) => {
     connections.push(request.url);
+    authHeaders.push(request.headers.authorization);
     socket.send(JSON.stringify({ type: "Metadata", request_id: `req-${connections.length}` }));
   });
 
   try {
-    await run(`ws://127.0.0.1:${server.address().port}`, connections);
+    await run(`ws://127.0.0.1:${server.address().port}`, connections, authHeaders);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -82,4 +86,60 @@ test("adopting a different mode before a warmup drops the other mode's token", a
       streaming.cleanupAll();
     }
   });
+});
+
+// Deepgram binds the Authorization scheme to the kind of credential, not to the
+// endpoint: a raw API key is a `Token`, and only the short-lived credential
+// /v1/auth/grant mints is a `Bearer`. BYOK hands over the raw key, so sending it
+// as a Bearer 401s the handshake (#2140).
+test("a BYOK key authenticates under Deepgram's Token scheme", async () => {
+  await withMetadataServer(async (url, connections, authHeaders) => {
+    const streaming = new DeepgramStreaming();
+    streaming.buildWebSocketUrl = () => url;
+
+    try {
+      await streaming.connect({ token: "byok-key", mode: "byok" });
+
+      assert.deepEqual(authHeaders, ["Token byok-key"]);
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
+test("a managed grant token authenticates under the Bearer scheme", async () => {
+  await withMetadataServer(async (url, connections, authHeaders) => {
+    const streaming = new DeepgramStreaming();
+    streaming.buildWebSocketUrl = () => url;
+
+    try {
+      await streaming.connect({ token: "grant-token", mode: "openwhispr" });
+
+      assert.deepEqual(authHeaders, ["Bearer grant-token"]);
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
+test("warmup presents the same scheme the session will connect with", async () => {
+  await withMetadataServer(async (url, connections, authHeaders) => {
+    const streaming = new DeepgramStreaming();
+    streaming.buildWebSocketUrl = () => url;
+
+    try {
+      await streaming.warmup({ token: "byok-key", mode: "byok" });
+
+      assert.deepEqual(authHeaders, ["Token byok-key"]);
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
+// stt-canary.mjs is the only consumer, and it runs weekly rather than in PR CI —
+// so without this, deleting the export stays green for a week.
+test("the authorization scheme is exported for the canary to reuse", () => {
+  assert.equal(DeepgramStreaming.authorizationHeader("byok", "k"), "Token k");
+  assert.equal(DeepgramStreaming.authorizationHeader("openwhispr", "k"), "Bearer k");
 });
