@@ -154,7 +154,7 @@ export default function CompactPermissionsStep({
 
   return (
     <CompactOnboardingFrame showLegalNotice={false}>
-      <div className="onboarding-shell-scroll relative flex h-full flex-col overflow-y-auto px-5 pb-6 pt-38 text-center">
+      <div className="onboarding-shell-scroll relative flex h-full flex-col overflow-y-auto px-5 pb-6 pt-46 text-center">
         {/* text-balance evens the two lines out ("Set up OpenWhispr" / "in 3
             minutes") instead of leaving one word stranded. Preferred over a
             hardcoded <br> because the break point stays correct in all 9
@@ -166,7 +166,7 @@ export default function CompactPermissionsStep({
           {t("auth.welcomeSubtitle")}
         </p>
 
-        <div className="mt-6 rounded-[1.35rem] bg-[var(--onboarding-surface-secondary)] px-3 py-1">
+        <div className="mt-4 rounded-[1.35rem] bg-[var(--onboarding-surface-secondary)] px-3 py-1">
           <PermissionRow
             title={t("onboarding.permissions.microphoneTitle")}
             description={t("onboarding.rehaul.permissions.microphoneDescription")}
