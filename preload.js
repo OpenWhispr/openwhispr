@@ -92,6 +92,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
   onOpenAssistantPanel: registerListener("open-assistant-panel", (callback) => () => callback()),
   onStartMeeting: registerListener("start-meeting", (callback) => () => callback()),
+  onTrayActionRefused: registerListener(
+    "tray-action-refused",
+    (callback) => (_event, data) => callback(data)
+  ),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
   onPrepareDictation: registerListener(

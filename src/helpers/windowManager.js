@@ -61,6 +61,8 @@ class WindowManager {
     // Set by IPCHandlers so its demo session dies with the demo kind on every
     // teardown path (id-matched end, onboarding exit, control panel closed).
     this.onOnboardingDemoTeardown = null;
+    // Set by main.js so the tray's listen item rebuilds with dictation state.
+    this.onDictationStateChanged = null;
     this.notificationWindow = null;
     this.agentDictationPillWindow = null;
     this._agentDictationPillReady = false;
@@ -1009,9 +1011,10 @@ class WindowManager {
   // pill menu gates those items on, so it decides; nothing is shown or created
   // here. An accepted assistant command surfaces the pill itself through
   // setAssistantPanelOpen, and a meeting comes back through start-manual-meeting.
+  // Onboarding blocks these outright rather than through the demo-aware gate:
+  // the tray and the meeting hotkey are never part of the scripted demo.
   sendOpenAssistantPanel() {
-    if (this.hotkeyManager.isInListeningMode()) return;
-    if (!this._isOnboardingInputAllowed("assistant")) return;
+    if (this.hotkeyManager.isInListeningMode() || this._onboardingActive) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("open-assistant-panel");
   }
@@ -1019,7 +1022,27 @@ class WindowManager {
   sendStartMeeting() {
     if (this.hotkeyManager.isInListeningMode() || !this.isMeetingInputAllowed()) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    debugLogger.info("Manual meeting requested", {}, "meeting");
     this.mainWindow.webContents.send("start-meeting");
+  }
+
+  // The tray's listen item, unlike the hotkey, is visible whatever the state, so
+  // the gates only this process can see explain themselves instead of going quiet.
+  sendStartListening() {
+    if (this.hotkeyManager.isInListeningMode() || this._onboardingActive) return;
+    if (
+      this._shouldBlockDictationInput("dictation") ||
+      shouldIgnoreDictationHotkey(this._dictationLifecycleState)
+    ) {
+      this._sendTrayActionRefused("app.commandMenu.busyRecording");
+      return;
+    }
+    this.sendStartDictation();
+  }
+
+  _sendTrayActionRefused(messageKey) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("tray-action-refused", { messageKey });
   }
 
   sendStartDictation() {

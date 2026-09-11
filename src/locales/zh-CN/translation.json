@@ -3534,6 +3534,7 @@
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏",
       "askAssistant": "询问助手",
+      "busyRecording": "请先结束当前录音",
       "startMeetingRecording": "开始会议录音"
     }
   },

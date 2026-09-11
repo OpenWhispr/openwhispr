@@ -3534,6 +3534,7 @@
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示",
       "askAssistant": "アシスタントに質問",
+      "busyRecording": "先に録音を終了してください",
       "startMeetingRecording": "ミーティングの録音を開始"
     }
   },

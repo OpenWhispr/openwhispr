@@ -3580,6 +3580,7 @@
       "startListening": "Начать запись",
       "hideForNow": "Скрыть",
       "askAssistant": "Спросить помощника",
+      "busyRecording": "Сначала завершите текущую запись",
       "startMeetingRecording": "Начать запись встречи"
     }
   },

@@ -3703,6 +3703,7 @@
       "startListening": "Start listening",
       "hideForNow": "Hide for now",
       "askAssistant": "Ask assistant",
+      "busyRecording": "Finish the current dictation first",
       "startMeetingRecording": "Start meeting recording"
     }
   },

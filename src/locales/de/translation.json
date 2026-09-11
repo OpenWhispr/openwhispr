@@ -3703,6 +3703,7 @@
       "startListening": "Aufnahme starten",
       "hideForNow": "Vorerst ausblenden",
       "askAssistant": "Assistent fragen",
+      "busyRecording": "Beende zuerst die laufende Aufnahme",
       "startMeetingRecording": "Meeting-Aufnahme starten"
     }
   },

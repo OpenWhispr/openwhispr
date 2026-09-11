@@ -3534,6 +3534,7 @@
       "startListening": "Começar a ouvir",
       "hideForNow": "Ocultar por agora",
       "askAssistant": "Perguntar ao assistente",
+      "busyRecording": "Termine primeiro a gravação atual",
       "startMeetingRecording": "Iniciar gravação da reunião"
     }
   },

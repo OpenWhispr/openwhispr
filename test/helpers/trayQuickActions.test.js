@@ -18,7 +18,7 @@ function createTrayManager(calls, { dictating = false } = {}) {
   trayManager.windowManager = {
     isDictationPanelVisible: () => false,
     isDictating: () => dictating,
-    sendStartDictation: () => calls.push("start-dictation"),
+    sendStartListening: () => calls.push("start-listening"),
     sendStopDictation: () => calls.push("stop-dictation"),
     sendOpenAssistantPanel: () => calls.push("assistant"),
     sendStartMeeting: () => calls.push("meeting"),
@@ -44,9 +44,9 @@ test("the tray menu leads with the dictation pill's quick actions", () => {
   listen.click();
   assistant.click();
   meeting.click();
-  // Both go to the renderer, which owns the policy and recording state the pill
-  // menu gates these items on.
-  assert.deepEqual(calls, ["start-dictation", "assistant", "meeting"]);
+  // All three go through the window manager's tray entries, which either ask the
+  // renderer or explain a refusal rather than swallowing the click.
+  assert.deepEqual(calls, ["start-listening", "assistant", "meeting"]);
 });
 
 test("the tray's listen item stops the recording it reflects", () => {

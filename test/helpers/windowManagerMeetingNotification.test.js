@@ -86,7 +86,14 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       dialog: {},
     };
   }
-  if (request === "./debugLogger") return { warn: () => undefined };
+  if (request === "./debugLogger") {
+    return {
+      info: () => undefined,
+      warn: () => undefined,
+      debug: () => undefined,
+      error: () => undefined,
+    };
+  }
   if (request === "./hotkeyManager") return FakeHotkeyManager;
   if (request === "./dragManager") return FakeDragManager;
   if (request === "./menuManager") return {};
@@ -819,4 +826,45 @@ test("the tray's quick actions ask the renderer without showing or focusing the 
   capturing.sendStartMeeting();
   capturing.sendOpenAssistantPanel();
   assert.deepEqual(capturingEvents, []);
+});
+
+// The tray shows its listen item whatever the state, so the gates only this
+// process can see have to answer rather than go quiet.
+test("the tray's listen item explains a refusal the renderer cannot see", () => {
+  const events = [];
+  const manager = createNormalWindowManager();
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    isMinimized: () => false,
+    isVisible: () => true,
+    focus: () => events.push("focus"),
+    showInactive: () => events.push("show"),
+    webContents: { send: (channel, payload) => events.push([channel, payload?.messageKey]) },
+  };
+
+  // A panel owning the pill blocks dictation input; the click must say so.
+  // Stubbed because the real gate also re-kicks the companion pill's load.
+  manager._shouldBlockDictationInput = () => true;
+  manager.sendStartListening();
+  assert.deepEqual(events, [["tray-action-refused", "app.commandMenu.busyRecording"]]);
+
+  // A transcription still settling refuses the same way.
+  events.length = 0;
+  manager._shouldBlockDictationInput = () => false;
+  manager._dictationLifecycleState = "processing";
+  manager.sendStartListening();
+  assert.deepEqual(events, [["tray-action-refused", "app.commandMenu.busyRecording"]]);
+  manager._dictationLifecycleState = "idle";
+
+  // Idle again, it hands off to the ordinary dictation start, which carries the
+  // target capture and panel choreography its own tests cover.
+  events.length = 0;
+  manager._assistantPanelOpen = false;
+  let starts = 0;
+  manager.sendStartDictation = () => {
+    starts += 1;
+  };
+  manager.sendStartListening();
+  assert.equal(starts, 1);
+  assert.deepEqual(events, [], "an accepted click refuses nothing");
 });

@@ -3703,6 +3703,7 @@
       "startListening": "Commencer l’écoute",
       "hideForNow": "Masquer pour l’instant",
       "askAssistant": "Demander à l'assistant",
+      "busyRecording": "Terminez d'abord l'enregistrement en cours",
       "startMeetingRecording": "Démarrer l’enregistrement de la réunion"
     }
   },

@@ -263,7 +263,7 @@ class TrayManager {
         click: () =>
           dictating
             ? this.windowManager?.sendStopDictation()
-            : this.windowManager?.sendStartDictation(),
+            : this.windowManager?.sendStartListening(),
       },
       {
         label: i18nMain.t("app.commandMenu.askAssistant"),

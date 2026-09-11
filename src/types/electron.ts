@@ -1169,6 +1169,7 @@ declare global {
       onToggleTranslation?: (callback: () => void) => () => void;
       onOpenAssistantPanel?: (callback: () => void) => () => void;
       onStartMeeting?: (callback: () => void) => () => void;
+      onTrayActionRefused?: (callback: (data: { messageKey: string }) => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (
