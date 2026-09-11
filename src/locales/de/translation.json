@@ -431,8 +431,7 @@
       "activation": "Diktat",
       "useCase": "Über dich",
       "meeting": "Meetings",
-      "finish": "Fertig",
-      "voiceAgent": "Sprachassistent"
+      "finish": "Fertig"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Dieser Hotkey konnte nicht registriert werden",
@@ -477,22 +476,6 @@
       "hotkeyToStartStop": "{{hotkey}} zum Starten/Stoppen",
       "holdHotkey": "{{hotkey}} gedrückt halten",
       "textareaPlaceholder": "Hier klicken und Hotkey zum Diktieren verwenden..."
-    },
-    "voiceAgent": {
-      "title": "Sprachassistent-Einrichtung",
-      "description": "Sprechen Sie mit Ihrem KI-Assistenten per Tastendruck",
-      "hotkey": "Hotkey",
-      "howItWorks": "Drücken Sie die Taste und sagen Sie, was Sie möchten — zum Beispiel „schreibe eine kurze Dankesnachricht“. Ist Text markiert, bearbeitet und ersetzt {{agentName}} ihn. Ist ein beschreibbares Textfeld fokussiert, wird die Antwort am Cursor eingefügt; andernfalls öffnet sie sich in einem schwebenden Panel. Sie müssen nicht zuerst „Hey {{agentName}}“ sagen.",
-      "test": "Ausprobieren",
-      "testInstruction": "Markiere unten den Beispieltext, drücke {{hotkey}} und sage „mach das kürzer“ — die Änderung landet direkt im Textfeld",
-      "testSetHotkey": "Lege oben einen Hotkey fest, um es auszuprobieren",
-      "sampleText": "Das Meeting von Donnerstag wurde verschoben, lass uns also Anfang nächster Woche kurz abstimmen, um den Launch-Plan durchzugehen und die restlichen Aufgaben aufzuteilen.",
-      "examples": [
-        "Übersetze ins Italienische: „Ich spreche schneller, als ich tippe“",
-        "Schreibe eine kurze E-Mail an meinen Chef, dass ich eine Beförderung möchte, sein Name ist Mark",
-        "Was ist 5 × 5?"
-      ],
-      "optionalNote": "Optional — Sie können ihn jederzeit in den Einstellungen festlegen oder ändern."
     },
     "connectivity": {
       "title": "OpenWhispr Cloud ist aus diesem Netzwerk nicht erreichbar",

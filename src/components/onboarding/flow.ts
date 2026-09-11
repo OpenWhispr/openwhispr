@@ -79,6 +79,13 @@ export interface OnboardingSession {
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
   selfHostedRequested: boolean;
+  /**
+   * The permissions step's screen-context Enable was clicked and the grant has
+   * not landed yet. Persisted so the opt-in completes across the quit-and-reopen
+   * macOS asks for after granting Screen Recording; cleared once consumed and
+   * dropped with the session at finalization.
+   */
+  screenContextRequested: boolean;
   resume: OnboardingResumeState;
 }
 
@@ -186,6 +193,7 @@ export function createOnboardingSession(): OnboardingSession {
     authPath: null,
     setupMode: null,
     selfHostedRequested: false,
+    screenContextRequested: false,
     resume: createOnboardingResumeState(),
   };
 }
@@ -415,6 +423,12 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
     ) {
       return null;
     }
+    if (
+      parsed.screenContextRequested !== undefined &&
+      typeof parsed.screenContextRequested !== "boolean"
+    ) {
+      return null;
+    }
 
     return {
       version: ONBOARDING_FLOW_VERSION,
@@ -423,6 +437,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
       authPath,
       setupMode,
       selfHostedRequested: parsed.selfHostedRequested ?? false,
+      screenContextRequested: parsed.screenContextRequested ?? false,
       resume: parseOnboardingResumeState(parsed.resume, parsed.currentStepId),
     };
   } catch {
@@ -452,7 +467,7 @@ export function migrateLegacyOnboardingStep(value: string | null): OnboardingSte
 
 /**
  * Map a step onto the caller's route, for when a saved session names a step the
- * current route no longer has (the agent gets disallowed, setupMode changes, or a
+ * current route no longer has (the assistant gets disallowed, setupMode changes, or a
  * dev jump asks for an off-route step).
  *
  * Clamps to the route step nearest in the canonical order, ties going to the
@@ -494,7 +509,7 @@ export interface OnboardingProgressState {
  * counter on, filled up to the current one.
  *
  * The total comes from the route rather than a constant because the route itself
- * is conditional — the assistant pair drops out when the agent is disallowed, and
+ * is conditional — the assistant pair drops out when the assistant is disallowed, and
  * the provider pair only exists once a non-cloud setup mode is picked. Choosing
  * BYOK/local on setup-choice therefore appends two steps and the row
  * grows by two dots at that moment, which is the flow honestly getting longer.

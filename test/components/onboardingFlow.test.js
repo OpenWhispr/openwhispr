@@ -167,8 +167,10 @@ test("versioned sessions reject malformed or old data", async () => {
 
   const legacyV2 = { ...session };
   delete legacyV2.selfHostedRequested;
+  delete legacyV2.screenContextRequested;
   delete legacyV2.resume;
   assert.equal(parseOnboardingSession(JSON.stringify(legacyV2)).selfHostedRequested, false);
+  assert.equal(parseOnboardingSession(JSON.stringify(legacyV2)).screenContextRequested, false);
   assert.deepEqual(
     parseOnboardingSession(JSON.stringify(legacyV2)).resume,
     createOnboardingSession().resume
@@ -177,6 +179,19 @@ test("versioned sessions reject malformed or old data", async () => {
     parseOnboardingSession(JSON.stringify({ ...session, selfHostedRequested: "yes" })),
     null
   );
+  assert.equal(
+    parseOnboardingSession(JSON.stringify({ ...session, screenContextRequested: "yes" })),
+    null
+  );
+});
+
+// The permissions step's Enable click must survive the quit-and-reopen macOS
+// asks for after granting Screen Recording, or the OS permission lands with
+// the Voice Assistant setting still off.
+test("a session keeps the screen-context request latch across a relaunch", async () => {
+  const { createOnboardingSession, parseOnboardingSession } = await load();
+  const session = { ...createOnboardingSession(), screenContextRequested: true };
+  assert.equal(parseOnboardingSession(JSON.stringify(session)).screenContextRequested, true);
 });
 
 test("v2 sessions retain safe within-step state without accepting secrets", async () => {

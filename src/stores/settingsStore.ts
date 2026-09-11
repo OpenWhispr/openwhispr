@@ -662,6 +662,45 @@ function migrateLLMScopeKeys() {
 
 migrateLLMScopeKeys();
 
+// The Voice Assistant scope shipped unseeded — empty provider and model, mode
+// defaulting to cloud — while the assistant panel answered on the Chat scope.
+// The panel now answers on the Voice Assistant scope, so a profile that never
+// configured it (no onboarding fan-out or Settings edit wrote its mode,
+// provider or model) copies the Chat scope over once; otherwise a signed-in
+// profile whose Chat runs local or BYOK would have its spoken commands move to
+// the cloud default silently. The scope's custom key is a secret, so
+// initializeSettings copies it once the secure store has loaded.
+const SEEDED_SCOPE_FIELDS = [
+  "mode",
+  "provider",
+  "model",
+  "cloudMode",
+  "cloudBaseUrl",
+  "remoteUrl",
+] as const;
+
+function seedDictationAgentScopeFromChat() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("_dictationAgentSeeded") !== null) return;
+
+  const chat = INFERENCE_SCOPES.chatIntelligence.storeKeys;
+  const agent = INFERENCE_SCOPES.dictationAgent.storeKeys;
+  const configured = [agent.mode, agent.provider, agent.model].some(
+    (key) => localStorage.getItem(key) !== null
+  );
+  if (configured) {
+    localStorage.setItem("_dictationAgentSeeded", "1");
+    return;
+  }
+  for (const field of SEEDED_SCOPE_FIELDS) {
+    const value = localStorage.getItem(chat[field] as string);
+    if (value !== null) localStorage.setItem(agent[field] as string, value);
+  }
+  localStorage.setItem("_dictationAgentSeeded", "key-pending");
+}
+
+seedDictationAgentScopeFromChat();
+
 // Builds before 1.10.0 ran migrateMeetingFollowFlags() before
 // migrateProviderSettings() had created `transcriptionMode` / `reasoningMode`,
 // so a profile upgrading straight from ≤1.6.7 copied every Note Recording key
@@ -1154,7 +1193,9 @@ export interface SettingsState
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
   setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => void;
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => void;
-  setCloudReasoningForAllScopes: (settings: Partial<CleanupSettings>) => void;
+  setCloudReasoningForAllScopes: (
+    settings: Partial<CleanupSettings & Pick<ApiKeySettings, "cleanupCustomApiKey">>
+  ) => void;
   updateApiKeys: (keys: Partial<ApiKeySettings>) => void;
   updateChatAgentSettings: (settings: Partial<ChatAgentSettings>) => void;
 }
@@ -2550,12 +2591,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.cleanupCloudBaseUrl !== undefined)
       s.setCleanupCloudBaseUrl(settings.cleanupCloudBaseUrl);
     if (settings.cleanupCloudMode !== undefined) s.setCleanupCloudMode(settings.cleanupCloudMode);
+    if (settings.cleanupRemoteUrl !== undefined) s.setCleanupRemoteUrl(settings.cleanupRemoteUrl);
   },
 
   // Apply a cleanup config to dictation, then mirror its cloud routing to the
   // other three LLM scopes — used when onboarding routes every reasoning scope to
   // one provider so PHI never reaches a second LLM (e.g. Corti for medical providers).
-  setCloudReasoningForAllScopes: (settings: Partial<CleanupSettings>) => {
+  setCloudReasoningForAllScopes: (settings) => {
     const s = useSettingsStore.getState();
     // Onboarding routes every scope to the local runtime or the enterprise
     // provider by passing "local"/"enterprise" as cleanupCloudMode. Those are
@@ -2571,42 +2613,21 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const mode = isDirectMode
       ? requestedCloudMode
       : deriveReasoningMode(requestedCloudMode, settings.cleanupProvider ?? s.cleanupProvider);
-    const {
-      dictationCleanup,
-      noteFormatting,
-      dictationAgent,
-      chatIntelligence,
-      dictationTranslation,
-    } = buildReasoningScopePatches(
+    const { dictationCleanup, ...mirrored } = buildReasoningScopePatches(
       isDirectMode ? { ...settings, cleanupCloudMode: undefined } : settings,
       mode
     );
     s.updateCleanupSettings(dictationCleanup);
     s.setCleanupMode(dictationCleanup.cleanupMode);
-    // Each Settings tab selects on its own mode field, so set the mode for every
-    // scope even when the routing fields are absent — otherwise the tab keeps
+    if (dictationCleanup.cleanupCustomApiKey !== undefined) {
+      s.setCleanupCustomApiKey(dictationCleanup.cleanupCustomApiKey);
+    }
+    // Each Settings tab selects on its own mode field, so every scope gets the
+    // mode even when the routing fields are absent — otherwise the tab keeps
     // showing the previous provider despite the new cloud routing.
-    if (noteFormatting.provider !== undefined) s.setNoteFormattingProvider(noteFormatting.provider);
-    if (noteFormatting.model !== undefined) s.setNoteFormattingModel(noteFormatting.model);
-    if (noteFormatting.cloudMode !== undefined)
-      s.setNoteFormattingCloudMode(noteFormatting.cloudMode);
-    s.setNoteFormattingMode(mode);
-    if (dictationAgent.provider !== undefined) s.setDictationAgentProvider(dictationAgent.provider);
-    if (dictationAgent.model !== undefined) s.setDictationAgentModel(dictationAgent.model);
-    if (dictationAgent.cloudMode !== undefined)
-      s.setDictationAgentCloudMode(dictationAgent.cloudMode);
-    s.setDictationAgentMode(mode);
-    if (chatIntelligence.provider !== undefined) s.setChatAgentProvider(chatIntelligence.provider);
-    if (chatIntelligence.model !== undefined) s.setChatAgentModel(chatIntelligence.model);
-    if (chatIntelligence.cloudMode !== undefined)
-      s.setChatAgentCloudMode(chatIntelligence.cloudMode);
-    s.setChatAgentMode(mode);
-    if (dictationTranslation.provider !== undefined)
-      s.setTranslationProvider(dictationTranslation.provider);
-    if (dictationTranslation.model !== undefined) s.setTranslationModel(dictationTranslation.model);
-    if (dictationTranslation.cloudMode !== undefined)
-      s.setTranslationCloudMode(dictationTranslation.cloudMode);
-    s.setTranslationMode(mode);
+    for (const [scope, patch] of Object.entries(mirrored)) {
+      setResolvedLLMConfig(scope as InferenceScope, patch);
+    }
   },
 
   updateApiKeys: (keys: Partial<ApiKeySettings>) => {
@@ -3239,6 +3260,13 @@ export async function initializeSettings(): Promise<void> {
         deepgramApiKey: deepgram || "",
         assemblyaiApiKey: assemblyai || "",
       });
+
+      if (localStorage.getItem("_dictationAgentSeeded") === "key-pending") {
+        const { chatAgentCustomApiKey, setDictationAgentCustomApiKey } =
+          useSettingsStore.getState();
+        if (chatAgentCustomApiKey) setDictationAgentCustomApiKey(chatAgentCustomApiKey);
+        localStorage.setItem("_dictationAgentSeeded", "1");
+      }
 
       if (!localStorage.getItem("enterpriseSetupMode")) {
         // One-time migration. "Managed by default" is meant to equip employees who never chose a

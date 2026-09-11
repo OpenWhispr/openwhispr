@@ -74,6 +74,10 @@ export function useOnboardingSession() {
     setSession((current) => ({ ...current, selfHostedRequested }));
   }, []);
 
+  const setScreenContextRequested = useCallback((screenContextRequested: boolean) => {
+    setSession((current) => ({ ...current, screenContextRequested }));
+  }, []);
+
   const clearSession = useCallback(() => {
     localStorage.removeItem(ONBOARDING_SESSION_KEY);
     localStorage.removeItem(LEGACY_ONBOARDING_STEP_KEY);
@@ -87,6 +91,7 @@ export function useOnboardingSession() {
     setAuthPath,
     setSetupMode,
     setSelfHostedRequested,
+    setScreenContextRequested,
     clearSession,
   };
 }

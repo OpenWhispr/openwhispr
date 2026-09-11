@@ -431,8 +431,7 @@
       "activation": "聽寫",
       "useCase": "關於你",
       "meeting": "會議",
-      "finish": "完成",
-      "voiceAgent": "語音助理"
+      "finish": "完成"
     },
     "hotkey": {
       "couldNotRegisterTitle": "無法註冊該快捷鍵",
@@ -477,22 +476,6 @@
       "hotkeyToStartStop": "{{hotkey}} 開始/停止",
       "holdHotkey": "按住 {{hotkey}}",
       "textareaPlaceholder": "點擊這裡，然後使用快捷鍵開始語音輸入..."
-    },
-    "voiceAgent": {
-      "title": "語音助理設定",
-      "description": "一鍵喚起你的 AI 助理",
-      "hotkey": "快捷鍵",
-      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。如果有選取的文字，{{agentName}} 會編輯並取代它。如果可編輯文字欄位已取得焦點，回答會貼到游標處；否則會在懸浮面板中開啟。無需先說「Hey {{agentName}}」。",
-      "test": "試試看",
-      "testInstruction": "選取下方的範例文字，按下 {{hotkey}} 並說「把它改短一點」——編輯結果會直接出現在文字框裡",
-      "testSetHotkey": "在上方設定快捷鍵即可試用",
-      "sampleText": "週四的會議改期了，我們下週初碰個面，過一遍上線計畫，並分配剩下的任務。",
-      "examples": [
-        "翻譯成義大利文:「我說話比打字快」",
-        "給我的老闆寫一封簡短的郵件,告訴他我想要升職,他叫 Mark",
-        "5 × 5 等於多少?"
-      ],
-      "optionalNote": "選用——你可以隨時在設定中新增或修改。"
     },
     "connectivity": {
       "title": "無法從此網路連線到 OpenWhispr Cloud",
