@@ -2076,7 +2076,7 @@ export default function SpacesTree({
       <div
         role="tree"
         aria-label={t("notes.list.title")}
-        className="flex-1 overflow-y-auto px-1.5 pb-2 space-y-px"
+        className="scrollbar-hidden flex-1 overflow-y-auto px-1.5 pb-2 space-y-px"
       >
         <div role="none" className="group/section">
           <SectionHeader
