@@ -3572,11 +3572,17 @@
       "web_searchName": "网页搜索",
       "get_calendar_eventsName": "获取日历事件",
       "get_calendar_availabilityName": "查看空闲时间",
+      "get_snippetName": "获取片段",
+      "update_dictionaryName": "更新词典",
+      "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜索笔记...",
       "web_searchStatus": "正在搜索网页...",
       "copy_to_clipboardStatus": "正在复制到剪贴板...",
       "get_calendar_eventsStatus": "正在查看日历...",
       "get_calendar_availabilityStatus": "正在查看空闲时间...",
+      "get_snippetStatus": "正在获取片段...",
+      "update_dictionaryStatus": "正在更新词典...",
+      "update_snippetsStatus": "正在更新片段...",
       "get_noteStatus": "正在读取笔记...",
       "create_noteStatus": "正在创建笔记...",
       "update_noteStatus": "正在更新笔记...",
@@ -3894,7 +3900,11 @@
     "scopes": {
       "notesRead": "读取笔记",
       "notesWrite": "创建和编辑笔记",
-      "transcriptionsRead": "读取转录"
+      "transcriptionsRead": "读取转录",
+      "dictionaryRead": "读取词典",
+      "dictionaryWrite": "编辑词典",
+      "snippetsRead": "读取片段",
+      "snippetsWrite": "编辑片段"
     },
     "revoke": {
       "button": "撤销",

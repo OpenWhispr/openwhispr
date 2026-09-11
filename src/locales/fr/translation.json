@@ -1257,7 +1257,11 @@
     "scopes": {
       "notesRead": "Lire les notes",
       "notesWrite": "Créer et modifier les notes",
-      "transcriptionsRead": "Lire les transcriptions"
+      "transcriptionsRead": "Lire les transcriptions",
+      "dictionaryRead": "Lire le dictionnaire",
+      "dictionaryWrite": "Modifier le dictionnaire",
+      "snippetsRead": "Lire les snippets",
+      "snippetsWrite": "Modifier les snippets"
     },
     "revoke": {
       "button": "Révoquer",
@@ -3737,11 +3741,17 @@
       "web_searchName": "Rechercher sur le web",
       "get_calendar_eventsName": "Obtenir les événements du calendrier",
       "get_calendar_availabilityName": "Vérifier les disponibilités",
+      "get_snippetName": "Obtenir un snippet",
+      "update_dictionaryName": "Mettre à jour le dictionnaire",
+      "update_snippetsName": "Mettre à jour les snippets",
       "search_notesStatus": "Recherche de notes...",
       "web_searchStatus": "Recherche sur le web...",
       "copy_to_clipboardStatus": "Copie dans le presse-papiers...",
       "get_calendar_eventsStatus": "Vérification du calendrier...",
       "get_calendar_availabilityStatus": "Vérification des disponibilités...",
+      "get_snippetStatus": "Récupération du snippet...",
+      "update_dictionaryStatus": "Mise à jour du dictionnaire...",
+      "update_snippetsStatus": "Mise à jour des snippets...",
       "get_noteStatus": "Lecture de la note...",
       "create_noteStatus": "Création de la note...",
       "update_noteStatus": "Mise à jour de la note...",

@@ -3572,11 +3572,17 @@
       "web_searchName": "Cerca sul web",
       "get_calendar_eventsName": "Ottieni eventi del calendario",
       "get_calendar_availabilityName": "Verifica disponibilità",
+      "get_snippetName": "Ottieni snippet",
+      "update_dictionaryName": "Aggiorna dizionario",
+      "update_snippetsName": "Aggiorna snippet",
       "search_notesStatus": "Ricerca nelle note...",
       "web_searchStatus": "Ricerca sul web...",
       "copy_to_clipboardStatus": "Copia negli appunti...",
       "get_calendar_eventsStatus": "Controllo del calendario...",
       "get_calendar_availabilityStatus": "Controllo della disponibilità...",
+      "get_snippetStatus": "Recupero dello snippet...",
+      "update_dictionaryStatus": "Aggiornamento del dizionario...",
+      "update_snippetsStatus": "Aggiornamento degli snippet...",
       "get_noteStatus": "Lettura della nota...",
       "create_noteStatus": "Creazione della nota...",
       "update_noteStatus": "Aggiornamento della nota...",
@@ -3894,7 +3900,11 @@
     "scopes": {
       "notesRead": "Leggi note",
       "notesWrite": "Crea e modifica note",
-      "transcriptionsRead": "Leggi trascrizioni"
+      "transcriptionsRead": "Leggi trascrizioni",
+      "dictionaryRead": "Leggi dizionario",
+      "dictionaryWrite": "Modifica dizionario",
+      "snippetsRead": "Leggi snippet",
+      "snippetsWrite": "Modifica snippet"
     },
     "revoke": {
       "button": "Revoca",

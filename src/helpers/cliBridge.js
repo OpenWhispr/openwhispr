@@ -288,6 +288,26 @@ class CliBridge {
       return value;
     };
 
+    const requireSnippetList = (value) => {
+      if (value === undefined || value === null) return [];
+      const valid =
+        Array.isArray(value) &&
+        value.every(
+          (s) =>
+            s &&
+            typeof s.trigger === "string" &&
+            s.trigger.trim() &&
+            typeof s.replacement === "string" &&
+            s.replacement.trim()
+        );
+      if (!valid) {
+        const err = new Error("'add' must be an array of { trigger, replacement } strings");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return value;
+    };
+
     const requireSuccess = (result, message) => {
       if (!result?.success) {
         const err = new Error(result?.error || message);
@@ -393,6 +413,40 @@ class CliBridge {
         const words = db.getDictionary();
         setImmediate(() => broadcastToWindows("dictionary-updated", words));
         return { data: { words, added: result.added, removed: result.removed } };
+      }),
+      exact("GET", "/v1/snippets/list", () => {
+        return { data: db.getSnippets(), has_more: false, next_cursor: null };
+      }),
+      // Same delta shape as the dictionary route: an add with an existing
+      // trigger replaces that snippet's text, and removes are by trigger.
+      exact("POST", "/v1/snippets/update", ({ body }) => {
+        const add = requireSnippetList(body?.add);
+        const remove = requireWordList(body?.remove, "remove");
+        if (add.length === 0 && remove.length === 0) {
+          const err = new Error("Provide at least one snippet in 'add' or trigger in 'remove'");
+          err.code = "VALIDATION";
+          throw err;
+        }
+        const lower = (trigger) => trigger.trim().toLowerCase();
+        const removeKeys = new Set(remove.map(lower));
+        const addKeys = new Set(add.map((s) => lower(s.trigger)));
+        const current = db.getSnippets();
+        const kept = current.filter(
+          (s) => !removeKeys.has(lower(s.trigger)) && !addKeys.has(lower(s.trigger))
+        );
+        db.setSnippets([...kept, ...add]);
+        const snippets = db.getSnippets();
+        setImmediate(() => broadcastToWindows("snippets-updated", snippets));
+        // setSnippets drops entries it cannot store (e.g. over-long triggers),
+        // so count what landed rather than what was sent.
+        const storedKeys = new Set(snippets.map((s) => lower(s.trigger)));
+        return {
+          data: {
+            snippets,
+            added: add.filter((s) => storedKeys.has(lower(s.trigger))).length,
+            removed: current.filter((s) => removeKeys.has(lower(s.trigger))).length,
+          },
+        };
       }),
       exact("GET", "/v1/transcriptions/list", ({ query }) => {
         const limit = query.get("limit") ? Number(query.get("limit")) : 50;
