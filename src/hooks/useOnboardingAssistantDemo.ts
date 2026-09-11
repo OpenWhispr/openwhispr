@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useChatStreaming } from "../components/chat/useChatStreaming";
+import { buildAssistantDemoRequest } from "../utils/onboardingDemo";
 import type { ChatImageAttachment, Message } from "../components/chat/types";
 import type { OnboardingDemoEvent } from "../types/electron";
 
@@ -21,6 +23,7 @@ type DemoEventInput = Omit<OnboardingDemoEvent, "demoId" | "kind">;
  * restriction, an empty completion — surfaces as "error" with that text.
  */
 export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => void) {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
   const repliedRef = useRef(false);
   const { agentState, activeToolName, sendToAI } = useChatStreaming({
@@ -44,14 +47,21 @@ export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => v
   return useCallback(
     (command: OnboardingAssistantCommand) => {
       repliedRef.current = false;
+      // The card shows the words as spoken; the model gets them with the email
+      // being answered and the shape the composer needs (see the builder).
+      const request = buildAssistantDemoRequest(command.text, {
+        senderName: t("onboarding.rehaul.assistantDemo.email.senderName"),
+        subject: t("onboarding.rehaul.assistantDemo.email.subject"),
+        body: t("onboarding.rehaul.assistantDemo.email.body"),
+      });
       const userMessage: Message = {
         id: crypto.randomUUID(),
         role: "user",
-        content: command.text,
+        content: request,
         isStreaming: false,
       };
       setMessages([userMessage]);
-      void sendToAI(command.text, [userMessage], {
+      void sendToAI(request, [userMessage], {
         attachment: command.attachment ?? undefined,
         suppressResponseContent: true,
         onComplete: ({ content }) => {
@@ -60,6 +70,6 @@ export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => v
         },
       });
     },
-    [publish, sendToAI]
+    [publish, sendToAI, t]
   );
 }
