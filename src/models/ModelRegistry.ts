@@ -105,7 +105,6 @@ export interface ParakeetModelInfo {
   size: string;
   sizeMb: number;
   expectedSizeBytes?: number;
-  manifestUrl?: string;
   language: string;
   supportedLanguages: string[];
   runtime?: "offline" | "online";
