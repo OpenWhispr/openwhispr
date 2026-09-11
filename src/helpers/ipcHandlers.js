@@ -4251,7 +4251,9 @@ class IPCHandlers {
           ? isUsingNativeShortcut
             ? hotkeyManager.supportsPushToTalk(hotkey)
             : this.linuxKeyManager?.isAvailable?.() === true
-          : !isUsingNativeShortcut;
+          : process.platform === "darwin"
+            ? hotkeyManager.supportsPushToTalk(hotkey)
+            : !isUsingNativeShortcut;
 
       return {
         isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),

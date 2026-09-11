@@ -21,3 +21,6 @@ export const USE_CASE_OPTIONS: UseCaseOption[] = [
   { id: USE_CASE_IDS.upload },
   { id: USE_CASE_IDS.ai },
 ];
+
+export const hasUseCaseIntent = (useCases: string[], note: string) =>
+  useCases.length > 0 || note.trim().length > 0;

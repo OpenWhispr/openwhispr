@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { AlertCircle } from "./icons";
 import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
 import UseCaseStep from "./onboarding/UseCaseStep";
+import { hasUseCaseIntent } from "./onboarding/useCases";
 import OnboardingShell, { OnboardingStepHeader } from "./onboarding/OnboardingShell";
 import CompactPermissionsStep from "./onboarding/CompactPermissionsStep";
 import LanguageSelectionStep from "./onboarding/LanguageSelectionStep";
@@ -453,11 +454,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     [settings.dictationKey]
   );
 
+  const hotkeyErrorRef = useRef<string | null>(null);
   const { registerHotkey, isRegistering } = useHotkeyRegistration({
     onSuccess: (registered) => {
       const primary = parseHotkeyList(registered)[0] || registered;
       setDictationHotkey(primary);
       settings.setDictationKey(registered);
+    },
+    onError: (message) => {
+      hotkeyErrorRef.current = message;
     },
     showSuccessToast: false,
     showErrorToast: false,
@@ -479,10 +484,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const confirmDictationHotkey = useCallback(
     async (value: string) => {
+      // Hold needs a key the OS reports released; a key without that falls
+      // back to Tap rather than failing the pick. The card below the box shows
+      // the switch, with Hold disabled and the reason on it.
+      if (activationMode === "push") {
+        const info = await window.electronAPI?.getHotkeyModeInfo?.(value);
+        if (info && !info.supportsPushToTalk) setActivationMode("tap");
+      }
+      hotkeyErrorRef.current = null;
       const registered = await registerHotkey(withExtraDictationHotkeys(value));
-      return registered ? null : t("onboarding.rehaul.hotkey.inUse");
+      return registered ? null : (hotkeyErrorRef.current ?? t("onboarding.rehaul.hotkey.inUse"));
     },
-    [registerHotkey, t, withExtraDictationHotkeys]
+    [activationMode, registerHotkey, setActivationMode, t, withExtraDictationHotkeys]
   );
 
   const confirmAssistantHotkey = useCallback(
@@ -770,7 +783,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "languages":
         return settings.spokenLanguages.length > 0;
       case "use-cases":
-        return settings.onboardingUseCases.length > 0;
+        return hasUseCaseIntent(settings.onboardingUseCases, settings.onboardingUseCaseNote);
       case "dictation-hotkey":
         return dictationHotkeyConfirmed;
       case "dictation-demo":
@@ -893,6 +906,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <UseCaseStep
               useCases={settings.onboardingUseCases}
               onUseCasesChange={settings.setOnboardingUseCases}
+              note={settings.onboardingUseCaseNote}
+              onNoteChange={settings.setOnboardingUseCaseNote}
             />
           </div>
         );
@@ -1054,10 +1069,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               stopLabel={t("onboarding.rehaul.demo.stop")}
               retryLabel={t("common.retry")}
               onSuccessChange={assistant ? setAssistantDemoSuccess : setDictationDemoSuccess}
-              // The dictation demo asks what the user would love OpenWhispr to
-              // do for them; their answer is the free-text half of the use-case
-              // step that follows.
-              onTranscript={assistant ? undefined : settings.setOnboardingUseCaseNote}
             />
           </div>
         );

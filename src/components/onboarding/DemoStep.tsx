@@ -244,8 +244,6 @@ interface DemoStepProps {
   stopLabel: string;
   retryLabel: string;
   onSuccessChange: (successful: boolean) => void;
-  /** The finished dictation, once the demo succeeds. */
-  onTranscript?: (text: string) => void;
   initialSuccessful?: boolean;
 }
 
@@ -259,7 +257,6 @@ export default function DemoStep({
   stopLabel,
   retryLabel,
   onSuccessChange,
-  onTranscript,
   initialSuccessful = false,
 }: DemoStepProps) {
   const [messageCount, setMessageCount] = useState(0);
@@ -305,16 +302,13 @@ export default function DemoStep({
         if (kind === "assistant" && heard) setTranscript(payload.text);
         else setDraft(payload.text);
       }
-      if (payload.status === "success") {
-        onSuccessChange(true);
-        if (payload.text) onTranscript?.(payload.text);
-      }
+      if (payload.status === "success") onSuccessChange(true);
     });
     return () => {
       unsubscribe?.();
       void window.electronAPI?.endOnboardingDemo?.(demoId);
     };
-  }, [demoId, kind, onSuccessChange, onTranscript]);
+  }, [demoId, kind, onSuccessChange]);
 
   const retry = () => {
     setRestoredSuccessful(false);

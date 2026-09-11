@@ -2196,6 +2196,8 @@
       "titleLineOne": "كيف ستستخدم",
       "titleLineTwo": "OpenWhispr؟",
       "description": "اختر كل ما ينطبق. سنقوم بتخصيص إعدادك.",
+      "noteLabel": "هل هناك أي شيء آخر تود أن نعرفه؟",
+      "notePlaceholder": "أخبرنا كيف تخطط لاستخدام OpenWhispr (اختياري)",
       "proceedToSetup": "متابعة الإعداد",
       "options": {
         "dictation": {
@@ -3476,6 +3478,7 @@
       "mouseButtonOnlyMac": "اختصارات أزرار الماوس مدعومة حاليًا على نظام macOS فقط.",
       "alreadyRegistered": "\"{{hotkey}}\" مسجل بالفعل بواسطة تطبيق آخر.",
       "osReserved": "قد يكون \"{{hotkey}}\" محجوزًا بواسطة بيئة سطح المكتب لديك.",
+      "holdNeedsReleaseKey": "يحتاج الضغط المستمر للتحدث إلى مفتاح يمكن لـ macOS أن يرصد تحريره: Globe، أو مفتاح جانبي أيمن مثل Option الأيمن، أو اختصار مع مفتاح تعديل. أما النقر فيعمل مع أي مفتاح.",
       "registrationFailed": "تعذر تسجيل \"{{hotkey}}\". قد يكون قيد الاستخدام بواسطة تطبيق آخر.",
       "updateFailedCheckFormat": "فشل تحديث الاختصار إلى \"{{hotkey}}\". تأكد من أن التنسيق صالح.",
       "trySuggestions": "جرّب: {{suggestions}}",

@@ -1008,7 +1008,11 @@ async function startApp() {
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 
-  await windowManager.setActivationModeCache(environmentManager.getActivationMode());
+  // A saved Hold with a key that cannot be held (macOS lone regular key) stays
+  // on Tap; write that back so the renderer's setting agrees with main.
+  if (!(await windowManager.setActivationModeCache(environmentManager.getActivationMode()))) {
+    environmentManager.saveActivationMode(windowManager.getActivationMode());
+  }
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 

@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
+      "holdNeedsReleaseKey": "ホールドして話すには、macOS が離したことを検知できるキーが必要です。Globe、右 Option のような右側のキー、または修飾キー付きのショートカットです。タップならどのキーでも使えます。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
       "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
       "trySuggestions": "お試しください: {{suggestions}}",
@@ -506,6 +507,8 @@
       "titleLineOne": "OpenWhisprを",
       "titleLineTwo": "どう使いますか？",
       "description": "当てはまるものをすべて選んでください。それに合わせてセットアップします。",
+      "noteLabel": "他に伝えておきたいことはありますか？",
+      "notePlaceholder": "OpenWhispr の使い方を教えてください（任意）",
       "proceedToSetup": "設定に進む",
       "options": {
         "dictation": {

@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Los atajos con botones del ratón solo son compatibles con macOS por ahora.",
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
+      "holdNeedsReleaseKey": "Mantener para hablar necesita una tecla cuya liberación macOS pueda detectar: Globo, una tecla derecha como Opción derecha o un atajo con modificador. Pulsar funciona con cualquier tecla.",
       "registrationFailed": "No se pudo registrar \"{{hotkey}}\". Puede estar en uso por otra aplicación.",
       "updateFailedCheckFormat": "No se pudo actualizar el atajo a \"{{hotkey}}\". Comprueba que el formato sea válido.",
       "trySuggestions": "Prueba: {{suggestions}}",
@@ -506,6 +507,8 @@
       "titleLineOne": "¿Cómo usarás",
       "titleLineTwo": "OpenWhispr?",
       "description": "Elige todas las opciones que apliquen. Adaptaremos tu configuración.",
+      "noteLabel": "¿Algo más que quieras contarnos?",
+      "notePlaceholder": "Cuéntanos cómo piensas usar OpenWhispr (opcional)",
       "proceedToSetup": "Continuar con la configuración",
       "options": {
         "dictation": {

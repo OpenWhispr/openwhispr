@@ -64,6 +64,20 @@ function isMouseButtonHotkey(hotkey) {
   return /^MouseButton[45]$/i.test(hotkey || "");
 }
 
+// macOS only reports a release for keys a native listener watches — Globe,
+// right-side modifiers, mouse buttons — and for modifier chords, whose modifier
+// release ends the hold (startMacCompoundPushToTalk). A lone regular key comes
+// through globalShortcut, which fires again on every autorepeat and never on
+// release: held, it would toggle dictation on and off a few times a second.
+function lacksMacReleaseSignal(hotkey) {
+  return (
+    !hotkey.includes("+") &&
+    !isGlobeLikeHotkey(hotkey) &&
+    !isMouseButtonHotkey(hotkey) &&
+    !isRightSideModifier(hotkey)
+  );
+}
+
 function normalizeToAccelerator(hotkey) {
   return hotkey
     .replace(/\bRight(Command|Cmd)\b/g, "Command")
@@ -387,6 +401,9 @@ class HotkeyManager extends EventEmitter {
   }
 
   supportsPushToTalk(hotkey = this.currentHotkey) {
+    if (process.platform === "darwin" && hotkey && lacksMacReleaseSignal(hotkey)) {
+      return false;
+    }
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
       return false;
     }
@@ -397,6 +414,9 @@ class HotkeyManager extends EventEmitter {
   }
 
   getPushToTalkUnavailableReason(hotkey = this.currentHotkey) {
+    if (process.platform === "darwin" && hotkey && lacksMacReleaseSignal(hotkey)) {
+      return i18nMain.t("hotkey.errors.holdNeedsReleaseKey", { hotkey });
+    }
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
       return i18nMain.t("hotkey.errors.osReserved", { hotkey });
     }

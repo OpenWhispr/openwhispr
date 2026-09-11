@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Le scorciatoie con i tasti del mouse sono attualmente supportate solo su macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
+      "holdNeedsReleaseKey": "Tieni premuto per parlare richiede un tasto di cui macOS rilevi il rilascio: Globo, un tasto destro come Opzione destra o una scorciatoia con modificatore. Tocca funziona con qualsiasi tasto.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
       "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
       "trySuggestions": "Prova: {{suggestions}}",
@@ -506,6 +507,8 @@
       "titleLineOne": "Come userai",
       "titleLineTwo": "OpenWhispr?",
       "description": "Scegli tutte le opzioni pertinenti. Adatteremo la configurazione.",
+      "noteLabel": "C'è altro che vorresti farci sapere?",
+      "notePlaceholder": "Raccontaci come pensi di usare OpenWhispr (facoltativo)",
       "proceedToSetup": "Continua la configurazione",
       "options": {
         "dictation": {

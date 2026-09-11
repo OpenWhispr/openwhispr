@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
+      "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
       "trySuggestions": "Try: {{suggestions}}",
@@ -506,6 +507,8 @@
       "titleLineOne": "How will you",
       "titleLineTwo": "use OpenWhispr?",
       "description": "Choose all that apply. We’ll tailor your setup.",
+      "noteLabel": "Anything else you'd like us to know?",
+      "notePlaceholder": "Tell us how you plan to use OpenWhispr (Optional)",
       "proceedToSetup": "Proceed to setup",
       "options": {
         "dictation": {

@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Atalhos com botões do mouse atualmente são compatíveis apenas no macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" já está registrada por outro aplicativo.",
       "osReserved": "\"{{hotkey}}\" pode estar reservada pelo seu ambiente de desktop.",
+      "holdNeedsReleaseKey": "Segurar para falar precisa de uma tecla cuja soltura o macOS detecte: Globo, uma tecla direita como Option direita ou um atalho com modificador. Tocar funciona com qualquer tecla.",
       "registrationFailed": "Não foi possível registrar \"{{hotkey}}\". Pode estar em uso por outro aplicativo.",
       "updateFailedCheckFormat": "Não foi possível atualizar o atalho para \"{{hotkey}}\". Verifique se o formato é válido.",
       "trySuggestions": "Tente: {{suggestions}}",
@@ -485,6 +486,8 @@
       "titleLineOne": "Como você usará",
       "titleLineTwo": "o OpenWhispr?",
       "description": "Escolha todas as opções que se aplicam. Vamos adaptar sua configuração.",
+      "noteLabel": "Algo mais que gostaria de nos contar?",
+      "notePlaceholder": "Conte como você pretende usar o OpenWhispr (opcional)",
       "proceedToSetup": "Continuar a configuração",
       "options": {
         "dictation": {

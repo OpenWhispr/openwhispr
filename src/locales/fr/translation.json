@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Les raccourcis avec les boutons de la souris ne sont actuellement pris en charge que sur macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" est déjà enregistré par une autre application.",
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
+      "holdNeedsReleaseKey": "Maintenir pour parler nécessite une touche dont macOS détecte le relâchement : Globe, une touche droite comme Option droite, ou un raccourci avec modificateur. Appuyer fonctionne avec n’importe quelle touche.",
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
       "updateFailedCheckFormat": "Impossible de mettre à jour le raccourci vers \"{{hotkey}}\". Vérifiez que le format est valide.",
       "trySuggestions": "Essayez : {{suggestions}}",
@@ -506,6 +507,8 @@
       "titleLineOne": "Comment utiliserez-vous",
       "titleLineTwo": "OpenWhispr ?",
       "description": "Choisissez tout ce qui s'applique. Nous adapterons votre configuration.",
+      "noteLabel": "Autre chose à nous dire ?",
+      "notePlaceholder": "Dites-nous comment vous comptez utiliser OpenWhispr (facultatif)",
       "proceedToSetup": "Continuer la configuration",
       "options": {
         "dictation": {

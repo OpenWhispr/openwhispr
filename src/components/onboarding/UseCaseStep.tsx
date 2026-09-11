@@ -5,14 +5,16 @@ import { USE_CASE_OPTIONS } from "./useCases";
 interface UseCaseStepProps {
   useCases: string[];
   onUseCasesChange: (useCases: string[]) => void;
+  note: string;
+  onNoteChange: (note: string) => void;
 }
 
-/**
- * The picks only. The free-text half of this question was answered a step
- * earlier: the dictation demo asks what the user would love OpenWhispr to do,
- * and their dictation is saved as the note that ships with these choices.
- */
-export default function UseCaseStep({ useCases, onUseCasesChange }: UseCaseStepProps) {
+export default function UseCaseStep({
+  useCases,
+  onUseCasesChange,
+  note,
+  onNoteChange,
+}: UseCaseStepProps) {
   const { t } = useTranslation();
 
   const toggleUseCase = (id: string) => {
@@ -88,6 +90,20 @@ export default function UseCaseStep({ useCases, onUseCasesChange }: UseCaseStepP
             </button>
           );
         })}
+
+        {/* Figma: Frame 37 — same card shell as the rows, pad 12, 14/140%
+            placeholder in text-tertiary. */}
+        <label className="block shrink-0">
+          <span className="sr-only">{t("onboarding.useCase.noteLabel")}</span>
+          <input
+            dir="auto"
+            type="text"
+            value={note}
+            onChange={(event) => onNoteChange(event.target.value)}
+            placeholder={t("onboarding.useCase.notePlaceholder")}
+            className="onboarding-light-input onboarding-light-input-bordered w-full rounded-xl! border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-2.5 text-sm font-normal leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! outline-none placeholder:text-[var(--onboarding-text-tertiary)] focus:border-[var(--onboarding-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]"
+          />
+        </label>
       </div>
     </div>
   );
