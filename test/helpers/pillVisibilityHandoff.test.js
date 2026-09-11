@@ -148,3 +148,24 @@ test("auto-hide closes the native window before releasing DOM suppression", asyn
 
   assert.deepEqual(order, ["suppress", "bounds", "hide", "release"]);
 });
+
+test("active work vetoes auto-hide while releasing a retry error", async () => {
+  const { createPillVisibilityHandoff } =
+    await import("../../src/utils/pillVisibilityHandoff.ts");
+  let active = true;
+  const order = [];
+  const handoff = createPillVisibilityHandoff({
+    onSuppressedChange: (suppressed) => order.push(suppressed ? "suppress" : "release"),
+    shouldAutoHide: () => !active,
+    hideWindow: async () => order.push("hide"),
+    waitForFrames: async () => order.push("frames"),
+  });
+
+  handoff.suppress();
+  await handoff.releaseAfter(async () => order.push("bounds"));
+
+  assert.deepEqual(order, ["suppress", "bounds", "frames", "release"]);
+  active = false;
+  await handoff.releaseAfter(async () => order.push("bounds-again"));
+  assert.deepEqual(order, ["suppress", "bounds", "frames", "release", "bounds-again", "hide"]);
+});

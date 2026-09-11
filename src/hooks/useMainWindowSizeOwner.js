@@ -23,6 +23,7 @@ export function useMainWindowSizeOwner({
   toastCount,
   isCommandMenuOpen,
   isCompactPill,
+  hasLiveActivity,
   assistantOpen,
   assistantMounted,
   assistantOpenRef,
@@ -32,6 +33,7 @@ export function useMainWindowSizeOwner({
 }) {
   const [handoffActive, setHandoffActive] = useState(false);
   const actionCountRef = useRef(dictationErrorActionCount);
+  const liveActivityRef = useRef(hasLiveActivity);
   const handoffRef = useRef(null);
   // Same masking for the panel-return shrink: snapping the native window from
   // panel bounds back to the pill box paints one compositor frame of the old
@@ -40,10 +42,14 @@ export function useMainWindowSizeOwner({
   const [panelReturnResizeActive, setPanelReturnResizeActive] = useState(false);
   const panelReturnSuppressedRef = useRef(false);
   const panelReturnHandoffRef = useRef(null);
+  useLayoutEffect(() => {
+    liveActivityRef.current = hasLiveActivity;
+  }, [hasLiveActivity]);
   useEffect(() => {
     const handoff = createPillVisibilityHandoff({
       onSuppressedChange: setHandoffActive,
-      shouldAutoHide: () => useSettingsStore.getState().floatingIconAutoHide,
+      shouldAutoHide: () =>
+        useSettingsStore.getState().floatingIconAutoHide && !liveActivityRef.current,
       hideWindow: () => window.electronAPI?.hideWindow?.(),
     });
     handoffRef.current = handoff;
@@ -173,6 +179,7 @@ export function useMainWindowSizeOwner({
     isCommandMenuOpen,
     toastCount,
     isCompactPill,
+    hasLiveActivity,
     dictationErrorActionCount,
     requestMainWindowSize,
   ]);

@@ -310,6 +310,7 @@ export default function App() {
     toastCount,
     isCommandMenuOpen,
     isCompactPill: windowFitsCompactPill,
+    hasLiveActivity: isVisuallyProcessing || isRecording,
     assistantOpen: assistant.open,
     assistantMounted: assistant.mounted,
     assistantOpenRef,
