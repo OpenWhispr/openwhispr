@@ -69,6 +69,7 @@ function loadClipboardManager({ spawn } = {}) {
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron") {
       return {
+        app: { isPackaged: false },
         clipboard: fakeClipboard,
         systemPreferences: {
           isTrustedAccessibilityClient: () => true,

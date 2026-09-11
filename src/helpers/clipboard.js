@@ -882,6 +882,13 @@ class ClipboardManager {
     const allowClipboardFallback = options.allowClipboardFallback === true;
 
     try {
+      // Direct insertion runs before touching any clipboard format. An uncertain
+      // native outcome throws rather than risking a duplicate clipboard paste.
+      const { tryNativeInsertion } = require("./nativeTextInsertion");
+      if (await tryNativeInsertion(text)) {
+        if (options.restoreClipboard === false) clipboard.writeText(text);
+        return { pasted: true, method: "native-direct", restoreComplete: Promise.resolve() };
+      }
       const shouldRestore = options.restoreClipboard !== false;
       const originalClipboard = shouldRestore ? this._saveClipboard() : null;
       const originalPrimary =
