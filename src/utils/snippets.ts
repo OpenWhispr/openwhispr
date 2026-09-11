@@ -68,6 +68,19 @@ function getMatcher(snippets?: Snippet[] | null): SnippetMatcher | null {
   return cachedMatcher;
 }
 
+// The pattern case-folds the Unicode way (/iu) while the keys are toLowerCase'd,
+// so a match is not proof of a replacement: "[ıI]mza" matches a plain "imza",
+// which is no key at all. Both callers resolve through here, so a reported range
+// always means an expansion — wake-word suppression depends on it.
+function resolveReplacement(match: string, replacements: Map<string, string>): string | undefined {
+  const folded = foldCapitalIDot(match);
+  return (
+    replacements.get(folded.toLowerCase()) ??
+    // An uppercase I can be capital dotless ı as well as English i.
+    replacements.get(folded.replace(/I/g, "ı").toLowerCase())
+  );
+}
+
 /**
  * Character ranges of every trigger occurrence, matched against `text` exactly
  * as given so the offsets index that same string. Wake-word detection uses
@@ -81,10 +94,12 @@ export function findSnippetTriggerRanges(
   if (!text) return [];
   const matcher = getMatcher(snippets);
   if (!matcher) return [];
-  return [...text.matchAll(matcher.regex)].map((match) => ({
-    start: match.index,
-    end: match.index + match[0].length,
-  }));
+  return [...text.matchAll(matcher.regex)]
+    .filter((match) => resolveReplacement(match[0], matcher.replacements) !== undefined)
+    .map((match) => ({
+      start: match.index,
+      end: match.index + match[0].length,
+    }));
 }
 
 /**
@@ -96,15 +111,9 @@ export function expandSnippets(text: string, snippets?: Snippet[] | null): strin
   if (!matcher) return text;
   const { regex, replacements } = matcher;
   // NFC so a decomposed "I" + U+0307 in the transcript recombines into İ.
-  return text.normalize("NFC").replace(regex, (match) => {
-    const folded = foldCapitalIDot(match);
-    return (
-      replacements.get(folded.toLowerCase()) ??
-      // An uppercase I can be capital dotless ı as well as English i.
-      replacements.get(folded.replace(/I/g, "ı").toLowerCase()) ??
-      match
-    );
-  });
+  return text
+    .normalize("NFC")
+    .replace(regex, (match) => resolveReplacement(match, replacements) ?? match);
 }
 
 /**

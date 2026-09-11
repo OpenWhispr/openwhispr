@@ -303,8 +303,10 @@ function resolveReasoningRoute(
         // reachable; standalone commands resolve the same scope again in the
         // panel and report their own configuration problems in-conversation.
         selectionEditReachable: agent.reachable,
-        // Detection and stripping must resolve auto-language identically.
+        // Detection and stripping must read the transcript identically, so both
+        // inputs ride the route rather than being re-read after the await.
         wakeWordLanguage,
+        snippets: settings.snippets,
         // The panel re-decides attach/drop for its own request, so carry the
         // raw screenshot past this attach gate for that path.
         ...(screenContext ? { rawScreenContext: screenContext } : {}),
@@ -2631,7 +2633,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           text,
           agentName,
           config?.wakeWordLanguage ?? resolveWakeWordLanguage(settings),
-          settings.snippets
+          config?.snippets ?? settings.snippets
         );
     const transcript = selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
     this._bankAssistantDirective(transcript, config, { selectedContext, deliverySessionId });

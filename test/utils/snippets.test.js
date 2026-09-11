@@ -146,3 +146,15 @@ test("findSnippetTriggerRanges reports where each trigger occurs", () => {
   assert.deepEqual(findSnippetTriggerRanges("nothing to expand here", snippets), []);
   assert.deepEqual(findSnippetTriggerRanges("openwhispr review", null), []);
 });
+
+// Wake-word suppression keys off these ranges, so a range that expandSnippets
+// will not actually replace costs the user both the wake word and the snippet.
+// The matcher folds case the Unicode way (/iu) while the replacement lookup
+// uses toLowerCase(); Turkish dotless ı is where the two part company, since
+// the pattern's [ıI] matches a plain "i" that is not a Map key.
+test("findSnippetTriggerRanges reports only ranges expandSnippets will replace", () => {
+  const snippets = [{ trigger: "ımza", replacement: "Saygılarımla" }];
+
+  assert.equal(expandSnippets("imza raporu hazırla", snippets), "imza raporu hazırla");
+  assert.deepEqual(findSnippetTriggerRanges("imza raporu hazırla", snippets), []);
+});
