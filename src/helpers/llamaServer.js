@@ -9,6 +9,7 @@ const { getSafeTempDir } = require("./safeTempDir");
 const { app } = require("electron");
 const sidecarPidFile = require("./sidecarPidFile");
 const { BIN_SUBDIR: LLAMA_VULKAN_BIN_SUBDIR } = require("./llamaVulkanManager");
+const { BASELINE_CONTEXT_SIZE } = require("./llamaContextPolicy");
 
 // Range kept clear of cliBridge (8200-8219) to avoid port-bind collisions.
 const PORT_RANGE_START = 8221;
@@ -29,6 +30,15 @@ const PREFLIGHT_TIMEOUT_MS = 10000;
  * llama.cpp internals in a toast (#2142), so it becomes a typed error carrying
  * the two numbers callers actually need.
  */
+/** Same argv with --ctx-size rewritten; used by the context step-down rung. */
+function withContextSize(args, contextSize) {
+  const index = args.indexOf("--ctx-size");
+  if (index === -1) return args;
+  const copy = [...args];
+  copy[index + 1] = String(contextSize);
+  return copy;
+}
+
 function buildResponseError(statusCode, body) {
   if (statusCode === 400) {
     try {
@@ -68,6 +78,9 @@ class LlamaServerManager {
     // the start() restart check); activeDraftModelPath is the one that actually loaded.
     this.draftModelPath = null;
     this.activeDraftModelPath = null;
+    // The context that actually loaded, which the GPU ladder may step down
+    // below the requested one.
+    this.activeContextSize = null;
     // The context the running server was started with. Grows on demand and is
     // only reset by stop(), so a short request cannot shrink a window a long
     // one just paid to open. See #2142.
@@ -180,7 +193,9 @@ class LlamaServerManager {
     this.startupPromise = this._doStart(modelPath, options);
     try {
       await this.startupPromise;
-      this.contextSize = requestedContextSize;
+      // The ladder may have stepped the context down to get a GPU rung to
+      // start; record what loaded, not what was asked for.
+      this.contextSize = this.activeContextSize ?? requestedContextSize;
     } finally {
       this.startupPromise = null;
     }
@@ -224,6 +239,7 @@ class LlamaServerManager {
     this.draftModelPath = options.draftModelPath || null;
     this.activeDraftModelPath = null;
 
+    this.activeContextSize = options.contextSize || DEFAULT_CONTEXT_SIZE;
     const baseArgs = this._buildBaseArgs(modelPath, this.port, options);
 
     // Draft flags stay separate from baseArgs so the fallback ladder can retry without
@@ -268,6 +284,7 @@ class LlamaServerManager {
     const gpuArgs = [...baseArgs, "--n-gpu-layers", String(options.gpuLayers ?? 99)];
     const cpuArgs = baseArgs;
     const hasDraft = draftArgs.length > 0;
+    const requestedContext = options.contextSize || DEFAULT_CONTEXT_SIZE;
 
     // Degrade ladder: GPU+MTP, then GPU alone (a live GPU beats speculation), then
     // CPU+MTP (the bundled pin normally accepts the flags), then plain CPU. The
@@ -293,6 +310,25 @@ class LlamaServerManager {
         timeout: VULKAN_STARTUP_TIMEOUT_MS,
         attemptMsg: "Attempting Vulkan backend startup",
       },
+      // A context sized against system RAM can still be too big for a
+      // discrete GPU's own memory, which the app does not probe. Halving it is
+      // far cheaper than the 10-30x cost of dropping to CPU, so try that
+      // first. Omitted entirely when there is nothing to step down to, so a
+      // baseline start keeps today's exact ladder.
+      ...(requestedContext > BASELINE_CONTEXT_SIZE && binaryPaths.vulkan
+        ? [
+            {
+              backend: "vulkan",
+              name: "Vulkan (reduced context)",
+              binary: binaryPaths.vulkan,
+              args: withContextSize(gpuArgs, BASELINE_CONTEXT_SIZE),
+              mtp: false,
+              contextSize: BASELINE_CONTEXT_SIZE,
+              timeout: VULKAN_STARTUP_TIMEOUT_MS,
+              attemptMsg: "Attempting Vulkan backend startup with a reduced context",
+            },
+          ]
+        : []),
       {
         backend: "cpu",
         name: "CPU",
@@ -331,6 +367,10 @@ class LlamaServerManager {
         );
         this.activeBackend = rung.backend;
         this.activeDraftModelPath = rung.mtp ? this.draftModelPath : null;
+        // Without this the preflight would believe the full context is
+        // available and send a prompt the server cannot take.
+        this.activeContextSize = rung.contextSize ?? requestedContext;
+        this.contextSize = this.activeContextSize;
         return;
       } catch (err) {
         lastError = err;
@@ -796,6 +836,7 @@ class LlamaServerManager {
     this.activeDraftModelPath = null;
     this.activeBackend = null;
     this.contextSize = null;
+    this.activeContextSize = null;
   }
 
   getStatus() {
