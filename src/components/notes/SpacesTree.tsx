@@ -195,8 +195,9 @@ function SectionHeader({
   isDragOver?: boolean;
   isDropSuccess?: boolean;
 }) {
+  // All-caps has no descenders, so its optical centre sits ~1px above the line box.
   const labelClassName =
-    "text-[11px] font-medium uppercase tracking-[0.08em] text-foreground/55 select-none";
+    "translate-y-px text-[11px] font-medium uppercase tracking-[0.08em] text-foreground/55 select-none";
 
   return (
     <div
