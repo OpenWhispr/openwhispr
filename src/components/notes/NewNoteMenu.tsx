@@ -19,8 +19,8 @@ import CreateSpaceDialog from "./CreateSpaceDialog";
 
 interface NewNoteMenuProps {
   onNewNote: () => void;
-  /** Omitted when the organization's policy turns the assistant off. */
-  onNewChat?: () => void;
+  /** Opens a fresh assistant chat in Notes: the open note's, or the overview's. */
+  onNewChat: () => void;
 }
 
 /** The Notes topbar's split "New note" button; the chevron offers the other things to create. */
@@ -51,20 +51,23 @@ export default function NewNoteMenu({ onNewNote, onNewChat }: NewNoteMenuProps) 
               <ChevronDown size={14} />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" sideOffset={6} className="min-w-44">
+          <DropdownMenuContent
+            align="end"
+            sideOffset={6}
+            className="min-w-44"
+            // Each item hands focus to what it opens (the chat input, the space dialog);
+            // don't pull it back to the chevron.
+            onCloseAutoFocus={(event) => event.preventDefault()}
+          >
             <DropdownMenuItem onSelect={onNewNote} className="gap-2.5">
               <NotebookPen className="h-4 w-4" />
               {t("notes.createMenu.note")}
             </DropdownMenuItem>
-            {onNewChat && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onNewChat} className="gap-2.5">
-                  <MessageSquare className="h-4 w-4" />
-                  {t("notes.createMenu.assistantChat")}
-                </DropdownMenuItem>
-              </>
-            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onNewChat} className="gap-2.5">
+              <MessageSquare className="h-4 w-4" />
+              {t("notes.createMenu.assistantChat")}
+            </DropdownMenuItem>
             {canCreateTeamSpace && (
               <>
                 <DropdownMenuSeparator />

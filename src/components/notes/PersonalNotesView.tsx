@@ -129,8 +129,6 @@ interface PersonalNotesViewProps {
   onInvitationEntryHandled?: () => void;
   /** The topbar slot the New note button portals into; null while the topbar hides it. */
   topBarActions?: HTMLElement | null;
-  /** Omitted when the organization's policy turns the assistant off. */
-  onNewChat?: () => void;
 }
 
 export default function PersonalNotesView({
@@ -140,7 +138,6 @@ export default function PersonalNotesView({
   invitationEntry,
   onInvitationEntryHandled,
   topBarActions,
-  onNewChat,
 }: PersonalNotesViewProps) {
   const isMeetingMode = useIsMeetingMode();
   const isNarrowWindow = useIsNarrowWindow();
@@ -552,6 +549,18 @@ export default function PersonalNotesView({
     else handleNewNoteInPrivate();
   }, [activeContext, handleNewNoteIn, handleNewNoteInPrivate]);
 
+  // The topbar's Assistant chat opens the chat already in Notes: the open note's, or the
+  // space/folder overview's (the private space's when nothing is selected).
+  const [newChatRequested, setNewChatRequested] = useState(false);
+  const clearNewChatRequest = useCallback(() => setNewChatRequested(false), []);
+  const handleNewChat = useCallback(() => {
+    if (!activeNote && !overviewSpace) {
+      if (privateSpaceId == null) return;
+      setActiveContext(privateSpaceId, null);
+    }
+    setNewChatRequested(true);
+  }, [activeNote, overviewSpace, privateSpaceId]);
+
   const handleNotesAdded = useCallback(async () => {
     if (activeFolderId) {
       await initializeNotes(null, 50, activeFolderId);
@@ -775,7 +784,7 @@ export default function PersonalNotesView({
     <div className="flex h-full">
       {topBarActions &&
         createPortal(
-          <NewNoteMenu onNewNote={handleNewNote} onNewChat={onNewChat} />,
+          <NewNoteMenu onNewNote={handleNewNote} onNewChat={handleNewChat} />,
           topBarActions
         )}
       <div
@@ -849,6 +858,8 @@ export default function PersonalNotesView({
               actionProcessingState={actionProcessingState}
               actionName={actionName}
               onGenerateSummary={generateSummary}
+              newChatRequested={newChatRequested}
+              onNewChatRequestHandled={clearNewChatRequest}
               actionPicker={
                 <ActionPicker
                   onRunAction={runNoteAction}
@@ -876,6 +887,8 @@ export default function PersonalNotesView({
             onOpenNote={setActiveNoteId}
             onNewNote={handleNewNote}
             onAddExisting={activeFolderId != null ? () => setShowAddNotesDialog(true) : undefined}
+            newChatRequested={newChatRequested}
+            onNewChatRequestHandled={clearNewChatRequest}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center -mt-6">

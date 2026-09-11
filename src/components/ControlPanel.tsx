@@ -1162,7 +1162,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     invitationEntry={invitationNotesEntry}
                     onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
                     topBarActions={topBarActions}
-                    onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
                   />
                 </Suspense>
               )}

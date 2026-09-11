@@ -27,6 +27,9 @@ interface ContainerOverviewProps {
   onOpenNote: (noteId: number) => void;
   onNewNote: () => void;
   onAddExisting?: () => void;
+  /** Set by the Notes topbar's Assistant chat: start a fresh chat in the ask box. */
+  newChatRequested?: boolean;
+  onNewChatRequestHandled?: () => void;
 }
 
 export function ContainerOverview({
@@ -35,6 +38,8 @@ export function ContainerOverview({
   onOpenNote,
   onNewNote,
   onAddExisting,
+  newChatRequested,
+  onNewChatRequestHandled,
 }: ContainerOverviewProps) {
   const { t } = useTranslation();
   const workspaces = useWorkspaceStore((s) => s.workspaces);
@@ -68,6 +73,15 @@ export function ContainerOverview({
   const notes = folder ? containerNotes : (spaceNotes ?? []);
 
   const chat = useContainerChat({ space, folder, notes });
+  const { startNewChat } = chat;
+  // Remounting the ask box for a requested chat leaves its input empty and focused.
+  const [chatSession, setChatSession] = useState(0);
+  useEffect(() => {
+    if (!newChatRequested) return;
+    startNewChat();
+    setChatSession((session) => session + 1);
+    onNewChatRequestHandled?.();
+  }, [newChatRequested, startNewChat, onNewChatRequestHandled]);
 
   const workspace = space.workspace_id
     ? workspaces.find((w) => w.id === space.workspace_id)
@@ -141,6 +155,7 @@ export function ContainerOverview({
         <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
 
         <OverviewAskSection
+          key={chatSession}
           messages={chat.messages}
           agentState={chat.agentState}
           onTextSubmit={chat.sendMessage}
