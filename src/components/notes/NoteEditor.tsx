@@ -189,9 +189,6 @@ interface NoteEditorProps {
   actionPicker?: React.ReactNode;
   /** Runs the built-in Generate Notes action; enables the post-recording summary pill. */
   onGenerateSummary?: () => void;
-  /** Set by the Notes topbar's Assistant chat: open a fresh chat about this note. */
-  newChatRequested?: boolean;
-  onNewChatRequestHandled?: () => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   diarizationSessionId?: string | null;
@@ -225,8 +222,6 @@ export default function NoteEditor({
   enhancement,
   actionPicker,
   onGenerateSummary,
-  newChatRequested,
-  onNewChatRequestHandled,
   actionProcessingState,
   actionName,
   diarizationSessionId,
@@ -378,16 +373,6 @@ export default function NoteEditor({
     noteContent: note.content,
     noteTranscript: note.transcript ?? undefined,
   });
-  const { startNewChat: startNewEmbeddedChat } = embeddedChat;
-  // Remounting the panel for a requested chat replays its entrance and refocuses its input.
-  const [chatSession, setChatSession] = useState(0);
-  useEffect(() => {
-    if (!newChatRequested) return;
-    startNewEmbeddedChat();
-    setChatSession((session) => session + 1);
-    setChatMode((mode) => (mode === "hidden" ? "floating" : mode));
-    onNewChatRequestHandled?.();
-  }, [newChatRequested, startNewEmbeddedChat, onNewChatRequestHandled]);
   const titleRef = useRef<HTMLDivElement>(null);
   const prevNoteIdRef = useRef<number>(note.id);
 
@@ -1264,7 +1249,6 @@ export default function NoteEditor({
           />
           {chatMode === "floating" && (
             <EmbeddedChat
-              key={chatSession}
               mode="floating"
               floatingPanelRef={floatingChatPanelRef}
               onModeChange={setChatMode}
@@ -1282,7 +1266,6 @@ export default function NoteEditor({
       </div>
       {chatMode === "sidebar" && (
         <EmbeddedChat
-          key={chatSession}
           mode="sidebar"
           onModeChange={setChatMode}
           messages={embeddedChat.messages}

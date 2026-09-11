@@ -19,8 +19,8 @@ import CreateSpaceDialog from "./CreateSpaceDialog";
 
 interface NewNoteMenuProps {
   onNewNote: () => void;
-  /** Opens a fresh assistant chat in Notes: the open note's, or the overview's. */
-  onNewChat: () => void;
+  /** Opens a new chat in the Chat tab; omitted when policy turns the assistant off. */
+  onNewChat?: () => void;
 }
 
 /** The Notes topbar's split "New note" button; the chevron offers the other things to create. */
@@ -74,11 +74,15 @@ export default function NewNoteMenu({ onNewNote, onNewChat }: NewNoteMenuProps) 
               <NotebookPen className="h-4 w-4" />
               {t("notes.createMenu.note")}
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={keepFocus(onNewChat)} className="gap-2.5">
-              <MessageSquare className="h-4 w-4" />
-              {t("notes.createMenu.assistantChat")}
-            </DropdownMenuItem>
+            {onNewChat && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={keepFocus(onNewChat)} className="gap-2.5">
+                  <MessageSquare className="h-4 w-4" />
+                  {t("notes.createMenu.assistantChat")}
+                </DropdownMenuItem>
+              </>
+            )}
             {canCreateTeamSpace && (
               <>
                 <DropdownMenuSeparator />

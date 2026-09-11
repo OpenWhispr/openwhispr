@@ -120,7 +120,9 @@ export default function ControlPanelTopBar({
             ref={actionsSlotRef}
             data-no-window-drag=""
             style={noDragStyle}
-            className="flex items-center"
+            // macOS keeps no window controls here, so page actions take the far
+            // end; elsewhere they sit beside the search, left of the controls.
+            className={cn("flex items-center", platform === "darwin" && "ms-auto")}
           />
         )}
         {platform !== "darwin" && (
