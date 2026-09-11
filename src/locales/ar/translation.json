@@ -1571,6 +1571,12 @@
       "hoursAgo": "منذ {{count}} س",
       "daysAgo": "منذ {{count}} ي"
     },
+    "createMenu": {
+      "note": "ملاحظة",
+      "assistantChat": "دردشة مع المساعد",
+      "sharedSpace": "مساحة مشتركة",
+      "chooseType": "اختر ما تريد إنشاءه"
+    },
     "editor": {
       "untitled": "بدون عنوان",
       "noteTitle": "عنوان الملاحظة",

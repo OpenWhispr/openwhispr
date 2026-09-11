@@ -2909,6 +2909,12 @@
       "hoursAgo": "{{count}} ч. назад",
       "daysAgo": "{{count}} дн. назад"
     },
+    "createMenu": {
+      "note": "Заметка",
+      "assistantChat": "Чат с помощником",
+      "sharedSpace": "Общее пространство",
+      "chooseType": "Выбрать, что создать"
+    },
     "editor": {
       "untitled": "Без названия",
       "noteTitle": "Название заметки",

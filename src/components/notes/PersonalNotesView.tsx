@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Plus, Sparkles } from "../icons";
 import { useToast } from "../ui/useToast";
 import NoteEditor from "./NoteEditor";
+import NewNoteMenu from "./NewNoteMenu";
 import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
 import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
@@ -125,6 +127,10 @@ interface PersonalNotesViewProps {
   onMeetingRecordingRequestHandled?: () => void;
   invitationEntry?: { workspaceId: string; teamIds: string[] } | null;
   onInvitationEntryHandled?: () => void;
+  /** The topbar slot the New note button portals into; null while the topbar hides it. */
+  topBarActions?: HTMLElement | null;
+  /** Omitted when the organization's policy turns the assistant off. */
+  onNewChat?: () => void;
 }
 
 export default function PersonalNotesView({
@@ -133,6 +139,8 @@ export default function PersonalNotesView({
   onMeetingRecordingRequestHandled,
   invitationEntry,
   onInvitationEntryHandled,
+  topBarActions,
+  onNewChat,
 }: PersonalNotesViewProps) {
   const isMeetingMode = useIsMeetingMode();
   const isNarrowWindow = useIsNarrowWindow();
@@ -765,6 +773,11 @@ export default function PersonalNotesView({
 
   return (
     <div className="flex h-full">
+      {topBarActions &&
+        createPortal(
+          <NewNoteMenu onNewNote={handleNewNote} onNewChat={onNewChat} />,
+          topBarActions
+        )}
       <div
         className="shrink-0 overflow-hidden transition-[width] duration-300 ease-out"
         style={{ width: isSidePanelLayout ? 0 : "13rem" }}

@@ -3229,6 +3229,12 @@
       "hoursAgo": "vor {{count}}h",
       "daysAgo": "vor {{count}}T"
     },
+    "createMenu": {
+      "note": "Notiz",
+      "assistantChat": "Assistent-Chat",
+      "sharedSpace": "Geteilter Bereich",
+      "chooseType": "Auswählen, was erstellt werden soll"
+    },
     "editor": {
       "untitled": "Unbenannt",
       "noteTitle": "Notiztitel",

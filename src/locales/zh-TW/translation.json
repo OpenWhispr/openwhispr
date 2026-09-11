@@ -2887,6 +2887,12 @@
       "hoursAgo": "{{count}} 小時前",
       "daysAgo": "{{count}} 天前"
     },
+    "createMenu": {
+      "note": "筆記",
+      "assistantChat": "助理聊天",
+      "sharedSpace": "共用空間",
+      "chooseType": "選擇要建立的內容"
+    },
     "editor": {
       "untitled": "未命名",
       "noteTitle": "筆記標題",

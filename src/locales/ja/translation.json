@@ -2918,6 +2918,12 @@
       "hoursAgo": "{{count}}時間前",
       "daysAgo": "{{count}}日前"
     },
+    "createMenu": {
+      "note": "ノート",
+      "assistantChat": "アシスタントとのチャット",
+      "sharedSpace": "共有スペース",
+      "chooseType": "作成する項目を選択"
+    },
     "upload": {
       "title": "音声をアップロード",
       "using": "{{model}} を使用中",

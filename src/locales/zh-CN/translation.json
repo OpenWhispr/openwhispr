@@ -2887,6 +2887,12 @@
       "hoursAgo": "{{count}} 小时前",
       "daysAgo": "{{count}} 天前"
     },
+    "createMenu": {
+      "note": "笔记",
+      "assistantChat": "助手聊天",
+      "sharedSpace": "共享空间",
+      "chooseType": "选择要创建的内容"
+    },
     "editor": {
       "untitled": "无标题",
       "noteTitle": "笔记标题",

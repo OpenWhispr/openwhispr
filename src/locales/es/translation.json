@@ -2940,6 +2940,12 @@
       "hoursAgo": "hace {{count}}h",
       "daysAgo": "hace {{count}}d"
     },
+    "createMenu": {
+      "note": "Nota",
+      "assistantChat": "Chat con el asistente",
+      "sharedSpace": "Espacio compartido",
+      "chooseType": "Elegir qué crear"
+    },
     "editor": {
       "untitled": "Sin título",
       "noteTitle": "Título de la nota",

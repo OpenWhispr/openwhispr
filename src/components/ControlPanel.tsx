@@ -150,6 +150,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     folderId: number;
     event: any;
   } | null>(null);
+  const [topBarActions, setTopBarActions] = useState<HTMLDivElement | null>(null);
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
   );
@@ -1003,6 +1004,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               onOpenSearch={() => setShowSearch(true)}
               isSidePanelLayout={isSidePanelLayout}
               onExitSidePanel={handleExitSidePanel}
+              actionsSlotRef={setTopBarActions}
             />
             <div className="scrollbar-hidden flex-1 overflow-y-auto">
               {updateRequiredByOrg && (
@@ -1159,6 +1161,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                     invitationEntry={invitationNotesEntry}
                     onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
+                    topBarActions={topBarActions}
+                    onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
                   />
                 </Suspense>
               )}

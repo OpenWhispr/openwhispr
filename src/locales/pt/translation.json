@@ -2887,6 +2887,12 @@
       "hoursAgo": "{{count}}h",
       "daysAgo": "{{count}}d"
     },
+    "createMenu": {
+      "note": "Nota",
+      "assistantChat": "Chat com o assistente",
+      "sharedSpace": "Espaço compartilhado",
+      "chooseType": "Escolher o que criar"
+    },
     "editor": {
       "untitled": "Sem título",
       "noteTitle": "Título da nota",
