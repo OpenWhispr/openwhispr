@@ -71,14 +71,18 @@ test("OpenWhispr reasoning labels only dictation-agent requests for server enfor
     text: "do this",
     model: "",
     agentName: "Whisper",
-    config: { systemPrompt: "Act on the request.", requiresAgent: true },
+    config: {
+      systemPrompt: "Act on the request.",
+      requiresAgent: true,
+      inferenceScope: "dictationAgent",
+    },
     ctx: context,
   });
   await openwhisprProvider.call({
     text: "clean this",
     model: "",
     agentName: "Whisper",
-    config: {},
+    config: { inferenceScope: "dictationCleanup" },
     ctx: context,
   });
   await openwhisprProvider.call({
@@ -90,8 +94,9 @@ test("OpenWhispr reasoning labels only dictation-agent requests for server enfor
   });
 
   assert.equal(requests[0].requestPurpose, "agent");
-  assert.equal(requests[0].purpose, undefined);
+  assert.equal(requests[0].purpose, "assistant");
   assert.equal(requests[1].requestPurpose, undefined);
   assert.equal(requests[1].promptMode, "cleanup");
+  assert.equal(requests[1].purpose, "cleanup");
   assert.equal(requests[2].purpose, "translation");
 });

@@ -967,7 +967,6 @@ export interface SettingsState
 
   setVoiceAgentScreenContext: (value: boolean) => void;
   setUseDictationAgentVisionModel: (value: boolean) => void;
-  setDictationAgentVisionMode: (mode: InferenceMode) => void;
   setDictationAgentVisionProvider: (value: string) => void;
   setDictationAgentVisionModel: (value: string) => void;
   setDictationAgentVisionCloudMode: (value: string) => void;
@@ -1915,9 +1914,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
   setUseDictationAgentVisionModel: createBooleanSetter("useDictationAgentVisionModel"),
-  setDictationAgentVisionMode: createStringSetter("dictationAgentVisionMode") as (
-    mode: InferenceMode
-  ) => void,
   setDictationAgentVisionProvider: createStringSetter("dictationAgentVisionProvider"),
   setDictationAgentVisionModel: createStringSetter("dictationAgentVisionModel"),
   setDictationAgentVisionCloudMode: createStringSetter("dictationAgentVisionCloudMode"),
