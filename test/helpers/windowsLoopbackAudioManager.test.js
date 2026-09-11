@@ -18,9 +18,12 @@ function setPlatform(platform) {
 
 afterEach(() => setPlatform(originalPlatform));
 
-function loadManagerClass() {
+function loadManagerClass(mocks = {}) {
   delete require.cache[managerModulePath];
   Module._load = function loadWithMocks(request, parent, isMain) {
+    if (mocks[request]) {
+      return mocks[request];
+    }
     if (request === "./debugLogger") {
       return {
         info() {},
@@ -232,4 +235,49 @@ test("live helper probe succeeds on this machine when the binary is present", as
   const parsed = JSON.parse(output);
   assert.equal(parsed.ok, true);
   assert.equal(parsed.supportsNativeCapture, true);
+});
+
+test("stderr output from an inactive child is ignored after process change", async () => {
+  setPlatform("win32");
+  const { EventEmitter } = require("node:events");
+
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = new EventEmitter();
+  child.kill = () => {};
+
+  const MockedManager = loadManagerClass({
+    child_process: {
+      spawn: () => {
+        process.nextTick(() => {
+          child.stderr.emit("data", JSON.stringify({ type: "start" }) + "\n");
+        });
+        return child;
+      },
+    },
+  });
+
+  const manager = new MockedManager();
+  manager.resolveBinary = () => "C:\\helper.exe";
+  manager.getCapability = async () => ({ available: true });
+
+  const errors = [];
+  await manager.start({
+    onError: (err) => errors.push(err),
+  });
+
+  assert.equal(manager.process, child);
+
+  // Process is replaced or cleared (e.g. stopped)
+  manager.process = null;
+
+  // Stale stderr arrives from the old child
+  child.stderr.emit(
+    "data",
+    JSON.stringify({ type: "error", error: "stale process failure" }) + "\n"
+  );
+
+  assert.equal(errors.length, 0);
+  assert.equal(manager.stderrBuffer, "");
 });

@@ -174,6 +174,7 @@ class WindowsLoopbackAudioManager {
       });
 
       child.stderr.on("data", (chunk) => {
+        if (this.process !== child) return;
         this._consumeStderr(chunk, (message) => {
           if (message.type === "start") {
             finish(resolve);
