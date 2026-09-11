@@ -460,8 +460,14 @@ export default function BackgroundModelDownloadTray({
                   {downloadDisplay(download).name}
                 </span>
               </span>
+              {/* Extraction pins the percentage at 100, so the number stops
+                  carrying information exactly when the bar stops moving. Naming
+                  the phase per row — as the setup step and the settings picker
+                  already do — keeps that readable whatever the other rows do. */}
               <span className="shrink-0 font-medium tabular-nums text-muted-foreground">
-                {Math.round(download.percentage)}%
+                {download.installing
+                  ? t("onboarding.rehaul.local.installing")
+                  : `${Math.round(download.percentage)}%`}
               </span>
             </div>
             {download.error ? (

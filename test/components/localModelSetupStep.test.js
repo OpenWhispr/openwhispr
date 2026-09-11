@@ -10,6 +10,7 @@ const {
 
 const FIRST_LLM = "qwen3.5-4b-q4_k_m";
 const SECOND_LLM = "qwen3.5-2b-q4_k_m";
+const PARAKEET = "parakeet-tdt-0.6b-v3";
 
 function findElement(node, predicate) {
   if (Array.isArray(node)) {
@@ -184,6 +185,11 @@ async function createSetupHarness(
     assert.ok(button, `${action} is available for ${modelId}: ${textContent(row(modelId))}`);
     await React.act(async () => button.props.onClick());
   };
+  const emit = async (family, event) => {
+    await React.act(async () => {
+      for (const listener of listeners[family]) listener({}, event);
+    });
+  };
   const progress = async (modelId, percentage, phase = "progress") => {
     const family = requests.get(modelId).family;
     const event =
@@ -196,9 +202,7 @@ async function createSetupHarness(
             downloaded_bytes: percentage,
             total_bytes: 100,
           };
-    await React.act(async () => {
-      for (const listener of listeners[family]) listener({}, event);
-    });
+    await emit(family, event);
   };
   const complete = async (modelId) => {
     const request = requests.get(modelId);
@@ -216,6 +220,11 @@ async function createSetupHarness(
       request.resolve({ success: true });
     });
   };
+  const trayRow = (key) => {
+    const element = findElement(trayTree, (node) => node.type === "div" && node.key === key);
+    assert.ok(element, `tray row ${key} is visible`);
+    return element;
+  };
   const actionButton = (label) =>
     findElement(
       tree,
@@ -228,13 +237,10 @@ async function createSetupHarness(
     click,
     progress,
     complete,
+    emit,
+    trayRow,
     cancel: async (modelId) => {
-      const trayRow = findElement(
-        trayTree,
-        (node) => node.type === "div" && node.key === `llm:${modelId}`
-      );
-      assert.ok(trayRow, `tray row ${modelId} is visible`);
-      const button = findElement(trayRow, (node) => node.type === "button");
+      const button = findElement(trayRow(`llm:${modelId}`), (node) => node.type === "button");
       await React.act(async () => button.props.onClick());
     },
     trayHeader: () => {
@@ -500,4 +506,22 @@ test("the tray header follows the transfer into its installing phase", async (t)
   // that can tell a full bar apart from a stalled one.
   await setup.progress(modelId, 100, "installing");
   assert.equal(setup.trayHeader(), "onboarding.rehaul.local.installing");
+});
+
+test("an extracting row says so while another model is still downloading", async (t) => {
+  const setup = await createSetupHarness(t, { assistant: true });
+  await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
+  await setup.progress(FIRST_LLM, 40);
+
+  // The tray outlives the step that started a transfer, so a dictation model
+  // picked earlier keeps extracting behind the assistant step.
+  await setup.emit("parakeet", { model: PARAKEET, type: "installing", percentage: 100 });
+
+  assert.match(
+    textContent(setup.trayRow(`parakeet:${PARAKEET}`)),
+    /onboarding\.rehaul\.local\.installing/
+  );
+  assert.match(textContent(setup.trayRow(`llm:${FIRST_LLM}`)), /40%/);
+  // Not every row has reached extraction, so the strip stays on downloading.
+  assert.equal(setup.trayHeader(), "onboarding.rehaul.local.downloadInProgress");
 });

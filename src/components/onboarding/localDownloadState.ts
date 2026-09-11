@@ -31,9 +31,14 @@ export function mergeHydratedDownloads<T>(
 /**
  * Extraction is the last phase of a transfer, so the tray header only claims it
  * once every row has reached it — a mixed tray is still, truthfully, downloading.
+ * A failed row is not one of those transfers: it has already stopped, so waiting
+ * on it would keep the header describing a download that is no longer running.
  */
-export function isTrayInstalling(downloads: readonly { installing?: boolean }[]): boolean {
-  return downloads.length > 0 && downloads.every((download) => download.installing === true);
+export function isTrayInstalling(
+  downloads: readonly { installing?: boolean; error?: string }[]
+): boolean {
+  const running = downloads.filter((download) => !download.error);
+  return running.length > 0 && running.every((download) => download.installing === true);
 }
 
 /** Cycles "" → "." → ".." → "..." so an installing header reads as live work. */
