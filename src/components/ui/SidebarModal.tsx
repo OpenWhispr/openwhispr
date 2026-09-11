@@ -2,6 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "../icons";
+import { InfoBox } from "./InfoBox";
 import { SettingsLayoutProvider } from "./useSettingsLayout";
 import { useDismissGuard } from "./useDismissGuard";
 
@@ -28,6 +29,8 @@ interface SidebarModalProps<T extends string> {
   version?: string;
   /** Rendered above the nav (hidden in compact mode), e.g. account identity. */
   header?: React.ReactNode;
+  /** Full-width banner above every section, e.g. an organization-managed notice. */
+  notice?: React.ReactNode;
 }
 
 export default function SidebarModal<T extends string>({
@@ -41,6 +44,7 @@ export default function SidebarModal<T extends string>({
   sidebarWidth = "w-52",
   version,
   header,
+  notice,
 }: SidebarModalProps<T>) {
   const { t } = useTranslation();
   const { registerContent, shouldBlockDismiss } = useDismissGuard<HTMLDivElement>();
@@ -238,7 +242,19 @@ export default function SidebarModal<T extends string>({
               {/* Main Content */}
               <div className="flex-1 overflow-y-auto bg-background dark:bg-surface-1">
                 <SettingsLayoutProvider value={{ isCompact }}>
-                  <div className={isCompact ? "p-4" : "p-6"}>{children}</div>
+                  <div className={isCompact ? "p-4" : "p-6"}>
+                    {/* Starts just below the close button, which floats over this column's top corner. */}
+                    {notice && (
+                      <InfoBox
+                        className={`mb-6 flex items-center gap-2.5 rounded-lg px-4 py-3 text-sm text-primary ${
+                          isCompact ? "mt-8" : "mt-6"
+                        }`}
+                      >
+                        {notice}
+                      </InfoBox>
+                    )}
+                    {children}
+                  </div>
                 </SettingsLayoutProvider>
               </div>
             </div>
