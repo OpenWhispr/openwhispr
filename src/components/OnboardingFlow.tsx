@@ -204,10 +204,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     needsRelaunch: screenRecordingNeedsRelaunch,
     request: requestScreenRecordingAccess,
   } = useScreenRecordingPermission();
-  const { supportsPushToTalk, pushToTalkUnavailableReason } = useHotkeyModeInfo(
-    "onboarding",
-    dictationHotkey
-  );
+  const {
+    supportsPushToTalk,
+    pushToTalkUnavailableReason,
+    loaded: hotkeyModeLoaded,
+  } = useHotkeyModeInfo("onboarding", dictationHotkey);
   const { activationMode, setActivationMode } = settings;
   // This hook also starts the membership fetch for already-authenticated users;
   // relying on the login transition alone would leave resumed onboarding stuck
@@ -359,6 +360,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   useEffect(() => {
     if (currentStepId === "required-models") requiredModelsLatchRef.current = true;
   }, [currentStepId]);
+
+  // New users start on hold-to-talk: the key is down only while they speak, so
+  // there is nothing to remember to stop. Only where no mode was ever chosen
+  // (the store's "tap" is a fallback, not a setting) and where this desktop can
+  // register push-to-talk at all — main's answer is awaited, since the hook's
+  // placeholder says yes on every platform.
+  useEffect(() => {
+    if (currentStepId !== "dictation-hotkey" || !hotkeyModeLoaded) return;
+    if (supportsPushToTalk && localStorage.getItem("activationMode") === null) {
+      setActivationMode("push");
+    }
+  }, [currentStepId, hotkeyModeLoaded, setActivationMode, supportsPushToTalk]);
 
   // The auth step lands on "permissions" before the policy and disk checks
   // settle (AppRouter's policy gate remounts this component mid-transition),
@@ -950,13 +963,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               dense={assistant}
             />
             {!assistant && (
-              <div className="mx-auto mt-8 w-full max-w-md rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-4">
-                <div className="flex items-center justify-between gap-5">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-[var(--onboarding-text-primary)]">
+              <div className="mx-auto mt-8 w-full max-w-md rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0 text-start">
+                    <p className="text-sm font-medium leading-5 text-[var(--onboarding-text-primary)]">
                       {t("onboarding.rehaul.dictationHotkey.activation")}
                     </p>
-                    <p className="mt-0.5 text-sm text-[var(--onboarding-text-secondary)]">
+                    <p className="text-sm leading-5 text-[var(--onboarding-text-secondary)]">
                       {t(
                         activationMode === "push"
                           ? "onboarding.activation.holdDescription"
@@ -965,6 +978,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     </p>
                   </div>
                   <ActivationModeSelector
+                    variant="onboarding"
                     value={activationMode}
                     onChange={setActivationMode}
                     pushDisabledReason={
