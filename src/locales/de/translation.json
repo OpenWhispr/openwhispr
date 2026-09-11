@@ -229,7 +229,8 @@
         "title": "Wählen Sie Ihr Diktier-Tastenkürzel",
         "titleLineOne": "Wählen Sie Ihr",
         "titleLineTwo": "Diktier-Tastenkürzel",
-        "description": "Drücken Sie es, wann immer Sie sprechen statt tippen möchten. Funktioniert in jeder App."
+        "description": "Drücken Sie es, wann immer Sie sprechen statt tippen möchten. Funktioniert in jeder App.",
+        "activation": "Tippen oder halten?"
       },
       "assistantHotkey": {
         "title": "OpenWhispr Assistant einrichten",
@@ -240,7 +241,6 @@
       "hotkey": {
         "capture": "Drücken Sie die Taste, die Sie verwenden möchten",
         "chooseAnother": "Anderes Tastenkürzel wählen",
-        "confirmAgain": "Drücke {{hotkey}} erneut zum Bestätigen",
         "inUse": "Dieses Tastenkürzel wird bereits verwendet. Wähle ein anderes.",
         "holding": "Weiter halten oder eine andere Taste drücken"
       },
@@ -249,9 +249,8 @@
         "titleLineOne": "Probieren Sie Ihr",
         "titleLineTwo": "erstes Diktat aus",
         "description": "Drücken Sie {{hotkey}} und sprechen Sie los. OpenWhispr wandelt Ihre Stimme in Text um.",
-        "founder": "Hallo, ich bin Gabe, Gründer von OpenWhispr",
-        "prompt": "Sagen Sie zum Beispiel: „Ich teste das Diktieren zum ersten Mal.“",
-        "placeholder": "Ihr Diktat erscheint hier…"
+        "founder": "Hallo, ich bin Gabe, der Gründer von OpenWhispr. Danke, dass Sie es ausprobieren. Wir haben viel Herzblut hineingesteckt, und ich freue mich wirklich, dass Sie hier sind.",
+        "prompt": "Wir lernen ständig von den Menschen, die es nutzen. Drücken Sie Ihr Tastenkürzel und sagen Sie mir: Was soll OpenWhispr für Sie tun?"
       },
       "assistantDemo": {
         "title": "OpenWhispr Assistant kennenlernen",

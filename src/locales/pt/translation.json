@@ -208,7 +208,8 @@
         "title": "Escolha seu atalho de ditado",
         "titleLineOne": "Escolha seu",
         "titleLineTwo": "atalho de ditado",
-        "description": "Pressione-o sempre que quiser falar em vez de digitar. Funciona em qualquer app."
+        "description": "Pressione-o sempre que quiser falar em vez de digitar. Funciona em qualquer app.",
+        "activation": "Tocar ou segurar?"
       },
       "assistantHotkey": {
         "title": "Configure o OpenWhispr Assistant",
@@ -219,7 +220,6 @@
       "hotkey": {
         "capture": "Pressione a tecla que você quer usar",
         "chooseAnother": "Escolher outro atalho",
-        "confirmAgain": "Pressione {{hotkey}} novamente para confirmar",
         "inUse": "Esse atalho já está em uso. Escolha outro.",
         "holding": "Continue pressionando ou pressione outra tecla"
       },
@@ -228,9 +228,8 @@
         "titleLineOne": "Experimente seu",
         "titleLineTwo": "primeiro ditado",
         "description": "Pressione {{hotkey}} e comece a falar. O OpenWhispr vai transformar sua voz em texto.",
-        "founder": "Olá, sou o Gabe, fundador do OpenWhispr",
-        "prompt": "Tente dizer: “Estou testando o ditado pela primeira vez.”",
-        "placeholder": "Seu ditado vai aparecer aqui…"
+        "founder": "Oi, eu sou o Gabe, fundador do OpenWhispr. Obrigado por experimentar. Colocamos muito carinho nisso, e fico genuinamente grato por você estar aqui.",
+        "prompt": "Estamos sempre aprendendo com quem usa. Pressione seu atalho e me conte: o que você adoraria que o OpenWhispr fizesse por você?"
       },
       "assistantDemo": {
         "title": "Conheça o OpenWhispr Assistant",

@@ -19,6 +19,8 @@ export type OnboardingStepId =
   | "languages"
   | "use-cases"
   | "dictation-hotkey"
+  /** No longer routed — tap/hold lives on dictation-hotkey. Kept so a session
+      saved on it still parses and reconciles onto its neighbour. */
   | "activation-mode"
   | "dictation-demo"
   | "assistant-hotkey"
@@ -113,7 +115,6 @@ const ACCOUNT_ROUTE: OnboardingStepId[] = [
   "languages",
   "use-cases",
   "dictation-hotkey",
-  "activation-mode",
   "dictation-demo",
   "notes",
 ];
@@ -230,13 +231,7 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
         // finalizeOnboarding registers dictationHotkey either way, and skipping
         // these steps shipped users who neither granted the mic nor knew their
         // trigger key.
-        ([
-          "auth",
-          "permissions",
-          "dictation-hotkey",
-          "activation-mode",
-          "setup-choice",
-        ] as OnboardingStepId[])
+        (["auth", "permissions", "dictation-hotkey", "setup-choice"] as OnboardingStepId[])
       : [
           ...ACCOUNT_ROUTE,
           ...(context.agentAllowed

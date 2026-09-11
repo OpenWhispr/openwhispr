@@ -1059,10 +1059,11 @@ export type OnboardingDemoKind = "dictation" | "assistant";
  * "partial" carries a streaming transcript. "processing" carries the finished
  * transcript once the assistant demo hands it to the model, and "replying"
  * carries the reply as it streams, so the demo card can show what was heard
- * before what was written.
+ * before what was written. "level" mirrors the microphone level while
+ * listening so the demo's pill can draw the same waveform as the real one.
  */
 export type OnboardingDemoStatus =
-  "listening" | "processing" | "partial" | "replying" | "success" | "error";
+  "listening" | "level" | "processing" | "partial" | "replying" | "success" | "error";
 export interface OnboardingDemoEvent {
   demoId: string;
   kind: OnboardingDemoKind;
@@ -1071,6 +1072,8 @@ export interface OnboardingDemoEvent {
   message?: string;
   /** Tool the assistant is running while it replies (a tool registry name). */
   tool?: string;
+  /** Microphone input level, 0..1, on "level" events. */
+  level?: number;
 }
 
 export interface ReferralItem {

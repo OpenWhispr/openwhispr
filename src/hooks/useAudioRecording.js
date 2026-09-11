@@ -882,16 +882,21 @@ export const useAudioRecording = (toast, options = {}) => {
   );
 
   useEffect(() => {
-    if (!isRecording || isAssistantVoice) return undefined;
+    if (!isRecording) return undefined;
 
     const reportAudioLevel = () => {
+      const level = getAudioLevel();
+      if (level === null) return;
+      // The onboarding demo's pill draws the same waveform from these levels;
+      // the callback drops them once onboarding is complete.
+      onDemoEventRef.current?.({ kind: demoKindRef.current, status: "level", level });
       // The companion pill only exists while the Agent panel is open — with
       // the panel closed there is nobody to mirror levels to, so skip the
       // IPC. Checked per tick, not once: the panel can open mid-recording and
       // a ref change never re-runs this effect.
-      if (!assistantOpenRef?.current) return;
-      const level = getAudioLevel();
-      if (level !== null) window.electronAPI?.dictationAudioLevelChanged?.(level);
+      if (!isAssistantVoice && assistantOpenRef?.current) {
+        window.electronAPI?.dictationAudioLevelChanged?.(level);
+      }
     };
     reportAudioLevel();
     const interval = setInterval(reportAudioLevel, COMPANION_AUDIO_LEVEL_INTERVAL_MS);

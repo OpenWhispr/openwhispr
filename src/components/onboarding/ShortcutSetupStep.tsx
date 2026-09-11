@@ -68,9 +68,9 @@ interface ShortcutSetupStepProps {
 
 /**
  * Opens empty and listening: the first thing the user does is press the key they
- * want, and the recommendations sit right under the box as one-click picks. A
- * pressed key is confirmed by pressing it once more (proving it is reachable and
- * registers), a clicked recommendation is registered on the spot.
+ * want, and the recommendations sit right under the box as one-click picks.
+ * Either way the key is registered on the spot; "Choose another shortcut" is the
+ * way out.
  */
 export default function ShortcutSetupStep({
   value,
@@ -123,15 +123,8 @@ export default function ShortcutSetupStep({
   };
 
   const handleCapture = (next: string) => {
-    setError(null);
-    if (!confirmed && candidate === next) {
-      void confirm(next);
-      return;
-    }
-    setCandidate(next);
-    setConfirmed(false);
-    onClearSelection?.();
-    setCaptureKey((current) => current + 1);
+    if (confirmed && candidate === next) return;
+    void confirm(next);
   };
 
   const captureInput = (
@@ -194,7 +187,7 @@ export default function ShortcutSetupStep({
       )}
 
       {/* One row under the box carries whatever comes next: the picks while it is
-          empty, the confirm hint and the way out once a key is in it. */}
+          empty, the way out once a key is in it. */}
       <div
         className={`flex flex-wrap items-center justify-center leading-[1.4] text-[var(--onboarding-text-tertiary)] ${
           dense ? "mt-3 gap-2 text-sm" : "mt-6 gap-3 text-base"
@@ -203,15 +196,7 @@ export default function ShortcutSetupStep({
       >
         {candidate ? (
           <>
-            {confirmed ? (
-              <p className="sr-only">{formatHotkeyInstruction(candidate)}</p>
-            ) : (
-              <p className="text-sm">
-                {t("onboarding.rehaul.hotkey.confirmAgain", {
-                  hotkey: formatHotkeyInstruction(candidate),
-                })}
-              </p>
-            )}
+            <p className="sr-only">{formatHotkeyInstruction(candidate)}</p>
             <button
               type="button"
               onClick={clear}

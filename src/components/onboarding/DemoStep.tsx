@@ -1,11 +1,18 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import confetti from "canvas-confetti";
-import { ChevronDown, CornerDownLeft, Loader2, Mic, RefreshCw, Sparkles, Square } from "../icons";
+import { ChevronDown, CornerDownLeft, Mic, RefreshCw, Sparkles } from "../icons";
 import { Button } from "../ui/button";
 import { toolIcons } from "../chat/toolIcons";
-import type { OnboardingDemoEvent, OnboardingDemoKind } from "../../types/electron";
+import { VoicePill, type VoicePillState } from "../dictation/VoicePill";
+import { useListeningEntrancePhase } from "../../hooks/useListeningEntrancePhase";
+import { resolveListeningEntrancePresentation } from "../../helpers/voicePillPresentation";
+import type {
+  OnboardingDemoEvent,
+  OnboardingDemoKind,
+  OnboardingDemoStatus,
+} from "../../types/electron";
 import founderAvatar from "../../assets/onboarding-founder.webp";
 import gmailMark from "../../assets/icons/gmail.svg";
 
@@ -143,6 +150,79 @@ function FounderBubble({ children }: { children: ReactNode }) {
 // index.css clamps the duration, and `both` leaves the bubble visible either way.
 const BUBBLE_IN = { animation: "agent-message-in 220ms ease-out both" } as const;
 
+// The user's side of the demo conversation: what they said, as they say it.
+function UserBubble({ children }: { children: ReactNode }) {
+  return (
+    <p
+      dir="auto"
+      className="max-w-[22rem] rounded-[38px] bg-[var(--onboarding-surface-tertiary)] px-4 py-2 text-start text-sm leading-[1.4] text-[var(--onboarding-text-primary)]"
+      style={BUBBLE_IN}
+    >
+      {children}
+    </p>
+  );
+}
+
+/**
+ * The real dictation pill, run through its real entrance (thinking hold →
+ * expand → waveform) off the demo's events, so what people practise on here is
+ * exactly what appears on their screen afterwards. It grows to the left, the
+ * way the floating pill does, and the waveform draws the microphone levels the
+ * dictation window mirrors over while it listens. Clicking it while listening
+ * stops the recording, as clicking the real one does.
+ */
+// Streaming transcript partials arrive while the microphone is still open.
+const isListening = (status: OnboardingDemoStatus | undefined) =>
+  status === "listening" || status === "partial";
+
+function DemoVoicePill({
+  status,
+  getLevel,
+  stopLabel,
+  onStop,
+}: {
+  status: OnboardingDemoStatus | undefined;
+  getLevel: () => number | null;
+  stopLabel: string;
+  onStop: () => void;
+}) {
+  const listening = isListening(status);
+  const busy = status === "processing" || status === "replying";
+  const phase = useListeningEntrancePhase(listening);
+  const entrance = resolveListeningEntrancePresentation({ isRecording: listening, phase });
+  // The presentation helper is untyped JS; while listening it always names the
+  // recording state.
+  const state: VoicePillState = listening ? "recording" : busy ? "processing" : "idle";
+
+  return (
+    <VoicePill
+      variant="floating"
+      state={state}
+      expanded={entrance.compactPill || busy}
+      collapseToLogo={entrance.collapseToLogo}
+      waveformVisible={entrance.waveformVisible}
+      horizontalDirection="left"
+      getAudioLevel={getLevel}
+      role={listening ? "button" : "status"}
+      tabIndex={listening ? 0 : undefined}
+      aria-label={listening ? stopLabel : undefined}
+      title={listening ? stopLabel : undefined}
+      onClick={listening ? onStop : undefined}
+      onKeyDown={
+        listening
+          ? (keyEvent) => {
+              if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+                keyEvent.preventDefault();
+                onStop();
+              }
+            }
+          : undefined
+      }
+      className="shrink-0"
+    />
+  );
+}
+
 function TypingDots() {
   // A 40x20 row of 8px dots on 16px centers (so an 8px gap) in light/text-tertiary.
   return (
@@ -178,7 +258,6 @@ interface DemoStepProps {
   kind: OnboardingDemoKind;
   firstMessage: string;
   secondMessage: string;
-  placeholder: string;
   listeningLabel: string;
   processingLabel: string;
   stopLabel: string;
@@ -191,7 +270,6 @@ export default function DemoStep({
   kind,
   firstMessage,
   secondMessage,
-  placeholder,
   listeningLabel,
   processingLabel,
   stopLabel,
@@ -207,6 +285,10 @@ export default function DemoStep({
   const [demoId, setDemoId] = useState(() => crypto.randomUUID());
   const [restoredSuccessful, setRestoredSuccessful] = useState(initialSuccessful);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Sampled by the pill's waveform from a rAF loop; a ref keeps the ~12 level
+  // events a second from re-rendering the step.
+  const levelRef = useRef(0);
+  const getLevel = useCallback(() => levelRef.current, []);
 
   useEffect(() => {
     const first = window.setTimeout(() => setMessageCount(1), 650);
@@ -223,6 +305,11 @@ export default function DemoStep({
     void window.electronAPI?.beginOnboardingDemo?.({ id: demoId, kind });
     const unsubscribe = window.electronAPI?.onOnboardingDemoEvent?.((payload) => {
       if (payload.demoId !== demoId || payload.kind !== kind) return;
+      if (payload.status === "level") {
+        levelRef.current = payload.level ?? 0;
+        return;
+      }
+      if (payload.status === "listening") levelRef.current = 0;
       setRestoredSuccessful(false);
       setEvent(payload);
       if (payload.text) {
@@ -254,7 +341,8 @@ export default function DemoStep({
   const effectiveEvent: OnboardingDemoEvent | null = restoredSuccessful
     ? { demoId, kind, status: "success" }
     : event;
-  const successful = effectiveEvent?.status === "success";
+  const status = effectiveEvent?.status;
+  const successful = status === "success";
   const stop = () => void window.electronAPI?.stopOnboardingDemo?.(demoId);
 
   return (
@@ -297,20 +385,33 @@ export default function DemoStep({
             )}
           </div>
 
+          {/* The user's turn: their words land as a bubble beside the pill they
+              pressed, so the whole exchange reads as one conversation. */}
           {messageCount >= 2 && (
-            <VoiceSurface
-              inputRef={inputRef}
-              value={draft}
-              onChange={setDraft}
-              placeholder={placeholder}
-              event={effectiveEvent}
-              listeningLabel={listeningLabel}
-              processingLabel={processingLabel}
-              stopLabel={stopLabel}
-              retryLabel={retryLabel}
-              onRetry={retry}
-              onStop={stop}
-            />
+            <div className="flex flex-col items-end gap-2" aria-live="polite">
+              <div className="flex items-end justify-end gap-2.5">
+                {draft && <UserBubble>{draft}</UserBubble>}
+                <DemoVoicePill
+                  status={status}
+                  getLevel={getLevel}
+                  stopLabel={stopLabel}
+                  onStop={stop}
+                />
+              </div>
+              <p className="min-h-4 text-xs text-[var(--onboarding-text-secondary)]">
+                {isListening(status) && listeningLabel}
+                {status === "processing" && processingLabel}
+                {status === "error" && (
+                  <span className="inline-flex items-center gap-1 text-[var(--onboarding-danger)]">
+                    {effectiveEvent.message}
+                    <Button type="button" variant="ghost" size="sm" onClick={retry}>
+                      <RefreshCw className="size-3" />
+                      {retryLabel}
+                    </Button>
+                  </span>
+                )}
+              </p>
+            </div>
           )}
         </div>
       ) : (
@@ -323,6 +424,7 @@ export default function DemoStep({
             placeholder={transcript ? "" : secondMessage}
             event={effectiveEvent}
             transcript={transcript}
+            getLevel={getLevel}
             listeningLabel={listeningLabel}
             processingLabel={processingLabel}
             stopLabel={stopLabel}
@@ -411,6 +513,7 @@ function VoiceSurface({
   placeholder,
   event,
   transcript,
+  getLevel,
   listeningLabel,
   processingLabel,
   stopLabel,
@@ -426,6 +529,7 @@ function VoiceSurface({
   event: OnboardingDemoEvent | null;
   /** What was heard, shown above the reply while the assistant answers it. */
   transcript?: string;
+  getLevel: () => number | null;
   listeningLabel: string;
   processingLabel: string;
   stopLabel: string;
@@ -468,32 +572,19 @@ function VoiceSurface({
         // Placeholder is text-tertiary at 38% — 16/140% in the mail card, 18/140%
         // in the dictation one. The caret takes the brand colour, which is what
         // Figma draws as the 3x18 bar.
-        className={`input-inline min-h-0 w-full flex-1 resize-none bg-transparent pe-10 leading-[1.4] text-[var(--onboarding-text-primary)] caret-[var(--onboarding-accent)] outline-none placeholder:text-[color-mix(in_srgb,var(--onboarding-text-tertiary)_38%,transparent)] ${
+        className={`input-inline min-h-0 w-full flex-1 resize-none bg-transparent pe-12 leading-[1.4] text-[var(--onboarding-text-primary)] caret-[var(--onboarding-accent)] outline-none placeholder:text-[color-mix(in_srgb,var(--onboarding-text-tertiary)_38%,transparent)] ${
           embedded ? "text-sm" : "text-base"
         }`}
       />
-      <button
-        type="button"
-        disabled={status !== "listening"}
-        onClick={onStop}
-        aria-label={stopLabel}
-        title={status === "listening" ? stopLabel : undefined}
-        // Figma places the 32px control 10 from the card's bottom-right corner.
-        className="absolute bottom-2.5 end-2.5 flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)] transition-colors hover:bg-[var(--onboarding-inverse-surface-secondary)] disabled:cursor-default disabled:hover:bg-[var(--onboarding-inverse-surface)]"
-      >
-        {status === "processing" || status === "replying" ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : status === "listening" ? (
-          <Square className="size-3.5 fill-current" />
-        ) : (
-          <Mic className="size-4" />
-        )}
-      </button>
+      {/* Anchored to the corner so the pill grows into the card, leftward. */}
+      <div className="absolute bottom-2 end-2 flex justify-end">
+        <DemoVoicePill status={status} getLevel={getLevel} stopLabel={stopLabel} onStop={onStop} />
+      </div>
       <div
         className="absolute bottom-3 start-3 max-w-[15rem] text-xs text-[var(--onboarding-text-secondary)]"
         aria-live="polite"
       >
-        {status === "listening" && listeningLabel}
+        {isListening(status) && listeningLabel}
         {status === "processing" && !transcript && processingLabel}
         {ToolIcon && event?.tool && (
           // The assistant is mid-tool (checking the calendar, say): name it, so

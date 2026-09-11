@@ -229,7 +229,8 @@
         "title": "ディクテーション用のショートカットを選びましょう",
         "titleLineOne": "ディクテーション用の",
         "titleLineTwo": "ショートカットを選びましょう",
-        "description": "入力の代わりに話したいときに押します。どのアプリでも使えます。"
+        "description": "入力の代わりに話したいときに押します。どのアプリでも使えます。",
+        "activation": "タップかホールド？"
       },
       "assistantHotkey": {
         "title": "OpenWhispr Assistant を設定",
@@ -240,7 +241,6 @@
       "hotkey": {
         "capture": "使いたいキーを押してください",
         "chooseAnother": "別のショートカットを選ぶ",
-        "confirmAgain": "確認するには {{hotkey}} をもう一度押してください",
         "inUse": "そのショートカットはすでに使用されています。別のものを選んでください。",
         "holding": "押したままにするか、別のキーを押してください"
       },
@@ -249,9 +249,8 @@
         "titleLineOne": "最初の",
         "titleLineTwo": "ディクテーションを試す",
         "description": "{{hotkey}} を押して話し始めてください。OpenWhispr が音声をテキストに変換します。",
-        "founder": "こんにちは、OpenWhispr創業者のゲイブです",
-        "prompt": "「初めてディクテーションを試しています」と話してみてください。",
-        "placeholder": "ここにディクテーションが表示されます…"
+        "founder": "こんにちは、OpenWhispr 創業者のゲイブです。試していただきありがとうございます。心を込めて作ったので、使ってもらえて本当にうれしいです。",
+        "prompt": "私たちは使ってくれる皆さんから常に学んでいます。ショートカットを押して教えてください。OpenWhispr に何をしてほしいですか？"
       },
       "assistantDemo": {
         "title": "OpenWhispr Assistant を使ってみる",

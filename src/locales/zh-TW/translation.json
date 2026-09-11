@@ -229,7 +229,8 @@
         "title": "選擇你的聽寫快速鍵",
         "titleLineOne": "選擇你的",
         "titleLineTwo": "聽寫快速鍵",
-        "description": "想用說話取代打字時按下它。在任何 App 中都能用。"
+        "description": "想用說話取代打字時按下它。在任何 App 中都能用。",
+        "activation": "點按還是按住？"
       },
       "assistantHotkey": {
         "title": "設定 OpenWhispr Assistant",
@@ -240,7 +241,6 @@
       "hotkey": {
         "capture": "請按下你想使用的按鍵",
         "chooseAnother": "選擇其他快速鍵",
-        "confirmAgain": "再次按下 {{hotkey}} 以確認",
         "inUse": "此快速鍵已被使用。請選擇其他快速鍵。",
         "holding": "繼續按住，或按下另一個鍵"
       },
@@ -249,9 +249,8 @@
         "titleLineOne": "試試你的",
         "titleLineTwo": "第一次語音輸入",
         "description": "按 {{hotkey}} 開始說話，OpenWhispr 會把你的語音轉成文字。",
-        "founder": "你好，我是 Gabe，OpenWhispr 的創辦人",
-        "prompt": "試著說：「我第一次測試聽寫功能。」",
-        "placeholder": "你的語音輸入結果會顯示在這裡…"
+        "founder": "你好，我是 Gabe，OpenWhispr 的創辦人。感謝你來試用。我們為它傾注了很多心力，真心感謝你的到來。",
+        "prompt": "我們一直在向使用者學習。按下你的快速鍵，告訴我：你希望 OpenWhispr 為你做些什麼？"
       },
       "assistantDemo": {
         "title": "認識 OpenWhispr Assistant",

@@ -761,8 +761,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return hasUseCaseIntent(settings.onboardingUseCases, settings.onboardingUseCaseNote);
       case "dictation-hotkey":
         return dictationHotkeyConfirmed;
-      case "activation-mode":
-        return true;
       case "dictation-demo":
         return dictationDemoSuccess;
       case "assistant-hotkey":
@@ -951,47 +949,39 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               onConfirm={assistant ? confirmAssistantHotkey : confirmDictationHotkey}
               dense={assistant}
             />
+            {!assistant && (
+              <div className="mx-auto mt-8 w-full max-w-md rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-4">
+                <div className="flex items-center justify-between gap-5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-[var(--onboarding-text-primary)]">
+                      {t("onboarding.rehaul.dictationHotkey.activation")}
+                    </p>
+                    <p className="mt-0.5 text-sm text-[var(--onboarding-text-secondary)]">
+                      {t(
+                        activationMode === "push"
+                          ? "onboarding.activation.holdDescription"
+                          : "onboarding.activation.tapDescription"
+                      )}
+                    </p>
+                  </div>
+                  <ActivationModeSelector
+                    value={activationMode}
+                    onChange={setActivationMode}
+                    pushDisabledReason={
+                      !supportsPushToTalk
+                        ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
+                        : undefined
+                    }
+                  />
+                </div>
+                {platform === "linux" && activationMode === "push" && (
+                  <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
+                )}
+              </div>
+            )}
           </div>
         );
       }
-
-      case "activation-mode":
-        return (
-          <div className="flex h-full min-h-0 w-full flex-col pt-2">
-            <OnboardingStepHeader
-              title={t("onboarding.activation.title")}
-              description={t("onboarding.activation.description")}
-            />
-            <div className="mx-auto mt-10 w-full max-w-md rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-5">
-              <div className="flex items-center justify-between gap-5">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-[var(--onboarding-text-primary)]">
-                    {t("onboarding.activation.mode")}
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--onboarding-text-secondary)]">
-                    {t(
-                      activationMode === "push"
-                        ? "onboarding.activation.holdDescription"
-                        : "onboarding.activation.tapDescription"
-                    )}
-                  </p>
-                </div>
-                <ActivationModeSelector
-                  value={activationMode}
-                  onChange={setActivationMode}
-                  pushDisabledReason={
-                    !supportsPushToTalk
-                      ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                      : undefined
-                  }
-                />
-              </div>
-              {platform === "linux" && activationMode === "push" && (
-                <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
-              )}
-            </div>
-          </div>
-        );
 
       case "dictation-demo":
       case "assistant-demo": {
@@ -1047,9 +1037,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? `onboarding.rehaul.assistantDemo.scenarios.${scenario}.prompt`
                   : "onboarding.rehaul.dictationDemo.prompt"
               )}
-              // Only the dictation demo renders this: the assistant card passes
-              // secondMessage as its textarea placeholder.
-              placeholder={t("onboarding.rehaul.dictationDemo.placeholder")}
               listeningLabel={t("onboarding.rehaul.demo.listening")}
               processingLabel={t("onboarding.rehaul.demo.processing")}
               stopLabel={t("onboarding.rehaul.demo.stop")}

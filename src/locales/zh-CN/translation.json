@@ -229,7 +229,8 @@
         "title": "选择你的听写快捷键",
         "titleLineOne": "选择你的",
         "titleLineTwo": "听写快捷键",
-        "description": "想说话代替打字时按下它。在任何应用中都能用。"
+        "description": "想说话代替打字时按下它。在任何应用中都能用。",
+        "activation": "点按还是按住？"
       },
       "assistantHotkey": {
         "title": "设置 OpenWhispr Assistant",
@@ -240,7 +241,6 @@
       "hotkey": {
         "capture": "请按下你想使用的按键",
         "chooseAnother": "选择其他快捷键",
-        "confirmAgain": "再次按下 {{hotkey}} 以确认",
         "inUse": "该快捷键已被使用。请选择其他快捷键。",
         "holding": "继续按住，或按下另一个键"
       },
@@ -249,9 +249,8 @@
         "titleLineOne": "试试你的",
         "titleLineTwo": "第一次听写",
         "description": "按 {{hotkey}} 开始说话，OpenWhispr 会把你的语音转成文字。",
-        "founder": "你好，我是 Gabe，OpenWhispr 的创始人",
-        "prompt": "试着说：“我第一次测试听写功能。”",
-        "placeholder": "你的听写结果会显示在这里…"
+        "founder": "你好，我是 Gabe，OpenWhispr 的创始人。感谢你来试用。我们为它倾注了很多心血，真心感谢你的到来。",
+        "prompt": "我们一直在向用户学习。按下你的快捷键，告诉我：你希望 OpenWhispr 为你做些什么？"
       },
       "assistantDemo": {
         "title": "认识 OpenWhispr Assistant",

@@ -229,7 +229,8 @@
         "title": "Choisissez votre raccourci de dictée",
         "titleLineOne": "Choisissez votre",
         "titleLineTwo": "raccourci de dictée",
-        "description": "Appuyez dessus quand vous voulez parler plutôt que taper. Fonctionne dans toutes les applications."
+        "description": "Appuyez dessus quand vous voulez parler plutôt que taper. Fonctionne dans toutes les applications.",
+        "activation": "Appuyer ou maintenir ?"
       },
       "assistantHotkey": {
         "title": "Configurer OpenWhispr Assistant",
@@ -240,7 +241,6 @@
       "hotkey": {
         "capture": "Appuyez sur la touche que vous souhaitez utiliser",
         "chooseAnother": "Choisir un autre raccourci",
-        "confirmAgain": "Appuyez à nouveau sur {{hotkey}} pour confirmer",
         "inUse": "Ce raccourci est déjà utilisé. Choisissez-en un autre.",
         "holding": "Maintenez la touche ou appuyez sur une autre"
       },
@@ -249,9 +249,8 @@
         "titleLineOne": "Essayez votre",
         "titleLineTwo": "première dictée",
         "description": "Appuyez sur {{hotkey}} et parlez. OpenWhispr transformera votre voix en texte.",
-        "founder": "Bonjour, je suis Gabe, fondateur d’OpenWhispr",
-        "prompt": "Essayez de dire : « Je teste la dictée pour la première fois. »",
-        "placeholder": "Votre dictée apparaîtra ici…"
+        "founder": "Bonjour, je suis Gabe, le fondateur d’OpenWhispr. Merci de l’essayer. Nous y avons mis beaucoup de cœur, et je suis sincèrement heureux que vous soyez là.",
+        "prompt": "Nous apprenons sans cesse de celles et ceux qui l’utilisent. Appuyez sur votre raccourci et dites-moi : qu’aimeriez-vous qu’OpenWhispr fasse pour vous ?"
       },
       "assistantDemo": {
         "title": "Découvrez OpenWhispr Assistant",

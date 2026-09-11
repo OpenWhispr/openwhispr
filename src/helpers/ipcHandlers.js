@@ -1410,6 +1410,9 @@ class IPCHandlers {
       const text = typeof event.text === "string" ? event.text.slice(0, 20000) : undefined;
       const message = typeof event.message === "string" ? event.message.slice(0, 500) : undefined;
       const tool = typeof event.tool === "string" ? event.tool.slice(0, 64) : undefined;
+      const level = Number.isFinite(event.level)
+        ? Math.min(1, Math.max(0, event.level))
+        : undefined;
       broadcastToWindows("onboarding-demo-event", {
         demoId: session.id,
         kind: session.kind,
@@ -1417,6 +1420,7 @@ class IPCHandlers {
         text,
         message,
         tool,
+        level,
       });
       return true;
     });

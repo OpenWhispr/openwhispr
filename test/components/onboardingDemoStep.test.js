@@ -27,7 +27,6 @@ async function loadDemoStep(t) {
 }
 
 const labels = {
-  placeholder: "Your dictation will appear here…",
   listeningLabel: "Listening…",
   processingLabel: "Turning your voice into text…",
   stopLabel: "Stop",

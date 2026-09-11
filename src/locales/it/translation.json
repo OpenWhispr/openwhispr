@@ -229,7 +229,8 @@
         "title": "Scegli la tua scorciatoia per dettare",
         "titleLineOne": "Scegli la tua",
         "titleLineTwo": "scorciatoia per dettare",
-        "description": "Premila quando vuoi parlare invece di scrivere. Funziona in qualsiasi app."
+        "description": "Premila quando vuoi parlare invece di scrivere. Funziona in qualsiasi app.",
+        "activation": "Toccare o tenere premuto?"
       },
       "assistantHotkey": {
         "title": "Configura OpenWhispr Assistant",
@@ -240,7 +241,6 @@
       "hotkey": {
         "capture": "Premi il tasto che vuoi usare",
         "chooseAnother": "Scegli un’altra scorciatoia",
-        "confirmAgain": "Premi di nuovo {{hotkey}} per confermare",
         "inUse": "Questa scorciatoia è già in uso. Scegline un’altra.",
         "holding": "Continua a tenere premuto o premi un altro tasto"
       },
@@ -249,9 +249,8 @@
         "titleLineOne": "Prova la tua",
         "titleLineTwo": "prima dettatura",
         "description": "Premi {{hotkey}} e inizia a parlare. OpenWhispr trasformerà la tua voce in testo.",
-        "founder": "Ciao, sono Gabe, fondatore di OpenWhispr",
-        "prompt": "Prova a dire: «Sto provando la dettatura per la prima volta».",
-        "placeholder": "La tua dettatura apparirà qui…"
+        "founder": "Ciao, sono Gabe, il fondatore di OpenWhispr. Grazie per averlo provato. Ci abbiamo messo tanto amore, e sono davvero grato che tu sia qui.",
+        "prompt": "Impariamo sempre da chi lo usa. Premi la tua scorciatoia e dimmi: cosa vorresti che OpenWhispr facesse per te?"
       },
       "assistantDemo": {
         "title": "Scopri OpenWhispr Assistant",
