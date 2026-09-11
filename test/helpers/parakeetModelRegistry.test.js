@@ -6,6 +6,7 @@ const { BINARIES } = require("../../scripts/download-sherpa-onnx");
 const {
   getModelRuntime,
   getModelType,
+  getSherpaModelType,
   getRequiredModelFiles,
   isSherpaLocalProvider,
   resolveModelLanguage,
@@ -93,8 +94,37 @@ test("cohere language resolution maps app languages to supported codes", () => {
   assert.equal(resolveModelLanguage("parakeet-tdt-0.6b-v3", "pl"), null);
 });
 
+test("only verified offline NeMo models skip sherpa metadata detection", () => {
+  assert.equal(getSherpaModelType("parakeet-tdt-0.6b-v3"), "nemo_transducer");
+  assert.equal(getSherpaModelType("orukeet-v0.1.0-q8"), "nemo_transducer");
+  assert.equal(getSherpaModelType("parakeet-unified-en-0.6b"), null);
+  assert.equal(getSherpaModelType("cohere-transcribe-03-2026"), null);
+  assert.equal(getSherpaModelType("nemotron-speech-streaming-en-0.6b"), null);
+  assert.equal(getSherpaModelType("unknown-model"), null);
+});
+
 test("sherpa provider check covers nvidia and cohere only", () => {
   assert.ok(isSherpaLocalProvider("nvidia"));
   assert.ok(isSherpaLocalProvider("cohere"));
   assert.ok(!isSherpaLocalProvider("whisper"));
+});
+
+test("Orukeet uses the existing Parakeet TDT v3 runtime and model layout", () => {
+  const id = "orukeet-v0.1.0-q8";
+  const model = modelData.parakeetModels[id];
+  const stock = modelData.parakeetModels["parakeet-tdt-0.6b-v3"];
+  assert.equal(model.name, "Orukeet");
+  assert.equal(model.organization.id, "oruk");
+  assert.equal(model.recommended, true);
+  assert.equal(model.engine, undefined);
+  assert.equal(getModelRuntime(id), "offline");
+  assert.equal(getModelType(id), "transducer");
+  assert.deepEqual(getRequiredModelFiles(id), getRequiredModelFiles("parakeet-tdt-0.6b-v3"));
+  assert.deepEqual(model.supportedLanguages, stock.supportedLanguages);
+  assert.equal(resolveModelLanguage(id, "fr"), null);
+  assert.match(
+    model.downloadUrl,
+    /^https:\/\/huggingface\.co\/oruk\/orukeet\/resolve\/[a-f0-9]{40}\/.+\.tar\.bz2$/
+  );
+  assert.equal(model.extractDir, "sherpa-onnx-orukeet-v0.1.0-int8");
 });

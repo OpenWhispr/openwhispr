@@ -47,7 +47,7 @@ test("keeps PATH tar resolution on non-Windows platforms", () => {
 test("runs the explicit Windows tar with drive-colon-free arguments", async () => {
   const child = makeChild();
   let invocation;
-  const promise = runSystemTar("C:\\cache\\model.tar.bz2", "C:\\cache\\extract", {
+  const promise = runSystemTar("C:\\cache\\model.tar.gz", "C:\\cache\\extract", {
     platform: "win32",
     arch: "x64",
     env: { SystemRoot: "C:\\Windows" },
@@ -61,9 +61,26 @@ test("runs the explicit Windows tar with drive-colon-free arguments", async () =
 
   await promise;
   assert.equal(invocation.command, "C:\\Windows\\System32\\tar.exe");
-  assert.deepEqual(invocation.args, ["-xjf", "model.tar.bz2", "-C", "extract"]);
+  assert.deepEqual(invocation.args, ["-xzf", "model.tar.gz", "-C", "extract"]);
   assert.equal(invocation.options.cwd, "C:\\cache");
   assert.equal(child.killed, false);
+});
+
+test("Windows bzip2 archives reach the JS fallback without starting tar or its external decompressor", async () => {
+  for (const extension of ["tar.bz2", "tbz2", "TAR.BZ2"]) {
+    let spawned = false;
+    await assert.rejects(
+      runSystemTar(`C:\\cache\\model.${extension}`, "C:\\cache\\extract", {
+        platform: "win32",
+        spawnImpl: () => {
+          spawned = true;
+          return makeChild();
+        },
+      }),
+      /bundled JavaScript extraction/
+    );
+    assert.equal(spawned, false);
+  }
 });
 
 test("derives tar flags from the archive extension", async () => {

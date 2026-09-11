@@ -1,3 +1,9 @@
+import {
+  LOCAL_ASR_ORGANIZATIONS,
+  getASRModelOrganization,
+  getSelectedASROrganization,
+  usesParakeetManager,
+} from "../../helpers/localASROrganization";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -7,6 +13,7 @@ import { Input } from "../ui/input";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useModelDownload } from "../../hooks/useModelDownload";
+import type { ParakeetCheckResult } from "../../types/electron";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
@@ -17,7 +24,6 @@ import {
 import {
   getTranscriptionProviders,
   getParakeetModels,
-  isCohereTranscribeModel,
   getWhisperModels,
   modelRegistry,
   type CloudProviderData,
@@ -234,28 +240,32 @@ function resolveInitialLocalSelection(
     ? modelRegistry.getProvider(store.chatAgentProvider)
       ? store.chatAgentProvider
       : "qwen"
-    : store.localTranscriptionProvider === "nvidia"
-      ? "nvidia"
-      : "whisper";
-  const requestedProvider = resumeState?.provider || pending?.provider || savedProvider;
+    : getSelectedASROrganization(store.localTranscriptionProvider, store.parakeetModel);
+  const resumeProvider = resumeState
+    ? getSelectedASROrganization(resumeState.provider, resumeState.modelId)
+    : undefined;
+  const pendingProvider = pending
+    ? getSelectedASROrganization(pending.provider, pending.modelId)
+    : undefined;
+  const requestedProvider = resumeProvider || pendingProvider || savedProvider;
   const provider = assistant
     ? modelRegistry.getProvider(requestedProvider)
       ? requestedProvider
       : "qwen"
-    : requestedProvider === "nvidia"
-      ? "nvidia"
+    : requestedProvider === "nvidia" || requestedProvider === "oruk"
+      ? requestedProvider
       : "whisper";
   const savedModel = assistant
     ? store.chatAgentModel
-    : provider === "nvidia"
+    : usesParakeetManager(provider)
       ? store.parakeetModel
       : store.whisperModel;
 
   return {
     provider,
     modelId:
-      (resumeState?.provider === provider ? resumeState.modelId : "") ||
-      (pending?.provider === provider ? pending.modelId : "") ||
+      (resumeProvider === provider ? resumeState?.modelId : "") ||
+      (pendingProvider === provider ? pending?.modelId : "") ||
       savedModel,
   };
 }
@@ -697,6 +707,29 @@ export function LocalModelSetupStep({
   const [downloadedWhisper, setDownloadedWhisper] = useState<Set<string>>(new Set());
   const [downloadedParakeet, setDownloadedParakeet] = useState<Set<string>>(new Set());
   const [downloadedLlm, setDownloadedLlm] = useState<Set<string>>(new Set());
+  const [parakeetCapability, setParakeetCapability] = useState<ParakeetCheckResult | null>(null);
+  const parakeetUnavailable = !assistant && parakeetCapability?.supported === false;
+
+  useEffect(() => {
+    if (assistant) return;
+    let cancelled = false;
+    window.electronAPI
+      ?.checkParakeetInstallation?.()
+      .then((capability) => {
+        if (!cancelled) setParakeetCapability(capability);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [assistant]);
+
+  useEffect(() => {
+    if (parakeetUnavailable && usesParakeetManager(selectedProvider)) {
+      setSelectedProvider("whisper");
+      setSelectedModel("");
+    }
+  }, [parakeetUnavailable, selectedProvider]);
 
   const refreshDownloadedModels = useCallback(async () => {
     const [whisper, parakeet, llm] = await Promise.all([
@@ -744,10 +777,12 @@ export function LocalModelSetupStep({
         icon: provider.id,
       }));
     }
-    return [
-      { id: "whisper", name: "OpenAI", icon: "openai" },
-      { id: "nvidia", name: "NVIDIA", icon: "nvidia" },
-    ];
+    return LOCAL_ASR_ORGANIZATIONS.filter((organization) => organization.id !== "cohere").map(
+      (organization) => ({
+        ...organization,
+        icon: organization.id === "whisper" ? "openai" : organization.id,
+      })
+    );
   }, [assistant]);
 
   const models = useMemo(() => {
@@ -760,17 +795,15 @@ export function LocalModelSetupStep({
         icon: selectedProvider,
       }));
     }
-    if (selectedProvider === "nvidia") {
-      // Onboarding offers only the whisper/NVIDIA providers; Cohere models
-      // would otherwise commit provider "nvidia" with a Cohere model id.
+    if (usesParakeetManager(selectedProvider)) {
       return Object.entries(getParakeetModels())
-        .filter(([id]) => !isCohereTranscribeModel(id))
+        .filter(([id]) => getASRModelOrganization(id) === selectedProvider)
         .map(([id, model]) => ({
           id,
           name: model.name,
           size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
           recommended: model.recommended,
-          icon: "nvidia",
+          icon: selectedProvider,
         }));
     }
     return Object.entries(getWhisperModels()).map(([id, model]) => ({
@@ -795,15 +828,19 @@ export function LocalModelSetupStep({
   const currentProvider = providerOptions.find((provider) => provider.id === selectedProvider);
   const activeDownload = assistant
     ? llmDownload
-    : selectedProvider === "nvidia"
+    : usesParakeetManager(selectedProvider)
       ? parakeetDownload
       : whisperDownload;
   const downloadedModels = assistant
     ? downloadedLlm
-    : selectedProvider === "nvidia"
+    : usesParakeetManager(selectedProvider)
       ? downloadedParakeet
       : downloadedWhisper;
-  const selectedReady = Boolean(selectedModel && downloadedModels.has(selectedModel));
+  const selectedReady = Boolean(
+    selectedModel &&
+    downloadedModels.has(selectedModel) &&
+    !(parakeetUnavailable && usesParakeetManager(selectedProvider))
+  );
 
   useEffect(() => {
     onReadinessChange(selectedReady);
@@ -811,13 +848,14 @@ export function LocalModelSetupStep({
 
   const selectInstalledModel = useCallback(
     (modelId: string): void => {
+      if (parakeetUnavailable && usesParakeetManager(selectedProvider)) return;
       const kind = assistant ? "assistant" : "dictation";
       setSelectedModel(modelId);
       if (assistant) {
         store.setChatAgentMode("local");
         store.setChatAgentProvider(selectedProvider);
         store.setChatAgentModel(modelId);
-      } else if (selectedProvider === "nvidia") {
+      } else if (usesParakeetManager(selectedProvider)) {
         store.setLocalTranscriptionProvider("nvidia");
         store.setParakeetModel(modelId);
       } else {
@@ -828,7 +866,7 @@ export function LocalModelSetupStep({
         forgetPendingLocalModel(kind, modelId);
       }
     },
-    [assistant, selectedProvider, store]
+    [assistant, parakeetUnavailable, selectedProvider, store]
   );
 
   const chooseInstalledModel = (modelId: string): void => {
@@ -837,6 +875,7 @@ export function LocalModelSetupStep({
   };
 
   const downloadModel = (modelId: string): void => {
+    if (parakeetUnavailable && usesParakeetManager(selectedProvider)) return;
     const kind = assistant ? "assistant" : "dictation";
     // LLMs can download concurrently; a refused duplicate or native transfer
     // must not replace the selection waiting for an accepted download.
@@ -845,12 +884,17 @@ export function LocalModelSetupStep({
       (assistant || !activeDownload.isDownloading)
     ) {
       rememberPendingLocalModel(kind, {
-        provider: selectedProvider,
+        provider: selectedProvider === "oruk" ? "nvidia" : selectedProvider,
         modelId,
       });
     }
     void activeDownload.downloadModel(modelId, (downloadedId): void => {
-      if (isPendingLocalModel(kind, { provider: selectedProvider, modelId: downloadedId })) {
+      if (
+        isPendingLocalModel(kind, {
+          provider: selectedProvider === "oruk" ? "nvidia" : selectedProvider,
+          modelId: downloadedId,
+        })
+      ) {
         selectInstalledModel(downloadedId);
         return;
       }
@@ -863,14 +907,16 @@ export function LocalModelSetupStep({
         ? saved.chatAgentMode === "local" &&
           saved.chatAgentProvider === selectedProvider &&
           saved.chatAgentModel === downloadedId
-        : saved.localTranscriptionProvider === selectedProvider &&
-          (selectedProvider === "nvidia" ? saved.parakeetModel : saved.whisperModel) ===
+        : getSelectedASROrganization(saved.localTranscriptionProvider, saved.parakeetModel) ===
+            selectedProvider &&
+          (usesParakeetManager(selectedProvider) ? saved.parakeetModel : saved.whisperModel) ===
             downloadedId;
       if (alreadySelected) setSelectedModel(downloadedId);
     });
   };
 
   const chooseProvider = (providerId: string) => {
+    if (parakeetUnavailable && usesParakeetManager(providerId)) return;
     setSelectedProvider(providerId);
     setSelectedModel("");
     onReadinessChange(false);
@@ -923,7 +969,12 @@ export function LocalModelSetupStep({
           </SelectTrigger>
           <SelectContent className={`max-h-[14.625rem] ${SELECT_PANEL_CLASS}`}>
             {providerOptions.map((provider) => (
-              <SelectItem key={provider.id} value={provider.id} className={SELECT_ITEM_CLASS}>
+              <SelectItem
+                key={provider.id}
+                value={provider.id}
+                className={SELECT_ITEM_CLASS}
+                disabled={parakeetUnavailable && usesParakeetManager(provider.id)}
+              >
                 <span className="flex items-center gap-2.5">
                   <ProviderIcon
                     provider={provider.icon}
@@ -936,6 +987,15 @@ export function LocalModelSetupStep({
             ))}
           </SelectContent>
         </Select>
+        {parakeetUnavailable && (
+          <p className="mt-2 text-xs text-[var(--onboarding-text-secondary)]">
+            {parakeetCapability.minimumMacOSVersion
+              ? t("transcription.parakeet.requiresMacOS", {
+                  version: parakeetCapability.minimumMacOSVersion,
+                })
+              : t("transcription.parakeet.unavailable")}
+          </p>
+        )}
       </div>
 
       {/* A fixed list height keeps the card and footer stable while the visible

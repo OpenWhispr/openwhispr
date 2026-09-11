@@ -7917,6 +7917,10 @@ class IPCHandlers {
       if (dictationPreviewTranscribing) return;
       if (!dictationPreviewBuffer.length) return;
 
+      const gen = dictationPreviewGen;
+      const provider = dictationPreviewProvider;
+      const model = dictationPreviewModel;
+      const language = dictationPreviewLanguage;
       dictationPreviewTranscribing = true;
       try {
         const pcm = Buffer.concat(dictationPreviewBuffer);
@@ -7939,35 +7943,37 @@ class IPCHandlers {
         const wav = pcm16ToWav(pcm);
 
         let result;
-        if (isSherpaLocalProvider(dictationPreviewProvider)) {
+        if (isSherpaLocalProvider(provider)) {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
-            model: dictationPreviewModel,
-            language: dictationPreviewLanguage,
+            model,
+            language,
           });
         } else {
           const vadOptions = this._resolveWhisperVadOptions("dictation");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
-            model: dictationPreviewModel,
-            language: dictationPreviewLanguage,
+            model,
+            language,
             ...vadOptions,
           });
         }
 
+        if (gen !== dictationPreviewGen) return;
         if (result?.success && result.text?.trim()) {
           this.windowManager.appendTranscriptionPreview(result.text.trim());
         } else if (result && !result.success) {
           debugLogger.warn("Dictation preview chunk returned failure", {
             error: result.error || result.message,
-            provider: dictationPreviewProvider,
+            provider,
           });
         }
       } catch (error) {
+        if (gen !== dictationPreviewGen) return;
         debugLogger.error("Dictation preview transcription chunk failed", {
           error: error.message,
-          provider: dictationPreviewProvider,
+          provider,
         });
       } finally {
-        dictationPreviewTranscribing = false;
+        if (gen === dictationPreviewGen) dictationPreviewTranscribing = false;
       }
     };
 
@@ -9017,9 +9023,10 @@ class IPCHandlers {
         if (streamedText && display && dictationPreviewSessionActive) {
           this.windowManager.showTranscriptionPreview(streamedText);
         }
-      } else {
-        await transcribeDictationPreviewChunk();
       }
+      // Offline chunks only draw previews. The renderer decodes the full
+      // recording separately, so another preview decode here competes with
+      // final transcription without contributing to its result.
       resetDictationPreviewState({ preserveSession: display });
       if (!display || !dictationPreviewSessionActive) {
         return { success: true, streamed, text: streamedText };

@@ -1,3 +1,4 @@
+import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AlertCircle, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -108,7 +109,7 @@ export function RequiredModelDownloadStep({
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
                 <ProviderIcon
-                  provider={family === "parakeet" ? "nvidia" : "openai"}
+                  provider={family === "parakeet" ? getASRModelOrganization(modelId) : "openai"}
                   className="size-5"
                 />
               </span>
