@@ -32,7 +32,7 @@ export function CopyableCommand({ command, label, className = "" }: CopyableComm
           type="button"
           onClick={handleCopy}
           aria-label={copied ? "Copied" : "Copy command"}
-          className="absolute top-2 right-2 h-6 w-6 flex items-center justify-center rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50 active:scale-95 transition-all"
+          className="absolute top-2 right-2 h-6 w-6 flex items-center justify-center rounded text-muted-foreground/70 hover:text-muted-foreground hover:bg-muted/50 active:scale-95 transition-all"
         >
           {copied ? (
             <Check className="w-3.5 h-3.5 text-success" />

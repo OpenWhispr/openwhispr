@@ -13,7 +13,7 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
         "selection:bg-primary selection:text-primary-foreground",
         "file:text-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium",
         "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-muted",
-        "dark:bg-surface-1 dark:border-border-subtle/50",
+        "dark:bg-surface-1 dark:border-border-subtle/60",
         "hover:border-border-hover",
         "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/10",
         "dark:focus-visible:border-border-active dark:focus-visible:ring-ring/10",

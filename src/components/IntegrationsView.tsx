@@ -35,7 +35,7 @@ interface IntegrationsViewProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-2 ps-1">
+    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 mb-2 ps-1">
       {children}
     </div>
   );
@@ -54,7 +54,7 @@ function ProviderRow({ icon, i18nKey, connected, isConnecting, onConnect }: Prov
   return (
     <SettingsPanelRow>
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/5 flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/10 flex items-center justify-center shrink-0">
           <img src={icon} alt="" className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
@@ -114,7 +114,7 @@ function CalendarAccountRows({
       {accounts.map((account) => (
         <SettingsPanelRow key={account.email}>
           <div className="group flex items-center gap-3 ps-12">
-            <Mail className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+            <Mail className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
             <span className="text-xs text-muted-foreground truncate flex-1">
               <bdi dir="ltr">{account.email}</bdi>
             </span>
@@ -412,7 +412,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
           {isMac && appleCalendarConnected && (
             <SettingsPanelRow>
               <div className="group flex items-center gap-3 ps-12">
-                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
                 <span className="text-xs text-muted-foreground truncate flex-1">
                   {appleSourceNames.join(" · ")}
                 </span>
@@ -475,13 +475,13 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
       </div>
 
       {!hasAccounts && (
-        <div className="rounded-lg border border-border/40 dark:border-border-subtle/40 bg-muted/20 dark:bg-surface-2/30 p-4 flex items-start gap-3">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/60 bg-muted/20 dark:bg-surface-2/30 p-4 flex items-start gap-3">
           <Info size={15} className="text-primary/60 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-foreground/80">
               {t("integrations.notABot.title")}
             </p>
-            <p className="text-xs text-muted-foreground/60 mt-0.5 leading-relaxed">
+            <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
               {t("integrations.notABot.description")}
             </p>
           </div>
@@ -495,7 +495,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
             <DialogDescription asChild>
               <span className="text-xs text-muted-foreground/80 leading-relaxed">
                 {t("apiKeysSection.description")}
-                <span className="mx-1.5 text-muted-foreground/30">·</span>
+                <span className="mx-1.5 text-muted-foreground/70">·</span>
                 <button
                   type="button"
                   className="inline-flex items-center gap-1 text-primary/80 hover:text-primary transition-colors"

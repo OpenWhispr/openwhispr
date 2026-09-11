@@ -80,14 +80,14 @@ export function notesEmptyTitleKey(inFolder: boolean): string {
 
 export const notesInputClass = cn(
   "w-full h-8 px-3 rounded-md text-xs",
-  "bg-foreground/3 dark:bg-white/4 border border-border/30 dark:border-white/6",
+  "bg-foreground/3 dark:bg-white/4 border border-border/70 dark:border-white/10",
   "text-foreground/80 placeholder:text-foreground/45 outline-none",
   "focus:border-primary/30 transition-colors duration-150"
 );
 
 export const notesTextareaClass = cn(
   "w-full px-3 py-2 rounded-md text-xs leading-relaxed resize-none",
-  "bg-foreground/3 dark:bg-white/4 border border-border/30 dark:border-white/6",
+  "bg-foreground/3 dark:bg-white/4 border border-border/70 dark:border-white/10",
   "text-foreground/80 placeholder:text-foreground/45 outline-none",
   "focus:border-primary/30 transition-colors duration-150"
 );

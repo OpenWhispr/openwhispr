@@ -35,7 +35,7 @@ export function OverviewNoteList({
   if (notes.length === 0) {
     return (
       <div className="flex flex-col items-center py-8">
-        <p className="text-xs text-foreground/40 dark:text-foreground/30 mb-3">
+        <p className="text-xs text-foreground/45 dark:text-foreground/45 mb-3">
           {t("notes.overview.list.empty")}
         </p>
         <div className="flex items-center gap-2">
@@ -49,7 +49,7 @@ export function OverviewNoteList({
           {onAddExisting && (
             <button
               onClick={onAddExisting}
-              className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/8 text-xs text-foreground/40 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
+              className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/10 text-xs text-foreground/45 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
             >
               {t("notes.addToFolder.addExisting")}
             </button>
@@ -63,7 +63,7 @@ export function OverviewNoteList({
     <div className="pb-6">
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="pt-4 pb-1 text-[10px] font-semibold text-muted-foreground/40 uppercase tracking-wider select-none">
+          <div className="pt-4 pb-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider select-none">
             {group.label}
           </div>
           {group.items.map((note) => {
@@ -81,7 +81,7 @@ export function OverviewNoteList({
               >
                 <FileText
                   size={14}
-                  className="text-foreground/30 dark:text-foreground/20 shrink-0"
+                  className="text-foreground/45 dark:text-foreground/45 shrink-0"
                 />
                 <span className="text-[13px] text-foreground/85 truncate flex-1">
                   {note.title || t("notes.list.untitled")}
@@ -94,12 +94,12 @@ export function OverviewNoteList({
                       image={member?.image}
                       size="sm"
                     />
-                    <span className="text-[11px] text-foreground/40 max-w-28 truncate">
+                    <span className="text-[11px] text-foreground/45 max-w-28 truncate">
                       {authorName}
                     </span>
                   </span>
                 )}
-                <span className="text-[11px] text-foreground/35 dark:text-foreground/25 shrink-0 tabular-nums">
+                <span className="text-[11px] text-foreground/45 dark:text-foreground/45 shrink-0 tabular-nums">
                   {formatRelativeTime(note.updated_at, t, locale)}
                 </span>
               </button>

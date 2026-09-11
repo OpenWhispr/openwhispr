@@ -231,7 +231,7 @@ export default function EnterpriseCheckoutDialog({
                 </div>
               ) : upgradePreview ? (
                 <>
-                  <div className="rounded-lg border border-border/50 divide-y divide-border/40">
+                  <div className="rounded-lg border border-border/70 divide-y divide-border/60">
                     <div className="flex justify-between px-3 py-2 text-xs">
                       <span className="text-muted-foreground">
                         {t("settingsPage.enterpriseCheckout.proratedCharge")}
@@ -262,7 +262,7 @@ export default function EnterpriseCheckoutDialog({
                   </p>
                 </>
               ) : previewError ? (
-                <div className="space-y-2 rounded-lg border border-border/50 px-3 py-3">
+                <div className="space-y-2 rounded-lg border border-border/70 px-3 py-3">
                   <p className="text-xs font-medium">
                     {t("settingsPage.enterpriseCheckout.errors.previewFailed")}
                   </p>

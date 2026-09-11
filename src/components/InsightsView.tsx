@@ -199,7 +199,7 @@ function MetricCard({
   largeValue?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border/40 dark:border-white/8 bg-card/70 p-4">
+    <div className="rounded-xl border border-border/70 dark:border-white/10 bg-card/70 p-4">
       <div className="flex items-center gap-2 text-muted-foreground">
         <Icon size={14} />
         <span className="text-xs">{label}</span>
@@ -338,7 +338,7 @@ function YourUsage({
       {summary.totalDictations === 0 ? (
         <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
           <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-            <BarChart3 size={40} className="mb-4 text-foreground/15" aria-hidden="true" />
+            <BarChart3 size={40} className="mb-4 text-foreground/45" aria-hidden="true" />
             <h2 className="text-sm font-medium text-foreground">{t("insights.emptyTitle")}</h2>
             <p className="mt-1.5 max-w-sm text-xs text-muted-foreground">
               {t("insights.emptyBody")}
@@ -377,7 +377,7 @@ function YourUsage({
             />
           </div>
 
-          <div className="mt-5 rounded-2xl border border-border/50 bg-card/70 px-5 py-2.5 dark:border-white/8">
+          <div className="mt-5 rounded-2xl border border-border/70 bg-card/70 px-5 py-2.5 dark:border-white/10">
             <h2 className="text-base font-medium text-foreground">{t("insights.activity")}</h2>
             <div className="mt-2">
               <Heatmap daily={summary.daily} />

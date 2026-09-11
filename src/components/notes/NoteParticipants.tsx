@@ -104,13 +104,13 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
       }}
     >
       <PopoverTrigger asChild>
-        <button className="inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none">
+        <button className="inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/45 hover:text-foreground/60 hover:border-border/70 hover:bg-foreground/3 dark:hover:text-foreground/45 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none">
           <Users size={11} className="shrink-0" />
           {chipLabel}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0">
-        <div className="p-2 border-b border-border/50">
+        <div className="p-2 border-b border-border/70">
           <input
             dir="auto"
             value={search}
@@ -124,7 +124,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
 
         <div className="max-h-64 overflow-y-auto">
           {search && suggestions.length > 0 && (
-            <div className="p-1 border-b border-border/30">
+            <div className="p-1 border-b border-border/70">
               {suggestions.slice(0, 5).map((contact) => (
                 <button
                   key={contact.email}
@@ -141,7 +141,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
           )}
 
           {search && !search.includes("@") && suggestions.length === 0 && (
-            <div className="px-3 py-2 text-[11px] text-foreground/30">
+            <div className="px-3 py-2 text-[11px] text-foreground/45">
               {t("notes.participants.typeEmail", "Type an email to add...")}
             </div>
           )}
@@ -161,7 +161,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
                   <span dir="auto" className="flex-1 min-w-0 truncate text-xs text-foreground/70">
                     {p.displayName || p.email.split("@")[0]}
                     {p.self && (
-                      <span className="ms-1 text-foreground/30">
+                      <span className="ms-1 text-foreground/45">
                         {t("notes.participants.me", "(me)")}
                       </span>
                     )}
@@ -169,7 +169,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
 
                   <button
                     onClick={() => removeParticipant(p.email)}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded text-foreground/30 hover:text-foreground/60 transition-opacity cursor-pointer"
+                    className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded text-foreground/45 hover:text-foreground/60 transition-opacity cursor-pointer"
                   >
                     <X size={12} />
                   </button>
@@ -179,7 +179,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
           ))}
 
           {localParticipants.length === 0 && !search && (
-            <div className="px-3 py-4 text-center text-[11px] text-foreground/30">
+            <div className="px-3 py-4 text-center text-[11px] text-foreground/45">
               {t("notes.participants.typeEmail", "Type an email to add...")}
             </div>
           )}

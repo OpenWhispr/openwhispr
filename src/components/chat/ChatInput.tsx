@@ -163,7 +163,7 @@ export function ChatInput({
               title={t("common.cancel")}
               className={cn(
                 "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
-                "text-muted-foreground/60 hover:text-foreground hover:bg-foreground/8",
+                "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
                 "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                 "transition-colors duration-100"
               )}
@@ -213,7 +213,7 @@ export function ChatInput({
                 "input-inline flex-1 outline-none bg-transparent caret-primary",
                 "text-[13px] text-foreground placeholder:text-muted-foreground/70",
                 "min-w-0 p-0",
-                isBusy && "text-muted-foreground/30 cursor-not-allowed"
+                isBusy && "text-muted-foreground/70 cursor-not-allowed"
               )}
             />
             {isBusy && onCancel ? (
@@ -224,7 +224,7 @@ export function ChatInput({
                 title={t("common.cancel")}
                 className={cn(
                   "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
-                  "text-muted-foreground/60 hover:text-foreground hover:bg-foreground/8",
+                  "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-colors duration-100"
                 )}

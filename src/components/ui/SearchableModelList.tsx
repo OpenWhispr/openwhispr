@@ -184,7 +184,7 @@ export default function SearchableModelList({
       <div dir="ltr" className="relative">
         <Search
           size={14}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none"
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none"
         />
         <Input
           dir="ltr"
@@ -230,7 +230,7 @@ export default function SearchableModelList({
                       <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
                         {row.label}
                       </span>
-                      <span className="text-[11px] text-muted-foreground/40 tabular-nums">
+                      <span className="text-[11px] text-muted-foreground/70 tabular-nums">
                         {row.count}
                       </span>
                     </div>

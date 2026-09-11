@@ -24,7 +24,7 @@ export default function LeaderboardEmptyStrip({ missingCount }: { missingCount: 
   return (
     <div
       data-leaderboard-state="empty_strip"
-      className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 bg-primary/5 px-5 py-3"
+      className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 bg-primary/5 px-5 py-3"
     >
       <div className="flex min-w-0 items-center gap-3">
         <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">

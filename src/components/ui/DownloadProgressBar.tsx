@@ -55,7 +55,7 @@ export function DownloadProgressBar({
               )}
               {etaText && (
                 <>
-                  <span className="text-xs text-muted-foreground/30">·</span>
+                  <span className="text-xs text-muted-foreground/70">·</span>
                   <span className="text-xs text-muted-foreground/70 tabular-nums">{etaText}</span>
                 </>
               )}

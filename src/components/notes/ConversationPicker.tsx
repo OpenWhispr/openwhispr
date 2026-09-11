@@ -41,12 +41,12 @@ export function ConversationPicker({
           <span className={cn("truncate max-w-40", titleClassName)}>
             {activeConversation?.title || t("embeddedChat.newChat")}
           </span>
-          <ChevronDown size={10} className="shrink-0 text-foreground/30" />
+          <ChevronDown size={10} className="shrink-0 text-foreground/45" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={4} className="min-w-44 max-w-56 p-1">
         <DropdownMenuItem onClick={onNewChat} className="text-xs gap-2 rounded-md px-2 py-1.5">
-          <Plus size={10} className="text-foreground/40 shrink-0" />
+          <Plus size={10} className="text-foreground/45 shrink-0" />
           {t("embeddedChat.newChat")}
         </DropdownMenuItem>
         {conversations.length > 0 && (
@@ -62,7 +62,7 @@ export function ConversationPicker({
                 )}
               >
                 <span className="truncate flex-1">{conversation.title}</span>
-                <span className="text-[10px] text-foreground/30 shrink-0">
+                <span className="text-[10px] text-foreground/45 shrink-0">
                   {formatShortDate(conversation.updated_at, locale)}
                 </span>
               </DropdownMenuItem>

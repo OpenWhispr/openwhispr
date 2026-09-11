@@ -85,7 +85,7 @@ export default function ActionPicker({
             aria-label={t("notes.actions.selectAction")}
             className={cn(
               "flex items-center justify-center h-7 w-6 pe-0.5",
-              "border-s border-black/6 dark:border-white/8",
+              "border-s border-black/6 dark:border-white/10",
               "text-accent/40 dark:text-accent/30",
               "transition-colors duration-150",
               "hover:bg-accent/8 dark:hover:bg-accent/12",
@@ -109,7 +109,7 @@ export default function ActionPicker({
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{getActionName(action, t)}</div>
                 {action.description && (
-                  <div className="text-xs text-muted-foreground/50 truncate">
+                  <div className="text-xs text-muted-foreground/70 truncate">
                     {getActionDescription(action, t)}
                   </div>
                 )}
@@ -119,7 +119,7 @@ export default function ActionPicker({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={onManageActions}
-            className="text-xs gap-2.5 rounded-md px-2.5 py-1.5 text-muted-foreground/60"
+            className="text-xs gap-2.5 rounded-md px-2.5 py-1.5 text-muted-foreground/70"
           >
             <Settings2 size={12} />
             {t("notes.actions.manage")}

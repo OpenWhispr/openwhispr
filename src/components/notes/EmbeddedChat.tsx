@@ -31,7 +31,7 @@ function EmptyState() {
   const { t } = useTranslation();
   return (
     <div className="flex items-center justify-center h-full select-none">
-      <p className="text-xs text-foreground/30 dark:text-foreground/20 text-center max-w-44">
+      <p className="text-xs text-foreground/45 dark:text-foreground/45 text-center max-w-44">
         {t("embeddedChat.emptyState")}
       </p>
     </div>
@@ -94,7 +94,7 @@ export default function EmbeddedChat({
     <div
       className={cn(
         "h-9 flex items-center px-3 shrink-0",
-        mode === "sidebar" && "border-b border-border/10 dark:border-white/5"
+        mode === "sidebar" && "border-b border-border/70 dark:border-white/10"
       )}
     >
       {headerTitle}
@@ -103,7 +103,7 @@ export default function EmbeddedChat({
         {mode === "floating" ? (
           <button
             onClick={() => onModeChange("sidebar")}
-            className="h-6 w-6 flex items-center justify-center rounded-md text-foreground/25 hover:text-foreground/40 hover:bg-foreground/6 transition-colors"
+            className="h-6 w-6 flex items-center justify-center rounded-md text-foreground/45 hover:bg-foreground/6 transition-colors"
             aria-label={t("embeddedChat.dock")}
           >
             <PanelRight size={13} className="rtl:scale-x-[-1]" />
@@ -111,7 +111,7 @@ export default function EmbeddedChat({
         ) : (
           <button
             onClick={() => onModeChange("floating")}
-            className="h-6 w-6 flex items-center justify-center rounded-md text-foreground/25 hover:text-foreground/40 hover:bg-foreground/6 transition-colors"
+            className="h-6 w-6 flex items-center justify-center rounded-md text-foreground/45 hover:bg-foreground/6 transition-colors"
             aria-label={t("embeddedChat.undock")}
           >
             <PanelRightClose size={13} className="rtl:scale-x-[-1]" />
@@ -119,7 +119,7 @@ export default function EmbeddedChat({
         )}
         <button
           onClick={() => onModeChange("hidden")}
-          className="h-6 w-6 flex items-center justify-center rounded-md text-foreground/25 hover:text-foreground/40 hover:bg-foreground/6 transition-colors"
+          className="h-6 w-6 flex items-center justify-center rounded-md text-foreground/45 hover:bg-foreground/6 transition-colors"
           aria-label={t("embeddedChat.close")}
         >
           <X size={13} />

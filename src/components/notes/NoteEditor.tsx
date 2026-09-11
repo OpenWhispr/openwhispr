@@ -74,7 +74,7 @@ import { observeFloatingChatLayout } from "./floatingChatLayout";
 import { defaultFolderDisplayName, folderMatchesQuery } from "./shared";
 
 const CHIP_BUTTON_CLASS =
-  "inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
+  "inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/45 hover:text-foreground/60 hover:border-border/70 hover:bg-foreground/3 dark:hover:text-foreground/45 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
 
 export interface Enhancement {
   content: string;
@@ -799,14 +799,14 @@ export default function NoteEditor({
             onKeyDown={handleTitleKeyDown}
             onPaste={handleTitlePaste}
             data-placeholder={t("notes.editor.untitled")}
-            className="text-base font-semibold text-foreground bg-transparent outline-none tracking-[-0.01em] empty:before:content-[attr(data-placeholder)] empty:before:text-foreground/15 empty:before:pointer-events-none"
+            className="text-base font-semibold text-foreground bg-transparent outline-none tracking-[-0.01em] empty:before:content-[attr(data-placeholder)] empty:before:text-foreground/45 empty:before:pointer-events-none"
             role="textbox"
             aria-label={t("notes.editor.noteTitle")}
           />
           <div className="flex items-center gap-2 mt-1.5">
             {shortDate && (
               <span
-                className="inline-flex items-center gap-1.5 text-[11px] text-foreground/50 dark:text-foreground/35"
+                className="inline-flex items-center gap-1.5 text-[11px] text-foreground/50 dark:text-foreground/45"
                 title={noteDate}
               >
                 <Calendar size={11} className="shrink-0" />
@@ -814,7 +814,7 @@ export default function NoteEditor({
               </span>
             )}
             {calendarEventName && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] text-foreground/50 dark:text-foreground/35">
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-foreground/50 dark:text-foreground/45">
                 <LinkIcon size={11} className="shrink-0" />
                 <span className="truncate max-w-40">{calendarEventName}</span>
               </span>
@@ -839,7 +839,7 @@ export default function NoteEditor({
                   </span>
                 </button>
                 {folders && onMoveToFolder && (canMoveToFolders || folderName) && (
-                  <span aria-hidden="true" className="text-[11px] text-foreground/25">
+                  <span aria-hidden="true" className="text-[11px] text-foreground/45">
                     /
                   </span>
                 )}
@@ -873,7 +873,7 @@ export default function NoteEditor({
                       <div className="relative px-1.5 py-0.5">
                         <Search
                           size={9}
-                          className="absolute start-3.5 top-1/2 -translate-y-1/2 text-foreground/15 pointer-events-none"
+                          className="absolute start-3.5 top-1/2 -translate-y-1/2 text-foreground/45 pointer-events-none"
                         />
                         <input
                           dir="auto"
@@ -897,7 +897,7 @@ export default function NoteEditor({
                           onClick={() => onMoveToFolder(note.id, folder.id)}
                           className="text-xs gap-2 rounded-md px-2 py-1.5"
                         >
-                          <FolderOpen size={11} className="text-foreground/30 shrink-0" />
+                          <FolderOpen size={11} className="text-foreground/45 shrink-0" />
                           <span dir="auto" className="truncate flex-1">
                             {defaultFolderDisplayName(folder, t)}
                           </span>
@@ -906,7 +906,7 @@ export default function NoteEditor({
                       );
                     })}
                     {folderSearch && filteredFolders.length === 0 && (
-                      <p className="text-xs text-foreground/20 text-center py-1.5">
+                      <p className="text-xs text-foreground/45 text-center py-1.5">
                         {t("notes.context.noResults")}
                       </p>
                     )}
@@ -943,7 +943,7 @@ export default function NoteEditor({
                             e.preventDefault();
                             setIsCreatingFolder(true);
                           }}
-                          className="text-xs gap-2 rounded-md px-2 py-1.5 text-foreground/40"
+                          className="text-xs gap-2 rounded-md px-2 py-1.5 text-foreground/45"
                         >
                           <Plus size={10} />
                           {t("notes.context.newFolder")}
@@ -967,7 +967,7 @@ export default function NoteEditor({
               </button>
             )}
             {isSaving && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-foreground/30 dark:text-foreground/15 tabular-nums">
+              <span className="inline-flex items-center gap-1 text-[11px] text-foreground/45 dark:text-foreground/45 tabular-nums">
                 <Loader2 size={8} className="animate-spin" />
                 {t("notes.editor.saving")}
               </span>
@@ -990,9 +990,7 @@ export default function NoteEditor({
                       onClick={() => setViewMode("transcript")}
                       className={cn(
                         "relative z-1 px-1.5 h-5 rounded text-xs font-medium transition-colors duration-150 flex items-center gap-1",
-                        viewMode === "transcript"
-                          ? "text-foreground/60"
-                          : "text-foreground/25 hover:text-foreground/40"
+                        viewMode === "transcript" ? "text-foreground/60" : "text-foreground/45"
                       )}
                     >
                       <MessageSquareText size={10} />
@@ -1005,9 +1003,7 @@ export default function NoteEditor({
                     onClick={() => setViewMode("raw")}
                     className={cn(
                       "relative z-1 px-1.5 h-5 rounded text-xs font-medium transition-colors duration-150 flex items-center gap-1",
-                      viewMode === "raw"
-                        ? "text-foreground/60"
-                        : "text-foreground/25 hover:text-foreground/40"
+                      viewMode === "raw" ? "text-foreground/60" : "text-foreground/45"
                     )}
                   >
                     <AlignLeft size={10} />
@@ -1020,9 +1016,7 @@ export default function NoteEditor({
                       onClick={() => setViewMode("enhanced")}
                       className={cn(
                         "relative z-1 px-1.5 h-5 rounded text-xs font-medium transition-colors duration-150 flex items-center gap-1",
-                        viewMode === "enhanced"
-                          ? "text-foreground/60"
-                          : "text-foreground/25 hover:text-foreground/40"
+                        viewMode === "enhanced" ? "text-foreground/60" : "text-foreground/45"
                       )}
                     >
                       <Sparkles size={9} />
@@ -1057,7 +1051,7 @@ export default function NoteEditor({
                       "transition-colors",
                       isShared
                         ? "text-blue-600 dark:text-blue-400"
-                        : "text-foreground/50 dark:text-foreground/40"
+                        : "text-foreground/50 dark:text-foreground/45"
                     )}
                   />
                 </button>
@@ -1066,7 +1060,7 @@ export default function NoteEditor({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
-                      className="shrink-0 h-6 w-6 flex items-center justify-center rounded-md bg-foreground/4 dark:bg-white/5 text-foreground/50 dark:text-foreground/40 hover:text-foreground/70 hover:bg-foreground/8 dark:hover:text-foreground/60 dark:hover:bg-white/8 transition-colors duration-150"
+                      className="shrink-0 h-6 w-6 flex items-center justify-center rounded-md bg-foreground/4 dark:bg-white/5 text-foreground/50 dark:text-foreground/45 hover:text-foreground/70 hover:bg-foreground/8 dark:hover:text-foreground/60 dark:hover:bg-white/8 transition-colors duration-150"
                       aria-label={t("notes.editor.export")}
                     >
                       <Download size={11} />
@@ -1079,28 +1073,28 @@ export default function NoteEditor({
                           onClick={() => onExportTranscript("txt")}
                           className="text-xs gap-2"
                         >
-                          <FileText size={13} className="text-foreground/40" />
+                          <FileText size={13} className="text-foreground/45" />
                           {t("notes.editor.asTranscriptText")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => onExportTranscript("srt")}
                           className="text-xs gap-2"
                         >
-                          <FileText size={13} className="text-foreground/40" />
+                          <FileText size={13} className="text-foreground/45" />
                           {t("notes.editor.asSubtitles")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => onExportTranscript("md")}
                           className="text-xs gap-2"
                         >
-                          <FileText size={13} className="text-foreground/40" />
+                          <FileText size={13} className="text-foreground/45" />
                           {t("notes.editor.asTranscriptMarkdown")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => onExportTranscript("json")}
                           className="text-xs gap-2"
                         >
-                          <FileText size={13} className="text-foreground/40" />
+                          <FileText size={13} className="text-foreground/45" />
                           {t("notes.editor.asJson")}
                         </DropdownMenuItem>
                       </>
@@ -1110,14 +1104,14 @@ export default function NoteEditor({
                           onClick={() => onExportNote?.("md")}
                           className="text-xs gap-2"
                         >
-                          <FileText size={13} className="text-foreground/40" />
+                          <FileText size={13} className="text-foreground/45" />
                           {t("notes.editor.asMarkdown")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => onExportNote?.("txt")}
                           className="text-xs gap-2"
                         >
-                          <FileText size={13} className="text-foreground/40" />
+                          <FileText size={13} className="text-foreground/45" />
                           {t("notes.editor.asPlainText")}
                         </DropdownMenuItem>
                       </>
@@ -1142,7 +1136,7 @@ export default function NoteEditor({
             <p className="text-[11px] text-foreground/50 flex-1 truncate">
               {t("notes.spaces.conflictBanner")}
               {conflictEditorName && (
-                <span className="text-foreground/30">
+                <span className="text-foreground/45">
                   {" "}
                   {t("notes.spaces.editedBy", {
                     name: conflictEditorName,
@@ -1159,7 +1153,7 @@ export default function NoteEditor({
             </button>
             <button
               onClick={handleConflictKeep}
-              className="text-[11px] font-medium text-foreground/35 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
             >
               {t("notes.spaces.conflictKeep")}
             </button>

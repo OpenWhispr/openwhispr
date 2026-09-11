@@ -58,7 +58,7 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
           className={cn(
             "shrink-0 transition-colors duration-300",
             isExecuting && "text-primary/70",
-            isCompleted && !isError && !isClipboard && "text-muted-foreground/50",
+            isCompleted && !isError && !isClipboard && "text-muted-foreground/70",
             isClipboard && "text-emerald-500/70",
             isError && "text-destructive/60"
           )}
@@ -96,7 +96,7 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
           <ChevronDown
             size={10}
             className={cn(
-              "ms-auto text-muted-foreground/40 shrink-0 transition-transform duration-200",
+              "ms-auto text-muted-foreground/70 shrink-0 transition-transform duration-200",
               expanded && "rotate-180"
             )}
           />
@@ -110,7 +110,7 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
         >
           <pre
             dir="ltr"
-            className="text-[10px] text-muted-foreground/60 px-2.5 pb-1.5 whitespace-pre-wrap leading-tight"
+            className="text-[10px] text-muted-foreground/70 px-2.5 pb-1.5 whitespace-pre-wrap leading-tight"
           >
             {toolCall.result}
           </pre>
@@ -152,11 +152,11 @@ function NoteCard({
         <p dir="auto" className="text-[12px] font-medium text-foreground truncate">
           {title}
         </p>
-        <p className="text-[10px] text-muted-foreground/50">{t("agentMode.tools.openNote")}</p>
+        <p className="text-[10px] text-muted-foreground/70">{t("agentMode.tools.openNote")}</p>
       </div>
       <ChevronRight
         size={12}
-        className="text-muted-foreground/30 group-hover/note:text-primary/50 shrink-0 transition-colors duration-150 rtl:rotate-180"
+        className="text-muted-foreground/70 group-hover/note:text-primary/50 shrink-0 transition-colors duration-150 rtl:rotate-180"
       />
     </button>
   );
@@ -215,14 +215,14 @@ export function ChatMessage({
         data-chat-bubble
         className={cn(
           "max-w-[85%] px-3 py-2 rounded-lg rounded-es-sm",
-          "bg-surface-1 border border-border/30 text-foreground",
+          "bg-surface-1 border border-border/70 text-foreground",
           "text-[13px] leading-relaxed"
         )}
       >
         {hasToolCalls && (
           <div
             className={cn(
-              (hasContent || noteCards.length > 0) && "mb-2 pb-1.5 border-b border-border/15"
+              (hasContent || noteCards.length > 0) && "mb-2 pb-1.5 border-b border-border/70"
             )}
           >
             {toolCalls.map((tc) => (
@@ -270,7 +270,7 @@ export function ChatMessage({
               onClick={handleCopy}
               className={cn(
                 "p-1 rounded-sm",
-                "text-muted-foreground/40 hover:text-foreground hover:bg-foreground/8",
+                "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
                 "opacity-0 group-hover/msg:opacity-100 transition-all duration-150",
                 "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               )}

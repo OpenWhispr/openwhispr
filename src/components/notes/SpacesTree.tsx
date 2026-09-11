@@ -100,14 +100,14 @@ const ROW_BASE_CLASS =
 // Button forces svg children to 16px; these 20px controls want the 12px icon they pass.
 const KEBAB_BUTTON_CLASS =
   "h-5 w-5 rounded-sm [&_svg]:size-3! opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 " +
-  "transition-opacity text-muted-foreground/60 dark:text-muted-foreground/40 " +
+  "transition-opacity text-muted-foreground/70 dark:text-muted-foreground/70 " +
   "hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8";
 
 const KEBAB_TRIGGER_CLASS = cn(KEBAB_BUTTON_CLASS, "absolute end-1.5");
 
 const HOVER_REVEAL_BUTTON_CLASS =
   "h-5 w-5 rounded-sm [&_svg]:size-3! opacity-0 focus-visible:opacity-100 transition-opacity " +
-  "text-muted-foreground/60 dark:text-muted-foreground/40 hover:text-foreground/60 " +
+  "text-muted-foreground/70 dark:text-muted-foreground/70 hover:text-foreground/60 " +
   "hover:bg-foreground/5 active:bg-foreground/8";
 
 const MENU_ITEM_CLASS = "text-xs gap-2 rounded-md px-2 py-1";
@@ -384,7 +384,7 @@ function SearchableMoveSubmenu({
 
 function SpaceMenuIcon({ space }: { space: SpaceItem }) {
   if (space.kind === "private") {
-    return <Lock size={11} className="text-muted-foreground/60 shrink-0" />;
+    return <Lock size={11} className="text-muted-foreground/70 shrink-0" />;
   }
   if (space.emoji) {
     return (
@@ -393,7 +393,7 @@ function SpaceMenuIcon({ space }: { space: SpaceItem }) {
       </span>
     );
   }
-  return <Users size={11} className="text-muted-foreground/60 shrink-0" />;
+  return <Users size={11} className="text-muted-foreground/70 shrink-0" />;
 }
 
 function SpaceRow({
@@ -535,7 +535,7 @@ function SpaceRow({
                   }}
                   className={MENU_ITEM_CLASS}
                 >
-                  <Users size={11} className="text-muted-foreground/60" />
+                  <Users size={11} className="text-muted-foreground/70" />
                   {t("notes.spaces.teamsMembers.menu")}
                 </DropdownMenuItem>
               )}
@@ -548,7 +548,7 @@ function SpaceRow({
                     }}
                     className={MENU_ITEM_CLASS}
                   >
-                    <Pencil size={11} className="text-muted-foreground/60" />
+                    <Pencil size={11} className="text-muted-foreground/70" />
                     {t("notes.spaces.rename")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
@@ -558,7 +558,7 @@ function SpaceRow({
                     }}
                     className={MENU_ITEM_CLASS}
                   >
-                    <Smile size={11} className="text-muted-foreground/60" />
+                    <Smile size={11} className="text-muted-foreground/70" />
                     {t("notes.spaces.changeEmoji")}
                   </DropdownMenuItem>
                 </>
@@ -733,7 +733,7 @@ function FolderRow({
                   }}
                   className={MENU_ITEM_CLASS}
                 >
-                  <ExternalLink size={11} className="text-muted-foreground/60" />
+                  <ExternalLink size={11} className="text-muted-foreground/70" />
                   {t("notes.context.showInFileManager", { manager: fileManagerName })}
                 </DropdownMenuItem>
               )}
@@ -747,12 +747,12 @@ function FolderRow({
                     }}
                     className={MENU_ITEM_CLASS}
                   >
-                    <Pencil size={11} className="text-muted-foreground/60" />
+                    <Pencil size={11} className="text-muted-foreground/70" />
                     {t("notes.context.rename")}
                   </DropdownMenuItem>
                   {canMoveToSpace && (
                     <SearchableMoveSubmenu
-                      icon={<Users size={11} className="text-muted-foreground/60" />}
+                      icon={<Users size={11} className="text-muted-foreground/70" />}
                       label={t("notes.spaces.moveToSpace")}
                       itemCount={spaces.length}
                       search={spaceSearch}
@@ -955,7 +955,7 @@ function NoteLeaf({
           "shrink-0 transition-colors duration-150",
           isActive
             ? "text-primary"
-            : "text-foreground/50 dark:text-foreground/40 group-hover:text-foreground/70 dark:group-hover:text-foreground/55"
+            : "text-foreground/50 dark:text-foreground/45 group-hover:text-foreground/70 dark:group-hover:text-foreground/55"
         )}
       />
       <span
@@ -974,7 +974,7 @@ function NoteLeaf({
           size={11}
           role="img"
           aria-label={t("notes.list.shared")}
-          className="text-foreground/40 shrink-0 transition-opacity group-hover:opacity-0"
+          className="text-foreground/45 shrink-0 transition-opacity group-hover:opacity-0"
         />
       )}
       {hasActions && (
@@ -1008,7 +1008,7 @@ function NoteLeaf({
                   }}
                   className={MENU_ITEM_CLASS}
                 >
-                  <ExternalLink size={11} className="text-muted-foreground/60" />
+                  <ExternalLink size={11} className="text-muted-foreground/70" />
                   {t("notes.context.showInFileManager", { manager: fileManagerName })}
                 </DropdownMenuItem>
                 {(canMove || canDelete) && <DropdownMenuSeparator />}
@@ -1016,7 +1016,7 @@ function NoteLeaf({
             )}
             {canMove && (
               <SearchableMoveSubmenu
-                icon={<FolderOpen size={11} className="text-muted-foreground/60" />}
+                icon={<FolderOpen size={11} className="text-muted-foreground/70" />}
                 label={multiSpace ? t("notes.spaces.moveTo") : t("notes.context.moveToFolder")}
                 itemCount={moveOptions.length}
                 search={moveSearch}
@@ -2067,7 +2067,7 @@ export default function SpacesTree({
   if (isTreeLoading && spaces.length === 0) {
     return (
       <div className="flex-1 flex items-start justify-center py-8">
-        <Loader2 size={12} className="animate-spin text-foreground/40" />
+        <Loader2 size={12} className="animate-spin text-foreground/45" />
       </div>
     );
   }

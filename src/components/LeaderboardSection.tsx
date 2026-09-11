@@ -105,7 +105,8 @@ interface LeaderboardSectionProps {
   ssoStarting: boolean;
 }
 
-const ERROR_CARD_CHROME = "mt-6 rounded-2xl border border-border/50 bg-card/70 dark:border-white/8";
+const ERROR_CARD_CHROME =
+  "mt-6 rounded-2xl border border-border/70 bg-card/70 dark:border-white/10";
 
 function LeaderboardRetryCard({
   actionLabel,
@@ -643,7 +644,7 @@ export default function LeaderboardSection({
   if (!isSignedIn) return <LeaderboardSignInPreview className="mt-6" onSignIn={onSignIn} />;
   if (accessLoading && !access) {
     return (
-      <section className="mt-6 flex min-h-48 items-center justify-center rounded-2xl border border-border/50 bg-card/70 text-muted-foreground dark:border-white/8">
+      <section className="mt-6 flex min-h-48 items-center justify-center rounded-2xl border border-border/70 bg-card/70 text-muted-foreground dark:border-white/10">
         <Loader2 size={18} className="animate-spin" />
       </section>
     );
@@ -727,7 +728,7 @@ export default function LeaderboardSection({
   }
   if (surface === "participation_loading") {
     return (
-      <section className="mt-6 flex min-h-48 items-center justify-center rounded-2xl border border-border/50 bg-card/70 text-muted-foreground dark:border-white/8">
+      <section className="mt-6 flex min-h-48 items-center justify-center rounded-2xl border border-border/70 bg-card/70 text-muted-foreground dark:border-white/10">
         <Loader2 size={18} className="animate-spin" />
       </section>
     );
@@ -843,9 +844,9 @@ export default function LeaderboardSection({
   return (
     <section
       data-leaderboard-state="board"
-      className="mt-6 overflow-hidden rounded-2xl border border-border/50 bg-card/70 dark:border-white/8"
+      className="mt-6 overflow-hidden rounded-2xl border border-border/70 bg-card/70 dark:border-white/10"
     >
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/40 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/70 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/8 text-primary">
             {selectedScope.kind === "workspace" ? <Building2 size={16} /> : <Globe2 size={16} />}
@@ -897,7 +898,7 @@ export default function LeaderboardSection({
                 setPage(0);
               }}
             >
-              <SelectTrigger className="h-8 w-44 rounded-lg border border-border/40 bg-background/30 px-2.5 text-xs font-medium shadow-none hover:bg-muted/40">
+              <SelectTrigger className="h-8 w-44 rounded-lg border border-border/70 bg-background/30 px-2.5 text-xs font-medium shadow-none hover:bg-muted/40">
                 <CalendarDays size={13} className="text-muted-foreground" />
                 <SelectValue>
                   {range === "all"
@@ -1047,7 +1048,7 @@ export default function LeaderboardSection({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-muted/10">
-                <tr className="border-y border-border/40 text-start text-[11px] uppercase tracking-wide text-muted-foreground">
+                <tr className="border-y border-border/70 text-start text-[11px] uppercase tracking-wide text-muted-foreground">
                   <th scope="col" className="w-16 px-5 py-2.5 font-medium">
                     {t("insights.leaderboard.rank")}
                   </th>
@@ -1065,7 +1066,7 @@ export default function LeaderboardSection({
                         setPage(0);
                       }}
                     >
-                      <SelectTrigger className="ml-auto h-8 w-48 rounded-lg border border-border/40 bg-background/30 px-2.5 text-xs font-medium normal-case tracking-normal shadow-none hover:bg-muted/40">
+                      <SelectTrigger className="ml-auto h-8 w-48 rounded-lg border border-border/70 bg-background/30 px-2.5 text-xs font-medium normal-case tracking-normal shadow-none hover:bg-muted/40">
                         <ArrowUpDown size={12} className="text-muted-foreground" />
                         <SelectValue />
                       </SelectTrigger>
@@ -1088,7 +1089,7 @@ export default function LeaderboardSection({
                       id={`leaderboard-rank-${member.rank}`}
                       key={member.userId}
                       className={cn(
-                        "border-b border-border/30 transition-colors last:border-0 hover:bg-muted/20",
+                        "border-b border-border/70 transition-colors last:border-0 hover:bg-muted/20",
                         isViewer && "bg-primary/5 hover:bg-primary/7"
                       )}
                     >
@@ -1142,7 +1143,7 @@ export default function LeaderboardSection({
           </div>
 
           {(showJumpToMe || visibleLeaderboard.totalMembers > pageSize) && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-muted/10 px-5 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 bg-muted/10 px-5 py-3">
               {showJumpToMe && (
                 <Tooltip
                   content={

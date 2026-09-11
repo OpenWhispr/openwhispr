@@ -79,7 +79,7 @@ export default function HistoryView({
   const discardedToggle = (
     <button
       onClick={onToggleDiscarded}
-      className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground/60 hover:!text-foreground hover:!bg-black/5 dark:hover:!bg-white/5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 transition-all duration-200"
+      className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground/70 hover:!text-foreground hover:!bg-black/5 dark:hover:!bg-white/5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 transition-all duration-200"
     >
       <Archive size={11} />
       <span>
@@ -237,13 +237,13 @@ export default function HistoryView({
                   <h3 className="text-xs font-semibold text-foreground/70 dark:text-foreground/60 mb-2">
                     {t("controlPanel.history.empty")}
                   </h3>
-                  <div className="flex items-center gap-2 text-xs text-foreground/50 dark:text-foreground/25">
+                  <div className="flex items-center gap-2 text-xs text-foreground/50 dark:text-foreground/45">
                     <span>{t("controlPanel.history.press")}</span>
                     <span dir="ltr" className="inline-flex items-center gap-2">
                       {parseHotkeyList(hotkey).map((hk, index) => (
                         <Fragment key={hk}>
-                          {index > 0 && <span className="text-foreground/30">/</span>}
-                          <kbd className="inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-1 dark:bg-white/6 border border-border/50 text-xs font-mono font-medium text-foreground/60 dark:text-foreground/40">
+                          {index > 0 && <span className="text-foreground/45">/</span>}
+                          <kbd className="inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-1 dark:bg-white/6 border border-border/70 text-xs font-mono font-medium text-foreground/60 dark:text-foreground/45">
                             {formatHotkeyLabel(hk)}
                           </kbd>
                         </Fragment>
@@ -264,7 +264,7 @@ export default function HistoryView({
                           {discardedToggle}
                           <button
                             onClick={clearAllTranscriptions}
-                            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground/60 hover:!text-destructive hover:!bg-destructive/8 dark:hover:!bg-destructive/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 transition-all duration-200"
+                            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground/70 hover:!text-destructive hover:!bg-destructive/8 dark:hover:!bg-destructive/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 transition-all duration-200"
                           >
                             <Trash2 size={11} />
                             <span>{t("controlPanel.history.clearAll")}</span>

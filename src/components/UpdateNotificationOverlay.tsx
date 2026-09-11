@@ -55,7 +55,7 @@ export default function UpdateNotificationOverlay() {
         className={[
           "relative",
           "bg-card/95 dark:bg-surface-2/95 backdrop-blur-xl",
-          "border border-border/40 dark:border-border-subtle/40",
+          "border border-border/70 dark:border-border-subtle/60",
           "rounded-xl shadow-lg p-2.5",
           "transition-all duration-300 ease-out",
           isVisible
@@ -70,7 +70,7 @@ export default function UpdateNotificationOverlay() {
           className={[
             "absolute -left-2.5 -top-2.5 z-10 size-6 rounded-full",
             "flex items-center justify-center",
-            "bg-card dark:bg-surface-2 border border-border/40 dark:border-border-subtle/40 shadow-sm",
+            "bg-card dark:bg-surface-2 border border-border/70 dark:border-border-subtle/60 shadow-sm",
             "text-muted-foreground/70 hover:text-foreground hover:bg-muted",
             "transition-all duration-150",
             isHovered ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none",

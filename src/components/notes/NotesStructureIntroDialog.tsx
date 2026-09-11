@@ -30,7 +30,7 @@ export default function NotesStructureIntroDialog({
         </DialogHeader>
 
         <div className="space-y-3">
-          <div className="rounded-xl border border-border/50 bg-foreground/[0.025] dark:bg-white/[0.025] p-3.5">
+          <div className="rounded-xl border border-border/70 bg-foreground/[0.025] dark:bg-white/[0.025] p-3.5">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-foreground/50 dark:bg-white/5">
                 <Lock size={13} />
@@ -59,8 +59,8 @@ export default function NotesStructureIntroDialog({
                   {t("notes.structureIntro.workspace.description")}
                 </p>
 
-                <div className="mt-3 flex items-center gap-2 rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
-                  <ChevronRight size={12} className="shrink-0 text-foreground/25 rtl:rotate-180" />
+                <div className="mt-3 flex items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-3 py-2.5">
+                  <ChevronRight size={12} className="shrink-0 text-foreground/45 rtl:rotate-180" />
                   <Users size={13} className="shrink-0 text-primary/60" />
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-foreground/80">

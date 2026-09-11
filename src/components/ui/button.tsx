@@ -63,7 +63,7 @@ const buttonVariants = cva(
         "outline-flat": [
           "font-medium",
           "text-muted-foreground/70 bg-transparent",
-          "border border-border/50",
+          "border border-border/70",
           "hover:text-foreground/80 hover:border-border hover:bg-foreground/3",
           "active:scale-[0.98]",
           "dark:border-white/10 dark:hover:bg-white/5 dark:hover:border-white/15",
@@ -73,10 +73,10 @@ const buttonVariants = cva(
         secondary: [
           "relative font-medium",
           "text-foreground bg-secondary",
-          "border border-border/50",
+          "border border-border/70",
           "hover:bg-muted",
           "active:scale-[0.98]",
-          "dark:text-foreground/90 dark:bg-white/8 dark:border-white/5 dark:hover:bg-white/12",
+          "dark:text-foreground/90 dark:bg-white/8 dark:border-white/10 dark:hover:bg-white/12",
         ].join(" "),
 
         // Ghost — uses design tokens
@@ -100,7 +100,7 @@ const buttonVariants = cva(
         social: [
           "relative font-medium",
           "text-foreground bg-surface-1/80 backdrop-blur-xl",
-          "border border-border/60",
+          "border border-border/70",
           "shadow-sm gap-2",
           "hover:bg-surface-2/90 hover:border-border-hover hover:shadow",
           "active:scale-[0.985] active:shadow-sm",

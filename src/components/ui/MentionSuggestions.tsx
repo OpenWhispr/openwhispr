@@ -69,7 +69,7 @@ const MentionSuggestions = forwardRef<MentionSuggestionsHandle, MentionSuggestio
               {item.label}
             </span>
             {item.email && (
-              <span dir="ltr" className="truncate text-[11px] text-foreground/30">
+              <span dir="ltr" className="truncate text-[11px] text-foreground/45">
                 {item.email}
               </span>
             )}

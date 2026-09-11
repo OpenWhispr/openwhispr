@@ -194,7 +194,7 @@ export default function SnippetsView() {
             onClick={openPanel}
             disabled={!trimmedTrigger || duplicate}
             aria-label={t("dictionary.snippets.create")}
-            className="absolute end-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-foreground/30 enabled:hover:text-primary disabled:text-foreground/15 transition-colors"
+            className="absolute end-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-foreground/45 enabled:hover:text-primary disabled:text-foreground/45 transition-colors"
           >
             {t("dictionary.add")}
             <CornerDownLeft size={10} />
@@ -223,10 +223,10 @@ export default function SnippetsView() {
           />
           <div className="flex items-center justify-between pt-1.5">
             <div dir="ltr" className="flex items-center gap-0.5">
-              <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
+              <kbd className="text-[10px] px-1 py-px rounded border border-border/70 dark:border-white/10 bg-muted/40 text-muted-foreground/70 font-mono leading-tight">
                 {getCachedPlatform() === "darwin" ? "⌘" : "Ctrl"}
               </kbd>
-              <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
+              <kbd className="text-[10px] px-1 py-px rounded border border-border/70 dark:border-white/10 bg-muted/40 text-muted-foreground/70 font-mono leading-tight">
                 ⏎
               </kbd>
             </div>
@@ -243,13 +243,13 @@ export default function SnippetsView() {
       )}
 
       {/* ─── Snippet list ─── */}
-      <div className="rounded-md border border-foreground/8 dark:border-white/6 bg-foreground/[0.02] dark:bg-white/[0.03] px-4 py-3">
+      <div className="rounded-md border border-foreground/8 dark:border-white/10 bg-foreground/[0.02] dark:bg-white/[0.03] px-4 py-3">
         {snippets.length > 0 && (
           <>
-            <h3 className="text-xs font-semibold text-foreground/40">
+            <h3 className="text-xs font-semibold text-foreground/45">
               {t("dictionary.snippets.title")}
             </h3>
-            <div className="mt-2.5 border-t border-dashed border-foreground/10 dark:border-white/8" />
+            <div className="mt-2.5 border-t border-dashed border-foreground/10 dark:border-white/10" />
           </>
         )}
 
@@ -260,7 +260,7 @@ export default function SnippetsView() {
                 {t("dictionary.snippets.emptyTitle")}{" "}
                 <span className="text-primary">{t("dictionary.snippets.emptyTitleAccent")}</span>
               </h4>
-              <p className="mt-1.5 text-xs text-foreground/30 leading-relaxed">
+              <p className="mt-1.5 text-xs text-foreground/45 leading-relaxed">
                 {t("dictionary.snippets.emptyDescription")}
               </p>
               <Button size="sm" className="mt-4" onClick={() => triggerInputRef.current?.focus()}>
@@ -268,15 +268,15 @@ export default function SnippetsView() {
                 {t("dictionary.snippets.new")}
               </Button>
             </div>
-            <div className="flex-1 min-w-[260px] rounded-md border border-foreground/8 dark:border-white/6 bg-foreground/[0.02] dark:bg-white/[0.03] px-3.5 py-3 flex flex-col gap-2.5">
+            <div className="flex-1 min-w-[260px] rounded-md border border-foreground/8 dark:border-white/10 bg-foreground/[0.02] dark:bg-white/[0.03] px-3.5 py-3 flex flex-col gap-2.5">
               {EXAMPLE_KEYS.map((key) => (
                 <div key={key} className="flex items-start gap-2">
                   <span className="shrink-0 inline-flex items-center gap-1 rounded-[5px] bg-primary/10 dark:bg-primary/15 border border-primary/15 dark:border-primary/20 px-1.5 py-0.5 text-xs text-primary">
                     <Mic size={9} />
                     {t(`dictionary.snippets.examples.${key}Trigger`)}
                   </span>
-                  <span className="shrink-0 text-xs text-foreground/20 mt-0.5">→</span>
-                  <span className="min-w-0 text-xs text-foreground/40 leading-relaxed">
+                  <span className="shrink-0 text-xs text-foreground/45 mt-0.5">→</span>
+                  <span className="min-w-0 text-xs text-foreground/45 leading-relaxed">
                     {t(`dictionary.snippets.examples.${key}Text`)}
                   </span>
                 </div>
@@ -284,7 +284,7 @@ export default function SnippetsView() {
             </div>
           </div>
         ) : visibleSnippets.length === 0 ? (
-          <p className="py-6 text-xs text-foreground/20 text-center">
+          <p className="py-6 text-xs text-foreground/45 text-center">
             {t("dictionary.noMatches", { word: trimmedTrigger })}
           </p>
         ) : (
@@ -292,14 +292,14 @@ export default function SnippetsView() {
             {visibleSnippets.map((snippet) => (
               <li
                 key={snippet.trigger}
-                className="group flex items-center gap-2 h-9 border-b border-foreground/4 dark:border-white/3 last:border-b-0"
+                className="group flex items-center gap-2 h-9 border-b border-foreground/4 dark:border-white/10 last:border-b-0"
               >
                 <div className="flex-1 min-w-0 flex items-center gap-2">
                   <span dir="auto" className="text-xs text-foreground/60 shrink-0">
                     {snippet.trigger}
                   </span>
-                  <span className="text-xs text-foreground/20 shrink-0">→</span>
-                  <span dir="auto" className="text-xs text-foreground/35 truncate">
+                  <span className="text-xs text-foreground/45 shrink-0">→</span>
+                  <span dir="auto" className="text-xs text-foreground/45 truncate">
                     {snippet.replacement}
                   </span>
                 </div>
@@ -307,14 +307,14 @@ export default function SnippetsView() {
                   <button
                     onClick={() => setEditing(snippet)}
                     aria-label={t("dictionary.snippets.edit", { trigger: snippet.trigger })}
-                    className="p-1 text-foreground/25 hover:text-foreground/60 transition-colors"
+                    className="p-1 text-foreground/45 hover:text-foreground/60 transition-colors"
                   >
                     <Pencil size={11} />
                   </button>
                   <button
                     onClick={() => handleRemove(snippet.trigger)}
                     aria-label={t("dictionary.snippets.remove", { trigger: snippet.trigger })}
-                    className="p-1 text-foreground/25 hover:text-destructive/70 transition-colors"
+                    className="p-1 text-foreground/45 hover:text-destructive/70 transition-colors"
                   >
                     <X size={11} strokeWidth={2} />
                   </button>

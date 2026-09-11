@@ -24,7 +24,7 @@ const BUBBLE_STYLES = {
   system: {
     align: "justify-end",
     radius: "rounded-ee-sm",
-    bg: "bg-surface-2/70 border border-border/20 text-foreground/80",
+    bg: "bg-surface-2/70 border border-border/70 text-foreground/80",
     cursor: "bg-foreground/40",
   },
 } as const;
@@ -112,7 +112,7 @@ function PartialBubble({
               {speakerLabel}
             </span>
             {speakerState === "provisional" && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground/40">
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground/70">
                 <Sparkles size={9} />
                 {getSpeakerStateLabel("provisional", t)}
               </span>
@@ -187,7 +187,7 @@ function AddContactButton({
         <button
           className={cn(
             "inline-flex items-center mb-0.5 px-1.5 py-0.5 rounded-md text-[11px] outline-none cursor-pointer",
-            "border border-dashed border-border/60 dark:border-white/15",
+            "border border-dashed border-border/70 dark:border-white/15",
             "text-foreground/50 hover:text-foreground hover:border-border/90 dark:hover:border-white/30",
             "transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-ring"
           )}
@@ -215,7 +215,7 @@ function AddContactButton({
           className={cn(
             "w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground",
             "placeholder:text-foreground/45 outline-none",
-            "border border-border/50 focus:border-border/90 transition-colors"
+            "border border-border/70 focus:border-border/90 transition-colors"
           )}
           autoFocus
           type="email"
@@ -299,7 +299,7 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
 
   return (
     <>
-      <div className="p-2 border-b border-border/50">
+      <div className="p-2 border-b border-border/70">
         <input
           dir="auto"
           value={search}
@@ -312,7 +312,7 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
       </div>
       <div className="max-h-52 overflow-y-auto">
         {filteredParticipants.length > 0 && (
-          <div className="p-1 border-b border-border/30">
+          <div className="p-1 border-b border-border/70">
             <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
               {t("notes.speaker.meetingAttendees")}
             </div>
@@ -326,7 +326,7 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
                   {p.displayName || p.email}
                 </span>
                 {p.displayName && (
-                  <span dir="ltr" className="text-foreground/30 truncate text-[11px]">
+                  <span dir="ltr" className="text-foreground/45 truncate text-[11px]">
                     {p.email}
                   </span>
                 )}
@@ -335,7 +335,7 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
           </div>
         )}
         {filteredProfiles.length > 0 && (
-          <div className="p-1 border-b border-border/30">
+          <div className="p-1 border-b border-border/70">
             <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
               {t("notes.speaker.knownSpeakers")}
             </div>
@@ -349,7 +349,7 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
                   {p.display_name}
                 </span>
                 {p.email && (
-                  <span dir="ltr" className="text-foreground/30 truncate text-[11px]">
+                  <span dir="ltr" className="text-foreground/45 truncate text-[11px]">
                     {p.email}
                   </span>
                 )}
@@ -371,7 +371,7 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
                   <span dir="auto" className="text-foreground truncate">
                     {nameFromEmail(trimmed)}
                   </span>
-                  <span dir="ltr" className="text-foreground/30 truncate text-[11px]">
+                  <span dir="ltr" className="text-foreground/45 truncate text-[11px]">
                     {trimmed.toLowerCase()}
                   </span>
                 </>
@@ -384,7 +384,7 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
           </div>
         )}
         {isEmpty && (
-          <div className="px-3 py-4 text-center text-[11px] text-foreground/30">
+          <div className="px-3 py-4 text-center text-[11px] text-foreground/45">
             {t("notes.speaker.nameOrEmailPlaceholder")}
           </div>
         )}
@@ -436,7 +436,7 @@ function SpeakerLabel({
   if (hasSuggestion) {
     return (
       <span className="group inline-flex items-center gap-1 mb-0.5 px-1">
-        <span dir="auto" className="text-[11px] font-medium italic text-muted-foreground/60">
+        <span dir="auto" className="text-[11px] font-medium italic text-muted-foreground/70">
           {segment.suggestedName}
         </span>
         <button
@@ -471,7 +471,7 @@ function SpeakerLabel({
         <button
           className={cn(
             "inline-flex items-center text-[11px] font-medium mb-0.5 px-1.5 py-0.5 rounded-md outline-none cursor-pointer",
-            "border border-border/60 dark:border-white/20",
+            "border border-border/70 dark:border-white/20",
             "hover:bg-foreground/5 hover:border-border/90 dark:hover:border-white/30",
             "transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-ring",
             SPEAKER_COLORS[colorIdx],
@@ -517,7 +517,7 @@ function SelectCheckbox({
         "w-4 h-4 rounded-full border flex items-center justify-center transition-all cursor-pointer",
         isSelected
           ? "border-primary bg-primary text-primary-foreground opacity-100"
-          : "border-border/60 bg-background/80 opacity-0 group-hover:opacity-100 hover:border-foreground/50",
+          : "border-border/70 bg-background/80 opacity-0 group-hover:opacity-100 hover:border-foreground/50",
         className
       )}
     >
@@ -544,7 +544,7 @@ export function SelectionBar({
   const [open, setOpen] = useState(false);
   return (
     <div
-      className="flex items-center gap-3 rounded-md border border-border/40 bg-surface-2/95 backdrop-blur px-3 py-1.5 text-xs shadow-lg"
+      className="flex items-center gap-3 rounded-md border border-border/70 bg-surface-2/95 backdrop-blur px-3 py-1.5 text-xs shadow-lg"
       style={{ animation: "agent-message-in 150ms ease-out both" }}
     >
       <span className="text-foreground/70 tabular-nums">
@@ -696,7 +696,7 @@ const SegmentRow = memo(function SegmentRow({
                   sameSpeaker ? "rounded-lg rounded-ss-sm" : "rounded-lg rounded-es-sm"
                 )
               : cn(
-                  "bg-surface-2 border border-border/30 text-foreground",
+                  "bg-surface-2 border border-border/70 text-foreground",
                   sameSpeaker ? "rounded-lg rounded-se-sm" : "rounded-lg rounded-ee-sm",
                   isSystemSpeaker && cn("border-s-2", SPEAKER_BORDER_COLORS[colorIdx])
                 ),
@@ -846,7 +846,7 @@ export function MeetingTranscriptChat({
   }, [speakerProfiles]);
 
   const consentNotice = (
-    <div className="shrink-0 flex items-center justify-center gap-1 px-4 pt-2 pb-1 text-[10px] text-muted-foreground/50 select-none">
+    <div className="shrink-0 flex items-center justify-center gap-1 px-4 pt-2 pb-1 text-[10px] text-muted-foreground/70 select-none">
       <ShieldCheck size={10} className="shrink-0" />
       <span>{t("notes.speaker.consentNotice")}</span>
     </div>
@@ -857,7 +857,7 @@ export function MeetingTranscriptChat({
       <div className="h-full flex flex-col">
         {consentNotice}
         <div className="flex-1 flex items-center justify-center px-5">
-          <p className="text-xs text-muted-foreground/40 select-none">
+          <p className="text-xs text-muted-foreground/70 select-none">
             {t("notes.editor.conversationWillAppear")}
           </p>
         </div>
@@ -884,7 +884,7 @@ export function MeetingTranscriptChat({
     <div className="h-full flex flex-col">
       {consentNotice}
       {(isRecording || isDiarizing) && (
-        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 mx-4 mb-1.5 px-3 py-1.5 rounded-lg border border-border/60 bg-surface-2/40 text-xs text-foreground">
+        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 mx-4 mb-1.5 px-3 py-1.5 rounded-lg border border-border/70 bg-surface-2/40 text-xs text-foreground">
           <div className="flex items-center gap-1.5 min-w-0">
             {isDiarizing ? (
               <Loader2 size={12} className="animate-spin text-muted-foreground shrink-0" />

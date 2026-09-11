@@ -147,7 +147,7 @@ export default function DictationTranslationSettings() {
 
           <InferenceConfigEditor scope="dictationTranslation" />
 
-          <div className="border-t border-border/40 pt-6">
+          <div className="border-t border-border/70 pt-6">
             <SectionHeader
               title={t("dictationTranslation.prompt.title")}
               description={t("dictationTranslation.prompt.description")}

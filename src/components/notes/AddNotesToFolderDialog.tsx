@@ -102,14 +102,14 @@ export default function AddNotesToFolderDialog({
           <div className="relative">
             <Search
               size={13}
-              className="absolute start-2.5 top-1/2 -translate-y-1/2 text-foreground/20"
+              className="absolute start-2.5 top-1/2 -translate-y-1/2 text-foreground/45"
             />
             <input
               dir="auto"
               placeholder={t("notes.addToFolder.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-8 rounded-md bg-foreground/[0.03] dark:bg-white/[0.04] border border-foreground/8 dark:border-white/8 ps-8 pe-3 text-xs text-foreground placeholder:text-foreground/45 outline-none focus:border-primary/30 transition-colors"
+              className="w-full h-8 rounded-md bg-foreground/[0.03] dark:bg-white/[0.04] border border-foreground/8 dark:border-white/10 ps-8 pe-3 text-xs text-foreground placeholder:text-foreground/45 outline-none focus:border-primary/30 transition-colors"
               autoFocus
             />
           </div>
@@ -118,7 +118,7 @@ export default function AddNotesToFolderDialog({
         <div className="max-h-80 overflow-y-auto px-2 pb-2">
           {grouped.length === 0 ? (
             <div className="flex items-center justify-center py-10">
-              <p className="text-xs text-foreground/20">
+              <p className="text-xs text-foreground/45">
                 {search
                   ? t("notes.addToFolder.noResults")
                   : t("notes.addToFolder.noNotesAvailable")}
@@ -127,7 +127,7 @@ export default function AddNotesToFolderDialog({
           ) : (
             grouped.map(([dateLabel, notes]) => (
               <div key={dateLabel}>
-                <p className="text-xs font-medium text-foreground/30 px-2 pt-3 pb-1.5">
+                <p className="text-xs font-medium text-foreground/45 px-2 pt-3 pb-1.5">
                   {dateLabel}
                 </p>
                 {notes.map((note) => {
@@ -142,8 +142,8 @@ export default function AddNotesToFolderDialog({
                         isSelected && "bg-primary/5 dark:bg-primary/8"
                       )}
                     >
-                      <div className="w-7 h-7 rounded-md bg-foreground/[0.03] dark:bg-white/[0.04] border border-foreground/6 dark:border-white/6 flex items-center justify-center shrink-0">
-                        <FileText size={12} className="text-foreground/20" />
+                      <div className="w-7 h-7 rounded-md bg-foreground/[0.03] dark:bg-white/[0.04] border border-foreground/6 dark:border-white/10 flex items-center justify-center shrink-0">
+                        <FileText size={12} className="text-foreground/45" />
                       </div>
                       <div className="flex-1 min-w-0 text-start">
                         <p className="text-xs text-foreground/80 truncate">
@@ -168,7 +168,7 @@ export default function AddNotesToFolderDialog({
           )}
         </div>
 
-        <div className="px-4 py-3 border-t border-border/30 dark:border-white/5 flex justify-end">
+        <div className="px-4 py-3 border-t border-border/70 dark:border-white/10 flex justify-end">
           <Button
             variant="default"
             size="sm"

@@ -208,7 +208,7 @@ export default function LanguageSelector({
             className="z-9999 bg-popover/95 backdrop-blur-xl border border-border/70 rounded shadow-xl overflow-hidden"
           >
             {showSearch && (
-              <div className="px-2 pt-2 pb-1.5 border-b border-border/50">
+              <div className="px-2 pt-2 pb-1.5 border-b border-border/70">
                 <div className="relative">
                   <Search className="absolute start-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
                   <input

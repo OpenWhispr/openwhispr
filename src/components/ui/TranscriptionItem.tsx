@@ -30,7 +30,7 @@ import { formatMmSs } from "../../utils/formatDuration";
 const platform = getCachedPlatform();
 
 const ACTION_BUTTON_CLASS =
-  "h-7 w-7 rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-foreground/6 dark:hover:bg-white/6";
+  "h-7 w-7 rounded-full text-muted-foreground/70 hover:text-foreground hover:bg-foreground/6 dark:hover:bg-white/6";
 
 function getShowInFolderKey(): string {
   if (platform === "win32") return "controlPanel.history.showInFolderWindows";
@@ -295,7 +295,7 @@ export default function TranscriptionItem({
           )}
         >
           <div className="min-h-0 overflow-hidden">
-            <div className="mt-2 border-t border-border/50 pt-2">
+            <div className="mt-2 border-t border-border/70 pt-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   {t("controlPanel.history.rawTranscript")}
@@ -315,7 +315,7 @@ export default function TranscriptionItem({
                 {rawText}
               </p>
               {rawText === item.text && (
-                <p className="mt-1 text-[10px] italic text-muted-foreground/50">
+                <p className="mt-1 text-[10px] italic text-muted-foreground/70">
                   {t("controlPanel.history.noAiProcessing")}
                 </p>
               )}

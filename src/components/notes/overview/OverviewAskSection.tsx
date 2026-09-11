@@ -50,7 +50,7 @@ export function OverviewAskSection({
   );
 
   return (
-    <div className="rounded-xl bg-surface-1/50 dark:bg-white/2 border border-border/25 dark:border-white/6">
+    <div className="rounded-xl bg-surface-1/50 dark:bg-white/2 border border-border/70 dark:border-white/10">
       {conversationPicker}
       {hasMessages && (
         <div className="max-h-[min(26rem,50vh)] flex flex-col">
@@ -71,9 +71,9 @@ export function OverviewAskSection({
               key={key}
               onClick={() => onTextSubmit(t(key))}
               disabled={agentState !== "idle"}
-              className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md border border-border/40 dark:border-white/8 text-[11px] text-foreground/55 hover:text-foreground/80 hover:border-border/70 hover:bg-foreground/3 dark:hover:bg-white/3 disabled:opacity-50 disabled:pointer-events-none transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md border border-border/70 dark:border-white/10 text-[11px] text-foreground/55 hover:text-foreground/80 hover:border-border/70 hover:bg-foreground/3 dark:hover:bg-white/3 disabled:opacity-50 disabled:pointer-events-none transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
             >
-              <Sparkles size={10} className="text-foreground/30 shrink-0" />
+              <Sparkles size={10} className="text-foreground/45 shrink-0" />
               {t(key)}
             </button>
           ))}

@@ -76,7 +76,7 @@ export default function ConversationItem({
             {conversation.title}
           </p>
           <div className="flex items-center gap-0.5 shrink-0">
-            <span className="text-[10px] text-muted-foreground/40 tabular-nums group-hover:opacity-0 transition-opacity">
+            <span className="text-[10px] text-muted-foreground/70 tabular-nums group-hover:opacity-0 transition-opacity">
               {formatTimestamp(conversation.updated_at, locale)}
             </span>
             <DropdownMenu>
@@ -85,7 +85,7 @@ export default function ConversationItem({
                   size="icon"
                   variant="ghost"
                   onClick={(e) => e.stopPropagation()}
-                  className="h-5 w-5 rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity absolute end-2 text-muted-foreground/60 dark:text-muted-foreground/40 hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
+                  className="h-5 w-5 rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity absolute end-2 text-muted-foreground/70 dark:text-muted-foreground/70 hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
                 >
                   <MoreHorizontal size={12} />
                 </Button>
@@ -126,7 +126,7 @@ export default function ConversationItem({
           </div>
         </div>
         {conversation.preview && (
-          <p dir="auto" className="text-[11px] text-muted-foreground/50 line-clamp-1 mt-0.5">
+          <p dir="auto" className="text-[11px] text-muted-foreground/70 line-clamp-1 mt-0.5">
             {conversation.preview}
           </p>
         )}

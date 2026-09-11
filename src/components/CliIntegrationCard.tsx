@@ -39,10 +39,10 @@ export default function CliIntegrationCard({ isPaid, onUpgrade }: CliIntegration
   };
 
   return (
-    <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm p-4">
+    <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm p-4">
       <div className="flex items-center gap-2 mb-4">
         <LogoTile src={logo} alt="OpenWhispr" />
-        <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/5 flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/10 flex items-center justify-center shrink-0">
           <Terminal className="w-4 h-4 text-foreground/70" strokeWidth={2} />
         </div>
       </div>
@@ -53,7 +53,7 @@ export default function CliIntegrationCard({ isPaid, onUpgrade }: CliIntegration
       </p>
 
       <div className="mb-3">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-1.5">
+        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 mb-1.5">
           {t("integrations.cli.installLabel")}
         </div>
         <CopyableCommand command={INSTALL_CMD} />

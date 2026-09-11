@@ -114,7 +114,7 @@ function AttendeePopover({
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-0">
-        <div className="border-b border-border/50 px-3 py-2.5">
+        <div className="border-b border-border/70 px-3 py-2.5">
           <p dir="auto" className="text-xs font-medium leading-snug text-foreground">
             {event.summary || t("upcoming.untitledEvent")}
           </p>
@@ -128,10 +128,10 @@ function AttendeePopover({
                 <p dir="auto" className="truncate text-xs text-foreground/80">
                   {a.displayName || a.email.split("@")[0]}
                   {a.self && (
-                    <span className="ms-1 text-foreground/30">{t("notes.participants.me")}</span>
+                    <span className="ms-1 text-foreground/45">{t("notes.participants.me")}</span>
                   )}
                 </p>
-                <p dir="ltr" className="truncate text-[11px] text-foreground/35">
+                <p dir="ltr" className="truncate text-[11px] text-foreground/45">
                   {a.email}
                 </p>
               </div>
@@ -145,7 +145,7 @@ function AttendeePopover({
           ))}
         </div>
         {joinUrl && (
-          <div className="border-t border-border/50 p-1">
+          <div className="border-t border-border/70 p-1">
             <button
               onClick={() => openJoinUrl(joinUrl)}
               className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/70 transition-colors hover:bg-foreground/5"
@@ -231,7 +231,7 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
       </div>
       <div className="bg-background px-2 dark:bg-surface-2/60">
         {group.items.length === 0 ? (
-          <p className="px-1 py-3 text-xs text-muted-foreground/60">
+          <p className="px-1 py-3 text-xs text-muted-foreground/70">
             {t("upcoming.noEventsToday")}
           </p>
         ) : (
@@ -259,10 +259,10 @@ function SidebarCard({
 }) {
   return (
     <div className="flex flex-col items-center rounded-2xl border border-border/70 bg-card/50 px-4 py-6 text-center dark:border-white/10 dark:bg-surface-2/60">
-      <Icon size={20} className="mb-2 text-muted-foreground/40" />
+      <Icon size={20} className="mb-2 text-muted-foreground/70" />
       {title && <p className="text-xs font-medium text-foreground/80">{title}</p>}
       {description && (
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground/60">{description}</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground/70">{description}</p>
       )}
       {children && <div className="mt-3">{children}</div>}
     </div>

@@ -732,11 +732,11 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                     <div className="absolute z-20 top-9 start-0 end-[72px] max-h-44 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
                       {searchingSuggestions && suggestions.length === 0 ? (
                         <div className="h-8 flex items-center justify-center">
-                          <Loader2 size={12} className="animate-spin text-foreground/40" />
+                          <Loader2 size={12} className="animate-spin text-foreground/45" />
                         </div>
                       ) : suggestions.length === 0 ? (
                         <div className="h-8 flex items-center justify-center">
-                          <span className="text-xs text-foreground/40">
+                          <span className="text-xs text-foreground/45">
                             {t("noteEditor.share.dialog.noResults")}
                           </span>
                         </div>
@@ -766,7 +766,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                               {principal.name && principal.email && (
                                 <span
                                   dir="ltr"
-                                  className="block text-[11px] text-foreground/40 truncate"
+                                  className="block text-[11px] text-foreground/45 truncate"
                                 >
                                   {principal.email}
                                 </span>
@@ -806,7 +806,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                   }
                   secondaryDir="ltr"
                   trailing={
-                    <span className="text-[11px] text-foreground/40">
+                    <span className="text-[11px] text-foreground/45">
                       {t("noteEditor.share.dialog.owner")}
                     </span>
                   }
@@ -846,7 +846,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                     primary={space.name}
                     secondary={t("noteEditor.share.dialog.teamAudience")}
                     trailing={
-                      <span className="text-[11px] text-foreground/40">
+                      <span className="text-[11px] text-foreground/45">
                         {t("noteEditor.share.dialog.editor")}
                       </span>
                     }
@@ -900,7 +900,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : (
-                      <span className="text-[11px] text-foreground/40">
+                      <span className="text-[11px] text-foreground/45">
                         {t("noteEditor.share.dialog.viewer")}
                       </span>
                     )
@@ -909,7 +909,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
               ))}
             </div>
 
-            <div className="flex items-center gap-2 pt-3 mt-1 border-t border-border/60">
+            <div className="flex items-center gap-2 pt-3 mt-1 border-t border-border/70">
               <ShareVisibilityMenu
                 value={share?.visibility ?? "private"}
                 ownerDomain={ownerDomain}
@@ -985,7 +985,7 @@ function MemberRow({
           {primary}
         </p>
         {secondary && (
-          <p dir={secondaryDir} className="text-[11px] text-foreground/40 truncate">
+          <p dir={secondaryDir} className="text-[11px] text-foreground/45 truncate">
             {secondary}
           </p>
         )}
@@ -1109,7 +1109,7 @@ function AccessGrantRow({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <span className="text-[11px] text-foreground/40">{permissionLabel}</span>
+          <span className="text-[11px] text-foreground/45">{permissionLabel}</span>
         )
       }
     />
