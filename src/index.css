@@ -1495,6 +1495,16 @@ a:hover {
   height: 6px;
 }
 
+/* Scroll containers whose chrome should stay clean (the main-window content
+   scroller): trackpad and wheel still scroll, the bar just never draws. */
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
