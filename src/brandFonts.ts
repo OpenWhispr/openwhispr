@@ -21,11 +21,12 @@ const fontUrls = import.meta.glob("./assets/fonts/yowza/*.otf", {
   import: "default",
 }) as Record<string, string>;
 
-// Yowza ships ascent 0.94 / descent 0.24, which parks lowercase about 1px below
-// the centre of its line box next to a 16px icon. Rebalancing the same 1.18em
-// content area to 0.873 / 0.307 lifts every glyph ~0.07em (1px at UI sizes)
-// without changing line heights, so icon + label rows centre optically app-wide.
-const METRICS = "ascent-override:87.3%;descent-override:30.7%;line-gap-override:0%";
+// Yowza ships ascent 0.94 / descent 0.24, which paints lowercase about 1px above
+// the centre of a 16px icon beside it (measured from rendered pixels, not font
+// tables). Rebalancing the same 1.18em content area to 0.965 / 0.215 drops the
+// baseline one pixel at UI sizes without changing any line height, so icon +
+// label rows centre optically app-wide.
+const METRICS = "ascent-override:96.5%;descent-override:21.5%;line-gap-override:0%";
 
 const rules = Object.entries(fontUrls).flatMap(([file, url]) => {
   const face = FACES[file.slice(file.lastIndexOf("/") + 1, -".otf".length)];
