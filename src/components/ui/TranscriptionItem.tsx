@@ -148,7 +148,7 @@ export default function TranscriptionItem({
   return (
     <div
       className={cn(
-        "group px-4 py-3 transition-colors duration-150",
+        "group/row px-4 py-3 transition-colors duration-150",
         isFailed
           ? "bg-destructive/5"
           : isDiscarded
@@ -166,7 +166,7 @@ export default function TranscriptionItem({
             // Actions surface on hover, keyboard focus, or while the menu is open; failed and
             // discarded rows keep them visible because recovery is the point of the row.
             isTranscribed &&
-              "opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100"
+              "opacity-0 group-hover/row:opacity-100 has-[:focus-visible]:opacity-100 has-[[data-state=open]]:opacity-100"
           )}
         >
           {isTranscribed && (

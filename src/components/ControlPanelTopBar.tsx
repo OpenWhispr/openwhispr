@@ -72,7 +72,9 @@ export default function ControlPanelTopBar({
               aria-label={sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")}
               data-no-window-drag=""
               style={noDragStyle}
-              className="group flex h-8 w-8 shrink-0 items-center justify-center rounded-lg outline-none transition-colors duration-150 hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-primary/30 dark:hover:bg-white/5"
+              // z-40 keeps the toggle above the peeking sidebar (z-30) so the panel slides in
+              // underneath it and the button stays clickable while collapsed.
+              className="group relative z-40 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg outline-none transition-colors duration-150 hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-primary/30 dark:hover:bg-white/5"
             >
               {sidebarCollapsed ? (
                 <PanelLeftOpen size={16} className={toggleIconClass} />
