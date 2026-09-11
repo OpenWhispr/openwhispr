@@ -195,7 +195,7 @@ function SectionHeader({
   isDropSuccess?: boolean;
 }) {
   const labelClassName =
-    "text-[10px] font-semibold uppercase tracking-wide text-foreground/50 select-none";
+    "text-[10px] font-semibold uppercase tracking-wide text-foreground/60 select-none";
 
   return (
     <div
@@ -468,7 +468,7 @@ function SpaceRow({
               size={13}
               className={cn(
                 "transition-colors duration-150",
-                isActive ? "text-primary" : "text-foreground/35 dark:text-foreground/20"
+                isActive ? "text-primary" : "text-foreground/55 dark:text-foreground/45"
               )}
             />
           ) : space.emoji ? (
@@ -482,7 +482,7 @@ function SpaceRow({
                 "transition-colors duration-150",
                 isDragOver || isActive
                   ? "text-primary"
-                  : "text-foreground/35 dark:text-foreground/20"
+                  : "text-foreground/55 dark:text-foreground/45"
               )}
             />
           )
@@ -492,7 +492,7 @@ function SpaceRow({
         dir="auto"
         className={cn(
           "text-xs truncate flex-1 transition-colors duration-150",
-          isDragOver || isActive ? "text-foreground font-medium" : "text-foreground/70"
+          isDragOver || isActive ? "text-foreground font-medium" : "text-foreground/85"
         )}
       >
         {displayName}
@@ -679,7 +679,7 @@ function FolderRow({
             size={13}
             className={cn(
               "transition-colors duration-150",
-              isDragOver || isActive ? "text-primary" : "text-foreground/35 dark:text-foreground/20"
+              isDragOver || isActive ? "text-primary" : "text-foreground/55 dark:text-foreground/45"
             )}
           />
         }
@@ -690,7 +690,7 @@ function FolderRow({
           "text-xs truncate flex-1 transition-colors duration-150",
           isDragOver || isActive
             ? "text-foreground font-medium"
-            : "text-foreground/50 group-hover:text-foreground/70"
+            : "text-foreground/85 group-hover:text-foreground"
         )}
       >
         {displayName}
@@ -953,7 +953,7 @@ function NoteLeaf({
           "shrink-0 transition-colors duration-150",
           isActive
             ? "text-primary"
-            : "text-foreground/30 dark:text-foreground/20 group-hover:text-foreground/45 dark:group-hover:text-foreground/30"
+            : "text-foreground/50 dark:text-foreground/40 group-hover:text-foreground/70 dark:group-hover:text-foreground/55"
         )}
       />
       <span
@@ -962,7 +962,7 @@ function NoteLeaf({
           "text-xs truncate flex-1 transition-colors duration-150",
           isActive
             ? "text-foreground font-medium"
-            : "text-foreground/60 group-hover:text-foreground/80"
+            : "text-foreground/85 group-hover:text-foreground"
         )}
       >
         {title}

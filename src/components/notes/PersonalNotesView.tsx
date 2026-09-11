@@ -705,7 +705,7 @@ export default function PersonalNotesView({
               onClick={() => setShowActionManager(true)}
               className={cn(
                 "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
-                "text-muted-foreground/80 hover:text-foreground hover:bg-foreground/5",
+                "text-foreground/85 hover:text-foreground hover:bg-foreground/5",
                 "transition-colors duration-150",
                 "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               )}
