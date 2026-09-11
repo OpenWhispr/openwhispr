@@ -28,6 +28,7 @@ import {
   getASRModelOrganization,
   getSelectedASROrganization,
   usesParakeetManager,
+  DEFAULT_LOCAL_ASR_SELECTION,
 } from "../../helpers/localASROrganization";
 import { pickDefaultModelId } from "../../models/providerDefaultModel";
 import {
@@ -236,6 +237,13 @@ function resolveInitialLocalSelection(
   store: ReturnType<typeof useSettingsStore.getState>
 ): OnboardingLocalModelDraft {
   const pending = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
+  // A fresh install has never picked a local provider (the store only falls back
+  // to whisper); open on the recommended Oruk model instead of that fallback.
+  const hasChosenLocalASR =
+    !!store.parakeetModel || localStorage.getItem("localTranscriptionProvider") !== null;
+  if (!assistant && !resumeState && !pending && !hasChosenLocalASR) {
+    return DEFAULT_LOCAL_ASR_SELECTION;
+  }
   const savedProvider = assistant
     ? modelRegistry.getProvider(store.chatAgentProvider)
       ? store.chatAgentProvider
