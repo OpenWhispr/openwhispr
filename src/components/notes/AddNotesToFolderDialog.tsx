@@ -109,7 +109,7 @@ export default function AddNotesToFolderDialog({
               placeholder={t("notes.addToFolder.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-8 rounded-md bg-foreground/[0.03] dark:bg-white/[0.04] border border-foreground/8 dark:border-white/8 ps-8 pe-3 text-xs text-foreground placeholder:text-foreground/20 outline-none focus:border-primary/30 transition-colors"
+              className="w-full h-8 rounded-md bg-foreground/[0.03] dark:bg-white/[0.04] border border-foreground/8 dark:border-white/8 ps-8 pe-3 text-xs text-foreground placeholder:text-foreground/45 outline-none focus:border-primary/30 transition-colors"
               autoFocus
             />
           </div>

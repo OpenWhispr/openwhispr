@@ -117,7 +117,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={t("notes.participants.addPlaceholder", "Add attendees...")}
-            className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/20 outline-none border-none appearance-none"
+            className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
             autoFocus
           />
         </div>

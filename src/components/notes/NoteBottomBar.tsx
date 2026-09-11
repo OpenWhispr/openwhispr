@@ -226,7 +226,7 @@ export default function NoteBottomBar({
             className={cn(
               "input-inline flex-1 bg-transparent outline-none min-w-0 p-0 caret-primary",
               "text-[13px] text-foreground",
-              "placeholder:text-foreground/25 dark:placeholder:text-foreground/15"
+              "placeholder:text-foreground/45 dark:placeholder:text-foreground/45"
             )}
           />
 

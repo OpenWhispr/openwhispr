@@ -219,7 +219,7 @@ export default function LanguageSelector({
                     onChange={(e) => handleSearchQueryChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={t("languageSelector.searchPlaceholder")}
-                    className="w-full h-7 ps-7 pe-6 text-xs bg-transparent text-foreground border-0 focus:outline-none placeholder:text-muted-foreground/50"
+                    className="w-full h-7 ps-7 pe-6 text-xs bg-transparent text-foreground border-0 focus:outline-none placeholder:text-muted-foreground/70"
                   />
                   {searchQuery && (
                     <button

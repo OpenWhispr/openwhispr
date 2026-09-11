@@ -89,7 +89,7 @@ const uploadFieldClass = cn(
   "rounded-lg text-xs",
   "bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm",
   "border border-foreground/6 dark:border-white/6",
-  "text-foreground/70 placeholder:text-foreground/20",
+  "text-foreground/70 placeholder:text-foreground/45",
   "focus:outline-none focus:border-foreground/12 dark:focus:border-white/10",
   "transition-colors"
 );

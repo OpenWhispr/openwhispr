@@ -214,7 +214,7 @@ function AddContactButton({
           placeholder={t("notes.speaker.emailPlaceholder")}
           className={cn(
             "w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground",
-            "placeholder:text-foreground/25 outline-none",
+            "placeholder:text-foreground/45 outline-none",
             "border border-border/50 focus:border-border/90 transition-colors"
           )}
           autoFocus
@@ -306,7 +306,7 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t("notes.speaker.nameOrEmailPlaceholder")}
-          className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/20 outline-none border-none appearance-none"
+          className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
           autoFocus
         />
       </div>

@@ -400,7 +400,7 @@ export default function CommandSearch({
               onKeyDown={handleKeyDown}
               placeholder={isConversationsMode ? t("chat.search") : t("commandSearch.placeholder")}
               autoFocus
-              className="flex-1 text-sm text-foreground placeholder:text-muted-foreground/40"
+              className="flex-1 text-sm text-foreground placeholder:text-muted-foreground/70"
               style={{
                 background: "transparent",
                 border: "none",

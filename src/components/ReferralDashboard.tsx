@@ -455,7 +455,7 @@ export function ReferralDashboard() {
                     onChange={(e) => setEmailInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     disabled={sendingInvite}
-                    className="flex-1 h-8 px-3 text-xs rounded-md bg-foreground/4 border border-foreground/7 text-foreground/70 placeholder:text-foreground/20 focus:outline-none focus:border-foreground/15 focus:ring-1 focus:ring-foreground/10 disabled:opacity-50"
+                    className="flex-1 h-8 px-3 text-xs rounded-md bg-foreground/4 border border-foreground/7 text-foreground/70 placeholder:text-foreground/45 focus:outline-none focus:border-foreground/15 focus:ring-1 focus:ring-foreground/10 disabled:opacity-50"
                   />
                   <button
                     onClick={sendInvite}

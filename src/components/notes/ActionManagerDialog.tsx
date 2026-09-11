@@ -296,7 +296,7 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
                       disabled={isSaving}
                       className={cn(
                         "flex-1 min-h-50 w-full rounded border border-border/70 bg-input px-3.5 py-3 text-sm text-foreground leading-relaxed transition-colors duration-200 outline-none resize-none",
-                        "placeholder:text-muted-foreground/40",
+                        "placeholder:text-muted-foreground/70",
                         "hover:border-border-hover",
                         "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/10",
                         "dark:bg-surface-1 dark:border-border-subtle/50",

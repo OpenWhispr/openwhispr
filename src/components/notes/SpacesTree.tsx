@@ -99,14 +99,14 @@ const ROW_BASE_CLASS =
 
 // Button forces svg children to 16px; these 20px controls want the 12px icon they pass.
 const KEBAB_BUTTON_CLASS =
-  "h-5 w-5 rounded-sm [&_svg]:size-3 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 " +
+  "h-5 w-5 rounded-sm [&_svg]:size-3! opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 " +
   "transition-opacity text-muted-foreground/60 dark:text-muted-foreground/40 " +
   "hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8";
 
 const KEBAB_TRIGGER_CLASS = cn(KEBAB_BUTTON_CLASS, "absolute end-1.5");
 
 const HOVER_REVEAL_BUTTON_CLASS =
-  "h-5 w-5 rounded-sm [&_svg]:size-3 opacity-0 focus-visible:opacity-100 transition-opacity " +
+  "h-5 w-5 rounded-sm [&_svg]:size-3! opacity-0 focus-visible:opacity-100 transition-opacity " +
   "text-muted-foreground/60 dark:text-muted-foreground/40 hover:text-foreground/60 " +
   "hover:bg-foreground/5 active:bg-foreground/8";
 
@@ -229,7 +229,7 @@ function SectionHeader({
             <ChevronRight
               size={11}
               className={cn(
-                "text-foreground/40 transition-all duration-150",
+                "text-foreground/60 transition-all duration-150",
                 expanded ? "rotate-90" : "rtl:rotate-180",
                 icon && "opacity-0 group-hover:opacity-100"
               )}
@@ -295,7 +295,7 @@ function RowToggle({
         e.stopPropagation();
         onToggle();
       }}
-      className="relative h-4 w-4 flex items-center justify-center shrink-0 rounded-sm text-foreground/30 hover:text-foreground/60 transition-colors duration-150"
+      className="relative h-4 w-4 flex items-center justify-center shrink-0 rounded-sm text-foreground/50 hover:text-foreground/80 transition-colors duration-150"
     >
       {icon && (
         <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover:opacity-0">
@@ -355,7 +355,7 @@ function SearchableMoveSubmenu({
             <div className="relative px-1.5 py-0.5">
               <Search
                 size={9}
-                className="absolute start-3.5 top-1/2 -translate-y-1/2 text-foreground/15 pointer-events-none"
+                className="absolute start-3.5 top-1/2 -translate-y-1/2 text-foreground/45 pointer-events-none"
               />
               <input
                 dir="auto"
@@ -363,7 +363,7 @@ function SearchableMoveSubmenu({
                 onChange={(event) => onSearchChange(event.target.value)}
                 onKeyDown={(event) => event.stopPropagation()}
                 placeholder={searchPlaceholder}
-                className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
+                className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
               />
             </div>
             <DropdownMenuSeparator />
@@ -779,7 +779,7 @@ function FolderRow({
                         );
                       })}
                       {spaceSearch && filteredSpaces.length === 0 && (
-                        <p className="text-xs text-foreground/20 text-center py-1.5">
+                        <p className="text-xs text-foreground/50 text-center py-1.5">
                           {t("notes.spaces.noSpacesFound")}
                         </p>
                       )}
@@ -1042,7 +1042,7 @@ function NoteLeaf({
                           }
                         }}
                         placeholder={t("notes.folders.folderName")}
-                        className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/20 outline-none border-none appearance-none"
+                        className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
                       />
                     </div>
                   ) : (
@@ -1051,7 +1051,7 @@ function NoteLeaf({
                         e.preventDefault();
                         setIsCreating(true);
                       }}
-                      className={cn(MENU_ITEM_CLASS, "text-foreground/40")}
+                      className={cn(MENU_ITEM_CLASS, "text-foreground/70")}
                     >
                       <Plus size={10} />
                       {t("notes.context.newFolder")}
@@ -1070,7 +1070,7 @@ function NoteLeaf({
                       )
                     )}
                     {filteredOptions.length === 0 && (
-                      <p className="text-xs text-foreground/20 text-center py-1.5">
+                      <p className="text-xs text-foreground/50 text-center py-1.5">
                         {t("notes.context.noResults")}
                       </p>
                     )}
@@ -1941,7 +1941,7 @@ export default function SpacesTree({
               }}
               onBlur={confirmCreateFolder}
               placeholder={t("notes.folders.folderName")}
-              className={cn(FOLDER_INPUT_CLASS, "placeholder:text-foreground/20")}
+              className={cn(FOLDER_INPUT_CLASS, "placeholder:text-foreground/45")}
             />
           </div>
         )}
@@ -1951,7 +1951,7 @@ export default function SpacesTree({
         {showSkeletons && <SkeletonRows />}
         {showEmptySpace && (
           <div className="ps-[18px] pe-2 py-1">
-            <p className="text-xs text-foreground/40 leading-relaxed mb-1.5">
+            <p className="text-xs text-foreground/60 leading-relaxed mb-1.5">
               {t("notes.spaces.emptySpace", { space: space.name })}
             </p>
             <Button
@@ -2066,7 +2066,7 @@ export default function SpacesTree({
   if (isTreeLoading && spaces.length === 0) {
     return (
       <div className="flex-1 flex items-start justify-center py-8">
-        <Loader2 size={12} className="animate-spin text-foreground/15" />
+        <Loader2 size={12} className="animate-spin text-foreground/40" />
       </div>
     );
   }
@@ -2081,7 +2081,7 @@ export default function SpacesTree({
         <div role="none" className="group/section">
           <SectionHeader
             label={t("notes.spaces.privateSpaces")}
-            icon={<Lock size={11} className="text-foreground/40" />}
+            icon={<Lock size={11} className="text-foreground/55" />}
             expanded={privateSectionExpanded}
             onToggle={() => {
               if (privateSpace) toggleContainerExpanded(spaceContainerKey(privateSpace.id));
@@ -2176,7 +2176,7 @@ export default function SpacesTree({
                           <span
                             dir="auto"
                             title={workspace.name}
-                            className="min-w-0 text-[10px] font-medium text-foreground/40 truncate"
+                            className="min-w-0 text-[10px] font-medium text-foreground/60 truncate"
                           >
                             {workspace.name}
                           </span>
@@ -2219,7 +2219,7 @@ export default function SpacesTree({
                       </div>
                     )
                   ) : (
-                    <p className="ps-[18px] pe-2 py-1 text-xs text-foreground/40 leading-relaxed">
+                    <p className="ps-[18px] pe-2 py-1 text-xs text-foreground/60 leading-relaxed">
                       {t("notes.spaces.emptyTeamHint")}
                     </p>
                   ))}

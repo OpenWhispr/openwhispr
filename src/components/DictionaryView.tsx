@@ -172,7 +172,7 @@ export default function DictionaryView() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleAdd();
                 }}
-                className="w-full h-8 text-xs pe-24 placeholder:text-foreground/20"
+                className="w-full h-8 text-xs pe-24 placeholder:text-foreground/45"
               />
               <div className="absolute end-2.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
                 <button
@@ -206,7 +206,7 @@ export default function DictionaryView() {
                 onChange={(e) => setBulkText(e.target.value)}
                 placeholder={t("dictionary.importPlaceholder")}
                 rows={4}
-                className="min-h-[72px] resize-none border-0 shadow-none rounded-none bg-transparent p-0 text-xs text-foreground placeholder:text-foreground/20 hover:border-0 focus:border-0 focus:ring-0"
+                className="min-h-[72px] resize-none border-0 shadow-none rounded-none bg-transparent p-0 text-xs text-foreground placeholder:text-foreground/45 hover:border-0 focus:border-0 focus:ring-0"
               />
               <div className="flex items-center justify-between pt-1.5">
                 <p className="text-xs text-foreground/20">

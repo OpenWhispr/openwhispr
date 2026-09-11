@@ -188,7 +188,7 @@ export default function SnippetsView() {
               if (e.key === "Enter") openPanel();
             }}
             maxLength={80}
-            className="w-full h-8 text-xs pe-16 placeholder:text-foreground/20"
+            className="w-full h-8 text-xs pe-16 placeholder:text-foreground/45"
           />
           <button
             onClick={openPanel}
@@ -219,7 +219,7 @@ export default function SnippetsView() {
             }}
             placeholder={t("dictionary.snippets.replacementPlaceholder")}
             rows={4}
-            className="min-h-[72px] resize-none border-0 shadow-none rounded-none bg-transparent p-0 text-xs text-foreground placeholder:text-foreground/20 hover:border-0 focus:border-0 focus:ring-0"
+            className="min-h-[72px] resize-none border-0 shadow-none rounded-none bg-transparent p-0 text-xs text-foreground placeholder:text-foreground/45 hover:border-0 focus:border-0 focus:ring-0"
           />
           <div className="flex items-center justify-between pt-1.5">
             <div dir="ltr" className="flex items-center gap-0.5">

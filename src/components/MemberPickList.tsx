@@ -48,7 +48,7 @@ export default function MemberPickList({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={t("notes.spaces.members.searchPlaceholder")}
-          className="w-full h-8 ps-7 pe-2 bg-transparent text-xs text-foreground placeholder:text-foreground/25 outline-none"
+          className="w-full h-8 ps-7 pe-2 bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none"
         />
       </div>
       <div className={cn("overflow-y-auto p-1", listClassName ?? "max-h-36")}>

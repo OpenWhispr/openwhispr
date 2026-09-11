@@ -891,7 +891,7 @@ export default function NoteEditor({
                           onChange={(e) => setFolderSearch(e.target.value)}
                           onKeyDown={(e) => e.stopPropagation()}
                           placeholder={t("notes.context.searchFolders")}
-                          className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
+                          className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
                         />
                       </div>
                       <DropdownMenuSeparator />
@@ -944,7 +944,7 @@ export default function NoteEditor({
                               }
                             }}
                             placeholder={t("notes.folders.folderName")}
-                            className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/20 outline-none border-none appearance-none"
+                            className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
                           />
                         </div>
                       ) : (

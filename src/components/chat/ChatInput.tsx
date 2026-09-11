@@ -211,7 +211,7 @@ export function ChatInput({
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
                 "input-inline flex-1 outline-none bg-transparent caret-primary",
-                "text-[13px] text-foreground placeholder:text-muted-foreground/40",
+                "text-[13px] text-foreground placeholder:text-muted-foreground/70",
                 "min-w-0 p-0",
                 isBusy && "text-muted-foreground/30 cursor-not-allowed"
               )}
