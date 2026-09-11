@@ -240,9 +240,12 @@ class WindowManager {
       return;
     }
 
-    if (process.platform === "win32") {
-      // Windows click-through forwarding is unreliable for this floating panel.
-      // Keep the panel interactive so the mic button and cancel button are always clickable.
+    if (process.platform !== "darwin") {
+      // Only macOS forwards hover through a click-through window. Windows
+      // forwarding is unreliable for this floating panel, and Linux ignores
+      // `forward` entirely (#1456): the pill stopped receiving mouseenter after
+      // the first hover-out, so its cancel button never came back (#2136).
+      // Keep the panel interactive so the mic and cancel buttons stay clickable.
       this.mainWindow.setIgnoreMouseEvents(false);
       return;
     }
