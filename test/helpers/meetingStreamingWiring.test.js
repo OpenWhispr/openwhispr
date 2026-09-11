@@ -157,3 +157,17 @@ test("the watchdog sees every system chunk and the helper's device warning", () 
   // user watching a recording that has stopped hearing the call.
   assert.match(source, /send\("meeting-system-audio-interrupted", payload\)/);
 });
+
+test("meeting connects forward the credential mode", () => {
+  // The Deepgram client picks its Authorization scheme from `mode`; both meeting
+  // connectOpts are built by hand, so omitting it re-authenticates Note Recording
+  // as managed (#2140). Scoped by sample rate so an unrelated connectOpts cannot
+  // drag the assertion off target.
+  const connectOptsBlocks =
+    source.match(/const connectOpts = \{[^}]*sampleRate: MEETING_STREAM_SAMPLE_RATE,\s*\};/g) ?? [];
+  assert.equal(connectOptsBlocks.length, 2, "initial connect and reconnect each build connectOpts");
+  for (const block of connectOptsBlocks) {
+    // Anchored: an unanchored match also accepts the key commented out.
+    assert.match(block, /^\s*mode: options\.mode,$/m);
+  }
+});

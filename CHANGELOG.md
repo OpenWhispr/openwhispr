@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Transcription
+
+- **Your own Deepgram key works again.** Every Deepgram connection failed with `Unexpected server response: 401`, even though the same key tested fine in Settings and worked against Deepgram directly. Deepgram accepts a raw API key only under its `Token` authorization scheme and reserves `Bearer` for the short-lived tokens OpenWhispr Cloud mints on your behalf — and the app was presenting your key as a `Bearer`. This broke bring-your-own-key dictation as well as Note Recording. (#2140, thanks @nikhilmaddirala)
+- **Your own AssemblyAI key works in Note Recording again.** Recordings died seconds in with `Input Duration Violation: 40.0 ms`, followed by a cascade of reconnect errors. AssemblyAI accepts audio in 50-1000 ms frames, and the app measured those frames against dictation's 16 kHz — but Note Recording streams at 24 kHz, where the same frame lasts only 33-40 ms. The frame size now follows the rate each session actually opened at, and an oversized burst — which a busy moment can produce on the system-audio channel — is split instead of being sent as one frame that trips the same limit from the other end. Dictation was never affected. (#2140, thanks @nikhilmaddirala)
+
 ## [1.10.0] - 2026-09-11
 
 The desktop app gets a new look: an inset content container with a top bar and ⌘K search, a redesigned Home and note editor, the Yowza brand font and Nucleo icons, and one brand-blue glass surface for every primary action, onboarding included. Notes start recording the moment you create them, offer an AI summary when a recording ends, and gain Detailed Notes and Follow-up email as built-in actions. Orukeet arrives as the recommended local speech-to-text model and local models run up to three times faster on Apple silicon. Managed enterprise speech-to-text lands for workspaces on Azure OpenAI or AI Foundry, transcription gains streaming from Deepgram, AssemblyAI and Gemini Live plus Cohere Transcribe as a local engine, gpt-transcribe becomes the OpenAI default, onboarding was rebuilt and reordered, Insights gains an opt-in leaderboard and backfilled history, updates install themselves, Arabic joins as the eleventh UI language, and Astra and Fable 5.1 join the reasoning models.
