@@ -187,12 +187,18 @@ function buildWhisperServerArgs({
   // explicitly pass "auto" to enable language auto-detection
   args.push("--language", language || "auto");
 
-  // whisper.cpp v1.9.x turned token timestamps on for every request, which enables the
-  // server's 60-character segment wrap. split_on_word is off, so the wrap lands on a token
-  // boundary and breaks words mid-word ("abschalten" -> "abs" + "chalten"); we join segments
-  // into one string, so the break surfaces as a stray space. We only read `text`, never
-  // per-token timings, so turn timestamps off and the wrap goes with them. See #1348.
-  args.push("--no-timestamps");
+  // whisper.cpp v1.9.x turned token timestamps on for every request and forces max_len=60
+  // when it is unset, so the server wraps segments at 60 characters. split_on_word is off,
+  // so the wrap lands on a token boundary and breaks words mid-word ("abschalten" -> "abs" +
+  // "chalten"); we join segments into one string, so the break surfaces as a stray space.
+  // See #1348.
+  //
+  // Raise max_len to switch the wrap off rather than passing --no-timestamps, which took the
+  // decoder's timestamp tokens with it: without them whisper.cpp advances `seek` a full 30s
+  // window no matter where the decode actually stopped, silently discarding the audio in
+  // between. See #2150. A segment covers at most one 30s window; the longest measured is
+  // 186 characters.
+  args.push("--max-len", "4096");
 
   if (isVadActive({ vadEnabled, vadModelPath })) {
     const cfg = sanitizeWhisperVadConfig(vadConfig || DEFAULT_WHISPER_VAD_CONFIG);

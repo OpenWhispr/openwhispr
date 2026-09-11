@@ -7074,6 +7074,7 @@ class IPCHandlers {
           const connectOpts = {
             model: options.model,
             language: options.language,
+            mode: options.mode,
             preconfigured: options.mode !== "byok",
             environment: options.environment,
             tenant: options.tenant,
@@ -7284,6 +7285,7 @@ class IPCHandlers {
       const connectOpts = {
         model: options.model,
         language: options.language,
+        mode: options.mode,
         preconfigured: options.mode !== "byok",
         environment: options.environment,
         tenant: options.tenant,

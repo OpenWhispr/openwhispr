@@ -29,6 +29,7 @@ import audioUtils from "../src/utils/audioUtils.js";
 import geminiTranscription from "../src/helpers/geminiTranscription.js";
 import geminiLive from "../src/helpers/geminiLiveStreaming.js";
 import AssemblyAiStreaming from "../src/helpers/assemblyAiStreaming.js";
+import DeepgramStreaming from "../src/helpers/deepgramStreaming.js";
 import modelRegistryData from "../src/models/modelRegistryData.json" with { type: "json" };
 
 const { fetchRealtimeTokenForProvider } = tokenProviders;
@@ -48,19 +49,25 @@ const HANDSHAKE_TIMEOUT_MS = 15000;
 const SILENT_WAV = () => pcm16ToWav(Buffer.alloc(16000));
 
 // Mirrors the app's dial: openaiRealtimeStreaming.js connects with a bare
-// Bearer header; deepgramStreaming.js passes the key as the bearer token; a
-// null token means the credential already rides in the URL (AssemblyAI).
+// Bearer header; a null token means the credential already rides in the URL
+// (AssemblyAI). `authorization` overrides both, for a provider whose scheme is
+// not Bearer; passing the client's own header keeps the probe from drifting.
 // `awaitServerEvent` is for providers that authenticate AFTER the upgrade:
 // OpenAI opens the socket for any key and only then sends an `error` event
 // for a bad one, so resolving on `open` validates nothing (#1624 class).
 // `verifyServerEvent` inspects that first event and returns a failure detail,
 // or null to accept — for servers that acknowledge the requested configuration
 // rather than reject a bad one.
-function probeWebSocket(url, token, { awaitServerEvent = false, verifyServerEvent = null } = {}) {
+function probeWebSocket(
+  url,
+  token,
+  { awaitServerEvent = false, verifyServerEvent = null, authorization = null } = {}
+) {
   return new Promise((resolve) => {
+    const credential = authorization ?? (token ? `Bearer ${token}` : null);
     const ws = new WebSocket(
       url,
-      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      credential ? { headers: { Authorization: credential } } : undefined
     );
     const timer = setTimeout(() => {
       ws.terminate();
@@ -259,10 +266,13 @@ const PROBES = [
       const token = await fetchRealtimeTokenForProvider("deepgram-realtime", tokenDeps(key), {
         mode: "byok",
       });
-      return probeWebSocket(
-        "wss://api.deepgram.com/v1/listen?model=nova-3&encoding=linear16&sample_rate=16000",
-        token
-      );
+      const url = new DeepgramStreaming().buildWebSocketUrl({
+        sampleRate: 16000,
+        keyterms: ["OpenWhispr"],
+      });
+      return probeWebSocket(url, null, {
+        authorization: DeepgramStreaming.authorizationHeader("byok", token),
+      });
     },
   },
   {

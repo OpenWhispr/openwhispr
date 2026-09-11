@@ -2145,7 +2145,7 @@
         "cancelDownload": "إلغاء تنزيل {{model}}",
         "downloads": "تنزيلات النماذج",
         "downloading": "جاري التنزيل... {{progress}}%",
-        "installing": "جاري التثبيت..."
+        "installing": "جاري التثبيت"
       }
     },
     "steps": {
