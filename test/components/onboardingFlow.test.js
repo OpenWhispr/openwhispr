@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { readFileSync } = require("node:fs");
 const test = require("node:test");
 
 const load = () => import("../../src/components/onboarding/flow.ts");
@@ -20,6 +21,30 @@ test("account flow includes the complete guided setup", async () => {
       "notes",
       "setup-choice",
     ]
+  );
+});
+
+test("macOS accessibility features stay deferred until the permissions screen", async () => {
+  const { shouldInitializeMacAccessibilityFeatures } = await load();
+
+  assert.equal(shouldInitializeMacAccessibilityFeatures("auth"), false);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("required-models"), false);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("permissions"), true);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("dictation-hotkey"), true);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("notes"), true);
+});
+
+test("onboarding permission checks use the resolved macOS feature gate", () => {
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+
+  assert.ok(
+    source.indexOf("const currentStepId = reconcileStepWithRoute") <
+      source.indexOf("const permissions = usePermissions")
+  );
+  assert.ok(
+    source.includes(
+      "macAccessibilityChecksEnabled: shouldInitializeMacAccessibilityFeatures(currentStepId)"
+    )
   );
 });
 

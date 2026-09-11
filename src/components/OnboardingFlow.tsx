@@ -53,6 +53,7 @@ import {
   reconcileStepWithRoute,
   resetOnboardingProgress,
   resolveEnterpriseWorkspaceForOnboarding,
+  shouldInitializeMacAccessibilityFeatures,
   shouldOfferOnboardingLogout,
   shouldSkipOnboardingSetupChoice,
   type OnboardingAuthDraft,
@@ -189,9 +190,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     [setSession]
   );
 
-  const permissions = usePermissions((dialog) =>
-    setPermissionAlert({ title: dialog.title, description: dialog.description })
-  );
   useClipboard((dialog) =>
     setPermissionAlert({ title: dialog.title, description: dialog.description })
   );
@@ -312,6 +310,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
   const compact = COMPACT_STEPS.has(currentStepId);
+  const permissions = usePermissions(
+    (dialog) => setPermissionAlert({ title: dialog.title, description: dialog.description }),
+    {
+      macAccessibilityChecksEnabled: shouldInitializeMacAccessibilityFeatures(currentStepId),
+    }
+  );
   const updateCurrentByokDraft = useCallback(
     (state: OnboardingByokDraft) => {
       if (currentStepId !== "byok-dictation" && currentStepId !== "byok-assistant") return;
@@ -375,6 +379,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   useEffect(() => {
     void window.electronAPI?.setOnboardingWindowMode?.(compact ? "compact" : "expanded");
   }, [compact]);
+
+  useEffect(() => {
+    if (platform === "darwin" && shouldInitializeMacAccessibilityFeatures(currentStepId)) {
+      window.electronAPI?.markMacAccessibilityFeaturesReady?.();
+    }
+  }, [currentStepId, platform]);
 
   useEffect(() => {
     setStageReady(false);

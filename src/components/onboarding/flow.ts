@@ -141,6 +141,11 @@ const STEP_ORDER: OnboardingStepId[] = [
 ];
 
 const KNOWN_STEPS = new Set<OnboardingStepId>(STEP_ORDER);
+const PERMISSIONS_STEP_INDEX = STEP_ORDER.indexOf("permissions");
+
+export function shouldInitializeMacAccessibilityFeatures(stepId: OnboardingStepId): boolean {
+  return STEP_ORDER.indexOf(stepId) >= PERMISSIONS_STEP_INDEX;
+}
 
 /**
  * Steps that render in the compact frame. That frame has no footer, so these
