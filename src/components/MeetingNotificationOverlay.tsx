@@ -175,8 +175,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
     presentation.action === "restart"
       ? () => void respondToAutoEnd("restart")
       : () => respond(presentation.action);
-  const secondaryActionKey =
-    presentation.action === "restart" ? presentation.secondaryActionKey : undefined;
+  const secondary = presentation.action === "restart" ? presentation.secondary : undefined;
 
   const isDragging = dragX !== null;
   const motionStyle: CSSProperties = isDragging
@@ -212,8 +211,8 @@ export default function MeetingNotificationOverlay(): ReactElement {
           body={body}
           startLabel={t(presentation.actionKey)}
           onStart={handleAction}
-          secondaryLabel={secondaryActionKey ? t(secondaryActionKey) : undefined}
-          onSecondary={secondaryActionKey ? () => void respondToAutoEnd("summary") : undefined}
+          secondaryLabel={secondary ? t(secondary.key) : undefined}
+          onSecondary={secondary ? () => void respondToAutoEnd(secondary.action) : undefined}
           onDismiss={presentation.dismissible ? dismiss : undefined}
           closeVisible={isHovered}
           allowTitleWrap={presentation.allowTitleWrap}

@@ -406,6 +406,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       if (data.folderId) {
         setActiveFolderId(data.folderId);
         initializeNotes(null, 50, data.folderId);
+      } else if (data.generateSummary) {
+        // The editor mounts only for a loaded note, and one that sits outside any
+        // folder belongs to no container this panel has fetched. Without this the
+        // summary request would arm and never reach an editor.
+        initializeNotes(null, 50, null);
       }
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
@@ -453,6 +458,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   // navigation queue so the panel is surfaced and the note opened first.
   const [summaryRequest, setSummaryRequest] = useState<{ noteId: number } | null>(null);
   const handleSummaryRequestHandled = useCallback(() => setSummaryRequest(null), []);
+  // A request the editor never consumed must not stay armed: once the user is
+  // looking at another note, or has left Notes altogether, generating a summary
+  // for the auto-ended one would be a surprise they no longer asked for. The
+  // drain sets the note and the view in the same batch, so this cannot cancel
+  // the request it was just handed.
+  useEffect(() => {
+    if (!summaryRequest) return;
+    if (activeNoteId !== summaryRequest.noteId || activeView !== "personal-notes") {
+      setSummaryRequest(null);
+    }
+  }, [activeNoteId, activeView, summaryRequest]);
 
   // The side-panel layout is shared by meeting mode and by a note opened in a
   // narrow window, so leaving it means different things in each case.

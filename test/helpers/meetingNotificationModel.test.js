@@ -33,12 +33,14 @@ test("auto-end presentation offers the AI summary only when the note can be summ
       12
     );
 
-  assert.equal(presentationFor(true).secondaryActionKey, "meetingNotification.autoEnd.summary");
-  assert.equal(presentationFor(true).secondaryAction, "summary");
+  assert.deepEqual(presentationFor(true).secondary, {
+    key: "meetingNotification.autoEnd.summary",
+    action: "summary",
+  });
   // The restart offer is unchanged by the addition.
   assert.equal(presentationFor(true).action, "restart");
-  assert.equal("secondaryActionKey" in presentationFor(false), false);
-  assert.equal("secondaryActionKey" in presentationFor(undefined), false);
+  assert.equal("secondary" in presentationFor(false), false);
+  assert.equal("secondary" in presentationFor(undefined), false);
 });
 
 test("auto-end presentation picks body copy by reason and defaults to mic-released", async () => {

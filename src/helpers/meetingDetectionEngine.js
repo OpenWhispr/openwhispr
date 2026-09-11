@@ -303,7 +303,7 @@ class MeetingDetectionEngine {
     // stopped — and additionally opens the note to generate its summary.
     if (action === "summary") {
       this._flushNotificationQueue();
-      void this._openNoteForSummary(pending.noteId ?? null);
+      void this._openNoteForSummary(pending.noteId);
       return true;
     }
 
