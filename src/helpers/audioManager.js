@@ -218,7 +218,9 @@ function resolveReasoningRoute(
     agentReachable: agent.reachable,
     // A translation recording never routes to the agent, so skip the scan.
     agentInvoked:
-      !translationRequested && !!agentName && detectAgentName(text, agentName, wakeWordLanguage),
+      !translationRequested &&
+      !!agentName &&
+      detectAgentName(text, agentName, wakeWordLanguage, settings.snippets),
     voiceAgentRequested,
     translationRequested,
     translationReachable: translation.reachable,
@@ -2622,12 +2624,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     { selectedContext, selectedText, deliverySessionId } = {}
   ) {
     this.assertAgentAllowedByPolicy();
+    const settings = getSettings();
     const command = this.voiceAgentRequested
       ? text
       : stripAgentAddress(
           text,
           agentName,
-          config?.wakeWordLanguage ?? resolveWakeWordLanguage(getSettings())
+          config?.wakeWordLanguage ?? resolveWakeWordLanguage(settings),
+          settings.snippets
         );
     const transcript = selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
     this._bankAssistantDirective(transcript, config, { selectedContext, deliverySessionId });

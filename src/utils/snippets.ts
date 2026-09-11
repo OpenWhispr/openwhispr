@@ -11,6 +11,13 @@ interface SnippetMatcher {
   replacements: Map<string, string>;
 }
 
+export interface SnippetTriggerRange {
+  /** Index of the trigger's first character. */
+  start: number;
+  /** Index one past the trigger's last character. */
+  end: number;
+}
+
 let cachedSnippets: Snippet[] | null = null;
 let cachedMatcher: SnippetMatcher | null = null;
 
@@ -50,19 +57,44 @@ function buildMatcher(snippets: Snippet[]): SnippetMatcher | null {
   return { regex, replacements };
 }
 
-/**
- * Replace every spoken trigger with its saved text in a single pass. The
- * matcher is memoized against the snippets array reference (the settings
- * store replaces the array on every change).
- */
-export function expandSnippets(text: string, snippets?: Snippet[] | null): string {
-  if (!text || !Array.isArray(snippets) || snippets.length === 0) return text;
+// Memoized against the snippets array reference (the settings store replaces
+// the array on every change).
+function getMatcher(snippets?: Snippet[] | null): SnippetMatcher | null {
+  if (!Array.isArray(snippets) || snippets.length === 0) return null;
   if (snippets !== cachedSnippets) {
     cachedSnippets = snippets;
     cachedMatcher = buildMatcher(snippets);
   }
-  if (!cachedMatcher) return text;
-  const { regex, replacements } = cachedMatcher;
+  return cachedMatcher;
+}
+
+/**
+ * Character ranges of every trigger occurrence, matched against `text` exactly
+ * as given so the offsets index that same string. Wake-word detection uses
+ * these to ignore an agent name that only appears because it opens a trigger
+ * the user chose, such as "openwhispr review" (see `agentDetection`).
+ */
+export function findSnippetTriggerRanges(
+  text: string,
+  snippets?: Snippet[] | null
+): SnippetTriggerRange[] {
+  if (!text) return [];
+  const matcher = getMatcher(snippets);
+  if (!matcher) return [];
+  return [...text.matchAll(matcher.regex)].map((match) => ({
+    start: match.index,
+    end: match.index + match[0].length,
+  }));
+}
+
+/**
+ * Replace every spoken trigger with its saved text in a single pass.
+ */
+export function expandSnippets(text: string, snippets?: Snippet[] | null): string {
+  if (!text) return text;
+  const matcher = getMatcher(snippets);
+  if (!matcher) return text;
+  const { regex, replacements } = matcher;
   // NFC so a decomposed "I" + U+0307 in the transcript recombines into İ.
   return text.normalize("NFC").replace(regex, (match) => {
     const folded = foldCapitalIDot(match);

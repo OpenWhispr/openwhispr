@@ -1,4 +1,9 @@
 import { getBaseLanguageCode } from "../utils/languageSupport";
+import {
+  findSnippetTriggerRanges,
+  type Snippet,
+  type SnippetTriggerRange,
+} from "../utils/snippets";
 
 function levenshteinDistance(a: string, b: string): number {
   const m = a.length;
@@ -109,6 +114,12 @@ function isAddressedAt(
   return /[.!?…]["')\]]*$/.test(rawWords[index - 1]);
 }
 
+// A snippet trigger is a phrase the user reserved for expansion, so a name
+// inside one is the trigger being spoken, not the agent being addressed.
+function overlapsTrigger(start: number, end: number, ranges: SnippetTriggerRange[]): boolean {
+  return ranges.some((range) => start < range.end && end > range.start);
+}
+
 interface AgentAddress {
   /** Index of the first raw word to drop (the cue, when one precedes the name). */
   start: number;
@@ -121,7 +132,8 @@ interface AgentAddress {
 function locateAgentAddress(
   transcript: string,
   agentName: string,
-  language?: string
+  language?: string,
+  snippets?: Snippet[] | null
 ): AgentAddress | null {
   const name = agentName.trim();
   if (!name || name.length < 2) return null;
@@ -133,8 +145,13 @@ function locateAgentAddress(
   const source = normalizeCjk ? normalizeCjkTranscript(transcript, detectionName) : transcript;
 
   const nameLower = detectionName.toLowerCase().replace(/\s+/g, "");
-  const rawWords = source.split(/\s+/).filter(Boolean);
+  // Tokenize with offsets so candidates can be tested against trigger ranges,
+  // which index the same `source` string.
+  const tokens = [...source.matchAll(/\S+/g)];
+  const rawWords = tokens.map((token) => token[0]);
+  const wordStarts = tokens.map((token) => token.index);
   const words = rawWords.map((w) => w.replace(TOKEN_PUNCTUATION_RE, "").toLowerCase());
+  const triggerRanges = findSnippetTriggerRanges(source, snippets);
 
   const maxEdits = maxEditsForLength(nameLower.length);
   // STT may split the name across tokens ("open whispr") or mishear it, so
@@ -149,6 +166,11 @@ function locateAgentAddress(
       if (Math.abs(joined.length - nameLower.length) > maxEdits) continue;
       if (
         levenshteinDistance(joined, nameLower) <= maxEdits &&
+        !overlapsTrigger(
+          wordStarts[i],
+          wordStarts[i + span] + rawWords[i + span].length,
+          triggerRanges
+        ) &&
         isAddressedAt(i, words, rawWords, localizedCues)
       ) {
         const cueBefore =
@@ -165,8 +187,13 @@ function locateAgentAddress(
   return null;
 }
 
-export function detectAgentName(transcript: string, agentName: string, language?: string): boolean {
-  return locateAgentAddress(transcript, agentName, language) !== null;
+export function detectAgentName(
+  transcript: string,
+  agentName: string,
+  language?: string,
+  snippets?: Snippet[] | null
+): boolean {
+  return locateAgentAddress(transcript, agentName, language, snippets) !== null;
 }
 
 /**
@@ -178,9 +205,10 @@ export function detectAgentName(transcript: string, agentName: string, language?
 export function stripAgentAddress(
   transcript: string,
   agentName: string,
-  language?: string
+  language?: string,
+  snippets?: Snippet[] | null
 ): string {
-  const address = locateAgentAddress(transcript, agentName, language);
+  const address = locateAgentAddress(transcript, agentName, language, snippets);
   if (!address) return transcript;
   const { rawWords, start, end } = address;
   const remaining = [...rawWords.slice(0, start), ...rawWords.slice(end)].join(" ").trim();

@@ -253,3 +253,83 @@ test("every locale's advertised wake phrase triggers detection in its language",
     );
   }
 });
+
+// A snippet trigger is a phrase the snippet feature owns. When it happens to
+// start with the agent name ("openwhispr review"), the wake-word scan used to
+// read it as an address and hijack an ordinary dictation into the agent.
+test("a name inside a snippet trigger is not an address", async () => {
+  const { detectAgentName } = await load();
+  const snippets = [{ trigger: "openwhispr review", replacement: "Review the PR" }];
+
+  assert.equal(
+    detectAgentName("openwhispr review this PR", "OpenWhispr", undefined, snippets),
+    false
+  );
+  assert.equal(
+    detectAgentName("Hey openwhispr review this PR", "OpenWhispr", undefined, snippets),
+    false
+  );
+  assert.equal(
+    detectAgentName("That's done. openwhispr review this PR", "OpenWhispr", undefined, snippets),
+    false
+  );
+});
+
+test("a real address still counts when the dictation also uses a snippet trigger", async () => {
+  const { detectAgentName } = await load();
+  const snippets = [{ trigger: "openwhispr review", replacement: "Review the PR" }];
+
+  assert.equal(
+    detectAgentName(
+      "Hey OpenWhispr, run openwhispr review on PR 5",
+      "OpenWhispr",
+      undefined,
+      snippets
+    ),
+    true
+  );
+});
+
+test("stripAgentAddress removes the real address, not the snippet trigger", async () => {
+  const { stripAgentAddress } = await load();
+  const snippets = [{ trigger: "openwhispr review", replacement: "Review the PR" }];
+
+  assert.equal(
+    stripAgentAddress(
+      "openwhispr review. OpenWhispr summarize it",
+      "OpenWhispr",
+      undefined,
+      snippets
+    ),
+    "openwhispr review. summarize it"
+  );
+  assert.equal(
+    stripAgentAddress("openwhispr review this PR", "OpenWhispr", undefined, snippets),
+    "openwhispr review this PR",
+    "no address left once the trigger is excluded"
+  );
+});
+
+test("characterization: a trigger equal to the agent name makes the wake word unreachable", async () => {
+  const { detectAgentName } = await load();
+  // Excluding trigger spans has an unavoidable cost: a snippet whose trigger is
+  // the bare agent name shadows the wake word everywhere. Expanding the snippet
+  // the user explicitly configured is the better of the two, but flip this
+  // deliberately (e.g. by warning about the collision when a snippet is saved).
+  const snippets = [{ trigger: "Jarvis", replacement: "J.A.R.V.I.S." }];
+
+  assert.equal(detectAgentName("Jarvis take a note", "Jarvis", undefined, snippets), false);
+  assert.equal(detectAgentName("Hey Jarvis take a note", "Jarvis", undefined, snippets), false);
+});
+
+test("characterization: a decomposed trigger falls back to firing the agent", async () => {
+  const { detectAgentName } = await load();
+  // Range-finding matches the transcript exactly as given, because the offsets
+  // have to index the string the locator tokenizes; expandSnippets normalizes to
+  // NFC first. A decomposed trigger therefore stays invisible here and keeps the
+  // pre-fix behavior — the safe direction, since it never suppresses a real
+  // wake word.
+  const snippets = [{ trigger: "İmza", replacement: "Best regards" }];
+
+  assert.equal(detectAgentName("İmza send it".normalize("NFD"), "İmza", undefined, snippets), true);
+});

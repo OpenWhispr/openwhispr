@@ -1,7 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { expandSnippets, getDictionaryHintWords } = require("../../src/utils/snippets.ts");
+const {
+  expandSnippets,
+  findSnippetTriggerRanges,
+  getDictionaryHintWords,
+} = require("../../src/utils/snippets.ts");
 
 test("expands a trigger containing Turkish capital İ", () => {
   const snippets = [{ trigger: "İmza", replacement: "Best regards,\nUmut" }];
@@ -128,4 +132,17 @@ test("getDictionaryHintWords combines dictionary words and snippet triggers safe
     "my cal",
     "zoom link",
   ]);
+});
+
+test("findSnippetTriggerRanges reports where each trigger occurs", () => {
+  const snippets = [{ trigger: "openwhispr review", replacement: "Review the PR" }];
+
+  assert.deepEqual(findSnippetTriggerRanges("openwhispr review this PR", snippets), [
+    { start: 0, end: 17 },
+  ]);
+  assert.deepEqual(findSnippetTriggerRanges("please openwhispr review it", snippets), [
+    { start: 7, end: 24 },
+  ]);
+  assert.deepEqual(findSnippetTriggerRanges("nothing to expand here", snippets), []);
+  assert.deepEqual(findSnippetTriggerRanges("openwhispr review", null), []);
 });
