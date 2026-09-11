@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Les raccourcis avec les boutons de la souris ne sont actuellement pris en charge que sur macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" est déjà enregistré par une autre application.",
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
+      "holdNeedsReleaseKey": "Maintenir pour parler nécessite une touche dont macOS détecte le relâchement : Globe, une touche droite comme Option droite, ou un raccourci avec modificateur. Appuyer fonctionne avec n’importe quelle touche.",
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
       "updateFailedCheckFormat": "Impossible de mettre à jour le raccourci vers \"{{hotkey}}\". Vérifiez que le format est valide.",
       "trySuggestions": "Essayez : {{suggestions}}",
@@ -211,11 +212,11 @@
     "rehaul": {
       "permissions": {
         "title": "Configurez OpenWhispr en 3 minutes",
-        "microphoneDescription": "Transforme la voix en texte.",
-        "accessibilityDescription": "Colle le texte dans votre application active.",
+        "microphoneDescription": "Transforme ce que vous dites en texte. Actif seulement pendant l’enregistrement.",
+        "accessibilityDescription": "Colle le texte dans l’application que vous utilisez.",
         "systemAudioTitle": "Audio Système",
-        "systemAudioDescription": "Nécessaire pour capturer l’audio dans les notes de réunion.",
-        "screenContextDescription": "Partagez le contexte de l’écran avec l’assistant vocal.",
+        "systemAudioDescription": "Enregistre vos interlocuteurs pour les notes de réunion. Actif seulement pendant l’enregistrement.",
+        "screenContextDescription": "Laisse votre assistant vocal voir votre écran quand vous le sollicitez. Jamais enregistré.",
         "enable": "Activer",
         "enabled": "Activé"
       },
@@ -226,21 +227,21 @@
         "description": "Sélectionnez toutes les langues concernées. Cela aide OpenWhispr à reconnaître plus précisément les changements de langue."
       },
       "dictationHotkey": {
-        "title": "Configurez votre raccourci clavier",
-        "titleLineOne": "Configurez votre",
-        "titleLineTwo": "raccourci clavier",
-        "description": "Choisissez un raccourci clavier pour démarrer et arrêter la dictée depuis n’importe où."
+        "title": "Choisissez votre raccourci de dictée",
+        "titleLineOne": "Choisissez votre",
+        "titleLineTwo": "raccourci de dictée",
+        "description": "Appuyez dessus quand vous voulez parler plutôt que taper. Fonctionne dans toutes les applications.",
+        "activation": "Appuyer ou maintenir ?"
       },
       "assistantHotkey": {
         "title": "Configurer OpenWhispr Assistant",
         "titleLineOne": "Configurez",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Formulez une demande et OpenWhispr Assistant rédige le résultat pour vous."
+        "description": "Formulez une demande. OpenWhispr Assistant rédige le résultat pour vous."
       },
       "hotkey": {
-        "capture": "Appuyez sur les touches que vous souhaitez utiliser",
+        "capture": "Appuyez sur la touche que vous souhaitez utiliser",
         "chooseAnother": "Choisir un autre raccourci",
-        "confirmAgain": "Appuyez à nouveau sur {{hotkey}} pour confirmer",
         "inUse": "Ce raccourci est déjà utilisé. Choisissez-en un autre.",
         "holding": "Maintenez la touche ou appuyez sur une autre"
       },
@@ -249,21 +250,39 @@
         "titleLineOne": "Essayez votre",
         "titleLineTwo": "première dictée",
         "description": "Appuyez sur {{hotkey}} et parlez. OpenWhispr transformera votre voix en texte.",
-        "founder": "Bonjour, je suis Gabe, fondateur d’OpenWhispr",
-        "prompt": "Essayez de dire : « Je teste la dictée pour la première fois. »",
-        "placeholder": "Votre dictée apparaîtra ici…"
+        "founder": "Bonjour, je suis Gabe, le fondateur. Merci d’essayer OpenWhispr !",
+        "prompt": "Cliquez dans le champ ci-dessous, appuyez sur votre raccourci et dites-moi : qu’aimeriez-vous qu’OpenWhispr fasse pour vous ?",
+        "placeholder": "Cliquez ici, puis appuyez sur votre raccourci. OpenWhispr écrit dans n’importe quel champ de texte."
       },
       "assistantDemo": {
         "title": "Découvrez OpenWhispr Assistant",
         "titleLineOne": "Découvrez",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Formulez une demande et OpenWhispr Assistant rédige le résultat pour vous.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "à John Doe",
-        "email": "Salut ! Un café la semaine prochaine ? Dis-moi ce qui t’arrange.",
-        "prompt": "Réponds que mardi à 15 h me convient. Envoie une invitation.",
-        "response": "Bonjour Eren,\n\nJ’aimerais beaucoup qu’on se retrouve. Mardi à 15 h me convient bien. Si cela te va, je t’enverrai une invitation d’agenda.\nAu plaisir,\nJohn"
+        "email": {
+          "subject": "Un café la semaine prochaine ?",
+          "senderName": "Maria Alvarez",
+          "recipient": "à moi",
+          "body": "Bonjour ! Ravie de vous avoir rencontré au meetup hier. Seriez-vous disponible pour un café rapide la semaine prochaine ? Dites-moi ce qui vous convient.\n\nMaria",
+          "reply": "Répondre"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Appuyez sur {{hotkey}} et demandez une réponse. L’assistant lit l’e-mail affiché à l’écran et cherche vos créneaux libres dans votre agenda.",
+            "prompt": "Essayez de dire : « Réponds en proposant quelques créneaux libres la semaine prochaine. »"
+          },
+          "screen": {
+            "description": "Appuyez sur {{hotkey}} et demandez une réponse. L’assistant lit l’e-mail directement sur votre écran.",
+            "prompt": "Essayez de dire : « Réponds que ce serait avec plaisir et propose mercredi après-midi. »"
+          },
+          "calendar": {
+            "description": "Appuyez sur {{hotkey}} et demandez une réponse. L’assistant cherche vos créneaux libres dans votre agenda et rédige la réponse.",
+            "prompt": "Essayez de dire : « Réponds à Maria en proposant quelques créneaux libres la semaine prochaine. »"
+          },
+          "general": {
+            "description": "Appuyez sur {{hotkey}} et demandez une réponse. L’assistant la rédige pour vous.",
+            "prompt": "Essayez de dire : « Réponds à Maria que ce serait avec plaisir et propose mercredi après-midi. »"
+          }
+        }
       },
       "demo": {
         "listening": "Écoute…",
@@ -1092,7 +1111,8 @@
       "welcomeBack": "Bon retour"
     },
     "signedIn": {
-      "welcomeBack": "Bon retour"
+      "welcomeBack": "Bon retour",
+      "notYou": "Ce n’est pas vous ? Se déconnecter"
     },
     "sso": {
       "continueWithSSO": "Se connecter avec le SSO",

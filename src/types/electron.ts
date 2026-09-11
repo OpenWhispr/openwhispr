@@ -1055,13 +1055,23 @@ export interface ConversationCreateAckResult {
 }
 
 export type OnboardingDemoKind = "dictation" | "assistant";
-export type OnboardingDemoStatus = "listening" | "processing" | "partial" | "success" | "error";
+/**
+ * "partial" streams the transcript, "processing" carries the final transcript,
+ * "replying" streams the assistant demo's reply, and "level" mirrors the
+ * microphone level while listening.
+ */
+export type OnboardingDemoStatus =
+  "listening" | "level" | "processing" | "partial" | "replying" | "success" | "error";
 export interface OnboardingDemoEvent {
   demoId: string;
   kind: OnboardingDemoKind;
   status: OnboardingDemoStatus;
   text?: string;
   message?: string;
+  /** Tool the assistant is running while it replies (a tool registry name). */
+  tool?: string;
+  /** Microphone input level, 0..1, on "level" events. */
+  level?: number;
 }
 
 export interface ReferralItem {

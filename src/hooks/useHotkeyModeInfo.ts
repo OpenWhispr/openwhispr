@@ -12,6 +12,8 @@ export interface HotkeyModeInfo {
   supportsPushToTalk: boolean;
   pushToTalkUnavailableReason: string | null;
   hyprlandConfigStatus: HyprlandConfigStatus | null;
+  /** False until main has answered; the defaults above are optimistic placeholders. */
+  loaded: boolean;
 }
 
 const DEFAULT_INFO: HotkeyModeInfo = {
@@ -20,6 +22,7 @@ const DEFAULT_INFO: HotkeyModeInfo = {
   supportsPushToTalk: true,
   pushToTalkUnavailableReason: null,
   hyprlandConfigStatus: null,
+  loaded: false,
 };
 
 /**
@@ -46,6 +49,7 @@ export function useHotkeyModeInfo(scope: string, hotkey?: string): HotkeyModeInf
           supportsPushToTalk: info.supportsPushToTalk,
           pushToTalkUnavailableReason: info.pushToTalkUnavailableReason,
           hyprlandConfigStatus,
+          loaded: true,
         });
       } catch (error) {
         logger.error("Failed to check hotkey mode", { error }, scope);

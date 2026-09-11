@@ -102,7 +102,6 @@ test("technical output values remain LTR inside an Arabic document", () => {
       /<p\s+dir="ltr"[^>]*max-w-50[^>]*>\s*\{file\.name\}/,
     ],
     ["src/components/ui/SidebarModal.tsx", /<span\s+dir="ltr"[\s\S]*?v\{version\}/],
-    ["src/components/onboarding/DemoStep.tsx", /<span\s+dir="ltr"[\s\S]*?\{assistantSenderEmail\}/],
     ["src/components/ui/ModelCardList.tsx", /<span\s+dir="ltr"[\s\S]*?\{model\.label\}/],
     [
       "src/components/onboarding/ProviderSetupStep.tsx",

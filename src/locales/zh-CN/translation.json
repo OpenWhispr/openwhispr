@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
+      "holdNeedsReleaseKey": "按住说话需要 macOS 能检测到松开的按键：Globe、右侧 Option 之类的右侧按键，或带修饰键的快捷键。点按可用于任何按键。",
       "registrationFailed": "无法注册 \"{{hotkey}}\"，该快捷键可能已被其他应用占用。",
       "updateFailedCheckFormat": "无法将快捷键更新为 \"{{hotkey}}\"，请检查格式是否有效。",
       "trySuggestions": "建议尝试：{{suggestions}}",
@@ -211,11 +212,11 @@
     "rehaul": {
       "permissions": {
         "title": "3 分钟完成 OpenWhispr 设置",
-        "microphoneDescription": "将语音转换为文本。",
-        "accessibilityDescription": "将文本粘贴到当前应用。",
+        "microphoneDescription": "把你说的话变成文字。仅在录音时开启。",
+        "accessibilityDescription": "把文字粘贴到你正在使用的应用里。",
         "systemAudioTitle": "系统音频",
-        "systemAudioDescription": "在会议笔记中捕获音频时必需。",
-        "screenContextDescription": "与语音助手共享屏幕上下文。",
+        "systemAudioDescription": "为会议笔记录下通话中的其他人。仅在录音时开启。",
+        "screenContextDescription": "当你向语音助手提问时，让它看到你屏幕上的内容。绝不保存。",
         "enable": "启用",
         "enabled": "已启用"
       },
@@ -226,21 +227,21 @@
         "description": "选择所有适用的语言。这有助于 OpenWhispr 更准确地识别语言切换。"
       },
       "dictationHotkey": {
-        "title": "设置键盘快捷键",
-        "titleLineOne": "设置你的",
-        "titleLineTwo": "键盘快捷键",
-        "description": "选择一个键盘快捷键，随时开始和停止听写。"
+        "title": "选择你的听写快捷键",
+        "titleLineOne": "选择你的",
+        "titleLineTwo": "听写快捷键",
+        "description": "想说话代替打字时按下它。在任何应用中都能用。",
+        "activation": "点按还是按住？"
       },
       "assistantHotkey": {
         "title": "设置 OpenWhispr Assistant",
         "titleLineOne": "设置",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "说出你的需求，OpenWhispr Assistant 就会为你写好结果。"
+        "description": "说出你的请求，OpenWhispr Assistant 会为你写好结果。"
       },
       "hotkey": {
         "capture": "请按下你想使用的按键",
         "chooseAnother": "选择其他快捷键",
-        "confirmAgain": "再次按下 {{hotkey}} 以确认",
         "inUse": "该快捷键已被使用。请选择其他快捷键。",
         "holding": "继续按住，或按下另一个键"
       },
@@ -249,21 +250,39 @@
         "titleLineOne": "试试你的",
         "titleLineTwo": "第一次听写",
         "description": "按 {{hotkey}} 开始说话，OpenWhispr 会把你的语音转成文字。",
-        "founder": "你好，我是 Gabe，OpenWhispr 的创始人",
-        "prompt": "试着说：“我第一次测试听写功能。”",
-        "placeholder": "你的听写结果会显示在这里…"
+        "founder": "你好，我是创始人 Gabe。感谢你试用 OpenWhispr！",
+        "prompt": "点击下面的输入框，按下快捷键，然后告诉我：你希望 OpenWhispr 为你做些什么？",
+        "placeholder": "点击这里，然后按下快捷键。OpenWhispr 可以在任何文本框中输入。"
       },
       "assistantDemo": {
         "title": "认识 OpenWhispr Assistant",
         "titleLineOne": "认识一下",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "说出你的需求，OpenWhispr Assistant 就会为你写好结果。",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "发送给 John Doe",
-        "email": "嗨！下周一起喝杯咖啡吗？告诉我你什么时候方便。",
-        "prompt": "回复说周二下午 3 点可以。发送一个邀请。",
-        "response": "你好，Eren：\n\n很想和你聊聊近况。周二下午 3 点对我来说很合适。如果你方便，我会发送日历邀请。\n期待见面，\nJohn"
+        "email": {
+          "subject": "下周喝杯咖啡？",
+          "senderName": "Maria Alvarez",
+          "recipient": "发送给我",
+          "body": "你好！很高兴昨天在聚会上认识你。下周有空一起喝杯咖啡吗？告诉我你什么时间方便。\n\nMaria",
+          "reply": "回复"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "按 {{hotkey}} 并请它回复。助手会读取屏幕上的邮件，并在你的日历中查找空闲时间。",
+            "prompt": "试着说：“回复并推荐几个我下周有空的时间。”"
+          },
+          "screen": {
+            "description": "按 {{hotkey}} 并请它回复。助手会直接从你的屏幕读取这封邮件。",
+            "prompt": "试着说：“回复说我很愿意，并建议周三下午。”"
+          },
+          "calendar": {
+            "description": "按 {{hotkey}} 并请它回复。助手会在你的日历中查找空闲时间并写好回复。",
+            "prompt": "试着说：“回复 Maria 并推荐几个我下周有空的时间。”"
+          },
+          "general": {
+            "description": "按 {{hotkey}} 并请它回复。助手会替你写好。",
+            "prompt": "试着说：“回复 Maria 说我很愿意，并建议周三下午。”"
+          }
+        }
       },
       "demo": {
         "listening": "正在聆听…",
@@ -1092,7 +1111,8 @@
       "welcomeBack": "欢迎回来"
     },
     "signedIn": {
-      "welcomeBack": "欢迎回来"
+      "welcomeBack": "欢迎回来",
+      "notYou": "不是你？退出登录"
     },
     "sso": {
       "continueWithSSO": "使用 SSO 登录",

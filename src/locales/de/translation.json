@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Maustasten-Hotkeys werden derzeit nur auf macOS unterstützt.",
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
+      "holdNeedsReleaseKey": "Halten zum Sprechen braucht eine Taste, deren Loslassen macOS erkennt: Globe, eine rechte Taste wie Rechte Option oder ein Kürzel mit Modifikator. Tippen funktioniert mit jeder Taste.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
       "updateFailedCheckFormat": "Hotkey konnte nicht auf \"{{hotkey}}\" aktualisiert werden. Prüfen Sie, ob das Format gültig ist.",
       "trySuggestions": "Versuchen Sie: {{suggestions}}",
@@ -211,11 +212,11 @@
     "rehaul": {
       "permissions": {
         "title": "OpenWhispr in 3 Minuten einrichten",
-        "microphoneDescription": "Verwandelt Sprache in Text.",
-        "accessibilityDescription": "Fügt Text in deine aktive App ein.",
+        "microphoneDescription": "Macht aus dem, was Sie sagen, Text. Nur während der Aufnahme aktiv.",
+        "accessibilityDescription": "Fügt den Text in die App ein, die Sie gerade nutzen.",
         "systemAudioTitle": "Systemaudio",
-        "systemAudioDescription": "Erforderlich, um Audio für Besprechungsnotizen aufzunehmen.",
-        "screenContextDescription": "Bildschirmkontext mit dem Sprachassistenten teilen.",
+        "systemAudioDescription": "Nimmt die anderen in Ihren Gesprächen für Besprechungsnotizen auf. Nur während der Aufnahme aktiv.",
+        "screenContextDescription": "Lässt Ihren Sprachassistenten Ihren Bildschirm sehen, wenn Sie fragen. Nie gespeichert.",
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },
@@ -226,21 +227,21 @@
         "description": "Wählen Sie alle zutreffenden aus. Das hilft OpenWhispr, Sprachwechsel genauer zu erkennen."
       },
       "dictationHotkey": {
-        "title": "Richten Sie Ihr Tastenkürzel ein",
-        "titleLineOne": "Tastenkürzel",
-        "titleLineTwo": "einrichten",
-        "description": "Wählen Sie ein Tastenkürzel, um das Diktieren von überall zu starten und zu stoppen."
+        "title": "Wählen Sie Ihr Diktier-Tastenkürzel",
+        "titleLineOne": "Wählen Sie Ihr",
+        "titleLineTwo": "Diktier-Tastenkürzel",
+        "description": "Drücken Sie es, wann immer Sie sprechen statt tippen möchten. Funktioniert in jeder App.",
+        "activation": "Tippen oder halten?"
       },
       "assistantHotkey": {
         "title": "OpenWhispr Assistant einrichten",
         "titleLineOne": "Einrichten:",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Sprechen Sie eine Anfrage aus, und OpenWhispr Assistant schreibt das Ergebnis für Sie."
+        "description": "Sprechen Sie eine Anfrage aus. OpenWhispr Assistant schreibt das Ergebnis für Sie."
       },
       "hotkey": {
-        "capture": "Drücken Sie die Tasten, die Sie verwenden möchten",
+        "capture": "Drücken Sie die Taste, die Sie verwenden möchten",
         "chooseAnother": "Anderes Tastenkürzel wählen",
-        "confirmAgain": "Drücke {{hotkey}} erneut zum Bestätigen",
         "inUse": "Dieses Tastenkürzel wird bereits verwendet. Wähle ein anderes.",
         "holding": "Weiter halten oder eine andere Taste drücken"
       },
@@ -249,21 +250,39 @@
         "titleLineOne": "Probieren Sie Ihr",
         "titleLineTwo": "erstes Diktat aus",
         "description": "Drücken Sie {{hotkey}} und sprechen Sie los. OpenWhispr wandelt Ihre Stimme in Text um.",
-        "founder": "Hallo, ich bin Gabe, Gründer von OpenWhispr",
-        "prompt": "Sagen Sie zum Beispiel: „Ich teste das Diktieren zum ersten Mal.“",
-        "placeholder": "Ihr Diktat erscheint hier…"
+        "founder": "Hallo, ich bin Gabe, der Gründer. Danke, dass Sie OpenWhispr ausprobieren!",
+        "prompt": "Klicken Sie in das Feld unten, drücken Sie Ihr Tastenkürzel und sagen Sie mir: Was soll OpenWhispr für Sie tun?",
+        "placeholder": "Klicken Sie hier und drücken Sie dann Ihr Tastenkürzel. OpenWhispr schreibt in jedes Textfeld."
       },
       "assistantDemo": {
         "title": "OpenWhispr Assistant kennenlernen",
         "titleLineOne": "Das ist",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Sprechen Sie eine Anfrage aus, und OpenWhispr Assistant schreibt das Ergebnis für Sie.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "an John Doe",
-        "email": "Hey! Hast du nächste Woche Zeit für einen Kaffee? Sag mir, was dir passt.",
-        "prompt": "Antworte, dass Dienstag um 15 Uhr passt. Sende eine Einladung.",
-        "response": "Hallo Eren,\n\nich würde mich gern austauschen. Dienstag um 15 Uhr passt mir gut. Wenn es dir passt, schicke ich dir eine Kalendereinladung.\nIch freue mich darauf,\nJohn"
+        "email": {
+          "subject": "Kaffee nächste Woche?",
+          "senderName": "Maria Alvarez",
+          "recipient": "an mich",
+          "body": "Hallo! Es war schön, dich gestern beim Meetup kennenzulernen. Hättest du nächste Woche Zeit für einen kurzen Kaffee? Sag mir einfach, was dir passt.\n\nMaria",
+          "reply": "Antworten"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Drücken Sie {{hotkey}} und bitten Sie um eine Antwort. Der Assistent liest die E-Mail auf Ihrem Bildschirm und prüft Ihren Kalender auf freie Zeiten.",
+            "prompt": "Sagen Sie zum Beispiel: „Antworte und schlage ein paar freie Termine nächste Woche vor.“"
+          },
+          "screen": {
+            "description": "Drücken Sie {{hotkey}} und bitten Sie um eine Antwort. Der Assistent liest die E-Mail direkt von Ihrem Bildschirm.",
+            "prompt": "Sagen Sie zum Beispiel: „Antworte, dass ich gern komme, und schlage Mittwochnachmittag vor.“"
+          },
+          "calendar": {
+            "description": "Drücken Sie {{hotkey}} und bitten Sie um eine Antwort. Der Assistent prüft Ihren Kalender auf freie Zeiten und schreibt die Antwort.",
+            "prompt": "Sagen Sie zum Beispiel: „Antworte Maria und schlage ein paar freie Termine nächste Woche vor.“"
+          },
+          "general": {
+            "description": "Drücken Sie {{hotkey}} und bitten Sie um eine Antwort. Der Assistent schreibt sie für Sie.",
+            "prompt": "Sagen Sie zum Beispiel: „Antworte Maria, dass ich gern komme, und schlage Mittwochnachmittag vor.“"
+          }
+        }
       },
       "demo": {
         "listening": "Höre zu…",
@@ -1092,7 +1111,8 @@
       "welcomeBack": "Willkommen zurück"
     },
     "signedIn": {
-      "welcomeBack": "Willkommen zurück"
+      "welcomeBack": "Willkommen zurück",
+      "notYou": "Nicht Sie? Abmelden"
     },
     "sso": {
       "continueWithSSO": "Mit SSO anmelden",

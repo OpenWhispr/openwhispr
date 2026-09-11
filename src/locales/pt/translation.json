@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Atalhos com botões do mouse atualmente são compatíveis apenas no macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" já está registrada por outro aplicativo.",
       "osReserved": "\"{{hotkey}}\" pode estar reservada pelo seu ambiente de desktop.",
+      "holdNeedsReleaseKey": "Segurar para falar precisa de uma tecla cuja soltura o macOS detecte: Globo, uma tecla direita como Option direita ou um atalho com modificador. Tocar funciona com qualquer tecla.",
       "registrationFailed": "Não foi possível registrar \"{{hotkey}}\". Pode estar em uso por outro aplicativo.",
       "updateFailedCheckFormat": "Não foi possível atualizar o atalho para \"{{hotkey}}\". Verifique se o formato é válido.",
       "trySuggestions": "Tente: {{suggestions}}",
@@ -190,11 +191,11 @@
     "rehaul": {
       "permissions": {
         "title": "Configure o OpenWhispr em 3 minutos",
-        "microphoneDescription": "Transforma voz em texto.",
-        "accessibilityDescription": "Cola o texto no app ativo.",
+        "microphoneDescription": "Transforma o que você diz em texto. Só fica ativo enquanto você grava.",
+        "accessibilityDescription": "Cola o texto no app que você está usando.",
         "systemAudioTitle": "Áudio do Sistema",
-        "systemAudioDescription": "Necessário para capturar áudio nas notas de reunião.",
-        "screenContextDescription": "Compartilhe o contexto da tela com o assistente de voz.",
+        "systemAudioDescription": "Grava as outras pessoas das suas chamadas para as notas de reunião. Só enquanto você grava.",
+        "screenContextDescription": "Deixa seu assistente de voz ver sua tela quando você pede algo. Nunca é salvo.",
         "enable": "Ativar",
         "enabled": "Ativado"
       },
@@ -205,21 +206,21 @@
         "description": "Selecione todas as opções aplicáveis. Isso ajuda o OpenWhispr a reconhecer trocas de idioma com mais precisão."
       },
       "dictationHotkey": {
-        "title": "Configure seu atalho de teclado",
-        "titleLineOne": "Configure seu",
-        "titleLineTwo": "atalho de teclado",
-        "description": "Escolha um atalho de teclado para iniciar e parar o ditado de qualquer lugar."
+        "title": "Escolha seu atalho de ditado",
+        "titleLineOne": "Escolha seu",
+        "titleLineTwo": "atalho de ditado",
+        "description": "Pressione-o sempre que quiser falar em vez de digitar. Funciona em qualquer app.",
+        "activation": "Tocar ou segurar?"
       },
       "assistantHotkey": {
         "title": "Configure o OpenWhispr Assistant",
         "titleLineOne": "Configure o",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Fale um pedido e o OpenWhispr Assistant escreve o resultado para você."
+        "description": "Fale um pedido. O OpenWhispr Assistant escreve o resultado para você."
       },
       "hotkey": {
-        "capture": "Pressione as teclas que você quer usar",
+        "capture": "Pressione a tecla que você quer usar",
         "chooseAnother": "Escolher outro atalho",
-        "confirmAgain": "Pressione {{hotkey}} novamente para confirmar",
         "inUse": "Esse atalho já está em uso. Escolha outro.",
         "holding": "Continue pressionando ou pressione outra tecla"
       },
@@ -228,21 +229,39 @@
         "titleLineOne": "Experimente seu",
         "titleLineTwo": "primeiro ditado",
         "description": "Pressione {{hotkey}} e comece a falar. O OpenWhispr vai transformar sua voz em texto.",
-        "founder": "Olá, sou o Gabe, fundador do OpenWhispr",
-        "prompt": "Tente dizer: “Estou testando o ditado pela primeira vez.”",
-        "placeholder": "Seu ditado vai aparecer aqui…"
+        "founder": "Oi, eu sou o Gabe, o fundador. Obrigado por experimentar o OpenWhispr!",
+        "prompt": "Clique na caixa abaixo, pressione seu atalho e me conte: o que você adoraria que o OpenWhispr fizesse por você?",
+        "placeholder": "Clique aqui e depois pressione seu atalho. O OpenWhispr digita em qualquer caixa de texto."
       },
       "assistantDemo": {
         "title": "Conheça o OpenWhispr Assistant",
         "titleLineOne": "Conheça o",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Fale um pedido e o OpenWhispr Assistant escreve o resultado para você.",
-        "senderName": "Eren Lauren",
-        "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "para John Doe",
-        "email": "Oi! Vamos tomar um café na semana que vem? Me diga o que funciona para você.",
-        "prompt": "Responda que terça às 15h funciona. Envie um convite.",
-        "response": "Olá Eren,\n\nAdoraria colocar o papo em dia. Terça-feira às 15h funciona bem para mim. Se estiver bom para você, envio um convite de calendário.\nAté breve,\nJohn"
+        "email": {
+          "subject": "Café na semana que vem?",
+          "senderName": "Maria Alvarez",
+          "recipient": "para mim",
+          "body": "Oi! Foi ótimo te conhecer no meetup ontem. Que tal um café rápido na semana que vem? Me diz o que funciona para você.\n\nMaria",
+          "reply": "Responder"
+        },
+        "scenarios": {
+          "calendarScreen": {
+            "description": "Pressione {{hotkey}} e peça uma resposta. O assistente lê o e-mail na sua tela e verifica horários livres no seu calendário.",
+            "prompt": "Tente dizer: “Responda e sugira alguns horários livres na semana que vem.”"
+          },
+          "screen": {
+            "description": "Pressione {{hotkey}} e peça uma resposta. O assistente lê o e-mail direto da sua tela.",
+            "prompt": "Tente dizer: “Responda que eu adoraria e sugira quarta à tarde.”"
+          },
+          "calendar": {
+            "description": "Pressione {{hotkey}} e peça uma resposta. O assistente verifica horários livres no seu calendário e escreve a resposta.",
+            "prompt": "Tente dizer: “Responda à Maria e sugira alguns horários livres na semana que vem.”"
+          },
+          "general": {
+            "description": "Pressione {{hotkey}} e peça uma resposta. O assistente escreve para você.",
+            "prompt": "Tente dizer: “Responda à Maria que eu adoraria e sugira quarta à tarde.”"
+          }
+        }
       },
       "demo": {
         "listening": "Ouvindo…",
@@ -1072,7 +1091,8 @@
       "welcomeBack": "Que bom ter você de volta"
     },
     "signedIn": {
-      "welcomeBack": "Que bom ter você de volta"
+      "welcomeBack": "Que bom ter você de volta",
+      "notYou": "Não é você? Sair"
     },
     "sso": {
       "continueWithSSO": "Entrar com SSO",

@@ -66,6 +66,10 @@ interface ShortcutSetupStepProps {
   dense?: boolean;
 }
 
+/**
+ * Opens empty and listening, with the recommendations as one-click picks; either
+ * way the key is registered on the spot.
+ */
 export default function ShortcutSetupStep({
   value,
   initiallyConfirmed,
@@ -81,12 +85,9 @@ export default function ShortcutSetupStep({
 }: ShortcutSetupStepProps) {
   const { t } = useTranslation();
   const recommendations = Array.isArray(recommended) ? recommended : [recommended];
-  const [candidate, setCandidate] = useState(value);
-  const [confirmed, setConfirmed] = useState(initiallyConfirmed ?? Boolean(value));
-  // The step opens with a recommended chord already in the box, so "press it
-  // again" only becomes true once the user has actually captured one.
-  const [hasCapturedChord, setHasCapturedChord] = useState(false);
-  const [seededValue, setSeededValue] = useState(value);
+  // Only a chord the user already confirmed reopens in the box.
+  const [candidate, setCandidate] = useState(initiallyConfirmed ? value : "");
+  const [confirmed, setConfirmed] = useState(Boolean(initiallyConfirmed && value));
   const [error, setError] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [captureKey, setCaptureKey] = useState(0);
@@ -94,93 +95,41 @@ export default function ShortcutSetupStep({
   // held have to be echoed here or pressing a bare modifier looks like nothing.
   const [heldModifiers, setHeldModifiers] = useState("");
 
-  // The opening chord is resolved asynchronously — main reports the shortcut it
-  // could actually register, and may replace it later — so the seed has to follow
-  // `value` until the user captures something of their own, or the box keeps
-  // offering a chord that is already known to fail. Adjusted during render rather
-  // than in an effect so the superseded chord is never painted, and it is not a
-  // capture: `hasCapturedChord` stays false, so the copy still asks for a first
-  // press instead of asking to confirm.
-  if (value !== seededValue) {
-    setSeededValue(value);
-    if (!hasCapturedChord) setCandidate(value);
-  }
+  const clear = () => {
+    setCandidate("");
+    setConfirmed(false);
+    // HotkeyInput blurs after every completed capture. Remounting restores focus
+    // so the box is listening again straight away.
+    setCaptureKey((current) => current + 1);
+    onClearSelection?.();
+  };
 
-  const handleCapture = async (next: string) => {
+  const confirm = async (next: string) => {
     setError(null);
-    if (!confirmed && candidate === next) {
-      setIsConfirming(true);
-      const confirmationError = (await onConfirm?.(next)) ?? null;
-      setIsConfirming(false);
-      if (confirmationError) {
-        setError(confirmationError);
-        setCandidate("");
-        setHasCapturedChord(false);
-        setCaptureKey((current) => current + 1);
-        onClearSelection?.();
-        return;
-      }
-      setConfirmed(true);
-      onChange(next);
+    setCandidate(next);
+    setIsConfirming(true);
+    const confirmationError = (await onConfirm?.(next)) ?? null;
+    setIsConfirming(false);
+    if (confirmationError) {
+      setError(confirmationError);
+      clear();
       return;
     }
-
-    setCandidate(next);
-    setHasCapturedChord(true);
-    setConfirmed(false);
-    onClearSelection?.();
-    // HotkeyInput blurs after every completed capture. Remounting restores focus
-    // so the candidate can be confirmed immediately with the same chord.
-    setCaptureKey((current) => current + 1);
+    setConfirmed(true);
+    onChange(next);
   };
 
-  const reset = () => {
-    setCandidate("");
-    setHasCapturedChord(false);
-    setConfirmed(false);
-    setError(null);
-    setCaptureKey((current) => current + 1);
-    onClearSelection?.();
+  const handleCapture = (next: string) => {
+    if (confirmed && candidate === next) return;
+    void confirm(next);
   };
-
-  // The box opens pre-filled with one of the recommendations, so the row carries
-  // the rest — without them the alternatives are reachable only by first clearing
-  // the chord the step just offered. Once the user has a chord of their own,
-  // suggesting others is noise.
-  const visibleRecommendations =
-    confirmed || hasCapturedChord
-      ? []
-      : // Deduplicate on the printed label, not the accelerator: GLOBE and Fn are
-        // distinct chords that both render as "Globe/Fn".
-        recommendations.filter(
-          (hotkey) => formatRecommendedHotkey(hotkey) !== formatRecommendedHotkey(candidate)
-        );
-  const recommendationRow = visibleRecommendations.length > 0 && (
-    <div
-      className={`flex flex-wrap items-center justify-center leading-[1.4] text-[var(--onboarding-text-tertiary)] ${
-        dense ? "mt-3 gap-2 text-sm" : "mt-6 gap-3 text-base"
-      }`}
-    >
-      <span>{recommendedLabel}</span>
-      {visibleRecommendations.map((hotkey) => (
-        <span
-          key={hotkey}
-          className={`rounded-full bg-[var(--onboarding-surface-tertiary)] text-[var(--onboarding-text-secondary)] ${
-            dense ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm"
-          }`}
-        >
-          {formatRecommendedHotkey(hotkey)}
-        </span>
-      ))}
-    </div>
-  );
 
   const captureInput = (
     <HotkeyInput
       key={captureKey}
       value={candidate}
-      onChange={(next) => void handleCapture(next)}
-      onClear={reset}
+      onChange={handleCapture}
+      onClear={clear}
       autoFocus
       variant="capture-overlay"
       validate={validate}
@@ -190,70 +139,33 @@ export default function ShortcutSetupStep({
     />
   );
 
+  const errorMessage = error && (
+    <p role="alert" className="max-w-72 text-sm leading-5 text-[var(--onboarding-danger)]">
+      {error}
+    </p>
+  );
+
   return (
     <div
-      className={`mx-auto mt-6 flex min-h-0 w-full flex-1 flex-col text-center ${dense ? "max-w-sm" : "max-w-lg"}`}
+      className={`mx-auto mt-6 flex w-full flex-col items-center text-center ${dense ? "max-w-sm" : "max-w-lg"}`}
     >
       {candidate ? (
-        <>
-          <div
-            className={`relative flex items-center justify-center ${dense ? "h-12 shrink-0" : "h-40"}`}
-          >
-            {captureInput}
-            {error ? (
-              <p
-                role="alert"
-                className="max-w-72 text-sm leading-5 text-[var(--onboarding-danger)]"
-              >
-                {error}
-              </p>
-            ) : isConfirming ? (
+        <div
+          className={`relative flex w-full items-center justify-center ${dense ? "h-12" : "h-40"}`}
+        >
+          {captureInput}
+          {errorMessage ||
+            (isConfirming ? (
               <Loader2 className="size-5 animate-spin text-[var(--onboarding-accent)]" />
             ) : (
               <HotkeyChord value={heldModifiers || candidate} compact={dense} />
-            )}
-          </div>
-
-          {recommendationRow}
-
-          <div
-            className={`mt-auto flex flex-col items-center gap-2.5 pb-1 ${dense ? "translate-y-3 pt-5" : "pt-8"}`}
-            aria-live="polite"
-          >
-            {confirmed ? (
-              <p className="sr-only">{formatHotkeyInstruction(candidate)}</p>
-            ) : (
-              <p
-                className={`rounded-full bg-[var(--onboarding-surface-tertiary)] px-5 py-2 text-sm text-[var(--onboarding-text-tertiary)] ${dense ? "" : "mt-6"}`}
-              >
-                {hasCapturedChord
-                  ? t("onboarding.rehaul.hotkey.confirmAgain", {
-                      hotkey: formatHotkeyInstruction(candidate),
-                    })
-                  : captureLabel}
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={reset}
-              className="rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 py-2 text-sm text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
-            >
-              {chooseAnotherLabel}
-            </button>
-          </div>
-        </>
+            ))}
+        </div>
       ) : (
-        <>
-          <div className="relative flex h-44 items-center justify-center rounded-3xl border-2 border-dashed border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5">
-            {captureInput}
-            {error ? (
-              <p
-                role="alert"
-                className="max-w-72 text-sm leading-5 text-[var(--onboarding-danger)]"
-              >
-                {error}
-              </p>
-            ) : heldModifiers ? (
+        <div className="relative flex h-44 w-full items-center justify-center rounded-3xl border-2 border-dashed border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5">
+          {captureInput}
+          {errorMessage ||
+            (heldModifiers ? (
               <div className="pointer-events-none flex flex-col items-center gap-3">
                 <HotkeyChord value={heldModifiers} compact />
                 <p className="text-sm leading-[1.4] text-[var(--onboarding-text-tertiary)]">
@@ -267,12 +179,47 @@ export default function ShortcutSetupStep({
                   {captureLabel}
                 </p>
               </div>
-            )}
-          </div>
-
-          {recommendationRow}
-        </>
+            ))}
+        </div>
       )}
+
+      <div
+        className={`flex flex-wrap items-center justify-center leading-[1.4] text-[var(--onboarding-text-tertiary)] ${
+          dense ? "mt-3 gap-2 text-sm" : "mt-6 gap-3 text-base"
+        }`}
+        aria-live="polite"
+      >
+        {candidate ? (
+          <>
+            <p className="sr-only">{formatHotkeyInstruction(candidate)}</p>
+            <button
+              type="button"
+              onClick={clear}
+              disabled={isConfirming}
+              className="onboarding-pressable rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-1.5 text-sm text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)] disabled:cursor-default disabled:opacity-60"
+            >
+              {chooseAnotherLabel}
+            </button>
+          </>
+        ) : (
+          <>
+            <span>{recommendedLabel}</span>
+            {recommendations.map((hotkey) => (
+              <button
+                key={hotkey}
+                type="button"
+                onClick={() => void confirm(hotkey)}
+                disabled={isConfirming}
+                className={`onboarding-pressable rounded-full bg-[var(--onboarding-surface-tertiary)] text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary-hover)] hover:text-[var(--onboarding-text-primary)] disabled:cursor-default ${
+                  dense ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm"
+                }`}
+              >
+                {formatRecommendedHotkey(hotkey)}
+              </button>
+            ))}
+          </>
+        )}
+      </div>
     </div>
   );
 }

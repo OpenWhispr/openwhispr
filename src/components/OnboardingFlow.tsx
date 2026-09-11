@@ -50,11 +50,11 @@ import {
   getNotesFooterAction,
   getOnboardingProgress,
   getOnboardingRoute,
+  isSetupDecisionStep,
   reconcileStepWithRoute,
   resetOnboardingProgress,
   resolveEnterpriseWorkspaceForOnboarding,
   shouldInitializeMacAccessibilityFeatures,
-  shouldOfferOnboardingLogout,
   shouldSkipOnboardingSetupChoice,
   type OnboardingAuthDraft,
   type OnboardingByokDraft,
@@ -65,6 +65,7 @@ import {
 } from "./onboarding/flow";
 import { useOnboardingSession } from "./onboarding/useOnboardingSession";
 import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
+import { resolveAssistantDemoScenario } from "./onboarding/assistantDemoScenario";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 
@@ -114,6 +115,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     resetOnboardingProgress(localStorage);
     window.location.reload();
   }, []);
+  // Set by Back on the permissions step: a signed-in user who asked to return to
+  // the auth step gets the welcome screen (where Log out lives), not auto-advance.
+  const [returnedToAuth, setReturnedToAuth] = useState(false);
 
   const { dictationHotkeyConfirmed, assistantHotkeyConfirmed } = session.resume;
   const [dictationHotkey, setDictationHotkey] = useState(() =>
@@ -199,10 +203,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     needsRelaunch: screenRecordingNeedsRelaunch,
     request: requestScreenRecordingAccess,
   } = useScreenRecordingPermission();
-  const { supportsPushToTalk, pushToTalkUnavailableReason } = useHotkeyModeInfo(
-    "onboarding",
-    dictationHotkey
-  );
+  const {
+    supportsPushToTalk,
+    pushToTalkUnavailableReason,
+    loaded: hotkeyModeLoaded,
+  } = useHotkeyModeInfo("onboarding", dictationHotkey);
   const { activationMode, setActivationMode } = settings;
   // This hook also starts the membership fetch for already-authenticated users;
   // relying on the login transition alone would leave resumed onboarding stuck
@@ -246,13 +251,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     session.authPath === "account" &&
     (!workspacesLoaded ||
       (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)));
-  const notesFooterAction = getNotesFooterAction({
-    workspaceResolutionPending,
-    hasConnectedCalendar:
-      settingsStore.gcalAccounts.length > 0 ||
-      settingsStore.mcalAccounts.length > 0 ||
-      (platform === "darwin" && settingsStore.appleCalendarConnected),
-  });
+  const hasConnectedCalendar =
+    settingsStore.gcalAccounts.length > 0 ||
+    settingsStore.mcalAccounts.length > 0 ||
+    (platform === "darwin" && settingsStore.appleCalendarConnected);
 
   // The setting turns on only once the permission is actually granted, so an
   // Enable click whose System Settings grant is abandoned can't leave screen
@@ -310,6 +312,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
   const compact = COMPACT_STEPS.has(currentStepId);
+  const setupDecisionPending =
+    workspaceResolutionPending && isSetupDecisionStep(currentStepId, route);
+  const notesFooterAction = getNotesFooterAction({ setupDecisionPending, hasConnectedCalendar });
+  // Screen context only reaches the model once macOS has been relaunched after
+  // the grant; until then the demo must not promise the assistant can see the card.
+  const screenContextActive =
+    agentAllowed &&
+    screenContextAllowed &&
+    settingsStore.voiceAgentScreenContext &&
+    screenRecordingGranted &&
+    !screenRecordingNeedsRelaunch;
   const permissions = usePermissions(
     (dialog) => setPermissionAlert({ title: dialog.title, description: dialog.description }),
     {
@@ -346,6 +359,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   useEffect(() => {
     if (currentStepId === "required-models") requiredModelsLatchRef.current = true;
   }, [currentStepId]);
+
+  // New users default to hold-to-talk, but only where no mode was ever chosen
+  // (the store's "tap" is a fallback) and once main has confirmed this desktop
+  // supports it — the hook's placeholder says yes on every platform.
+  useEffect(() => {
+    if (currentStepId !== "dictation-hotkey" || !hotkeyModeLoaded) return;
+    if (supportsPushToTalk && localStorage.getItem("activationMode") === null) {
+      setActivationMode("push");
+    }
+  }, [currentStepId, hotkeyModeLoaded, setActivationMode, supportsPushToTalk]);
 
   // The auth step lands on "permissions" before the policy and disk checks
   // settle (AppRouter's policy gate remounts this component mid-transition),
@@ -428,11 +451,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     [settings.dictationKey]
   );
 
+  const hotkeyErrorRef = useRef<string | null>(null);
   const { registerHotkey, isRegistering } = useHotkeyRegistration({
     onSuccess: (registered) => {
       const primary = parseHotkeyList(registered)[0] || registered;
       setDictationHotkey(primary);
       settings.setDictationKey(registered);
+    },
+    onError: (message) => {
+      hotkeyErrorRef.current = message;
     },
     showSuccessToast: false,
     showErrorToast: false,
@@ -454,10 +481,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const confirmDictationHotkey = useCallback(
     async (value: string) => {
+      // A key the OS cannot see released falls back to Tap rather than failing
+      // the pick; the card below shows Hold disabled with the reason.
+      if (activationMode === "push") {
+        const info = await window.electronAPI?.getHotkeyModeInfo?.(value);
+        if (info && !info.supportsPushToTalk) setActivationMode("tap");
+      }
+      hotkeyErrorRef.current = null;
       const registered = await registerHotkey(withExtraDictationHotkeys(value));
-      return registered ? null : t("onboarding.rehaul.hotkey.inUse");
+      return registered ? null : (hotkeyErrorRef.current ?? t("onboarding.rehaul.hotkey.inUse"));
     },
-    [registerHotkey, t, withExtraDictationHotkeys]
+    [activationMode, registerHotkey, setActivationMode, t, withExtraDictationHotkeys]
   );
 
   const confirmAssistantHotkey = useCallback(
@@ -550,9 +584,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     ]
   );
 
-  // Sessions saved on the old setup-choice step reconcile back to Notes once an
-  // Enterprise workspace is confirmed. Finish them without writing provider or
-  // model settings, just as if Notes had been their final step originally.
+  // Sessions saved on the old setup-choice step reconcile back to the last
+  // guided step once an Enterprise workspace is confirmed. Finish them without
+  // writing provider or model settings, just as if that had been their final
+  // step originally.
   useEffect(() => {
     if (!skipSetupChoiceForEnterprise || session.currentStepId !== "setup-choice" || isFinishing) {
       return;
@@ -638,7 +673,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const continueFromCurrentStep = useCallback(async () => {
     // A banner from an earlier failed attempt must not outlive the retry.
     setFatalError(null);
-    if (currentStepId === "notes" && workspaceResolutionPending) return;
+    if (setupDecisionPending) return;
     if (currentStepId === "permissions") {
       if (platform === "darwin" && !permissions.accessibilityPermissionGranted) {
         setAccessibilitySkipped(true);
@@ -723,7 +758,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     syncUseCases,
     t,
     withExtraDictationHotkeys,
-    workspaceResolutionPending,
+    setupDecisionPending,
     skipSetupChoiceForEnterprise,
   ]);
 
@@ -747,8 +782,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return hasUseCaseIntent(settings.onboardingUseCases, settings.onboardingUseCaseNote);
       case "dictation-hotkey":
         return dictationHotkeyConfirmed;
-      case "activation-mode":
-        return true;
       case "dictation-demo":
         return dictationDemoSuccess;
       case "assistant-hotkey":
@@ -775,14 +808,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <CompactAuthenticationFlow
               resumeState={session.resume.auth}
               onResumeStateChange={updateAuthResumeState}
+              autoContinue={!returnedToAuth}
+              onSignOut={() => void handleLogout()}
               onContinueWithoutAccount={() => {
                 // Guests continue onto their route's permissions step — jumping
                 // straight to setup-choice would skip the permission grants and
                 // hotkey the guest route exists to guarantee (see flow.ts).
+                setReturnedToAuth(false);
                 setAuthPath("guest");
                 goTo("permissions");
               }}
               onAuthComplete={() => {
+                setReturnedToAuth(false);
                 setAuthPath("account");
                 goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
               }}
@@ -826,9 +863,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 : undefined
             }
-            onLogout={
-              shouldOfferOnboardingLogout({ isSignedIn, authPath: session.authPath })
-                ? handleLogout
+            onBack={
+              session.history.length > 0
+                ? () => {
+                    setReturnedToAuth(true);
+                    goBack();
+                  }
                 : undefined
             }
             onContinue={() => void continueFromCurrentStep()}
@@ -879,17 +919,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? "onboarding.rehaul.assistantHotkey.title"
                   : "onboarding.rehaul.dictationHotkey.title"
               )}
+              // The assistant step's preview image needs the room a two-line header takes.
               titleLines={
                 assistant
-                  ? [
-                      t("onboarding.rehaul.assistantHotkey.titleLineOne"),
-                      t("onboarding.rehaul.assistantHotkey.titleLineTwo"),
-                    ]
+                  ? undefined
                   : [
                       t("onboarding.rehaul.dictationHotkey.titleLineOne"),
                       t("onboarding.rehaul.dictationHotkey.titleLineTwo"),
                     ]
               }
+              wideTitle={assistant}
+              wideDescription={assistant}
               description={t(
                 assistant
                   ? "onboarding.rehaul.assistantHotkey.description"
@@ -930,57 +970,54 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               onConfirm={assistant ? confirmAssistantHotkey : confirmDictationHotkey}
               dense={assistant}
             />
+            {!assistant && (
+              <div className="mx-auto mt-8 w-full max-w-md rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0 text-start">
+                    <p className="text-sm font-medium leading-5 text-[var(--onboarding-text-primary)]">
+                      {t("onboarding.rehaul.dictationHotkey.activation")}
+                    </p>
+                    <p className="text-sm leading-5 text-[var(--onboarding-text-secondary)]">
+                      {t(
+                        activationMode === "push"
+                          ? "onboarding.activation.holdDescription"
+                          : "onboarding.activation.tapDescription"
+                      )}
+                    </p>
+                  </div>
+                  <ActivationModeSelector
+                    variant="onboarding"
+                    value={activationMode}
+                    onChange={setActivationMode}
+                    pushDisabledReason={
+                      !supportsPushToTalk
+                        ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
+                        : undefined
+                    }
+                  />
+                </div>
+                {platform === "linux" && activationMode === "push" && (
+                  <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
+                )}
+              </div>
+            )}
           </div>
         );
       }
 
-      case "activation-mode":
-        return (
-          <div className="flex h-full min-h-0 w-full flex-col pt-2">
-            <OnboardingStepHeader
-              title={t("onboarding.activation.title")}
-              description={t("onboarding.activation.description")}
-            />
-            <div className="mx-auto mt-10 w-full max-w-md rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-5">
-              <div className="flex items-center justify-between gap-5">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-[var(--onboarding-text-primary)]">
-                    {t("onboarding.activation.mode")}
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--onboarding-text-secondary)]">
-                    {t(
-                      activationMode === "push"
-                        ? "onboarding.activation.holdDescription"
-                        : "onboarding.activation.tapDescription"
-                    )}
-                  </p>
-                </div>
-                <ActivationModeSelector
-                  value={activationMode}
-                  onChange={setActivationMode}
-                  pushDisabledReason={
-                    !supportsPushToTalk
-                      ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                      : undefined
-                  }
-                />
-              </div>
-              {platform === "linux" && activationMode === "push" && (
-                <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
-              )}
-            </div>
-          </div>
-        );
-
       case "dictation-demo":
       case "assistant-demo": {
         const assistant = currentStepId === "assistant-demo";
+        const scenario = resolveAssistantDemoScenario({
+          calendarConnected: hasConnectedCalendar,
+          screenContextActive,
+        });
         const hotkeyInstruction = formatHotkeyInstruction(
           assistant ? assistantHotkey : dictationHotkey
         );
         const description = t(
           assistant
-            ? "onboarding.rehaul.assistantDemo.description"
+            ? `onboarding.rehaul.assistantDemo.scenarios.${scenario}.description`
             : activationMode === "push"
               ? "onboarding.activation.holdHotkey"
               : "onboarding.rehaul.dictationDemo.description",
@@ -996,49 +1033,36 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? "onboarding.rehaul.assistantDemo.title"
                   : "onboarding.rehaul.dictationDemo.title"
               )}
+              // The assistant demo's card is tall, so its title runs one line.
               titleLines={
                 assistant
-                  ? [
-                      t("onboarding.rehaul.assistantDemo.titleLineOne"),
-                      t("onboarding.rehaul.assistantDemo.titleLineTwo"),
-                    ]
+                  ? undefined
                   : [
                       t("onboarding.rehaul.dictationDemo.titleLineOne"),
                       t("onboarding.rehaul.dictationDemo.titleLineTwo"),
                     ]
               }
-              description={
-                assistant ? (
-                  description
-                ) : (
-                  <DemoHotkeyDescription text={description} hotkey={hotkeyInstruction} />
-                )
-              }
+              wideTitle={assistant}
+              description={<DemoHotkeyDescription text={description} hotkey={hotkeyInstruction} />}
             />
             <DemoStep
               kind={assistant ? "assistant" : "dictation"}
               initialSuccessful={assistant ? assistantDemoSuccess : dictationDemoSuccess}
               firstMessage={t(
                 assistant
-                  ? "onboarding.rehaul.assistantDemo.email"
+                  ? "onboarding.rehaul.assistantDemo.email.body"
                   : "onboarding.rehaul.dictationDemo.founder"
               )}
               secondMessage={t(
                 assistant
-                  ? "onboarding.rehaul.assistantDemo.prompt"
+                  ? `onboarding.rehaul.assistantDemo.scenarios.${scenario}.prompt`
                   : "onboarding.rehaul.dictationDemo.prompt"
               )}
-              // Only the dictation demo renders this: the assistant card passes
-              // secondMessage as its textarea placeholder.
               placeholder={t("onboarding.rehaul.dictationDemo.placeholder")}
               listeningLabel={t("onboarding.rehaul.demo.listening")}
               processingLabel={t("onboarding.rehaul.demo.processing")}
               stopLabel={t("onboarding.rehaul.demo.stop")}
               retryLabel={t("common.retry")}
-              assistantResponse={t("onboarding.rehaul.assistantDemo.response")}
-              assistantSenderName={t("onboarding.rehaul.assistantDemo.senderName")}
-              assistantSenderEmail={t("onboarding.rehaul.assistantDemo.senderEmail")}
-              assistantRecipientLabel={t("onboarding.rehaul.assistantDemo.recipientLabel")}
               onSuccessChange={assistant ? setAssistantDemoSuccess : setDictationDemoSuccess}
             />
           </div>
@@ -1172,11 +1196,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     hasShellNavigation &&
     !choiceStep &&
     !inlineProviderStep &&
-    (!inlineGatedStep || canContinue) &&
+    (!inlineGatedStep || canContinue || setupDecisionPending) &&
     (!notesStep || notesFooterAction !== "skip");
   // Practice remains skippable if it cannot complete. Calendar connections are
   // optional, so Notes starts with Skip and replaces it with Continue on connect.
-  const showsSkip = (demoStep && !canContinue) || (notesStep && notesFooterAction === "skip");
+  // While the setup decision is pending, a disabled Continue stands in for Skip.
+  const showsSkip =
+    !setupDecisionPending &&
+    ((demoStep && !canContinue) || (notesStep && notesFooterAction === "skip"));
 
   return (
     <>
@@ -1203,9 +1230,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }
         skipLabel={t("common.skip")}
         continueDisabled={!canContinue}
-        continueLoading={
-          isFinishing || isRegistering || (notesStep && notesFooterAction === "loading")
-        }
+        continueLoading={isFinishing || isRegistering || setupDecisionPending}
         progress={getOnboardingProgress(currentStepId, route)}
         // Label Back only when it is the sole footer action. Unlike the source
         // commit, this branch also has demo Skip, so Back stays icon-only there.
