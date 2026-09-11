@@ -17,6 +17,12 @@ export interface InferenceScopeDefinition {
   fallbackScope?: string;
   /** Server-side fallback chain OpenWhispr Cloud answers this scope on. */
   cloudPurpose: CloudReasonPurpose;
+  /**
+   * Inert until the user picks its own model, inheriting the fallback scope
+   * meanwhile. Policy clamps a chosen target but never invents one: that would
+   * switch the override on and capture requests for a provider with no key.
+   */
+  optional?: true;
 }
 
 export const INFERENCE_SCOPES = {
@@ -61,6 +67,7 @@ export const INFERENCE_SCOPES = {
       disableThinking: "dictationAgentVisionDisableThinking",
     },
     fallbackScope: "dictationAgent",
+    optional: true,
   },
   noteFormatting: {
     cloudPurpose: "noteFormatting",

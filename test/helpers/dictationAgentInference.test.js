@@ -453,3 +453,37 @@ test("a vision override that cannot see images drops the screenshot instead of r
   assert.equal(config.scope, "dictationAgent");
   assert.equal(attachScreenContext, false);
 });
+
+// The cloud vision-routes screenshot commands itself and the settings tab
+// offers no BYOK override while the assistant runs there, so a target chosen
+// under another mode stays parked: applying it would redirect the request to
+// a provider that may hold no key.
+const cloudAssistant = {
+  isSignedIn: true,
+  dictationAgentMode: "openwhispr",
+  dictationAgentCloudMode: "openwhispr",
+  dictationAgentProvider: "openwhispr",
+  dictationAgentModel: "",
+};
+
+test("a configured vision override is inactive while the assistant runs on OpenWhispr Cloud", async () => {
+  const { resolveDictationAgentVisionInference } = await load();
+
+  const result = resolveDictationAgentVisionInference(
+    { ...panelSettings, ...visionOverride, ...cloudAssistant },
+    { isSignedIn: true }
+  );
+
+  assert.equal(result.active, false);
+});
+
+test("a screenshot command stays on the cloud when the assistant runs there", () => {
+  const { config, attachScreenContext } = panel(
+    { ...panelSettings, ...visionOverride, ...cloudAssistant },
+    { hasScreenContext: true }
+  );
+
+  assert.equal(config.scope, "dictationAgent");
+  assert.equal(config.mode, "openwhispr");
+  assert.equal(attachScreenContext, true, "the cloud keeps the screenshot");
+});

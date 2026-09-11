@@ -95,6 +95,10 @@ export function resolveDictationAgentVisionInference(settings, { isSignedIn = fa
   // too — an inherited endpoint with only the vision key (or none) would call
   // the agent's host with the wrong credential.
   const agent = selectResolvedLLMConfig(settings, "dictationAgent");
+  // The settings tab offers no override while the assistant runs on OpenWhispr
+  // Cloud, which vision-routes screenshot commands itself, so a target chosen
+  // under another mode stays parked instead of redirecting the request.
+  const agentOnCloud = agent.mode === "openwhispr";
   const borrowsAgentEndpoint = inheritsFallbackEndpoint(
     { mode, cloudBaseUrl: settings.dictationAgentVisionCloudBaseUrl },
     agent.mode
@@ -104,6 +108,7 @@ export function resolveDictationAgentVisionInference(settings, { isSignedIn = fa
 
   return {
     active:
+      !agentOnCloud &&
       !!settings.useDictationAgentVisionModel &&
       chosen &&
       resolveModeReachability({ mode, provider, model, isCloud, isSelfHosted: false }),

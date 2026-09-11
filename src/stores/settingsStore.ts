@@ -3018,7 +3018,9 @@ export function selectPolicyEffectiveSettings(
   ) as Record<InferenceScope, ResolvedLLMConfig>;
 
   for (const scope of Object.keys(INFERENCE_SCOPES) as InferenceScope[]) {
-    const definition = INFERENCE_SCOPES[scope];
+    const definition: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
+    // An optional override with no model of its own is not a choice to clamp.
+    if (definition.optional && !(state[definition.storeKeys.model] as string)?.trim()) continue;
     const config = resolvedConfigs[scope];
     const selection = resolveEffectivePolicySelection(
       policyState,

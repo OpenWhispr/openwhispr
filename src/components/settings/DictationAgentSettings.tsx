@@ -1,13 +1,18 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Monitor } from "../icons";
-import { useSettingsStore } from "../../stores/settingsStore";
+import {
+  selectPolicyEffectiveSettings,
+  selectResolvedLLMConfig,
+  useSettingsStore,
+} from "../../stores/settingsStore";
 import {
   isAgentAllowed,
   isModeAllowedByPolicy,
   isScreenContextAllowed,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
+import { usePolicySnapshot } from "../../hooks/usePolicy";
 import { useAgentName } from "../../utils/agentName";
 import { useDialogs } from "../../hooks/useDialogs";
 import { useScreenRecordingPermission } from "../../hooks/useScreenRecordingPermission";
@@ -44,6 +49,18 @@ export default function DictationAgentSettings() {
   // Display the effective value: an org that forces the feature off shows the
   // toggle off while the raw preference survives for when the policy lifts.
   const screenContextActive = voiceAgentScreenContext && screenContextAllowed;
+  // The cloud vision-routes screenshot commands itself, so the BYOK override is
+  // offered only while the assistant runs elsewhere; the resolver applies the
+  // same rule (resolveDictationAgentVisionInference).
+  const policySnapshot = usePolicySnapshot();
+  const assistantOnCloud = useSettingsStore(
+    (settings) =>
+      selectResolvedLLMConfig(
+        selectPolicyEffectiveSettings(settings, policySnapshot),
+        "dictationAgent"
+      ).mode === "openwhispr"
+  );
+  const visionOverrideOffered = screenContextActive && visionOverrideAllowed && !assistantOnCloud;
 
   const { agentName, setAgentName } = useAgentName();
   const [agentNameInput, setAgentNameInput] = useState(agentName);
@@ -199,7 +216,7 @@ export default function DictationAgentSettings() {
                 />
               </SettingsRow>
             </SettingsPanelRow>
-            {screenContextActive && visionOverrideAllowed && (
+            {visionOverrideOffered && (
               <SettingsPanelRow>
                 <SettingsRow
                   label={t("dictationAgent.screenContext.visionModel")}
@@ -228,7 +245,7 @@ export default function DictationAgentSettings() {
               {t("dictationAgent.screenContext.relaunchHint")}
             </p>
           )}
-          {screenContextActive && visionOverrideAllowed && useDictationAgentVisionModel && (
+          {visionOverrideOffered && useDictationAgentVisionModel && (
             <InferenceConfigEditor scope="dictationAgentVision" allowedModes={["providers"]} />
           )}
         </div>
