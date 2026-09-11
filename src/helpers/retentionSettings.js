@@ -8,6 +8,10 @@ const DEFAULT_RETENTION_SETTINGS = {
   // so a renderer that predates this field is never read as history-off, and
   // so the value only becomes trustworthy once hasSynced() says it is real.
   dataRetentionEnabled: true,
+  // Whether the switch above reflects a settled managed policy rather than the
+  // permissive default the renderer reports while one is still being fetched.
+  // Defaults false: an unreported policy must never read as a resolved one.
+  localHistoryPolicyResolved: false,
 };
 
 function toDays(value, fallback) {
@@ -26,11 +30,18 @@ function applyRetentionSettings(current, incoming) {
       typeof incoming?.dataRetentionEnabled === "boolean"
         ? incoming.dataRetentionEnabled
         : current.dataRetentionEnabled,
+    localHistoryPolicyResolved:
+      typeof incoming?.localHistoryPolicyResolved === "boolean"
+        ? incoming.localHistoryPolicyResolved
+        : current.localHistoryPolicyResolved,
   };
   const changed =
     settings.audioRetentionDays !== current.audioRetentionDays ||
     settings.transcriptRetentionDays !== current.transcriptRetentionDays ||
-    settings.dataRetentionEnabled !== current.dataRetentionEnabled;
+    settings.dataRetentionEnabled !== current.dataRetentionEnabled ||
+    // The policy settling is what unblocks reconstruction, so it has to count
+    // as a change even when every other value stayed put.
+    settings.localHistoryPolicyResolved !== current.localHistoryPolicyResolved;
   return { changed, settings };
 }
 

@@ -1014,3 +1014,19 @@ test("the enterprise transcription tile is offered only to a managed policy snap
     ["openwhispr", "providers", "local", "self-hosted", "enterprise"]
   );
 });
+
+test("the local-history policy is resolved only once the fetch has settled", async () => {
+  const { isLocalHistoryPolicyResolved } = await load();
+  const snapshot = (status) => ({ status, policy: null, appVersion: null });
+
+  // Settled: the org either locks the switch or it does not.
+  assert.equal(isLocalHistoryPolicyResolved(snapshot("managed")), true);
+  assert.equal(isLocalHistoryPolicyResolved(snapshot("unmanaged")), true);
+
+  // Unsettled. effectiveLocalHistoryEnabled resolves these to the user's own
+  // preference, which is the right value to show and to sweep retention with,
+  // but it is a default rather than an answer -- so it is not consent.
+  assert.equal(isLocalHistoryPolicyResolved(snapshot("idle")), false);
+  assert.equal(isLocalHistoryPolicyResolved(snapshot("loading")), false);
+  assert.equal(isLocalHistoryPolicyResolved(snapshot("error")), false);
+});

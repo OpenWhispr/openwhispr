@@ -9,7 +9,11 @@ import type {
   SelfHostedType,
 } from "../types/electron";
 import type { Snippet } from "../utils/snippets";
-import { effectiveAudioRetentionDays, effectiveLocalHistoryEnabled } from "../stores/policyRules";
+import {
+  effectiveAudioRetentionDays,
+  effectiveLocalHistoryEnabled,
+  isLocalHistoryPolicyResolved,
+} from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 
 export interface TranscriptionSettings {
@@ -194,13 +198,22 @@ function useSettingsInternal() {
   const enforcedDataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, dataRetentionEnabled)
   );
+  // Reported alongside the value because history reconstruction reads that
+  // switch as consent, and until the policy settles it is only a default.
+  const localHistoryPolicyResolved = usePolicyStore(isLocalHistoryPolicyResolved);
   useEffect(() => {
     window.electronAPI?.syncRetentionSettings?.({
       audioRetentionDays: enforcedAudioRetentionDays,
       transcriptRetentionDays,
       dataRetentionEnabled: enforcedDataRetentionEnabled,
+      localHistoryPolicyResolved,
     });
-  }, [enforcedAudioRetentionDays, transcriptRetentionDays, enforcedDataRetentionEnabled]);
+  }, [
+    enforcedAudioRetentionDays,
+    transcriptRetentionDays,
+    enforcedDataRetentionEnabled,
+    localHistoryPolicyResolved,
+  ]);
 
   // Sync startup pre-warming preferences to main process
   const {

@@ -713,12 +713,30 @@ class IPCHandlers {
     return this._retentionSettingsSynced && this._retentionSettings.dataRetentionEnabled;
   }
 
+  /** Whether a signed-in account is bound to this install. */
+  _hasActiveAccountScope() {
+    return Boolean(accountScopeBinding.read());
+  }
+
+  // The switch alone is not enough to start: a managed workspace can force local
+  // history off, and that policy arrives over the network while this scan takes
+  // milliseconds, so the renderer reports the permissive personal default until
+  // it lands. Waiting for the real answer is only possible where there is one --
+  // signed out the policy store stays idle forever and the user's own preference
+  // is the only authority there is. Mid-scan arrival needs no separate check:
+  // a policy that resolves "always_off" flips the switch, which the loop reads.
+  _mayStartAnalyticsHistoryReconstruction() {
+    if (!this._canReconstructAnalyticsHistory()) return false;
+    if (this._retentionSettings.localHistoryPolicyResolved === true) return true;
+    return !this._hasActiveAccountScope();
+  }
+
   // Reconciliation is best-effort. Analytics reads await it so later-eligible
   // history shows up before the numbers are read, which means a failure here
   // must never fail the read itself: a broken scan would otherwise blank an
   // Insights summary that SQLite could have answered perfectly well.
   async _ensureAnalyticsHistoryBackfilled() {
-    if (!this._canReconstructAnalyticsHistory()) return { inserted: 0, scanned: 0 };
+    if (!this._mayStartAnalyticsHistoryReconstruction()) return { inserted: 0, scanned: 0 };
     if (this._analyticsHistoryBackfillPromise) return this._analyticsHistoryBackfillPromise;
     // The failure is absorbed inside this promise rather than around the
     // creator's await, because callers that join an in-flight pass are handed

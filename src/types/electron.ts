@@ -1330,6 +1330,7 @@ declare global {
         audioRetentionDays: number;
         transcriptRetentionDays: number;
         dataRetentionEnabled: boolean;
+        localHistoryPolicyResolved: boolean;
       }) => void;
       retryTranscription: (
         id: number,

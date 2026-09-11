@@ -15,7 +15,12 @@ test("reports a change when a retention period is shortened", () => {
     }),
     {
       changed: true,
-      settings: { audioRetentionDays: 1, transcriptRetentionDays: 1, dataRetentionEnabled: true },
+      settings: {
+        audioRetentionDays: 1,
+        transcriptRetentionDays: 1,
+        dataRetentionEnabled: true,
+        localHistoryPolicyResolved: false,
+      },
     }
   );
 });
@@ -29,7 +34,12 @@ test("is idempotent when both values are unchanged — dual-window mount sync", 
 });
 
 test("keeps the current value when an incoming value is missing or unusable", () => {
-  const current = { audioRetentionDays: 7, transcriptRetentionDays: 1, dataRetentionEnabled: true };
+  const current = {
+    audioRetentionDays: 7,
+    transcriptRetentionDays: 1,
+    dataRetentionEnabled: true,
+    localHistoryPolicyResolved: false,
+  };
   for (const incoming of [
     undefined,
     {},
@@ -45,7 +55,12 @@ test("keeps the current value when an incoming value is missing or unusable", ()
 test("only the main renderer can replace process-global retention settings", () => {
   const mainRenderer = {};
   const auxiliaryRenderers = [{}, {}, {}];
-  const managedSettings = { audioRetentionDays: 7, transcriptRetentionDays: 30, dataRetentionEnabled: true };
+  const managedSettings = {
+    audioRetentionDays: 7,
+    transcriptRetentionDays: 30,
+    dataRetentionEnabled: true,
+    localHistoryPolicyResolved: false,
+  };
   let current = { ...DEFAULT_RETENTION_SETTINGS };
   let cleanupRuns = 0;
   let synced = false;
@@ -81,6 +96,7 @@ test("only the main renderer can replace process-global retention settings", () 
     audioRetentionDays: 90,
     transcriptRetentionDays: 0,
     dataRetentionEnabled: true,
+    localHistoryPolicyResolved: false,
   });
   assert.equal(cleanupRuns, 2);
 });
@@ -146,7 +162,12 @@ test("a disabled retention setting reaches the sweep before it can delete", () =
 
   handle({ sender: owner }, { audioRetentionDays: 0, transcriptRetentionDays: 0 });
   assert.deepEqual(sweptWith, [
-    { audioRetentionDays: 0, transcriptRetentionDays: 0, dataRetentionEnabled: true },
+    {
+      audioRetentionDays: 0,
+      transcriptRetentionDays: 0,
+      dataRetentionEnabled: true,
+      localHistoryPolicyResolved: false,
+    },
   ]);
 });
 
@@ -170,3 +191,23 @@ test("carries the effective local-history switch, and reports it changing", () =
   assert.equal(legacy.changed, false);
 });
 
+test("carries whether the local-history policy has resolved, and reports it changing", () => {
+  assert.equal(
+    DEFAULT_RETENTION_SETTINGS.localHistoryPolicyResolved,
+    false,
+    "an unreported policy must never read as a resolved one"
+  );
+
+  const arrival = applyRetentionSettings(DEFAULT_RETENTION_SETTINGS, {
+    audioRetentionDays: 30,
+    transcriptRetentionDays: 0,
+    dataRetentionEnabled: true,
+    localHistoryPolicyResolved: true,
+  });
+  assert.equal(
+    arrival.changed,
+    true,
+    "the policy settling is the change that unblocks reconstruction"
+  );
+  assert.equal(arrival.settings.localHistoryPolicyResolved, true);
+});

@@ -109,6 +109,38 @@ test("concurrent readers share one pass and completed history stays checkpointed
   assert.equal(calls, 2, "a completed pass must short-circuit later reads");
 });
 
+test("history is not reconstructed while an account's policy is still resolving", async () => {
+  let calls = 0;
+  const context = createContext(() => {
+    calls += 1;
+    return completeBatch();
+  });
+  // Signed in, so a workspace could still force local history off; the renderer
+  // has only reported its own permissive default so far.
+  context._hasActiveAccountScope = () => true;
+  context._retentionSettings = { dataRetentionEnabled: true, localHistoryPolicyResolved: false };
+
+  await context._ensureAnalyticsHistoryBackfilled();
+
+  assert.equal(calls, 0, "a default is not consent while a managed policy may still arrive");
+});
+
+test("history is reconstructed for a signed-out user, whose policy never resolves", async () => {
+  let calls = 0;
+  const context = createContext(() => {
+    calls += 1;
+    return completeBatch({ scanned: 1 });
+  });
+  // No account, so the policy store stays idle forever and the user's own
+  // preference is the only authority there is.
+  context._hasActiveAccountScope = () => false;
+  context._retentionSettings = { dataRetentionEnabled: true, localHistoryPolicyResolved: false };
+
+  await context._ensureAnalyticsHistoryBackfilled();
+
+  assert.equal(calls, 1, "an unresolvable policy must not disable the feature");
+});
+
 test("revoking local history stops a pass that is already scanning", async () => {
   let calls = 0;
   let context;
