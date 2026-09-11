@@ -191,10 +191,14 @@ test("other llama-server failures keep their existing shape", async () => {
 // price the real prompt, chat template and all.
 
 function withStubServer(routes) {
+  // A Map rather than indexing the object: req.url is request-controlled, so a
+  // plain lookup answers /toString or /constructor with an inherited
+  // Object.prototype method and then calls it.
+  const routeTable = new Map(Object.entries(routes));
   return async (run) => {
     const server = http.createServer((req, res) => {
-      const handler = routes[req.url];
-      if (!handler) {
+      const handler = routeTable.get(req.url);
+      if (typeof handler !== "function") {
         res.writeHead(404).end();
         return;
       }
