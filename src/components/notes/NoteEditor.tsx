@@ -17,6 +17,7 @@ import {
   Share2,
   Users,
 } from "../icons";
+import { MeetingAudioPanel, type MeetingAudioHandle } from "./MeetingAudioPanel";
 import ShareNoteDialog from "./ShareNoteDialog";
 import {
   canOrganizeNote,
@@ -218,6 +219,11 @@ export default function NoteEditor({
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
+  const meetingAudioRef = useRef<MeetingAudioHandle>(null);
+  const playTranscriptAudio = useCallback(
+    (segment: TranscriptSegment) => meetingAudioRef.current?.playSegment(segment),
+    []
+  );
   const [viewMode, setViewMode] = useState<MeetingViewMode>("raw");
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   const [folderSearch, setFolderSearch] = useState("");
@@ -1176,6 +1182,7 @@ export default function NoteEditor({
           </div>
         )}
 
+        <MeetingAudioPanel ref={meetingAudioRef} noteId={note.id} isRecording={isRecording} />
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
@@ -1197,6 +1204,7 @@ export default function NoteEditor({
                 />
               ) : (
                 <MeetingTranscriptChat
+                  onPlaySegment={playTranscriptAudio}
                   segments={displaySegments}
                   speakerMappings={speakerMappings}
                   speakerProfiles={knownSpeakers}

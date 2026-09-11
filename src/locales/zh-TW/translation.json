@@ -889,7 +889,6 @@
         "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
         "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。",
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
-        "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
         "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。"
       },
       "translationFallback": {
@@ -3138,7 +3137,8 @@
         "labelToggle": "標記發言者",
         "toggleAria": "切換此錄音的發言者辨識",
         "incAria": "增加預期發言人數",
-        "decAria": "減少預期發言人數"
+        "decAria": "減少預期發言人數",
+        "auto": "Auto"
       },
       "consentNotice": "錄製他人時請務必徵得同意"
     },
@@ -3179,6 +3179,21 @@
       "author": {
         "you": "你"
       }
+    },
+    "audio": {
+      "title": "Meeting audio",
+      "keep": "Keep original audio",
+      "retention": "Retention",
+      "forever": "Forever",
+      "days": "{{count}} days",
+      "play": "Play",
+      "reveal": "Reveal in folder",
+      "mic": "Microphone",
+      "system": "System audio",
+      "noAudio": "No retained audio. These settings apply to new meeting recordings.",
+      "noMatchingAudio": "No retained audio with a matching timestamp is available for this segment.",
+      "playbackError": "Recording could not be played. Try revealing the source file.",
+      "playSegment": "Play recording from this segment"
     }
   },
   "dictionary": {

@@ -24,11 +24,11 @@ test("GLOBE/Fn is macOS-only — accepting it elsewhere would register a key the
   assert.equal(win.errorCode, "INVALID_GLOBE");
 });
 
-test("mouse button hotkeys are macOS-only and cannot combine with keyboard keys", async () => {
+test("mouse triggers support Windows and macOS without keyboard combinations", async () => {
   const { validateHotkey } = await load();
 
   assert.equal(validateHotkey("MouseButton4", "darwin").valid, true);
-  assert.equal(validateHotkey("MouseButton5", "win32").valid, false);
+  assert.equal(validateHotkey("MouseButton5", "win32").valid, true);
   assert.equal(validateHotkey("Control+MouseButton4", "darwin").valid, false);
 });
 
@@ -222,4 +222,13 @@ test("mixing left and right versions of the same modifier is rejected across pre
   const crossMix = validateHotkey("LeftControl+ControlRight", "win32");
   assert.equal(crossMix.valid, false);
   assert.equal(crossMix.errorCode, "LEFT_RIGHT_MIX");
+});
+
+test("middle mouse is configurable on Windows and macOS", async () => {
+  const { validateHotkey } = await load();
+  for (const platform of ["win32", "darwin"]) {
+    assert.equal(validateHotkey("MouseButton3", platform).valid, true);
+    assert.equal(validateHotkey("Control+MouseButton3", platform).valid, false);
+  }
+  assert.equal(validateHotkey("MouseButton3", "linux").valid, false);
 });

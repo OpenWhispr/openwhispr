@@ -163,3 +163,37 @@ test("mic mode still dedupes bleed-flagged mic echoes of system text first", () 
   assert.equal(merged.length, 1);
   assert.equal(merged[0].source, "system");
 });
+
+for (const [cap, actual, expectedCalls] of [
+  [4, 1, [-1]],
+  [2, 4, [-1, 2]],
+  [null, 3, [-1]],
+]) {
+  test("speaker cap " + cap + " preserves threshold result for " + actual + " voices", async () => {
+    const manager = new DiarizationManager();
+    const calls = [];
+    manager._diarize = async (_path, options) => {
+      calls.push(options.numSpeakers);
+      return Array.from(
+        { length: options.numSpeakers > 0 ? options.numSpeakers : actual },
+        (_, i) => ({ start: i, end: i + 1, speaker: "speaker_" + i })
+      );
+    };
+    const result = await manager.diarize("fixture.wav", { maxSpeakers: cap });
+    assert.deepEqual(calls, expectedCalls);
+    assert.equal(result.length, cap ? Math.min(cap, actual) : actual);
+  });
+}
+
+test("cancellation prevents a second clustering pass", async () => {
+  const manager = new DiarizationManager();
+  const controller = new AbortController();
+  let calls = 0;
+  manager._diarize = async () => {
+    calls++;
+    controller.abort();
+    return [{ speaker: "a" }, { speaker: "b" }];
+  };
+  await manager.diarize("fixture.wav", { maxSpeakers: 1, signal: controller.signal });
+  assert.equal(calls, 1);
+});

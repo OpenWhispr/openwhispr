@@ -600,6 +600,7 @@ interface SegmentRowProps {
   onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
+  onPlaySegment?: (segment: TranscriptSegment) => void;
   onToggleSelect?: (segmentId: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }
@@ -625,6 +626,7 @@ const SegmentRow = memo(function SegmentRow({
   onConfirmSuggestion,
   onDismissSuggestion,
   onAttachSpeakerEmail,
+  onPlaySegment,
   onToggleSelect,
   t,
 }: SegmentRowProps) {
@@ -703,7 +705,20 @@ const SegmentRow = memo(function SegmentRow({
             isSelected && "ring-2 ring-primary/60"
           )}
         >
-          <span dir="auto">{segment.text}</span>
+          {onPlaySegment && segment.timestamp != null ? (
+            <button
+              type="button"
+              className="text-start w-full"
+              title={t("notes.audio.playSegment")}
+              onClick={() => {
+                if (window.getSelection()?.isCollapsed !== false) onPlaySegment(segment);
+              }}
+            >
+              <span dir="auto">{segment.text}</span>
+            </button>
+          ) : (
+            <span dir="auto">{segment.text}</span>
+          )}
         </div>
         {selectable && (
           <SelectCheckbox
@@ -743,6 +758,7 @@ interface MeetingTranscriptChatProps {
   onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
+  onPlaySegment?: (segment: TranscriptSegment) => void;
   onToggleSelect?: (segmentId: string) => void;
 }
 
@@ -767,6 +783,7 @@ export function MeetingTranscriptChat({
   onConfirmSuggestion,
   onDismissSuggestion,
   onAttachSpeakerEmail,
+  onPlaySegment,
   onToggleSelect,
 }: MeetingTranscriptChatProps) {
   const { t } = useTranslation();
@@ -917,16 +934,18 @@ export function MeetingTranscriptChat({
               <div className="flex items-center gap-0.5 rounded-md border border-border bg-surface-2/60">
                 <button
                   onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount - 1)}
-                  disabled={sessionExpectedCount <= 1}
+                  disabled={sessionExpectedCount <= 0}
                   className="px-1.5 py-0.5 rounded-s-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                   aria-label={t("notes.speaker.pill.decAria")}
                 >
                   −
                 </button>
                 <span className="px-1.5 tabular-nums" aria-live="polite">
-                  {sessionExpectedCount === 1
-                    ? t("notes.speaker.pill.justYou")
-                    : sessionExpectedCount}
+                  {sessionExpectedCount === 0
+                    ? t("notes.speaker.pill.auto")
+                    : sessionExpectedCount === 1
+                      ? t("notes.speaker.pill.justYou")
+                      : sessionExpectedCount}
                 </span>
                 <button
                   onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount + 1)}
@@ -1005,6 +1024,7 @@ export function MeetingTranscriptChat({
                     onConfirmSuggestion={onConfirmSuggestion}
                     onDismissSuggestion={onDismissSuggestion}
                     onAttachSpeakerEmail={onAttachSpeakerEmail}
+                    onPlaySegment={onPlaySegment}
                     onToggleSelect={onToggleSelect}
                     t={t}
                   />

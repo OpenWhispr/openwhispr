@@ -889,7 +889,6 @@
         "managedRouteInvalid": "La trascrizione gestita non è potuta partire per un'incoerenza di configurazione. Riprova o contatta l'amministratore.",
         "managedAuthRejected": "Le credenziali di trascrizione gestita della tua organizzazione sono state rifiutate. Contatta l'amministratore.",
         "streamingOnlyProvider": "Questo provider supporta solo la trascrizione dal vivo. Scegli un altro provider per i caricamenti di file e i nuovi tentativi.",
-        "streamingOnlyProvider": "Questo provider supporta solo la trascrizione dal vivo. Scegli un altro provider per i caricamenti di file e i nuovi tentativi.",
         "providerKeyMissing": "Nessuna chiave API impostata per il tuo provider di trascrizione. Aggiungila in Impostazioni → Da voce a testo."
       },
       "translationFallback": {
@@ -3138,7 +3137,8 @@
         "labelToggle": "Etichetta i partecipanti",
         "toggleAria": "Attiva/disattiva l'identificazione dei partecipanti per questa registrazione",
         "incAria": "Aumenta il numero di partecipanti previsti",
-        "decAria": "Diminuisci il numero di partecipanti previsti"
+        "decAria": "Diminuisci il numero di partecipanti previsti",
+        "auto": "Auto"
       },
       "consentNotice": "Ottieni sempre il consenso quando registri altre persone"
     },
@@ -3179,6 +3179,21 @@
       "author": {
         "you": "Tu"
       }
+    },
+    "audio": {
+      "title": "Meeting audio",
+      "keep": "Keep original audio",
+      "retention": "Retention",
+      "forever": "Forever",
+      "days": "{{count}} days",
+      "play": "Play",
+      "reveal": "Reveal in folder",
+      "mic": "Microphone",
+      "system": "System audio",
+      "noAudio": "No retained audio. These settings apply to new meeting recordings.",
+      "noMatchingAudio": "No retained audio with a matching timestamp is available for this segment.",
+      "playbackError": "Recording could not be played. Try revealing the source file.",
+      "playSegment": "Play recording from this segment"
     }
   },
   "dictionary": {

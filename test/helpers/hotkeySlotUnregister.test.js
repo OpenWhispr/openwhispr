@@ -8,6 +8,7 @@ const registered = new Map();
 const unregisterCalls = [];
 require.cache[require.resolve("electron")] = {
   exports: {
+    app: { isPackaged: false },
     globalShortcut: {
       register(accelerator, callback) {
         if (registered.has(accelerator)) return false;

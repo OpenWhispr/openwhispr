@@ -61,7 +61,7 @@ function isGlobeLikeHotkey(hotkey) {
 }
 
 function isMouseButtonHotkey(hotkey) {
-  return /^MouseButton[45]$/i.test(hotkey || "");
+  return /^MouseButton[345]$/i.test(hotkey || "");
 }
 
 function normalizeToAccelerator(hotkey) {
@@ -376,9 +376,15 @@ class HotkeyManager extends EventEmitter {
     const keys = [];
     for (const [slotName, slot] of this.slots) {
       for (const hotkey of slot.hotkeys ?? []) {
-        if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
+        if (!hotkey || isGlobeLikeHotkey(hotkey)) continue;
+        if (isMouseButtonHotkey(hotkey) && process.platform !== "win32") continue;
         const pushToTalk = slotName === "dictation" && activationMode === "push";
-        if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
+        if (
+          pushToTalk ||
+          isMouseButtonHotkey(hotkey) ||
+          isModifierOnlyHotkey(hotkey) ||
+          isRightSideModifier(hotkey)
+        ) {
           keys.push(hotkey);
         }
       }
@@ -494,11 +500,11 @@ class HotkeyManager extends EventEmitter {
   _registerSingleHotkey(hotkey, callback) {
     try {
       if (isMouseButtonHotkey(hotkey)) {
-        if (process.platform !== "darwin") {
+        if (process.platform !== "darwin" && process.platform !== "win32") {
           return { success: false, hotkey, error: i18nMain.t("hotkey.errors.mouseButtonOnlyMac") };
         }
         debugLogger.log(
-          `[HotkeyManager] Mouse button "${hotkey}" set - using macOS native listener`
+          `[HotkeyManager] Mouse button "${hotkey}" set - using platform native listener`
         );
         return { success: true, hotkey, accelerator: null };
       }

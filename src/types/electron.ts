@@ -1252,6 +1252,16 @@ declare global {
         ) => void
       ) => () => void;
 
+      getMeetingAudioSettings: () => Promise<import("./meetingAudio").MeetingAudioSettings>;
+      setMeetingAudioSettings: (
+        settings: import("./meetingAudio").MeetingAudioSettings
+      ) => Promise<import("./meetingAudio").MeetingAudioSettings>;
+      listMeetingAudio: (
+        noteId: number
+      ) => Promise<import("./meetingAudio").MeetingAudioRecording[]>;
+      revealMeetingAudio: (noteId: number, id: string, source: string) => Promise<void>;
+      onMeetingAudioSaved: (callback: (data: { noteId: number }) => void) => () => void;
+      onMeetingAudioError: (callback: (data: { error: string }) => void) => () => void;
       getNoteRecordingConfig?: () => Promise<NoteRecordingConfigResult | null>;
 
       // Database operations

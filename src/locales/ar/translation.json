@@ -1845,7 +1845,8 @@
         "labelToggle": "تسمية المتحدثين",
         "toggleAria": "تبديل تحديد المتحدثين لهذا التسجيل",
         "incAria": "زيادة عدد المتحدثين المتوقع",
-        "decAria": "تقليل عدد المتحدثين المتوقع"
+        "decAria": "تقليل عدد المتحدثين المتوقع",
+        "auto": "Auto"
       },
       "consentNotice": "احصل دائمًا على الموافقة عند تسجيل الآخرين"
     },
@@ -1894,6 +1895,21 @@
       "author": {
         "you": "أنت"
       }
+    },
+    "audio": {
+      "title": "Meeting audio",
+      "keep": "Keep original audio",
+      "retention": "Retention",
+      "forever": "Forever",
+      "days": "{{count}} days",
+      "play": "Play",
+      "reveal": "Reveal in folder",
+      "mic": "Microphone",
+      "system": "System audio",
+      "noAudio": "No retained audio. These settings apply to new meeting recordings.",
+      "noMatchingAudio": "No retained audio with a matching timestamp is available for this segment.",
+      "playbackError": "Recording could not be played. Try revealing the source file.",
+      "playSegment": "Play recording from this segment"
     }
   },
   "onboarding": {

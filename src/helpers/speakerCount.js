@@ -4,6 +4,7 @@ const { MAX_SPEAKER_COUNT } = require("../constants/speakerDetection.json");
 // 1 is meaningless. Cloud sync persists whatever the server sends, so invalid
 // values arrive as data rather than as programmer error and must degrade to null.
 function normalizeStoredSpeakerCount(value) {
+  if (typeof value !== "number" && typeof value !== "string") return null;
   const count = Number(value);
   if (!Number.isInteger(count) || count < 1) return null;
   return Math.min(count, MAX_SPEAKER_COUNT);

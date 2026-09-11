@@ -500,7 +500,14 @@ export function HotkeyInput({
         return;
       }
 
-      const mouseHotkey = e.button === 3 ? "MouseButton4" : e.button === 4 ? "MouseButton5" : null;
+      const mouseHotkey =
+        e.button === 1
+          ? "MouseButton3"
+          : e.button === 3
+            ? "MouseButton4"
+            : e.button === 4
+              ? "MouseButton5"
+              : null;
       if (!mouseHotkey) return;
 
       e.preventDefault();

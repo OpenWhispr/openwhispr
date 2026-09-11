@@ -283,7 +283,33 @@ class DiarizationManager {
     return { success: false, error: "No active download to cancel" };
   }
 
+  // A participant count is an upper bound, never a demand to split a voice.
+  // Let sherpa use its distance threshold first; only rerun constrained
+  // agglomerative clustering when the automatic result exceeds the cap.
   async diarize(wavPath, options = {}) {
+    const { normalizeStoredSpeakerCount } = require("./speakerCount");
+    const cap = normalizeStoredSpeakerCount(options.maxSpeakers ?? options.numSpeakers);
+    const startedAt = Date.now();
+    const automatic = await this._diarize(wavPath, { ...options, numSpeakers: -1 });
+    const observed = new Set(automatic.map((segment) => segment.speaker)).size;
+    const constrained = cap != null && observed > cap && !options.signal?.aborted;
+    const segments = constrained
+      ? await this._diarize(wavPath, { ...options, numSpeakers: cap })
+      : automatic;
+    debugLogger.info("Speaker clustering completed", {
+      stage: "clustering",
+      maxSpeakers: cap,
+      automaticClusters: observed,
+      resultClusters: new Set(segments.map((segment) => segment.speaker)).size,
+      constrained,
+      elapsedMs: Date.now() - startedAt,
+      confidence: null,
+      confidenceReason: "The diarization CLI does not expose calibrated confidence",
+    });
+    return segments;
+  }
+
+  async _diarize(wavPath, options = {}) {
     const { numSpeakers = -1, threshold = 0.55, signal = null } = options;
 
     if (signal?.aborted) return [];

@@ -22,6 +22,12 @@ const {
   session,
   systemPreferences,
 } = require("electron");
+require("electron").protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "meeting-audio",
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+  },
+]);
 const path = require("path");
 const http = require("http");
 const tls = require("tls");
@@ -1692,6 +1698,7 @@ async function startApp() {
     // Dictation supports push-to-talk and needs the overlay window; meeting
     // drives other windows (matching their globalShortcut callbacks and macOS).
     const dispatchNativeKeyDown = (key) => {
+      if (hotkeyManager.isInListeningMode()) return;
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         if (windowManager.getActivationMode() === "push") {

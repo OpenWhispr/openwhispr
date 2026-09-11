@@ -38,7 +38,7 @@ class GlobeKeyManager extends EventEmitter {
   setConfiguration({ mouseButtons = [], suppressGlobeAction = false } = {}) {
     const next = {
       mouseButtons: [
-        ...new Set(mouseButtons.filter((button) => /^MouseButton[45]$/i.test(button))),
+        ...new Set(mouseButtons.filter((button) => /^MouseButton[345]$/i.test(button))),
       ].sort(),
       suppressGlobeAction: Boolean(suppressGlobeAction),
     };

@@ -953,7 +953,7 @@ class IPCHandlers {
   }
 
   _resolveNoteExpectedSpeakerCount(note) {
-    return this._noteExpectedSpeakerCountOrNull(note) ?? DEFAULT_EXPECTED_SPEAKER_COUNT;
+    return this._noteExpectedSpeakerCountOrNull(note) ?? 0;
   }
 
   _resolveInitialMeetingSpeakerConfig(noteId) {
@@ -1566,6 +1566,37 @@ class IPCHandlers {
 
     ipcMain.handle("db-delete-transcription", async (event, id) => {
       return this.deleteTranscriptionInternal(id);
+    });
+
+    const getMeetingAudioStorage = () => {
+      if (!this.meetingAudioStorage) {
+        const { MeetingAudioStorage } = require("./meetingAudioStorage");
+        this.meetingAudioStorage = new MeetingAudioStorage(
+          path.join(app.getPath("userData"), "meeting-audio"),
+          (error) => broadcastToWindows("meeting-audio-error", { error: error.message })
+        );
+      }
+      return this.meetingAudioStorage;
+    };
+    this.getMeetingAudioStorage = getMeetingAudioStorage;
+    const { createAudioHandler } = require("./meetingAudioProtocol");
+    require("electron").protocol.handle(
+      "meeting-audio",
+      createAudioHandler(getMeetingAudioStorage, (noteId) => !!this.databaseManager.getNote(noteId))
+    );
+    ipcMain.handle("meeting-audio-settings", (_event, value) => {
+      const storage = getMeetingAudioStorage();
+      return value === undefined ? storage.settings : storage.setSettings(value);
+    });
+    ipcMain.handle("meeting-audio-list", (_event, noteId) => {
+      if (!Number.isSafeInteger(noteId) || !this.databaseManager.getNote(noteId)) return [];
+      const storage = getMeetingAudioStorage();
+      storage.cleanup();
+      return storage.list(noteId);
+    });
+    ipcMain.handle("meeting-audio-reveal", (_event, noteId, id, source) => {
+      if (!this.databaseManager.getNote(noteId)) throw new Error("Note not found");
+      shell.showItemInFolder(getMeetingAudioStorage().resolveTrack(noteId, id, source));
     });
 
     // Audio storage handlers
@@ -3663,10 +3694,7 @@ class IPCHandlers {
         if (!realPath) return { success: false, error: "File path not allowed" };
         filePath = realPath;
 
-        const numSpeakers = Math.min(
-          MAX_SPEAKER_COUNT,
-          Math.max(-1, Math.round(Number(options.numSpeakers) || -1))
-        );
+        const numSpeakers = normalizeStoredSpeakerCount(options.numSpeakers) ?? -1;
 
         const { convertToWav } = require("./ffmpegUtils");
         const { getSafeTempDir } = require("./safeTempDir");
@@ -6633,6 +6661,10 @@ class IPCHandlers {
     };
 
     const captureMeetingDiarizationState = async () => {
+      await this.meetingAudioStorage
+        ?.stop()
+        .catch((error) => broadcastToWindows("meeting-audio-error", { error: error.message }));
+      broadcastToWindows("meeting-audio-saved", { noteId: meetingNoteId });
       const systemPcmPath = meetingDiarizationPath;
       const systemStartedAt = meetingDiarizationStartedAt;
       const micPcmPath = meetingMicDiarizationPath;
@@ -7252,6 +7284,7 @@ class IPCHandlers {
 
     let meetingLocalMode = false;
     let meetingLocalBuffers = { mic: [], system: [] };
+    let meetingLocalChunkStarts = { mic: null, system: null };
     let meetingLocalTimer = null;
     let meetingLocalWin = null;
     let meetingLocalTranscript = "";
@@ -7297,7 +7330,7 @@ class IPCHandlers {
 
     const resolveSessionMaxSpeakers = () => {
       const count = this.activeMeetingSpeakerConfig?.expectedCount;
-      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
+      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : MAX_SPEAKER_COUNT;
       return Math.max(1, total - 1);
     };
 
@@ -7334,6 +7367,7 @@ class IPCHandlers {
         // Local STT timestamps each batch with wall time, not a sample cursor.
         // Large synthetic gaps would dilute speech and inflate the next batch.
         if (synthetic) return;
+        meetingLocalChunkStarts[source] ??= capturedAt ?? Date.now();
         meetingLocalBuffers[source].push(buffer);
         return;
       }
@@ -7620,8 +7654,10 @@ class IPCHandlers {
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
 
+      const chunkStartedAt = meetingLocalChunkStarts[source] ?? Date.now();
       const pcm24k = Buffer.concat(chunks);
       meetingLocalBuffers[source] = [];
+      meetingLocalChunkStarts[source] = null;
 
       const pcm16k = downsample24kTo16k(pcm24k);
 
@@ -7674,7 +7710,7 @@ class IPCHandlers {
 
         if (result?.success && result.text?.trim()) {
           const text = result.text.trim();
-          const segTimestamp = Date.now();
+          const segTimestamp = chunkStartedAt;
           let micSuppression = null;
           if (source === "mic") {
             const chunkDurationMs = (pcm24k.length / 2 / 24000) * 1000;
@@ -7838,6 +7874,7 @@ class IPCHandlers {
       this._activeMeetingNoteId = null;
       meetingLocalMode = false;
       meetingLocalBuffers = { mic: [], system: [] };
+      meetingLocalChunkStarts = { mic: null, system: null };
       if (meetingDiarizationStream) {
         meetingDiarizationStream.end();
         meetingDiarizationStream = null;
@@ -8330,6 +8367,11 @@ class IPCHandlers {
         meetingOneOnOneProfileBound = false;
         meetingNoteId = options.noteId ?? null;
         this._activeMeetingNoteId = meetingNoteId;
+        try {
+          this.getMeetingAudioStorage().start(meetingNoteId);
+        } catch (error) {
+          broadcastToWindows("meeting-audio-error", { error: error.message });
+        }
 
         // Seed the speaker cap from the note/calendar participants up front so live
         // identification isn't stuck at the default if the renderer never pushes a config.
@@ -8377,6 +8419,7 @@ class IPCHandlers {
           meetingLocalLanguage = options.language || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalBuffers = { mic: [], system: [] };
+          meetingLocalChunkStarts = { mic: null, system: null };
           meetingLocalTranscript = "";
 
           await startLiveSpeakerIdentification(meetingLocalWin, systemAudioMode);
@@ -8424,6 +8467,7 @@ class IPCHandlers {
           oneOnOneAttendee: meetingOneOnOneAttendee,
         });
       } catch (error) {
+        await this.meetingAudioStorage?.stop().catch(() => {});
         await rollbackMeetingTranscriptionStart();
         this.meetingDetectionEngine?.endRecordingSession(recordingSessionId);
         this.meetingDetectionEngine?.setUserRecording(false);
@@ -8436,6 +8480,7 @@ class IPCHandlers {
 
     const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      this.meetingAudioStorage?.append(source, outboundBuffer, capturedAt ?? Date.now());
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.
       if (!synthetic) {
@@ -11316,13 +11361,18 @@ class IPCHandlers {
     ipcMain.handle("meeting-set-session-speaker-config", async (_event, payload) => {
       try {
         const enabled = payload?.enabled !== false;
-        const expectedCount = Math.max(
-          1,
-          Math.min(
-            MAX_SPEAKER_COUNT,
-            Number(payload?.expectedCount) || DEFAULT_EXPECTED_SPEAKER_COUNT
-          )
-        );
+        const rawCount = payload?.expectedCount;
+        if (
+          rawCount != null &&
+          rawCount !== 0 &&
+          (!Number.isInteger(rawCount) || rawCount < 1 || rawCount > MAX_SPEAKER_COUNT)
+        ) {
+          return {
+            success: false,
+            error: "Participant count must be Auto or an integer from 1 to " + MAX_SPEAKER_COUNT,
+          };
+        }
+        const expectedCount = rawCount ?? 0;
         // Only a stepper-set count is explicit; the diarization toggle reuses this
         // channel and must not freeze the count against roster-driven refreshes.
         this.activeMeetingSpeakerConfig = {
@@ -11333,7 +11383,7 @@ class IPCHandlers {
         liveSpeakerIdentifier.setEnabled(enabled);
         // Live identification only labels other speakers (the mic track is "you"),
         // so cap at expectedCount - 1 to match resolveSessionMaxSpeakers().
-        liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
+        liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, (expectedCount || MAX_SPEAKER_COUNT) - 1));
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -11918,7 +11968,7 @@ class IPCHandlers {
     // mid-meeting postdate the config snapshot taken at recording start.
     let expectedTotal = sessionConfig?.explicit ? sessionConfig.expectedCount : null;
 
-    if (!expectedTotal && noteId != null) {
+    if (!sessionConfig?.explicit && !expectedTotal && noteId != null) {
       try {
         expectedTotal = this._noteExpectedSpeakerCountOrNull(this.databaseManager.getNote(noteId));
       } catch (_) {
@@ -11937,18 +11987,14 @@ class IPCHandlers {
       return { numSpeakers, cap: numSpeakers };
     }
 
-    if (observedSpeakerIds.size >= 2) {
-      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
-      return { numSpeakers, cap: numSpeakers };
-    }
-
+    // Auto must not turn provisional live labels into a fixed speaker count.
     if (micMode) {
-      return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
+      return { numSpeakers: -1, cap: MAX_SPEAKER_COUNT };
     }
 
     // Only system audio reaches the diarizer (the mic track is "you"), so the cap
     // counts other speakers — same total - 1 basis as the branches above.
-    return { numSpeakers: -1, cap: Math.max(1, DEFAULT_EXPECTED_SPEAKER_COUNT - 1) };
+    return { numSpeakers: -1, cap: Math.max(1, MAX_SPEAKER_COUNT - 1) };
   }
 
   _startOrSkipDiarization(
@@ -12007,10 +12053,9 @@ class IPCHandlers {
           observedSpeakerIds,
           diarizedSource,
         });
-        let diarizationSegments = await this.diarizationManager.diarize(
-          tmpWav,
-          numSpeakers > 0 ? { numSpeakers } : {}
-        );
+        let diarizationSegments = await this.diarizationManager.diarize(tmpWav, {
+          maxSpeakers: cap,
+        });
         if (cap != null) {
           diarizationSegments = this.diarizationManager.capSpeakerClusters(
             diarizationSegments,
@@ -12147,7 +12192,18 @@ class IPCHandlers {
           }
         }
 
-        send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
+        // Merge works in track-relative seconds; persisted segments must retain
+        // the original epoch timeline for seeking and subsequent recordings.
+        send({
+          segments: enrichedSegments.map((segment) => ({
+            ...segment,
+            timestamp:
+              isEpochMs && segment.timestamp != null
+                ? startMs + segment.timestamp * 1000
+                : segment.timestamp,
+          })),
+          speakerEmbeddings: speakerEmbeddingsMap,
+        });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
         send({ segments: [] });
