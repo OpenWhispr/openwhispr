@@ -4,7 +4,6 @@ import App from "./App.jsx";
 import AgentDictationPillOverlay from "./components/dictation/AgentDictationPillOverlay.tsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
 import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
-import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
 import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
@@ -31,10 +30,6 @@ export default function AppRouter() {
 
   if (params.includes("meeting-notification=true")) {
     return <MeetingNotificationOverlay />;
-  }
-
-  if (params.includes("update-notification=true")) {
-    return <UpdateNotificationOverlay />;
   }
 
   if (params.includes("agent-dictation-pill=true")) {

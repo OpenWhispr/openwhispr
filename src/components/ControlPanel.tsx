@@ -3,16 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
-import {
-  Download,
-  RefreshCw,
-  Loader2,
-  AlertTriangle,
-  Zap,
-  ChevronLeft,
-  PanelLeftOpen,
-  PanelLeftClose,
-} from "./icons";
+import { AlertTriangle, Zap, ChevronLeft, PanelLeftOpen, PanelLeftClose } from "./icons";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { RequiredModelsBanner } from "./RequiredModelsBanner";
@@ -183,15 +174,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     isPastDue: usage?.isPastDue ?? false,
   });
 
-  const {
-    status: updateStatus,
-    downloadProgress,
-    isDownloading,
-    isInstalling,
-    downloadUpdate,
-    installUpdate,
-    error: updateError,
-  } = useUpdater();
+  const { status: updateStatus, isDownloading, error: updateError } = useUpdater();
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
   const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
@@ -793,72 +776,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     loadTranscriptions(!showDiscarded);
   }, [loadTranscriptions, showDiscarded]);
 
-  const handleUpdateClick = async () => {
-    if (updateStatus.updateDownloaded) {
-      showConfirmDialog({
-        title: t("controlPanel.update.installTitle"),
-        description: t("controlPanel.update.installDescription"),
-        onConfirm: async () => {
-          try {
-            await installUpdate();
-          } catch (error) {
-            toast({
-              title: t("controlPanel.update.couldNotInstallTitle"),
-              description: t("controlPanel.update.couldNotInstallDescription"),
-              variant: "destructive",
-            });
-          }
-        },
-      });
-    } else if (updateStatus.updateAvailable && !isDownloading) {
-      try {
-        await downloadUpdate();
-      } catch (error) {
-        toast({
-          title: t("controlPanel.update.couldNotDownloadTitle"),
-          description: t("controlPanel.update.couldNotDownloadDescription"),
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  const getUpdateButtonContent = () => {
-    if (isInstalling) {
-      return (
-        <>
-          <Loader2 size={14} className="animate-spin" />
-          <span>{t("controlPanel.update.installing")}</span>
-        </>
-      );
-    }
-    if (isDownloading) {
-      return (
-        <>
-          <Loader2 size={14} className="animate-spin" />
-          <span>{Math.round(downloadProgress)}%</span>
-        </>
-      );
-    }
-    if (updateStatus.updateDownloaded) {
-      return (
-        <>
-          <RefreshCw size={14} />
-          <span>{t("controlPanel.update.installButton")}</span>
-        </>
-      );
-    }
-    if (updateStatus.updateAvailable) {
-      return (
-        <>
-          <Download size={14} />
-          <span>{t("controlPanel.update.availableButton")}</span>
-        </>
-      );
-    }
-    return null;
-  };
-
   return (
     <div className="h-screen bg-background flex flex-col">
       <MeetingRecordingMount />
@@ -998,23 +915,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             isSignedIn={isSignedIn}
             authLoaded={authLoaded}
             upsell={upsell}
-            updateAction={
-              !updateStatus.isDevelopment &&
-              (updateStatus.updateAvailable ||
-                updateStatus.updateDownloaded ||
-                isDownloading ||
-                isInstalling) ? (
-                <Button
-                  variant={updateStatus.updateDownloaded ? "default" : "outline"}
-                  size="sm"
-                  onClick={handleUpdateClick}
-                  disabled={isInstalling || isDownloading}
-                  className="gap-1.5 text-xs w-full h-7"
-                >
-                  {getUpdateButtonContent()}
-                </Button>
-              ) : undefined
-            }
           />
         </div>
         <main className="flex-1 flex flex-col overflow-hidden">

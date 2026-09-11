@@ -1235,8 +1235,8 @@ export default function SettingsPage({
     setNotifyMeetingDetection,
     notifyCalendarReminders,
     setNotifyCalendarReminders,
-    notifyUpdates,
-    setNotifyUpdates,
+    autoUpdatesEnabled,
+    setAutoUpdatesEnabled,
     audioCuesEnabled,
     setAudioCuesEnabled,
     pauseMediaOnDictation,
@@ -1614,9 +1614,8 @@ export default function SettingsPage({
       notificationsEnabled,
       notifyMeetingDetection,
       notifyCalendarReminders,
-      notifyUpdates,
     });
-  }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders, notifyUpdates]);
+  }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders]);
 
   const handleAutoStartChange = async (enabled: boolean) => {
     if (!window.electronAPI?.setAutoStartEnabled) return;
@@ -3170,18 +3169,6 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.general.notifications.updates")}
-                    description={t("settingsPage.general.notifications.updatesDescription")}
-                  >
-                    <Toggle
-                      checked={notifyUpdates}
-                      onChange={setNotifyUpdates}
-                      disabled={!notificationsEnabled}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 
@@ -4570,9 +4557,11 @@ EOF`,
                     description={
                       updateStatus.isDevelopment
                         ? t("settingsPage.general.updates.devMode")
-                        : isUpdateAvailable
-                          ? t("settingsPage.general.updates.newVersionAvailable")
-                          : t("settingsPage.general.updates.latestVersion")
+                        : !updateStatus.isSupported
+                          ? t("settingsPage.general.updates.managedByPackageManager")
+                          : isUpdateAvailable
+                            ? t("settingsPage.general.updates.newVersionAvailable")
+                            : t("settingsPage.general.updates.latestVersion")
                     }
                   >
                     <div className="flex items-center gap-2.5">
@@ -4599,6 +4588,17 @@ EOF`,
                   </SettingsRow>
                 </SettingsPanelRow>
 
+                {updateStatus.isSupported && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.general.updates.automaticUpdates")}
+                      description={t("settingsPage.general.updates.automaticUpdatesDescription")}
+                    >
+                      <Toggle checked={autoUpdatesEnabled} onChange={setAutoUpdatesEnabled} />
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
+
                 <SettingsPanelRow>
                   <div className="space-y-2.5">
                     <Button
@@ -4615,7 +4615,11 @@ EOF`,
                           }
                         } catch {}
                       }}
-                      disabled={checkingForUpdates || updateStatus.isDevelopment}
+                      disabled={
+                        checkingForUpdates ||
+                        updateStatus.isDevelopment ||
+                        !updateStatus.isSupported
+                      }
                       variant="outline"
                       className="w-full"
                       size="sm"

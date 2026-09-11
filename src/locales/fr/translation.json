@@ -581,16 +581,7 @@
       "readyTitle": "Mise à jour prête à installer",
       "readyDescription": "Cliquez sur « Installer la mise à jour » pour redémarrer avec la dernière version.",
       "problemTitle": "Problème pendant la mise à jour",
-      "problemDescription": "Nous n'avons pas pu terminer la mise à jour. Réessayez plus tard.",
-      "installTitle": "Installer la mise à jour",
-      "installDescription": "OpenWhispr va redémarrer pour appliquer la mise à jour. Le travail en cours sera sauvegardé.",
-      "couldNotInstallTitle": "Impossible d'installer la mise à jour",
-      "couldNotInstallDescription": "Une erreur est survenue. Veuillez réessayer.",
-      "couldNotDownloadTitle": "Impossible de télécharger la mise à jour",
-      "couldNotDownloadDescription": "Vérifiez votre connexion internet puis réessayez.",
-      "installing": "Installation...",
-      "installButton": "Installer la mise à jour",
-      "availableButton": "Mise à jour disponible"
+      "problemDescription": "Nous n'avons pas pu terminer la mise à jour. Réessayez plus tard."
     },
     "limit": {
       "weeklyTitle": "Limite hebdomadaire atteinte",
@@ -2189,9 +2180,7 @@
         "meetingDetection": "Détection de réunion",
         "meetingDetectionDescription": "Prévenir quand une réunion est détectée pour lancer l'enregistrement",
         "calendarReminders": "Rappels de calendrier",
-        "calendarRemindersDescription": "Prévenir quand une réunion planifiée va commencer",
-        "updates": "Mises à jour",
-        "updatesDescription": "Prévenir quand une nouvelle version est disponible"
+        "calendarRemindersDescription": "Prévenir quand une réunion planifiée va commencer"
       },
       "clipboard": {
         "title": "Presse-papiers",
@@ -2290,6 +2279,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "Mises à jour automatiques",
+        "automaticUpdatesDescription": "Télécharger et installer les mises à jour en arrière-plan",
         "badges": {
           "dev": "Dev",
           "latest": "À jour",
@@ -2338,6 +2329,7 @@
         "downloading": "Téléchargement... {{progress}}%",
         "installAndRestart": "Installer et redémarrer",
         "latestVersion": "Vous avez la dernière version",
+        "managedByPackageManager": "Les mises à jour sont installées via votre gestionnaire de paquets",
         "newVersion": "Une version plus récente est disponible",
         "newVersionAvailable": "Nouvelle version disponible",
         "restarting": "Redémarrage...",
@@ -3975,11 +3967,6 @@
       "open": "Ouvrir",
       "dismiss": "Fermer"
     }
-  },
-  "updateNotification": {
-    "title": "Mise à jour OpenWhispr disponible",
-    "body": "La version {{version}} est prête à télécharger",
-    "cta": "Mettre à jour"
   },
   "permissionsGate": {
     "title": "Autorisations requises",

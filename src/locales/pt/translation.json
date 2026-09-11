@@ -560,16 +560,7 @@
       "readyTitle": "Atualização pronta para instalar",
       "readyDescription": "Clique em 'Instalar atualização' para reiniciar com a versão mais recente.",
       "problemTitle": "Houve um problema na atualização",
-      "problemDescription": "Não foi possível concluir a atualização. Tente novamente mais tarde.",
-      "installTitle": "Instalar atualização",
-      "installDescription": "O OpenWhispr será reiniciado para aplicar a atualização. O trabalho em andamento será salvo.",
-      "couldNotInstallTitle": "Não foi possível instalar a atualização",
-      "couldNotInstallDescription": "Algo deu errado. Tente novamente.",
-      "couldNotDownloadTitle": "Não foi possível baixar a atualização",
-      "couldNotDownloadDescription": "Verifique sua conexão e tente novamente.",
-      "installing": "Instalando...",
-      "installButton": "Instalar atualização",
-      "availableButton": "Atualização disponível"
+      "problemDescription": "Não foi possível concluir a atualização. Tente novamente mais tarde."
     },
     "limit": {
       "weeklyTitle": "Limite semanal atingido",
@@ -1879,9 +1870,7 @@
         "meetingDetection": "Detecção de reuniões",
         "meetingDetectionDescription": "Notificar quando uma reunião for detectada para iniciar a gravação",
         "calendarReminders": "Lembretes do calendário",
-        "calendarRemindersDescription": "Notificar quando uma reunião agendada está prestes a começar",
-        "updates": "Atualizações do app",
-        "updatesDescription": "Notificar quando uma nova versão estiver disponível"
+        "calendarRemindersDescription": "Notificar quando uma reunião agendada está prestes a começar"
       },
       "clipboard": {
         "title": "Área de transferência",
@@ -1980,6 +1969,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "Atualizações automáticas",
+        "automaticUpdatesDescription": "Baixar e instalar atualizações em segundo plano",
         "badges": {
           "dev": "Dev",
           "latest": "Mais recente",
@@ -2028,6 +2019,7 @@
         "downloading": "Baixando... {{progress}}%",
         "installAndRestart": "Instalar e reiniciar",
         "latestVersion": "Você está na versão mais recente",
+        "managedByPackageManager": "As atualizações são instaladas pelo seu gerenciador de pacotes",
         "newVersion": "Uma versão mais recente está disponível",
         "newVersionAvailable": "Nova versão disponível",
         "restarting": "Reiniciando...",
@@ -3851,11 +3843,6 @@
       "open": "Abrir",
       "dismiss": "Fechar"
     }
-  },
-  "updateNotification": {
-    "title": "Atualização do OpenWhispr disponível",
-    "body": "A versão {{version}} está pronta para download",
-    "cta": "Atualizar agora"
   },
   "permissionsGate": {
     "title": "Permissões necessárias",

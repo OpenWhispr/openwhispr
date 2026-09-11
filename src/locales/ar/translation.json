@@ -468,16 +468,7 @@
       "readyTitle": "التحديث جاهز للتثبيت",
       "readyDescription": "انقر فوق «تثبيت التحديث» لإعادة التشغيل باستخدام أحدث إصدار.",
       "problemTitle": "واجه التحديث مشكلة",
-      "problemDescription": "لم نتمكن من إكمال التحديث. يرجى المحاولة مرة أخرى لاحقًا.",
-      "installTitle": "تثبيت التحديث",
-      "installDescription": "سيتم إعادة تشغيل OpenWhispr لتطبيق التحديث. سيتم حفظ أي عمل قيد التقدم.",
-      "couldNotInstallTitle": "تعذر تثبيت التحديث",
-      "couldNotInstallDescription": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
-      "couldNotDownloadTitle": "تعذر تنزيل التحديث",
-      "couldNotDownloadDescription": "تحقق من اتصالك بالإنترنت وحاول مرة أخرى.",
-      "installing": "جاري التثبيت...",
-      "installButton": "تثبيت التحديث",
-      "availableButton": "التحديث متاح"
+      "problemDescription": "لم نتمكن من إكمال التحديث. يرجى المحاولة مرة أخرى لاحقًا."
     },
     "limit": {
       "weeklyTitle": "تم الوصول إلى الحد الأسبوعي",
@@ -2910,9 +2901,7 @@
         "meetingDetection": "اكتشاف الاجتماع",
         "meetingDetectionDescription": "إعلام عند اكتشاف اجتماع حتى تتمكن من بدء التسجيل",
         "calendarReminders": "تذكيرات التقويم",
-        "calendarRemindersDescription": "إعلام عند اقتراب موعد بدء اجتماع مجدول",
-        "updates": "تحديثات التطبيق",
-        "updatesDescription": "إعلام عند توفر إصدار جديد"
+        "calendarRemindersDescription": "إعلام عند اقتراب موعد بدء اجتماع مجدول"
       },
       "clipboard": {
         "title": "الحافظة",
@@ -3011,6 +3000,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "التحديثات التلقائية",
+        "automaticUpdatesDescription": "تنزيل التحديثات وتثبيتها في الخلفية",
         "badges": {
           "dev": "تطوير",
           "latest": "الأحدث",
@@ -3059,6 +3050,7 @@
         "downloading": "جاري التنزيل... {{progress}}%",
         "installAndRestart": "تثبيت وإعادة التشغيل",
         "latestVersion": "أنت تستخدم أحدث إصدار",
+        "managedByPackageManager": "يتم تثبيت التحديثات عبر مدير الحزم لديك",
         "newVersion": "يتوفر إصدار أحدث",
         "newVersionAvailable": "يتوفر إصدار جديد",
         "restarting": "جاري إعادة التشغيل...",
@@ -4100,11 +4092,6 @@
       "open": "فتح",
       "dismiss": "تجاهل"
     }
-  },
-  "updateNotification": {
-    "title": "تحديث OpenWhispr متوفر",
-    "body": "الإصدار {{version}} جاهز للتنزيل",
-    "cta": "تحديث الآن"
   },
   "permissionsGate": {
     "title": "الأذونات مطلوبة",

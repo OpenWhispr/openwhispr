@@ -581,16 +581,7 @@
       "readyTitle": "Update bereit zur Installation",
       "readyDescription": "Klicken Sie auf 'Update installieren', um mit der neuesten Version neu zu starten.",
       "problemTitle": "Beim Update ist ein Problem aufgetreten",
-      "problemDescription": "Das Update konnte nicht abgeschlossen werden. Bitte versuchen Sie es später erneut.",
-      "installTitle": "Update installieren",
-      "installDescription": "OpenWhispr startet neu, um das Update anzuwenden. Laufende Arbeit wird gespeichert.",
-      "couldNotInstallTitle": "Update konnte nicht installiert werden",
-      "couldNotInstallDescription": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
-      "couldNotDownloadTitle": "Update konnte nicht heruntergeladen werden",
-      "couldNotDownloadDescription": "Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
-      "installing": "Wird installiert...",
-      "installButton": "Update installieren",
-      "availableButton": "Update verfügbar"
+      "problemDescription": "Das Update konnte nicht abgeschlossen werden. Bitte versuchen Sie es später erneut."
     },
     "limit": {
       "weeklyTitle": "Wochenlimit erreicht",
@@ -2189,9 +2180,7 @@
         "meetingDetection": "Meeting-Erkennung",
         "meetingDetectionDescription": "Benachrichtigen, wenn ein Meeting erkannt wird, um die Aufnahme zu starten",
         "calendarReminders": "Kalendererinnerungen",
-        "calendarRemindersDescription": "Benachrichtigen, wenn ein geplantes Meeting bald beginnt",
-        "updates": "App-Updates",
-        "updatesDescription": "Benachrichtigen, wenn eine neue Version verfügbar ist"
+        "calendarRemindersDescription": "Benachrichtigen, wenn ein geplantes Meeting bald beginnt"
       },
       "clipboard": {
         "title": "Zwischenablage",
@@ -2290,6 +2279,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "Automatische Updates",
+        "automaticUpdatesDescription": "Updates im Hintergrund herunterladen und installieren",
         "badges": {
           "dev": "Dev",
           "latest": "Aktuell",
@@ -2338,6 +2329,7 @@
         "downloading": "Wird heruntergeladen... {{progress}}%",
         "installAndRestart": "Installieren & neu starten",
         "latestVersion": "Sie verwenden die neueste Version",
+        "managedByPackageManager": "Updates werden über deinen Paketmanager installiert",
         "newVersion": "Eine neuere Version ist verfügbar",
         "newVersionAvailable": "Neue Version verfügbar",
         "restarting": "Wird neu gestartet...",
@@ -3975,11 +3967,6 @@
       "open": "Öffnen",
       "dismiss": "Schließen"
     }
-  },
-  "updateNotification": {
-    "title": "OpenWhispr-Update verfügbar",
-    "body": "Version {{version}} steht zum Download bereit",
-    "cta": "Jetzt aktualisieren"
   },
   "permissionsGate": {
     "title": "Berechtigungen erforderlich",

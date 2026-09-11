@@ -581,16 +581,7 @@
       "readyTitle": "Update ready to install",
       "readyDescription": "Click 'Install Update' to restart with the latest version.",
       "problemTitle": "Update ran into a problem",
-      "problemDescription": "We couldn't complete the update. Please try again later.",
-      "installTitle": "Install Update",
-      "installDescription": "OpenWhispr will restart to apply the update. Any in-progress work will be saved.",
-      "couldNotInstallTitle": "Couldn't install update",
-      "couldNotInstallDescription": "Something went wrong. Please try again.",
-      "couldNotDownloadTitle": "Couldn't download update",
-      "couldNotDownloadDescription": "Check your internet connection and try again.",
-      "installing": "Installing...",
-      "installButton": "Install Update",
-      "availableButton": "Update Available"
+      "problemDescription": "We couldn't complete the update. Please try again later."
     },
     "limit": {
       "weeklyTitle": "Weekly limit reached",
@@ -2189,9 +2180,7 @@
         "meetingDetection": "Meeting detection",
         "meetingDetectionDescription": "Notify when a meeting is detected so you can start recording",
         "calendarReminders": "Calendar reminders",
-        "calendarRemindersDescription": "Notify when a scheduled meeting is about to start",
-        "updates": "App updates",
-        "updatesDescription": "Notify when a new version is available"
+        "calendarRemindersDescription": "Notify when a scheduled meeting is about to start"
       },
       "clipboard": {
         "title": "Clipboard",
@@ -2290,6 +2279,8 @@
         }
       },
       "updates": {
+        "automaticUpdates": "Automatic updates",
+        "automaticUpdatesDescription": "Download and install updates in the background",
         "badges": {
           "dev": "Dev",
           "latest": "Latest",
@@ -2338,6 +2329,7 @@
         "downloading": "Downloading... {{progress}}%",
         "installAndRestart": "Install & Restart",
         "latestVersion": "You're on the latest version",
+        "managedByPackageManager": "Updates are installed through your package manager",
         "newVersion": "A newer version is available",
         "newVersionAvailable": "New version available",
         "restarting": "Restarting...",
@@ -3975,11 +3967,6 @@
       "open": "Open",
       "dismiss": "Dismiss"
     }
-  },
-  "updateNotification": {
-    "title": "OpenWhispr Update Available",
-    "body": "Version {{version}} is ready to download",
-    "cta": "Update Now"
   },
   "permissionsGate": {
     "title": "Permissions Required",

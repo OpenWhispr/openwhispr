@@ -52,7 +52,6 @@ interface ControlPanelSidebarProps {
   isSignedIn?: boolean;
   authLoaded?: boolean;
   upsell: UpsellDecision;
-  updateAction?: React.ReactNode;
 }
 
 export default function ControlPanelSidebar({
@@ -69,7 +68,6 @@ export default function ControlPanelSidebar({
   isSignedIn,
   authLoaded,
   upsell,
-  updateAction,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
   const [upgradeDismissed, setUpgradeDismissed] = useState(
@@ -239,12 +237,6 @@ export default function ControlPanelSidebar({
       )}
 
       <div className="px-2 pb-2 space-y-0.5">
-        {updateAction && (
-          <div className="px-1 pb-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-            {updateAction}
-          </div>
-        )}
-
         {isSignedIn && onOpenReferrals && (
           <button
             onClick={onOpenReferrals}
