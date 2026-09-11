@@ -21,6 +21,79 @@ function createElectronMock(response) {
   };
 }
 
+function loadWithNetFetch(fetchImpl) {
+  const electronPath = require.resolve("electron");
+  const downloadUtilsPath = require.resolve("../../src/helpers/downloadUtils.js");
+  const originalElectronCache = require.cache[electronPath];
+  require.cache[electronPath] = {
+    exports: { app: { isReady: () => false }, net: { fetch: fetchImpl } },
+  };
+  delete require.cache[downloadUtilsPath];
+  return {
+    downloadUtils: require(downloadUtilsPath),
+    restore() {
+      delete require.cache[downloadUtilsPath];
+      if (originalElectronCache) require.cache[electronPath] = originalElectronCache;
+      else delete require.cache[electronPath];
+    },
+  };
+}
+
+test("fetchJson sends the app User-Agent and returns the parsed body", async (t) => {
+  const calls = [];
+  const { downloadUtils, restore } = loadWithNetFetch(async (url, init) => {
+    calls.push({ url, init });
+    return Response.json({ tag_name: "v1" });
+  });
+  t.after(restore);
+
+  assert.deepEqual(await downloadUtils.fetchJson("https://example.com/release.json"), {
+    tag_name: "v1",
+  });
+  assert.equal(calls[0].init.method, "GET");
+  assert.equal(calls[0].init.headers["User-Agent"], "OpenWhispr/1.0");
+});
+
+// The status is the only thing standing between an error page and a caller that
+// would otherwise treat a valid-looking JSON body as a successful response.
+test("fetchJson rejects a non-2xx response even when its body is valid JSON", async (t) => {
+  const { downloadUtils, restore } = loadWithNetFetch(async () =>
+    Response.json({ error: "Entry not found" }, { status: 404 })
+  );
+  t.after(restore);
+
+  await assert.rejects(
+    () => downloadUtils.fetchJson("https://example.com/missing.json"),
+    (error) => error.isHttpError === true && error.statusCode === 404
+  );
+});
+
+test("fetchJson forwards caller init and keeps the User-Agent alongside caller headers", async (t) => {
+  const calls = [];
+  const { downloadUtils, restore } = loadWithNetFetch(async (url, init) => {
+    calls.push({ url, init });
+    return Response.json({});
+  });
+  t.after(restore);
+  const signal = new AbortController().signal;
+
+  await downloadUtils.fetchJson("https://example.com/pinned.json", {
+    headers: { Accept: "application/vnd.github+json" },
+    credentials: "omit",
+    cache: "no-store",
+    signal,
+  });
+
+  const { init } = calls[0];
+  assert.equal(init.credentials, "omit");
+  assert.equal(init.cache, "no-store");
+  assert.equal(init.signal, signal);
+  assert.deepEqual(init.headers, {
+    "User-Agent": "OpenWhispr/1.0",
+    Accept: "application/vnd.github+json",
+  });
+});
+
 test("downloadFile waits for a cancelled write stream to close before removing its temp file", async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "downloadUtils-test-"));
   const destination = path.join(tempDir, "model.bin");

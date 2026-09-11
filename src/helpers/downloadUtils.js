@@ -248,11 +248,12 @@ function downloadAttempt(url, tempPath, options) {
 }
 
 async function fetchJson(url, options = {}) {
-  const headers = { "User-Agent": USER_AGENT, ...(options.headers || {}) };
+  const { headers, ...init } = options;
   const response = await net.fetch(url, {
     method: "GET",
-    headers,
     useSessionCookies: false,
+    ...init,
+    headers: { "User-Agent": USER_AGENT, ...(headers || {}) },
   });
   if (!response.ok) {
     const err = new Error(`HTTP ${response.status} fetching ${url}`);

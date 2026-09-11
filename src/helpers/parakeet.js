@@ -1,12 +1,12 @@
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
-const { net } = require("electron");
 const { pipeline } = require("stream/promises");
 const debugLogger = require("./debugLogger");
 const { runSystemTar } = require("./systemTar");
 const {
   downloadFile,
+  fetchJson,
   createDownloadSignal,
   createDownloadInProgressError,
   cleanupStaleDownloads,
@@ -30,6 +30,7 @@ function getParakeetModelConfig(modelName) {
     url: modelInfo.downloadUrl,
     manifestUrl: modelInfo.manifestUrl,
     size: modelInfo.expectedSizeBytes || modelInfo.sizeMb * 1_000_000,
+    expectedSizeBytes: modelInfo.expectedSizeBytes,
     language: modelInfo.language,
     supportedLanguages: modelInfo.supportedLanguages || [],
     extractDir: modelInfo.extractDir,
@@ -473,19 +474,19 @@ class ParakeetManager {
   }
 
   async _saveModelManifest(modelConfig, modelPath) {
-    const response = await net.fetch(modelConfig.manifestUrl, {
-      headers: { "User-Agent": "OpenWhispr/1.0" },
+    const manifest = await fetchJson(modelConfig.manifestUrl, {
+      // Keep the default session's cookies off a third-party host, and make sure
+      // the request reaches the network — a cache hit would not be counted.
       credentials: "omit",
-      useSessionCookies: false,
       cache: "no-store",
       signal: AbortSignal.timeout(3000),
     });
-    if (!response.ok) throw new Error(`Manifest HTTP ${response.status}`);
-    const manifest = await response.json();
     if (
       manifest?.archive !== path.posix.basename(new URL(modelConfig.url).pathname) ||
       manifest.extract_dir !== modelConfig.extractDir ||
-      manifest.archive_bytes !== modelConfig.size ||
+      // Only `expectedSizeBytes` is the archive's true size; `sizeMb` describes the
+      // extracted model, so a model without it simply skips this comparison.
+      (modelConfig.expectedSizeBytes && manifest.archive_bytes !== modelConfig.expectedSizeBytes) ||
       !/^[a-f0-9]{64}$/.test(manifest.archive_sha256)
     ) {
       throw new Error("Manifest does not match the installed model");

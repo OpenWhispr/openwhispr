@@ -21,9 +21,10 @@ const managerFile = path.resolve(__dirname, "../../src/helpers/parakeet.js");
 function setup(t, options = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "parakeet-manifest-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const calls = { downloads: [], manifests: [], events: [], errors: [], warms: 0 };
+  const calls = { downloads: [], manifests: [], events: [], errors: [], warms: 0, timeouts: [] };
   const realRequire = createRequire(managerFile);
   const timeout = new AbortController();
+  let downloadControl;
   const fakeFs = options.writeError
     ? {
         ...fs,
@@ -37,15 +38,6 @@ function setup(t, options = {}) {
     : fs;
   const stubs = {
     fs: fakeFs,
-    electron: {
-      net: {
-        fetch: async (url, init) => {
-          calls.manifests.push({ url, init });
-          calls.events.push("manifest");
-          return options.fetch ? options.fetch(url, init) : Response.json(manifest);
-        },
-      },
-    },
     "./debugLogger": {
       info() {},
       warn() {},
@@ -83,15 +75,30 @@ function setup(t, options = {}) {
       },
       createDownloadSignal() {
         const signal = { aborted: false };
-        return {
+        downloadControl = {
           signal,
           abort: () => {
             signal.aborted = true;
           },
         };
+        return downloadControl;
       },
       createDownloadInProgressError: () => new Error("download already running"),
       checkDiskSpace: async () => ({ ok: true }),
+      // Mirrors the real helper's contract (test/helpers/downloadUtils.test.js):
+      // non-2xx rejects, otherwise the parsed body comes back.
+      async fetchJson(url, init) {
+        calls.manifests.push({ url, init });
+        calls.events.push("manifest");
+        const response = options.fetch ? await options.fetch(url, init) : Response.json(manifest);
+        if (!response.ok) {
+          throw Object.assign(new Error(`HTTP ${response.status} fetching ${url}`), {
+            isHttpError: true,
+            statusCode: response.status,
+          });
+        }
+        return response.json();
+      },
     },
   };
   const exports = { exports: {} };
@@ -103,7 +110,7 @@ function setup(t, options = {}) {
       URL,
       AbortSignal: {
         timeout(ms) {
-          assert.equal(ms, 3000);
+          calls.timeouts.push(ms);
           return timeout.signal;
         },
       },
@@ -124,6 +131,7 @@ function setup(t, options = {}) {
     fs.mkdirSync(dir, { recursive: true });
     for (const file of getRequiredModelFiles(name))
       fs.writeFileSync(path.join(dir, file), "model fixture");
+    if (options.abortDuringInstall) downloadControl.abort();
     calls.events.push("extracted");
   };
   let manifestTask;
@@ -161,9 +169,12 @@ test("fresh install fetches one manifest after extraction and warmup, then saves
   assert.equal(h.calls.manifests.length, 1);
   const { url, init } = h.calls.manifests[0];
   assert.equal(url, info.manifestUrl);
+  // `credentials` is what actually keeps the default session's cookies off this
+  // third-party host; net.fetch ignores `useSessionCookies` and sends them without it.
   assert.equal(init.credentials, "omit");
-  assert.equal(init.useSessionCookies, false);
   assert.equal(init.cache, "no-store");
+  assert.equal(init.signal, h.timeout.signal);
+  assert.deepEqual(h.calls.timeouts, [3000]);
   assert.equal(h.manager.currentDownloadProcess, null);
   assert.deepEqual(JSON.parse(fs.readFileSync(h.sidecar)), manifest);
   for (const file of getRequiredModelFiles(MODEL))
@@ -200,6 +211,18 @@ for (const option of ["cancel", "downloadError", "extractionError"]) {
     assert.equal(h.manager.currentDownloadProcess, null);
   });
 }
+
+// downloadFile only checks the signal between retry attempts, so a cancel that
+// lands after the last byte (during the archive's cross-device move, say)
+// resolves normally and still installs. The install stands; the ping does not.
+test("a cancel landing after the download does not fetch a manifest", async (t) => {
+  const h = setup(t, { abortDuringInstall: true });
+  assert.equal((await h.manager.downloadParakeetModel(MODEL)).success, true);
+  await h.settled();
+  assert.equal(h.calls.manifests.length, 0);
+  assert.equal(fs.existsSync(h.sidecar), false);
+  assert.equal(h.manager.serverManager.isModelDownloaded(MODEL), true);
+});
 
 test("an extraction retry fetches only one manifest", async (t) => {
   const h = setup(t, { retryExtraction: true });
@@ -249,7 +272,9 @@ const failures = [
       },
     },
   ],
-  ["HTTP 404", { fetch: async () => new Response("missing", { status: 404 }) }],
+  // Body is a valid manifest on purpose: the status alone has to stop the write,
+  // or a JSON error page served with a 4xx would be saved as provenance.
+  ["HTTP 404", { fetch: async () => Response.json(manifest, { status: 404 }) }],
   ["invalid JSON", { fetch: async () => new Response("not json") }],
   ["null manifest", { fetch: async () => Response.json(null) }],
   [
@@ -274,6 +299,21 @@ for (const [label, options] of failures) {
     assert.equal(h.manager.currentDownloadProcess, null);
   });
 }
+
+// `sizeMb` describes the extracted model, not the archive, so a model whose entry
+// omits `expectedSizeBytes` has nothing to compare and must still save provenance.
+test("a model without expectedSizeBytes skips the archive-size check", async (t) => {
+  const h = setup(t, { fetch: async () => Response.json({ ...manifest, archive_bytes: 1 }) });
+  const modelDir = path.join(h.root, MODEL);
+  fs.mkdirSync(modelDir, { recursive: true });
+
+  await h.manager._saveModelManifest(
+    { url: info.downloadUrl, extractDir: info.extractDir, manifestUrl: info.manifestUrl },
+    modelDir
+  );
+
+  assert.equal(JSON.parse(fs.readFileSync(h.sidecar)).archive_bytes, 1);
+});
 
 test("a late manifest never recreates a deleted model directory", async (t) => {
   let finish;
