@@ -65,7 +65,7 @@ export default function ActionPicker({
         disabled={disabled}
         aria-label={t("notes.actions.runAction", { name: getActionName(activeAction, t) })}
         className={cn(
-          "flex items-center gap-1.5 h-7 pl-3 pr-1.5",
+          "flex items-center gap-1.5 h-7 ps-3 pe-1.5",
           "text-accent/70 dark:text-accent/60",
           "transition-colors duration-150",
           "hover:bg-accent/8 dark:hover:bg-accent/12",
@@ -84,8 +84,8 @@ export default function ActionPicker({
             disabled={disabled}
             aria-label={t("notes.actions.selectAction")}
             className={cn(
-              "flex items-center justify-center h-7 w-6 pr-0.5",
-              "border-l border-black/6 dark:border-white/8",
+              "flex items-center justify-center h-7 w-6 pe-0.5",
+              "border-s border-black/6 dark:border-white/8",
               "text-accent/40 dark:text-accent/30",
               "transition-colors duration-150",
               "hover:bg-accent/8 dark:hover:bg-accent/12",

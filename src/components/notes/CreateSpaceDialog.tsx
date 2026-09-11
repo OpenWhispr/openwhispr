@@ -288,7 +288,7 @@ export default function CreateSpaceDialog({
                 disabled={workspacesLoading}
                 className="shrink-0"
               >
-                {workspacesLoading && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                {workspacesLoading && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
                 {t("settingsPage.workspace.loadError.retry")}
               </Button>
             </div>
@@ -315,7 +315,7 @@ export default function CreateSpaceDialog({
                         <SelectContent>
                           {manageableWorkspaces.map((item) => (
                             <SelectItem key={item.id} value={item.id}>
-                              {item.name}
+                              <span dir="auto">{item.name}</span>
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -326,7 +326,9 @@ export default function CreateSpaceDialog({
                       <p className="text-xs font-medium text-foreground/50">
                         {t("settingsPage.workspace.title")}
                       </p>
-                      <p className="text-sm text-foreground truncate">{workspace.name}</p>
+                      <p dir="auto" className="text-sm text-foreground truncate">
+                        {workspace.name}
+                      </p>
                     </>
                   )}
                 </div>
@@ -355,6 +357,7 @@ export default function CreateSpaceDialog({
                     {t("notes.spaces.nameLabel")}
                   </label>
                   <Input
+                    dir="auto"
                     id="create-space-name"
                     value={name}
                     autoFocus
@@ -402,13 +405,13 @@ export default function CreateSpaceDialog({
                               aria-pressed={isSelected}
                               onClick={() => toggleTeam(team.id)}
                               className={cn(
-                                "flex items-center gap-2 w-full px-2 h-8 rounded-md text-left",
+                                "flex items-center gap-2 w-full px-2 h-8 rounded-md text-start",
                                 "transition-colors duration-150 outline-none",
                                 "hover:bg-foreground/4 dark:hover:bg-white/4",
                                 "focus-visible:ring-1 focus-visible:ring-ring/30"
                               )}
                             >
-                              <span className="text-xs text-foreground truncate flex-1">
+                              <span dir="auto" className="text-xs text-foreground truncate flex-1">
                                 {team.name}
                               </span>
                               <span className="text-[10px] text-foreground/40 shrink-0">
@@ -432,6 +435,7 @@ export default function CreateSpaceDialog({
                             {t("notes.spaces.teams.newTeamNameLabel")}
                           </label>
                           <Input
+                            dir="auto"
                             id="create-space-new-team-name"
                             value={newTeamName}
                             maxLength={80}
@@ -487,7 +491,7 @@ export default function CreateSpaceDialog({
                         onClick={() => setCreateTeamOpen(true)}
                         className="h-7 px-2 text-xs text-foreground/60"
                       >
-                        <Plus size={12} className="mr-1" />
+                        <Plus size={12} className="me-1" />
                         {t("notes.spaces.teams.newTeam")}
                       </Button>
                     )}
@@ -507,7 +511,7 @@ export default function CreateSpaceDialog({
                   onClick={handleCreate}
                   disabled={!name.trim() || isCreating || !workspace || !hasTeamSelection}
                 >
-                  {showSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                  {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                   {t("notes.spaces.create")}
                 </Button>
               </DialogFooter>

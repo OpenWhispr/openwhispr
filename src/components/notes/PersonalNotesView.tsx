@@ -64,7 +64,7 @@ import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import NotesOnboarding from "./NotesOnboarding";
-import { notesEmptyTitleKey } from "./shared";
+import { defaultFolderDisplayName, notesEmptyTitleKey } from "./shared";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
@@ -329,8 +329,9 @@ export default function PersonalNotesView({
   // Derive folder name and calendar event name for the metadata chips
   const activeFolderName = useMemo(() => {
     if (!activeNote?.folder_id) return null;
-    return folders.find((f) => f.id === activeNote.folder_id)?.name ?? null;
-  }, [activeNote?.folder_id, folders]);
+    const folder = folders.find((f) => f.id === activeNote.folder_id);
+    return folder ? defaultFolderDisplayName(folder, t) : null;
+  }, [activeNote?.folder_id, folders, t]);
 
   // The editor's move-to-folder chip only offers folders in the note's own
   // space; cross-space moves change the audience and need an explicit confirm.
@@ -698,7 +699,7 @@ export default function PersonalNotesView({
         className="shrink-0 overflow-hidden transition-[width] duration-300 ease-out"
         style={{ width: isSidePanelLayout ? 0 : "13rem" }}
       >
-        <div className="w-52 shrink-0 border-r border-border/15 dark:border-white/4 flex flex-col h-full">
+        <div className="w-52 shrink-0 border-e border-border/15 dark:border-white/4 flex flex-col h-full">
           <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
             <button
               onClick={() => setShowActionManager(true)}

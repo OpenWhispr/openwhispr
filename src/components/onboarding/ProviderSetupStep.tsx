@@ -194,7 +194,7 @@ const SELECT_PANEL_CLASS =
  * theme out here and would paint a square band behind the slab.
  */
 const SELECT_ITEM_CLASS =
-  "onboarding-select-item gap-2.5 rounded-none py-2.5 pl-1.5 pr-8 text-sm font-normal leading-[1.4] hover:bg-transparent focus:bg-transparent data-highlighted:bg-transparent dark:hover:bg-transparent dark:focus:bg-transparent dark:data-highlighted:bg-transparent [&>span:nth-child(2)]:w-full";
+  "onboarding-select-item gap-2.5 rounded-none py-2.5 ps-1.5 pe-8 text-sm font-normal leading-[1.4] hover:bg-transparent focus:bg-transparent data-highlighted:bg-transparent dark:hover:bg-transparent dark:focus:bg-transparent dark:data-highlighted:bg-transparent [&>span:nth-child(2)]:w-full";
 
 function providerCredential(provider: string, store: ReturnType<typeof useSettingsStore.getState>) {
   switch (provider) {
@@ -514,6 +514,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.endpointUrl")}</FieldLabel>
               <Input
+                dir="ltr"
                 value={draftBaseUrl}
                 onChange={(event) => setDraftBaseUrl(event.target.value)}
                 placeholder={t("onboarding.rehaul.provider.endpointPlaceholder")}
@@ -523,6 +524,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
               <Input
+                dir="ltr"
                 type="password"
                 value={draftApiKey}
                 onChange={(event) => setDraftApiKey(event.target.value)}
@@ -535,6 +537,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.modelId")}</FieldLabel>
               <Input
+                dir="ltr"
                 value={draftCustomModel}
                 onChange={(event) => setDraftCustomModel(event.target.value)}
                 placeholder={t("onboarding.rehaul.provider.modelIdPlaceholder")}
@@ -568,7 +571,7 @@ export function ByokProviderStep({
                         <ProviderIcon provider={provider.id} className="size-5" />
                         <span>{provider.name}</span>
                         {provider.id === "corti" && (
-                          <span className="ml-auto rounded bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-2 py-1 text-[0.625rem] text-[var(--onboarding-accent)]">
+                          <span className="ms-auto rounded bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-2 py-1 text-[0.625rem] text-[var(--onboarding-accent)]">
                             {t("onboarding.rehaul.provider.clinical")}
                           </span>
                         )}
@@ -590,7 +593,7 @@ export function ByokProviderStep({
                   className={`${SELECT_TRIGGER_CLASS} disabled:opacity-100 disabled:[&>svg]:hidden`}
                 >
                   {selectedModel ? (
-                    <span>
+                    <span dir="ltr">
                       {models.find((model) => model.id === selectedModel)?.name ?? selectedModel}
                     </span>
                   ) : (
@@ -614,6 +617,7 @@ export function ByokProviderStep({
                 <label className="block">
                   <FieldLabel>{t("onboarding.rehaul.provider.clientId")}</FieldLabel>
                   <Input
+                    dir="ltr"
                     value={draftCortiClientId}
                     onChange={(event) => setDraftCortiClientId(event.target.value)}
                     className={inputClass}
@@ -623,6 +627,7 @@ export function ByokProviderStep({
                 <label className="block">
                   <FieldLabel>{t("onboarding.rehaul.provider.clientSecret")}</FieldLabel>
                   <Input
+                    dir="ltr"
                     type="password"
                     value={draftCortiClientSecret}
                     onChange={(event) => setDraftCortiClientSecret(event.target.value)}
@@ -635,6 +640,7 @@ export function ByokProviderStep({
               <label className="block">
                 <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
                 <Input
+                  dir="ltr"
                   type="password"
                   value={draftApiKey}
                   onChange={(event) => setDraftApiKey(event.target.value)}
@@ -1023,7 +1029,7 @@ export function LocalModelSetupStep({
                 type="button"
                 disabled={!isDownloaded}
                 onClick={() => chooseInstalledModel(model.id)}
-                className="min-w-0 flex-1 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default"
+                className="min-w-0 flex-1 rounded-lg text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default"
               >
                 <span className="block truncate text-base font-medium text-[var(--onboarding-text-primary)]">
                   {model.name}
@@ -1046,7 +1052,7 @@ export function LocalModelSetupStep({
                   {/* Figma draws the rect taller than the pill so it bleeds top
                       and bottom; inset-y-0 does that without a magic height. */}
                   <span
-                    className="absolute inset-y-0 left-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
+                    className="absolute inset-y-0 start-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
                     style={{ width: `${percentage}%` }}
                     aria-hidden="true"
                   />

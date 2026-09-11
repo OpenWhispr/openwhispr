@@ -39,11 +39,11 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
     <div
       className={cn(
         "relative rounded-md mb-1 overflow-hidden",
-        "border-l-2 transition-colors duration-300",
-        isExecuting && "border-l-primary/60",
-        isCompleted && !isError && "border-l-muted-foreground/20",
-        isClipboard && "border-l-emerald-500/50",
-        isError && "border-l-destructive/50"
+        "border-s-2 transition-colors duration-300",
+        isExecuting && "border-s-primary/60",
+        isCompleted && !isError && "border-s-muted-foreground/20",
+        isClipboard && "border-s-emerald-500/50",
+        isError && "border-s-destructive/50"
       )}
     >
       {isExecuting && (
@@ -104,7 +104,7 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
           <ChevronDown
             size={10}
             className={cn(
-              "ml-auto text-muted-foreground/40 shrink-0 transition-transform duration-200",
+              "ms-auto text-muted-foreground/40 shrink-0 transition-transform duration-200",
               expanded && "rotate-180"
             )}
           />
@@ -116,7 +116,10 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
           className="overflow-hidden transition-all duration-200"
           style={{ maxHeight: expanded ? `${resultLines.length * 16 + 12}px` : "0px" }}
         >
-          <pre className="text-[10px] text-muted-foreground/60 px-2.5 pb-1.5 whitespace-pre-wrap leading-tight">
+          <pre
+            dir="ltr"
+            className="text-[10px] text-muted-foreground/60 px-2.5 pb-1.5 whitespace-pre-wrap leading-tight"
+          >
             {toolCall.result}
           </pre>
         </div>
@@ -147,19 +150,21 @@ function NoteCard({
         "hover:bg-primary/10 hover:border-primary/20",
         "active:scale-[0.99]",
         "transition-all duration-150",
-        "text-left group/note"
+        "text-start group/note"
       )}
     >
       <div className={cn("shrink-0 p-1 rounded", "bg-primary/10")}>
         <FileText size={12} className="text-primary/70" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[12px] font-medium text-foreground truncate">{title}</p>
+        <p dir="auto" className="text-[12px] font-medium text-foreground truncate">
+          {title}
+        </p>
         <p className="text-[10px] text-muted-foreground/50">{t("agentMode.tools.openNote")}</p>
       </div>
       <ChevronRight
         size={12}
-        className="text-muted-foreground/30 group-hover/note:text-primary/50 shrink-0 transition-colors duration-150"
+        className="text-muted-foreground/30 group-hover/note:text-primary/50 shrink-0 transition-colors duration-150 rtl:rotate-180"
       />
     </button>
   );
@@ -194,12 +199,12 @@ export function ChatMessage({
         <div
           data-chat-bubble
           className={cn(
-            "max-w-[80%] px-3 py-2 rounded-lg rounded-br-sm",
+            "max-w-[80%] px-3 py-2 rounded-lg rounded-ee-sm",
             "bg-primary/90 text-primary-foreground",
             "text-[13px] leading-relaxed"
           )}
         >
-          {content}
+          <span dir="auto">{content}</span>
         </div>
       </div>
     );
@@ -217,7 +222,7 @@ export function ChatMessage({
       <div
         data-chat-bubble
         className={cn(
-          "max-w-[85%] px-3 py-2 rounded-lg rounded-bl-sm",
+          "max-w-[85%] px-3 py-2 rounded-lg rounded-es-sm",
           "bg-surface-1 border border-border/30 text-foreground",
           "text-[13px] leading-relaxed"
         )}
@@ -243,7 +248,7 @@ export function ChatMessage({
 
         {isStreaming && hasContent && (
           <span
-            className="inline-block w-[2px] h-[14px] bg-foreground/70 align-middle ml-0.5"
+            className="inline-block w-[2px] h-[14px] bg-foreground/70 align-middle ms-0.5"
             style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
           />
         )}

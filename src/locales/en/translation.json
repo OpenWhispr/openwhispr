@@ -3181,6 +3181,11 @@
       "reopen": "Learn how spaces are organized"
     },
     "folders": {
+      "defaults": {
+        "personal": "Personal",
+        "meetings": "Meetings",
+        "videos": "Videos"
+      },
       "title": "Folders",
       "soon": "Soon",
       "folderName": "Folder name",

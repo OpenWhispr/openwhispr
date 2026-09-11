@@ -96,7 +96,7 @@ function AttendeePopover({
       <PopoverTrigger asChild>
         <button
           aria-label={`${attendees.length} ${t("notes.participants.attendees")}`}
-          className="flex shrink-0 items-center -space-x-1.5 rounded-full pt-0.5 outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring/40"
+          className="flex shrink-0 items-center -space-x-1.5 rounded-full pt-0.5 outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring/40 rtl:space-x-reverse"
         >
           {attendees.slice(0, 3).map((a) => (
             <PersonAvatar
@@ -116,7 +116,7 @@ function AttendeePopover({
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-0">
         <div className="border-b border-border/50 px-3 py-2.5">
-          <p className="text-xs font-medium leading-snug text-foreground">
+          <p dir="auto" className="text-xs font-medium leading-snug text-foreground">
             {event.summary || t("upcoming.untitledEvent")}
           </p>
           <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">{timeRange}</p>
@@ -126,13 +126,15 @@ function AttendeePopover({
             <div key={a.email} className="flex items-center gap-2 rounded-md px-2 py-1.5">
               <PersonAvatar email={a.email} displayName={a.displayName} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs text-foreground/80">
+                <p dir="auto" className="truncate text-xs text-foreground/80">
                   {a.displayName || a.email.split("@")[0]}
                   {a.self && (
-                    <span className="ml-1 text-foreground/30">{t("notes.participants.me")}</span>
+                    <span className="ms-1 text-foreground/30">{t("notes.participants.me")}</span>
                   )}
                 </p>
-                <p className="truncate text-[11px] text-foreground/35">{a.email}</p>
+                <p dir="ltr" className="truncate text-[11px] text-foreground/35">
+                  {a.email}
+                </p>
               </div>
               <span
                 className={cn(
@@ -173,12 +175,15 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
   return (
     <div
       className={cn(
-        "group/event border-l-2 pl-2.5",
+        "group/event border-s-2 ps-2.5",
         isNow ? "border-green-500/60" : "border-primary/25"
       )}
     >
       <div className="flex items-start gap-2">
-        <p className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-foreground line-clamp-2">
+        <p
+          dir="auto"
+          className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-foreground line-clamp-2"
+        >
           {event.summary || t("upcoming.untitledEvent")}
         </p>
         {attendees.length > 1 ? (
@@ -253,7 +258,7 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
         </div>
       </div>
       {group.items.length === 0 ? (
-        <div className="border-l-2 border-border/40 pl-2.5 text-xs text-muted-foreground/60">
+        <div className="border-s-2 border-border/40 ps-2.5 text-xs text-muted-foreground/60">
           {t("upcoming.noEventsToday")}
         </div>
       ) : (

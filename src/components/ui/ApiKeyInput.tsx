@@ -99,8 +99,9 @@ export default function ApiKeyInput({
 
       <div ref={containerRef} className="relative">
         {isEditing ? (
-          <div className="relative">
+          <div dir="ltr" className="relative">
             <Input
+              dir="ltr"
               ref={inputRef}
               type="text"
               placeholder={resolvedPlaceholder}
@@ -143,14 +144,17 @@ export default function ApiKeyInput({
             aria-label={hasKey ? t("apiKeyInput.edit") : t("apiKeyInput.add")}
           >
             {hasKey ? (
-              <span className="flex items-center gap-1.5 text-foreground/70 font-mono text-xs tracking-wide">
+              <span
+                dir="ltr"
+                className="flex items-center gap-1.5 text-foreground/70 font-mono text-xs tracking-wide"
+              >
                 <KeyRound className="w-3 h-3 text-muted-foreground/50 shrink-0" />
                 {maskKey(apiKey)}
               </span>
             ) : (
               <span className="text-muted-foreground/40 text-xs">{resolvedPlaceholder}</span>
             )}
-            <span className="ml-auto text-muted-foreground/30 text-xs group-hover:text-muted-foreground/60 transition-colors">
+            <span className="ms-auto text-muted-foreground/30 text-xs group-hover:text-muted-foreground/60 transition-colors">
               {hasKey ? t("apiKeyInput.editButton") : t("apiKeyInput.addButton")}
             </span>
           </button>

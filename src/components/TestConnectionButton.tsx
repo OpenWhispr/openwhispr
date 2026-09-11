@@ -73,9 +73,9 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
         disabled={status === "testing"}
         className="w-full"
       >
-        {status === "testing" && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-        {status === "success" && <CheckCircle className="w-3.5 h-3.5 mr-1.5 text-green-500" />}
-        {status === "error" && <XCircle className="w-3.5 h-3.5 mr-1.5 text-destructive" />}
+        {status === "testing" && <Loader2 className="w-3.5 h-3.5 me-1.5 animate-spin" />}
+        {status === "success" && <CheckCircle className="w-3.5 h-3.5 me-1.5 text-green-500" />}
+        {status === "error" && <XCircle className="w-3.5 h-3.5 me-1.5 text-destructive" />}
         {status === "testing"
           ? t("reasoning.enterprise.testing", { defaultValue: "Testing..." })
           : status === "success"
@@ -85,11 +85,17 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
 
       {status === "error" && errorInfo && (
         <div className="rounded-md bg-destructive/10 border border-destructive/20 p-2.5 space-y-1.5">
-          <p className="text-xs text-destructive font-medium">{errorInfo.message}</p>
-          {errorInfo.action && <p className="text-xs text-muted-foreground">{errorInfo.action}</p>}
+          <p dir="auto" className="text-xs text-destructive font-medium">
+            {errorInfo.message}
+          </p>
+          {errorInfo.action && (
+            <p dir="auto" className="text-xs text-muted-foreground">
+              {errorInfo.action}
+            </p>
+          )}
           {errorInfo.copyCommand && (
             <div className="flex items-center gap-1.5">
-              <code className="text-xs bg-muted px-1.5 py-0.5 rounded flex-1 font-mono">
+              <code dir="ltr" className="text-xs bg-muted px-1.5 py-0.5 rounded flex-1 font-mono">
                 {errorInfo.copyCommand}
               </code>
               <Button

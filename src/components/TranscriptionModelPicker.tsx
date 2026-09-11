@@ -108,7 +108,7 @@ function LocalModelCard({
   return (
     <div
       onClick={handleClick}
-      className={`relative w-full text-left overflow-hidden rounded-md border transition-colors duration-200 group ${
+      className={`relative w-full text-start overflow-hidden rounded-md border transition-colors duration-200 group ${
         isSelected ? cardStyles.modelCard.selected : cardStyles.modelCard.default
       } ${isDownloaded && !isSelected ? "cursor-pointer" : ""}`}
     >
@@ -178,7 +178,7 @@ function LocalModelCard({
               variant="outline"
               className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
             >
-              <X size={11} className="mr-0.5" />
+              <X size={11} className="me-0.5" />
               {isCancelling ? "..." : t("common.cancel")}
             </Button>
           ) : (
@@ -191,7 +191,7 @@ function LocalModelCard({
               variant="default"
               className="h-6 px-2.5 text-xs"
             >
-              <Download size={11} className="mr-1" />
+              <Download size={11} className="me-1" />
               {t("common.download")}
             </Button>
           )}
@@ -349,7 +349,9 @@ function ModeToggle({ useLocalWhisper, onModeChange }: ModeToggleProps) {
     <div className="relative flex p-0.5 rounded-lg bg-surface-1/80 backdrop-blur-xl dark:bg-surface-1 border border-border/60 dark:border-white/8 shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark)">
       <div
         className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md bg-card border border-border/60 dark:border-border-subtle shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark) transition-transform duration-200 ease-out ${
-          useLocalWhisper ? "translate-x-[calc(100%)]" : "translate-x-0"
+          useLocalWhisper
+            ? "translate-x-[calc(100%)] rtl:-translate-x-[calc(100%)]"
+            : "translate-x-0"
         }`}
       />
       <button
@@ -1205,6 +1207,7 @@ export default function TranscriptionModelPicker({
                       {t("transcription.endpointUrl")}
                     </label>
                     <Input
+                      dir="ltr"
                       value={cloudTranscriptionBaseUrl}
                       onChange={(e) => setCloudTranscriptionBaseUrl?.(e.target.value)}
                       onBlur={handleBaseUrlBlur}
@@ -1225,6 +1228,7 @@ export default function TranscriptionModelPicker({
                       {t("common.model")}
                     </label>
                     <Input
+                      dir="ltr"
                       value={
                         selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : ""
                       }
@@ -1279,6 +1283,7 @@ export default function TranscriptionModelPicker({
                         </Select>
                       ) : (
                         <Input
+                          dir="ltr"
                           value={credentialValues[field.key]}
                           onChange={(e) => credentialSetters[field.key](e.target.value)}
                           placeholder={field.placeholder}

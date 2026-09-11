@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarDays, Code2, Info, Loader2, Mail, Plus, Unlink } from "lucide-react";
 import { Button } from "./ui/button";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Badge } from "./ui/badge";
 import { SettingsPanel, SettingsPanelRow, SettingsRow } from "./ui/SettingsSection";
 import { Toggle } from "./ui/toggle";
@@ -34,7 +35,7 @@ interface IntegrationsViewProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-2 pl-1">
+    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-2 ps-1">
       {children}
     </div>
   );
@@ -112,9 +113,11 @@ function CalendarAccountRows({
     <>
       {accounts.map((account) => (
         <SettingsPanelRow key={account.email}>
-          <div className="group flex items-center gap-3 pl-12">
+          <div className="group flex items-center gap-3 ps-12">
             <Mail className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-            <span className="text-xs text-muted-foreground truncate flex-1">{account.email}</span>
+            <span dir="ltr" className="text-xs text-muted-foreground truncate flex-1 text-start">
+              {account.email}
+            </span>
             <button
               onClick={() => onUnlink(account.email)}
               disabled={disconnectingEmail === account.email}
@@ -144,7 +147,7 @@ function CalendarAccountRows({
         <button
           onClick={onAddAnother}
           disabled={isConnecting}
-          className="flex items-center gap-2 pl-12 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 ps-12 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
         >
           {isConnecting ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -411,7 +414,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
 
           {isMac && appleCalendarConnected && (
             <SettingsPanelRow>
-              <div className="group flex items-center gap-3 pl-12">
+              <div className="group flex items-center gap-3 ps-12">
                 <CalendarDays className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
                 <span className="text-xs text-muted-foreground truncate flex-1">
                   {appleSourceNames.join(" · ")}
@@ -515,9 +518,14 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
         onOpenChange={(open) => {
           if (!open) setConfirmDisconnectEmail(null);
         }}
-        title={t("integrations.googleCalendar.disconnectConfirm", {
-          email: confirmDisconnectEmail,
-        })}
+        title={
+          <BidiInterpolatedText
+            text={t("integrations.googleCalendar.disconnectConfirm", {
+              email: BIDI_VALUE_TOKEN,
+            })}
+            value={confirmDisconnectEmail}
+          />
+        }
         description={t("integrations.googleCalendar.disconnectDescription")}
         confirmText={t("integrations.googleCalendar.disconnect")}
         variant="destructive"
@@ -531,9 +539,14 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
         onOpenChange={(open) => {
           if (!open) setConfirmMsDisconnectEmail(null);
         }}
-        title={t("integrations.microsoftCalendar.disconnectConfirm", {
-          email: confirmMsDisconnectEmail,
-        })}
+        title={
+          <BidiInterpolatedText
+            text={t("integrations.microsoftCalendar.disconnectConfirm", {
+              email: BIDI_VALUE_TOKEN,
+            })}
+            value={confirmMsDisconnectEmail}
+          />
+        }
         description={t("integrations.microsoftCalendar.disconnectDescription")}
         confirmText={t("integrations.microsoftCalendar.disconnect")}
         variant="destructive"

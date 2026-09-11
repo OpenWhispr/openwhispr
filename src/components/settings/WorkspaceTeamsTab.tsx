@@ -101,7 +101,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
         </div>
         {canManage && (
           <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            <Plus className="me-1.5 h-3.5 w-3.5" />
             {t("settingsPage.workspace.teams.new")}
           </Button>
         )}
@@ -139,7 +139,9 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
             return (
               <div key={team.id} className="flex items-center gap-3 px-4 h-14">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-foreground truncate">{team.name}</p>
+                  <p dir="auto" className="text-xs font-medium text-foreground truncate">
+                    {team.name}
+                  </p>
                   {backedSpaces > 0 && (
                     <p className="text-xs text-muted-foreground/80 truncate">
                       {t("settingsPage.workspace.teams.grantsAccessToSpaces", {
@@ -159,7 +161,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
                   onClick={() => setMembersTeam(team)}
                   className="h-7 px-2 text-xs"
                 >
-                  <Users className="mr-1 h-3 w-3" />
+                  <Users className="me-1 h-3 w-3" />
                   {t("settingsPage.workspace.teams.membersButton")}
                 </Button>
                 {canManage && (

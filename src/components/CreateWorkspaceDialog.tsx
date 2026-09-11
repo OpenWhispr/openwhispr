@@ -78,6 +78,7 @@ export default function CreateWorkspaceDialog({
               {t("workspaces.create.nameLabel")}
             </Label>
             <Input
+              dir="auto"
               id="workspace-name"
               autoFocus
               value={name}
@@ -96,7 +97,7 @@ export default function CreateWorkspaceDialog({
               {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={!name.trim() || submitting}>
-              {showSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
               {submitting ? t("workspaces.create.submitting") : t("workspaces.create.submit")}
             </Button>
           </DialogFooter>

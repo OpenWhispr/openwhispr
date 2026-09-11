@@ -149,7 +149,7 @@ export default function ChatView() {
         </Suspense>
       )}
       <div className="flex h-full">
-        <div className="w-56 min-w-50 shrink-0 border-r border-border/15 dark:border-white/6">
+        <div className="w-56 min-w-50 shrink-0 border-e border-border/15 dark:border-white/6">
           <ConversationList
             activeConversationId={activeConversationId}
             onSelectConversation={handleSelectConversation}

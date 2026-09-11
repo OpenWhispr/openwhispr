@@ -148,7 +148,7 @@ export default function CalendarConnectionsStep() {
         />
 
         {/* Flexible copy panel beside the fixed-aspect artwork. */}
-        <div className="flex min-w-0 flex-1 flex-col gap-3 bg-[var(--onboarding-surface)] px-3.5 py-4 text-left">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 bg-[var(--onboarding-surface)] px-3.5 py-4 text-start">
           <p className="text-xs font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
             {t("onboarding.rehaul.notes.hero.description")}
           </p>
@@ -207,7 +207,7 @@ export default function CalendarConnectionsStep() {
                 className="size-5 select-none object-contain"
               />
             </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-[3px] text-left">
+            <div className="flex min-w-0 flex-1 flex-col gap-[3px] text-start">
               <p className="text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
                 {provider.title}
               </p>

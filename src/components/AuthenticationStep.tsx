@@ -43,6 +43,7 @@ const EXISTING_ACCOUNT_ERROR_CODES = new Set([
   "USER_ALREADY_EXISTS",
   "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
 ]);
+const SSO_DOMAIN_MARKER = "__OPENWHISPR_SSO_DOMAIN__";
 
 function ProviderTile({
   label,
@@ -414,7 +415,7 @@ export default function AuthenticationStep({
           {onContinueWithoutAccount && (
             <Button onClick={onContinueWithoutAccount} className="mt-3 h-12 w-full rounded-full">
               {t("auth.getStarted")}
-              <ArrowRight className="size-4" />
+              <ArrowRight className="size-4 rtl:rotate-180" />
             </Button>
           )}
         </div>
@@ -436,7 +437,7 @@ export default function AuthenticationStep({
           </p>
           <Button onClick={onAuthComplete} className="mt-7 h-12 w-fit min-w-32 rounded-full px-6">
             {t("auth.common.continue")}
-            <ArrowRight className="size-4" />
+            <ArrowRight className="size-4 rtl:rotate-180" />
           </Button>
         </div>
       </CompactOnboardingFrame>
@@ -474,6 +475,7 @@ export default function AuthenticationStep({
                 {t("auth.sso.workEmailLabel")}
               </span>
               <Input
+                dir="ltr"
                 type="email"
                 placeholder={t("auth.sso.emailPlaceholder")}
                 value={email}
@@ -524,6 +526,13 @@ export default function AuthenticationStep({
   }
 
   if (ssoDiscovery && authMode === null) {
+    const ssoDescription = t(
+      ssoDiscovery.required ? "auth.sso.requiredDescription" : "auth.sso.availableDescription",
+      { domain: SSO_DOMAIN_MARKER }
+    );
+    const [descriptionBeforeDomain, descriptionAfterDomain = ""] =
+      ssoDescription.split(SSO_DOMAIN_MARKER);
+
     return (
       <CompactOnboardingFrame embedded={embedded}>
         <div className={`space-y-3 ${frameInset("pt-72")}`}>
@@ -532,19 +541,21 @@ export default function AuthenticationStep({
             onClick={handleBack}
             className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ChevronLeft className="h-3 w-3" />
+            <ChevronLeft className="h-3 w-3 rtl:rotate-180" />
             {t("auth.common.back")}
           </button>
 
           <div className="pb-1 text-center">
-            <p className="mb-2 text-sm leading-tight text-muted-foreground/70">{email}</p>
+            <p dir="ltr" className="mb-2 text-sm leading-tight text-muted-foreground/70">
+              {email}
+            </p>
             <p className="text-lg font-semibold leading-tight tracking-tight text-foreground">
               {t("auth.sso.companySignInTitle")}
             </p>
             <p className="mt-1 text-xs leading-snug text-muted-foreground">
-              {ssoDiscovery.required
-                ? t("auth.sso.requiredDescription", { domain: ssoDiscovery.domain })
-                : t("auth.sso.availableDescription", { domain: ssoDiscovery.domain })}
+              {descriptionBeforeDomain}
+              <bdi dir="ltr">{ssoDiscovery.domain}</bdi>
+              {descriptionAfterDomain}
             </p>
           </div>
 
@@ -619,17 +630,17 @@ export default function AuthenticationStep({
               className={
                 embedded
                   ? "mb-3 inline-flex h-8 items-center gap-1 text-xs text-[var(--onboarding-text-secondary)] transition-colors hover:text-[var(--onboarding-text-primary)]"
-                  : "fixed left-5 top-13 z-[60] inline-flex h-8 items-center gap-1 text-xs font-medium text-white/80 transition-colors hover:text-white"
+                  : "fixed start-5 top-13 z-[60] inline-flex h-8 items-center gap-1 text-xs font-medium text-white/80 transition-colors hover:text-white"
               }
               style={embedded ? undefined : ({ WebkitAppRegion: "no-drag" } as React.CSSProperties)}
               disabled={isSubmitting}
             >
-              <ChevronLeft className="size-3.5" />
+              <ChevronLeft className="size-3.5 rtl:rotate-180" />
               {t("auth.common.back")}
             </button>
           )}
 
-          <form onSubmit={handleSubmit} className="mt-4 space-y-3 text-left">
+          <form onSubmit={handleSubmit} className="mt-4 space-y-3 text-start">
             <label className="block space-y-2">
               <span className="text-xs text-[var(--onboarding-text-secondary)]">
                 {authMode === "sign-up"
@@ -638,6 +649,7 @@ export default function AuthenticationStep({
               </span>
               {authMode === "sign-up" ? (
                 <Input
+                  dir="auto"
                   type="text"
                   placeholder={t("auth.passwordForm.fullNamePlaceholder")}
                   value={fullName}
@@ -648,6 +660,7 @@ export default function AuthenticationStep({
                 />
               ) : (
                 <Input
+                  dir="ltr"
                   type="email"
                   value={email}
                   className="onboarding-light-input onboarding-auth-input h-10 rounded-xl px-3 text-sm"
@@ -661,6 +674,7 @@ export default function AuthenticationStep({
                 {t("auth.passwordForm.passwordLabel")}
               </span>
               <Input
+                dir="ltr"
                 type="password"
                 placeholder={t("auth.passwordForm.passwordLabel")}
                 value={password}
@@ -779,6 +793,7 @@ export default function AuthenticationStep({
           className="mt-3 space-y-3"
         >
           <Input
+            dir="ltr"
             type="email"
             placeholder={t("auth.emailStep.emailPlaceholder")}
             value={email}
@@ -828,7 +843,7 @@ export default function AuthenticationStep({
         )}
 
         {error && (
-          <div className="mt-2 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-left">
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-start">
             <AlertCircle className="size-3.5 shrink-0 text-destructive" />
             <p className="text-xs text-destructive">{error}</p>
           </div>

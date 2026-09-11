@@ -245,7 +245,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
         </div>
         {canManage && (
           <Button size="sm" onClick={() => setInviteOpen(true)}>
-            <Mail className="mr-1.5 h-3.5 w-3.5" />
+            <Mail className="me-1.5 h-3.5 w-3.5" />
             {t("settingsPage.workspace.members.invite")}
           </Button>
         )}
@@ -268,11 +268,13 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
             <div key={member.user_id} className="flex items-center gap-3 px-4 h-14">
               <MemberAvatar name={member.name} email={member.email} image={member.image} />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-foreground truncate">
+                <p dir="auto" className="text-xs font-medium text-foreground truncate">
                   {member.name || member.email}
                 </p>
                 {member.name && (
-                  <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                  <p dir="ltr" className="text-xs text-muted-foreground truncate">
+                    {member.email}
+                  </p>
                 )}
               </div>
               <RoleBadge
@@ -307,7 +309,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                       className="text-destructive"
                       onSelect={() => confirmRemoveMember(member)}
                     >
-                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      <Trash2 className="me-1.5 h-3.5 w-3.5" />
                       {t("settingsPage.workspace.members.remove")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -349,11 +351,13 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                   size="sm"
                 />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-foreground truncate">
+                  <p dir="auto" className="text-xs text-foreground truncate">
                     {request.name ?? request.email}
                   </p>
                   {request.name && (
-                    <p className="text-[11px] text-muted-foreground truncate">{request.email}</p>
+                    <p dir="ltr" className="text-[11px] text-muted-foreground truncate">
+                      {request.email}
+                    </p>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -371,7 +375,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                     disabled={decidingId !== null}
                   >
                     {decidingId === request.id && (
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
                     )}
                     {t("settingsPage.workspace.joinRequests.approve")}
                   </Button>
@@ -398,7 +402,9 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                 >
                   <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-foreground truncate">{inv.email}</p>
+                    <p dir="ltr" className="text-xs text-foreground truncate">
+                      {inv.email}
+                    </p>
                     <p
                       className={cn(
                         "text-[11px]",
@@ -420,7 +426,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                     disabled={resendingId === inv.id}
                     className="h-7 px-2"
                   >
-                    {resendingId === inv.id && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                    {resendingId === inv.id && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
                     {resendingId === inv.id
                       ? t("settingsPage.workspace.invites.resending")
                       : t("settingsPage.workspace.invites.resend")}

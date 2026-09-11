@@ -264,7 +264,7 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
                 }}
                 className="h-6 px-2 text-xs shrink-0"
               >
-                {teamsLoading && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                {teamsLoading && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
                 {t("common.retry")}
               </Button>
             </div>
@@ -299,14 +299,14 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
                       aria-hidden="true"
                       className={cn(
                         "shrink-0 text-foreground/40 transition-transform duration-150",
-                        expanded && "rotate-90"
+                        expanded ? "rotate-90" : "rtl:rotate-180"
                       )}
                     />
-                    <span className="text-xs font-semibold text-foreground truncate">
+                    <span dir="auto" className="text-xs font-semibold text-foreground truncate">
                       {teamRef.name}
                     </span>
                     {memberCount != null && (
-                      <span className="ml-auto text-[10px] text-foreground/40 shrink-0">
+                      <span className="ms-auto text-[10px] text-foreground/40 shrink-0">
                         {t("settingsPage.workspace.teams.memberCount", { count: memberCount })}
                       </span>
                     )}
@@ -408,7 +408,7 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
                     <SelectContent>
                       {unassignedTeams.map((team) => (
                         <SelectItem key={team.id} value={team.id} className="text-xs">
-                          {team.name}
+                          <span dir="auto">{team.name}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -419,7 +419,7 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
                     disabled={!pendingTeamId || isAssigning}
                     className="h-8 shrink-0"
                   >
-                    {showAssignSpinner && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                    {showAssignSpinner && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
                     {t("common.add")}
                   </Button>
                 </div>
@@ -431,7 +431,7 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
                   onClick={() => setNewTeamOpen(true)}
                   className="h-7 px-2 text-xs text-foreground/60"
                 >
-                  <Plus size={12} className="mr-1" />
+                  <Plus size={12} className="me-1" />
                   {t("notes.spaces.teams.newTeam")}
                 </Button>
               )}

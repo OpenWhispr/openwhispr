@@ -66,6 +66,7 @@ function EditSnippetDialog({
               {t("dictionary.snippets.triggerLabel")}
             </Label>
             <Input
+              dir="auto"
               id="snippet-trigger"
               value={trigger}
               onChange={(e) => setTrigger(e.target.value)}
@@ -81,6 +82,7 @@ function EditSnippetDialog({
               {t("dictionary.snippets.replacementLabel")}
             </Label>
             <Textarea
+              dir="auto"
               id="snippet-replacement"
               autoFocus
               value={replacement}
@@ -177,6 +179,7 @@ export default function SnippetsView() {
       <div>
         <div className="relative">
           <Input
+            dir="auto"
             ref={triggerInputRef}
             placeholder={t("dictionary.snippets.addPlaceholder")}
             value={trigger}
@@ -185,13 +188,13 @@ export default function SnippetsView() {
               if (e.key === "Enter") openPanel();
             }}
             maxLength={80}
-            className="w-full h-8 text-xs pr-16 placeholder:text-foreground/20"
+            className="w-full h-8 text-xs pe-16 placeholder:text-foreground/20"
           />
           <button
             onClick={openPanel}
             disabled={!trimmedTrigger || duplicate}
             aria-label={t("dictionary.snippets.create")}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-foreground/30 enabled:hover:text-primary disabled:text-foreground/15 transition-colors"
+            className="absolute end-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-foreground/30 enabled:hover:text-primary disabled:text-foreground/15 transition-colors"
           >
             {t("dictionary.add")}
             <CornerDownLeft size={10} />
@@ -206,6 +209,7 @@ export default function SnippetsView() {
       {panelOpen && (
         <div className="rounded-md border border-primary/30 dark:border-primary/40 px-3 pt-2.5 pb-2">
           <Textarea
+            dir="auto"
             autoFocus
             value={expansion}
             onChange={(e) => setExpansion(e.target.value)}
@@ -218,7 +222,7 @@ export default function SnippetsView() {
             className="min-h-[72px] resize-none border-0 shadow-none rounded-none bg-transparent p-0 text-xs text-foreground placeholder:text-foreground/20 hover:border-0 focus:border-0 focus:ring-0"
           />
           <div className="flex items-center justify-between pt-1.5">
-            <div className="flex items-center gap-0.5">
+            <div dir="ltr" className="flex items-center gap-0.5">
               <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
                 {getCachedPlatform() === "darwin" ? "⌘" : "Ctrl"}
               </kbd>
@@ -291,9 +295,13 @@ export default function SnippetsView() {
                 className="group flex items-center gap-2 h-9 border-b border-foreground/4 dark:border-white/3 last:border-b-0"
               >
                 <div className="flex-1 min-w-0 flex items-center gap-2">
-                  <span className="text-xs text-foreground/60 shrink-0">{snippet.trigger}</span>
+                  <span dir="auto" className="text-xs text-foreground/60 shrink-0">
+                    {snippet.trigger}
+                  </span>
                   <span className="text-xs text-foreground/20 shrink-0">→</span>
-                  <span className="text-xs text-foreground/35 truncate">{snippet.replacement}</span>
+                  <span dir="auto" className="text-xs text-foreground/35 truncate">
+                    {snippet.replacement}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                   <button

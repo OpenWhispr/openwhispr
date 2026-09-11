@@ -141,13 +141,23 @@ export function resolveTranslationDisplayProvider({ translationMode, translation
   return resolveModeDisplayProvider(translationMode, translationProvider);
 }
 
+const ARABIC_SCRIPT_RE = /\p{Script=Arabic}/u;
+
 // Wake-word cues gate on the explicit dictation language, then the language
-// detected by STT, with the UI language as the final hint under auto-detect.
-export function resolveWakeWordLanguage({ preferredLanguage, uiLanguage }, detectedLanguage) {
+// detected by STT. Some local and streaming providers do not report their
+// auto-detected language, so Arabic script is a deterministic hint before the
+// UI language fallback. Explicit and provider-reported languages stay
+// authoritative, preventing foreign-language cues from broadening those modes.
+export function resolveWakeWordLanguage(
+  { preferredLanguage, uiLanguage },
+  detectedLanguage,
+  transcript
+) {
   const language = typeof preferredLanguage === "string" ? preferredLanguage.trim() : "";
   if (language && language.toLowerCase() !== "auto") return language;
   const detected = typeof detectedLanguage === "string" ? detectedLanguage.trim() : "";
   if (detected && detected.toLowerCase() !== "auto") return detected;
+  if (typeof transcript === "string" && ARABIC_SCRIPT_RE.test(transcript)) return "ar";
   return typeof uiLanguage === "string" ? uiLanguage : undefined;
 }
 

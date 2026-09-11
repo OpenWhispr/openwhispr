@@ -60,7 +60,7 @@ export default function NotesStructureIntroDialog({
                 </p>
 
                 <div className="mt-3 flex items-center gap-2 rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
-                  <ChevronRight size={12} className="shrink-0 text-foreground/25" />
+                  <ChevronRight size={12} className="shrink-0 text-foreground/25 rtl:rotate-180" />
                   <Users size={13} className="shrink-0 text-primary/60" />
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-foreground/80">
@@ -72,7 +72,7 @@ export default function NotesStructureIntroDialog({
                   </div>
                 </div>
 
-                <div className="mt-2 flex items-center gap-2 pl-5 text-[11px] text-muted-foreground">
+                <div className="mt-2 flex items-center gap-2 ps-5 text-[11px] text-muted-foreground">
                   <FolderOpen size={12} className="shrink-0" />
                   {t("notes.structureIntro.contents")}
                 </div>

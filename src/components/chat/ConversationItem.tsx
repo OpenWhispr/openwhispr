@@ -28,7 +28,7 @@ interface ConversationItemProps {
   onDelete: (id: number) => void;
 }
 
-function formatTimestamp(dateStr: string): string {
+function formatTimestamp(dateStr: string, locale?: string): string {
   const date = normalizeDbDate(dateStr);
   if (Number.isNaN(date.getTime())) return "";
   const now = new Date();
@@ -42,7 +42,7 @@ function formatTimestamp(dateStr: string): string {
   if (minutes < 60) return `${minutes}m`;
   if (hours < 24) return `${hours}h`;
   if (days < 7) return `${days}d`;
-  return formatShortDate(dateStr);
+  return formatShortDate(dateStr, locale);
 }
 
 export default function ConversationItem({
@@ -52,7 +52,8 @@ export default function ConversationItem({
   onArchive,
   onDelete,
 }: ConversationItemProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const isArchived = !!conversation.is_archived;
 
   return (
@@ -60,19 +61,22 @@ export default function ConversationItem({
       type="button"
       onClick={onClick}
       className={cn(
-        "group relative w-full text-left px-3 py-2 cursor-pointer transition-all duration-150",
+        "group relative w-full text-start px-3 py-2 cursor-pointer transition-all duration-150",
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
         isActive ? "bg-primary/8 dark:bg-primary/10" : "hover:bg-foreground/4 dark:hover:bg-white/4"
       )}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <p className={cn("text-xs truncate text-foreground", isActive && "font-medium")}>
+          <p
+            dir="auto"
+            className={cn("text-xs truncate text-foreground", isActive && "font-medium")}
+          >
             {conversation.title}
           </p>
           <div className="flex items-center gap-0.5 shrink-0">
             <span className="text-[10px] text-muted-foreground/40 tabular-nums group-hover:opacity-0 transition-opacity">
-              {formatTimestamp(conversation.updated_at)}
+              {formatTimestamp(conversation.updated_at, locale)}
             </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -80,7 +84,7 @@ export default function ConversationItem({
                   size="icon"
                   variant="ghost"
                   onClick={(e) => e.stopPropagation()}
-                  className="h-5 w-5 rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity absolute right-2 text-muted-foreground/60 dark:text-muted-foreground/40 hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
+                  className="h-5 w-5 rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity absolute end-2 text-muted-foreground/60 dark:text-muted-foreground/40 hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
                 >
                   <MoreHorizontal size={12} />
                 </Button>
@@ -121,7 +125,7 @@ export default function ConversationItem({
           </div>
         </div>
         {conversation.preview && (
-          <p className="text-[11px] text-muted-foreground/50 line-clamp-1 mt-0.5">
+          <p dir="auto" className="text-[11px] text-muted-foreground/50 line-clamp-1 mt-0.5">
             {conversation.preview}
           </p>
         )}

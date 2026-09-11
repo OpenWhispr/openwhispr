@@ -173,6 +173,7 @@ export default function DictionaryView() {
           <div>
             <div className="relative">
               <Input
+                dir="auto"
                 ref={addInputRef}
                 placeholder={t("dictionary.addPlaceholder")}
                 value={newWord}
@@ -180,9 +181,9 @@ export default function DictionaryView() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleAdd();
                 }}
-                className="w-full h-8 text-xs pr-24 placeholder:text-foreground/20"
+                className="w-full h-8 text-xs pe-24 placeholder:text-foreground/20"
               />
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              <div className="absolute end-2.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
                 <button
                   onClick={handleAdd}
                   disabled={!newWord.trim()}
@@ -208,6 +209,7 @@ export default function DictionaryView() {
           {showBulkImport && (
             <div className="rounded-md border border-primary/30 dark:border-primary/40 px-3 pt-2.5 pb-2">
               <Textarea
+                dir="auto"
                 autoFocus
                 value={bulkText}
                 onChange={(e) => setBulkText(e.target.value)}
@@ -248,7 +250,9 @@ export default function DictionaryView() {
           <div className="rounded-md border border-primary/15 dark:border-primary/20 bg-primary/3 dark:bg-primary/6 px-4 py-2.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
               <Sparkles size={11} className="text-primary/70 shrink-0" />
-              <span className="text-xs font-medium text-primary truncate">{agentName}</span>
+              <span dir="auto" className="text-xs font-medium text-primary truncate">
+                {agentName}
+              </span>
             </div>
             <span className="text-xs text-foreground/25 shrink-0">
               {t("dictionary.agentDefault")}
@@ -301,6 +305,7 @@ export default function DictionaryView() {
                     >
                       {isEditing ? (
                         <Input
+                          dir="auto"
                           autoFocus
                           value={editValue}
                           onChange={(e) => setEditValue(e.target.value)}
@@ -312,7 +317,9 @@ export default function DictionaryView() {
                           className="h-7 text-xs flex-1"
                         />
                       ) : (
-                        <span className="flex-1 text-xs truncate text-foreground/60">{word}</span>
+                        <span dir="auto" className="flex-1 text-xs truncate text-foreground/60">
+                          {word}
+                        </span>
                       )}
                       {!isEditing && (
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">

@@ -169,10 +169,12 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
           <div className="flex flex-col items-center gap-2 pb-2 text-center">
             <AccountAvatar image={user.image} name={user.name || t("settingsPage.account.user")} />
             <div className="min-w-0 w-full">
-              <p className="text-[13px] font-semibold text-foreground truncate">
+              <p dir="auto" className="text-[13px] font-semibold text-foreground truncate">
                 {user.name || t("settingsPage.account.user")}
               </p>
-              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+              <p dir="ltr" className="text-xs text-muted-foreground truncate">
+                {user.email}
+              </p>
             </div>
           </div>
         ) : undefined

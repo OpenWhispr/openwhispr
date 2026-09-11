@@ -138,7 +138,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
               type="button"
               onClick={() => setLlmExpanded(!llmExpanded)}
               aria-expanded={llmExpanded}
-              className="flex items-center justify-between w-full px-4 py-3 text-left"
+              className="flex items-center justify-between w-full px-4 py-3 text-start"
             >
               <div className="flex items-center gap-2.5">
                 <Zap
@@ -158,7 +158,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 size={12}
                 className={cn(
                   "text-foreground/20 transition-transform duration-200",
-                  llmExpanded && "rotate-90"
+                  llmExpanded ? "rotate-90" : "rtl:rotate-180"
                 )}
               />
             </button>
@@ -293,7 +293,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
             type="button"
             onClick={() => setCreateExpanded(!createExpanded)}
             aria-expanded={createExpanded}
-            className="flex items-center justify-between w-full px-4 py-3 text-left"
+            className="flex items-center justify-between w-full px-4 py-3 text-start"
           >
             <div className="flex items-center gap-2.5">
               <Plus size={13} className="text-foreground/30" />
@@ -310,7 +310,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
               size={12}
               className={cn(
                 "text-foreground/20 transition-transform duration-200",
-                createExpanded && "rotate-90"
+                createExpanded ? "rotate-90" : "rtl:rotate-180"
               )}
             />
           </button>
@@ -321,6 +321,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 {t("notes.onboarding.actions.createDescription")}
               </p>
               <input
+                dir="auto"
                 type="text"
                 value={actionName}
                 onChange={(e) => setActionName(e.target.value)}
@@ -330,6 +331,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 className={cn(notesInputClass, "disabled:opacity-40")}
               />
               <input
+                dir="auto"
                 type="text"
                 value={actionDescription}
                 onChange={(e) => setActionDescription(e.target.value)}
@@ -339,6 +341,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 className={cn(notesInputClass, "disabled:opacity-40")}
               />
               <textarea
+                dir="auto"
                 value={actionPrompt}
                 onChange={(e) => setActionPrompt(e.target.value)}
                 placeholder={t("notes.actions.promptPlaceholder")}

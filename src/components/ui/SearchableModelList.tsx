@@ -181,12 +181,13 @@ export default function SearchableModelList({
 
   return (
     <div className="space-y-2">
-      <div className="relative">
+      <div dir="ltr" className="relative">
         <Search
           size={14}
           className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none"
         />
         <Input
+          dir="ltr"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleKeyDown}
