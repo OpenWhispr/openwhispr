@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "AI 处理已被您的组织限制。",
     "policyAgentRestricted": "AI 助手的使用已被您的组织限制。",
     "policyTranscriptionRestricted": "转录已被您的组织限制。",
+    "policyUnresolved": "您所在组织的设置尚未加载完成。请稍后再试。",
     "managedConfigLoading": "正在检查您组织的托管设置。请稍候再试。",
     "managedConfigUnavailable": "托管企业访问不可用。请重新登录或联系管理员。",
     "managedPolicyConflict": "托管访问已被您工作区的策略阻止。请联系管理员。"
@@ -3019,6 +3020,7 @@
       "description": "转录与结构化摘要",
       "back": "返回",
       "restrictedByOrg": "会议转录已被您的组织限制。",
+      "alreadyRecording": "会议录制已在进行中。",
       "unsupportedSelfHosted": "笔记录音暂不支持自托管端点。请打开设置，选择本地或支持流式传输的服务商。",
       "unsupportedProvider": "笔记录音无法使用 {{provider}} 进行实时转录。请打开设置，选择本地或支持流式传输的服务商。",
       "noProviderSelected": "尚未为笔记录音选择服务商。请打开设置，选择本地或支持流式传输的服务商。",
@@ -3535,6 +3537,7 @@
       "hideForNow": "暂时隐藏",
       "askAssistant": "询问助手",
       "busyRecording": "请先结束当前录音",
+      "busyHotkeyCapture": "请先完成快捷键设置",
       "startMeetingRecording": "开始会议录音"
     }
   },

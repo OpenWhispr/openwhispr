@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "L’elaborazione con IA è limitata dalla tua organizzazione.",
     "policyAgentRestricted": "L’uso dell’assistente IA è limitato dalla tua organizzazione.",
     "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione.",
+    "policyUnresolved": "Le impostazioni della tua organizzazione non sono ancora state caricate. Riprova tra un momento.",
     "managedConfigLoading": "Verifica della configurazione gestita della tua organizzazione in corso. Riprova tra un momento.",
     "managedConfigUnavailable": "L'accesso aziendale gestito non è disponibile. Accedi di nuovo o contatta l'amministratore.",
     "managedPolicyConflict": "L'accesso gestito è bloccato dai criteri del tuo spazio di lavoro. Contatta l'amministratore."
@@ -3019,6 +3020,7 @@
       "description": "Trascrizioni e riassunti strutturati",
       "back": "Indietro",
       "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione.",
+      "alreadyRecording": "È già in corso una registrazione di riunione.",
       "unsupportedSelfHosted": "La registrazione delle note non può ancora usare un endpoint self-hosted. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "unsupportedProvider": "La registrazione delle note non può usare {{provider}} per la trascrizione dal vivo. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "noProviderSelected": "Nessun provider selezionato per la registrazione delle note. Apri le Impostazioni e scegli Locale o un provider in streaming.",
@@ -3535,6 +3537,7 @@
       "hideForNow": "Nascondi per ora",
       "askAssistant": "Chiedi all'assistente",
       "busyRecording": "Prima termina la registrazione in corso",
+      "busyHotkeyCapture": "Prima finisci di scegliere la scorciatoia",
       "startMeetingRecording": "Avvia registrazione meeting"
     }
   },

@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
     "policyAgentRestricted": "AI assistant use is restricted by your organization.",
     "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
+    "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
     "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator."
@@ -3361,6 +3362,7 @@
       "description": "Transcriptions & structured summaries",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
+      "alreadyRecording": "A meeting recording is already running.",
       "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
@@ -3704,6 +3706,7 @@
       "hideForNow": "Hide for now",
       "askAssistant": "Ask assistant",
       "busyRecording": "Finish the current dictation first",
+      "busyHotkeyCapture": "Finish choosing your shortcut first",
       "startMeetingRecording": "Start meeting recording"
     }
   },

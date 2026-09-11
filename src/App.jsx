@@ -17,7 +17,7 @@ import { useSettingsStore } from "./stores/settingsStore";
 import { isAgentAllowed } from "./stores/policyRules";
 import { usePolicyStore } from "./stores/policyStore";
 import { useTranscriptionContextAllowed } from "./hooks/usePolicy";
-import { resolveTrayAssistantAction, resolveTrayMeetingAction } from "./helpers/trayActionPolicy";
+import { useTrayQuickActions } from "./hooks/useTrayQuickActions";
 import { VoicePill } from "./components/dictation/VoicePill";
 import { AssistantPanel } from "./components/dictation/AssistantPanel";
 import { LiveTranscriptPanel } from "./components/dictation/LiveTranscriptPanel";
@@ -115,6 +115,11 @@ export default function App() {
 
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const meetingAllowed = useTranscriptionContextAllowed("meeting");
+  // Both allowances fail closed while the policy is loading or its fetch failed,
+  // so the tray's refusals need to tell those apart from a real org restriction.
+  const policyStatus = usePolicyStore((state) => state.status);
+  const policyResolved =
+    policyStatus === "idle" || policyStatus === "managed" || policyStatus === "unmanaged";
 
   const mainWindowResizeCoordinatorRef = useRef(null);
   useEffect(() => {
@@ -378,11 +383,8 @@ export default function App() {
     return () => unsubscribe?.();
   }, [isRecording, isPreparing, isProcessing, cancelRecording, cancelProcessing]);
 
-  // The tray's Ask Assistant and Start meeting recording. The pill menu hides
-  // those items when policy or a live recording rules them out; the tray always
-  // shows them, so the refusal happens here — before a panel opens or a note
-  // exists. A policy refusal says why, with the pill surfaced so it is visible.
-  // Surfaced with the pill, so the message is visible even when it was hidden.
+  // Every tray refusal surfaces the pill first, so the message is visible even
+  // when the pill was hidden. useTrayQuickActions decides when one is needed.
   const refuse = useCallback(
     (messageKey) => {
       void window.electronAPI?.showDictationPanel?.();
@@ -391,44 +393,18 @@ export default function App() {
     [toast, t]
   );
 
-  useEffect(() => {
-    const unsubscribe = window.electronAPI?.onOpenAssistantPanel?.(() => {
-      setIsCommandMenuOpen(false);
-      const decision = resolveTrayAssistantAction({
-        agentAllowed,
-        isRecording,
-        liveTranscriptMounted: liveTranscript.mounted,
-      });
-      if (decision.action === "refuse") {
-        refuse(decision.messageKey);
-        return;
-      }
-      void openAssistantPanel();
-    });
-    return () => unsubscribe?.();
-  }, [agentAllowed, isRecording, liveTranscript.mounted, openAssistantPanel, refuse]);
+  const closeCommandMenu = useCallback(() => setIsCommandMenuOpen(false), []);
 
-  useEffect(() => {
-    const unsubscribe = window.electronAPI?.onStartMeeting?.(() => {
-      setIsCommandMenuOpen(false);
-      const decision = resolveTrayMeetingAction({ meetingAllowed, isRecording });
-      if (decision.action === "refuse") {
-        refuse(decision.messageKey);
-        return;
-      }
-      void window.electronAPI?.startManualMeeting?.();
-    });
-    return () => unsubscribe?.();
-  }, [meetingAllowed, isRecording, refuse]);
-
-  // Main refuses the tray's listen item on gates only it can see (a panel owning
-  // the pill, a transcription still settling), and says so through here.
-  useEffect(() => {
-    const unsubscribe = window.electronAPI?.onTrayActionRefused?.((data) => {
-      if (data?.messageKey) refuse(data.messageKey);
-    });
-    return () => unsubscribe?.();
-  }, [refuse]);
+  useTrayQuickActions({
+    agentAllowed,
+    meetingAllowed,
+    policyResolved,
+    isRecording,
+    liveTranscriptMounted: liveTranscript.mounted,
+    closeCommandMenu,
+    openAssistantPanel,
+    refuse,
+  });
 
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {

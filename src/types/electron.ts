@@ -1170,6 +1170,7 @@ declare global {
       onOpenAssistantPanel?: (callback: () => void) => () => void;
       onStartMeeting?: (callback: () => void) => () => void;
       onTrayActionRefused?: (callback: (data: { messageKey: string }) => void) => () => void;
+      notifyDictationRendererReady?: () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (

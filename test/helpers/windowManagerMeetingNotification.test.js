@@ -811,12 +811,28 @@ test("the tray's quick actions ask the renderer without showing or focusing the 
   onboarding.sendStartMeeting();
   assert.deepEqual(onboardingEvents, []);
 
+  // Both entries wait for the renderer to say its listeners exist: AppRouter holds
+  // a loading screen while a signed-in launch resolves policy, and a send into
+  // that window would land nowhere.
   const events = [];
   const manager = createNormalWindowManager();
   manager.mainWindow = fakeMainWindow(events);
+  let mainProcessStarts = 0;
+  manager.meetingDetectionEngine = {
+    startManualMeeting: async () => {
+      mainProcessStarts += 1;
+    },
+  };
+  manager.sendOpenAssistantPanel();
+  manager.sendStartMeeting();
+  assert.deepEqual(events, [], "nothing is sent into a window that cannot answer");
+  assert.equal(mainProcessStarts, 1, "the meeting keeps the main-process path meanwhile");
+
+  manager.setDictationRendererReady(true);
   manager.sendOpenAssistantPanel();
   manager.sendStartMeeting();
   assert.deepEqual(events, ["open-assistant-panel", "start-meeting"]);
+  assert.equal(mainProcessStarts, 1, "a listening renderer decides for itself");
 
   // Capturing a hotkey swallows both, like every other input path.
   const capturingEvents = [];
@@ -841,6 +857,14 @@ test("the tray's listen item explains a refusal the renderer cannot see", () => 
     showInactive: () => events.push("show"),
     webContents: { send: (channel, payload) => events.push([channel, payload?.messageKey]) },
   };
+
+  // Capturing a hotkey is a state the user is actively in, so unlike onboarding
+  // it answers rather than swallowing the click.
+  manager.hotkeyManager.isInListeningMode = () => true;
+  manager.sendStartListening();
+  assert.deepEqual(events, [["tray-action-refused", "app.commandMenu.busyHotkeyCapture"]]);
+  events.length = 0;
+  manager.hotkeyManager.isInListeningMode = () => false;
 
   // A panel owning the pill blocks dictation input; the click must say so.
   // Stubbed because the real gate also re-kicks the companion pill's load.

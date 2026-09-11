@@ -63,6 +63,10 @@ class WindowManager {
     this.onOnboardingDemoTeardown = null;
     // Set by main.js so the tray's listen item rebuilds with dictation state.
     this.onDictationStateChanged = null;
+    // The tray and the meeting hotkey ask the dictation renderer to act, but a
+    // send lands nowhere until App mounts its listeners — AppRouter holds the
+    // loading screen while a signed-in launch resolves policy. Acked from there.
+    this._dictationRendererReady = false;
     this.notificationWindow = null;
     this.agentDictationPillWindow = null;
     this._agentDictationPillReady = false;
@@ -160,6 +164,8 @@ class WindowManager {
       // A reload has not resolved its route yet. AppRouter releases this gate
       // after it renders the normal app; fresh onboarding keeps it active.
       this.setOnboardingActive(true);
+      // The tray listeners go with the old page; App re-acks when it remounts.
+      this._dictationRendererReady = false;
       this.endOnboardingDemo();
       this.mainWindow.setTitle(i18nMain.t("window.voiceRecorderTitle"));
       this.enforceMainWindowOnTop();
@@ -1008,28 +1014,47 @@ class WindowManager {
 
   // The pill's Ask Assistant and Start meeting recording for surfaces outside the
   // pill (the tray). Only the renderer knows the policy and recording state the
-  // pill menu gates those items on, so it decides; nothing is shown or created
-  // here. An accepted assistant command surfaces the pill itself through
-  // setAssistantPanelOpen, and a meeting comes back through start-manual-meeting.
+  // pill menu gates those items on, so while it is listening it decides and
+  // nothing is shown or created here: an accepted assistant command surfaces the
+  // pill itself through setAssistantPanelOpen, and a meeting comes back through
+  // start-manual-meeting. Before it can answer, only the meeting has a path.
   // Onboarding blocks these outright rather than through the demo-aware gate:
   // the tray and the meeting hotkey are never part of the scripted demo.
   sendOpenAssistantPanel() {
     if (this.hotkeyManager.isInListeningMode() || this._onboardingActive) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    if (!this._dictationRendererReady) {
+      // The assistant has no main-process path, so this one can only be logged.
+      debugLogger.info("Assistant request dropped — renderer not ready", {}, "tray");
+      return;
+    }
     this.mainWindow.webContents.send("open-assistant-panel");
   }
 
   sendStartMeeting() {
     if (this.hotkeyManager.isInListeningMode() || !this.isMeetingInputAllowed()) return;
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     debugLogger.info("Manual meeting requested", {}, "meeting");
+    // The renderer owns the org meeting policy, but it only answers once mounted.
+    // Until then — a signed-in launch still resolving policy, or a reload — take
+    // the main-process path this used before it became a renderer round trip,
+    // rather than sending into a window that is still on the loading screen.
+    if (!this.mainWindow || this.mainWindow.isDestroyed() || !this._dictationRendererReady) {
+      void this.startManualMeeting();
+      return;
+    }
     this.mainWindow.webContents.send("start-meeting");
   }
 
   // The tray's listen item, unlike the hotkey, is visible whatever the state, so
   // the gates only this process can see explain themselves instead of going quiet.
   sendStartListening() {
-    if (this.hotkeyManager.isInListeningMode() || this._onboardingActive) return;
+    // Onboarding stays silent — the tray is not part of the scripted demo — but
+    // hotkey capture is a click the user is waiting on, so it answers.
+    if (this._onboardingActive) return;
+    if (this.hotkeyManager.isInListeningMode()) {
+      this._sendTrayActionRefused("app.commandMenu.busyHotkeyCapture");
+      return;
+    }
     if (
       this._shouldBlockDictationInput("dictation") ||
       shouldIgnoreDictationHotkey(this._dictationLifecycleState)
@@ -1043,6 +1068,17 @@ class WindowManager {
   _sendTrayActionRefused(messageKey) {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("tray-action-refused", { messageKey });
+  }
+
+  // App acks once its tray listeners are mounted; a reload clears it.
+  setDictationRendererReady(ready) {
+    this._dictationRendererReady = ready === true;
+  }
+
+  // A live meeting the engine cannot surface (it started with no note) would
+  // otherwise swallow the click that asked for another one.
+  notifyMeetingAlreadyRecording() {
+    this._sendTrayActionRefused("notes.meeting.alreadyRecording");
   }
 
   sendStartDictation() {

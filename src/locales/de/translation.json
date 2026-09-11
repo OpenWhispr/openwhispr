@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "Die KI-Verarbeitung ist durch Ihre Organisation eingeschränkt.",
     "policyAgentRestricted": "Die Nutzung des KI-Assistenten ist durch Ihre Organisation eingeschränkt.",
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt.",
+    "policyUnresolved": "Die Einstellungen deiner Organisation wurden noch nicht geladen. Versuche es gleich noch einmal.",
     "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
     "managedConfigUnavailable": "Der verwaltete Unternehmenszugriff ist nicht verfügbar. Melden Sie sich erneut an oder wenden Sie sich an Ihren Administrator.",
     "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator."
@@ -3361,6 +3362,7 @@
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "back": "Zurück",
       "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt.",
+      "alreadyRecording": "Eine Meeting-Aufnahme läuft bereits.",
       "unsupportedSelfHosted": "Die Notizaufnahme kann noch keinen selbst gehosteten Endpunkt verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "unsupportedProvider": "Die Notizaufnahme kann {{provider}} nicht für die Live-Transkription verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
@@ -3704,6 +3706,7 @@
       "hideForNow": "Vorerst ausblenden",
       "askAssistant": "Assistent fragen",
       "busyRecording": "Beende zuerst die laufende Aufnahme",
+      "busyHotkeyCapture": "Wähle zuerst dein Tastenkürzel fertig aus",
       "startMeetingRecording": "Meeting-Aufnahme starten"
     }
   },

@@ -96,6 +96,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "tray-action-refused",
     (callback) => (_event, data) => callback(data)
   ),
+  notifyDictationRendererReady: () => ipcRenderer.send("dictation-renderer-ready"),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
   onPrepareDictation: registerListener(

@@ -183,6 +183,7 @@
     "policyAiProcessingRestricted": "O processamento de IA está restrito pela sua organização.",
     "policyAgentRestricted": "O uso do assistente de IA está restrito pela sua organização.",
     "policyTranscriptionRestricted": "A transcrição está restrita pela sua organização.",
+    "policyUnresolved": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes.",
     "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
     "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
     "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador."
@@ -3019,6 +3020,7 @@
       "description": "Transcrições e resumos estruturados",
       "back": "Voltar",
       "restrictedByOrg": "A transcrição de reuniões está restrita pela sua organização.",
+      "alreadyRecording": "Já existe uma gravação de reunião em andamento.",
       "unsupportedSelfHosted": "A gravação de notas ainda não pode usar um endpoint auto-hospedado. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "unsupportedProvider": "A gravação de notas não pode usar {{provider}} para transcrição ao vivo. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "noProviderSelected": "Nenhum provedor está selecionado para a gravação de notas. Abra as Configurações e escolha Local ou um provedor de streaming.",
@@ -3535,6 +3537,7 @@
       "hideForNow": "Ocultar por agora",
       "askAssistant": "Perguntar ao assistente",
       "busyRecording": "Termine primeiro a gravação atual",
+      "busyHotkeyCapture": "Termine de escolher o seu atalho primeiro",
       "startMeetingRecording": "Iniciar gravação da reunião"
     }
   },

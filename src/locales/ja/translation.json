@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "AI処理は組織によって制限されています。",
     "policyAgentRestricted": "AIアシスタントの使用は組織によって制限されています。",
     "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。",
+    "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
     "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。"
@@ -3012,6 +3013,7 @@
       "description": "文字起こしと構造化されたサマリー",
       "back": "戻る",
       "restrictedByOrg": "会議の文字起こしは組織によって制限されています。",
+      "alreadyRecording": "すでに会議の録音が進行中です。",
       "unsupportedSelfHosted": "ノート録音はまだセルフホストのエンドポイントを利用できません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
       "unsupportedProvider": "ノート録音ではライブ文字起こしに {{provider}} を利用できません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
       "noProviderSelected": "ノート録音のプロバイダーが選択されていません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
@@ -3535,6 +3537,7 @@
       "hideForNow": "一時的に非表示",
       "askAssistant": "アシスタントに質問",
       "busyRecording": "先に録音を終了してください",
+      "busyHotkeyCapture": "先にショートカットの設定を完了してください",
       "startMeetingRecording": "ミーティングの録音を開始"
     }
   },

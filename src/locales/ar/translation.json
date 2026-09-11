@@ -1352,6 +1352,7 @@
       "hideForNow": "إخفاء الآن",
       "askAssistant": "اسأل المساعد",
       "busyRecording": "أنهِ التسجيل الحالي أولاً",
+      "busyHotkeyCapture": "أنهِ اختيار الاختصار أولاً",
       "startMeetingRecording": "بدء تسجيل الاجتماع"
     }
   },
@@ -1704,6 +1705,7 @@
       "description": "نصوص مفرَّغة وملخصات مهيكلة",
       "back": "رجوع",
       "restrictedByOrg": "تفريغ الاجتماعات مقيد بواسطة مؤسستك.",
+      "alreadyRecording": "هناك تسجيل اجتماع قيد التشغيل بالفعل.",
       "autoEnded": "توقف التسجيل تلقائيًا بعد انتهاء اجتماعك.",
       "restartFailed": "تعذرت إعادة تشغيل تسجيل الاجتماع.",
       "systemAudioSilent": {
@@ -3584,6 +3586,7 @@
     "policyAiProcessingRestricted": "معالجة الذكاء الاصطناعي مقيدة من قبل مؤسستك.",
     "policyAgentRestricted": "استخدام مساعد الذكاء الاصطناعي مقيد من قبل مؤسستك.",
     "policyTranscriptionRestricted": "التفريغ الصوتي مقيد من قبل مؤسستك.",
+    "policyUnresolved": "لم يتم تحميل إعدادات مؤسستك بعد. حاول مرة أخرى بعد قليل.",
     "logout": "تسجيل الخروج",
     "managedConfigLoading": "جارٍ التحقق من الإعداد المُدار لمؤسستك. أعد المحاولة بعد لحظات.",
     "managedConfigUnavailable": "الوصول المُدار للمؤسسة غير متاح. سجّل الدخول مرة أخرى أو اتصل بالمسؤول.",

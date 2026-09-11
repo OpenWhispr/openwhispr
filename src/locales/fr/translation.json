@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "Le traitement par IA est restreint par votre organisation.",
     "policyAgentRestricted": "L’utilisation de l’assistant IA est restreinte par votre organisation.",
     "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation.",
+    "policyUnresolved": "Les paramètres de votre organisation ne sont pas encore chargés. Réessayez dans un instant.",
     "managedConfigLoading": "Vérification de la configuration gérée de votre organisation en cours. Réessayez dans un instant.",
     "managedConfigUnavailable": "L'accès d'entreprise géré est indisponible. Reconnectez-vous ou contactez votre administrateur.",
     "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur."
@@ -3361,6 +3362,7 @@
       "description": "Transcriptions et résumés structurés",
       "back": "Retour",
       "restrictedByOrg": "La transcription des réunions est restreinte par votre organisation.",
+      "alreadyRecording": "Un enregistrement de réunion est déjà en cours.",
       "unsupportedSelfHosted": "L'enregistrement de notes ne peut pas encore utiliser un serveur auto-hébergé. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "unsupportedProvider": "L'enregistrement de notes ne peut pas utiliser {{provider}} pour la transcription en direct. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "noProviderSelected": "Aucun fournisseur n'est sélectionné pour l'enregistrement de notes. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
@@ -3704,6 +3706,7 @@
       "hideForNow": "Masquer pour l’instant",
       "askAssistant": "Demander à l'assistant",
       "busyRecording": "Terminez d'abord l'enregistrement en cours",
+      "busyHotkeyCapture": "Terminez d'abord de choisir votre raccourci",
       "startMeetingRecording": "Démarrer l’enregistrement de la réunion"
     }
   },

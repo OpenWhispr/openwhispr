@@ -85,8 +85,10 @@ export function useAssistantPanel({
   }, [mounted, open, responseReady, clearFooterTimers]);
 
   const openPanel = useCallback(async () => {
-    setThinking(false);
+    // After the guard: a second open (the tray's Ask assistant while a command is
+    // already thinking) must not clear the flourish of the one in flight.
     if (openRef.current) return;
+    setThinking(false);
     const generation = ++openGenerationRef.current;
     openRef.current = true;
     closingRef.current = false;
