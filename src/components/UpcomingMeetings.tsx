@@ -226,7 +226,11 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
       >
         <Calendar size={12} className="shrink-0" />
         <span>
-          {group.date.toLocaleDateString(i18n.language, { day: "numeric", month: "short" })}
+          {group.date.toLocaleDateString(i18n.language, {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+          })}
         </span>
       </div>
       <div className="bg-background px-2 dark:bg-surface-2/60">
