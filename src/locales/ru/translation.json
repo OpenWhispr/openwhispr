@@ -3940,7 +3940,8 @@
       "dictionaryRead": "Чтение словаря",
       "dictionaryWrite": "Изменение словаря",
       "snippetsRead": "Чтение сниппетов",
-      "snippetsWrite": "Изменение сниппетов"
+      "snippetsWrite": "Изменение сниппетов",
+      "transcriptionsWrite": "Транскрибировать аудио"
     },
     "revoke": {
       "button": "Отозвать",

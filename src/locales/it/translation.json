@@ -3894,7 +3894,8 @@
       "dictionaryRead": "Leggi dizionario",
       "dictionaryWrite": "Modifica dizionario",
       "snippetsRead": "Leggi snippet",
-      "snippetsWrite": "Modifica snippet"
+      "snippetsWrite": "Modifica snippet",
+      "transcriptionsWrite": "Trascrivi audio"
     },
     "revoke": {
       "button": "Revoca",

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Transcribe files from the terminal with your local models.** The CLI bridge gains `POST /v1/transcribe`, which takes a file path and runs whichever local model the app is set to use (whisper.cpp, Parakeet, Nemotron, or Cohere), and `GET /v1/transcribe/models`, which lists downloaded models. Audio never crosses the bridge; the app reads the file itself. Powers `openwhispr transcribe <file>` in `@openwhispr/cli` 0.3.0.
+
 ### Changed
 
 - **Automatic updates replace the update popup.** A new Automatic updates toggle under Settings → System downloads updates in the background and installs them when the app next quits. It is on for new installs; existing installs keep today's flow until they opt in: the app still checks for updates, and the sidebar Update Available button and Settings → System let you download and install by hand. The update-available popup window and the App updates notification toggle are gone. On Linux the toggle and the check only appear for AppImage installs, since deb, rpm and tar.gz packages are updated by the package manager.

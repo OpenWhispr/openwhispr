@@ -3894,7 +3894,8 @@
       "dictionaryRead": "读取词典",
       "dictionaryWrite": "编辑词典",
       "snippetsRead": "读取片段",
-      "snippetsWrite": "编辑片段"
+      "snippetsWrite": "编辑片段",
+      "transcriptionsWrite": "转录音频"
     },
     "revoke": {
       "button": "撤销",

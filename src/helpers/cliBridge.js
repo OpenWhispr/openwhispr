@@ -308,6 +308,58 @@ class CliBridge {
       return value;
     };
 
+    const requireAudioFile = (value) => {
+      if (typeof value !== "string" || !value.trim()) {
+        const err = new Error("'path' must be the path of an audio file");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      let stat;
+      try {
+        stat = fs.statSync(value);
+      } catch {
+        const err = new Error(`No file at ${value}`);
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      if (!stat.isFile()) {
+        const err = new Error("'path' must point to a file, not a directory");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return fs.realpathSync(value);
+    };
+
+    // Picks the requested model, or the one the app is set to use, and refuses
+    // anything not on disk so the engines' own errors stay genuine failures.
+    const requireLocalModel = (models, requested) => {
+      if (requested !== undefined && typeof requested !== "string") {
+        const err = new Error("'model' must be a string");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      const match = requested
+        ? models.find((m) => m.model === requested)
+        : models.find((m) => m.default);
+      if (!match) {
+        const err = new Error(
+          requested
+            ? `Unknown model '${requested}'. Available: ${models.map((m) => m.model).join(", ")}`
+            : "No local transcription model is selected. Choose one in OpenWhispr under Settings → Transcription, or pass 'model'."
+        );
+        err.code = "VALIDATION";
+        throw err;
+      }
+      if (!match.downloaded) {
+        const err = new Error(
+          `Model '${match.model}' is not downloaded. Open OpenWhispr and download it under Settings → Transcription.`
+        );
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return match;
+    };
+
     const requireSuccess = (result, message) => {
       if (!result?.success) {
         const err = new Error(result?.error || message);
@@ -447,6 +499,28 @@ class CliBridge {
             removed: current.filter((s) => removeKeys.has(lower(s.trigger))).length,
           },
         };
+      }),
+      exact("GET", "/v1/transcribe/models", () => ({ data: ipc.listLocalTranscriptionModels() })),
+      // The CLI runs on this machine, so it sends a path and the app reads the
+      // file itself: no audio crosses the bridge and the user's downloaded
+      // models do the work.
+      exact("POST", "/v1/transcribe", async ({ body }) => {
+        const real = requireAudioFile(body?.path);
+        const { provider, model } = requireLocalModel(
+          ipc.listLocalTranscriptionModels(),
+          body?.model
+        );
+        const language =
+          typeof body?.language === "string" && body.language ? body.language : undefined;
+        ipc.approveAudioPath(real);
+        const result = await ipc.transcribeLocalFile(real, { provider, model, language });
+        if (!result?.success) {
+          if (result?.code === "NO_SPEECH_DETECTED" || result?.message === "No audio detected") {
+            return { data: { text: "", provider, model, warning: "No speech detected" } };
+          }
+          throw new Error(result?.error || result?.message || "Local transcription failed");
+        }
+        return { data: { text: result.text, provider, model } };
       }),
       exact("GET", "/v1/transcriptions/list", ({ query }) => {
         const limit = query.get("limit") ? Number(query.get("limit")) : 50;
