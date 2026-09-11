@@ -22,7 +22,7 @@ function loadLoopback() {
   }
 }
 
-function startFlow(handleCallback = async () => ({ ok: true })) {
+function startFlow(handleCallback = async () => ({ ok: true }), options = {}) {
   const { runOAuthLoopbackFlow } = loadLoopback();
   let redirectUri;
   let state;
@@ -42,6 +42,7 @@ function startFlow(handleCallback = async () => ({ ok: true })) {
         return "https://example.test/auth";
       },
       handleCallback,
+      ...options,
     });
     return { flow, server, getRedirectUri: () => redirectUri, getState: () => state };
   } finally {
@@ -206,6 +207,20 @@ test("a callback with a code and the wrong state rejects immediately", async () 
 
   await rejected;
   assert.ok(Date.now() - started < 5000, "must not wait for the 120s timeout");
+});
+
+test("redirectHost overrides the redirect_uri sent to the provider, and the loopback server still answers on it", async () => {
+  const { flow, getRedirectUri, getState } = startFlow(async (code) => ({ code }), {
+    redirectHost: "localhost",
+  });
+  const redirectUri = await waitForListen(getRedirectUri);
+  assert.match(redirectUri, /^http:\/\/localhost:\d+$/);
+
+  const success = await fetch(`${redirectUri}/?code=ok&state=${getState()}`, {
+    redirect: "manual",
+  });
+  assert.equal(success.status, 302);
+  assert.deepEqual(await flow, { code: "ok" });
 });
 
 test("a request with no code leaves the flow running until a real callback", async () => {
