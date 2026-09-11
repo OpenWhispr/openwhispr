@@ -376,9 +376,9 @@ export default function BackgroundModelDownloadTray({
   const positionClass =
     placement === "onboarding"
       ? getPlatform() === "darwin"
-        ? "right-5 top-5"
-        : "right-5 top-14"
-      : "right-7 bottom-5";
+        ? "end-5 top-5"
+        : "end-5 top-14"
+      : "end-7 bottom-5";
 
   useEffect(() => {
     if (hydrated && activeDownloads.length === 0 && !hasPendingLocalModels()) {

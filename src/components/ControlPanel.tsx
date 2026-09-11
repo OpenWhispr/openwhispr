@@ -2,6 +2,7 @@ import React, { Suspense, useState, useEffect, useRef, useCallback } from "react
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import {
   Download,
   RefreshCw,
@@ -76,6 +77,7 @@ import {
   shouldRunTranslateStep,
 } from "../helpers/translationChain";
 import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
+import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
@@ -97,7 +99,7 @@ const SIDEBAR_WIDTH_PX = 192;
 const SEMANTIC_REINDEX_VERSION = 2;
 
 const toggleIconClass =
-  "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150";
+  "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150 rtl:scale-x-[-1]";
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
@@ -637,7 +639,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 import("../stores/settingsStore"),
               ]);
               const settings = getEffectiveSettings();
-              const agentName = localStorage.getItem("agentName") || null;
+              const agentName = getAgentName();
               const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
               if (route.kind === "translation") {
                 const { text, translated } = await executeTranslationChain({
@@ -708,7 +710,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               const model = getEffectiveCleanupModel();
               const isCloud = isCloudCleanupMode();
               if (model || isCloud) {
-                const agentName = localStorage.getItem("agentName") || null;
+                const agentName = getAgentName();
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,
                 });
@@ -964,17 +966,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           style={{ width: sidebarCollapsed || isSidePanelLayout ? 0 : SIDEBAR_WIDTH_PX }}
         />
         <div
-          className={`absolute inset-y-0 left-0 z-30 transition-transform duration-300 ease-out${
+          className={`absolute inset-y-0 start-0 z-30 transition-transform duration-300 ease-out ${
+            !isSidePanelLayout && (!sidebarCollapsed || sidebarPeek)
+              ? "translate-x-0"
+              : "ltr:-translate-x-full rtl:translate-x-full"
+          }${
             sidebarCollapsed && sidebarPeek && !isSidePanelLayout
-              ? " shadow-[10px_0_40px_-18px_rgba(0,0,0,0.2)]"
+              ? " shadow-[10px_0_40px_-18px_rgba(0,0,0,0.2)] rtl:shadow-[-10px_0_40px_-18px_rgba(0,0,0,0.2)]"
               : ""
           }`}
-          style={{
-            transform:
-              !isSidePanelLayout && (!sidebarCollapsed || sidebarPeek)
-                ? "translateX(0)"
-                : "translateX(-100%)",
-          }}
           onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
           onMouseLeave={sidebarCollapsed ? hideSidebarPeek : undefined}
         >
@@ -1024,7 +1024,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           >
             {isSidePanelLayout && (
               <div
-                className={platform === "darwin" ? "ml-[84px] mt-[16px]" : "ml-2"}
+                className={platform === "darwin" ? "ltr:ml-[84px] rtl:mr-2 mt-[16px]" : "ms-2"}
                 data-no-window-drag=""
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
@@ -1032,9 +1032,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   variant="outline-flat"
                   size="sm"
                   onClick={handleExitMeetingMode}
-                  className="h-7 px-2.5 pl-1.5 gap-1"
+                  className="h-7 px-2.5 ps-1.5 gap-1"
                 >
-                  <ChevronLeft size={14} strokeWidth={1.8} />
+                  <ChevronLeft size={14} strokeWidth={1.8} className="rtl:rotate-180" />
                   {t("controlPanel.backToNotes")}
                 </Button>
               </div>
@@ -1042,7 +1042,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             <div className="flex-1" />
             {platform !== "darwin" && (
               <div
-                className="pr-1"
+                className="pe-1"
                 data-no-window-drag=""
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
@@ -1063,9 +1063,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                         {t("controlPanel.updateRequiredByOrg.title")}
                       </p>
                       <p className="text-xs text-amber-700 dark:text-amber-300/80">
-                        {t("controlPanel.updateRequiredByOrg.description", {
-                          version: policyMinAppVersion,
-                        })}
+                        <BidiInterpolatedText
+                          text={t("controlPanel.updateRequiredByOrg.description", {
+                            version: BIDI_VALUE_TOKEN,
+                          })}
+                          value={policyMinAppVersion}
+                        />
                       </p>
                     </div>
                   </div>
@@ -1241,7 +1244,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         {!isSidePanelLayout && (
           <div
             className={`absolute z-40 flex h-10 items-center ${
-              platform === "darwin" ? "left-21 top-2" : "left-2 top-0"
+              platform === "darwin" ? "ltr:left-21 rtl:right-2 top-2" : "start-2 top-0"
             }`}
             data-no-window-drag=""
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}

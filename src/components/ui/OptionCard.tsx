@@ -25,7 +25,7 @@ export default function OptionCard({
       disabled={disabled}
       aria-pressed={selected}
       className={cn(
-        "group relative w-full rounded-md p-3 text-left transition-colors duration-150",
+        "group relative w-full rounded-md p-3 text-start transition-colors duration-150",
         "border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
         selected
           ? "bg-primary/5 border-primary/40 dark:bg-primary/10 dark:border-primary/30"

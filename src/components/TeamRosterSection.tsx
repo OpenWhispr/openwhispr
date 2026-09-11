@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Mail, X } from "lucide-react";
 import { Button } from "./ui/button";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./ui/select";
 import { useToast } from "./ui/useToast";
 import { cn } from "./lib/utils";
@@ -147,11 +148,13 @@ export default function TeamRosterSection({
               <div key={member.user_id} className="flex items-center gap-3 px-4 h-14">
                 <MemberAvatar name={member.name} email={member.email} image={member.image} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-foreground truncate">
+                  <p dir="auto" className="text-xs font-medium text-foreground truncate">
                     {member.name || member.email}
                   </p>
                   {member.name && (
-                    <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                    <p dir="ltr" className="text-xs text-muted-foreground truncate">
+                      {member.email}
+                    </p>
                   )}
                 </div>
                 {canManage && !isSelf ? (
@@ -243,7 +246,7 @@ export default function TeamRosterSection({
                     setAddSearch("");
                   }}
                   className={cn(
-                    "flex items-center gap-2 w-full px-2 h-8 rounded-md text-left",
+                    "flex items-center gap-2 w-full px-2 h-8 rounded-md text-start",
                     "transition-colors duration-150 outline-none",
                     "text-primary/80 hover:text-primary hover:bg-primary/8",
                     "focus-visible:ring-1 focus-visible:ring-ring/30"
@@ -251,7 +254,12 @@ export default function TeamRosterSection({
                 >
                   <Mail size={12} className="shrink-0" />
                   <span className="text-xs truncate">
-                    {t("notes.spaces.members.inviteFooter", { email: addSearch.trim() })}
+                    <BidiInterpolatedText
+                      text={t("notes.spaces.members.inviteFooter", {
+                        email: BIDI_VALUE_TOKEN,
+                      })}
+                      value={addSearch.trim()}
+                    />
                   </span>
                 </button>
               ) : undefined

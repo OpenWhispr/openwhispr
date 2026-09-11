@@ -111,6 +111,7 @@ import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionary
 import { dictionaryKeywords, usesTranscriptionKeywords } from "../utils/dictionaryKeywords.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
+import { getAgentName } from "../utils/agentName";
 import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
 import {
   buildSelectionEditSystemPrompt,
@@ -200,6 +201,7 @@ function resolveReasoningRoute(
   screenContext,
   detectedLanguage
 ) {
+  const wakeWordLanguage = resolveWakeWordLanguage(settings, detectedLanguage, text);
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
   const cleanupReachable =
     !!settings.useCleanupModel && (!!cleanup.model?.trim() || isCloudCleanupMode());
@@ -216,9 +218,7 @@ function resolveReasoningRoute(
     agentReachable: agent.reachable,
     // A translation recording never routes to the agent, so skip the scan.
     agentInvoked:
-      !translationRequested &&
-      !!agentName &&
-      detectAgentName(text, agentName, resolveWakeWordLanguage(settings, detectedLanguage)),
+      !translationRequested && !!agentName && detectAgentName(text, agentName, wakeWordLanguage),
     voiceAgentRequested,
     translationRequested,
     translationReachable: translation.reachable,
@@ -301,6 +301,8 @@ function resolveReasoningRoute(
         // reachable; standalone commands resolve the same scope again in the
         // panel and report their own configuration problems in-conversation.
         selectionEditReachable: agent.reachable,
+        // Detection and stripping must resolve auto-language identically.
+        wakeWordLanguage,
         // The panel re-decides attach/drop for its own request, so carry the
         // raw screenshot past this attach gate for that path.
         ...(screenContext ? { rawScreenContext: screenContext } : {}),
@@ -2614,7 +2616,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.assertAgentAllowedByPolicy();
     const command = this.voiceAgentRequested
       ? text
-      : stripAgentAddress(text, agentName, resolveWakeWordLanguage(getSettings()));
+      : stripAgentAddress(
+          text,
+          agentName,
+          config?.wakeWordLanguage ?? resolveWakeWordLanguage(getSettings())
+        );
     const transcript = selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
     this._bankAssistantDirective(transcript, config, { selectedContext, deliverySessionId });
     return text;
@@ -2697,10 +2703,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw error;
     }
 
-    // selectionEditReachable and rawScreenContext are routing directives for
-    // this method, not reasoning options — strip them before the config
-    // reaches ReasoningService.
-    const { selectionEditReachable, rawScreenContext, ...reasoningOptions } = config ?? {};
+    // These are routing directives for this method, not reasoning options —
+    // strip them before the config reaches ReasoningService.
+    const { selectionEditReachable, rawScreenContext, wakeWordLanguage, ...reasoningOptions } =
+      config ?? {};
     const selectionConfig = {
       ...reasoningOptions,
       maxTokens: Math.max(config?.maxTokens || 0, 8192),
@@ -2927,9 +2933,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const cleanupReachable = !!settings.useCleanupModel && (!!cleanupModel || isCloud);
     const agentReachable = dictationAgentReachable(settings);
     const agentName =
-      typeof window !== "undefined" && window.localStorage
-        ? localStorage.getItem("agentName") || null
-        : null;
+      typeof window !== "undefined" && window.localStorage ? getAgentName() : "OpenWhispr";
     if (
       !cleanupReachable &&
       !agentReachable &&
@@ -3270,7 +3274,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let processedText = result.text;
     if (processedText) {
       const reasoningStart = performance.now();
-      const agentName = localStorage.getItem("agentName") || null;
+      const agentName = getAgentName();
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
       const route = resolveReasoningRoute(
         processedText,
@@ -4951,7 +4955,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let usedCloudReasoning = false;
     if (finalText) {
       const reasoningStart = performance.now();
-      const agentName = localStorage.getItem("agentName") || null;
+      const agentName = getAgentName();
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
       if (wasCancelled()) return true;
       const route = resolveReasoningRoute(
@@ -4960,7 +4964,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         agentName,
         this.voiceAgentRequested,
         this.translationRequested,
-        screenContext
+        screenContext,
+        streamingSttLanguage
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");

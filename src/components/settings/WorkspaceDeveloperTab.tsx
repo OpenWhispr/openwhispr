@@ -177,7 +177,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
           </p>
         </div>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          <Plus className="me-1.5 h-3.5 w-3.5" />
           {t("settingsPage.workspace.developer.new")}
         </Button>
       </div>
@@ -204,8 +204,10 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
         {keys.map((k) => (
           <div key={k.id} className="flex items-center gap-3 px-4 h-14">
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-foreground truncate">{k.name}</p>
-              <p className="text-[11px] font-mono text-muted-foreground truncate">
+              <p dir="auto" className="text-xs font-medium text-foreground truncate">
+                {k.name}
+              </p>
+              <p dir="ltr" className="text-[11px] font-mono text-muted-foreground truncate">
                 {k.key_prefix}…
               </p>
             </div>
@@ -242,6 +244,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
                 {t("settingsPage.workspace.developer.nameLabel")}
               </Label>
               <Input
+                dir="auto"
                 id="key-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -296,7 +299,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
                 type="submit"
                 disabled={!name.trim() || selectedScopes.size === 0 || submitting}
               >
-                {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                {submitting && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                 {submitting ? t("common.saving") : t("settingsPage.workspace.developer.create")}
               </Button>
             </DialogFooter>
@@ -331,19 +334,22 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
               {t("settingsPage.workspace.developer.keyCreatedDescription")}
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-md border border-border/60 bg-foreground/4 dark:bg-white/4 p-3 font-mono text-xs break-all">
+          <div
+            dir="ltr"
+            className="rounded-md border border-border/60 bg-foreground/4 dark:bg-white/4 p-3 font-mono text-xs break-all"
+          >
             {newKey?.key}
           </div>
           <DialogFooter>
             <Button onClick={handleCopy} variant="outline" size="sm">
               {copied ? (
                 <>
-                  <Check className="mr-1.5 h-3.5 w-3.5" />
+                  <Check className="me-1.5 h-3.5 w-3.5" />
                   {t("common.copied")}
                 </>
               ) : (
                 <>
-                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  <Copy className="me-1.5 h-3.5 w-3.5" />
                   {t("common.copy")}
                 </>
               )}

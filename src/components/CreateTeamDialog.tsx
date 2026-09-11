@@ -132,6 +132,7 @@ export default function CreateTeamDialog({
               {t("settingsPage.workspace.teams.nameLabel")}
             </Label>
             <Input
+              dir="auto"
               id="create-team-name"
               value={name}
               autoFocus
@@ -181,7 +182,7 @@ export default function CreateTeamDialog({
             {t("common.cancel")}
           </Button>
           <Button onClick={() => void handleCreate()} disabled={!name.trim() || isCreating}>
-            {showSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
             {t("common.create")}
           </Button>
         </DialogFooter>

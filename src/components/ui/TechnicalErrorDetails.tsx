@@ -48,7 +48,10 @@ export function TechnicalErrorDetails({
         {t("reasoning.enterprise.technicalDetails.title")}
       </summary>
       <div className="mt-1.5 flex items-start justify-between gap-2">
-        <pre className="min-w-0 flex-1 whitespace-pre-wrap wrap-break-word font-mono text-[11px] leading-snug select-all">
+        <pre
+          dir="ltr"
+          className="min-w-0 flex-1 whitespace-pre-wrap wrap-break-word font-mono text-[11px] leading-snug select-all"
+        >
           {text}
         </pre>
         <button

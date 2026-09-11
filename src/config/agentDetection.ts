@@ -32,6 +32,7 @@ const VOCATIVE_CUES = new Set(["hey", "hi", "hello", "ok", "okay", "yo", "please
 // Localized vocatives per base dictation language, matched with the same
 // previous-token rule as the English cues. Kept short to avoid false positives.
 const LOCALIZED_VOCATIVE_CUES: Record<string, readonly string[]> = {
+  ar: ["يا"],
   de: ["hallo", "servus"],
   es: ["oye", "hola", "oiga"],
   fr: ["hé", "salut"],
@@ -70,6 +71,8 @@ const CJK_PUNCTUATION_RE = new RegExp(`[${Object.keys(CJK_PUNCTUATION_MAP).join(
 const CJK_CHAR_RANGE = "\\u3040-\\u30ff\\u3400-\\u4dbf\\u4e00-\\u9fff";
 const CJK_TO_LATIN_RE = new RegExp(`([${CJK_CHAR_RANGE}])(?=[A-Za-z0-9])`, "g");
 const LATIN_TO_CJK_RE = new RegExp(`([A-Za-z0-9])(?=[${CJK_CHAR_RANGE}])`, "g");
+const TOKEN_PUNCTUATION_RE = /[.,!?;:'"()،؛؟]/g;
+const SEPARATE_ADDRESS_PUNCTUATION = new Set([",", "،"]);
 
 function normalizeCjkTranscript(transcript: string, agentName: string): string {
   const escapedName = agentName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -131,7 +134,7 @@ function locateAgentAddress(
 
   const nameLower = detectionName.toLowerCase().replace(/\s+/g, "");
   const rawWords = source.split(/\s+/).filter(Boolean);
-  const words = rawWords.map((w) => w.replace(/[.,!?;:'"()]/g, "").toLowerCase());
+  const words = rawWords.map((w) => w.replace(TOKEN_PUNCTUATION_RE, "").toLowerCase());
 
   const maxEdits = maxEditsForLength(nameLower.length);
   // STT may split the name across tokens ("open whispr") or mishear it, so
@@ -151,7 +154,9 @@ function locateAgentAddress(
         const cueBefore =
           i > 0 && (VOCATIVE_CUES.has(words[i - 1]) || localizedCues.has(words[i - 1]));
         const nameEnd = i + span + 1;
-        const addressEnd = rawWords[nameEnd] === "," ? nameEnd + 1 : nameEnd;
+        const addressEnd = SEPARATE_ADDRESS_PUNCTUATION.has(rawWords[nameEnd])
+          ? nameEnd + 1
+          : nameEnd;
         return { start: cueBefore ? i - 1 : i, end: addressEnd, rawWords };
       }
     }

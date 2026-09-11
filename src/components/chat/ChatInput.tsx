@@ -117,7 +117,7 @@ export function ChatInput({
     <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
       <div
         className={cn(
-          "flex items-center gap-2 min-h-11 pl-4 pr-1.5 rounded-full",
+          "flex items-center gap-2 min-h-11 ps-4 pe-1.5 rounded-full",
           GLASS_SURFACE,
           "border border-black/10 dark:border-white/14",
           "transition-all duration-200",
@@ -200,6 +200,7 @@ export function ChatInput({
         {(isIdle || isBusy) && !isVoiceRecording && !isVoiceTranscribing && (
           <div className="flex items-center gap-2 w-full">
             <input
+              dir="auto"
               ref={inputRef}
               type="text"
               value={inputText}
@@ -245,7 +246,7 @@ export function ChatInput({
                     : "opacity-30 saturate-0 cursor-default"
                 )}
               >
-                <SendIcon size={28} className="block" />
+                <SendIcon size={28} className="block rtl:scale-x-[-1]" />
               </button>
             ) : isIdle ? (
               <button

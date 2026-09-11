@@ -91,7 +91,7 @@ export default function ApiKeysSection() {
       {!isLoading && keys.length > 0 && keys.length < MAX_API_KEYS && (
         <div className="flex justify-end">
           <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            <Plus className="h-3.5 w-3.5 me-1.5" />
             {t("apiKeysSection.createButton")}
           </Button>
         </div>
@@ -118,7 +118,7 @@ export default function ApiKeysSection() {
               <Key className="h-5 w-5 text-muted-foreground/40 mb-2" />
               <p className="text-xs text-muted-foreground mb-3">{t("apiKeysSection.empty")}</p>
               <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                <Plus className="h-3.5 w-3.5 me-1.5" />
                 {t("apiKeysSection.createButton")}
               </Button>
             </div>
@@ -131,10 +131,13 @@ export default function ApiKeysSection() {
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-xs font-medium text-foreground truncate">
+                    <span dir="auto" className="text-xs font-medium text-foreground truncate">
                       {apiKey.name}
                     </span>
-                    <code className="text-[10px] font-mono text-muted-foreground/60 shrink-0">
+                    <code
+                      dir="ltr"
+                      className="text-[10px] font-mono text-muted-foreground/60 shrink-0"
+                    >
                       {apiKey.key_prefix}...
                     </code>
                   </div>
@@ -146,7 +149,7 @@ export default function ApiKeysSection() {
                           {t(`apiKeysSection.scopes.${API_SCOPE_I18N_KEY[scope as ApiScope]}`)}
                         </Badge>
                       ))}
-                    <span className="text-[10px] text-muted-foreground/50 ml-1">
+                    <span className="text-[10px] text-muted-foreground/50 ms-1">
                       {apiKey.last_used_at
                         ? t("apiKeysSection.lastUsed", {
                             time: formatRelativeTime(apiKey.last_used_at),
@@ -302,16 +305,19 @@ function CreateKeyDialog({
 
             <div className="space-y-3">
               <div className="rounded-lg border border-border/50 bg-muted/30 dark:bg-surface-raised/30 p-3">
-                <code className="text-xs font-mono text-foreground break-all select-all leading-relaxed">
+                <code
+                  dir="ltr"
+                  className="text-xs font-mono text-foreground break-all select-all leading-relaxed"
+                >
                   {rawKey}
                 </code>
               </div>
 
               <Button variant="outline" size="sm" className="w-full" onClick={handleCopy}>
                 {copied ? (
-                  <Check className="h-3.5 w-3.5 mr-1.5 text-success" />
+                  <Check className="h-3.5 w-3.5 me-1.5 text-success" />
                 ) : (
-                  <Copy className="h-3.5 w-3.5 mr-1.5" />
+                  <Copy className="h-3.5 w-3.5 me-1.5" />
                 )}
                 {copied
                   ? t("apiKeysSection.created.copied")
@@ -347,6 +353,7 @@ function CreateKeyDialog({
                   {t("apiKeysSection.create.nameLabel")}
                 </label>
                 <Input
+                  dir="auto"
                   value={name}
                   onChange={(e) => setName(e.target.value.slice(0, MAX_NAME_LENGTH))}
                   placeholder={t("apiKeysSection.create.namePlaceholder")}

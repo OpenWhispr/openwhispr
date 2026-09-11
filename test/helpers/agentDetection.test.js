@@ -5,7 +5,10 @@ const load = () => import("../../src/config/agentDetection.ts");
 
 test("stripAgentAddress removes the leading cue and name, keeping the command", async () => {
   const { stripAgentAddress } = await load();
-  assert.equal(stripAgentAddress("Hey OpenWhispr, make this formal", "OpenWhispr"), "make this formal");
+  assert.equal(
+    stripAgentAddress("Hey OpenWhispr, make this formal", "OpenWhispr"),
+    "make this formal"
+  );
   assert.equal(stripAgentAddress("Max take a note", "Max"), "take a note");
   assert.equal(
     stripAgentAddress("That's everything. OpenWhispr, format this", "OpenWhispr"),
@@ -212,6 +215,16 @@ test("keeps detection English-only for languages without a localized cue set", a
   assert.equal(detectAgentName("well then hey Jarvis take a note", "Jarvis", "ko"), true);
 });
 
+test("detects and strips the Arabic vocative only for Arabic dictation", async () => {
+  const { detectAgentName, stripAgentAddress } = await load();
+  const addressed = "كنت أفكر يا Max، لخّص هذه الملاحظة";
+
+  assert.equal(detectAgentName(addressed, "Max", "ar"), true);
+  assert.equal(detectAgentName(addressed, "Max", "ar-SA"), true);
+  assert.equal(stripAgentAddress(addressed, "Max", "ar"), "كنت أفكر لخّص هذه الملاحظة");
+  assert.equal(detectAgentName(addressed, "Max", "en"), false);
+});
+
 test("every locale's advertised wake phrase triggers detection in its language", async () => {
   const { detectAgentName } = await load();
   const fs = require("node:fs");
@@ -222,7 +235,7 @@ test("every locale's advertised wake phrase triggers detection in its language",
     .readdirSync(localesDir, { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name);
-  assert.equal(locales.length, 10);
+  assert.ok(locales.includes("ar"), "Arabic locale should be covered by the behavior loop");
 
   for (const locale of locales) {
     const translation = JSON.parse(

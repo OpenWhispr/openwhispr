@@ -55,11 +55,11 @@ export default function SupportDropdown({ className, trigger }: SupportDropdownP
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => openExternal("https://docs.openwhispr.com")}>
-          <BookOpen className="mr-2 h-4 w-4" />
+          <BookOpen className="me-2 h-4 w-4" />
           {t("support.documentation")}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => openExternal("https://discord.gg/yZWC9WTtX7")}>
-          <DiscordIcon className="mr-2 h-4 w-4" />
+          <DiscordIcon className="me-2 h-4 w-4" />
           {t("support.joinDiscord")}
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -70,13 +70,13 @@ export default function SupportDropdown({ className, trigger }: SupportDropdownP
             }
           }}
         >
-          <Mail className="mr-2 h-4 w-4" />
+          <Mail className="me-2 h-4 w-4" />
           {t("support.contactSupport")}
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => openExternal("https://github.com/OpenWhispr/openwhispr/issues")}
         >
-          <Bug className="mr-2 h-4 w-4" />
+          <Bug className="me-2 h-4 w-4" />
           {t("support.submitBug")}
         </DropdownMenuItem>
       </DropdownMenuContent>

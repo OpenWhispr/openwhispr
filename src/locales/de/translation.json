@@ -3181,6 +3181,11 @@
       "reopen": "Organisation der Bereiche erklären"
     },
     "folders": {
+      "defaults": {
+        "personal": "Persönlich",
+        "meetings": "Besprechungen",
+        "videos": "Videos"
+      },
       "title": "Ordner",
       "soon": "Demnächst",
       "folderName": "Ordnername",

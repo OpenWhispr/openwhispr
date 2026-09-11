@@ -84,12 +84,12 @@ export default function SidebarModal<T extends string>({
     if (!item.badge && item.badgeVariant !== "dot") return null;
 
     if (item.badgeVariant === "dot") {
-      return <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary shrink-0" />;
+      return <span className="ms-auto h-1.5 w-1.5 rounded-full bg-primary shrink-0" />;
     }
 
     return (
       <span
-        className={`ml-auto text-xs font-semibold uppercase tracking-wider px-1.5 py-px rounded-sm shrink-0 ${
+        className={`ms-auto text-xs font-semibold uppercase tracking-wider px-1.5 py-px rounded-sm shrink-0 ${
           item.badgeVariant === "new"
             ? "bg-primary/10 text-primary dark:bg-primary/15"
             : item.badgeVariant === "update"
@@ -122,7 +122,7 @@ export default function SidebarModal<T extends string>({
           className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-4xl translate-x-[-50%] translate-y-[-50%] rounded-xl p-0 overflow-hidden bg-background border border-border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] dark:bg-surface-1 dark:border-border-subtle dark:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98"
         >
           <div className="relative h-full max-h-[85vh] overflow-hidden">
-            <DialogPrimitive.Close className="absolute right-4 top-4 z-10 rounded-md p-1.5 opacity-40 ring-offset-background transition-[opacity,background-color] hover:opacity-100 bg-transparent hover:bg-muted dark:hover:bg-surface-raised focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1">
+            <DialogPrimitive.Close className="absolute end-4 top-4 z-10 rounded-md p-1.5 opacity-40 ring-offset-background transition-[opacity,background-color] hover:opacity-100 bg-transparent hover:bg-muted dark:hover:bg-surface-raised focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1">
               <X className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="sr-only">{t("common.close")}</span>
             </DialogPrimitive.Close>
@@ -132,7 +132,7 @@ export default function SidebarModal<T extends string>({
 
               {/* Sidebar */}
               <div
-                className={`${actualSidebarWidth} shrink-0 border-r border-border/40 dark:border-border-subtle flex flex-col bg-surface-1 dark:bg-surface-0 transition-[width] duration-200 ease-out`}
+                className={`${actualSidebarWidth} shrink-0 border-e border-border/40 dark:border-border-subtle flex flex-col bg-surface-1 dark:bg-surface-0 transition-[width] duration-200 ease-out`}
               >
                 {/* Identity / custom header */}
                 {header && !isCompact && <div className="px-4 pt-5 pb-1">{header}</div>}
@@ -163,7 +163,7 @@ export default function SidebarModal<T extends string>({
                               data-section-id={item.id}
                               onClick={() => onSectionChange(item.id)}
                               title={isCompact ? item.label : undefined}
-                              className={`group relative w-full flex items-center text-left text-xs rounded-md transition-colors duration-100 outline-none ${
+                              className={`group relative w-full flex items-center text-start text-xs rounded-md transition-colors duration-100 outline-none ${
                                 isCompact ? "justify-center px-0 py-2" : "gap-2 px-2 py-1.5"
                               } ${
                                 isActive
@@ -187,14 +187,17 @@ export default function SidebarModal<T extends string>({
                                   </span>
                                   {renderBadge(item)}
                                   {item.shortcut && !item.badge && (
-                                    <kbd className="ml-auto text-xs text-muted-foreground/25 font-mono shrink-0">
+                                    <kbd
+                                      dir="ltr"
+                                      className="ms-auto text-xs text-muted-foreground/25 font-mono shrink-0"
+                                    >
                                       {item.shortcut}
                                     </kbd>
                                   )}
                                 </>
                               )}
                               {isCompact && item.badgeVariant === "dot" && (
-                                <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                                <span className="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
                               )}
                             </button>
                           );
@@ -214,7 +217,10 @@ export default function SidebarModal<T extends string>({
                     <div className="flex items-center gap-1.5">
                       <div className="h-1 w-1 rounded-full bg-success/60" />
                       {!isCompact && (
-                        <span className="text-xs text-muted-foreground/40 tabular-nums tracking-wide">
+                        <span
+                          dir="ltr"
+                          className="text-xs text-muted-foreground/40 tabular-nums tracking-wide"
+                        >
                           v{version}
                         </span>
                       )}

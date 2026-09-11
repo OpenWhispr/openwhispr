@@ -92,6 +92,7 @@ export default function DictationAgentSettings() {
             <div className="space-y-3">
               <div className="flex gap-2">
                 <Input
+                  dir="auto"
                   placeholder={t("settingsPage.agentConfig.placeholder")}
                   value={agentNameInput}
                   onChange={(e) => setAgentNameInput(e.target.value)}

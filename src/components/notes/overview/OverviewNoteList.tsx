@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { FileText, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useUiLocale } from "../../../hooks/useUiLocale";
 import MemberAvatar from "../../MemberAvatar";
 import { groupItemsByDate } from "../../../utils/dateGrouping";
 import { formatRelativeTime } from "../../../utils/dateFormatting";
@@ -24,6 +25,7 @@ export function OverviewNoteList({
   onAddExisting,
 }: OverviewNoteListProps) {
   const { t } = useTranslation();
+  const locale = useUiLocale();
   const { user } = useAuth();
   const isTeamSpace = space.kind === "team";
   const roster = useSpaceRoster(isTeamSpace ? space.cloud_space_id : null);
@@ -75,7 +77,7 @@ export function OverviewNoteList({
               <button
                 key={note.id}
                 onClick={() => onOpenNote(note.id)}
-                className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-md text-left hover:bg-foreground/4 dark:hover:bg-white/4 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-md text-start hover:bg-foreground/4 dark:hover:bg-white/4 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               >
                 <FileText
                   size={14}
@@ -98,7 +100,7 @@ export function OverviewNoteList({
                   </span>
                 )}
                 <span className="text-[11px] text-foreground/35 dark:text-foreground/25 shrink-0 tabular-nums">
-                  {formatRelativeTime(note.updated_at, t)}
+                  {formatRelativeTime(note.updated_at, t, locale)}
                 </span>
               </button>
             );

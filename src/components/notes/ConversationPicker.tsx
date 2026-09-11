@@ -1,5 +1,6 @@
 import { ChevronDown, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useUiLocale } from "../../hooks/useUiLocale";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { formatShortDate } from "../../utils/dateFormatting";
 import { cn } from "../lib/utils";
@@ -27,13 +28,14 @@ export function ConversationPicker({
   titleClassName,
 }: ConversationPickerProps) {
   const { t } = useTranslation();
+  const locale = useUiLocale();
   const activeConversation = conversations.find((item) => item.id === activeConversationId);
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="inline-flex items-center gap-1 text-xs font-medium text-foreground/50 hover:text-foreground/70 hover:bg-foreground/5 rounded-md px-1.5 py-0.5 -ml-1.5 transition-colors duration-150 outline-none"
+          className="inline-flex items-center gap-1 text-xs font-medium text-foreground/50 hover:text-foreground/70 hover:bg-foreground/5 rounded-md px-1.5 py-0.5 -ms-1.5 transition-colors duration-150 outline-none"
           aria-label={t("embeddedChat.conversationSelector")}
         >
           <span className={cn("truncate max-w-40", titleClassName)}>
@@ -61,7 +63,7 @@ export function ConversationPicker({
               >
                 <span className="truncate flex-1">{conversation.title}</span>
                 <span className="text-[10px] text-foreground/30 shrink-0">
-                  {formatShortDate(conversation.updated_at)}
+                  {formatShortDate(conversation.updated_at, locale)}
                 </span>
               </DropdownMenuItem>
             ))}
