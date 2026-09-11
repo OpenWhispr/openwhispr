@@ -1,17 +1,29 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Users, X } from "../icons";
+import { Calendar, ChevronDown, Users, X } from "../icons";
+import { cn } from "../lib/utils";
+import { NOTE_META_CHIP_CLASS } from "./shared";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import PersonAvatar from "../ui/PersonAvatar";
 import type { CalendarAttendee } from "../../types/calendar";
 import { syncSessionExpectedCountFromParticipants } from "../../stores/meetingRecordingStore";
 
+const MAX_STACKED_AVATARS = 2;
+
 interface NoteParticipantsProps {
   noteId: number;
   participants: CalendarAttendee[];
+  /** When present the capsule leads with the note's date, so date and people read as one fact. */
+  dateLabel?: string;
+  dateTitle?: string;
 }
 
-export default function NoteParticipants({ noteId, participants }: NoteParticipantsProps) {
+export default function NoteParticipants({
+  noteId,
+  participants,
+  dateLabel,
+  dateTitle,
+}: NoteParticipantsProps) {
   const { t } = useTranslation();
   const [localParticipants, setLocalParticipants] = useState(participants);
   const [search, setSearch] = useState("");
@@ -104,9 +116,43 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
       }}
     >
       <PopoverTrigger asChild>
-        <button className="inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/45 hover:text-foreground/60 hover:border-border/70 hover:bg-foreground/3 dark:hover:text-foreground/45 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none">
-          <Users size={11} className="shrink-0" />
-          {chipLabel}
+        <button
+          type="button"
+          aria-label={chipLabel}
+          title={dateTitle}
+          className={cn(NOTE_META_CHIP_CLASS, "pe-2")}
+        >
+          {dateLabel && (
+            <>
+              <Calendar size={14} className="shrink-0 text-foreground/60" />
+              <span>{dateLabel}</span>
+              <span aria-hidden="true" className="mx-0.5 h-3.5 w-px bg-border dark:bg-white/15" />
+            </>
+          )}
+          {localParticipants.length > 0 ? (
+            <span className="flex items-center -space-x-1">
+              {localParticipants.slice(0, MAX_STACKED_AVATARS).map((p) => (
+                <PersonAvatar
+                  key={p.email}
+                  email={p.email}
+                  displayName={p.displayName}
+                  size={18}
+                  className="ring-1 ring-surface-3 dark:ring-surface-2"
+                />
+              ))}
+              {localParticipants.length > MAX_STACKED_AVATARS && (
+                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-background px-0.5 text-[9px] font-medium tabular-nums text-foreground/70 ring-1 ring-surface-3 dark:bg-surface-3 dark:ring-surface-2">
+                  +{localParticipants.length - MAX_STACKED_AVATARS}
+                </span>
+              )}
+            </span>
+          ) : (
+            <>
+              <Users size={14} className="shrink-0 text-foreground/60" />
+              {chipLabel}
+            </>
+          )}
+          <ChevronDown size={14} className="shrink-0 text-foreground/50" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0">

@@ -4,6 +4,7 @@ import { Calendar, ExternalLink, Loader2, Mic, Monitor, Video } from "./icons";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import PersonAvatar from "./ui/PersonAvatar";
+import EmptyStateCard from "./ui/EmptyStateCard";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { cn } from "./lib/utils";
 import type { CalendarAttendee, CalendarEvent } from "../types/calendar";
@@ -276,29 +277,6 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
   );
 }
 
-function SidebarCard({
-  icon: Icon,
-  title,
-  description,
-  children,
-}: {
-  icon: typeof Calendar;
-  title?: string;
-  description?: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-center rounded-2xl border border-border/70 bg-card/50 px-4 py-6 text-center dark:border-white/10 dark:bg-surface-2/60">
-      <Icon size={20} className="mb-2 text-muted-foreground/70" />
-      {title && <p className="text-xs font-medium text-foreground/80">{title}</p>}
-      {description && (
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground/70">{description}</p>
-      )}
-      {children && <div className="mt-3">{children}</div>}
-    </div>
-  );
-}
-
 export default function UpcomingMeetings({
   events,
   isLoading,
@@ -331,15 +309,20 @@ export default function UpcomingMeetings({
 
       {/* Calendar not connected */}
       {!isLoading && !isConnected && (
-        <SidebarCard
+        <EmptyStateCard
+          className="px-4 py-8"
           icon={Calendar}
           title={t("upcoming.connectCalendar")}
           description={t("upcoming.connectCalendarDescription")}
         >
-          <Button size="sm" onClick={onConnectCalendar} className="h-7 text-xs">
+          <Button
+            size="sm"
+            onClick={onConnectCalendar}
+            className="h-[30px] rounded-full px-3.5 text-xs"
+          >
             {t("upcoming.connectCalendarButton")}
           </Button>
-        </SidebarCard>
+        </EmptyStateCard>
       )}
 
       {/* Connected, nothing scheduled */}
@@ -347,20 +330,25 @@ export default function UpcomingMeetings({
         isConnected &&
         events.length === 0 &&
         (needsSystemAudioGrant ? (
-          <SidebarCard icon={Monitor} description={t("upcoming.systemAudioRequired")}>
+          <EmptyStateCard
+            className="px-4 py-8"
+            icon={Monitor}
+            description={t("upcoming.systemAudioRequired")}
+          >
             <Button
               size="sm"
               variant="outline"
               onClick={() => systemAudio.request()}
-              className="h-7 text-xs"
+              className="h-[30px] rounded-full px-3.5 text-xs"
             >
               {systemAudio.mode === "native"
                 ? t("upcoming.openSettings")
                 : t("onboarding.permissions.grantAccess")}
             </Button>
-          </SidebarCard>
+          </EmptyStateCard>
         ) : (
-          <SidebarCard
+          <EmptyStateCard
+            className="px-4 py-8"
             icon={Calendar}
             title={t("upcoming.noUpcomingEvents")}
             description={t("upcoming.moreCalendarsHint")}
@@ -371,7 +359,7 @@ export default function UpcomingMeetings({
             >
               {t("upcoming.connectHere")}
             </button>
-          </SidebarCard>
+          </EmptyStateCard>
         ))}
 
       {/* Day cards */}

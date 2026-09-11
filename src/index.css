@@ -1510,6 +1510,17 @@ a:hover {
   display: none;
 }
 
+/* Transcript tab indicator while a meeting is being recorded. */
+@keyframes ow-wave {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }

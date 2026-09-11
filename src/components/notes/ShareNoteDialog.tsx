@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, Link2, Loader2, MoreHorizontal, Users } from "../icons";
+import { Check, Copy, FileText, Link2, Loader2, MoreHorizontal, Users } from "../icons";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import {
@@ -54,13 +54,29 @@ const SHARE_VISIBILITY_OPTIONS: Array<{ id: ShareVisibility }> = [
   { id: "domain" },
 ];
 
+export interface NoteExportOption {
+  id: string;
+  label: string;
+  onSelect: () => void;
+}
+
 interface ShareNoteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   note: NoteItem;
+  /** Local export formats offered below the sharing controls. */
+  exportOptions?: NoteExportOption[];
+  /** Opened from the link segment of the Share button: copy the link as soon as it is usable. */
+  copyLinkOnOpen?: boolean;
 }
 
-export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteDialogProps) {
+export default function ShareNoteDialog({
+  open,
+  onOpenChange,
+  note,
+  exportOptions = [],
+  copyLinkOnOpen = false,
+}: ShareNoteDialogProps) {
   const { user } = useAuth();
   const ownerName: string | null = user?.name ?? null;
   const ownerEmail: string = user?.email ?? "";
@@ -406,6 +422,18 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
       setLinkBusy(false);
     }
   }, [cloudId, share, canUseLink, note.share_token, applyVisibility, copyLink, rotateAndCopy]);
+
+  const copyIntentHandled = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      copyIntentHandled.current = false;
+      return;
+    }
+    if (copyLinkOnOpen && !copyIntentHandled.current && share && !loading && canUseLink) {
+      copyIntentHandled.current = true;
+      void handleLinkButton();
+    }
+  }, [open, copyLinkOnOpen, share, loading, canUseLink, handleLinkButton]);
 
   const handleInvite = useCallback(async () => {
     if (!cloudId || !canInvite) return;
@@ -954,6 +982,30 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
               )}
             </div>
           </>
+        )}
+
+        {exportOptions.length > 0 && (
+          <div className="mt-1 border-t border-border/70 pt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground/55">
+              {t("noteEditor.share.dialog.export")}
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {exportOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => {
+                    option.onSelect();
+                    onOpenChange(false);
+                  }}
+                  className="flex items-center gap-2.5 rounded-xl border border-border/70 px-3 py-2.5 text-start text-xs font-medium text-foreground/80 transition-colors hover:bg-surface-3 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 dark:border-white/10 dark:hover:bg-surface-2"
+                >
+                  <FileText size={14} className="shrink-0 text-foreground/55" />
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </DialogContent>
     </Dialog>
