@@ -5,6 +5,7 @@ import { isEnterpriseProvider } from "../../models/ModelRegistry";
 import { providerSupportsImages } from "../../services/ai/inferenceProviders";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
+import logger from "../../utils/logger";
 import {
   isAgentAllowed,
   isLlmSelectionAllowed,
@@ -565,6 +566,18 @@ export function useChatStreaming({
             )
           );
         } else {
+          logger.error(
+            "Assistant request failed",
+            {
+              scope: llmConfig.scope,
+              mode: llmMode,
+              provider: llmConfig.provider,
+              model: llmConfig.model,
+              attachScreenContext,
+              error: (error as Error).message,
+            },
+            "reasoning"
+          );
           announceResponse();
           setMessages((prev) =>
             prev.map((m) =>
