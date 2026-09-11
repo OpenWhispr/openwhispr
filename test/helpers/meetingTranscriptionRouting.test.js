@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const load = () => import("../../src/helpers/meetingTranscriptionRouting.js");
+const modelRegistryData = require("../../src/models/modelRegistryData.json");
 
 // Sentinels this module throws, paired with the MEETING_ERROR_KEYS entry that
 // MeetingRecordingMount looks up. A healed legacy profile can reach any of them,
@@ -21,6 +22,11 @@ const byokProviders = [
   },
   { id: "corti", models: [{ id: "corti-transcribe" }] },
   { id: "tinfoil", models: [{ id: "voxtral-mini-4b-realtime" }] },
+  { id: "deepgram", models: [{ id: "nova-3", default: true }] },
+  {
+    id: "assemblyai",
+    models: [{ id: "universal-streaming-english", default: true }],
+  },
 ];
 
 const baseOptions = {
@@ -52,6 +58,20 @@ test("providers mode routes Tinfoil through its realtime client", async () => {
     mode: "byok",
     language: "en",
   });
+});
+
+test("BYOK Deepgram and AssemblyAI route to their own realtime clients", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  for (const [selectedProvider, model] of [
+    ["deepgram", "nova-3"],
+    ["assemblyai", "universal-streaming-english"],
+  ]) {
+    assert.deepEqual(
+      resolveMeetingTranscriptionOptions({ ...baseOptions, selectedProvider, selectedModel: "" }),
+      { provider: `${selectedProvider}-realtime`, model, mode: "byok", language: "en" }
+    );
+  }
 });
 
 test("BYOK OpenAI never downgrades to managed cloud when its key is unavailable", async () => {
@@ -207,4 +227,46 @@ test("every thrown sentinel is translated and rendered by the mount", () => {
   // The provider sentinel carries its argument after a colon, so its copy has to
   // have somewhere to put it.
   assert.match(translation.notes.meeting.unsupportedProvider, /\{\{provider\}\}/);
+});
+
+// gpt-live-transcribe has no server VAD and only completes a turn when the client
+// commits, which dictation does on stop and a long-running meeting stream never
+// does. Until that guard exists, the desktop must not be able to route a meeting
+// onto it: no registry entry, and a stale selection falls back to the default.
+test("gpt-live-transcribe is never offered for Note Recording", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+  // Mirrors getStreamingTranscriptionProviders(): the meeting BYOK picker.
+  const registryStreamingProviders = modelRegistryData.transcriptionProviders
+    .map((provider) => ({ ...provider, models: provider.models.filter((m) => m.streaming) }))
+    .filter((provider) => provider.models.length > 0);
+  for (const provider of registryStreamingProviders) {
+    for (const model of provider.models) {
+      assert.equal(model.id.startsWith("gpt-live-transcribe"), false, model.id);
+    }
+  }
+
+  assert.equal(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      selectedProvider: "openai",
+      selectedModel: "gpt-live-transcribe",
+      byokProviders: registryStreamingProviders,
+    }).model,
+    "gpt-4o-mini-transcribe"
+  );
+  const managedCatalogs = [
+    null,
+    [{ id: "openai", models: [{ id: "gpt-4o-mini-transcribe", default: true }] }],
+  ];
+  for (const managedProviders of managedCatalogs) {
+    assert.equal(
+      resolveMeetingTranscriptionOptions({
+        ...baseOptions,
+        transcriptionMode: "openwhispr",
+        managedProviders,
+        selectedModel: "gpt-live-transcribe",
+      }).model,
+      "gpt-4o-mini-transcribe"
+    );
+  }
 });

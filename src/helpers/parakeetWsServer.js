@@ -13,7 +13,7 @@ const { getSafeTempDir } = require("./safeTempDir");
 const { createAbortError } = require("./abortError");
 const sidecarPidFile = require("./sidecarPidFile");
 const { parseOfflineMessage, createOnlineAccumulator } = require("./parakeetWsResult");
-const { getModelType } = require("./parakeetModelInfo");
+const { getModelType, getSherpaModelType } = require("./parakeetModelInfo");
 const { pcm16ToFloat32 } = require("../utils/audioUtils");
 const {
   computeTranscriptionTimeoutMs,
@@ -123,9 +123,11 @@ class ParakeetWsServer {
             `--decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
             `--joiner=${path.join(modelDir, "joiner.int8.onnx")}`,
           ];
+    const sherpaModelType = getSherpaModelType(modelName);
     const args = [
       `--tokens=${path.join(modelDir, "tokens.txt")}`,
       ...modelArgs,
+      ...(runtime === "offline" && sherpaModelType ? [`--model-type=${sherpaModelType}`] : []),
       `--port=${this.port}`,
       ...(runtime === "online"
         ? [

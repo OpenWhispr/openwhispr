@@ -47,6 +47,8 @@ function textContent(node) {
   if (Array.isArray(node)) return node.map(textContent).join("");
   if (typeof node === "string") return node;
   if (!node || typeof node !== "object") return "";
+  // Hook-free presentational wrapper: expand it so its interpolated text is visible.
+  if (node.type?.name === "BidiInterpolatedText") return textContent(node.type(node.props));
   return textContent(node.props?.children);
 }
 
@@ -86,7 +88,7 @@ test("email authentication discovers accounts, restores drafts, and persists the
 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-authentication-step-",
-    noExternal: ["react", "react-dom", "react-i18next", "lucide-react"],
+    noExternal: ["react", "react-dom", "react-i18next"],
     mockModules: {
       // A minimal renderer rather than react-dom: it returns the element tree so
       // the assertions can read rendered output, and it collects effects so the
@@ -183,7 +185,7 @@ test("email authentication discovers accounts, restores drafts, and persists the
       `,
       "/ui/button": `export function Button() { return null; }`,
       "/ui/input": `export function Input() { return null; }`,
-      "lucide-react": `
+      "/components/icons": `
         const Icon = () => null;
         export { Icon as AlertCircle, Icon as ArrowRight, Icon as Building2, Icon as Check,
           Icon as Loader2, Icon as ChevronLeft };
@@ -239,6 +241,31 @@ test("email authentication discovers accounts, restores drafts, and persists the
   assert.deepEqual(existingAccount.discoveryCalls, [
     { email: "returning@example.com", authUrl: "https://auth.example.test" },
   ]);
+
+  // Regression test for #1700: the gate rejected any local part containing "+",
+  // so accounts the website had already created with a plus alias could not sign
+  // in from the app — on any surface, since this step backs all of them.
+  const plusAlias = createHarness();
+  plusAlias.discoveryResult = { exists: true };
+  const aliasSignIn = await submitEmail(plusAlias, "user+tag@example.com");
+  assert.deepEqual(
+    plusAlias.discoveryCalls,
+    [{ email: "user+tag@example.com", authUrl: "https://auth.example.test" }],
+    "a plus-addressed alias must reach discovery unchanged"
+  );
+  assert.equal(readOnlyEmailField(aliasSignIn)?.props.value, "user+tag@example.com");
+  assert.doesNotMatch(textContent(aliasSignIn), /auth\.errors\./);
+
+  // Replacing the plus gate kept a shape check, so input the server could only
+  // reject on a round trip still never leaves the welcome view.
+  const malformedEmail = createHarness();
+  const rejected = await submitEmail(malformedEmail, "not-an-email");
+  assert.deepEqual(
+    malformedEmail.discoveryCalls,
+    [],
+    "a malformed address must never reach discovery"
+  );
+  assert.match(textContent(rejected), /auth\.errors\.invalidEmail/);
 
   const newAccount = createHarness();
   const signUp = await submitEmail(newAccount, "new@example.com");

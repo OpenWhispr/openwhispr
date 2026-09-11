@@ -35,6 +35,8 @@ import { pickDefaultModelId } from "../models/providerDefaultModel";
 // the switch store only zustand, so neither reopens the ModelRegistry cycle.
 import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { recordTinfoilModelSwitch } from "./tinfoilModelSwitchStore";
+import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
+import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
   getTranscriptionSelection,
   isScreenContextAllowed,
@@ -65,6 +67,8 @@ let _ReasoningService: typeof import("../services/ReasoningService").default | n
 // store with partial window stubs that don't define it.
 const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
 
+const DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER = "openai";
+
 export const TRANSCRIPTION_POLICY_PROVIDER_IDS = [
   ...modelRegistryData.transcriptionProviders.map((provider) => provider.id),
   "custom",
@@ -92,7 +96,11 @@ const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
   // Self-hosted realtime is not implemented for Note Recording.
   modes: ["openwhispr", "providers", "local"] as const,
   byokProviders: modelRegistryData.transcriptionProviders
-    .filter((provider) => provider.models.some((model) => model.streaming))
+    .filter(
+      (provider) =>
+        MEETING_STREAMING_PROVIDER_IDS.includes(provider.id) &&
+        provider.models.some((model) => model.streaming)
+    )
     .map((provider) => provider.id),
 };
 
@@ -232,6 +240,17 @@ function migrateMicrophoneSelectionMode() {
 
 migrateMicrophoneSelectionMode();
 
+// Automatic updates default on for new installs only. An install that already
+// finished onboarding keeps the manual download-and-install flow until the
+// user opts in.
+function initializeAutoUpdatesDefault() {
+  if (!isBrowser || localStorage.getItem("autoUpdatesEnabled") !== null) return;
+  const isExistingInstall = localStorage.getItem("onboardingCompleted") === "true";
+  localStorage.setItem("autoUpdatesEnabled", String(!isExistingInstall));
+}
+
+initializeAutoUpdatesDefault();
+
 const BOOLEAN_SETTINGS = new Set([
   "useLocalWhisper",
   "meetingUseLocalWhisper",
@@ -274,7 +293,7 @@ const BOOLEAN_SETTINGS = new Set([
   "notificationsEnabled",
   "notifyMeetingDetection",
   "notifyCalendarReminders",
-  "notifyUpdates",
+  "autoUpdatesEnabled",
   "gcalPrimaryOnly",
   "mcalPrimaryOnly",
   "appleCalendarConnected",
@@ -654,6 +673,45 @@ function migrateLLMScopeKeys() {
 
 migrateLLMScopeKeys();
 
+// The Voice Assistant scope shipped unseeded — empty provider and model, mode
+// defaulting to cloud — while the assistant panel answered on the Chat scope.
+// The panel now answers on the Voice Assistant scope, so a profile that never
+// configured it (no onboarding fan-out or Settings edit wrote its mode,
+// provider or model) copies the Chat scope over once; otherwise a signed-in
+// profile whose Chat runs local or BYOK would have its spoken commands move to
+// the cloud default silently. The scope's custom key is a secret, so
+// initializeSettings copies it once the secure store has loaded.
+const SEEDED_SCOPE_FIELDS = [
+  "mode",
+  "provider",
+  "model",
+  "cloudMode",
+  "cloudBaseUrl",
+  "remoteUrl",
+] as const;
+
+function seedDictationAgentScopeFromChat() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("_dictationAgentSeeded") !== null) return;
+
+  const chat = INFERENCE_SCOPES.chatIntelligence.storeKeys;
+  const agent = INFERENCE_SCOPES.dictationAgent.storeKeys;
+  const configured = [agent.mode, agent.provider, agent.model].some(
+    (key) => localStorage.getItem(key) !== null
+  );
+  if (configured) {
+    localStorage.setItem("_dictationAgentSeeded", "1");
+    return;
+  }
+  for (const field of SEEDED_SCOPE_FIELDS) {
+    const value = localStorage.getItem(chat[field] as string);
+    if (value !== null) localStorage.setItem(agent[field] as string, value);
+  }
+  localStorage.setItem("_dictationAgentSeeded", "key-pending");
+}
+
+seedDictationAgentScopeFromChat();
+
 // Builds before 1.10.0 ran migrateMeetingFollowFlags() before
 // migrateProviderSettings() had created `transcriptionMode` / `reasoningMode`,
 // so a profile upgrading straight from ≤1.6.7 copied every Note Recording key
@@ -802,7 +860,7 @@ export interface SettingsState
   notificationsEnabled: boolean;
   notifyMeetingDetection: boolean;
   notifyCalendarReminders: boolean;
-  notifyUpdates: boolean;
+  autoUpdatesEnabled: boolean;
   gcalPrimaryOnly: boolean;
   mcalPrimaryOnly: boolean;
   appleCalendarConnected: boolean;
@@ -920,7 +978,6 @@ export interface SettingsState
 
   setVoiceAgentScreenContext: (value: boolean) => void;
   setUseDictationAgentVisionModel: (value: boolean) => void;
-  setDictationAgentVisionMode: (mode: InferenceMode) => void;
   setDictationAgentVisionProvider: (value: string) => void;
   setDictationAgentVisionModel: (value: string) => void;
   setDictationAgentVisionCloudMode: (value: string) => void;
@@ -1034,6 +1091,8 @@ export interface SettingsState
   setCortiClientSecret: (key: string) => void;
   setCortiApiKey: (key: string) => void;
   setTinfoilApiKey: (key: string) => void;
+  setDeepgramApiKey: (key: string) => void;
+  setAssemblyaiApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
 
@@ -1110,7 +1169,7 @@ export interface SettingsState
   setNotificationsEnabled: (value: boolean) => void;
   setNotifyMeetingDetection: (value: boolean) => void;
   setNotifyCalendarReminders: (value: boolean) => void;
-  setNotifyUpdates: (value: boolean) => void;
+  setAutoUpdatesEnabled: (enabled: boolean) => void;
   setGcalPrimaryOnly: (value: boolean) => void;
   setMcalPrimaryOnly: (value: boolean) => void;
   setAppleCalendarConnected: (value: boolean) => void;
@@ -1144,7 +1203,9 @@ export interface SettingsState
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
   setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => void;
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => void;
-  setCloudReasoningForAllScopes: (settings: Partial<CleanupSettings>) => void;
+  setCloudReasoningForAllScopes: (
+    settings: Partial<CleanupSettings & Pick<ApiKeySettings, "cleanupCustomApiKey">>
+  ) => void;
   updateApiKeys: (keys: Partial<ApiKeySettings>) => void;
   updateChatAgentSettings: (settings: Partial<ChatAgentSettings>) => void;
 }
@@ -1272,6 +1333,8 @@ const SECRET_IPC_SAVERS = {
   cortiClientSecret: "saveCortiClientSecret",
   cortiApiKey: "saveCortiKey",
   tinfoil: "saveTinfoilKey",
+  deepgram: "saveDeepgramKey",
+  assemblyai: "saveAssemblyAIKey",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
   noteFormattingCustom: "saveNoteFormattingCustomKey",
@@ -1319,6 +1382,8 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "cortiClientSecret",
   "cortiApiKey",
   "tinfoilApiKey",
+  "deepgramApiKey",
+  "assemblyaiApiKey",
   "customTranscriptionApiKey",
   "customReasoningApiKey",
   "cleanupCustomApiKey",
@@ -1402,7 +1467,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   chineseScriptPreference: normalizeChineseScriptPreference(
     readString("chineseScriptPreference", "as-transcribed")
   ),
-  cloudTranscriptionProvider: readString("cloudTranscriptionProvider", "openai"),
+  cloudTranscriptionProvider: readString(
+    "cloudTranscriptionProvider",
+    DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER
+  ),
   cloudTranscriptionModel: readString("cloudTranscriptionModel", "gpt-4o-mini-transcribe"),
   cloudTranscriptionBaseUrl: readString(
     "cloudTranscriptionBaseUrl",
@@ -1446,6 +1514,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cortiClientSecret: "",
   cortiApiKey: "",
   tinfoilApiKey: "",
+  deepgramApiKey: "",
+  assemblyaiApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -1519,7 +1589,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   notificationsEnabled: readBoolean("notificationsEnabled", true),
   notifyMeetingDetection: readBoolean("notifyMeetingDetection", true),
   notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
-  notifyUpdates: readBoolean("notifyUpdates", true),
+  autoUpdatesEnabled: readBoolean("autoUpdatesEnabled", true),
   ...(() => {
     let accounts: CalendarAccount[] = [];
     try {
@@ -1816,11 +1886,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   voiceAgentScreenContext: readBoolean("voiceAgentScreenContext", false),
   useDictationAgentVisionModel: readBoolean("useDictationAgentVisionModel", false),
-  dictationAgentVisionMode: (() => {
-    const v = readString("dictationAgentVisionMode", "openwhispr");
-    if (v === "openwhispr" || v === "providers") return v as InferenceMode;
-    return "openwhispr" as InferenceMode;
-  })(),
+  // Cloud already vision-routes screenshot commands, so the override is BYOK-only.
+  dictationAgentVisionMode: "providers" as InferenceMode,
   dictationAgentVisionProvider: readString("dictationAgentVisionProvider", ""),
   dictationAgentVisionModel: readString("dictationAgentVisionModel", ""),
   dictationAgentVisionCloudMode: readString("dictationAgentVisionCloudMode", "openwhispr"),
@@ -1858,9 +1925,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
   setUseDictationAgentVisionModel: createBooleanSetter("useDictationAgentVisionModel"),
-  setDictationAgentVisionMode: createStringSetter("dictationAgentVisionMode") as (
-    mode: InferenceMode
-  ) => void,
   setDictationAgentVisionProvider: createStringSetter("dictationAgentVisionProvider"),
   setDictationAgentVisionModel: createStringSetter("dictationAgentVisionModel"),
   setDictationAgentVisionCloudMode: createStringSetter("dictationAgentVisionCloudMode"),
@@ -2086,6 +2150,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
   setTinfoilApiKey: createSecretSetter("tinfoilApiKey", "tinfoil", "tinfoil"),
+  // STT-only, so there is no ReasoningService key cache to invalidate.
+  setDeepgramApiKey: createSecretSetter("deepgramApiKey", "deepgram"),
+  setAssemblyaiApiKey: createSecretSetter("assemblyaiApiKey", "assemblyai"),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -2320,7 +2387,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setNotificationsEnabled: createBooleanSetter("notificationsEnabled"),
   setNotifyMeetingDetection: createBooleanSetter("notifyMeetingDetection"),
   setNotifyCalendarReminders: createBooleanSetter("notifyCalendarReminders"),
-  setNotifyUpdates: createBooleanSetter("notifyUpdates"),
+  setAutoUpdatesEnabled: (enabled: boolean) => {
+    if (isBrowser) localStorage.setItem("autoUpdatesEnabled", String(enabled));
+    set({ autoUpdatesEnabled: enabled });
+    if (isBrowser) window.electronAPI?.setAutoUpdatesEnabled?.(enabled);
+  },
   setGcalPrimaryOnly: (value: boolean) => {
     if (isBrowser) localStorage.setItem("gcalPrimaryOnly", String(value));
     useSettingsStore.setState({ gcalPrimaryOnly: value });
@@ -2528,12 +2599,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.cleanupCloudBaseUrl !== undefined)
       s.setCleanupCloudBaseUrl(settings.cleanupCloudBaseUrl);
     if (settings.cleanupCloudMode !== undefined) s.setCleanupCloudMode(settings.cleanupCloudMode);
+    if (settings.cleanupRemoteUrl !== undefined) s.setCleanupRemoteUrl(settings.cleanupRemoteUrl);
   },
 
   // Apply a cleanup config to dictation, then mirror its cloud routing to the
   // other three LLM scopes — used when onboarding routes every reasoning scope to
   // one provider so PHI never reaches a second LLM (e.g. Corti for medical providers).
-  setCloudReasoningForAllScopes: (settings: Partial<CleanupSettings>) => {
+  setCloudReasoningForAllScopes: (settings) => {
     const s = useSettingsStore.getState();
     // Onboarding routes every scope to the local runtime or the enterprise
     // provider by passing "local"/"enterprise" as cleanupCloudMode. Those are
@@ -2549,42 +2621,21 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const mode = isDirectMode
       ? requestedCloudMode
       : deriveReasoningMode(requestedCloudMode, settings.cleanupProvider ?? s.cleanupProvider);
-    const {
-      dictationCleanup,
-      noteFormatting,
-      dictationAgent,
-      chatIntelligence,
-      dictationTranslation,
-    } = buildReasoningScopePatches(
+    const { dictationCleanup, ...mirrored } = buildReasoningScopePatches(
       isDirectMode ? { ...settings, cleanupCloudMode: undefined } : settings,
       mode
     );
     s.updateCleanupSettings(dictationCleanup);
     s.setCleanupMode(dictationCleanup.cleanupMode);
-    // Each Settings tab selects on its own mode field, so set the mode for every
-    // scope even when the routing fields are absent — otherwise the tab keeps
+    if (dictationCleanup.cleanupCustomApiKey !== undefined) {
+      s.setCleanupCustomApiKey(dictationCleanup.cleanupCustomApiKey);
+    }
+    // Each Settings tab selects on its own mode field, so every scope gets the
+    // mode even when the routing fields are absent — otherwise the tab keeps
     // showing the previous provider despite the new cloud routing.
-    if (noteFormatting.provider !== undefined) s.setNoteFormattingProvider(noteFormatting.provider);
-    if (noteFormatting.model !== undefined) s.setNoteFormattingModel(noteFormatting.model);
-    if (noteFormatting.cloudMode !== undefined)
-      s.setNoteFormattingCloudMode(noteFormatting.cloudMode);
-    s.setNoteFormattingMode(mode);
-    if (dictationAgent.provider !== undefined) s.setDictationAgentProvider(dictationAgent.provider);
-    if (dictationAgent.model !== undefined) s.setDictationAgentModel(dictationAgent.model);
-    if (dictationAgent.cloudMode !== undefined)
-      s.setDictationAgentCloudMode(dictationAgent.cloudMode);
-    s.setDictationAgentMode(mode);
-    if (chatIntelligence.provider !== undefined) s.setChatAgentProvider(chatIntelligence.provider);
-    if (chatIntelligence.model !== undefined) s.setChatAgentModel(chatIntelligence.model);
-    if (chatIntelligence.cloudMode !== undefined)
-      s.setChatAgentCloudMode(chatIntelligence.cloudMode);
-    s.setChatAgentMode(mode);
-    if (dictationTranslation.provider !== undefined)
-      s.setTranslationProvider(dictationTranslation.provider);
-    if (dictationTranslation.model !== undefined) s.setTranslationModel(dictationTranslation.model);
-    if (dictationTranslation.cloudMode !== undefined)
-      s.setTranslationCloudMode(dictationTranslation.cloudMode);
-    s.setTranslationMode(mode);
+    for (const [scope, patch] of Object.entries(mirrored)) {
+      setResolvedLLMConfig(scope as InferenceScope, patch);
+    }
   },
 
   updateApiKeys: (keys: Partial<ApiKeySettings>) => {
@@ -2600,6 +2651,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
     if (keys.cortiApiKey !== undefined) s.setCortiApiKey(keys.cortiApiKey);
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
+    if (keys.deepgramApiKey !== undefined) s.setDeepgramApiKey(keys.deepgramApiKey);
+    if (keys.assemblyaiApiKey !== undefined) s.setAssemblyaiApiKey(keys.assemblyaiApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
@@ -2692,22 +2745,33 @@ export interface ResolvedUploadTranscription {
 
 // Audio upload is batch (not streaming), so unset values fall back to the base
 // dictation settings — matching the behavior before upload had its own context.
+// A realtime-only dictation provider is the exception: it has no batch route, so
+// inheriting it would fail every upload closed. Uploads take the default provider
+// instead, and the dictation model stays behind with the provider it belongs to.
 export const selectResolvedUploadTranscription = (
   state: SettingsState
-): ResolvedUploadTranscription => ({
-  useLocalWhisper: state.uploadUseLocalWhisper,
-  whisperModel: state.uploadWhisperModel || state.whisperModel,
-  localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
-  parakeetModel: state.uploadParakeetModel || state.parakeetModel,
-  cohereModel: state.uploadCohereModel || state.cohereModel,
-  cloudTranscriptionProvider:
-    state.uploadCloudTranscriptionProvider || state.cloudTranscriptionProvider,
-  cloudTranscriptionModel: state.uploadCloudTranscriptionModel || state.cloudTranscriptionModel,
-  cloudTranscriptionBaseUrl:
-    state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
-  cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
-  transcriptionMode: state.uploadTranscriptionMode,
-});
+): ResolvedUploadTranscription => {
+  const inheritsDictationProvider = !STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider);
+  return {
+    useLocalWhisper: state.uploadUseLocalWhisper,
+    whisperModel: state.uploadWhisperModel || state.whisperModel,
+    localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
+    parakeetModel: state.uploadParakeetModel || state.parakeetModel,
+    cohereModel: state.uploadCohereModel || state.cohereModel,
+    cloudTranscriptionProvider:
+      state.uploadCloudTranscriptionProvider ||
+      (inheritsDictationProvider
+        ? state.cloudTranscriptionProvider
+        : DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER),
+    cloudTranscriptionModel:
+      state.uploadCloudTranscriptionModel ||
+      (inheritsDictationProvider ? state.cloudTranscriptionModel : ""),
+    cloudTranscriptionBaseUrl:
+      state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
+    cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
+    transcriptionMode: state.uploadTranscriptionMode,
+  };
+};
 
 export interface ResolvedNoteFormatting {
   provider: string;
@@ -3141,6 +3205,8 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken,
         azureApiKey,
         vertexApiKey,
+        deepgram,
+        assemblyai,
       ] = await Promise.all([
         window.electronAPI.getOpenAIKey?.(),
         window.electronAPI.getAnthropicKey?.(),
@@ -3165,6 +3231,8 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getBedrockSessionToken?.(),
         window.electronAPI.getAzureApiKey?.(),
         window.electronAPI.getVertexApiKey?.(),
+        window.electronAPI.getDeepgramKey?.(),
+        window.electronAPI.getAssemblyAIKey?.(),
       ]);
 
       useSettingsStore.setState({
@@ -3197,7 +3265,16 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken: bedrockSessionToken || "",
         azureApiKey: azureApiKey || "",
         vertexApiKey: vertexApiKey || "",
+        deepgramApiKey: deepgram || "",
+        assemblyaiApiKey: assemblyai || "",
       });
+
+      if (localStorage.getItem("_dictationAgentSeeded") === "key-pending") {
+        const { chatAgentCustomApiKey, setDictationAgentCustomApiKey } =
+          useSettingsStore.getState();
+        if (chatAgentCustomApiKey) setDictationAgentCustomApiKey(chatAgentCustomApiKey);
+        localStorage.setItem("_dictationAgentSeeded", "1");
+      }
 
       if (!localStorage.getItem("enterpriseSetupMode")) {
         // One-time migration. "Managed by default" is meant to equip employees who never chose a
@@ -3413,11 +3490,22 @@ export async function initializeSettings(): Promise<void> {
         notificationsEnabled: currentState.notificationsEnabled,
         notifyMeetingDetection: currentState.notifyMeetingDetection,
         notifyCalendarReminders: currentState.notifyCalendarReminders,
-        notifyUpdates: currentState.notifyUpdates,
       });
     } catch (err) {
       logger.warn(
         "Failed to sync notification preferences on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    try {
+      await window.electronAPI.setAutoUpdatesEnabled?.(
+        useSettingsStore.getState().autoUpdatesEnabled
+      );
+    } catch (err) {
+      logger.warn(
+        "Failed to sync automatic updates preference on startup",
         { error: (err as Error).message },
         "settings"
       );

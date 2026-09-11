@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, Loader2, ShieldCheck } from "lucide-react";
+import { ExternalLink, Loader2, ShieldCheck } from "../icons";
 import { Button } from "../ui/button";
 import { openAdminConsole } from "../../lib/auth";
 import { isEnterpriseConsoleAvailable } from "../../lib/workspaceBilling";
@@ -26,7 +26,7 @@ export default function EnterpriseConsoleRow({ workspace }: { workspace: Workspa
   }
 
   return (
-    <div className="rounded-md border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-3 flex items-center justify-between gap-3">
+    <div className="rounded-md border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-3 flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
         <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
         <div className="min-w-0">
@@ -46,9 +46,9 @@ export default function EnterpriseConsoleRow({ workspace }: { workspace: Workspa
         className="shrink-0"
       >
         {opening ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
         ) : (
-          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+          <ExternalLink className="me-1.5 h-3.5 w-3.5" />
         )}
         {t("settingsPage.workspace.enterpriseConsole.open")}
       </Button>

@@ -38,7 +38,20 @@ async function mountLiveTranscript(t, initialProps = {}) {
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  installBrowserGlobals(t);
+  const previewListeners = new Map();
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: Object.fromEntries(
+        ["onPreviewText", "onPreviewAppend", "onPreviewResult", "onPreviewHide"].map((method) => [
+          method,
+          (listener) => {
+            previewListeners.set(method, listener);
+            return () => previewListeners.delete(method);
+          },
+        ])
+      ),
+    },
+  });
   const container = installHookDom(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-live-transcript-hold-test-",
@@ -65,12 +78,106 @@ async function mountLiveTranscript(t, initialProps = {}) {
   });
   return {
     getPanel: () => panel,
+    emitPreview: async (method, payload) => {
+      assert.ok(previewListeners.has(method), `Missing preview listener: ${method}`);
+      await React.act(async () => previewListeners.get(method)(payload));
+    },
     rerender: async (nextProps) => {
       props = { ...props, ...nextProps };
       await React.act(async () => root.render(React.createElement(Harness)));
     },
   };
 }
+
+function capturePresentationClock(t) {
+  const original = {
+    setTimeout: globalThis.setTimeout,
+    clearTimeout: globalThis.clearTimeout,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
+  };
+  const timers = new Map();
+  let time = 0;
+  let nextId = 1;
+  globalThis.setTimeout = (callback, delay = 0) => {
+    const id = nextId++;
+    timers.set(id, { at: time + delay, callback });
+    return id;
+  };
+  globalThis.clearTimeout = (id) => timers.delete(id);
+  globalThis.requestAnimationFrame = (callback) => setTimeout(() => callback(time), 16);
+  globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
+  t.after(() => Object.assign(globalThis, original));
+
+  return async (duration) => {
+    const end = time + duration;
+    for (let steps = 0; steps < 1000; steps += 1) {
+      const next = [...timers]
+        .filter(([, timer]) => timer.at <= end)
+        .sort((a, b) => a[1].at - b[1].at)[0];
+      if (!next) {
+        time = end;
+        return;
+      }
+      const [id, timer] = next;
+      time = timer.at;
+      timers.delete(id);
+      await React.act(async () => {
+        // Async measurement callbacks can schedule another animation frame;
+        // advance that frame below instead of waiting for it inside this step.
+        timer.callback();
+      });
+    }
+    assert.fail("Presentation clock did not settle");
+  };
+}
+
+test("rapid consecutive recordings update an already-visible final transcript panel", async (t) => {
+  let entrances = 0;
+  const { getPanel, emitPreview, rerender } = await mountLiveTranscript(t, {
+    isRecording: true,
+    onWillOpen: () => entrances++,
+  });
+  const advance = capturePresentationClock(t);
+
+  await emitPreview("onPreviewAppend", "first recording");
+  await advance(2200);
+  assert.equal(getPanel().text, "first recording");
+  assert.equal(getPanel().entrancePhase, "content");
+
+  for (const nextText of ["second recording", "third recording"]) {
+    await rerender({ isRecording: false });
+    await emitPreview("onPreviewResult", { text: "previous final result" });
+    await advance(200);
+    assert.equal(getPanel().text, "previous final result");
+
+    await rerender({ isRecording: true });
+    assert.equal(getPanel().text, "", "a new recording clears the previous transcript");
+    await emitPreview("onPreviewText", "");
+    await emitPreview("onPreviewAppend", nextText);
+    await advance(400);
+
+    assert.equal(getPanel().open, true);
+    assert.equal(getPanel().text, nextText);
+    assert.equal(entrances, 1, "an open panel does not replay its entrance");
+  }
+});
+
+test("a new recording during panel entrance keeps text buffered until the surface is ready", async (t) => {
+  const { getPanel, emitPreview, rerender } = await mountLiveTranscript(t, { isRecording: true });
+  const advance = capturePresentationClock(t);
+
+  await emitPreview("onPreviewAppend", "old recording");
+  await advance(100);
+  await rerender({ isRecording: false });
+  await rerender({ isRecording: true });
+  await emitPreview("onPreviewAppend", "fresh recording");
+  await advance(400);
+  assert.equal(getPanel().text, "", "text must not bypass the panel entrance");
+
+  await advance(1800);
+  assert.equal(getPanel().text, "fresh recording");
+});
 
 async function showNextFinalAndRunHide(panel, getFinalHideTimer) {
   await React.act(async () => {

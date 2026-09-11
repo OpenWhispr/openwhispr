@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { readFileSync } = require("node:fs");
 const test = require("node:test");
 
 const load = () => import("../../src/components/onboarding/flow.ts");
@@ -13,13 +14,45 @@ test("account flow includes the complete guided setup", async () => {
       "languages",
       "use-cases",
       "dictation-hotkey",
-      "activation-mode",
       "dictation-demo",
+      "notes",
       "assistant-hotkey",
       "assistant-demo",
-      "notes",
       "setup-choice",
     ]
+  );
+});
+
+// The assistant demo offers to suggest meeting times from a connected calendar,
+// so the Notes step that connects one has to come first.
+test("notes precedes the assistant steps on the account route", async () => {
+  const { getOnboardingRoute } = await load();
+  const route = getOnboardingRoute({ authPath: "account", setupMode: null, agentAllowed: true });
+  assert.ok(route.indexOf("notes") < route.indexOf("assistant-hotkey"));
+  assert.equal(route.indexOf("assistant-demo"), route.indexOf("assistant-hotkey") + 1);
+});
+
+test("macOS accessibility features stay deferred until the permissions screen", async () => {
+  const { shouldInitializeMacAccessibilityFeatures } = await load();
+
+  assert.equal(shouldInitializeMacAccessibilityFeatures("auth"), false);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("required-models"), false);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("permissions"), true);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("dictation-hotkey"), true);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("notes"), true);
+});
+
+test("onboarding permission checks use the resolved macOS feature gate", () => {
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+
+  assert.ok(
+    source.indexOf("const currentStepId = reconcileStepWithRoute") <
+      source.indexOf("const permissions = usePermissions")
+  );
+  assert.ok(
+    source.includes(
+      "macAccessibilityChecksEnabled: shouldInitializeMacAccessibilityFeatures(currentStepId)"
+    )
   );
 });
 
@@ -31,26 +64,8 @@ test("guest flow keeps permissions and the hotkey before setup choice", async ()
     "auth",
     "permissions",
     "dictation-hotkey",
-    "activation-mode",
     "setup-choice",
   ]);
-});
-
-test("every dictation route restores activation mode setup after shortcut capture", async () => {
-  const { getOnboardingRoute } = await load();
-  const accountRoute = getOnboardingRoute({
-    authPath: "account",
-    setupMode: null,
-    agentAllowed: true,
-  });
-  const guestRoute = getOnboardingRoute({
-    authPath: "guest",
-    setupMode: null,
-    agentAllowed: true,
-  });
-
-  assert.equal(accountRoute[accountRoute.indexOf("dictation-hotkey") + 1], "activation-mode");
-  assert.equal(guestRoute[guestRoute.indexOf("dictation-hotkey") + 1], "activation-mode");
 });
 
 test("policy removes assistant states", async () => {
@@ -65,15 +80,7 @@ test("setup choice appends the selected two-stage route", async () => {
   const { getOnboardingRoute } = await load();
   assert.deepEqual(
     getOnboardingRoute({ authPath: "guest", setupMode: "byok", agentAllowed: true }),
-    [
-      "auth",
-      "permissions",
-      "dictation-hotkey",
-      "activation-mode",
-      "setup-choice",
-      "byok-dictation",
-      "byok-assistant",
-    ]
+    ["auth", "permissions", "dictation-hotkey", "setup-choice", "byok-dictation", "byok-assistant"]
   );
   assert.deepEqual(
     getOnboardingRoute({ authPath: "account", setupMode: "local", agentAllowed: false }).slice(-2),
@@ -81,7 +88,7 @@ test("setup choice appends the selected two-stage route", async () => {
   );
 });
 
-test("a confirmed enterprise workspace ends the account route at notes", async () => {
+test("a confirmed enterprise workspace ends the account route at the last guided step", async () => {
   const { getOnboardingRoute } = await load();
   const route = getOnboardingRoute({
     authPath: "account",
@@ -89,30 +96,63 @@ test("a confirmed enterprise workspace ends the account route at notes", async (
     agentAllowed: true,
     skipSetupChoice: true,
   });
-  assert.equal(route.at(-1), "notes");
+  assert.equal(route.at(-1), "assistant-demo");
   assert.equal(route.includes("setup-choice"), false);
+  assert.equal(
+    getOnboardingRoute({
+      authPath: "account",
+      setupMode: null,
+      agentAllowed: false,
+      skipSetupChoice: true,
+    }).at(-1),
+    "notes"
+  );
+});
+
+test("the setup decision step is whichever step precedes setup choice", async () => {
+  const { getOnboardingRoute, isSetupDecisionStep } = await load();
+  const withChoice = getOnboardingRoute({
+    authPath: "account",
+    setupMode: null,
+    agentAllowed: true,
+  });
+  assert.equal(isSetupDecisionStep("assistant-demo", withChoice), true);
+  assert.equal(isSetupDecisionStep("notes", withChoice), false);
+
+  const managed = getOnboardingRoute({
+    authPath: "account",
+    setupMode: null,
+    agentAllowed: false,
+    skipSetupChoice: true,
+  });
+  assert.equal(isSetupDecisionStep("notes", managed), true);
+
+  // Provider steps finish their own setup mode; workspace resolution is moot there.
+  const byok = getOnboardingRoute({ authPath: "account", setupMode: "byok", agentAllowed: true });
+  assert.equal(isSetupDecisionStep("byok-assistant", byok), false);
+  assert.equal(isSetupDecisionStep("assistant-demo", byok), true);
 });
 
 test("notes starts with Skip and switches to Continue after a calendar connects", async () => {
   const { getNotesFooterAction } = await load();
 
   assert.equal(
-    getNotesFooterAction({ workspaceResolutionPending: false, hasConnectedCalendar: false }),
+    getNotesFooterAction({ setupDecisionPending: false, hasConnectedCalendar: false }),
     "skip"
   );
   assert.equal(
-    getNotesFooterAction({ workspaceResolutionPending: false, hasConnectedCalendar: true }),
+    getNotesFooterAction({ setupDecisionPending: false, hasConnectedCalendar: true }),
     "continue"
   );
   // Naming this state rather than returning null: the footer has to keep showing a
   // Continue while workspaces resolve, disabled and loading. Reading it as "no
   // action" left the step with nothing but Back and no explanation.
   assert.equal(
-    getNotesFooterAction({ workspaceResolutionPending: true, hasConnectedCalendar: true }),
+    getNotesFooterAction({ setupDecisionPending: true, hasConnectedCalendar: true }),
     "loading"
   );
   assert.equal(
-    getNotesFooterAction({ workspaceResolutionPending: true, hasConnectedCalendar: false }),
+    getNotesFooterAction({ setupDecisionPending: true, hasConnectedCalendar: false }),
     "loading"
   );
 });
@@ -167,8 +207,10 @@ test("versioned sessions reject malformed or old data", async () => {
 
   const legacyV2 = { ...session };
   delete legacyV2.selfHostedRequested;
+  delete legacyV2.screenContextRequested;
   delete legacyV2.resume;
   assert.equal(parseOnboardingSession(JSON.stringify(legacyV2)).selfHostedRequested, false);
+  assert.equal(parseOnboardingSession(JSON.stringify(legacyV2)).screenContextRequested, false);
   assert.deepEqual(
     parseOnboardingSession(JSON.stringify(legacyV2)).resume,
     createOnboardingSession().resume
@@ -177,6 +219,19 @@ test("versioned sessions reject malformed or old data", async () => {
     parseOnboardingSession(JSON.stringify({ ...session, selfHostedRequested: "yes" })),
     null
   );
+  assert.equal(
+    parseOnboardingSession(JSON.stringify({ ...session, screenContextRequested: "yes" })),
+    null
+  );
+});
+
+// The permissions step's Enable click must survive the quit-and-reopen macOS
+// asks for after granting Screen Recording, or the OS permission lands with
+// the Voice Assistant setting still off.
+test("a session keeps the screen-context request latch across a relaunch", async () => {
+  const { createOnboardingSession, parseOnboardingSession } = await load();
+  const session = { ...createOnboardingSession(), screenContextRequested: true };
+  assert.equal(parseOnboardingSession(JSON.stringify(session)).screenContextRequested, true);
 });
 
 test("v2 sessions retain safe within-step state without accepting secrets", async () => {
@@ -263,17 +318,29 @@ test("legacy numeric steps migrate conservatively", async () => {
 test("an off-route assistant step clamps to its neighbour, not the end of the route", async () => {
   const { getOnboardingRoute, reconcileStepWithRoute } = await load();
   // agentAllowed false is what a failed policy fetch produces, and it drops both
-  // assistant steps from the route. Clamping to route.at(-1) used to land the user
-  // on setup-choice, skipping notes and looking like a jump to the plan chooser.
+  // assistant steps from the route. Clamping to route.at(-1) would teleport a
+  // user on either step to the route's end; the nearest neighbour keeps them
+  // where they were in the flow, with ties going to the earlier step.
   const route = getOnboardingRoute({
     authPath: "account",
     setupMode: null,
     agentAllowed: false,
   });
   assert.equal(route.includes("assistant-hotkey"), false);
-  assert.equal(reconcileStepWithRoute("assistant-hotkey", route), "dictation-demo");
-  assert.equal(reconcileStepWithRoute("assistant-demo", route), "notes");
-  assert.notEqual(reconcileStepWithRoute("assistant-hotkey", route), "setup-choice");
+  assert.equal(reconcileStepWithRoute("assistant-hotkey", route), "notes");
+  assert.equal(reconcileStepWithRoute("assistant-demo", route), "setup-choice");
+  assert.equal(
+    reconcileStepWithRoute(
+      "assistant-demo",
+      getOnboardingRoute({
+        authPath: "account",
+        setupMode: null,
+        agentAllowed: false,
+        skipSetupChoice: true,
+      })
+    ),
+    "notes"
+  );
 
   // With the agent allowed the steps are on the route and pass through untouched.
   const agentRoute = getOnboardingRoute({
@@ -297,7 +364,7 @@ test("progress counts every step the user is shown, once each", async () => {
   const route = getOnboardingRoute({ authPath: "account", setupMode: null, agentAllowed: true });
 
   // The compact steps render in a frame with no footer, so they carry no row and
-  // must not inflate the total — landing on languages is "1 of 9", not "3 of 11".
+  // must not inflate the total — landing on languages is "1 of 8", not "3 of 10".
   assert.equal(getOnboardingProgress("auth", route), null);
   assert.equal(getOnboardingProgress("permissions", route), null);
 
@@ -306,8 +373,8 @@ test("progress counts every step the user is shown, once each", async () => {
     counted.map((stepId) => getOnboardingProgress(stepId, route).index),
     counted.map((_, index) => index)
   );
-  assert.deepEqual(getOnboardingProgress("languages", route), { index: 0, total: 9 });
-  assert.deepEqual(getOnboardingProgress("setup-choice", route), { index: 8, total: 9 });
+  assert.deepEqual(getOnboardingProgress("languages", route), { index: 0, total: 8 });
+  assert.deepEqual(getOnboardingProgress("setup-choice", route), { index: 7, total: 8 });
 });
 
 test("progress total tracks the conditional parts of the route", async () => {
@@ -317,29 +384,29 @@ test("progress total tracks the conditional parts of the route", async () => {
   // Dropping the assistant pair shortens the row rather than leaving two dots
   // that can never fill.
   const noAgent = getOnboardingRoute({ ...context, agentAllowed: false });
-  assert.equal(getOnboardingProgress("languages", noAgent).total, 7);
-  assert.deepEqual(getOnboardingProgress("setup-choice", noAgent), { index: 6, total: 7 });
+  assert.equal(getOnboardingProgress("languages", noAgent).total, 6);
+  assert.deepEqual(getOnboardingProgress("setup-choice", noAgent), { index: 5, total: 6 });
 
   // Picking a non-cloud mode appends the provider pair, so the row grows by two
   // at that moment and the last provider step is what fills it.
   const byok = getOnboardingRoute({ ...context, setupMode: "byok" });
-  assert.deepEqual(getOnboardingProgress("setup-choice", byok), { index: 8, total: 11 });
-  assert.deepEqual(getOnboardingProgress("byok-assistant", byok), { index: 10, total: 11 });
+  assert.deepEqual(getOnboardingProgress("setup-choice", byok), { index: 7, total: 10 });
+  assert.deepEqual(getOnboardingProgress("byok-assistant", byok), { index: 9, total: 10 });
 });
 
 test("progress counts only the guest steps that draw a footer", async () => {
   const { getOnboardingProgress, getOnboardingRoute } = await load();
   // auth and permissions are compact, so the pre-plan guest route counts
-  // dictation-hotkey, activation-mode and setup-choice: a three-dot row.
+  // dictation-hotkey and setup-choice: a two-dot row.
   const guest = getOnboardingRoute({ authPath: "guest", setupMode: null, agentAllowed: true });
-  assert.deepEqual(getOnboardingProgress("setup-choice", guest), { index: 2, total: 3 });
+  assert.deepEqual(getOnboardingProgress("setup-choice", guest), { index: 1, total: 2 });
 
   const guestByok = getOnboardingRoute({
     authPath: "guest",
     setupMode: "byok",
     agentAllowed: true,
   });
-  assert.deepEqual(getOnboardingProgress("setup-choice", guestByok), { index: 2, total: 5 });
+  assert.deepEqual(getOnboardingProgress("setup-choice", guestByok), { index: 1, total: 4 });
 
   // An off-route step has no position to report.
   assert.equal(getOnboardingProgress("notes", guestByok), null);
@@ -400,8 +467,8 @@ test("the required-models step is counted in progress", async () => {
     agentAllowed: true,
     requiredModelsPending: true,
   });
-  assert.deepEqual(getOnboardingProgress("required-models", route), { index: 0, total: 10 });
-  assert.deepEqual(getOnboardingProgress("languages", route), { index: 1, total: 10 });
+  assert.deepEqual(getOnboardingProgress("required-models", route), { index: 0, total: 9 });
+  assert.deepEqual(getOnboardingProgress("languages", route), { index: 1, total: 9 });
 });
 
 test("the tray suppression predicate matches only an active required-models session", async () => {
@@ -438,9 +505,15 @@ test("a session written before the resume flags infers its hotkey confirmations"
   // The shipped build persists this shape. Read back as "never confirmed", a
   // macOS session resuming past the hotkey step lets finalizeOnboarding replace
   // the chord the user confirmed on that build, with no screen ever showing it.
-  const past = parseOnboardingSession(preResumeSession("notes"));
+  const past = parseOnboardingSession(preResumeSession("setup-choice"));
   assert.equal(past.resume.dictationHotkeyConfirmed, true);
   assert.equal(past.resume.assistantHotkeyConfirmed, true);
+
+  // Notes now precedes the assistant steps, so a session standing there is
+  // still ahead of the assistant hotkey and gets shown that step.
+  const onNotes = parseOnboardingSession(preResumeSession("notes"));
+  assert.equal(onNotes.resume.dictationHotkeyConfirmed, true);
+  assert.equal(onNotes.resume.assistantHotkeyConfirmed, false);
 
   // Not yet reached is genuinely unconfirmed: the step still has to be shown, and
   // onboarding stays free to open it on the platform's onboarding chord.
@@ -456,20 +529,4 @@ test("a session written before the resume flags infers its hotkey confirmations"
   // Nothing else is inferred — a demo the user never ran must still gate Continue.
   assert.equal(past.resume.dictationDemoCompleted, false);
   assert.equal(past.resume.assistantDemoCompleted, false);
-});
-
-test("only a signed-in account holder is offered a logout during onboarding", async () => {
-  const { shouldOfferOnboardingLogout } = await load();
-
-  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: true, authPath: "account" }), true);
-
-  // Guests have no account to leave.
-  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: "guest" }), false);
-  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: true, authPath: "guest" }), false);
-
-  // The legacy migration labels any pre-v2 session past the auth step "account"
-  // without anyone signing in, and Log out wipes the session, localSetupPending and
-  // the pending model selections — unconfirmed, for someone with nothing to log out of.
-  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: "account" }), false);
-  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: null }), false);
 });

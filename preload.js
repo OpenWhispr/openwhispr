@@ -14,6 +14,8 @@ const BYOK_KEY_BRIDGES = [
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
+  { base: "deepgram", get: "getDeepgramKey", save: "saveDeepgramKey" },
+  { base: "assemblyai", get: "getAssemblyAIKey", save: "saveAssemblyAIKey" },
   {
     base: "note-formatting-custom",
     get: "getNoteFormattingCustomKey",
@@ -63,6 +65,10 @@ const registerListener = (channel, handlerFactory) => {
 contextBridge.exposeInMainWorld("electronAPI", {
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
+  markMacAccessibilityFeaturesReady: (expectedAccountScope) =>
+    expectedAccountScope
+      ? ipcRenderer.send("mac-accessibility-features-ready", expectedAccountScope)
+      : ipcRenderer.send("mac-accessibility-features-ready"),
   beginOnboardingDemo: (session) => ipcRenderer.invoke("onboarding-demo-begin", session),
   endOnboardingDemo: (id) => ipcRenderer.invoke("onboarding-demo-end", id),
   stopOnboardingDemo: (id) => ipcRenderer.invoke("onboarding-demo-stop", id),
@@ -95,6 +101,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
   onCancelDictation: registerListener("cancel-dictation", (callback) => () => callback()),
+  onDictationForceStopped: registerListener(
+    "dictation-force-stopped",
+    (callback) => (_event, payload) => callback(payload)
+  ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
   dictationLifecycleStateChanged: (state, inputKind) =>
     ipcRenderer.send("dictation-lifecycle-state-changed", state, inputKind),
@@ -128,17 +138,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-get-transcriptions", limit, options),
   recordAnalyticsEvent: (input) => ipcRenderer.invoke("analytics-record-event", input),
   getAnalyticsSummary: () => ipcRenderer.invoke("analytics-get-summary"),
-  getPendingAnalyticsEvents: (limit) => ipcRenderer.invoke("analytics-get-pending", limit),
-  markAnalyticsEventsSynced: (eventIds) => ipcRenderer.invoke("analytics-mark-synced", eventIds),
-  getPendingAnalyticsDeletes: (limit) => ipcRenderer.invoke("analytics-get-pending-deletes", limit),
-  hardDeleteAnalyticsEvents: (eventIds) => ipcRenderer.invoke("analytics-hard-delete", eventIds),
-  getPendingAnalyticsClear: () => ipcRenderer.invoke("analytics-get-pending-clear"),
-  completeAnalyticsClear: (clearedThrough) =>
-    ipcRenderer.invoke("analytics-complete-clear", clearedThrough),
-  countUnclaimedAnalyticsEvents: () => ipcRenderer.invoke("analytics-count-unclaimed"),
-  countAnalyticsEventsAwaitingUpload: () =>
-    ipcRenderer.invoke("analytics-count-awaiting-upload"),
-  claimAnonymousAnalyticsEvents: () => ipcRenderer.invoke("analytics-claim-anonymous"),
+  getPendingAnalyticsEvents: (limit, context) =>
+    ipcRenderer.invoke("analytics-get-pending", limit, context),
+  markAnalyticsEventsSynced: (eventIds, context) =>
+    ipcRenderer.invoke("analytics-mark-synced", eventIds, context),
+  getPendingAnalyticsDeletes: (limit, context) =>
+    ipcRenderer.invoke("analytics-get-pending-deletes", limit, context),
+  hardDeleteAnalyticsEvents: (eventIds, context) =>
+    ipcRenderer.invoke("analytics-hard-delete", eventIds, context),
+  getPendingAnalyticsClear: (context) => ipcRenderer.invoke("analytics-get-pending-clear", context),
+  completeAnalyticsClear: (clearedThrough, context) =>
+    ipcRenderer.invoke("analytics-complete-clear", clearedThrough, context),
+  countUnclaimedAnalyticsEvents: (context) =>
+    ipcRenderer.invoke("analytics-count-unclaimed", context),
+  countAnalyticsEventsAwaitingUpload: (context) =>
+    ipcRenderer.invoke("analytics-count-awaiting-upload", context),
+  claimAnonymousAnalyticsEvents: (accountId, expectedAuthGeneration) =>
+    ipcRenderer.invoke("analytics-claim-anonymous", accountId, expectedAuthGeneration),
   clearTranscriptions: () => ipcRenderer.invoke("db-clear-transcriptions"),
   deleteTranscription: (id) => ipcRenderer.invoke("db-delete-transcription", id),
 
@@ -379,6 +395,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   promptAccessibilityPermission: () => ipcRenderer.invoke("prompt-accessibility-permission"),
   readClipboard: () => ipcRenderer.invoke("read-clipboard"),
   writeClipboard: (text) => ipcRenderer.invoke("write-clipboard", text),
+  copyLeaderboardImage: (dataUrl) => ipcRenderer.invoke("leaderboard-copy-image", dataUrl),
+  saveLeaderboardImage: (dataUrl, suggestedName) =>
+    ipcRenderer.invoke("leaderboard-save-image", dataUrl, suggestedName),
   checkPasteTools: () => ipcRenderer.invoke("check-paste-tools"),
 
   // Voice drafts (chat input recordings)
@@ -544,6 +563,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   markBundleMigrationDismissed: () => ipcRenderer.invoke("mark-bundle-migration-dismissed"),
   getUpdateStatus: () => ipcRenderer.invoke("get-update-status"),
   getUpdateInfo: () => ipcRenderer.invoke("get-update-info"),
+  setAutoUpdatesEnabled: (enabled) => ipcRenderer.invoke("set-auto-updates-enabled", enabled),
 
   // Update event listeners
   onUpdateAvailable: registerListener("update-available"),
@@ -825,6 +845,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onDeepgramSessionEnd: registerListener(
     "deepgram-session-end",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Gemini Live Streaming
+  geminiStreamingWarmup: (options) => ipcRenderer.invoke("gemini-streaming-warmup", options),
+  geminiStreamingStart: (options) => ipcRenderer.invoke("gemini-streaming-start", options),
+  geminiStreamingSend: (audioBuffer) => ipcRenderer.send("gemini-streaming-send", audioBuffer),
+  geminiStreamingFinalize: () => ipcRenderer.send("gemini-streaming-finalize"),
+  geminiStreamingStop: () => ipcRenderer.invoke("gemini-streaming-stop"),
+  geminiStreamingStatus: () => ipcRenderer.invoke("gemini-streaming-status"),
+  onGeminiPartialTranscript: registerListener(
+    "gemini-partial-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onGeminiFinalTranscript: registerListener(
+    "gemini-final-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onGeminiError: registerListener("gemini-error", (callback) => (_event, error) => callback(error)),
+  onGeminiSessionEnd: registerListener(
+    "gemini-session-end",
     (callback) => (_event, data) => callback(data)
   ),
 
@@ -1309,12 +1350,4 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "note-navigation-pending",
     (callback) => () => callback()
   ),
-
-  onUpdateNotificationData: registerListener(
-    "update-notification-data",
-    (callback) => (_event, data) => callback(data)
-  ),
-  getUpdateNotificationData: () => ipcRenderer.invoke("get-update-notification-data"),
-  updateNotificationReady: () => ipcRenderer.invoke("update-notification-ready"),
-  updateNotificationRespond: (action) => ipcRenderer.invoke("update-notification-respond", action),
 });

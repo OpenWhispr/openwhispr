@@ -1,4 +1,4 @@
-import { Globe, Download, Trash2, X, ExternalLink } from "lucide-react";
+import { Globe, Download, Trash2, X, ExternalLink } from "../icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "./button";
 import { cn } from "../lib/utils";
@@ -33,13 +33,13 @@ const COLOR_CONFIG: Record<
     selected:
       "border-primary/30 bg-primary/8 dark:bg-primary/6 dark:border-primary/20 shadow-[0_0_0_1px_oklch(0.62_0.22_260/0.12),0_0_10px_-3px_oklch(0.62_0.22_260/0.18)]",
     default:
-      "border-border bg-surface-1 hover:border-border-hover hover:bg-muted dark:border-white/5 dark:bg-white/3 dark:hover:border-white/20 dark:hover:bg-white/8",
+      "border-border bg-surface-1 hover:border-border-hover hover:bg-muted dark:border-white/10 dark:bg-white/3 dark:hover:border-white/20 dark:hover:bg-white/8",
   },
   blue: {
     selected:
       "border-primary/30 bg-primary/10 dark:bg-primary/6 shadow-[0_0_0_1px_oklch(0.62_0.22_260/0.15),0_0_12px_-3px_oklch(0.62_0.22_260/0.2)]",
     default:
-      "border-border bg-surface-1 hover:border-border-hover hover:bg-muted dark:border-white/5 dark:bg-white/3 dark:hover:border-white/20 dark:hover:bg-white/8",
+      "border-border bg-surface-1 hover:border-border-hover hover:bg-muted dark:border-white/10 dark:bg-white/3 dark:hover:border-white/20 dark:hover:bg-white/8",
   },
 };
 
@@ -105,7 +105,7 @@ export function ModelCard({
   return (
     <div
       onClick={handleCardClick}
-      className={`relative w-full p-2 rounded-md border text-left transition-colors duration-200 group overflow-hidden ${
+      className={`relative w-full p-2 rounded-md border text-start transition-colors duration-200 group overflow-hidden ${
         isSelected ? styles.selected : styles.default
       } ${!isLocalMode || (isDownloaded && !isSelected) ? "cursor-pointer" : ""}`}
     >
@@ -132,6 +132,7 @@ export function ModelCard({
         )}
 
         <span
+          dir="ltr"
           className={cn(
             "text-sm font-semibold text-foreground truncate tracking-tight",
             truncateDescription && (model.description ? "shrink-0 max-w-[60%]" : "min-w-0 flex-1")
@@ -143,8 +144,8 @@ export function ModelCard({
           <span
             className={
               truncateDescription
-                ? "text-xs text-muted-foreground/60 truncate min-w-0 flex-1"
-                : "text-xs text-muted-foreground/50 tabular-nums shrink-0"
+                ? "text-xs text-muted-foreground/70 truncate min-w-0 flex-1"
+                : "text-xs text-muted-foreground/70 tabular-nums shrink-0"
             }
           >
             {model.description}
@@ -167,7 +168,7 @@ export function ModelCard({
           </span>
         )}
 
-        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+        <div className="ms-auto flex items-center gap-1.5 shrink-0">
           {isSelected && (
             <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
               {t("common.active")}
@@ -184,7 +185,7 @@ export function ModelCard({
                   }}
                   size="sm"
                   variant="ghost"
-                  className="h-6 w-6 p-0 text-muted-foreground/40 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
+                  className="h-6 w-6 p-0 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
                 >
                   <Trash2 size={12} />
                 </Button>
@@ -199,7 +200,7 @@ export function ModelCard({
                   variant="outline"
                   className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
                 >
-                  <X size={11} className="mr-0.5" />
+                  <X size={11} className="me-0.5" />
                   {modelIsCancelling ? "..." : t("common.cancel")}
                 </Button>
               ) : (
@@ -212,7 +213,7 @@ export function ModelCard({
                   variant="default"
                   className="h-6 px-2.5 text-xs"
                 >
-                  <Download size={11} className="mr-1" />
+                  <Download size={11} className="me-1" />
                   {t("common.download")}
                 </Button>
               )}

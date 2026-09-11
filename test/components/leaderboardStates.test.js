@@ -1,0 +1,201 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { createElement } = require("react");
+const { renderToStaticMarkup } = require("react-dom/server");
+const i18next = require("i18next");
+const { initReactI18next } = require("react-i18next");
+
+globalThis.React = require("react");
+
+async function initializeI18n() {
+  if (i18next.isInitialized) return;
+  const en = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
+  );
+  await i18next.use(initReactI18next).init({
+    lng: "en",
+    resources: { en: { translation: en } },
+    interpolation: { escapeValue: false },
+  });
+}
+
+async function component(relativePath) {
+  await initializeI18n();
+  const module = await import(`../../src/components/${relativePath}.tsx`);
+  return module.default.default ?? module.default;
+}
+
+function assertState(markup, state, cta) {
+  assert.match(markup, new RegExp(`data-leaderboard-state="${state}"`));
+  assert.ok(markup.includes(cta), `expected ${state} to show “${cta}”`);
+}
+
+test("create renders the workspace funnel and its primary action", async () => {
+  const Setup = await component("LeaderboardSetupCard");
+  const markup = renderToStaticMarkup(
+    createElement(Setup, {
+      colleagueCount: 3,
+      domain: "acme.com",
+      onCreate() {},
+    })
+  );
+  assertState(markup, "create", "Create workspace");
+  assert.ok(markup.includes("3 people at acme.com have joined leaderboards"));
+});
+
+test("request_join names the matched team and preserves the pending CTA", async () => {
+  const RequestJoin = await component("LeaderboardRequestJoinPreview");
+  const markup = renderToStaticMarkup(
+    createElement(RequestJoin, {
+      memberCount: 14,
+      onRequest() {},
+      pending: true,
+      requesting: false,
+      workspaceName: "Acme",
+    })
+  );
+  assertState(markup, "request_join", "Request sent");
+  assert.ok(markup.includes("Acme has 14 members"));
+  // Matched by pattern rather than substring: a bare-hostname includes() check
+  // trips CodeQL's incomplete-URL-sanitization rule (js/incomplete-url-substring
+  // -sanitization), which cannot tell an assertion on markup from a host check.
+  assert.doesNotMatch(markup, /acme\.com/);
+});
+
+test("accept_invite attributes the inviter and offers a direct join", async () => {
+  const AcceptInvite = await component("LeaderboardAcceptInvitePreview");
+  const markup = renderToStaticMarkup(
+    createElement(AcceptInvite, {
+      inviterName: "Sam",
+      joining: false,
+      onAccept() {},
+      workspaceName: "Acme",
+    })
+  );
+  assertState(markup, "accept_invite", "Join Team");
+  assert.ok(markup.includes("Sam invited you"));
+});
+
+test("workspace actions stay secondary when a domain leaderboard is ready", async () => {
+  const WorkspaceNudge = await component("LeaderboardWorkspaceNudge");
+  const invitation = renderToStaticMarkup(
+    createElement(WorkspaceNudge, {
+      kind: "accept_invite",
+      loading: false,
+      onAction() {},
+      pending: false,
+      workspaceName: "Acme",
+    })
+  );
+  const pendingRequest = renderToStaticMarkup(
+    createElement(WorkspaceNudge, {
+      kind: "request_join",
+      loading: false,
+      onAction() {},
+      pending: true,
+      workspaceName: "Acme",
+    })
+  );
+
+  assertState(invitation, "workspace_nudge", "Join Team");
+  assert.ok(invitation.includes("You&#x27;re invited to Acme"));
+  assertState(pendingRequest, "workspace_nudge", "Request sent");
+});
+
+test("invite keeps the teammate action primary without a second sync control", async () => {
+  const Invite = await component("LeaderboardSoloEmptyState");
+  const markup = renderToStaticMarkup(
+    createElement(Invite, {
+      scopeKind: "workspace",
+      scopeName: "Acme",
+      onInvite() {},
+      pendingInvites: ["alex@acme.com"],
+    })
+  );
+  assertState(markup, "invite", "Invite teammates");
+  assert.doesNotMatch(markup, /role="switch"/);
+  assert.ok(markup.includes("Invited: alex@acme.com"));
+});
+
+test("ready while not participating offers an explicit leaderboard join", async () => {
+  const Join = await component("LeaderboardJoinPreview");
+  const markup = renderToStaticMarkup(
+    createElement(Join, {
+      canJoin: true,
+      error: false,
+      leavePending: false,
+      onJoin() {},
+      scopeName: "Acme",
+      updating: false,
+    })
+  );
+  assertState(markup, "join", "See where you rank in Acme");
+  assert.match(markup, /<button/);
+  assert.ok(markup.includes("Join leaderboards"));
+});
+
+// A leave the network never delivered leaves the toggle off and the Join card
+// up. The card has to say the account is still coming off the boards, or that
+// silence reads as done.
+test("join says so while an opt-out is still owed to the account", async () => {
+  const Join = await component("LeaderboardJoinPreview");
+  const markup = renderToStaticMarkup(
+    createElement(Join, {
+      canJoin: true,
+      error: false,
+      leavePending: true,
+      onJoin() {},
+      scopeName: "Acme",
+      updating: false,
+    })
+  );
+  assertState(markup, "join", "See where you rank in Acme");
+  assert.ok(markup.includes("We&#x27;ll finish leaving the leaderboards when you&#x27;re online."));
+});
+
+test("a ready board with one of five participants renders the inline nudge", async () => {
+  const EmptyStrip = await component("LeaderboardEmptyStrip");
+  const useToastModule = await import("../../src/components/ui/useToast.ts");
+  const ToastContext = useToastModule.ToastContext ?? useToastModule.default.ToastContext;
+  const markup = renderToStaticMarkup(
+    createElement(
+      ToastContext.Provider,
+      { value: { toast() {}, dismiss() {}, toastCount: 0, dictationErrorActionCount: 0 } },
+      createElement(EmptyStrip, { missingCount: 4 })
+    )
+  );
+  assertState(markup, "empty_strip", "Copy a nudge");
+  assert.ok(markup.includes("4 teammates haven&#x27;t joined the leaderboard yet"));
+});
+
+test("podium cards accent all three placements", async () => {
+  const Podium = await component("LeaderboardPodium");
+  const members = [1, 2, 3].map((rank) => ({
+    userId: `user-${rank}`,
+    name: `Member ${rank}`,
+    email: `member-${rank}@acme.com`,
+    image: null,
+    rank,
+    totalWords: 1_000 - rank,
+    desktopWords: 900 - rank,
+    mobileWords: 100,
+    wordsPerMinute: 120,
+    currentDailyStreak: 5,
+  }));
+  const markup = renderToStaticMarkup(
+    createElement(Podium, {
+      formatValue: (member) => String(member.totalWords),
+      memberLabel: (member) => member.name || member.email || "Teammate",
+      members,
+      metricLabel: "Total words",
+      periodLabel: "Sep 7 – Sep 13",
+      title: "Top performers",
+    })
+  );
+
+  assert.ok(markup.includes("border-amber-400/25 bg-amber-400/5"));
+  assert.ok(markup.includes("border-slate-400/30 bg-slate-400/5"));
+  assert.ok(markup.includes("border-orange-500/25 bg-orange-500/5"));
+});

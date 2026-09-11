@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
-import { getCloudModel, isEnterpriseProvider } from "../../models/ModelRegistry";
-import { PROVIDER_REGISTRY } from "../../services/ai/inferenceProviders";
-import { getSettings, selectResolvedLLMConfig } from "../../stores/settingsStore";
+import { isEnterpriseProvider } from "../../models/ModelRegistry";
+import { providerSupportsImages } from "../../services/ai/inferenceProviders";
+import { getSettings, useSettingsStore } from "../../stores/settingsStore";
+import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
 import {
   isAgentAllowed,
   isLlmSelectionAllowed,
@@ -62,9 +63,19 @@ async function buildRAGContext(userText: string, scope?: ContainerScope): Promis
   }
 }
 
+/**
+ * Which settings scope answers a conversation. Typed chat surfaces stay on the
+ * Chat scope; the voice assistant panel runs on the Voice Assistant scope so
+ * the model picked under Settings > Voice Assistant is the one that answers
+ * (see resolveChatStreamingInference for its Chat fallback).
+ */
+export type ChatStreamingScope = "chatIntelligence" | "dictationAgent";
+
 interface UseChatStreamingOptions {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  /** Settings scope the conversation resolves its provider and model from. */
+  inferenceScope?: ChatStreamingScope;
   /** Optional note context to prepend to the system prompt (used by embedded note chat). */
   noteContext?: string;
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
@@ -97,16 +108,6 @@ export interface ChatStreaming {
   cancelStream: () => void;
 }
 
-// An image attaches only where the provider's AI-SDK client is image-wired
-// (registry `supportsImages`) AND the model id exists in the local registry,
-// so supportsVision is decidable — the same dual gate the single-shot
-// dictation path applies. OpenRouter/custom alias the OpenAI client here, but
-// their model ids never appear in the registry (vision would be a guess that
-// errors the whole command on a text-only backend). The cloud path carries its
-// screenshot separately as a server-routed field below.
-const providerSupportsStreamImages = (providerId: string) =>
-  Boolean(providerId && PROVIDER_REGISTRY[providerId]?.supportsImages);
-
 type HistoryMessage = { role: string; content: string | Array<Record<string, unknown>> };
 
 // Walks backward to the newest user message; a null transform keeps walking.
@@ -126,6 +127,7 @@ function transformLastUserMessage(
 export function useChatStreaming({
   messages,
   setMessages,
+  inferenceScope = "chatIntelligence",
   noteContext: externalNoteContext,
   searchScope,
   onStreamComplete,
@@ -233,18 +235,23 @@ export function useChatStreaming({
         if (!options?.suppressResponseContent) onResponseContent?.();
       };
       const settings = getSettings();
-      const chatConfig = selectResolvedLLMConfig(settings, "chatIntelligence");
-      const chatAgentMode = chatConfig.mode || "openwhispr";
+      const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
+        inferenceScope,
+        hasScreenContext: !!options?.attachment,
+        isProviderImageWired: providerSupportsImages,
+      });
+      const requestedAttachment = attachScreenContext ? (options?.attachment ?? null) : null;
+      const llmMode = llmConfig.mode || "openwhispr";
       const policyState = usePolicyStore.getState();
       const policyProvider =
-        chatAgentMode === "openwhispr"
+        llmMode === "openwhispr"
           ? "openwhispr"
-          : chatAgentMode === "local"
+          : llmMode === "local"
             ? "local"
-            : chatConfig.provider;
+            : llmConfig.provider;
       if (
         !isAgentAllowed(policyState) ||
-        !isLlmSelectionAllowed(policyState, { mode: chatAgentMode, provider: policyProvider })
+        !isLlmSelectionAllowed(policyState, { mode: llmMode, provider: policyProvider })
       ) {
         // The user message is already appended; answer it instead of dead-ending silently.
         const restriction = !isAgentAllowed(policyState)
@@ -259,11 +266,11 @@ export function useChatStreaming({
       }
 
       setAgentState("thinking");
-      const isCloudAgent = chatAgentMode === "openwhispr" && settings.isSignedIn;
-      const isLanAgent = chatAgentMode === "self-hosted" && !!chatConfig.remoteUrl;
-      const isCustomAgent = chatAgentMode === "providers" && chatConfig.provider === "custom";
+      const isCloudAgent = llmMode === "openwhispr" && settings.isSignedIn;
+      const isLanAgent = llmMode === "self-hosted" && !!llmConfig.remoteUrl;
+      const isCustomAgent = llmMode === "providers" && llmConfig.provider === "custom";
       const isLocalProvider =
-        !isEnterpriseProvider(chatConfig.provider) &&
+        !isEnterpriseProvider(llmConfig.provider) &&
         ![
           "openai",
           "groq",
@@ -273,9 +280,9 @@ export function useChatStreaming({
           "tinfoil",
           "openrouter",
           "corti",
-        ].includes(chatConfig.provider);
+        ].includes(llmConfig.provider);
       const localModelCanUseTool =
-        isLocalProvider && estimateModelSizeB(chatConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B;
+        isLocalProvider && estimateModelSizeB(llmConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B;
       const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
 
       const scope = searchScopeRef.current;
@@ -287,7 +294,9 @@ export function useChatStreaming({
         const calendarConnected =
           settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
         const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
-        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}`;
+        // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
+        const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
+        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
@@ -297,6 +306,13 @@ export function useChatStreaming({
             cloudBackupEnabled: settings.cloudBackupEnabled,
             searchScope: scope,
             webSearchEnabled,
+            vocabulary: {
+              getDictionary: () => getSettings().customDictionary,
+              updateDictionary: (changes) =>
+                useSettingsStore.getState().updateCustomDictionary(changes),
+              getSnippets: () => getSettings().snippets,
+              setSnippets: (snippets) => useSettingsStore.getState().setSnippets(snippets),
+            },
           });
           toolRegistryRef.current = { key: cacheKey, registry };
         }
@@ -329,24 +345,15 @@ export function useChatStreaming({
         );
       }
 
-      // Attach the screenshot to the command it came with, but only where a
-      // model can actually see it; otherwise drop it silently — an image
-      // problem must never cost the user their command. BYOK models get it as
-      // an image part when the registry says they have vision; the cloud
-      // agent gets it as a dedicated field the server vision-routes (older
-      // servers strip the unknown field, which degrades to a plain command).
-      const attachment =
-        options?.attachment &&
-        !isCloudAgent &&
-        !isLanAgent &&
-        !isLocalProvider &&
-        providerSupportsStreamImages(chatConfig.provider) &&
-        getCloudModel(chatConfig.model)?.supportsVision
-          ? options.attachment
-          : null;
+      // A screenshot the resolver kept rides with the command it came with:
+      // BYOK models get it as an image part, the cloud agent as a dedicated
+      // field the server vision-routes (older servers strip the unknown field,
+      // which degrades to a plain command). A dropped one costs nothing but the
+      // image — the command still runs.
+      const attachment = requestedAttachment && !isCloudAgent ? requestedAttachment : null;
       const cloudScreenContext =
-        options?.attachment && isCloudAgent
-          ? { data: options.attachment.image, mediaType: options.attachment.mediaType }
+        requestedAttachment && isCloudAgent
+          ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
           : null;
       if (attachment) {
         // The screenshot needs its grounding instruction, exactly like the
@@ -423,16 +430,20 @@ export function useChatStreaming({
           const aiTools = registry?.toAISDKFormat();
           stream = ReasoningService.processTextStreamingAI(
             llmMessages,
-            chatConfig.model,
-            chatConfig.provider,
+            llmConfig.model,
+            llmConfig.provider,
             {
               systemPrompt,
-              inferenceScope: "chatIntelligence",
-              lanUrl: isLanAgent ? chatConfig.remoteUrl : undefined,
-              baseUrl: isCustomAgent ? chatConfig.cloudBaseUrl || undefined : undefined,
+              // Policy and managed enforcement judge the scope that actually
+              // answers: the panel's Chat fallback as Chat, and the vision
+              // override as the agent scope whose image lane it is.
+              inferenceScope:
+                llmConfig.scope === "dictationAgentVision" ? "dictationAgent" : llmConfig.scope,
+              lanUrl: isLanAgent ? llmConfig.remoteUrl : undefined,
+              baseUrl: isCustomAgent ? llmConfig.cloudBaseUrl || undefined : undefined,
               customApiKey:
-                isCustomAgent || isLanAgent ? chatConfig.customApiKey || undefined : undefined,
-              disableThinking: chatConfig.disableThinking,
+                isCustomAgent || isLanAgent ? llmConfig.customApiKey || undefined : undefined,
+              disableThinking: llmConfig.disableThinking,
             },
             aiTools
           );
@@ -573,6 +584,7 @@ export function useChatStreaming({
       completeToolActivity();
     },
     [
+      inferenceScope,
       t,
       setMessages,
       onStreamComplete,

@@ -3,6 +3,9 @@ export interface Snippet {
   replacement: string;
 }
 
+// Mirrors the cap database.js enforces when it stores snippets.
+export const MAX_SNIPPET_TRIGGER_LENGTH = 100;
+
 interface SnippetMatcher {
   regex: RegExp;
   replacements: Map<string, string>;

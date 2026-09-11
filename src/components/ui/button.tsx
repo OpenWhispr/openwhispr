@@ -3,6 +3,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
+import { BRAND_GLASS_SURFACE } from "./gradientCircle";
 
 const buttonVariants = cva(
   [
@@ -16,15 +17,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Primary CTA — ultra-premium with subtle depth
+        // Primary CTA — brand glass capsule
         default: [
-          "relative text-primary-foreground font-semibold tracking-[0.005em]",
-          "bg-primary",
-          "border border-primary/60",
-          "shadow-sm",
-          "hover:bg-primary/95 hover:shadow",
-          "active:bg-primary/85 active:scale-[0.985]",
-          "transition-[background-color,border-color,color,transform] duration-200 ease-out",
+          "relative rounded-full font-semibold tracking-[0.005em]",
+          BRAND_GLASS_SURFACE,
+          "hover:brightness-110",
+          "active:brightness-95 active:scale-[0.985]",
+          "transition-[filter,transform] duration-200 ease-out",
         ].join(" "),
 
         // Success — uses design tokens
@@ -63,7 +62,7 @@ const buttonVariants = cva(
         "outline-flat": [
           "font-medium",
           "text-muted-foreground/70 bg-transparent",
-          "border border-border/50",
+          "border border-border/70",
           "hover:text-foreground/80 hover:border-border hover:bg-foreground/3",
           "active:scale-[0.98]",
           "dark:border-white/10 dark:hover:bg-white/5 dark:hover:border-white/15",
@@ -73,10 +72,10 @@ const buttonVariants = cva(
         secondary: [
           "relative font-medium",
           "text-foreground bg-secondary",
-          "border border-border/50",
+          "border border-border/70",
           "hover:bg-muted",
           "active:scale-[0.98]",
-          "dark:text-foreground/90 dark:bg-white/8 dark:border-white/5 dark:hover:bg-white/12",
+          "dark:text-foreground/90 dark:bg-white/8 dark:border-white/10 dark:hover:bg-white/12",
         ].join(" "),
 
         // Ghost — uses design tokens
@@ -100,7 +99,7 @@ const buttonVariants = cva(
         social: [
           "relative font-medium",
           "text-foreground bg-surface-1/80 backdrop-blur-xl",
-          "border border-border/60",
+          "border border-border/70",
           "shadow-sm gap-2",
           "hover:bg-surface-2/90 hover:border-border-hover hover:shadow",
           "active:scale-[0.985] active:shadow-sm",
@@ -137,6 +136,7 @@ function Button({
   return (
     <Comp
       data-slot="button"
+      data-variant={variant ?? "default"}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

@@ -4,7 +4,6 @@ import App from "./App.jsx";
 import AgentDictationPillOverlay from "./components/dictation/AgentDictationPillOverlay.tsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
 import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
-import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
 import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
@@ -13,6 +12,7 @@ import { useTheme } from "./hooks/useTheme";
 import { mirrorActiveAccountScope } from "./lib/accountScopeMirror";
 import { usePolicyStore } from "./stores/policyStore";
 import { resolveSettledControlPanelWindowMode } from "./utils/controlPanelWindowMode.ts";
+import { resolveMacAccessibilityReadiness } from "./utils/macAccessibilityReadiness.ts";
 import { isControlPanelWindow } from "./utils/windowContext.ts";
 
 // Either marker means the flow is mid-way: the legacy step key is kept for
@@ -30,10 +30,6 @@ export default function AppRouter() {
 
   if (params.includes("meeting-notification=true")) {
     return <MeetingNotificationOverlay />;
-  }
-
-  if (params.includes("update-notification=true")) {
-    return <UpdateNotificationOverlay />;
   }
 
   if (params.includes("agent-dictation-pill=true")) {
@@ -162,11 +158,31 @@ function MainApp() {
     const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
     const normalAppVisible =
       onboardingCompleted && (!isControlPanel || (!showOnboarding && !needsReauth));
+    const authSkipped =
+      localStorage.getItem("authenticationSkipped") === "true" ||
+      localStorage.getItem("skipAuth") === "true";
     // Main starts fail-closed. Only a renderer that has resolved the route and
     // actually committed the normal app may release global hotkeys and popup
     // surfaces; fresh installs and onboarding reloads keep them suppressed.
     void window.electronAPI?.setOnboardingActive?.(!normalAppVisible);
-  }, [isControlPanel, isLoading, isWaitingForPolicyStart, needsReauth, showOnboarding]);
+    let cancelled = false;
+    void resolveMacAccessibilityReadiness({
+      normalAppVisible,
+      isControlPanel,
+      isSignedIn,
+      authSkipped,
+      // The hidden dictation window cannot resolve Better Auth itself. Its
+      // persisted main-process scope proves this is a validated returning user.
+      readActiveAccountScope: window.electronAPI?.getActiveAccountScope,
+    }).then((readiness) => {
+      if (!cancelled && readiness) {
+        window.electronAPI?.markMacAccessibilityFeaturesReady?.(readiness.expectedAccountScope);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isControlPanel, isLoading, isSignedIn, isWaitingForPolicyStart, needsReauth, showOnboarding]);
 
   const handleOnboardingComplete = (options) => {
     if (options?.openSettings) {

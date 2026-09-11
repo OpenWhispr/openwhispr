@@ -132,6 +132,62 @@ for (const ownerLossEvent of ["destroyed", "render-process-gone"]) {
   });
 }
 
+test("a main-frame navigation of the owner tears down the session; same-document does not", async () => {
+  const stopCompleted = createDeferred();
+  const ownerWebContents = createOwnerWebContents();
+  let stopCalls = 0;
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => ({ success: true, sessionId }),
+    stop: async () => {
+      stopCalls += 1;
+      stopCompleted.resolve();
+      return { success: true };
+    },
+  });
+
+  await lifecycle.startSession({ sessionId: "meeting-1", ownerWebContents, options: {} });
+  ownerWebContents.emit("did-start-navigation", { isMainFrame: true, isSameDocument: true });
+  ownerWebContents.emit("did-start-navigation", { isMainFrame: false, isSameDocument: false });
+  await Promise.resolve();
+  assert.equal(stopCalls, 0);
+
+  ownerWebContents.emit("did-start-navigation", { isMainFrame: true, isSameDocument: false });
+  await stopCompleted.promise;
+  await Promise.resolve();
+
+  assert.equal(stopCalls, 1);
+  assert.equal(ownerWebContents.listenerCount("did-start-navigation"), 0);
+});
+
+test("a restart from the same owner retires its stale session instead of being refused", async () => {
+  const ownerWebContents = createOwnerWebContents();
+  const otherOwner = createOwnerWebContents();
+  const stopped = [];
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => ({ success: true, sessionId }),
+    stop: async (sessionId) => {
+      stopped.push(sessionId);
+      return { success: true };
+    },
+  });
+
+  await lifecycle.startSession({ sessionId: "meeting-1", ownerWebContents, options: {} });
+  const refused = await lifecycle.startSession({
+    sessionId: "meeting-2",
+    ownerWebContents: otherOwner,
+    options: {},
+  });
+  assert.deepEqual(refused, { success: false, error: "Operation in progress" });
+
+  const restarted = await lifecycle.startSession({
+    sessionId: "meeting-3",
+    ownerWebContents,
+    options: {},
+  });
+  assert.equal(restarted.success, true);
+  assert.deepEqual(stopped, ["meeting-1"]);
+});
+
 test("a replacement start waits for a deferred accepted stop to finish", async () => {
   const stopDeferred = createDeferred();
   const oldOwner = createOwnerWebContents();

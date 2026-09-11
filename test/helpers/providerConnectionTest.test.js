@@ -21,6 +21,51 @@ test("honors OpenAI base URL overrides from the environment", () => {
   }
 });
 
+test("the realtime STT providers use their own auth schemes, not Bearer", () => {
+  const deepgram = resolveProviderRequest({ provider: "deepgram", apiKey: "dg-secret" });
+  assert.equal(deepgram.endpoint, "https://api.deepgram.com/v1/models");
+  assert.equal(deepgram.endpoint.includes("dg-secret"), false);
+  assert.equal(deepgram.headers.Authorization, "Token dg-secret");
+
+  const assemblyai = resolveProviderRequest({ provider: "assemblyai", apiKey: "aai-secret" });
+  assert.equal(assemblyai.endpoint, "https://api.assemblyai.com/v2/transcript?limit=1");
+  assert.equal(assemblyai.endpoint.includes("aai-secret"), false);
+  assert.equal(assemblyai.headers.Authorization, "aai-secret");
+});
+
+// Neither payload is OpenAI-shaped, so responseOffersModel would report
+// modelNotFound for a perfectly valid key.
+test("a 200 is the whole signal for providers with no OpenAI-shaped model list", async () => {
+  for (const [provider, model, payload] of [
+    ["deepgram", "nova-3", { stt: [{ name: "nova-3", canonical_name: "nova-3-general" }] }],
+    ["assemblyai", "universal-streaming-english", { transcripts: [], page_details: {} }],
+  ]) {
+    assert.deepEqual(
+      await testProviderConnection({ provider, apiKey: "k", model }, async () => ({
+        ok: true,
+        status: 200,
+        json: async () => payload,
+      })),
+      { success: true },
+      provider
+    );
+
+    assert.deepEqual(
+      await testProviderConnection({ provider, apiKey: "bad", model }, async () => ({
+        ok: false,
+        status: 401,
+      })),
+      {
+        success: false,
+        errorCode: "credentialsRejected",
+        error: "The provider rejected these credentials.",
+        status: 401,
+      },
+      provider
+    );
+  }
+});
+
 test("normalizes custom compatible endpoints", () => {
   assert.equal(
     resolveProviderRequest({ provider: "custom", baseUrl: "localhost:11434/v1", apiKey: "" })

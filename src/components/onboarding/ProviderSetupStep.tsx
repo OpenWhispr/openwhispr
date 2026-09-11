@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "lucide-react";
+import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "../icons";
 import { useTranslation } from "react-i18next";
 import ProviderConnectionTest from "./ProviderConnectionTest";
 import { Button } from "../ui/button";
@@ -7,6 +7,7 @@ import { Input } from "../ui/input";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useModelDownload } from "../../hooks/useModelDownload";
+import type { ParakeetCheckResult } from "../../types/electron";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
@@ -17,12 +18,18 @@ import {
 import {
   getTranscriptionProviders,
   getParakeetModels,
-  isCohereTranscribeModel,
   getWhisperModels,
   modelRegistry,
   type CloudProviderData,
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
+import {
+  LOCAL_ASR_ORGANIZATIONS,
+  getASRModelOrganization,
+  getSelectedASROrganization,
+  usesParakeetManager,
+  DEFAULT_LOCAL_ASR_SELECTION,
+} from "../../helpers/localASROrganization";
 import { pickDefaultModelId } from "../../models/providerDefaultModel";
 import {
   RESUME_DRAFT_PERSIST_DELAY_MS,
@@ -105,7 +112,7 @@ function StepPrimaryAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`h-9 rounded-[38px] border-0 bg-[var(--onboarding-accent)] px-5 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none! disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-secondary)] disabled:opacity-100! ${className}`}
+      className="h-9 rounded-[38px] px-5 text-sm"
     >
       {children}
     </Button>
@@ -188,7 +195,7 @@ const SELECT_PANEL_CLASS =
  * theme out here and would paint a square band behind the slab.
  */
 const SELECT_ITEM_CLASS =
-  "onboarding-select-item gap-2.5 rounded-none py-2.5 pl-1.5 pr-8 text-sm font-normal leading-[1.4] hover:bg-transparent focus:bg-transparent data-highlighted:bg-transparent dark:hover:bg-transparent dark:focus:bg-transparent dark:data-highlighted:bg-transparent [&>span:nth-child(2)]:w-full";
+  "onboarding-select-item gap-2.5 rounded-none py-2.5 ps-1.5 pe-8 text-sm font-normal leading-[1.4] hover:bg-transparent focus:bg-transparent data-highlighted:bg-transparent dark:hover:bg-transparent dark:focus:bg-transparent dark:data-highlighted:bg-transparent [&>span:nth-child(2)]:w-full";
 
 function providerCredential(provider: string, store: ReturnType<typeof useSettingsStore.getState>) {
   switch (provider) {
@@ -210,6 +217,10 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
       return { value: store.tinfoilApiKey, set: store.setTinfoilApiKey };
     case "corti":
       return { value: store.cortiApiKey, set: store.setCortiApiKey };
+    case "deepgram":
+      return { value: store.deepgramApiKey, set: store.setDeepgramApiKey };
+    case "assemblyai":
+      return { value: store.assemblyaiApiKey, set: store.setAssemblyaiApiKey };
     default:
       return { value: "", set: (_value: string) => undefined };
   }
@@ -226,32 +237,43 @@ function resolveInitialLocalSelection(
   store: ReturnType<typeof useSettingsStore.getState>
 ): OnboardingLocalModelDraft {
   const pending = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
+  // A fresh install has never picked a local provider (the store only falls back
+  // to whisper); open on the recommended Oruk model instead of that fallback.
+  const hasChosenLocalASR =
+    !!store.parakeetModel || localStorage.getItem("localTranscriptionProvider") !== null;
+  if (!assistant && !resumeState && !pending && !hasChosenLocalASR) {
+    return DEFAULT_LOCAL_ASR_SELECTION;
+  }
   const savedProvider = assistant
     ? modelRegistry.getProvider(store.chatAgentProvider)
       ? store.chatAgentProvider
       : "qwen"
-    : store.localTranscriptionProvider === "nvidia"
-      ? "nvidia"
-      : "whisper";
-  const requestedProvider = resumeState?.provider || pending?.provider || savedProvider;
+    : getSelectedASROrganization(store.localTranscriptionProvider, store.parakeetModel);
+  const resumeProvider = resumeState
+    ? getSelectedASROrganization(resumeState.provider, resumeState.modelId)
+    : undefined;
+  const pendingProvider = pending
+    ? getSelectedASROrganization(pending.provider, pending.modelId)
+    : undefined;
+  const requestedProvider = resumeProvider || pendingProvider || savedProvider;
   const provider = assistant
     ? modelRegistry.getProvider(requestedProvider)
       ? requestedProvider
       : "qwen"
-    : requestedProvider === "nvidia"
-      ? "nvidia"
+    : requestedProvider === "nvidia" || requestedProvider === "oruk"
+      ? requestedProvider
       : "whisper";
   const savedModel = assistant
     ? store.chatAgentModel
-    : provider === "nvidia"
+    : usesParakeetManager(provider)
       ? store.parakeetModel
       : store.whisperModel;
 
   return {
     provider,
     modelId:
-      (resumeState?.provider === provider ? resumeState.modelId : "") ||
-      (pending?.provider === provider ? pending.modelId : "") ||
+      (resumeProvider === provider ? resumeState?.modelId : "") ||
+      (pendingProvider === provider ? pending?.modelId : "") ||
       savedModel,
   };
 }
@@ -500,6 +522,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.endpointUrl")}</FieldLabel>
               <Input
+                dir="ltr"
                 value={draftBaseUrl}
                 onChange={(event) => setDraftBaseUrl(event.target.value)}
                 placeholder={t("onboarding.rehaul.provider.endpointPlaceholder")}
@@ -509,6 +532,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
               <Input
+                dir="ltr"
                 type="password"
                 value={draftApiKey}
                 onChange={(event) => setDraftApiKey(event.target.value)}
@@ -521,6 +545,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.modelId")}</FieldLabel>
               <Input
+                dir="ltr"
                 value={draftCustomModel}
                 onChange={(event) => setDraftCustomModel(event.target.value)}
                 placeholder={t("onboarding.rehaul.provider.modelIdPlaceholder")}
@@ -554,7 +579,7 @@ export function ByokProviderStep({
                         <ProviderIcon provider={provider.id} className="size-5" />
                         <span>{provider.name}</span>
                         {provider.id === "corti" && (
-                          <span className="ml-auto rounded bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-2 py-1 text-[0.625rem] text-[var(--onboarding-accent)]">
+                          <span className="ms-auto rounded bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-2 py-1 text-[0.625rem] text-[var(--onboarding-accent)]">
                             {t("onboarding.rehaul.provider.clinical")}
                           </span>
                         )}
@@ -576,7 +601,7 @@ export function ByokProviderStep({
                   className={`${SELECT_TRIGGER_CLASS} disabled:opacity-100 disabled:[&>svg]:hidden`}
                 >
                   {selectedModel ? (
-                    <span>
+                    <span dir="ltr">
                       {models.find((model) => model.id === selectedModel)?.name ?? selectedModel}
                     </span>
                   ) : (
@@ -600,6 +625,7 @@ export function ByokProviderStep({
                 <label className="block">
                   <FieldLabel>{t("onboarding.rehaul.provider.clientId")}</FieldLabel>
                   <Input
+                    dir="ltr"
                     value={draftCortiClientId}
                     onChange={(event) => setDraftCortiClientId(event.target.value)}
                     className={inputClass}
@@ -609,6 +635,7 @@ export function ByokProviderStep({
                 <label className="block">
                   <FieldLabel>{t("onboarding.rehaul.provider.clientSecret")}</FieldLabel>
                   <Input
+                    dir="ltr"
                     type="password"
                     value={draftCortiClientSecret}
                     onChange={(event) => setDraftCortiClientSecret(event.target.value)}
@@ -621,6 +648,7 @@ export function ByokProviderStep({
               <label className="block">
                 <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
                 <Input
+                  dir="ltr"
                   type="password"
                   value={draftApiKey}
                   onChange={(event) => setDraftApiKey(event.target.value)}
@@ -693,6 +721,29 @@ export function LocalModelSetupStep({
   const [downloadedWhisper, setDownloadedWhisper] = useState<Set<string>>(new Set());
   const [downloadedParakeet, setDownloadedParakeet] = useState<Set<string>>(new Set());
   const [downloadedLlm, setDownloadedLlm] = useState<Set<string>>(new Set());
+  const [parakeetCapability, setParakeetCapability] = useState<ParakeetCheckResult | null>(null);
+  const parakeetUnavailable = !assistant && parakeetCapability?.supported === false;
+
+  useEffect(() => {
+    if (assistant) return;
+    let cancelled = false;
+    window.electronAPI
+      ?.checkParakeetInstallation?.()
+      .then((capability) => {
+        if (!cancelled) setParakeetCapability(capability);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [assistant]);
+
+  useEffect(() => {
+    if (parakeetUnavailable && usesParakeetManager(selectedProvider)) {
+      setSelectedProvider("whisper");
+      setSelectedModel("");
+    }
+  }, [parakeetUnavailable, selectedProvider]);
 
   const refreshDownloadedModels = useCallback(async () => {
     const [whisper, parakeet, llm] = await Promise.all([
@@ -740,10 +791,12 @@ export function LocalModelSetupStep({
         icon: provider.id,
       }));
     }
-    return [
-      { id: "whisper", name: "OpenAI", icon: "openai" },
-      { id: "nvidia", name: "NVIDIA", icon: "nvidia" },
-    ];
+    return LOCAL_ASR_ORGANIZATIONS.filter((organization) => organization.id !== "cohere").map(
+      (organization) => ({
+        ...organization,
+        icon: organization.id === "whisper" ? "openai" : organization.id,
+      })
+    );
   }, [assistant]);
 
   const models = useMemo(() => {
@@ -756,17 +809,15 @@ export function LocalModelSetupStep({
         icon: selectedProvider,
       }));
     }
-    if (selectedProvider === "nvidia") {
-      // Onboarding offers only the whisper/NVIDIA providers; Cohere models
-      // would otherwise commit provider "nvidia" with a Cohere model id.
+    if (usesParakeetManager(selectedProvider)) {
       return Object.entries(getParakeetModels())
-        .filter(([id]) => !isCohereTranscribeModel(id))
+        .filter(([id]) => getASRModelOrganization(id) === selectedProvider)
         .map(([id, model]) => ({
           id,
           name: model.name,
           size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
           recommended: model.recommended,
-          icon: "nvidia",
+          icon: selectedProvider,
         }));
     }
     return Object.entries(getWhisperModels()).map(([id, model]) => ({
@@ -791,15 +842,19 @@ export function LocalModelSetupStep({
   const currentProvider = providerOptions.find((provider) => provider.id === selectedProvider);
   const activeDownload = assistant
     ? llmDownload
-    : selectedProvider === "nvidia"
+    : usesParakeetManager(selectedProvider)
       ? parakeetDownload
       : whisperDownload;
   const downloadedModels = assistant
     ? downloadedLlm
-    : selectedProvider === "nvidia"
+    : usesParakeetManager(selectedProvider)
       ? downloadedParakeet
       : downloadedWhisper;
-  const selectedReady = Boolean(selectedModel && downloadedModels.has(selectedModel));
+  const selectedReady = Boolean(
+    selectedModel &&
+    downloadedModels.has(selectedModel) &&
+    !(parakeetUnavailable && usesParakeetManager(selectedProvider))
+  );
 
   useEffect(() => {
     onReadinessChange(selectedReady);
@@ -807,13 +862,14 @@ export function LocalModelSetupStep({
 
   const selectInstalledModel = useCallback(
     (modelId: string): void => {
+      if (parakeetUnavailable && usesParakeetManager(selectedProvider)) return;
       const kind = assistant ? "assistant" : "dictation";
       setSelectedModel(modelId);
       if (assistant) {
         store.setChatAgentMode("local");
         store.setChatAgentProvider(selectedProvider);
         store.setChatAgentModel(modelId);
-      } else if (selectedProvider === "nvidia") {
+      } else if (usesParakeetManager(selectedProvider)) {
         store.setLocalTranscriptionProvider("nvidia");
         store.setParakeetModel(modelId);
       } else {
@@ -824,7 +880,7 @@ export function LocalModelSetupStep({
         forgetPendingLocalModel(kind, modelId);
       }
     },
-    [assistant, selectedProvider, store]
+    [assistant, parakeetUnavailable, selectedProvider, store]
   );
 
   const chooseInstalledModel = (modelId: string): void => {
@@ -833,6 +889,7 @@ export function LocalModelSetupStep({
   };
 
   const downloadModel = (modelId: string): void => {
+    if (parakeetUnavailable && usesParakeetManager(selectedProvider)) return;
     const kind = assistant ? "assistant" : "dictation";
     // LLMs can download concurrently; a refused duplicate or native transfer
     // must not replace the selection waiting for an accepted download.
@@ -841,12 +898,17 @@ export function LocalModelSetupStep({
       (assistant || !activeDownload.isDownloading)
     ) {
       rememberPendingLocalModel(kind, {
-        provider: selectedProvider,
+        provider: selectedProvider === "oruk" ? "nvidia" : selectedProvider,
         modelId,
       });
     }
     void activeDownload.downloadModel(modelId, (downloadedId): void => {
-      if (isPendingLocalModel(kind, { provider: selectedProvider, modelId: downloadedId })) {
+      if (
+        isPendingLocalModel(kind, {
+          provider: selectedProvider === "oruk" ? "nvidia" : selectedProvider,
+          modelId: downloadedId,
+        })
+      ) {
         selectInstalledModel(downloadedId);
         return;
       }
@@ -859,14 +921,16 @@ export function LocalModelSetupStep({
         ? saved.chatAgentMode === "local" &&
           saved.chatAgentProvider === selectedProvider &&
           saved.chatAgentModel === downloadedId
-        : saved.localTranscriptionProvider === selectedProvider &&
-          (selectedProvider === "nvidia" ? saved.parakeetModel : saved.whisperModel) ===
+        : getSelectedASROrganization(saved.localTranscriptionProvider, saved.parakeetModel) ===
+            selectedProvider &&
+          (usesParakeetManager(selectedProvider) ? saved.parakeetModel : saved.whisperModel) ===
             downloadedId;
       if (alreadySelected) setSelectedModel(downloadedId);
     });
   };
 
   const chooseProvider = (providerId: string) => {
+    if (parakeetUnavailable && usesParakeetManager(providerId)) return;
     setSelectedProvider(providerId);
     setSelectedModel("");
     onReadinessChange(false);
@@ -919,7 +983,12 @@ export function LocalModelSetupStep({
           </SelectTrigger>
           <SelectContent className={`max-h-[14.625rem] ${SELECT_PANEL_CLASS}`}>
             {providerOptions.map((provider) => (
-              <SelectItem key={provider.id} value={provider.id} className={SELECT_ITEM_CLASS}>
+              <SelectItem
+                key={provider.id}
+                value={provider.id}
+                className={SELECT_ITEM_CLASS}
+                disabled={parakeetUnavailable && usesParakeetManager(provider.id)}
+              >
                 <span className="flex items-center gap-2.5">
                   <ProviderIcon
                     provider={provider.icon}
@@ -932,6 +1001,15 @@ export function LocalModelSetupStep({
             ))}
           </SelectContent>
         </Select>
+        {parakeetUnavailable && (
+          <p className="mt-2 text-xs text-[var(--onboarding-text-secondary)]">
+            {parakeetCapability.minimumMacOSVersion
+              ? t("transcription.parakeet.requiresMacOS", {
+                  version: parakeetCapability.minimumMacOSVersion,
+                })
+              : t("transcription.parakeet.unavailable")}
+          </p>
+        )}
       </div>
 
       {/* A fixed list height keeps the card and footer stable while the visible
@@ -959,7 +1037,7 @@ export function LocalModelSetupStep({
                 type="button"
                 disabled={!isDownloaded}
                 onClick={() => chooseInstalledModel(model.id)}
-                className="min-w-0 flex-1 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default"
+                className="min-w-0 flex-1 rounded-lg text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default"
               >
                 <span className="block truncate text-base font-medium text-[var(--onboarding-text-primary)]">
                   {model.name}
@@ -982,7 +1060,7 @@ export function LocalModelSetupStep({
                   {/* Figma draws the rect taller than the pill so it bleeds top
                       and bottom; inset-y-0 does that without a magic height. */}
                   <span
-                    className="absolute inset-y-0 left-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
+                    className="absolute inset-y-0 start-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
                     style={{ width: `${percentage}%` }}
                     aria-hidden="true"
                   />
@@ -1005,7 +1083,7 @@ export function LocalModelSetupStep({
                 <Button
                   type="button"
                   onClick={() => chooseInstalledModel(model.id)}
-                  className="h-8 gap-1.5 rounded-full border-0! bg-[var(--onboarding-accent)] px-3 text-sm font-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none!"
+                  className="h-8 gap-1.5 px-3 text-sm"
                 >
                   {t("onboarding.rehaul.local.use")}
                 </Button>
@@ -1013,7 +1091,7 @@ export function LocalModelSetupStep({
                 <Button
                   type="button"
                   onClick={() => downloadModel(model.id)}
-                  className="h-8 gap-1.5 rounded-full border-[var(--onboarding-inverse-surface)]! bg-[var(--onboarding-inverse-surface)] px-3 text-sm font-normal text-[var(--onboarding-inverse-text)] shadow-none! hover:bg-[var(--onboarding-inverse-surface-secondary)] hover:shadow-none! disabled:bg-[var(--onboarding-surface-tertiary-hover)] disabled:opacity-100"
+                  className="h-8 gap-1.5 px-3 text-sm"
                 >
                   <Download className="size-3.5" />
                   {t("onboarding.rehaul.local.download")}

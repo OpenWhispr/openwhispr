@@ -1,11 +1,14 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Calendar, ExternalLink, Loader2, Mic, Monitor, Video } from "lucide-react";
+import { Calendar, ExternalLink, Loader2, Mic, Monitor, Video } from "./icons";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import PersonAvatar from "./ui/PersonAvatar";
+import EmptyStateCard from "./ui/EmptyStateCard";
+import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { cn } from "./lib/utils";
 import type { CalendarAttendee, CalendarEvent } from "../types/calendar";
+import { parseAttendees } from "../utils/calendarAttendees";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import { getMeetingJoinUrl } from "../helpers/meetingJoinUrl";
@@ -26,21 +29,16 @@ const openJoinUrl = (url: string) => {
   }
 };
 
-function parseAttendees(event: CalendarEvent): CalendarAttendee[] {
-  if (!event.attendees) return [];
-  try {
-    const parsed = JSON.parse(event.attendees);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
 function formatTimeRange(locale: string, startTime: string, endTime: string): string {
   const format = (value: string) =>
     new Date(value).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
   return `${format(startTime)} – ${format(endTime)}`;
 }
+
+// Today plus the next days that have events, capped at a working week.
+const MAX_DAY_CARDS = 5;
+// Avatars shown before the "+N" overflow pill.
+const MAX_STACKED_AVATARS = 2;
 
 interface DayGroup {
   key: string;
@@ -69,8 +67,11 @@ function groupEventsByDay(events: CalendarEvent[], now: Date): DayGroup[] {
   if (groups.length > 0 && !groups.some((g) => g.isToday)) {
     groups.unshift({ key: now.toDateString(), date: now, isToday: true, items: [] });
   }
-  return groups;
+  return groups.slice(0, MAX_DAY_CARDS);
 }
+
+const ATTENDEE_COUNT_PILL_CLASS =
+  "flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-surface-3 px-0.5 text-[9px] font-medium tabular-nums text-muted-foreground ring-1 ring-background";
 
 const RSVP_DOT: Record<string, string> = {
   accepted: "bg-green-500",
@@ -96,27 +97,27 @@ function AttendeePopover({
       <PopoverTrigger asChild>
         <button
           aria-label={`${attendees.length} ${t("notes.participants.attendees")}`}
-          className="flex shrink-0 items-center -space-x-1.5 rounded-full pt-0.5 outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring/40"
+          className="flex shrink-0 items-center -space-x-1 rounded-full outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring/40"
         >
-          {attendees.slice(0, 3).map((a) => (
+          {attendees.slice(0, MAX_STACKED_AVATARS).map((a) => (
             <PersonAvatar
               key={a.email}
               email={a.email}
               displayName={a.displayName}
-              size={16}
+              size={18}
               className="ring-1 ring-background"
             />
           ))}
-          {attendees.length > 3 && (
-            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-0.5 text-[9px] font-medium text-muted-foreground ring-1 ring-background">
-              +{attendees.length - 3}
+          {attendees.length > MAX_STACKED_AVATARS && (
+            <span className={ATTENDEE_COUNT_PILL_CLASS}>
+              +{attendees.length - MAX_STACKED_AVATARS}
             </span>
           )}
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-0">
-        <div className="border-b border-border/50 px-3 py-2.5">
-          <p className="text-xs font-medium leading-snug text-foreground">
+        <div className="border-b border-border/70 px-3 py-2.5">
+          <p dir="auto" className="text-xs font-medium leading-snug text-foreground">
             {event.summary || t("upcoming.untitledEvent")}
           </p>
           <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">{timeRange}</p>
@@ -126,13 +127,15 @@ function AttendeePopover({
             <div key={a.email} className="flex items-center gap-2 rounded-md px-2 py-1.5">
               <PersonAvatar email={a.email} displayName={a.displayName} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs text-foreground/80">
+                <p dir="auto" className="truncate text-xs text-foreground/80">
                   {a.displayName || a.email.split("@")[0]}
                   {a.self && (
-                    <span className="ml-1 text-foreground/30">{t("notes.participants.me")}</span>
+                    <span className="ms-1 text-foreground/45">{t("notes.participants.me")}</span>
                   )}
                 </p>
-                <p className="truncate text-[11px] text-foreground/35">{a.email}</p>
+                <p dir="ltr" className="truncate text-[11px] text-foreground/45">
+                  {a.email}
+                </p>
               </div>
               <span
                 className={cn(
@@ -144,7 +147,7 @@ function AttendeePopover({
           ))}
         </div>
         {joinUrl && (
-          <div className="border-t border-border/50 p-1">
+          <div className="border-t border-border/70 p-1">
             <button
               onClick={() => openJoinUrl(joinUrl)}
               className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/70 transition-colors hover:bg-foreground/5"
@@ -170,122 +173,106 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
     window.electronAPI?.joinCalendarMeeting?.(event.id);
   };
 
-  return (
-    <div
-      className={cn(
-        "group/event border-l-2 pl-2.5",
-        isNow ? "border-green-500/60" : "border-primary/25"
-      )}
+  const joinButton = (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={startNotes}
+      className="pointer-events-auto h-7 shrink-0 gap-1.5 rounded-full bg-surface-3 px-3 text-xs text-foreground hover:bg-surface-raised dark:bg-surface-2 dark:hover:bg-surface-3"
     >
-      <div className="flex items-start gap-2">
-        <p className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-foreground line-clamp-2">
+      {joinUrl ? <Video size={12} /> : <Mic size={12} />}
+      {joinUrl ? t("upcoming.joinAndTranscribe") : t("upcoming.takeNotes")}
+    </Button>
+  );
+
+  return (
+    <div className="group/event relative flex items-center gap-3 px-1 py-2">
+      {attendees.length > 1 ? (
+        <AttendeePopover
+          event={event}
+          attendees={attendees}
+          timeRange={timeRange}
+          joinUrl={joinUrl}
+        />
+      ) : event.attendees_count > 1 ? (
+        <span className={ATTENDEE_COUNT_PILL_CLASS}>+{event.attendees_count - 1}</span>
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <p dir="auto" className="truncate text-sm font-medium leading-tight text-foreground">
           {event.summary || t("upcoming.untitledEvent")}
         </p>
-        {attendees.length > 1 ? (
-          <AttendeePopover
-            event={event}
-            attendees={attendees}
-            timeRange={timeRange}
-            joinUrl={joinUrl}
-          />
-        ) : event.attendees_count > 1 ? (
-          <span className="shrink-0 pt-0.5 text-[11px] tabular-nums text-muted-foreground/70">
-            +{event.attendees_count - 1}
-          </span>
-        ) : null}
-      </div>
-      <div className="mt-1 flex items-center justify-between gap-2">
         {isNow ? (
-          <span className="flex items-center gap-1.5">
+          <span className="mt-1 flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-green-500 opacity-75" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
             </span>
-            <span className="text-[11px] font-medium tabular-nums text-green-600 dark:text-green-400">
+            <span className="text-xs font-medium text-green-600 dark:text-green-400">
               {t("upcoming.now")}
             </span>
           </span>
         ) : (
-          <span className="text-[11px] tabular-nums text-muted-foreground">{timeRange}</span>
+          <p className="mt-0.5 truncate text-xs tabular-nums text-muted-foreground">{timeRange}</p>
         )}
-        <Button
-          size="sm"
-          variant={isNow ? "default" : "ghost"}
-          onClick={startNotes}
-          className={cn(
-            "h-6 min-w-0 gap-1 px-2 text-[11px] font-medium",
-            !isNow &&
-              "text-muted-foreground opacity-0 transition-opacity duration-150 hover:text-foreground focus-visible:opacity-100 group-hover/event:opacity-100"
-          )}
-        >
-          {joinUrl ? (
-            <Video size={11} className="shrink-0" />
-          ) : (
-            <Mic size={11} className="shrink-0" />
-          )}
-          <span className="truncate">
-            {joinUrl ? t("upcoming.joinAndTakeNotes") : t("upcoming.takeNotes")}
-          </span>
-        </Button>
       </div>
+      {/* Always shown once the meeting is live; otherwise revealed on hover so you can join early. */}
+      {isNow ? (
+        joinButton
+      ) : (
+        <span
+          // Overlaid so the row keeps its full width until hovered; the scrim fades the
+          // covered end of a long title out instead of slicing it.
+          className="pointer-events-none absolute inset-y-0 end-0 flex items-center bg-linear-to-r from-transparent to-background to-[2rem] ps-8 pe-1 opacity-0 transition-opacity duration-150 group-hover/event:opacity-100 has-[:focus-visible]:opacity-100 dark:to-surface-2"
+        >
+          {joinButton}
+        </span>
+      )}
     </div>
   );
 }
 
 function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEvent) => boolean }) {
   const { t, i18n } = useTranslation();
-  const locale = i18n.language;
 
   return (
-    <div className="rounded-lg border border-border/40 bg-card/50 px-3 py-2.5 dark:border-border-subtle/60 dark:bg-surface-2/60">
-      <div className="flex items-center gap-2 pb-2">
-        <span className="text-[22px] font-semibold leading-none tabular-nums text-foreground">
-          {group.date.getDate()}
+    <div
+      className={cn(
+        "rounded-2xl border border-border/70 dark:border-white/10",
+        !group.isToday && "overflow-clip"
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium",
+          // Today's glass strip sits over the card's hairline on three sides so the blue meets
+          // the rounded edge directly instead of being outlined in grey.
+          group.isToday
+            ? cn(GRADIENT_CIRCLE, "-mx-px -mt-px rounded-t-2xl")
+            : "bg-surface-3 text-foreground dark:bg-surface-2"
+        )}
+      >
+        <Calendar size={12} className="shrink-0" />
+        <span>
+          {group.date.toLocaleDateString(i18n.language, {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+          })}
         </span>
-        <div className="flex flex-col justify-center">
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium leading-tight text-foreground">
-            {group.date.toLocaleDateString(locale, { month: "long" })}
-            {group.isToday && <span className="h-1 w-1 rounded-full bg-red-500" />}
-          </span>
-          <span className="text-[10px] leading-tight text-muted-foreground">
-            {group.date.toLocaleDateString(locale, { weekday: "short" })}
-          </span>
-        </div>
       </div>
-      {group.items.length === 0 ? (
-        <div className="border-l-2 border-border/40 pl-2.5 text-xs text-muted-foreground/60">
-          {t("upcoming.noEventsToday")}
-        </div>
-      ) : (
-        <div className="space-y-2.5">
-          {group.items.map((event) => (
-            <EventRow key={event.id} event={event} isNow={isNowFn(event)} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SidebarCard({
-  icon: Icon,
-  title,
-  description,
-  children,
-}: {
-  icon: typeof Calendar;
-  title?: string;
-  description?: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-center rounded-lg border border-border bg-card/50 px-4 py-6 text-center dark:bg-surface-2/60">
-      <Icon size={20} className="mb-2 text-muted-foreground/40" />
-      {title && <p className="text-xs font-medium text-foreground/80">{title}</p>}
-      {description && (
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground/60">{description}</p>
-      )}
-      {children && <div className="mt-3">{children}</div>}
+      <div className="rounded-b-[15px] bg-background px-2 dark:bg-surface-2/60">
+        {group.items.length === 0 ? (
+          <p className="px-1 py-3 text-xs text-muted-foreground/70">
+            {t("upcoming.noEventsToday")}
+          </p>
+        ) : (
+          <div className="divide-y divide-border/60">
+            {group.items.map((event) => (
+              <EventRow key={event.id} event={event} isNow={isNowFn(event)} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -310,14 +297,8 @@ export default function UpcomingMeetings({
   };
 
   return (
-    <div className="w-64 sticky top-0 self-start max-h-screen overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center gap-1.5 pb-2.5">
-        <Calendar size={12} className="text-muted-foreground" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {t("upcoming.title")}
-        </span>
-      </div>
+    <div>
+      <p className="pt-2 pb-2.5 text-sm text-muted-foreground">{t("upcoming.title")}</p>
 
       {/* Loading state */}
       {isLoading && (
@@ -328,15 +309,20 @@ export default function UpcomingMeetings({
 
       {/* Calendar not connected */}
       {!isLoading && !isConnected && (
-        <SidebarCard
+        <EmptyStateCard
+          className="px-4 py-8"
           icon={Calendar}
           title={t("upcoming.connectCalendar")}
           description={t("upcoming.connectCalendarDescription")}
         >
-          <Button size="sm" onClick={onConnectCalendar} className="h-7 text-xs">
+          <Button
+            size="sm"
+            onClick={onConnectCalendar}
+            className="h-[30px] rounded-full px-3.5 text-xs"
+          >
             {t("upcoming.connectCalendarButton")}
           </Button>
-        </SidebarCard>
+        </EmptyStateCard>
       )}
 
       {/* Connected, nothing scheduled */}
@@ -344,20 +330,25 @@ export default function UpcomingMeetings({
         isConnected &&
         events.length === 0 &&
         (needsSystemAudioGrant ? (
-          <SidebarCard icon={Monitor} description={t("upcoming.systemAudioRequired")}>
+          <EmptyStateCard
+            className="px-4 py-8"
+            icon={Monitor}
+            description={t("upcoming.systemAudioRequired")}
+          >
             <Button
               size="sm"
               variant="outline"
               onClick={() => systemAudio.request()}
-              className="h-7 text-xs"
+              className="h-[30px] rounded-full px-3.5 text-xs"
             >
               {systemAudio.mode === "native"
                 ? t("upcoming.openSettings")
                 : t("onboarding.permissions.grantAccess")}
             </Button>
-          </SidebarCard>
+          </EmptyStateCard>
         ) : (
-          <SidebarCard
+          <EmptyStateCard
+            className="px-4 py-8"
             icon={Calendar}
             title={t("upcoming.noUpcomingEvents")}
             description={t("upcoming.moreCalendarsHint")}
@@ -368,12 +359,12 @@ export default function UpcomingMeetings({
             >
               {t("upcoming.connectHere")}
             </button>
-          </SidebarCard>
+          </EmptyStateCard>
         ))}
 
       {/* Day cards */}
       {!isLoading && isConnected && groupedEvents.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {groupedEvents.map((group) => (
             <DayCard key={group.key} group={group} isNowFn={isNowFn} />
           ))}

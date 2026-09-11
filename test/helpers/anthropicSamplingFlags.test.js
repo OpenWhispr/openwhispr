@@ -17,6 +17,7 @@ test("every Anthropic model declares sampling support explicitly", () => {
 
 test("models from Opus 4.7 onward do not receive temperature", () => {
   for (const id of [
+    "claude-fable-5-1",
     "claude-fable-5",
     "claude-sonnet-5",
     "claude-opus-5",
