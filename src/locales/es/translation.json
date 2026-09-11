@@ -211,10 +211,10 @@
     "rehaul": {
       "permissions": {
         "title": "Configura OpenWhispr en 3 minutos",
-        "microphoneDescription": "Te escucha mientras dictas. Solo se activa cuando pulsas tu atajo.",
-        "accessibilityDescription": "Pega el texto final en la aplicación en la que estás trabajando.",
+        "microphoneDescription": "Convierte lo que dices en texto. Solo se activa mientras grabas.",
+        "accessibilityDescription": "Pega el texto en la aplicación que estás usando.",
         "systemAudioTitle": "Audio del Sistema",
-        "systemAudioDescription": "Deja que las notas de reuniones oigan a los demás en la llamada. Solo mientras grabas.",
+        "systemAudioDescription": "Graba a las demás personas de tus llamadas para las notas de reuniones. Solo mientras grabas.",
         "screenContextDescription": "Deja que tu asistente de voz vea tu pantalla cuando le pides algo. Nunca se guarda.",
         "enable": "Activar",
         "enabled": "Activado"

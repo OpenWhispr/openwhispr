@@ -211,10 +211,10 @@
     "rehaul": {
       "permissions": {
         "title": "3 分で OpenWhispr を設定",
-        "microphoneDescription": "ディクテーション中にあなたの声を聞き取ります。ホットキーを押したときだけ有効になります。",
-        "accessibilityDescription": "完成したテキストを、いま作業中のアプリに貼り付けます。",
+        "microphoneDescription": "話した内容をテキストにします。録音中のみ有効です。",
+        "accessibilityDescription": "テキストを、いま使っているアプリに貼り付けます。",
         "systemAudioTitle": "システムオーディオ",
-        "systemAudioDescription": "会議メモが通話相手の音声を聞き取れるようにします。録音中のみ使われます。",
+        "systemAudioDescription": "会議メモのために、通話相手の音声を録音します。録音中のみ有効です。",
         "screenContextDescription": "音声アシスタントに何かを頼んだとき、画面の内容を見られるようにします。保存は一切されません。",
         "enable": "有効にする",
         "enabled": "有効"

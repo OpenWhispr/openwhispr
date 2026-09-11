@@ -190,10 +190,10 @@
     "rehaul": {
       "permissions": {
         "title": "Configure o OpenWhispr em 3 minutos",
-        "microphoneDescription": "Ouve você enquanto dita. Só é ativado quando você pressiona seu atalho.",
-        "accessibilityDescription": "Cola o texto final no app em que você está trabalhando.",
+        "microphoneDescription": "Transforma o que você diz em texto. Só fica ativo enquanto você grava.",
+        "accessibilityDescription": "Cola o texto no app que você está usando.",
         "systemAudioTitle": "Áudio do Sistema",
-        "systemAudioDescription": "Deixa as notas de reunião ouvirem as outras pessoas da chamada. Só durante a gravação.",
+        "systemAudioDescription": "Grava as outras pessoas das suas chamadas para as notas de reunião. Só enquanto você grava.",
         "screenContextDescription": "Deixa seu assistente de voz ver sua tela quando você pede algo. Nunca é salvo.",
         "enable": "Ativar",
         "enabled": "Ativado"

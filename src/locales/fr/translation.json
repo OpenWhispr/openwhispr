@@ -211,10 +211,10 @@
     "rehaul": {
       "permissions": {
         "title": "Configurez OpenWhispr en 3 minutes",
-        "microphoneDescription": "Vous écoute pendant la dictée. Actif seulement après l’appui sur votre raccourci.",
-        "accessibilityDescription": "Colle le texte final dans l’application où vous travaillez.",
+        "microphoneDescription": "Transforme ce que vous dites en texte. Actif seulement pendant l’enregistrement.",
+        "accessibilityDescription": "Colle le texte dans l’application que vous utilisez.",
         "systemAudioTitle": "Audio Système",
-        "systemAudioDescription": "Laisse les notes de réunion entendre vos interlocuteurs. Seulement pendant l’enregistrement.",
+        "systemAudioDescription": "Enregistre vos interlocuteurs pour les notes de réunion. Actif seulement pendant l’enregistrement.",
         "screenContextDescription": "Laisse votre assistant vocal voir votre écran quand vous le sollicitez. Jamais enregistré.",
         "enable": "Activer",
         "enabled": "Activé"

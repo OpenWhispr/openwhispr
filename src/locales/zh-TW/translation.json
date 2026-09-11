@@ -211,10 +211,10 @@
     "rehaul": {
       "permissions": {
         "title": "3 分鐘完成 OpenWhispr 設定",
-        "microphoneDescription": "在你聽寫時聽你說話。只有按下快捷鍵後才會啟用。",
-        "accessibilityDescription": "把整理好的文字貼到你正在使用的 App 裡。",
+        "microphoneDescription": "把你說的話變成文字。僅在錄音時開啟。",
+        "accessibilityDescription": "把文字貼到你正在使用的 App 裡。",
         "systemAudioTitle": "系統音訊",
-        "systemAudioDescription": "讓會議筆記聽到通話中的其他人。僅在錄音時使用。",
+        "systemAudioDescription": "為會議筆記錄下通話中的其他人。僅在錄音時開啟。",
         "screenContextDescription": "當你向語音助理提問時，讓它看到你螢幕上的內容。絕不儲存。",
         "enable": "啟用",
         "enabled": "已啟用"

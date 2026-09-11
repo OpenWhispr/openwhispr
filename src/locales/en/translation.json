@@ -211,10 +211,10 @@
     "rehaul": {
       "permissions": {
         "title": "Set up OpenWhispr in 3 minutes",
-        "microphoneDescription": "Hears you while you dictate. Only listens after you press your hotkey.",
-        "accessibilityDescription": "Pastes your finished text into the app you’re working in.",
+        "microphoneDescription": "Turns what you say into text. Only on while you’re recording.",
+        "accessibilityDescription": "Pastes the text into the app you’re using.",
         "systemAudioTitle": "System Audio",
-        "systemAudioDescription": "Lets Meeting Notes hear the other people on your call. Only while you’re recording.",
+        "systemAudioDescription": "Records the other people on your calls for meeting notes. Only on while you’re recording.",
         "screenContextDescription": "Lets your voice assistant see your screen when you ask it something. Never stored.",
         "enable": "Enable",
         "enabled": "Enabled"

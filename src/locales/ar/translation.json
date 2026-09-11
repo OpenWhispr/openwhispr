@@ -1901,10 +1901,10 @@
     "rehaul": {
       "permissions": {
         "title": "قم بإعداد OpenWhispr في 3 دقائق",
-        "microphoneDescription": "يستمع إليك أثناء الإملاء. لا يعمل إلا بعد ضغط مفتاح الاختصار.",
-        "accessibilityDescription": "يلصق النص النهائي في التطبيق الذي تعمل فيه.",
+        "microphoneDescription": "يحوّل ما تقوله إلى نص. يعمل أثناء التسجيل فقط.",
+        "accessibilityDescription": "يلصق النص في التطبيق الذي تستخدمه.",
         "systemAudioTitle": "صوت النظام",
-        "systemAudioDescription": "يتيح لملاحظات الاجتماع سماع الأشخاص الآخرين في مكالمتك. أثناء التسجيل فقط.",
+        "systemAudioDescription": "يسجّل الأشخاص الآخرين في مكالماتك لملاحظات الاجتماع. أثناء التسجيل فقط.",
         "screenContextDescription": "يتيح لمساعدك الصوتي رؤية شاشتك عندما تطلب منه شيئًا. لا يتم تخزينه أبدًا.",
         "enable": "تمكين",
         "enabled": "مُمكّن"
