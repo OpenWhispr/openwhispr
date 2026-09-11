@@ -22,6 +22,12 @@ const {
   session,
   systemPreferences,
 } = require("electron");
+require("electron").protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "meeting-audio",
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+  },
+]);
 const path = require("path");
 const http = require("http");
 const tls = require("tls");

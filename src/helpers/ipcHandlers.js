@@ -1568,6 +1568,37 @@ class IPCHandlers {
       return this.deleteTranscriptionInternal(id);
     });
 
+    const getMeetingAudioStorage = () => {
+      if (!this.meetingAudioStorage) {
+        const { MeetingAudioStorage } = require("./meetingAudioStorage");
+        this.meetingAudioStorage = new MeetingAudioStorage(
+          path.join(app.getPath("userData"), "meeting-audio"),
+          (error) => broadcastToWindows("meeting-audio-error", { error: error.message })
+        );
+      }
+      return this.meetingAudioStorage;
+    };
+    this.getMeetingAudioStorage = getMeetingAudioStorage;
+    const { createAudioHandler } = require("./meetingAudioProtocol");
+    require("electron").protocol.handle(
+      "meeting-audio",
+      createAudioHandler(getMeetingAudioStorage, (noteId) => !!this.databaseManager.getNote(noteId))
+    );
+    ipcMain.handle("meeting-audio-settings", (_event, value) => {
+      const storage = getMeetingAudioStorage();
+      return value === undefined ? storage.settings : storage.setSettings(value);
+    });
+    ipcMain.handle("meeting-audio-list", (_event, noteId) => {
+      if (!Number.isSafeInteger(noteId) || !this.databaseManager.getNote(noteId)) return [];
+      const storage = getMeetingAudioStorage();
+      storage.cleanup();
+      return storage.list(noteId);
+    });
+    ipcMain.handle("meeting-audio-reveal", (_event, noteId, id, source) => {
+      if (!this.databaseManager.getNote(noteId)) throw new Error("Note not found");
+      shell.showItemInFolder(getMeetingAudioStorage().resolveTrack(noteId, id, source));
+    });
+
     // Audio storage handlers
     ipcMain.handle("save-transcription-audio", async (event, id, audioBuffer, metadata) => {
       const transcription = this.databaseManager.getTranscriptionById(id);
@@ -6630,6 +6661,10 @@ class IPCHandlers {
     };
 
     const captureMeetingDiarizationState = async () => {
+      await this.meetingAudioStorage
+        ?.stop()
+        .catch((error) => broadcastToWindows("meeting-audio-error", { error: error.message }));
+      broadcastToWindows("meeting-audio-saved", { noteId: meetingNoteId });
       const systemPcmPath = meetingDiarizationPath;
       const systemStartedAt = meetingDiarizationStartedAt;
       const micPcmPath = meetingMicDiarizationPath;
@@ -7249,6 +7284,7 @@ class IPCHandlers {
 
     let meetingLocalMode = false;
     let meetingLocalBuffers = { mic: [], system: [] };
+    let meetingLocalChunkStarts = { mic: null, system: null };
     let meetingLocalTimer = null;
     let meetingLocalWin = null;
     let meetingLocalTranscript = "";
@@ -7331,6 +7367,7 @@ class IPCHandlers {
         // Local STT timestamps each batch with wall time, not a sample cursor.
         // Large synthetic gaps would dilute speech and inflate the next batch.
         if (synthetic) return;
+        meetingLocalChunkStarts[source] ??= capturedAt ?? Date.now();
         meetingLocalBuffers[source].push(buffer);
         return;
       }
@@ -7617,8 +7654,10 @@ class IPCHandlers {
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
 
+      const chunkStartedAt = meetingLocalChunkStarts[source] ?? Date.now();
       const pcm24k = Buffer.concat(chunks);
       meetingLocalBuffers[source] = [];
+      meetingLocalChunkStarts[source] = null;
 
       const pcm16k = downsample24kTo16k(pcm24k);
 
@@ -7671,7 +7710,7 @@ class IPCHandlers {
 
         if (result?.success && result.text?.trim()) {
           const text = result.text.trim();
-          const segTimestamp = Date.now();
+          const segTimestamp = chunkStartedAt;
           let micSuppression = null;
           if (source === "mic") {
             const chunkDurationMs = (pcm24k.length / 2 / 24000) * 1000;
@@ -7835,6 +7874,7 @@ class IPCHandlers {
       this._activeMeetingNoteId = null;
       meetingLocalMode = false;
       meetingLocalBuffers = { mic: [], system: [] };
+      meetingLocalChunkStarts = { mic: null, system: null };
       if (meetingDiarizationStream) {
         meetingDiarizationStream.end();
         meetingDiarizationStream = null;
@@ -8327,6 +8367,11 @@ class IPCHandlers {
         meetingOneOnOneProfileBound = false;
         meetingNoteId = options.noteId ?? null;
         this._activeMeetingNoteId = meetingNoteId;
+        try {
+          this.getMeetingAudioStorage().start(meetingNoteId);
+        } catch (error) {
+          broadcastToWindows("meeting-audio-error", { error: error.message });
+        }
 
         // Seed the speaker cap from the note/calendar participants up front so live
         // identification isn't stuck at the default if the renderer never pushes a config.
@@ -8374,6 +8419,7 @@ class IPCHandlers {
           meetingLocalLanguage = options.language || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalBuffers = { mic: [], system: [] };
+          meetingLocalChunkStarts = { mic: null, system: null };
           meetingLocalTranscript = "";
 
           await startLiveSpeakerIdentification(meetingLocalWin, systemAudioMode);
@@ -8421,6 +8467,7 @@ class IPCHandlers {
           oneOnOneAttendee: meetingOneOnOneAttendee,
         });
       } catch (error) {
+        await this.meetingAudioStorage?.stop().catch(() => {});
         await rollbackMeetingTranscriptionStart();
         this.meetingDetectionEngine?.endRecordingSession(recordingSessionId);
         this.meetingDetectionEngine?.setUserRecording(false);
@@ -8433,6 +8480,7 @@ class IPCHandlers {
 
     const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      this.meetingAudioStorage?.append(source, outboundBuffer, capturedAt ?? Date.now());
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.
       if (!synthetic) {
@@ -12144,7 +12192,18 @@ class IPCHandlers {
           }
         }
 
-        send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
+        // Merge works in track-relative seconds; persisted segments must retain
+        // the original epoch timeline for seeking and subsequent recordings.
+        send({
+          segments: enrichedSegments.map((segment) => ({
+            ...segment,
+            timestamp:
+              isEpochMs && segment.timestamp != null
+                ? startMs + segment.timestamp * 1000
+                : segment.timestamp,
+          })),
+          speakerEmbeddings: speakerEmbeddingsMap,
+        });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
         send({ segments: [] });

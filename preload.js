@@ -780,6 +780,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("workspace-policy-changed", listener);
     return () => ipcRenderer.removeListener("workspace-policy-changed", listener);
   },
+  getMeetingAudioSettings: () => ipcRenderer.invoke("meeting-audio-settings"),
+  setMeetingAudioSettings: (settings) => ipcRenderer.invoke("meeting-audio-settings", settings),
+  listMeetingAudio: (noteId) => ipcRenderer.invoke("meeting-audio-list", noteId),
+  revealMeetingAudio: (noteId, id, source) =>
+    ipcRenderer.invoke("meeting-audio-reveal", noteId, id, source),
+  onMeetingAudioSaved: registerListener("meeting-audio-saved"),
+  onMeetingAudioError: registerListener("meeting-audio-error"),
   getNoteRecordingConfig: () => ipcRenderer.invoke("get-note-recording-config"),
 
   // Cloud audio file transcription

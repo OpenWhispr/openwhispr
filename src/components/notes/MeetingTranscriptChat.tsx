@@ -600,6 +600,7 @@ interface SegmentRowProps {
   onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
+  onPlaySegment?: (segment: TranscriptSegment) => void;
   onToggleSelect?: (segmentId: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }
@@ -625,6 +626,7 @@ const SegmentRow = memo(function SegmentRow({
   onConfirmSuggestion,
   onDismissSuggestion,
   onAttachSpeakerEmail,
+  onPlaySegment,
   onToggleSelect,
   t,
 }: SegmentRowProps) {
@@ -703,7 +705,20 @@ const SegmentRow = memo(function SegmentRow({
             isSelected && "ring-2 ring-primary/60"
           )}
         >
-          <span dir="auto">{segment.text}</span>
+          {onPlaySegment && segment.timestamp != null ? (
+            <button
+              type="button"
+              className="text-start w-full"
+              title={t("notes.audio.playSegment")}
+              onClick={() => {
+                if (window.getSelection()?.isCollapsed !== false) onPlaySegment(segment);
+              }}
+            >
+              <span dir="auto">{segment.text}</span>
+            </button>
+          ) : (
+            <span dir="auto">{segment.text}</span>
+          )}
         </div>
         {selectable && (
           <SelectCheckbox
@@ -743,6 +758,7 @@ interface MeetingTranscriptChatProps {
   onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
+  onPlaySegment?: (segment: TranscriptSegment) => void;
   onToggleSelect?: (segmentId: string) => void;
 }
 
@@ -767,6 +783,7 @@ export function MeetingTranscriptChat({
   onConfirmSuggestion,
   onDismissSuggestion,
   onAttachSpeakerEmail,
+  onPlaySegment,
   onToggleSelect,
 }: MeetingTranscriptChatProps) {
   const { t } = useTranslation();
@@ -1007,6 +1024,7 @@ export function MeetingTranscriptChat({
                     onConfirmSuggestion={onConfirmSuggestion}
                     onDismissSuggestion={onDismissSuggestion}
                     onAttachSpeakerEmail={onAttachSpeakerEmail}
+                    onPlaySegment={onPlaySegment}
                     onToggleSelect={onToggleSelect}
                     t={t}
                   />
