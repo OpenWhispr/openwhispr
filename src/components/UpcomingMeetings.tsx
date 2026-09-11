@@ -172,7 +172,7 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
   };
 
   return (
-    <div className="group/event flex items-center gap-3 px-1 py-2">
+    <div className="group/event relative flex items-center gap-3 px-1 py-2">
       {attendees.length > 1 ? (
         <AttendeePopover
           event={event}
@@ -198,7 +198,7 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
             </span>
           </span>
         ) : (
-          <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{timeRange}</p>
+          <p className="mt-0.5 truncate text-xs tabular-nums text-muted-foreground">{timeRange}</p>
         )}
       </div>
       {/* Always shown once the meeting is live; otherwise revealed on hover so you can join early. */}
@@ -208,8 +208,9 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
         onClick={startNotes}
         className={cn(
           "h-7 shrink-0 gap-1.5 rounded-full bg-surface-3 px-3 text-xs text-foreground hover:bg-surface-raised dark:bg-surface-2 dark:hover:bg-surface-3",
+          // Overlaid rather than in flow so the row keeps its full width until hovered.
           !isNow &&
-            "opacity-0 transition-opacity duration-150 group-hover/event:opacity-100 focus-visible:opacity-100"
+            "absolute end-1 top-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover/event:opacity-100 focus-visible:opacity-100"
         )}
       >
         {joinUrl ? <Video size={12} /> : <Mic size={12} />}
