@@ -109,6 +109,23 @@ test("concurrent readers share one pass and completed history stays checkpointed
   assert.equal(calls, 2, "a completed pass must short-circuit later reads");
 });
 
+test("revoking local history stops a pass that is already scanning", async () => {
+  let calls = 0;
+  let context;
+  context = createContext(() => {
+    calls += 1;
+    // The renderer's retention sync lands between the first batch and the
+    // second, which is the only window a yielding scan leaves open.
+    if (calls === 1) context._retentionSettings = { dataRetentionEnabled: false };
+    // A pass that ignores the switch keeps mining until the history runs out.
+    return completeBatch({ complete: calls >= 5, nextCursor: calls, scanned: 1 });
+  });
+
+  await context._ensureAnalyticsHistoryBackfilled();
+
+  assert.equal(calls, 1, "the scan must stop at the next batch boundary, not run to the end");
+});
+
 test("an in-flight pass rereads a durable cursor that moves backward", async () => {
   let calls = 0;
   const starts = [];

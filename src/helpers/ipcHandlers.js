@@ -729,6 +729,7 @@ class IPCHandlers {
       let inserted = 0;
       let scanned = 0;
       let skipped = 0;
+      let stoppedEarly = false;
       const state = this.databaseManager.getAnalyticsHistoryBackfillState(
         ANALYTICS_HISTORY_BACKFILL_VERSION
       );
@@ -746,11 +747,22 @@ class IPCHandlers {
         skipped += batch.skipped;
         if (batch.complete) break;
         await new Promise((resolve) => setImmediate(resolve));
+        // The switch can be turned off while this pass yields -- by the user, or
+        // by a managed policy that resolved after the renderer's first sync sent
+        // the personal default. Re-reading it here stops the scan at the next
+        // batch boundary instead of mining the rest of a history the user has
+        // just opted out of.
+        if (!this._canReconstructAnalyticsHistory()) {
+          stoppedEarly = true;
+          break;
+        }
       }
       if (inserted > 0) broadcastToWindows("analytics-changed");
       if (scanned > 0) {
         debugLogger.info(
-          "Analytics history backfill complete",
+          stoppedEarly
+            ? "Analytics history backfill stopped: local history was turned off mid-scan"
+            : "Analytics history backfill complete",
           { inserted, skipped, scanned },
           "analytics"
         );
