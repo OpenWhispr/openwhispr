@@ -1114,7 +1114,7 @@
       "continueWithMicrosoft": "Продолжить с Microsoft",
       "protocolUnavailable": "Вход через браузер недоступен — повторно зарегистрируйте протокол openwhispr:// в системных настройках приложений по умолчанию."
     },
-    "welcomeSubtitle": "Используйте голос для всего",
+    "welcomeSubtitle": "Сила вашего голоса. На ваших условиях.",
     "welcomeTitle": "Добро пожаловать в OpenWhispr",
     "sessionExpired": "Сессия истекла. Пожалуйста, войдите снова."
   },
