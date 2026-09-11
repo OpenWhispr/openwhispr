@@ -12,10 +12,9 @@ import assistantPreview from "../../assets/onboarding-assistant-preview.webp";
  * reads for meaning.
  *
  * This stays above the shortcut controls and outside the shrinking flex pool.
- * The frame is a fixed band rather than the export's 16:9 — at full height the
- * step needed a scroll to reach the recommendations — and it crops a lightly
- * enlarged image, biased toward the top, so the spoken request and the mail
- * window stay in view while no export edge or component border shows.
+ * The frame is a fixed band rather than the export's 16:9 (at full height the
+ * step scrolled) and crops a lightly enlarged image biased toward the top, so
+ * the spoken request and mail window stay in view with no export edge showing.
  */
 export default function AssistantHotkeyPreview() {
   return (

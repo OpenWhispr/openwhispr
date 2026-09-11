@@ -115,9 +115,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     resetOnboardingProgress(localStorage);
     window.location.reload();
   }, []);
-  // Set by Back on the permissions step. A signed-in user normally completes the
-  // auth step on sight; one who asked to return to it gets the welcome screen,
-  // where Log out lives.
+  // Set by Back on the permissions step: a signed-in user who asked to return to
+  // the auth step gets the welcome screen (where Log out lives), not auto-advance.
   const [returnedToAuth, setReturnedToAuth] = useState(false);
 
   const { dictationHotkeyConfirmed, assistantHotkeyConfirmed } = session.resume;
@@ -361,11 +360,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     if (currentStepId === "required-models") requiredModelsLatchRef.current = true;
   }, [currentStepId]);
 
-  // New users start on hold-to-talk: the key is down only while they speak, so
-  // there is nothing to remember to stop. Only where no mode was ever chosen
-  // (the store's "tap" is a fallback, not a setting) and where this desktop can
-  // register push-to-talk at all — main's answer is awaited, since the hook's
-  // placeholder says yes on every platform.
+  // New users default to hold-to-talk, but only where no mode was ever chosen
+  // (the store's "tap" is a fallback) and once main has confirmed this desktop
+  // supports it — the hook's placeholder says yes on every platform.
   useEffect(() => {
     if (currentStepId !== "dictation-hotkey" || !hotkeyModeLoaded) return;
     if (supportsPushToTalk && localStorage.getItem("activationMode") === null) {
@@ -484,9 +481,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const confirmDictationHotkey = useCallback(
     async (value: string) => {
-      // Hold needs a key the OS reports released; a key without that falls
-      // back to Tap rather than failing the pick. The card below the box shows
-      // the switch, with Hold disabled and the reason on it.
+      // A key the OS cannot see released falls back to Tap rather than failing
+      // the pick; the card below shows Hold disabled with the reason.
       if (activationMode === "push") {
         const info = await window.electronAPI?.getHotkeyModeInfo?.(value);
         if (info && !info.supportsPushToTalk) setActivationMode("tap");
@@ -923,8 +919,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? "onboarding.rehaul.assistantHotkey.title"
                   : "onboarding.rehaul.dictationHotkey.title"
               )}
-              // The assistant step carries a preview image, so its header runs
-              // one line each to leave the image room without a scroll.
+              // The assistant step's preview image needs the room a two-line header takes.
               titleLines={
                 assistant
                   ? undefined
@@ -1038,8 +1033,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? "onboarding.rehaul.assistantDemo.title"
                   : "onboarding.rehaul.dictationDemo.title"
               )}
-              // The assistant demo's card is tall, so its title runs one line to
-              // leave the reply box room without a scroll.
+              // The assistant demo's card is tall, so its title runs one line.
               titleLines={
                 assistant
                   ? undefined

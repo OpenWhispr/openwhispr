@@ -510,10 +510,8 @@ export const useAudioRecording = (toast, options = {}) => {
                 : null,
             };
             if (localStorage.getItem("onboardingCompleted") !== "true") {
-              // The onboarding demo owns the result surface: the assistant panel
-              // would cover the flow, so a headless responder answers instead
-              // and streams the reply back through the demo events. The demo
-              // stays in "processing" until that reply completes.
+              // The assistant panel would cover the onboarding flow, so a headless
+              // responder answers and streams the reply back as demo events.
               onDemoEventRef.current?.({
                 kind: demoKindRef.current,
                 status: "processing",
@@ -887,8 +885,7 @@ export const useAudioRecording = (toast, options = {}) => {
     const reportAudioLevel = () => {
       const level = getAudioLevel();
       if (level === null) return;
-      // The onboarding demo's pill draws the same waveform from these levels;
-      // the callback drops them once onboarding is complete.
+      // The onboarding demo's pill draws its waveform from these levels.
       onDemoEventRef.current?.({ kind: demoKindRef.current, status: "level", level });
       // The companion pill only exists while the Agent panel is open — with
       // the panel closed there is nobody to mirror levels to, so skip the

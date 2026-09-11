@@ -46,12 +46,9 @@ export function ActivationModeSelector({
   const styles = STYLES[variant];
 
   return (
-    // Two equal columns sized to the wider option, so the half-width indicator
-    // always covers exactly one of them.
+    // Two equal columns, so the half-width indicator covers exactly one option
+    // and a single full-width translate lands it under the other.
     <div className={`relative grid grid-cols-2 transition-colors duration-200 ${styles.track}`}>
-      {/* Sliding indicator: anchored at the track's inner edge and exactly half
-          the inner width, so one full-width translate lands it under the second
-          option with no arithmetic on the padding. */}
       <div
         className={`absolute inset-y-[var(--inset)] start-[var(--inset)] w-[calc(50%-var(--inset))] transition-transform duration-200 ease-out ${styles.indicator} ${
           value === "push" ? "translate-x-full rtl:-translate-x-full" : "translate-x-0"

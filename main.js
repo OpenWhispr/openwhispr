@@ -1072,10 +1072,8 @@ async function startApp() {
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
   await windowManager.createMainWindow();
-  // The activation mode was cached before any hotkey was registered, so a saved
-  // Hold could not be checked against its key then. Now that the key is known,
-  // a Hold it cannot support (a lone regular key on macOS, which would toggle on
-  // every autorepeat) drops back to Tap, and the renderer's setting follows.
+  // The activation mode was cached before the hotkey was registered, so a saved
+  // Hold could not be checked against its key until now.
   if (
     windowManager.getActivationMode() === "push" &&
     !windowManager.hotkeyManager.supportsPushToTalk()
@@ -1111,9 +1109,8 @@ async function startApp() {
   }
 
   // Set up voice agent hotkey (dictation routed straight to the dictation
-  // agent, bypassing cleanup). Tap-only slots gate autorepeat the way the
-  // dictation toggle does, or a held chord starts and stops a recording on
-  // every repeat.
+  // agent, bypassing cleanup). Tap-only slots gate autorepeat like the
+  // dictation toggle does.
   const isVoiceAgentPress = createHotkeyRepeatGate();
   const voiceAgentHotkeyCallback = () => {
     if (!isVoiceAgentPress()) return;

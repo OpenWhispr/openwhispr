@@ -64,11 +64,9 @@ function isMouseButtonHotkey(hotkey) {
   return /^MouseButton[45]$/i.test(hotkey || "");
 }
 
-// macOS only reports a release for keys a native listener watches — Globe,
-// right-side modifiers, mouse buttons — and for modifier chords, whose modifier
-// release ends the hold (startMacCompoundPushToTalk). A lone regular key comes
-// through globalShortcut, which fires again on every autorepeat and never on
-// release: held, it would toggle dictation on and off a few times a second.
+// macOS only reports a release for keys the native listener watches (Globe,
+// right-side modifiers, mouse buttons) and for modifier chords. A lone regular
+// key goes through globalShortcut, which autorepeats and never reports release.
 function lacksMacReleaseSignal(hotkey) {
   return (
     !hotkey.includes("+") &&

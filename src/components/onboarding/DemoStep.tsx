@@ -175,9 +175,8 @@ function DemoVoicePill({
   const busy = status === "processing" || status === "replying";
   const phase = useListeningEntrancePhase(listening);
   const entrance = resolveListeningEntrancePresentation({ isRecording: listening, phase });
-  // Processing collapses to the logo and lights the Signal glow, exactly as the
-  // dictation window's pill does — blue for dictation, purple while the
-  // assistant thinks.
+  // Processing collapses to the logo and lights the Signal glow, as the
+  // dictation window's pill does.
   const activity = resolveVoiceActivityPresentation({
     isRecording: listening,
     isProcessing: busy,
@@ -382,8 +381,6 @@ export default function DemoStep({
             )}
           </div>
 
-          {/* A real text box, because that is the habit being taught: click into
-              any input, press the shortcut, and the words land there. */}
           {messageCount >= 2 && (
             <VoiceSurface
               inputRef={inputRef}
@@ -407,7 +404,6 @@ export default function DemoStep({
             inputRef={inputRef}
             value={draft}
             onChange={setDraft}
-            // Once the request has been heard, the suggestion has done its job.
             placeholder={transcript ? "" : secondMessage}
             event={effectiveEvent}
             transcript={transcript}
@@ -428,10 +424,8 @@ export default function DemoStep({
 }
 
 /**
- * The assistant demo's stage: one message in a mail client, with the reply
- * composer as the voice surface. The card is what the assistant sees when
- * screen context is on, so the sender's name and the ask are spelled out in
- * plain text rather than baked into artwork.
+ * One message in a mail client, with the reply composer as the voice surface.
+ * Screen context reads this card, so the sender and the ask are plain text.
  */
 function EmailThread({ body, children }: { body: string; children: ReactNode }) {
   const { t } = useTranslation();
@@ -456,7 +450,6 @@ function EmailThread({ body, children }: { body: string; children: ReactNode }) 
       </header>
 
       <div className="flex gap-3 px-4 py-3">
-        {/* Letter avatar, the way a mail client draws a sender without a photo. */}
         <span
           aria-hidden="true"
           className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] text-sm font-semibold text-[var(--onboarding-accent)]"
@@ -537,8 +530,7 @@ function VoiceSurface({
 
   return (
     <div
-      // Shared by both demos; the assistant variant fills the row beside its
-      // avatar and runs taller, so a few-sentence reply shows without scrolling.
+      // The assistant variant runs taller so a few-sentence reply fits unscrolled.
       className={`relative flex flex-col rounded-[14px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-3 ${
         embedded ? "h-52 min-w-0 flex-1" : "h-36"
       }`}
@@ -584,8 +576,6 @@ function VoiceSurface({
         {isListening(status) && listeningLabel}
         {status === "processing" && !transcript && processingLabel}
         {ToolIcon && event?.tool && (
-          // The assistant is mid-tool (checking the calendar, say): name it, so
-          // the pause reads as work rather than a stall.
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onboarding-surface-secondary)] px-2 py-1 text-[var(--onboarding-text-primary)]">
             <ToolIcon className="size-3.5 shrink-0" aria-hidden="true" />
             {t(`agentMode.tools.${event.tool}Status`, {

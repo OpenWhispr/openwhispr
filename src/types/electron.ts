@@ -1056,11 +1056,9 @@ export interface ConversationCreateAckResult {
 
 export type OnboardingDemoKind = "dictation" | "assistant";
 /**
- * "partial" carries a streaming transcript. "processing" carries the finished
- * transcript once the assistant demo hands it to the model, and "replying"
- * carries the reply as it streams, so the demo card can show what was heard
- * before what was written. "level" mirrors the microphone level while
- * listening so the demo's pill can draw the same waveform as the real one.
+ * "partial" streams the transcript, "processing" carries the final transcript,
+ * "replying" streams the assistant demo's reply, and "level" mirrors the
+ * microphone level while listening.
  */
 export type OnboardingDemoStatus =
   "listening" | "level" | "processing" | "partial" | "replying" | "success" | "error";

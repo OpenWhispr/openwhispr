@@ -11,15 +11,10 @@ export interface AssistantDemoEmail {
 }
 
 /**
- * The model-side form of the assistant demo's spoken request. The card shows
- * the words as spoken; the model additionally gets the email being answered
- * (the same standing a selected message has in the real flow) and is told to
- * return the reply itself — the composer is a plain text box, and the chat
- * assistant's usual preamble, markdown and "[Name]" placeholders read as noise
- * in it. It signs nothing: the user's name is theirs to add. And it must be
- * final — the demo has no follow-up turn, so a question back ("which hours
- * should I check?") is a dead end; the assumptions it would ask about are
- * supplied instead.
+ * The model-side form of the assistant demo's spoken request: the email being
+ * answered plus instructions for a bare, final reply. The composer is a plain
+ * text box, and the demo has no follow-up turn, so preamble, markdown,
+ * placeholders and questions back are all dead ends.
  */
 export function buildAssistantDemoRequest(spoken: string, email: AssistantDemoEmail): string {
   const firstName = email.senderName.trim().split(/\s+/)[0] ?? email.senderName;

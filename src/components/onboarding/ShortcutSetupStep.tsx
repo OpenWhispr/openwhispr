@@ -67,10 +67,8 @@ interface ShortcutSetupStepProps {
 }
 
 /**
- * Opens empty and listening: the first thing the user does is press the key they
- * want, and the recommendations sit right under the box as one-click picks.
- * Either way the key is registered on the spot; "Choose another shortcut" is the
- * way out.
+ * Opens empty and listening, with the recommendations as one-click picks; either
+ * way the key is registered on the spot.
  */
 export default function ShortcutSetupStep({
   value,
@@ -87,8 +85,7 @@ export default function ShortcutSetupStep({
 }: ShortcutSetupStepProps) {
   const { t } = useTranslation();
   const recommendations = Array.isArray(recommended) ? recommended : [recommended];
-  // Only a chord the user already confirmed reopens in the box; a resumed step
-  // must not ask for it again.
+  // Only a chord the user already confirmed reopens in the box.
   const [candidate, setCandidate] = useState(initiallyConfirmed ? value : "");
   const [confirmed, setConfirmed] = useState(Boolean(initiallyConfirmed && value));
   const [error, setError] = useState<string | null>(null);
@@ -186,8 +183,6 @@ export default function ShortcutSetupStep({
         </div>
       )}
 
-      {/* One row under the box carries whatever comes next: the picks while it is
-          empty, the way out once a key is in it. */}
       <div
         className={`flex flex-wrap items-center justify-center leading-[1.4] text-[var(--onboarding-text-tertiary)] ${
           dense ? "mt-3 gap-2 text-sm" : "mt-6 gap-3 text-base"

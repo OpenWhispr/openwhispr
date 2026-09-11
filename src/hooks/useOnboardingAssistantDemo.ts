@@ -13,14 +13,10 @@ export interface OnboardingAssistantCommand {
 type DemoEventInput = Omit<OnboardingDemoEvent, "demoId" | "kind">;
 
 /**
- * Answers the onboarding assistant demo without the assistant panel. The demo
- * card lives in the onboarding window, but the screenshot, tool registry and
- * Voice Assistant scope all live here in the dictation window, so the command
- * runs through the panel's own streaming pipeline and the reply travels back
- * as demo events: "replying" while it streams (naming the running tool, so the
- * card can show the calendar being checked) and "success" once it lands.
- * Anything that ends the stream without a reply — a provider error, a policy
- * restriction, an empty completion — surfaces as "error" with that text.
+ * Answers the onboarding assistant demo headlessly from the dictation window,
+ * where the screenshot, tool registry and Voice Assistant scope live. The reply
+ * travels back as demo events: "replying" while it streams, "success" once it
+ * lands, and "error" when the stream ends without a reply.
  */
 export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => void) {
   const { t } = useTranslation();
@@ -47,8 +43,6 @@ export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => v
   return useCallback(
     (command: OnboardingAssistantCommand) => {
       repliedRef.current = false;
-      // The card shows the words as spoken; the model gets them with the email
-      // being answered and the shape the composer needs (see the builder).
       const request = buildAssistantDemoRequest(command.text, {
         senderName: t("onboarding.rehaul.assistantDemo.email.senderName"),
         subject: t("onboarding.rehaul.assistantDemo.email.subject"),

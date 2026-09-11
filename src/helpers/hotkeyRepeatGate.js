@@ -1,10 +1,7 @@
-// A held key re-fires globalShortcut on every keyboard autorepeat and never
-// reports the release: macOS starts repeating 225–375ms after the press by
-// default and then every 30–90ms, and Windows' RegisterHotKey repeats the same
-// way. A tap-to-toggle hotkey would start and stop dictation a few times a
-// second for as long as the key is down. Every fire inside the window of the
-// previous fire is a repeat, and each repeat renews the window, so one hold is
-// exactly one press however long it lasts.
+// A held key re-fires globalShortcut on every autorepeat (macOS: first after
+// 225–375ms, then every 30–90ms) and never reports the release. Fires inside
+// the window of the previous fire are repeats and renew the window, so one
+// hold is one press however long it lasts.
 const HOTKEY_REPEAT_WINDOW_MS = 600;
 
 function createHotkeyRepeatGate(windowMs = HOTKEY_REPEAT_WINDOW_MS, now = Date.now) {
