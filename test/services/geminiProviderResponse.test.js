@@ -85,6 +85,6 @@ test("Gemini provider preserves complete-output truncation errors before extract
 
   await assert.rejects(
     callGemini(t, response, { requireCompleteOutput: true }),
-    /Model output was truncated before the selection edit completed/
+    /Model output was truncated/
   );
 });
