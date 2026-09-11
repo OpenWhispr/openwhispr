@@ -1926,7 +1926,7 @@
         "title": "قم بإعداد OpenWhispr Assistant",
         "titleLineOne": "قم بإعداد",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "قل ما تريده بصوتك، وسيكتب OpenWhispr Assistant النتيجة لك."
+        "description": "قل طلبك، وسيكتب OpenWhispr Assistant النتيجة لك."
       },
       "hotkey": {
         "capture": "اضغط على المفتاح الذي تريد استخدامه",

@@ -237,7 +237,7 @@
         "title": "Set up OpenWhispr Assistant",
         "titleLineOne": "Set up",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you."
+        "description": "Speak a request. OpenWhispr Assistant writes the result for you."
       },
       "hotkey": {
         "capture": "Press the key you want to use",

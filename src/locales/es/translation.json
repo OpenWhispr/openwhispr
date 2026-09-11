@@ -237,7 +237,7 @@
         "title": "Configura OpenWhispr Assistant",
         "titleLineOne": "Configura",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Di lo que necesitas y OpenWhispr Assistant escribe el resultado por ti."
+        "description": "Di lo que necesitas. OpenWhispr Assistant escribe el resultado por ti."
       },
       "hotkey": {
         "capture": "Pulsa la tecla que quieras usar",

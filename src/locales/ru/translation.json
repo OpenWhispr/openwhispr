@@ -237,7 +237,7 @@
         "title": "Настройте OpenWhispr Assistant",
         "titleLineOne": "Настройте",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Произнесите запрос, и OpenWhispr Assistant напишет результат за вас."
+        "description": "Скажите, что нужно. OpenWhispr Assistant напишет результат за вас."
       },
       "hotkey": {
         "capture": "Нажмите клавишу, которую хотите использовать",

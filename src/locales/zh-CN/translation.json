@@ -237,7 +237,7 @@
         "title": "设置 OpenWhispr Assistant",
         "titleLineOne": "设置",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "说出你的需求，OpenWhispr Assistant 就会为你写好结果。"
+        "description": "说出你的请求，OpenWhispr Assistant 会为你写好结果。"
       },
       "hotkey": {
         "capture": "请按下你想使用的按键",

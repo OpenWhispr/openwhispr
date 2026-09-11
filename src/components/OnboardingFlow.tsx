@@ -923,17 +923,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? "onboarding.rehaul.assistantHotkey.title"
                   : "onboarding.rehaul.dictationHotkey.title"
               )}
+              // The assistant step carries a preview image, so its header runs
+              // one line each to leave the image room without a scroll.
               titleLines={
                 assistant
-                  ? [
-                      t("onboarding.rehaul.assistantHotkey.titleLineOne"),
-                      t("onboarding.rehaul.assistantHotkey.titleLineTwo"),
-                    ]
+                  ? undefined
                   : [
                       t("onboarding.rehaul.dictationHotkey.titleLineOne"),
                       t("onboarding.rehaul.dictationHotkey.titleLineTwo"),
                     ]
               }
+              wideTitle={assistant}
+              wideDescription={assistant}
               description={t(
                 assistant
                   ? "onboarding.rehaul.assistantHotkey.description"

@@ -123,18 +123,23 @@ export function OnboardingStepHeader({
   description,
   descriptionLines,
   wideTitle = false,
+  wideDescription = false,
 }: {
   title: string;
   titleLines?: string[];
   description?: ReactNode;
   descriptionLines?: string[];
   wideTitle?: boolean;
+  /** Lets a short description run as one line instead of wrapping at 20rem. */
+  wideDescription?: boolean;
 }) {
   return (
-    <header className="mx-auto w-full max-w-md space-y-3 text-center">
+    <header
+      className={`mx-auto w-full space-y-3 text-center ${wideTitle ? "max-w-lg" : "max-w-md"}`}
+    >
       <h1
         // titleLines already carries the authored line breaks. Lines can still
-        // wrap inside the header's 32rem cap when a translation runs long.
+        // wrap inside the header's cap when a translation runs long.
         className={`onboarding-display-title mx-auto text-[var(--onboarding-text-primary)] ${
           wideTitle || titleLines ? "max-w-none" : "max-w-xs"
         }`}
@@ -155,7 +160,11 @@ export function OnboardingStepHeader({
         )}
       </h1>
       {(description || descriptionLines) && (
-        <p className="mx-auto max-w-xs text-balance text-sm leading-[1.5] text-[var(--onboarding-text-secondary)]">
+        <p
+          className={`mx-auto text-balance text-sm leading-[1.5] text-[var(--onboarding-text-secondary)] ${
+            wideDescription ? "max-w-none" : "max-w-xs"
+          }`}
+        >
           {descriptionLines ? (
             <>
               <span className="sr-only">{description}</span>

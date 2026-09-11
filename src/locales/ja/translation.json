@@ -237,7 +237,7 @@
         "title": "OpenWhispr Assistant を設定",
         "titleLineOne": "セットアップ",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "話しかけるだけで、OpenWhispr Assistant が結果を書き上げます。"
+        "description": "頼みごとを話すだけ。OpenWhispr Assistant が結果を書きます。"
       },
       "hotkey": {
         "capture": "使いたいキーを押してください",
