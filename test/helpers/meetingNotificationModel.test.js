@@ -23,6 +23,24 @@ test("auto-end presentation has countdown copy, Restart action, and dismissal", 
   );
 });
 
+// Main sets canSummarize from the note itself, so the card only offers a summary
+// when there is a transcript to summarize and no summary already.
+test("auto-end presentation offers the AI summary only when the note can be summarized", async () => {
+  const { getMeetingNotificationPresentation } = await load();
+  const presentationFor = (canSummarize) =>
+    getMeetingNotificationPresentation(
+      { kind: "auto-end", sessionId: "meeting-2", expiresAt: 40_001, canSummarize },
+      12
+    );
+
+  assert.equal(presentationFor(true).secondaryActionKey, "meetingNotification.autoEnd.summary");
+  assert.equal(presentationFor(true).secondaryAction, "summary");
+  // The restart offer is unchanged by the addition.
+  assert.equal(presentationFor(true).action, "restart");
+  assert.equal("secondaryActionKey" in presentationFor(false), false);
+  assert.equal("secondaryActionKey" in presentationFor(undefined), false);
+});
+
 test("auto-end presentation picks body copy by reason and defaults to mic-released", async () => {
   const { getMeetingNotificationPresentation } = await load();
   const bodyFor = (reason) =>

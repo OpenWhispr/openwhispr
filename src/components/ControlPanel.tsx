@@ -409,6 +409,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       }
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
+      if (data.generateSummary) setSummaryRequest({ noteId: data.noteId });
     };
     drain();
     const cleanup = window.electronAPI?.onNoteNavigationPending?.(drain);
@@ -447,6 +448,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     () => setMeetingRecordingRequest(null),
     []
   );
+
+  // Set by the auto-end card's summary action, which routes through the note
+  // navigation queue so the panel is surfaced and the note opened first.
+  const [summaryRequest, setSummaryRequest] = useState<{ noteId: number } | null>(null);
+  const handleSummaryRequestHandled = useCallback(() => setSummaryRequest(null), []);
 
   // The side-panel layout is shared by meeting mode and by a note opened in a
   // narrow window, so leaving it means different things in each case.
@@ -1159,6 +1165,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     }}
                     meetingRecordingRequest={meetingRecordingRequest}
                     onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
+                    summaryRequest={summaryRequest}
+                    onSummaryRequestHandled={handleSummaryRequestHandled}
                     invitationEntry={invitationNotesEntry}
                     onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
                     topBarActions={topBarActions}

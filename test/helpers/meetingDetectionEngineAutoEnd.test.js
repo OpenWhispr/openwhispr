@@ -115,7 +115,7 @@ class FakeMeetingProcessDetector extends EventEmitter {
   }
 }
 
-function createEngine(windowManagerOverrides = {}) {
+function createEngine(windowManagerOverrides = {}, { databaseManager = {} } = {}) {
   const clock = createClock();
   const audioActivityDetector = new FakeAudioActivityDetector();
   const meetingProcessDetector = new FakeMeetingProcessDetector();
@@ -140,7 +140,7 @@ function createEngine(windowManagerOverrides = {}) {
     meetingProcessDetector,
     audioActivityDetector,
     windowManager,
-    {},
+    databaseManager,
     {
       now: clock.now,
       setInterval: clock.setInterval,
@@ -170,11 +170,12 @@ function createEngine(windowManagerOverrides = {}) {
   };
 }
 
-async function triggerOwnershipStop(engineHarness, ownerWebContents) {
+async function triggerOwnershipStop(engineHarness, ownerWebContents, { noteId = null } = {}) {
   await engineHarness.engine.beginRecordingSession({
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents,
+    noteId,
     systemAudioAvailable: true,
   });
   engineHarness.clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
@@ -389,6 +390,8 @@ test("the recovery notice appears only after the owning renderer confirms stop c
       sessionId: "meeting-1",
       reason: "mic-released",
       expiresAt: harness.clock.now() + RESTART_WINDOW_MS,
+      // This harness has no database, so the card cannot offer a summary.
+      canSummarize: false,
     },
   ]);
   harness.engine.stop();
@@ -461,6 +464,77 @@ test("dismiss response clears the recovery offer without restarting", async () =
     false
   );
   assert.deepEqual(harness.dismissedAutoEndNotifications, ["meeting-1"]);
+  harness.engine.stop();
+});
+
+// The card's summary offer follows the note, not the auto-end reason: a note with
+// nothing transcribed, or one that already has a summary, must not be offered one.
+test("the auto-end card offers a summary only for an unsummarized transcript", async () => {
+  const summarizable = createEngine(
+    {},
+    { databaseManager: { getNote: () => ({ id: 7, transcript: "SPEAKER_00: hi", folder_id: 3 }) } }
+  );
+  const owner = summarizable.owner([]);
+  await triggerOwnershipStop(summarizable, owner, { noteId: 7 });
+  summarizable.engine.endRecordingSession("meeting-1");
+  await summarizable.engine.completeAutoEndSession("meeting-1", owner);
+
+  assert.equal(summarizable.autoEndNotifications.at(-1).canSummarize, true);
+  summarizable.engine.stop();
+
+  const alreadySummarized = createEngine(
+    {},
+    {
+      databaseManager: {
+        getNote: () => ({ id: 7, transcript: "SPEAKER_00: hi", enhanced_content: "# Notes" }),
+      },
+    }
+  );
+  const secondOwner = alreadySummarized.owner([]);
+  await triggerOwnershipStop(alreadySummarized, secondOwner, { noteId: 7 });
+  alreadySummarized.engine.endRecordingSession("meeting-1");
+  await alreadySummarized.engine.completeAutoEndSession("meeting-1", secondOwner);
+
+  assert.equal(alreadySummarized.autoEndNotifications.at(-1).canSummarize, false);
+  alreadySummarized.engine.stop();
+});
+
+test("the summary response opens the note for its summary and ends the offer", async () => {
+  const navigations = [];
+  const harness = createEngine(
+    { queueNoteNavigation: async (payload) => navigations.push(payload) },
+    { databaseManager: { getNote: () => ({ id: 7, transcript: "SPEAKER_00: hi", folder_id: 3 }) } }
+  );
+  const messages = [];
+  const ownerWebContents = harness.owner(messages);
+  await triggerOwnershipStop(harness, ownerWebContents, { noteId: 7 });
+  harness.engine.endRecordingSession("meeting-1");
+  await harness.engine.completeAutoEndSession("meeting-1", ownerWebContents);
+
+  assert.equal(
+    harness.engine.respondToAutoEndNotification(
+      "meeting-1",
+      "summary",
+      harness.overlayWebContents
+    ),
+    true
+  );
+  assert.deepEqual(navigations, [{ noteId: 7, folderId: 3, generateSummary: true }]);
+  // A summary leaves the recording stopped, so nothing restarts.
+  assert.equal(
+    messages.some(({ channel }) => channel === "meeting-auto-end-restart-requested"),
+    false
+  );
+  assert.deepEqual(harness.dismissedAutoEndNotifications, ["meeting-1"]);
+  // Single-use, like the restart and dismiss responses.
+  assert.equal(
+    harness.engine.respondToAutoEndNotification(
+      "meeting-1",
+      "summary",
+      harness.overlayWebContents
+    ),
+    false
+  );
   harness.engine.stop();
 });
 

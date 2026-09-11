@@ -39,13 +39,17 @@ test("stop-completion validation rejects invalid, stale, and non-owning sessions
   ]);
 });
 
-test("overlay response validation accepts only restart or dismiss for a live offer", () => {
+test("overlay response validation accepts restart, summary or dismiss for a live offer", () => {
   const overlay = { id: "overlay" };
   const calls = [];
   const engine = {
     respondToAutoEndNotification: (sessionId, action, sender) => {
       calls.push({ sessionId, action, sender });
-      return sessionId === "meeting-2" && action === "restart" && sender === overlay;
+      return (
+        sessionId === "meeting-2" &&
+        (action === "restart" || action === "summary") &&
+        sender === overlay
+      );
     },
   };
 
@@ -64,9 +68,13 @@ test("overlay response validation accepts only restart or dismiss for a live off
   assert.deepEqual(respondToMeetingAutoEndNotification(engine, "meeting-2", "restart", overlay), {
     success: true,
   });
+  assert.deepEqual(respondToMeetingAutoEndNotification(engine, "meeting-2", "summary", overlay), {
+    success: true,
+  });
   assert.deepEqual(calls, [
     { sessionId: "meeting-1", action: "dismiss", sender: overlay },
     { sessionId: "meeting-2", action: "restart", sender: overlay },
+    { sessionId: "meeting-2", action: "summary", sender: overlay },
   ]);
 });
 

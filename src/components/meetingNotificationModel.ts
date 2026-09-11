@@ -17,6 +17,9 @@ interface AutoEndPresentation {
   bodyValues: { seconds: number };
   actionKey: "meetingNotification.autoEnd.restart";
   action: "restart";
+  /** Only present when the auto-ended note has something to summarize. */
+  secondaryActionKey?: "meetingNotification.autoEnd.summary";
+  secondaryAction?: "summary";
   dismissible: true;
   allowTitleWrap: true;
 }
@@ -57,6 +60,12 @@ export function getMeetingNotificationPresentation(
       bodyValues: { seconds: secondsRemaining },
       actionKey: "meetingNotification.autoEnd.restart",
       action: "restart",
+      ...(data.canSummarize
+        ? {
+            secondaryActionKey: "meetingNotification.autoEnd.summary" as const,
+            secondaryAction: "summary" as const,
+          }
+        : {}),
       dismissible: true,
       allowTitleWrap: true,
     };

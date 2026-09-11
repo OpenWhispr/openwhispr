@@ -17,6 +17,7 @@ const AUTO_END_RESTART_GRACE_MS = 5 * 60_000;
 // with a reload, or a manual recording won the race), so an unclaimed grace has
 // to lapse rather than wait to be taken by whatever recording starts next.
 const AUTO_END_RESTART_CLAIM_MS = 30_000;
+const MEETING_AUTO_END_ACTIONS = new Set(["restart", "summary", "dismiss"]);
 
 const PLACEHOLDER_PREFIX = { __detected__: "detected", __manual__: "manual" };
 
@@ -155,6 +156,8 @@ class MeetingDetectionEngine {
       sessionId,
       reason,
       ownerWebContents,
+      // Carried so the recovery card can offer this note's AI summary.
+      noteId: session.noteId ?? null,
       expiresAt: null,
     };
     try {
@@ -207,6 +210,7 @@ class MeetingDetectionEngine {
         sessionId,
         reason: pending.reason,
         expiresAt,
+        canSummarize: this._canSummarizeNote(pending.noteId),
       });
       if (this._pendingAutoEnd !== pending) return false;
       // Only an explicit success offers the restart: anything else (a missing
@@ -235,9 +239,46 @@ class MeetingDetectionEngine {
     }
   }
 
+  // The renderer persists the final transcript before it acknowledges the stop,
+  // so the database is the authority on whether there is anything to summarize.
+  _canSummarizeNote(noteId) {
+    if (noteId == null) return false;
+    try {
+      const note = this.databaseManager?.getNote?.(noteId);
+      return !!note?.transcript && !note?.enhanced_content;
+    } catch (error) {
+      debugLogger.error(
+        "Could not check whether the auto-ended note can be summarized",
+        { error: error?.message, noteId },
+        "meeting"
+      );
+      return false;
+    }
+  }
+
+  // Routed through the note-navigation queue so the control panel is created,
+  // surfaced and pointed at the note before the notes view runs the action.
+  async _openNoteForSummary(noteId) {
+    if (noteId == null) return;
+    try {
+      const note = this.databaseManager?.getNote?.(noteId);
+      await this.windowManager.queueNoteNavigation?.({
+        noteId,
+        folderId: note?.folder_id ?? null,
+        generateSummary: true,
+      });
+    } catch (error) {
+      debugLogger.error(
+        "Failed to open the auto-ended note for its AI summary",
+        { error: error?.message, noteId },
+        "meeting"
+      );
+    }
+  }
+
   respondToAutoEndNotification(sessionId, action, responderWebContents) {
     if (
-      (action !== "restart" && action !== "dismiss") ||
+      !MEETING_AUTO_END_ACTIONS.has(action) ||
       !this.windowManager.isMeetingNotificationSender?.(responderWebContents)
     ) {
       return false;
@@ -255,6 +296,14 @@ class MeetingDetectionEngine {
     this._clearAutoEndRecovery();
     if (action === "dismiss") {
       this._flushNotificationQueue();
+      return true;
+    }
+
+    // Summary ends the offer like a dismissal — the recording is staying
+    // stopped — and additionally opens the note to generate its summary.
+    if (action === "summary") {
+      this._flushNotificationQueue();
+      void this._openNoteForSummary(pending.noteId ?? null);
       return true;
     }
 

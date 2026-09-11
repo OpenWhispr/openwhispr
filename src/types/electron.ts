@@ -96,6 +96,9 @@ export interface MeetingAutoEndNotificationData {
   sessionId: string;
   expiresAt: number;
   reason?: MeetingAutoEndReason;
+  /** True when the auto-ended note has a transcript and no AI summary yet, which
+   * is when the card also offers to generate one. */
+  canSummarize?: boolean;
 }
 
 export type MeetingNotificationData =
@@ -106,7 +109,7 @@ export interface MeetingAutoEndRequest {
   reason?: MeetingAutoEndReason;
 }
 
-export type MeetingAutoEndAction = "restart" | "dismiss";
+export type MeetingAutoEndAction = "restart" | "summary" | "dismiss";
 
 export interface MeetingAutoEndRestartRequest {
   sessionId: string;
@@ -3166,6 +3169,8 @@ declare global {
       getPendingNoteNavigation?: () => Promise<{
         noteId: number;
         folderId: number | null;
+        /** Set by the auto-end card's summary action: open the note and run its AI summary. */
+        generateSummary?: boolean;
       } | null>;
       onNoteNavigationPending?: (callback: () => void) => () => void;
       onPreviewText?: (callback: (text: string) => void) => () => void;
