@@ -11,10 +11,18 @@ import type {
   AnalyticsSyncContext,
   PendingAnalyticsEvent,
 } from "../types/electron";
+import { ANALYTICS_HISTORICAL_COUNTER_VERSION } from "../helpers/analytics";
 
 const BATCH_SIZE = 200;
+// A pass uploads at most this many batches. Insights waits on a pass before
+// it can read the account summary, so an unbounded drain would hold the view's
+// spinner — and hammer the batch endpoint — for the length of a whole history
+// backfill. What is left over stays pending and still counts as moved work,
+// which keeps the ambient pass cadence tight until the queue is empty.
+const MAX_BATCHES_PER_PASS = 5;
 export const ANALYTICS_SUMMARY_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const ANALYTICS_REMOTE_REFRESH_DEBOUNCE_MS = 250;
+const requestedHistoryBackfillAccounts = new Set<string>();
 
 export function subscribeToAnalyticsRefresh(
   refresh: () => void | Promise<void>,
@@ -209,7 +217,7 @@ async function runAnalyticsPass({
   // batch and one stuck row costs an extra POST per batch behind it.
   const offered = new Set<string>();
 
-  while (true) {
+  for (let batch = 0; batch < MAX_BATCHES_PER_PASS; batch += 1) {
     // Re-check between batches. Revoking consent while a >200-row drain is in
     // flight cannot cancel the active request, but it must stop the next one.
     if (!(await canUpload())) return synced;
@@ -221,26 +229,34 @@ async function runAnalyticsPass({
     if (fresh.length === 0) return synced;
     for (const event of fresh) offered.add(event.event_id);
 
-    // `accepted` is an ack list, not a list of stored rows. The endpoint
-    // validates per event and deliberately echoes back the ids it refused as
-    // permanently invalid, so marking exactly `accepted` as synced is what
-    // retires them. Narrowing this to the ids that were actually stored -- or
-    // deriving it from the sibling `rejected` field -- would leave a row that
-    // can never validate at the head of the queue forever. A batch the server
-    // refuses outright throws and stays pending for the next pass.
+    // `accepted` is an ack list, not a list of stored rows. Only a capable API
+    // can distinguish a permanently invalid version-zero row from an older
+    // deployment rejecting that version altogether. Keep those ids pending
+    // when the capability is absent so an API rollback cannot destroy history.
     if (!(await canUpload())) return synced;
-    const result = await postToCloud<{ accepted: string[] }>(
-      "/api/analytics/events/batch",
-      { events: fresh },
-      context
-    );
+    const result = await postToCloud<{
+      accepted?: string[];
+      rejected?: string[];
+      supportsHistoricalCounterVersion?: boolean;
+    }>("/api/analytics/events/batch", { events: fresh }, context);
     const accepted = Array.isArray(result?.accepted) ? result.accepted : [];
+    const rejected = new Set(Array.isArray(result?.rejected) ? result.rejected : []);
+    const historicalEventIds = new Set(
+      fresh
+        .filter((event) => event.counter_version === ANALYTICS_HISTORICAL_COUNTER_VERSION)
+        .map((event) => event.event_id)
+    );
+    const acknowledged =
+      result?.supportsHistoricalCounterVersion === true
+        ? accepted
+        : accepted.filter((eventId) => !rejected.has(eventId) || !historicalEventIds.has(eventId));
 
-    const { updated } = await window.electronAPI.markAnalyticsEventsSynced(accepted, context);
+    const { updated } = await window.electronAPI.markAnalyticsEventsSynced(acknowledged, context);
     synced += updated;
     // The whole queue fit in one read, so there is nothing behind this batch.
     if (events.length < BATCH_SIZE) return synced;
   }
+  return synced;
 }
 
 const REQUIRED_NONNEGATIVE_SUMMARY_FIELDS = [
@@ -284,26 +300,52 @@ function isAnalyticsSummary(value: unknown): value is AnalyticsSummary {
     value.averageWpm === null || isNonnegativeFiniteNumber(value.averageWpm);
   const coverageIsValid =
     isNonnegativeFiniteNumber(value.wpmCoveragePercent) && value.wpmCoveragePercent <= 100;
+  const retryHintIsValid =
+    value.historyBackfillRetryRequired === undefined ||
+    typeof value.historyBackfillRetryRequired === "boolean";
   return (
     totalsAreValid &&
     averageWpmIsValid &&
     coverageIsValid &&
+    retryHintIsValid &&
     Array.isArray(value.daily) &&
     value.daily.length <= 366 &&
     value.daily.every(isAnalyticsDailyBucket)
   );
 }
 
-export async function getAccountAnalyticsSummary(): Promise<AnalyticsSummary> {
+export async function getAccountAnalyticsSummary(
+  accountId: string | null = null
+): Promise<AnalyticsSummary> {
+  const requestHistoryBackfill = Boolean(
+    accountId && !requestedHistoryBackfillAccounts.has(accountId)
+  );
+  if (requestHistoryBackfill && accountId) requestedHistoryBackfillAccounts.add(accountId);
   const params = new URLSearchParams({
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   });
-  const summary = await cloudGet<unknown>(`/api/analytics/summary?${params}`);
+  if (requestHistoryBackfill) params.set("backfill", "true");
+
+  let summary: unknown;
+  try {
+    summary = await cloudGet<unknown>(`/api/analytics/summary?${params}`);
+  } catch (error) {
+    // A transient first request must not permanently suppress reconciliation.
+    // The Set is claimed before I/O so overlapping refreshes still collapse to
+    // one trigger for this account and renderer process.
+    if (requestHistoryBackfill && accountId) requestedHistoryBackfillAccounts.delete(accountId);
+    throw error;
+  }
   // The cloud is an untrusted JSON boundary. Invalid buckets crash Heatmap
   // during render, outside the caller's async fallback, so validate the whole
-  // shape before any part of it reaches component state.
+  // shape before any part of it reaches component state. A successful request
+  // already triggered history reconciliation; malformed presentation data
+  // must not start another continuation chain on the next refresh.
   if (!isAnalyticsSummary(summary)) {
     throw new Error("Malformed analytics summary from cloud");
+  }
+  if (requestHistoryBackfill && accountId && summary.historyBackfillRetryRequired === true) {
+    requestedHistoryBackfillAccounts.delete(accountId);
   }
   return summary;
 }

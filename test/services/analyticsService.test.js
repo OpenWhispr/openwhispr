@@ -300,6 +300,104 @@ test("account analytics sends UTC when the runtime exposes no timezone", async (
   assert.equal(requestUrl.searchParams.get("timeZone"), "UTC");
 });
 
+test("account analytics requests history once per account and not on ordinary refreshes", async (t) => {
+  const requests = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return {
+            success: true,
+            data: { ...VALID_SUMMARY, scope: "account", timeZone: "UTC" },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { getAccountAnalyticsSummary } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  await getAccountAnalyticsSummary("account-a");
+  await getAccountAnalyticsSummary("account-a");
+  await getAccountAnalyticsSummary("account-b");
+  await getAccountAnalyticsSummary();
+
+  assert.deepEqual(
+    requests.map((request) =>
+      new URL(request.path, "https://api.openwhispr.com").searchParams.get("backfill")
+    ),
+    ["true", null, "true", null]
+  );
+});
+
+test("account analytics retries the history trigger after a failed request", async (t) => {
+  const requests = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          if (requests.length === 1) {
+            return { success: false, status: 503, error: "temporarily unavailable" };
+          }
+          return {
+            success: true,
+            data: { ...VALID_SUMMARY, scope: "account", timeZone: "UTC" },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { getAccountAnalyticsSummary } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  await assert.rejects(getAccountAnalyticsSummary("retry-account"));
+  await getAccountAnalyticsSummary("retry-account");
+
+  assert.deepEqual(
+    requests.map((request) =>
+      new URL(request.path, "https://api.openwhispr.com").searchParams.get("backfill")
+    ),
+    ["true", "true"]
+  );
+});
+
+test("account analytics retries the history trigger when queue scheduling is unavailable", async (t) => {
+  const requests = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return {
+            success: true,
+            data: {
+              ...VALID_SUMMARY,
+              historyBackfillRetryRequired: requests.length === 1,
+            },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { getAccountAnalyticsSummary } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  assert.equal(
+    (await getAccountAnalyticsSummary("queue-retry-account")).historyBackfillRetryRequired,
+    true
+  );
+  await getAccountAnalyticsSummary("queue-retry-account");
+
+  assert.deepEqual(
+    requests.map((request) =>
+      new URL(request.path, "https://api.openwhispr.com").searchParams.get("backfill")
+    ),
+    ["true", "true"]
+  );
+});
+
 for (const [name, daily] of [
   ["a null bucket", [null]],
   ["an impossible date", [{ ...VALID_SUMMARY.daily[0], date: "2026-02-30" }]],
@@ -326,6 +424,37 @@ for (const [name, daily] of [
     await assert.rejects(getAccountAnalyticsSummary(), /Malformed analytics summary from cloud/);
   });
 }
+
+test("a malformed successful summary does not retrigger server history", async (t) => {
+  const requests = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return requests.length === 1
+            ? { success: true, data: { ...VALID_SUMMARY, daily: [null] } }
+            : { success: true, data: VALID_SUMMARY };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { getAccountAnalyticsSummary } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  await assert.rejects(
+    getAccountAnalyticsSummary("malformed-account"),
+    /Malformed analytics summary from cloud/
+  );
+  await getAccountAnalyticsSummary("malformed-account");
+
+  assert.deepEqual(
+    requests.map((request) =>
+      new URL(request.path, "https://api.openwhispr.com").searchParams.get("backfill")
+    ),
+    ["true", null]
+  );
+});
 
 test("analytics refreshes locally on change and remotely only while cloud Insights are active", async (t) => {
   const windowListeners = new Map();
@@ -708,6 +837,53 @@ test("revoking upload consent stops a multi-batch drain after its active request
   assert.equal(retired.has("event-200"), false, "the next batch stays pending after revocation");
 });
 
+test("a history backlog is capped per pass and drains across later passes", async (t) => {
+  // Insights waits on a pass before it can read the account summary, so an
+  // unbounded drain held the view's spinner — and hammered the batch endpoint —
+  // for as long as a whole reconstructed history took to upload.
+  const pending = Array.from({ length: 1400 }, (_, index) => ({
+    ...EVENT,
+    event_id: `event-${index}`,
+    counter_version: 0,
+  }));
+  const retired = new Set();
+  const posted = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => null,
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async (limit) =>
+          pending.filter((event) => !retired.has(event.event_id)).slice(0, limit),
+        markAnalyticsEventsSynced: async (eventIds) => {
+          eventIds.forEach((eventId) => retired.add(eventId));
+          return { success: true, updated: eventIds.length };
+        },
+        cloudApiRequest: async (request) => {
+          posted.push(request.body.events.length);
+          return {
+            success: true,
+            data: {
+              accepted: request.body.events.map((event) => event.event_id),
+              supportsHistoricalCounterVersion: true,
+            },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  assert.equal(await syncPendingAnalytics(), 1000, "a pass stops at its batch budget");
+  assert.equal(posted.length, 5);
+  assert.equal(retired.size, 1000, "the rest of the backlog stays pending");
+
+  assert.equal(await syncPendingAnalytics(), 400, "a later pass drains the remainder");
+  assert.equal(posted.length, 7);
+  assert.equal(retired.size, 1400);
+});
+
 test("analytics queue and cloud operations carry one pinned account context", async (t) => {
   const context = { accountId: "account-1", authGeneration: 17 };
   const localCalls = [];
@@ -790,4 +966,85 @@ test("a withheld row is offered once per pass, not once per batch behind it", as
 
   assert.deepEqual(posted, [["event-0", "event-1", "event-2"]]);
   assert.equal(retired.has("event-0"), false, "the withheld row stays pending for a later pass");
+});
+
+test("rejected version-zero history survives an API rollback and syncs after recovery", async (t) => {
+  const pending = [
+    { ...EVENT, event_id: "history-rejected-by-old-api", counter_version: 0 },
+    { ...EVENT, event_id: "history-stored", counter_version: 0 },
+    { ...EVENT, event_id: "invalid-live-event", counter_version: 1 },
+  ];
+  const retired = new Set();
+  let requests = 0;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => null,
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async () =>
+          pending.filter((event) => !retired.has(event.event_id)),
+        markAnalyticsEventsSynced: async (eventIds) => {
+          eventIds.forEach((eventId) => retired.add(eventId));
+          return { success: true, updated: eventIds.length };
+        },
+        cloudApiRequest: async (request) => {
+          requests += 1;
+          const accepted = request.body.events.map((event) => event.event_id);
+          return {
+            success: true,
+            data:
+              requests === 1
+                ? {
+                    accepted,
+                    rejected: ["history-rejected-by-old-api", "invalid-live-event"],
+                  }
+                : {
+                    accepted,
+                    rejected: [],
+                    supportsHistoricalCounterVersion: true,
+                  },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  assert.equal(await syncPendingAnalytics(), 2);
+  assert.deepEqual([...retired].sort(), ["history-stored", "invalid-live-event"]);
+
+  assert.equal(await syncPendingAnalytics(), 1);
+  assert.equal(retired.has("history-rejected-by-old-api"), true);
+});
+
+test("a capable API can permanently retire invalid version-zero history", async (t) => {
+  const event = { ...EVENT, event_id: "permanently-invalid-history", counter_version: 0 };
+  const retired = new Set();
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => null,
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async () => (retired.has(event.event_id) ? [] : [event]),
+        markAnalyticsEventsSynced: async (eventIds) => {
+          eventIds.forEach((eventId) => retired.add(eventId));
+          return { success: true, updated: eventIds.length };
+        },
+        cloudApiRequest: async () => ({
+          success: true,
+          data: {
+            accepted: [event.event_id],
+            rejected: [event.event_id],
+            supportsHistoricalCounterVersion: true,
+          },
+        }),
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  assert.equal(await syncPendingAnalytics(), 1);
+  assert.equal(retired.has(event.event_id), true);
 });

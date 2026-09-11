@@ -4,6 +4,10 @@
 const DEFAULT_RETENTION_SETTINGS = {
   audioRetentionDays: 30,
   transcriptRetentionDays: 0, // 0 = keep transcripts forever
+  // The renderer's policy-aware "keep local history" switch. Defaults to true
+  // so a renderer that predates this field is never read as history-off, and
+  // so the value only becomes trustworthy once hasSynced() says it is real.
+  dataRetentionEnabled: true,
 };
 
 function toDays(value, fallback) {
@@ -18,10 +22,15 @@ function applyRetentionSettings(current, incoming) {
       incoming?.transcriptRetentionDays,
       current.transcriptRetentionDays
     ),
+    dataRetentionEnabled:
+      typeof incoming?.dataRetentionEnabled === "boolean"
+        ? incoming.dataRetentionEnabled
+        : current.dataRetentionEnabled,
   };
   const changed =
     settings.audioRetentionDays !== current.audioRetentionDays ||
-    settings.transcriptRetentionDays !== current.transcriptRetentionDays;
+    settings.transcriptRetentionDays !== current.transcriptRetentionDays ||
+    settings.dataRetentionEnabled !== current.dataRetentionEnabled;
   return { changed, settings };
 }
 
