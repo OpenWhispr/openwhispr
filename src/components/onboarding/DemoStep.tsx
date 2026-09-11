@@ -150,27 +150,6 @@ function FounderBubble({ children }: { children: ReactNode }) {
 // index.css clamps the duration, and `both` leaves the bubble visible either way.
 const BUBBLE_IN = { animation: "agent-message-in 220ms ease-out both" } as const;
 
-// The user's side of the demo conversation: what they said, as they say it.
-function UserBubble({ children }: { children: ReactNode }) {
-  return (
-    <p
-      dir="auto"
-      className="max-w-[22rem] rounded-[38px] bg-[var(--onboarding-surface-tertiary)] px-4 py-2 text-start text-sm leading-[1.4] text-[var(--onboarding-text-primary)]"
-      style={BUBBLE_IN}
-    >
-      {children}
-    </p>
-  );
-}
-
-/**
- * The real dictation pill, run through its real entrance (thinking hold →
- * expand → waveform) off the demo's events, so what people practise on here is
- * exactly what appears on their screen afterwards. It grows to the left, the
- * way the floating pill does, and the waveform draws the microphone levels the
- * dictation window mirrors over while it listens. Clicking it while listening
- * stops the recording, as clicking the real one does.
- */
 // Streaming transcript partials arrive while the microphone is still open.
 const isListening = (status: OnboardingDemoStatus | undefined) =>
   status === "listening" || status === "partial";
@@ -258,11 +237,15 @@ interface DemoStepProps {
   kind: OnboardingDemoKind;
   firstMessage: string;
   secondMessage: string;
+  /** Dictation only; the assistant card uses secondMessage as its placeholder. */
+  placeholder?: string;
   listeningLabel: string;
   processingLabel: string;
   stopLabel: string;
   retryLabel: string;
   onSuccessChange: (successful: boolean) => void;
+  /** The finished dictation, once the demo succeeds. */
+  onTranscript?: (text: string) => void;
   initialSuccessful?: boolean;
 }
 
@@ -270,11 +253,13 @@ export default function DemoStep({
   kind,
   firstMessage,
   secondMessage,
+  placeholder = "",
   listeningLabel,
   processingLabel,
   stopLabel,
   retryLabel,
   onSuccessChange,
+  onTranscript,
   initialSuccessful = false,
 }: DemoStepProps) {
   const [messageCount, setMessageCount] = useState(0);
@@ -320,13 +305,16 @@ export default function DemoStep({
         if (kind === "assistant" && heard) setTranscript(payload.text);
         else setDraft(payload.text);
       }
-      if (payload.status === "success") onSuccessChange(true);
+      if (payload.status === "success") {
+        onSuccessChange(true);
+        if (payload.text) onTranscript?.(payload.text);
+      }
     });
     return () => {
       unsubscribe?.();
       void window.electronAPI?.endOnboardingDemo?.(demoId);
     };
-  }, [demoId, kind, onSuccessChange]);
+  }, [demoId, kind, onSuccessChange, onTranscript]);
 
   const retry = () => {
     setRestoredSuccessful(false);
@@ -385,33 +373,23 @@ export default function DemoStep({
             )}
           </div>
 
-          {/* The user's turn: their words land as a bubble beside the pill they
-              pressed, so the whole exchange reads as one conversation. */}
+          {/* A real text box, because that is the habit being taught: click into
+              any input, press the shortcut, and the words land there. */}
           {messageCount >= 2 && (
-            <div className="flex flex-col items-end gap-2" aria-live="polite">
-              <div className="flex items-end justify-end gap-2.5">
-                {draft && <UserBubble>{draft}</UserBubble>}
-                <DemoVoicePill
-                  status={status}
-                  getLevel={getLevel}
-                  stopLabel={stopLabel}
-                  onStop={stop}
-                />
-              </div>
-              <p className="min-h-4 text-xs text-[var(--onboarding-text-secondary)]">
-                {isListening(status) && listeningLabel}
-                {status === "processing" && processingLabel}
-                {status === "error" && (
-                  <span className="inline-flex items-center gap-1 text-[var(--onboarding-danger)]">
-                    {effectiveEvent.message}
-                    <Button type="button" variant="ghost" size="sm" onClick={retry}>
-                      <RefreshCw className="size-3" />
-                      {retryLabel}
-                    </Button>
-                  </span>
-                )}
-              </p>
-            </div>
+            <VoiceSurface
+              inputRef={inputRef}
+              value={draft}
+              onChange={setDraft}
+              placeholder={placeholder}
+              event={effectiveEvent}
+              getLevel={getLevel}
+              listeningLabel={listeningLabel}
+              processingLabel={processingLabel}
+              stopLabel={stopLabel}
+              retryLabel={retryLabel}
+              onRetry={retry}
+              onStop={stop}
+            />
           )}
         </div>
       ) : (

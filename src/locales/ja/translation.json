@@ -249,8 +249,9 @@
         "titleLineOne": "最初の",
         "titleLineTwo": "ディクテーションを試す",
         "description": "{{hotkey}} を押して話し始めてください。OpenWhispr が音声をテキストに変換します。",
-        "founder": "こんにちは、OpenWhispr 創業者のゲイブです。試していただきありがとうございます。心を込めて作ったので、使ってもらえて本当にうれしいです。",
-        "prompt": "私たちは使ってくれる皆さんから常に学んでいます。ショートカットを押して教えてください。OpenWhispr に何をしてほしいですか？"
+        "founder": "こんにちは、創業者のゲイブです。OpenWhispr を試してくれてありがとう。",
+        "prompt": "下のボックスをクリックしてショートカットを押し、教えてください。OpenWhispr に何をしてほしいですか？",
+        "placeholder": "ここをクリックしてからショートカットを押してください。OpenWhispr はどんなテキスト欄にも入力します。"
       },
       "assistantDemo": {
         "title": "OpenWhispr Assistant を使ってみる",
@@ -505,8 +506,6 @@
       "titleLineOne": "OpenWhisprを",
       "titleLineTwo": "どう使いますか？",
       "description": "当てはまるものをすべて選んでください。それに合わせてセットアップします。",
-      "noteLabel": "他に伝えておきたいことはありますか？",
-      "notePlaceholder": "OpenWhispr の使い方を教えてください（任意）",
       "proceedToSetup": "設定に進む",
       "options": {
         "dictation": {

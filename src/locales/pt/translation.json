@@ -228,8 +228,9 @@
         "titleLineOne": "Experimente seu",
         "titleLineTwo": "primeiro ditado",
         "description": "Pressione {{hotkey}} e comece a falar. O OpenWhispr vai transformar sua voz em texto.",
-        "founder": "Oi, eu sou o Gabe, fundador do OpenWhispr. Obrigado por experimentar. Colocamos muito carinho nisso, e fico genuinamente grato por você estar aqui.",
-        "prompt": "Estamos sempre aprendendo com quem usa. Pressione seu atalho e me conte: o que você adoraria que o OpenWhispr fizesse por você?"
+        "founder": "Oi, eu sou o Gabe, o fundador. Obrigado por experimentar o OpenWhispr.",
+        "prompt": "Clique na caixa abaixo, pressione seu atalho e me conte: o que você adoraria que o OpenWhispr fizesse por você?",
+        "placeholder": "Clique aqui e depois pressione seu atalho. O OpenWhispr digita em qualquer caixa de texto."
       },
       "assistantDemo": {
         "title": "Conheça o OpenWhispr Assistant",
@@ -484,8 +485,6 @@
       "titleLineOne": "Como você usará",
       "titleLineTwo": "o OpenWhispr?",
       "description": "Escolha todas as opções que se aplicam. Vamos adaptar sua configuração.",
-      "noteLabel": "Algo mais que gostaria de nos contar?",
-      "notePlaceholder": "Conte como você pretende usar o OpenWhispr (opcional)",
       "proceedToSetup": "Continuar a configuração",
       "options": {
         "dictation": {

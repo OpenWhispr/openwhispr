@@ -249,8 +249,9 @@
         "titleLineOne": "试试你的",
         "titleLineTwo": "第一次听写",
         "description": "按 {{hotkey}} 开始说话，OpenWhispr 会把你的语音转成文字。",
-        "founder": "你好，我是 Gabe，OpenWhispr 的创始人。感谢你来试用。我们为它倾注了很多心血，真心感谢你的到来。",
-        "prompt": "我们一直在向用户学习。按下你的快捷键，告诉我：你希望 OpenWhispr 为你做些什么？"
+        "founder": "你好，我是创始人 Gabe。感谢你试用 OpenWhispr。",
+        "prompt": "点击下面的输入框，按下快捷键，然后告诉我：你希望 OpenWhispr 为你做些什么？",
+        "placeholder": "点击这里，然后按下快捷键。OpenWhispr 可以在任何文本框中输入。"
       },
       "assistantDemo": {
         "title": "认识 OpenWhispr Assistant",
@@ -505,8 +506,6 @@
       "titleLineOne": "你会如何使用",
       "titleLineTwo": "OpenWhispr？",
       "description": "选择所有适用项，我们会据此为你定制设置。",
-      "noteLabel": "还有什么想告诉我们的吗？",
-      "notePlaceholder": "告诉我们你打算如何使用 OpenWhispr（可选）",
       "proceedToSetup": "继续设置",
       "options": {
         "dictation": {

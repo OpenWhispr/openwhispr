@@ -108,14 +108,15 @@ export interface OnboardingRouteContext {
 
 // Dictation first, then Notes (the meeting recorder and its calendar
 // connections), then the assistant: the assistant demo suggests meeting times
-// from whatever calendar the Notes step connected.
+// from whatever calendar the Notes step connected. Use cases follow the
+// dictation demo because what the user dictates there is their free-text answer.
 const ACCOUNT_ROUTE: OnboardingStepId[] = [
   "auth",
   "permissions",
   "languages",
-  "use-cases",
   "dictation-hotkey",
   "dictation-demo",
+  "use-cases",
   "notes",
 ];
 
@@ -131,10 +132,10 @@ const STEP_ORDER: OnboardingStepId[] = [
   "required-models",
   "permissions",
   "languages",
-  "use-cases",
   "dictation-hotkey",
   "activation-mode",
   "dictation-demo",
+  "use-cases",
   "notes",
   "assistant-hotkey",
   "assistant-demo",

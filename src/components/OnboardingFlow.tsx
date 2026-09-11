@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { AlertCircle } from "./icons";
 import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
 import UseCaseStep from "./onboarding/UseCaseStep";
-import { hasUseCaseIntent } from "./onboarding/useCases";
 import OnboardingShell, { OnboardingStepHeader } from "./onboarding/OnboardingShell";
 import CompactPermissionsStep from "./onboarding/CompactPermissionsStep";
 import LanguageSelectionStep from "./onboarding/LanguageSelectionStep";
@@ -771,7 +770,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "languages":
         return settings.spokenLanguages.length > 0;
       case "use-cases":
-        return hasUseCaseIntent(settings.onboardingUseCases, settings.onboardingUseCaseNote);
+        return settings.onboardingUseCases.length > 0;
       case "dictation-hotkey":
         return dictationHotkeyConfirmed;
       case "dictation-demo":
@@ -894,8 +893,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <UseCaseStep
               useCases={settings.onboardingUseCases}
               onUseCasesChange={settings.setOnboardingUseCases}
-              note={settings.onboardingUseCaseNote}
-              onNoteChange={settings.setOnboardingUseCaseNote}
             />
           </div>
         );
@@ -1051,11 +1048,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? `onboarding.rehaul.assistantDemo.scenarios.${scenario}.prompt`
                   : "onboarding.rehaul.dictationDemo.prompt"
               )}
+              placeholder={t("onboarding.rehaul.dictationDemo.placeholder")}
               listeningLabel={t("onboarding.rehaul.demo.listening")}
               processingLabel={t("onboarding.rehaul.demo.processing")}
               stopLabel={t("onboarding.rehaul.demo.stop")}
               retryLabel={t("common.retry")}
               onSuccessChange={assistant ? setAssistantDemoSuccess : setDictationDemoSuccess}
+              // The dictation demo asks what the user would love OpenWhispr to
+              // do for them; their answer is the free-text half of the use-case
+              // step that follows.
+              onTranscript={assistant ? undefined : settings.setOnboardingUseCaseNote}
             />
           </div>
         );
