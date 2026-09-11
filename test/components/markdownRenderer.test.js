@@ -29,6 +29,10 @@ test("a GFM table renders as a real table, not literal pipes", async (t) => {
 
   assert.ok(html.includes("<table"), "renders a table element");
   assert.ok(html.includes("<th"), "renders header cells");
+  assert.ok(
+    /<th[^>]*text-start/.test(html),
+    "header cells align to the writing direction, not a physical edge"
+  );
   assert.equal((html.match(/<tr/g) || []).length, 3, "one header row plus two body rows");
   assert.ok(!html.includes("|"), "no literal pipe survives into the output");
 });

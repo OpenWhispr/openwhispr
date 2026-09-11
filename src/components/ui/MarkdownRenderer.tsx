@@ -64,7 +64,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           ),
           // style carries the GFM column alignment (:--, :-:, --:).
           th: ({ children, style }) => (
-            <th style={style} className="px-2 py-1.5 text-left font-semibold align-top">
+            <th style={style} className="px-2 py-1.5 text-start font-semibold align-top">
               {children}
             </th>
           ),
