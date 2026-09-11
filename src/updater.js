@@ -309,6 +309,13 @@ class UpdateManager {
     if (enabled) this._autoDownloadIfEnabled();
   }
 
+  // Reset relaunches the app itself, and installing a downloaded update on that same
+  // quit would replace the executable the relaunch starts (an AppImage even moves to
+  // a new file name). Leave the update for a later quit instead.
+  deferInstallOnQuit() {
+    autoUpdater.autoInstallOnAppQuit = false;
+  }
+
   _autoDownloadIfEnabled() {
     if (!this.autoUpdatesEnabled || !this.updateAvailable) return;
     // downloadUpdate() is a no-op while a download is in flight or complete;

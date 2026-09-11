@@ -7,6 +7,7 @@ const {
   resolveAutoStartState,
   needsHiddenFlagMigration,
   wasLaunchedHidden,
+  getRelaunchOptions,
 } = require("../../src/helpers/autoStartPolicy.js");
 
 // getLoginItemSettings compares the Run value against `"exe" args` verbatim, so
@@ -146,5 +147,44 @@ test("macOS detects a login launch from wasOpenedAtLogin, not from argv", () => 
       loginItemSettings: { wasOpenedAtLogin: false },
     }),
     false
+  );
+});
+
+// Reset app data relaunches a process that may have started at login; carrying the
+// flag over would bring the reset app back in the tray with no window.
+test("a relaunch drops the hidden-launch flag and keeps every other arg", () => {
+  assert.deepEqual(
+    getRelaunchOptions({
+      argv: ["OpenWhispr.exe", HIDDEN_LAUNCH_FLAG, "--log-level=debug"],
+      protocol: "openwhispr",
+    }),
+    { args: ["--log-level=debug"] }
+  );
+});
+
+// Startup handles a deep link found on argv, so replaying a sign-in link would
+// restore the session the reset just cleared.
+test("a relaunch drops the deep link that cold-started the app", () => {
+  assert.deepEqual(
+    getRelaunchOptions({
+      argv: [
+        "OpenWhispr.exe",
+        "openwhispr://auth/callback?bearer_token=stale",
+        "--proxy-server=http://proxy:8080",
+      ],
+      protocol: "openwhispr",
+    }),
+    { args: ["--proxy-server=http://proxy:8080"] }
+  );
+});
+
+test("an AppImage relaunches the AppImage file, not its FUSE mount", () => {
+  assert.deepEqual(
+    getRelaunchOptions({
+      argv: ["/tmp/.mount_OpenWh/open-whispr", "--no-sandbox"],
+      protocol: "openwhispr",
+      appImagePath: "/home/user/OpenWhispr.AppImage",
+    }),
+    { execPath: "/home/user/OpenWhispr.AppImage", args: ["--no-sandbox"] }
   );
 });

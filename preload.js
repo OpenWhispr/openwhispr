@@ -520,6 +520,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Cleanup function
   cleanupApp: () => ipcRenderer.invoke("cleanup-app"),
+  relaunchApp: () => ipcRenderer.invoke("relaunch-app"),
   updateHotkey: (hotkey) => ipcRenderer.invoke("update-hotkey", hotkey),
   setHotkeyListeningMode: (enabled) => ipcRenderer.invoke("set-hotkey-listening-mode", enabled),
   getHotkeyModeInfo: (hotkey) => ipcRenderer.invoke("get-hotkey-mode-info", hotkey),

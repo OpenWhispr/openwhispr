@@ -2026,7 +2026,14 @@ export default function SettingsPage({
             ? t("settingsPage.account.deleteAccount.partialCleanupDescription")
             : t("settingsPage.account.deleteAccount.successDescription"),
       });
-      setTimeout(() => window.location.reload(), 1000);
+      // Erasing device data closes the database and stops services; only a relaunch restores them.
+      setTimeout(() => {
+        if (eraseDeviceData) {
+          window.electronAPI?.relaunchApp();
+        } else {
+          window.location.reload();
+        }
+      }, 1000);
     } catch (error) {
       logger.error("Account deletion failed", error, "auth");
       showAlertDialog({
@@ -4810,7 +4817,7 @@ EOF`,
                                   ),
                                 });
                                 setTimeout(() => {
-                                  window.location.reload();
+                                  window.electronAPI?.relaunchApp();
                                 }, 1000);
                               } catch {
                                 showAlertDialog({

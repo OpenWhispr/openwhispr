@@ -79,6 +79,7 @@ const diarizationHost = (endpoint) => {
 };
 const { resolveLocalServerNeeds } = require("./localServerPolicy");
 const autoStart = require("./autoStart");
+const { getRelaunchOptions } = require("./autoStartPolicy");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
@@ -3863,6 +3864,40 @@ class IPCHandlers {
 
     ipcMain.handle("cancel-diarization-download", async () => {
       return this.diarizationManager.cancelDownload();
+    });
+
+    // The renderer calls this after cleanup-app, which closes the database and stops
+    // local services for good. `npm run dev` stops the Vite server once Electron
+    // exits, so a relaunched dev instance would have no renderer: just quit there.
+    ipcMain.handle("relaunch-app", () => {
+      if (process.env.NODE_ENV !== "development") {
+        this.updateManager.deferInstallOnQuit();
+        const { execPath, args } = getRelaunchOptions({
+          argv: process.argv,
+          protocol: this.oauthProtocol,
+          appImagePath: process.env.APPIMAGE,
+        });
+        if (execPath) {
+          // Electron's relaunch helper runs from inside the AppImage mount and dies with
+          // it, so a shell outside the mount waits for this process to exit (releasing
+          // the single-instance lock) and then starts the AppImage file.
+          const { spawn } = require("child_process");
+          spawn(
+            "/bin/sh",
+            [
+              "-c",
+              'while kill -0 "$0" 2>/dev/null; do sleep 0.2; done; exec "$@"',
+              String(process.pid),
+              execPath,
+              ...args,
+            ],
+            { detached: true, stdio: "ignore" }
+          ).unref();
+        } else {
+          app.relaunch({ args });
+        }
+      }
+      app.quit();
     });
 
     ipcMain.handle("cleanup-app", async (event) => {
