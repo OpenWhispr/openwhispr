@@ -551,9 +551,15 @@ class HotkeyManager extends EventEmitter {
         return { success: true, hotkey, accelerator: null };
       }
 
-      if (isModifierOnlyHotkey(hotkey) && process.platform === "win32") {
+      // Both Windows and Linux watch modifier-only chords with a low-level
+      // listener; Electron cannot build an accelerator without a regular key,
+      // so registering one would fail and reject an otherwise valid hotkey.
+      if (
+        isModifierOnlyHotkey(hotkey) &&
+        (process.platform === "win32" || process.platform === "linux")
+      ) {
         debugLogger.log(
-          `[HotkeyManager] Modifier-only "${hotkey}" set - using Windows native listener`
+          `[HotkeyManager] Modifier-only "${hotkey}" set - using native listener`
         );
         return { success: true, hotkey, accelerator: null };
       }
