@@ -2566,7 +2566,11 @@
         "deepgram_nova_3": "Самая точная модель Deepgram для реального времени",
         "assemblyai_universal_streaming_english": "Неизменяемые расшифровки в реальном времени, английский",
         "assemblyai_universal_streaming_multilingual": "Неизменяемые расшифровки в реальном времени, многоязычные",
-        "assemblyai_universal_3_5_pro": "Максимальная точность в реальном времени, 18 языков"
+        "assemblyai_universal_3_5_pro": "Максимальная точность в реальном времени, 18 языков",
+        "openrouter_openai_gpt_transcribe": "Актуальная модель транскрипции OpenAI",
+        "openrouter_deepgram_nova_3": "Быстрая многоязычная транскрипция Deepgram",
+        "openrouter_google_chirp_3": "Распознавание речи Google на 100+ языках",
+        "openrouter_mistralai_voxtral_mini_transcribe": "Недорогая многоязычная транскрипция"
       },
       "cloud": {
         "openai_gpt_5_2": "Сильная модель рассуждения",

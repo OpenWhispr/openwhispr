@@ -6458,7 +6458,9 @@ class IPCHandlers {
                   ? this.environmentManager.getCustomTranscriptionKey()
                   : route.auth.keyRef === "groq"
                     ? this.environmentManager.getGroqKey()
-                    : this.environmentManager.getOpenAIKey();
+                    : route.auth.keyRef === "openrouter"
+                      ? this.environmentManager.getOpenrouterKey()
+                      : this.environmentManager.getOpenAIKey();
           if (!apiKey && provider !== "custom") {
             throw new Error(`${provider} API key not configured`);
           }

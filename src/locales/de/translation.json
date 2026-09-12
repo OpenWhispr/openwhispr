@@ -2647,7 +2647,11 @@
         "deepgram_nova_3": "Deepgrams genauestes Echtzeitmodell",
         "assemblyai_universal_streaming_english": "Unveränderliche Echtzeit-Transkripte, Englisch",
         "assemblyai_universal_streaming_multilingual": "Unveränderliche Echtzeit-Transkripte, mehrsprachig",
-        "assemblyai_universal_3_5_pro": "Höchste Genauigkeit in Echtzeit, 18 Sprachen"
+        "assemblyai_universal_3_5_pro": "Höchste Genauigkeit in Echtzeit, 18 Sprachen",
+        "openrouter_openai_gpt_transcribe": "Aktuelles Transkriptionsmodell von OpenAI",
+        "openrouter_deepgram_nova_3": "Schnelle mehrsprachige Transkription von Deepgram",
+        "openrouter_google_chirp_3": "Googles Spracherkennung in über 100 Sprachen",
+        "openrouter_mistralai_voxtral_mini_transcribe": "Günstige mehrsprachige Transkription"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",

@@ -2550,7 +2550,11 @@
         "deepgram_nova_3": "Deepgram 最精準的即時模型",
         "assemblyai_universal_streaming_english": "不會變動的即時轉錄（英文）",
         "assemblyai_universal_streaming_multilingual": "不會變動的即時轉錄（多語言）",
-        "assemblyai_universal_3_5_pro": "最高精度即時轉錄，支援 18 種語言"
+        "assemblyai_universal_3_5_pro": "最高精度即時轉錄，支援 18 種語言",
+        "openrouter_openai_gpt_transcribe": "OpenAI 目前的轉錄模型",
+        "openrouter_deepgram_nova_3": "Deepgram 的快速多語言轉錄",
+        "openrouter_google_chirp_3": "支援 100 多種語言的 Google 語音轉文字",
+        "openrouter_mistralai_voxtral_mini_transcribe": "低成本多語言轉錄"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",

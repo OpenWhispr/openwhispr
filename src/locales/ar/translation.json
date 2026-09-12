@@ -236,7 +236,11 @@
         "deepgram_nova_3": "نموذج Deepgram الأكثر دقة في الوقت الفعلي",
         "assemblyai_universal_streaming_english": "نصوص مفرَّغة ثابتة في الوقت الفعلي، الإنجليزية",
         "assemblyai_universal_streaming_multilingual": "نصوص مفرَّغة ثابتة في الوقت الفعلي، متعددة اللغات",
-        "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة"
+        "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة",
+        "openrouter_openai_gpt_transcribe": "نموذج التفريغ الحالي من OpenAI",
+        "openrouter_deepgram_nova_3": "تفريغ سريع متعدد اللغات من Deepgram",
+        "openrouter_google_chirp_3": "تحويل الكلام إلى نص من Google بأكثر من 100 لغة",
+        "openrouter_mistralai_voxtral_mini_transcribe": "تفريغ متعدد اللغات منخفض التكلفة"
       },
       "cloud": {
         "openai_gpt_5_2": "نموذج استنتاج قوي",
