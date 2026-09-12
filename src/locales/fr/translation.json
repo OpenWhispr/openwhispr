@@ -3365,7 +3365,6 @@
       "unsupportedSelfHosted": "L'enregistrement de notes ne peut pas encore utiliser un serveur auto-hébergé. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "unsupportedProvider": "L'enregistrement de notes ne peut pas utiliser {{provider}} pour la transcription en direct. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "noProviderSelected": "Aucun fournisseur n'est sélectionné pour l'enregistrement de notes. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
-      "autoEnded": "L'enregistrement s'est arrêté automatiquement à la fin de votre réunion.",
       "restartFailed": "Impossible de redémarrer l'enregistrement de la réunion.",
       "systemAudioSilent": {
         "title": "Aucun son de réunion détecté pour le moment",
@@ -4096,7 +4095,8 @@
         "silence": "Aucun son n’a été détecté, donc l’enregistrement s’est arrêté automatiquement. Redémarrez-le dans les {{seconds}} s.",
         "processExit": "Votre app de réunion s’est fermée, donc l’enregistrement s’est arrêté automatiquement. Redémarrez-le dans les {{seconds}} s."
       },
-      "restart": "Redémarrer l’enregistrement"
+      "restart": "Redémarrer l’enregistrement",
+      "summary": "Générer un résumé IA"
     }
   }
 }

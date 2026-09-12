@@ -17,6 +17,10 @@ interface AutoEndPresentation {
   bodyValues: { seconds: number };
   actionKey: "meetingNotification.autoEnd.restart";
   action: "restart";
+  /** Only present when the auto-ended note has something to summarize. The label
+   * and the response travel together, so the card can never show an offer it
+   * cannot answer. */
+  secondary?: { key: "meetingNotification.autoEnd.summary"; action: "summary" };
   dismissible: true;
   allowTitleWrap: true;
 }
@@ -57,6 +61,14 @@ export function getMeetingNotificationPresentation(
       bodyValues: { seconds: secondsRemaining },
       actionKey: "meetingNotification.autoEnd.restart",
       action: "restart",
+      ...(data.canSummarize
+        ? {
+            secondary: {
+              key: "meetingNotification.autoEnd.summary" as const,
+              action: "summary" as const,
+            },
+          }
+        : {}),
       dismissible: true,
       allowTitleWrap: true,
     };

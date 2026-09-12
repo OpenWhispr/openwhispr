@@ -33,7 +33,7 @@ test("auto-end uses a larger positioned window while detection keeps its existin
 });
 
 test("auto-end dimensions fit every supported localized title, body, and action", () => {
-  const locales = ["en", "es", "fr", "de", "pt", "it", "ru", "ja", "zh-CN", "zh-TW"];
+  const locales = ["en", "es", "fr", "de", "pt", "it", "ru", "ja", "zh-CN", "zh-TW", "ar"];
   const translations = locales.map(
     (locale) => require(`../../src/locales/${locale}/translation.json`).meetingNotification.autoEnd
   );
@@ -44,8 +44,13 @@ test("auto-end dimensions fit every supported localized title, body, and action"
         (/\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}/u.test(character) ? 2 : 1),
       0
     );
+  // Restart and the summary offer stack vertically, so the wider label is what
+  // narrows the text column.
   const longestActionColumns = Math.max(
-    ...translations.map(({ restart }) => displayColumns(restart))
+    ...translations.flatMap(({ restart, summary }) => [
+      displayColumns(restart),
+      displayColumns(summary),
+    ])
   );
 
   // Reserve the card's outer padding, icon/gaps, and the full non-wrapping action.

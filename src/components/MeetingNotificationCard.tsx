@@ -7,6 +7,9 @@ interface MeetingNotificationCardProps {
   body: string;
   startLabel: string;
   onStart?: () => void;
+  /** Optional second action, stacked under the primary one. Omitted by the detection card. */
+  secondaryLabel?: string;
+  onSecondary?: () => void;
   onDismiss?: () => void;
   /** Controls the close button's hover fade. Ignored when `onDismiss` is absent. */
   closeVisible?: boolean;
@@ -27,6 +30,8 @@ export function MeetingNotificationCard({
   body,
   startLabel,
   onStart,
+  secondaryLabel,
+  onSecondary,
   onDismiss,
   closeVisible = true,
   allowTitleWrap = false,
@@ -87,15 +92,29 @@ export function MeetingNotificationCard({
           </p>
         </div>
 
-        <button
-          onClick={onStart}
-          className={cn(
-            BRAND_GLASS_SURFACE,
-            "shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium transition-[filter] hover:brightness-110 active:brightness-95"
+        <div className="flex shrink-0 flex-col gap-1">
+          <button
+            onClick={onStart}
+            className={cn(
+              BRAND_GLASS_SURFACE,
+              "whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium transition-[filter] hover:brightness-110 active:brightness-95"
+            )}
+          >
+            {startLabel}
+          </button>
+          {secondaryLabel && (
+            <button
+              onClick={onSecondary}
+              className={cn(
+                "whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium",
+                "border border-border/70 bg-card/70 text-foreground/80 dark:border-border-subtle/60 dark:bg-surface-3/70",
+                "transition-colors duration-150 hover:bg-muted hover:text-foreground"
+              )}
+            >
+              {secondaryLabel}
+            </button>
           )}
-        >
-          {startLabel}
-        </button>
+        </div>
       </div>
     </div>
   );

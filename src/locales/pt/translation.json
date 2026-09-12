@@ -3023,7 +3023,6 @@
       "unsupportedSelfHosted": "A gravação de notas ainda não pode usar um endpoint auto-hospedado. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "unsupportedProvider": "A gravação de notas não pode usar {{provider}} para transcrição ao vivo. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "noProviderSelected": "Nenhum provedor está selecionado para a gravação de notas. Abra as Configurações e escolha Local ou um provedor de streaming.",
-      "autoEnded": "A gravação parou automaticamente após o fim da reunião.",
       "restartFailed": "Não foi possível reiniciar a gravação da reunião.",
       "systemAudioSilent": {
         "title": "Nenhum áudio da reunião detectado até agora",
@@ -4096,7 +4095,8 @@
         "silence": "Nenhum áudio foi detectado, então a gravação parou automaticamente. Reinicie em até {{seconds}} s.",
         "processExit": "Seu app de reunião foi fechado, então a gravação parou automaticamente. Reinicie em até {{seconds}} s."
       },
-      "restart": "Reiniciar gravação"
+      "restart": "Reiniciar gravação",
+      "summary": "Gerar resumo com IA"
     }
   }
 }

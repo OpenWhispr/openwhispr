@@ -54,16 +54,21 @@ export default function NoteRecordControl({
   onStop,
 }: NoteRecordControlProps) {
   const { t } = useTranslation();
-  const [elapsed, setElapsed] = useState(0);
+  // Elapsed time comes from the session's start timestamp rather than a tick
+  // count: this control remounts whenever the user switches notes, and counted
+  // ticks would restart at zero (and drift while the window is throttled).
+  const startedAt = useMeetingRecordingStore((s) => s.recordingStartedAt);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (!isRecording) {
-      setElapsed(0);
-      return;
-    }
-    const id = setInterval(() => setElapsed((s) => s + 1), 1000);
+    if (!isRecording) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [isRecording]);
+
+  const elapsed =
+    isRecording && startedAt != null ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
 
   return (
     <div

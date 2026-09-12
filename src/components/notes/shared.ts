@@ -73,6 +73,27 @@ export function transcriptionErrorKey(failure: unknown): string | undefined {
   return code ? TRANSCRIPTION_ERROR_KEYS[code] : undefined;
 }
 
+// A finished recording that has a transcript but no AI summary yet offers to
+// generate one. Deliberately independent of the open view tab: the callout lives
+// in the bottom bar shared by Notes and Transcript, and every detected or
+// quick-action meeting starts on the Notes tab, so gating it on the transcript
+// view hid the offer exactly when a meeting ended on its own.
+export function shouldOfferMeetingSummary({
+  isRecording,
+  hasTranscriptSegments,
+  hasSummary,
+  canEdit,
+  isProcessingAction,
+}: {
+  isRecording: boolean;
+  hasTranscriptSegments: boolean;
+  hasSummary: boolean;
+  canEdit: boolean;
+  isProcessingAction: boolean;
+}): boolean {
+  return !isRecording && hasTranscriptSegments && !hasSummary && canEdit && !isProcessingAction;
+}
+
 // Folder scopes get the folder-specific empty title; space roots keep the generic one.
 export function notesEmptyTitleKey(inFolder: boolean): string {
   return inFolder ? "notes.empty.emptyFolder" : "notes.empty.title";
