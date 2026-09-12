@@ -30,7 +30,9 @@ function freshRequire({ runSystemTar } = {}) {
   delete require.cache[downloadUtilsPath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
-    if (request === "electron") return { net: {} };
+    if (request === "electron") {
+      return { net: {}, app: { isPackaged: false, isReady: () => false } };
+    }
     if (request === "./systemTar" && runSystemTar) return { runSystemTar };
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -180,7 +182,7 @@ test("extractArchive falls back to PowerShell when Windows tar rejects a zip arc
         args: [
           "-NoProfile",
           "-Command",
-          "Expand-Archive -Force -Path 'C:\\cache\\binary.zip' -DestinationPath 'C:\\cache\\extract'",
+          "Expand-Archive -Force -LiteralPath 'C:\\cache\\binary.zip' -DestinationPath 'C:\\cache\\extract'",
         ],
       },
     ]);
@@ -190,3 +192,64 @@ test("extractArchive falls back to PowerShell when Windows tar rejects a zip arc
     delete require.cache[downloadUtilsPath];
   }
 });
+
+test("extractArchive PowerShell fallback quotes apostrophe paths safely", async () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  const originalExecFile = cp.execFile;
+  const execCalls = [];
+
+  Object.defineProperty(process, "platform", { value: "win32" });
+  cp.execFile = (command, args, callback) => {
+    execCalls.push({ command, args });
+    callback(null);
+  };
+
+  const archivePath = "C:\\Users\\O'Brien\\cache\\binary.zip";
+  const destDir = "C:\\Users\\O'Brien\\cache\\extract";
+  const { extractArchive } = freshRequire({
+    runSystemTar: async () => {
+      throw new Error("tar extraction timed out");
+    },
+  });
+
+  try {
+    await extractArchive(archivePath, destDir);
+    assert.equal(execCalls.length, 1);
+    assert.equal(execCalls[0].command, "powershell");
+    assert.deepEqual(execCalls[0].args, [
+      "-NoProfile",
+      "-Command",
+      "Expand-Archive -Force -LiteralPath 'C:\\Users\\O''Brien\\cache\\binary.zip' -DestinationPath 'C:\\Users\\O''Brien\\cache\\extract'",
+    ]);
+  } finally {
+    cp.execFile = originalExecFile;
+    Object.defineProperty(process, "platform", originalPlatform);
+    delete require.cache[downloadUtilsPath];
+  }
+});
+
+test(
+  "extractArchive PowerShell fallback extracts a zip under apostrophe paths",
+  { skip: process.platform !== "win32" },
+  async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "O'Brien-extract-"));
+    const zipPath = writeZip(tmp, "binary.zip", Buffer.from(ZIP_FIXTURE_B64, "base64"));
+    const dest = path.join(tmp, "out");
+    fs.mkdirSync(dest);
+
+    const { extractArchive } = freshRequire({
+      runSystemTar: async () => {
+        throw new Error("tar extraction timed out");
+      },
+    });
+
+    try {
+      await extractArchive(zipPath, dest);
+      const content = fs.readFileSync(path.join(dest, "test-file.txt"), "utf8");
+      assert.equal(content.trim(), "hello from test");
+    } finally {
+      delete require.cache[downloadUtilsPath];
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  }
+);
