@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "L’elaborazione con IA è limitata dalla tua organizzazione.",
     "policyAgentRestricted": "L’uso dell’assistente IA è limitato dalla tua organizzazione.",
     "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione.",
+    "policyUnresolved": "Le impostazioni della tua organizzazione non sono ancora state caricate. Riprova tra un momento.",
     "managedConfigLoading": "Verifica della configurazione gestita della tua organizzazione in corso. Riprova tra un momento.",
     "managedConfigUnavailable": "L'accesso aziendale gestito non è disponibile. Accedi di nuovo o contatta l'amministratore.",
     "managedPolicyConflict": "L'accesso gestito è bloccato dai criteri del tuo spazio di lavoro. Contatta l'amministratore."
@@ -2892,6 +2893,12 @@
       "hoursAgo": "{{count}}h",
       "daysAgo": "{{count}}g"
     },
+    "createMenu": {
+      "note": "Nota",
+      "assistantChat": "Chat con l'assistente",
+      "teamSpace": "Spazio del team",
+      "chooseType": "Scegli cosa creare"
+    },
     "editor": {
       "untitled": "Senza titolo",
       "noteTitle": "Titolo della nota",
@@ -2906,7 +2913,7 @@
       "asJson": "Come JSON (.json)",
       "asTranscriptMarkdown": "Come Markdown (.md)",
       "raw": "Originale",
-      "enhanced": "Migliorato",
+      "aiSummary": "Riepilogo AI",
       "saving": "Salvataggio",
       "transcriptEmptyTitle": "Nessuna registrazione",
       "transcriptEmptyDescription": "Premi registra per iniziare a trascrivere. Tutto ciò che viene detto compare qui in tempo reale.",
@@ -3532,7 +3539,9 @@
       "stopListening": "Smetti di ascoltare",
       "startListening": "Inizia ad ascoltare",
       "hideForNow": "Nascondi per ora",
-      "askAssistant": "Chiedi all'assistente"
+      "askAssistant": "Chiedi all'assistente",
+      "busyRecording": "Prima termina la registrazione in corso",
+      "startMeetingRecording": "Avvia registrazione meeting"
     }
   },
   "dictationAgent": {

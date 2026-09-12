@@ -61,6 +61,8 @@ class WindowManager {
     // Set by IPCHandlers so its demo session dies with the demo kind on every
     // teardown path (id-matched end, onboarding exit, control panel closed).
     this.onOnboardingDemoTeardown = null;
+    // Set by main.js so the tray's listen item rebuilds with dictation state.
+    this.onDictationStateChanged = null;
     this.notificationWindow = null;
     this.agentDictationPillWindow = null;
     this._agentDictationPillReady = false;
@@ -837,11 +839,21 @@ class WindowManager {
     return isOnboardingInputAllowed(this._onboardingActive, this._onboardingDemoKind, inputKind);
   }
 
-  // Public gate for main.js's meeting hotkey call sites, which invoke the
-  // detection engine directly rather than routing through a send method here.
   // "meeting" is never a demo kind, so this is simply "not during onboarding".
   isMeetingInputAllowed() {
     return this._isOnboardingInputAllowed("meeting");
+  }
+
+  // The one entry for starting a meeting by hand: the meeting hotkey, the pill's
+  // command menu, and the tray. Fails closed during onboarding and while a
+  // hotkey is being captured, like every hotkey slot.
+  async startManualMeeting() {
+    if (this.hotkeyManager.isInListeningMode() || !this.isMeetingInputAllowed()) return;
+    try {
+      await this.meetingDetectionEngine?.startManualMeeting();
+    } catch (error) {
+      debugLogger.error("Failed to start manual meeting", { error: error.message }, "meeting");
+    }
   }
 
   // Visibility is part of "available": a ready pill that is merely hidden
@@ -939,6 +951,12 @@ class WindowManager {
     this._isDictatingToggle = isDictationRecording(nextState);
     this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     this._sendAgentDictationPillState();
+    this.onDictationStateChanged?.();
+  }
+
+  // The tray's listen item is a toggle over this state, like the pill's.
+  isDictating() {
+    return this._isDictatingToggle;
   }
 
   _sendAgentDictationPillState() {
@@ -986,6 +1004,17 @@ class WindowManager {
 
   sendToggleTranslation() {
     this._sendDictationToggle("toggle-translation", "translation");
+  }
+
+  // The tray's Ask assistant. Only the renderer can open the panel, and only it
+  // knows the policy and recording state the pill menu gates the item on, so it
+  // decides: nothing is shown or created here, and an accepted command surfaces
+  // the pill itself through setAssistantPanelOpen. Onboarding blocks it outright
+  // rather than through the demo-aware gate — the tray is never part of the demo.
+  sendOpenAssistantPanel() {
+    if (this.hotkeyManager.isInListeningMode() || this._onboardingActive) return;
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("open-assistant-panel");
   }
 
   sendStartDictation() {

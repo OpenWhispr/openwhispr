@@ -1355,7 +1355,9 @@
       "stopListening": "إيقاف الاستماع",
       "startListening": "بدء الاستماع",
       "hideForNow": "إخفاء الآن",
-      "askAssistant": "اسأل المساعد"
+      "askAssistant": "اسأل المساعد",
+      "busyRecording": "أنهِ التسجيل الحالي أولاً",
+      "startMeetingRecording": "بدء تسجيل الاجتماع"
     }
   },
   "calendar": {
@@ -1575,6 +1577,12 @@
       "hoursAgo": "منذ {{count}} س",
       "daysAgo": "منذ {{count}} ي"
     },
+    "createMenu": {
+      "note": "ملاحظة",
+      "assistantChat": "دردشة مع المساعد",
+      "teamSpace": "مساحة فريق",
+      "chooseType": "اختر ما تريد إنشاءه"
+    },
     "editor": {
       "untitled": "بدون عنوان",
       "noteTitle": "عنوان الملاحظة",
@@ -1589,7 +1597,7 @@
       "asJson": "بصيغة JSON (.json)",
       "asTranscriptMarkdown": "بصيغة Markdown (.md)",
       "raw": "خام",
-      "enhanced": "مُحسّن",
+      "aiSummary": "ملخص بالذكاء الاصطناعي",
       "saving": "جاري الحفظ",
       "transcriptEmptyTitle": "لم يتم تسجيل أي شيء بعد",
       "transcriptEmptyDescription": "اضغط على تسجيل لبدء النسخ. كل ما يُقال يظهر هنا لحظيًا.",
@@ -3581,6 +3589,7 @@
     "policyAiProcessingRestricted": "معالجة الذكاء الاصطناعي مقيدة من قبل مؤسستك.",
     "policyAgentRestricted": "استخدام مساعد الذكاء الاصطناعي مقيد من قبل مؤسستك.",
     "policyTranscriptionRestricted": "التفريغ الصوتي مقيد من قبل مؤسستك.",
+    "policyUnresolved": "لم يتم تحميل إعدادات مؤسستك بعد. حاول مرة أخرى بعد قليل.",
     "logout": "تسجيل الخروج",
     "managedConfigLoading": "جارٍ التحقق من الإعداد المُدار لمؤسستك. أعد المحاولة بعد لحظات.",
     "managedConfigUnavailable": "الوصول المُدار للمؤسسة غير متاح. سجّل الدخول مرة أخرى أو اتصل بالمسؤول.",

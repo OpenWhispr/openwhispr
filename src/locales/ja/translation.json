@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "AI処理は組織によって制限されています。",
     "policyAgentRestricted": "AIアシスタントの使用は組織によって制限されています。",
     "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。",
+    "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
     "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。"
@@ -2814,7 +2815,7 @@
       "asJson": "JSON (.json)",
       "asTranscriptMarkdown": "Markdown (.md)",
       "raw": "元のテキスト",
-      "enhanced": "強化済み",
+      "aiSummary": "AI要約",
       "saving": "保存中",
       "transcriptEmptyTitle": "まだ録音がありません",
       "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
@@ -2922,6 +2923,12 @@
       "minutesAgo": "{{count}}分前",
       "hoursAgo": "{{count}}時間前",
       "daysAgo": "{{count}}日前"
+    },
+    "createMenu": {
+      "note": "ノート",
+      "assistantChat": "アシスタントとのチャット",
+      "teamSpace": "チームスペース",
+      "chooseType": "作成する項目を選択"
     },
     "upload": {
       "title": "音声をアップロード",
@@ -3532,7 +3539,9 @@
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示",
-      "askAssistant": "アシスタントに質問"
+      "askAssistant": "アシスタントに質問",
+      "busyRecording": "先に録音を終了してください",
+      "startMeetingRecording": "ミーティングの録音を開始"
     }
   },
   "dictationAgent": {

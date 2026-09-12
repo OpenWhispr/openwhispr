@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "Обработка ИИ ограничена вашей организацией.",
     "policyAgentRestricted": "Использование ИИ-помощника ограничено вашей организацией.",
     "policyTranscriptionRestricted": "Транскрипция ограничена вашей организацией.",
+    "policyUnresolved": "Настройки вашей организации ещё не загружены. Повторите попытку через мгновение.",
     "managedConfigLoading": "Проверяется управляемая настройка вашей организации. Повторите попытку через некоторое время.",
     "managedConfigUnavailable": "Управляемый корпоративный доступ недоступен. Войдите снова или обратитесь к администратору.",
     "managedPolicyConflict": "Управляемый доступ заблокирован политикой вашего рабочего пространства. Обратитесь к администратору."
@@ -2914,6 +2915,12 @@
       "hoursAgo": "{{count}} ч. назад",
       "daysAgo": "{{count}} дн. назад"
     },
+    "createMenu": {
+      "note": "Заметка",
+      "assistantChat": "Чат с помощником",
+      "teamSpace": "Командное пространство",
+      "chooseType": "Выбрать, что создать"
+    },
     "editor": {
       "untitled": "Без названия",
       "noteTitle": "Название заметки",
@@ -2928,7 +2935,7 @@
       "asJson": "Как JSON (.json)",
       "asTranscriptMarkdown": "Как Markdown (.md)",
       "raw": "Исходный",
-      "enhanced": "Улучшенный",
+      "aiSummary": "ИИ-сводка",
       "saving": "Сохранение",
       "transcriptEmptyTitle": "Пока ничего не записано",
       "transcriptEmptyDescription": "Нажмите «Запись», чтобы начать транскрипцию. Всё сказанное появится здесь в реальном времени.",
@@ -3578,7 +3585,9 @@
       "stopListening": "Остановить запись",
       "startListening": "Начать запись",
       "hideForNow": "Скрыть",
-      "askAssistant": "Спросить помощника"
+      "askAssistant": "Спросить помощника",
+      "busyRecording": "Сначала завершите текущую запись",
+      "startMeetingRecording": "Начать запись встречи"
     }
   },
   "dictationAgent": {

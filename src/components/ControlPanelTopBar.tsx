@@ -24,6 +24,8 @@ interface ControlPanelTopBarProps {
   /** Meeting mode or a narrow window with an open note: sidebar hidden, back button shown. */
   isSidePanelLayout: boolean;
   onExitSidePanel: () => void;
+  /** Receives the slot, right of the search bar, that the active page portals its actions into. */
+  actionsSlotRef?: React.Ref<HTMLDivElement>;
 }
 
 export default function ControlPanelTopBar({
@@ -35,6 +37,7 @@ export default function ControlPanelTopBar({
   onOpenSearch,
   isSidePanelLayout,
   onExitSidePanel,
+  actionsSlotRef,
 }: ControlPanelTopBarProps) {
   const { t } = useTranslation();
   // With the sidebar out of the way the container's start edge sits under the
@@ -44,7 +47,8 @@ export default function ControlPanelTopBar({
   return (
     <header
       className={cn(
-        "grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,340px)_minmax(0,1fr)] items-center gap-4 border-b border-border px-3 dark:border-white/10",
+        // The trailing column never shrinks past its actions and window controls.
+        "grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,340px)_minmax(max-content,1fr)] items-center gap-4 border-b border-border px-3 dark:border-white/10",
         // Eased with the sidebar spacer so the toggle glides instead of jumping when the
         // clearance switches; a jump would drag it back under the cursor and re-trigger peek.
         "transition-[padding] duration-300 ease-out",
@@ -95,7 +99,7 @@ export default function ControlPanelTopBar({
           onClick={onOpenSearch}
           data-no-window-drag=""
           style={noDragStyle}
-          className="flex h-8 w-full items-center gap-2.5 rounded-full bg-foreground/4 px-4 text-start outline-none transition-colors duration-150 hover:bg-foreground/6 focus-visible:ring-1 focus-visible:ring-primary/30 dark:bg-white/5 dark:hover:bg-white/8"
+          className="flex h-8 w-full items-center gap-2.5 rounded-full border border-border bg-foreground/4 px-4 text-start outline-none transition-colors duration-150 hover:bg-foreground/6 focus-visible:ring-1 focus-visible:ring-primary/30 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/8"
         >
           <Search size={14} className="shrink-0 text-muted-foreground/70" />
           <span className="flex-1 truncate text-[13px] text-muted-foreground/70">
@@ -110,9 +114,19 @@ export default function ControlPanelTopBar({
         </button>
       )}
 
-      <div className="col-start-3 flex items-center justify-self-end">
+      <div className="col-start-3 flex items-center gap-2">
+        {!isSidePanelLayout && (
+          <div
+            ref={actionsSlotRef}
+            data-no-window-drag=""
+            style={noDragStyle}
+            // macOS keeps no window controls here, so page actions take the far
+            // end; elsewhere they sit beside the search, left of the controls.
+            className={cn("flex items-center", platform === "darwin" && "ms-auto")}
+          />
+        )}
         {platform !== "darwin" && (
-          <div data-no-window-drag="" style={noDragStyle}>
+          <div data-no-window-drag="" style={noDragStyle} className="ms-auto">
             <WindowControls />
           </div>
         )}

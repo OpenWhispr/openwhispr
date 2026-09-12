@@ -35,6 +35,7 @@ import { useDialogs } from "../../hooks/useDialogs";
 import { useToast } from "../ui/useToast";
 import { useNoteDragAndDrop, type NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
+import { useCanCreateTeamSpace } from "../../hooks/useCanCreateTeamSpace";
 import { useAuth } from "../../hooks/useAuth";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { EmojiPickerInput } from "./EmojiPickerInput";
@@ -1175,6 +1176,7 @@ export default function SpacesTree({
   const isTreeLoading = useIsTreeLoading();
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
+  const canCreateTeamSpace = useCanCreateTeamSpace();
   const { workspaces, loaded: workspacesLoaded } = useWorkspace();
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const shareByCloudId = useShareCache();
@@ -1235,12 +1237,6 @@ export default function SpacesTree({
   // Signed-out users never load workspaces (mirrored team spaces render flat);
   // errors still flip `loaded`, so this can't skeleton forever.
   const workspacesPending = isSignedIn && !workspacesLoaded;
-
-  // The server 403s team creation for plain members; no-workspace users get the create funnel.
-  const canCreateTeamSpace =
-    isSignedIn &&
-    workspacesLoaded &&
-    (workspaces.length === 0 || workspaces.some((w) => canManageWorkspace(w.role)));
 
   const currentUserId = user?.id ?? null;
   const workspaceRoleFor = (space: SpaceItem | undefined): WorkspaceRole | null =>

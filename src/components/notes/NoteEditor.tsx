@@ -54,6 +54,11 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
+import {
+  SPLIT_BUTTON_DIVIDER_CLASS,
+  SPLIT_BUTTON_GROUP_CLASS,
+  SPLIT_BUTTON_SEGMENT_CLASS,
+} from "../ui/splitButton";
 import type { NoteItem, FolderItem } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
@@ -78,10 +83,6 @@ import { NOTE_META_CHIP_CLASS, defaultFolderDisplayName, folderMatchesQuery } fr
 
 const SEGMENT_BUTTON_CLASS =
   "relative z-1 flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors duration-150";
-const SHARE_GROUP_CLASS =
-  "flex h-[30px] items-stretch overflow-hidden rounded-full border border-border bg-surface-3 dark:border-white/10 dark:bg-surface-2";
-const SHARE_SEGMENT_CLASS =
-  "flex items-center text-xs font-medium text-foreground/80 outline-none transition-colors duration-150 hover:bg-surface-raised hover:text-foreground focus-visible:bg-surface-raised dark:hover:bg-surface-3";
 
 const TRANSCRIPT_EXPORT_LABEL_KEYS = {
   txt: "notes.editor.asTranscriptText",
@@ -1055,7 +1056,7 @@ export default function NoteEditor({
                     )}
                   >
                     <Sparkles size={12} />
-                    {t("notes.editor.enhanced")}
+                    {t("notes.editor.aiSummary")}
                     {enhancement.isStale && (
                       <span
                         className="h-1 w-1 rounded-full bg-amber-400/60"
@@ -1076,21 +1077,21 @@ export default function NoteEditor({
                   onStop={onStopRecording}
                 />
               )}
-              <div className={SHARE_GROUP_CLASS}>
+              <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-[30px]")}>
                 <button
                   type="button"
                   onClick={() => openShare("open")}
-                  className={cn(SHARE_SEGMENT_CLASS, "gap-1.5 ps-2.5 pe-3")}
+                  className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "gap-1.5 ps-2.5 pe-3")}
                 >
                   <Lock size={13} className={isShared ? "text-primary" : "text-foreground/60"} />
                   {t("noteEditor.share.button")}
                 </button>
-                <span aria-hidden="true" className="my-1.5 w-px bg-border dark:bg-white/10" />
+                <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
                 <button
                   type="button"
                   onClick={() => openShare("copy-link")}
                   aria-label={t("noteEditor.share.dialog.copyLink")}
-                  className={cn(SHARE_SEGMENT_CLASS, "w-[30px] justify-center")}
+                  className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-[30px] justify-center")}
                 >
                   <Link2 size={13} className="text-foreground/60" />
                 </button>

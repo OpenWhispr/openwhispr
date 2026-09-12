@@ -16,6 +16,8 @@ import { useWindowResizeCompensation } from "./hooks/useWindowResizeCompensation
 import { useSettingsStore } from "./stores/settingsStore";
 import { isAgentAllowed } from "./stores/policyRules";
 import { usePolicyStore } from "./stores/policyStore";
+import { useTranscriptionContextAllowed } from "./hooks/usePolicy";
+import { useTrayQuickActions } from "./hooks/useTrayQuickActions";
 import { VoicePill } from "./components/dictation/VoicePill";
 import { AssistantPanel } from "./components/dictation/AssistantPanel";
 import { LiveTranscriptPanel } from "./components/dictation/LiveTranscriptPanel";
@@ -112,6 +114,12 @@ export default function App() {
   useMainProcessNotifications({ toast, dismiss, t });
 
   const agentAllowed = usePolicyStore(isAgentAllowed);
+  const meetingAllowed = useTranscriptionContextAllowed("meeting");
+  // Both allowances fail closed while the policy is loading or its fetch failed,
+  // so the tray's refusals need to tell those apart from a real org restriction.
+  const policyStatus = usePolicyStore((state) => state.status);
+  const policyResolved =
+    policyStatus === "idle" || policyStatus === "managed" || policyStatus === "unmanaged";
 
   const mainWindowResizeCoordinatorRef = useRef(null);
   useEffect(() => {
@@ -172,7 +180,11 @@ export default function App() {
     recordingControlsRef,
     onPanelOpened,
   });
-  const { noteDictationError, openRef: assistantOpenRef } = assistant;
+  const {
+    noteDictationError,
+    openRef: assistantOpenRef,
+    openPanel: openAssistantPanel,
+  } = assistant;
 
   const handleDictationError = React.useCallback(
     (options = {}) => {
@@ -370,6 +382,28 @@ export default function App() {
     });
     return () => unsubscribe?.();
   }, [isRecording, isPreparing, isProcessing, cancelRecording, cancelProcessing]);
+
+  // Every tray refusal surfaces the pill first, so the message is visible even
+  // when the pill was hidden. useTrayQuickActions decides when one is needed.
+  const refuse = useCallback(
+    (messageKey) => {
+      void window.electronAPI?.showDictationPanel?.();
+      toast({ title: t(messageKey), variant: "default" });
+    },
+    [toast, t]
+  );
+
+  const closeCommandMenu = useCallback(() => setIsCommandMenuOpen(false), []);
+
+  useTrayQuickActions({
+    agentAllowed,
+    policyResolved,
+    isRecording,
+    liveTranscriptMounted: liveTranscript.mounted,
+    closeCommandMenu,
+    openAssistantPanel,
+    refuse,
+  });
 
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {
@@ -722,6 +756,7 @@ export default function App() {
               buttonRef={buttonRef}
               isRecording={isRecording}
               agentAllowed={agentAllowed}
+              meetingAllowed={meetingAllowed}
               isHovered={isHovered}
               setWindowInteractivity={setWindowInteractivity}
               onToggleListening={() => {
@@ -729,7 +764,11 @@ export default function App() {
               }}
               onAskAssistant={() => {
                 setIsCommandMenuOpen(false);
-                assistant.openPanel();
+                void openAssistantPanel();
+              }}
+              onStartMeeting={() => {
+                setIsCommandMenuOpen(false);
+                void window.electronAPI?.startManualMeeting?.();
               }}
               onHide={() => {
                 setIsCommandMenuOpen(false);

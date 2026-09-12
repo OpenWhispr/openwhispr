@@ -80,6 +80,7 @@ async function renderTree(t, direction) {
       "/hooks/useAuth": "export const useAuth = () => ({ isSignedIn: false, user: null });",
       "/hooks/useWorkspace":
         "export const useWorkspace = () => ({ workspaces: [], loaded: true });",
+      "/hooks/useCanCreateTeamSpace": "export const useCanCreateTeamSpace = () => false;",
       "/hooks/useDialogs": `
         export const useDialogs = () => ({
           confirmDialog: { open: false },

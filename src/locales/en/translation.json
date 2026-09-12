@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
     "policyAgentRestricted": "AI assistant use is restricted by your organization.",
     "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
+    "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
     "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator."
@@ -3234,6 +3235,12 @@
       "hoursAgo": "{{count}}h",
       "daysAgo": "{{count}}d"
     },
+    "createMenu": {
+      "note": "Note",
+      "assistantChat": "Assistant chat",
+      "teamSpace": "Team space",
+      "chooseType": "Choose what to create"
+    },
     "editor": {
       "untitled": "Untitled",
       "noteTitle": "Note title",
@@ -3248,7 +3255,7 @@
       "asJson": "As JSON (.json)",
       "asTranscriptMarkdown": "As Markdown (.md)",
       "raw": "Raw",
-      "enhanced": "Enhanced",
+      "aiSummary": "AI Summary",
       "saving": "Saving",
       "transcriptEmptyTitle": "Nothing recorded yet",
       "transcriptEmptyDescription": "Hit record to start transcribing. Everything said shows up here as it happens.",
@@ -3701,7 +3708,9 @@
       "stopListening": "Stop listening",
       "startListening": "Start listening",
       "hideForNow": "Hide for now",
-      "askAssistant": "Ask Assistant"
+      "askAssistant": "Ask assistant",
+      "busyRecording": "Finish the current dictation first",
+      "startMeetingRecording": "Start meeting recording"
     }
   },
   "dictationAgent": {

@@ -183,6 +183,7 @@
     "policyAiProcessingRestricted": "O processamento de IA está restrito pela sua organização.",
     "policyAgentRestricted": "O uso do assistente de IA está restrito pela sua organização.",
     "policyTranscriptionRestricted": "A transcrição está restrita pela sua organização.",
+    "policyUnresolved": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes.",
     "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
     "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
     "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador."
@@ -2892,6 +2893,12 @@
       "hoursAgo": "{{count}}h",
       "daysAgo": "{{count}}d"
     },
+    "createMenu": {
+      "note": "Nota",
+      "assistantChat": "Chat com o assistente",
+      "teamSpace": "Espaço de equipe",
+      "chooseType": "Escolher o que criar"
+    },
     "editor": {
       "untitled": "Sem título",
       "noteTitle": "Título da nota",
@@ -2906,7 +2913,7 @@
       "asJson": "Como JSON (.json)",
       "asTranscriptMarkdown": "Como Markdown (.md)",
       "raw": "Original",
-      "enhanced": "Aprimorado",
+      "aiSummary": "Resumo com IA",
       "saving": "Salvando",
       "transcriptEmptyTitle": "Nada gravado ainda",
       "transcriptEmptyDescription": "Toque em gravar para começar a transcrever. Tudo o que for dito aparece aqui em tempo real.",
@@ -3532,7 +3539,9 @@
       "stopListening": "Parar de ouvir",
       "startListening": "Começar a ouvir",
       "hideForNow": "Ocultar por agora",
-      "askAssistant": "Perguntar ao assistente"
+      "askAssistant": "Perguntar ao assistente",
+      "busyRecording": "Termine primeiro a gravação atual",
+      "startMeetingRecording": "Iniciar gravação da reunião"
     }
   },
   "dictationAgent": {

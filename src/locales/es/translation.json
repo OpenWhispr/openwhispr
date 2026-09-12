@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "El procesamiento con IA está restringido por tu organización.",
     "policyAgentRestricted": "El uso del asistente de IA está restringido por tu organización.",
     "policyTranscriptionRestricted": "La transcripción está restringida por tu organización.",
+    "policyUnresolved": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento.",
     "managedConfigLoading": "Comprobando la configuración gestionada de tu organización. Inténtalo de nuevo en un momento.",
     "managedConfigUnavailable": "El acceso empresarial gestionado no está disponible. Vuelve a iniciar sesión o contacta a tu administrador.",
     "managedPolicyConflict": "El acceso gestionado está bloqueado por la política de tu espacio de trabajo. Contacta a tu administrador."
@@ -2945,6 +2946,12 @@
       "hoursAgo": "hace {{count}}h",
       "daysAgo": "hace {{count}}d"
     },
+    "createMenu": {
+      "note": "Nota",
+      "assistantChat": "Chat con el asistente",
+      "teamSpace": "Espacio de equipo",
+      "chooseType": "Elegir qué crear"
+    },
     "editor": {
       "untitled": "Sin título",
       "noteTitle": "Título de la nota",
@@ -2959,7 +2966,7 @@
       "asJson": "Como JSON (.json)",
       "asTranscriptMarkdown": "Como Markdown (.md)",
       "raw": "Sin procesar",
-      "enhanced": "Mejorado",
+      "aiSummary": "Resumen con IA",
       "saving": "Guardando",
       "transcriptEmptyTitle": "Aún no hay grabaciones",
       "transcriptEmptyDescription": "Pulsa grabar para empezar a transcribir. Todo lo que se diga aparecerá aquí en tiempo real.",
@@ -3585,7 +3592,9 @@
       "stopListening": "Dejar de escuchar",
       "startListening": "Empezar a escuchar",
       "hideForNow": "Ocultar por ahora",
-      "askAssistant": "Preguntar al asistente"
+      "askAssistant": "Preguntar al asistente",
+      "busyRecording": "Primero termina la grabación actual",
+      "startMeetingRecording": "Iniciar grabación de reunión"
     }
   },
   "dictationAgent": {

@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "AI 处理已被您的组织限制。",
     "policyAgentRestricted": "AI 助手的使用已被您的组织限制。",
     "policyTranscriptionRestricted": "转录已被您的组织限制。",
+    "policyUnresolved": "您所在组织的设置尚未加载完成。请稍后再试。",
     "managedConfigLoading": "正在检查您组织的托管设置。请稍候再试。",
     "managedConfigUnavailable": "托管企业访问不可用。请重新登录或联系管理员。",
     "managedPolicyConflict": "托管访问已被您工作区的策略阻止。请联系管理员。"
@@ -2892,6 +2893,12 @@
       "hoursAgo": "{{count}} 小时前",
       "daysAgo": "{{count}} 天前"
     },
+    "createMenu": {
+      "note": "笔记",
+      "assistantChat": "助手聊天",
+      "teamSpace": "团队空间",
+      "chooseType": "选择要创建的内容"
+    },
     "editor": {
       "untitled": "无标题",
       "noteTitle": "笔记标题",
@@ -2906,7 +2913,7 @@
       "asJson": "导出为 JSON (.json)",
       "asTranscriptMarkdown": "导出为 Markdown (.md)",
       "raw": "原始内容",
-      "enhanced": "增强内容",
+      "aiSummary": "AI 摘要",
       "saving": "保存中",
       "transcriptEmptyTitle": "尚未录制任何内容",
       "transcriptEmptyDescription": "点击录制开始转写。所说的内容会实时显示在这里。",
@@ -3532,7 +3539,9 @@
       "stopListening": "停止录音",
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏",
-      "askAssistant": "询问助手"
+      "askAssistant": "询问助手",
+      "busyRecording": "请先结束当前录音",
+      "startMeetingRecording": "开始会议录音"
     }
   },
   "dictationAgent": {

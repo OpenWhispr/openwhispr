@@ -143,12 +143,13 @@ class SelectionManager {
   // The Windows foreground window captured at record start, for the paste path
   // to restore before Ctrl+V lands (#859). Waits out an in-flight probe for the
   // same reason captureSelectedText does: the stop-press probe can still be
-  // running when fast transcription reaches the paste.
-  async getWinTargetHwnd() {
+  // running when fast transcription reaches the paste. Carries the window's
+  // identity so the paste can judge whether restoring it makes sense.
+  async getWinTarget() {
     while (this._captureTargetPromise) {
       await this._captureTargetPromise;
     }
-    return this.lastTarget?.kind === "win-hwnd" ? this.lastTarget.id : null;
+    return this.lastTarget?.kind === "win-hwnd" ? this.lastTarget : null;
   }
 
   async captureSelectedText(options = {}) {

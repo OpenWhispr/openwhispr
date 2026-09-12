@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "Le traitement par IA est restreint par votre organisation.",
     "policyAgentRestricted": "L’utilisation de l’assistant IA est restreinte par votre organisation.",
     "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation.",
+    "policyUnresolved": "Les paramètres de votre organisation ne sont pas encore chargés. Réessayez dans un instant.",
     "managedConfigLoading": "Vérification de la configuration gérée de votre organisation en cours. Réessayez dans un instant.",
     "managedConfigUnavailable": "L'accès d'entreprise géré est indisponible. Reconnectez-vous ou contactez votre administrateur.",
     "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur."
@@ -3234,6 +3235,12 @@
       "hoursAgo": "il y a {{count}}h",
       "daysAgo": "il y a {{count}}j"
     },
+    "createMenu": {
+      "note": "Note",
+      "assistantChat": "Chat avec l'assistant",
+      "teamSpace": "Espace d'équipe",
+      "chooseType": "Choisir quoi créer"
+    },
     "editor": {
       "untitled": "Sans titre",
       "noteTitle": "Titre de la note",
@@ -3248,7 +3255,7 @@
       "asJson": "En JSON (.json)",
       "asTranscriptMarkdown": "En Markdown (.md)",
       "raw": "Brut",
-      "enhanced": "Amélioré",
+      "aiSummary": "Résumé IA",
       "saving": "Enregistrement",
       "transcriptEmptyTitle": "Rien d'enregistré pour l'instant",
       "transcriptEmptyDescription": "Lancez l'enregistrement pour commencer la transcription. Tout ce qui est dit s'affiche ici en direct.",
@@ -3701,7 +3708,9 @@
       "stopListening": "Arrêter l’écoute",
       "startListening": "Commencer l’écoute",
       "hideForNow": "Masquer pour l’instant",
-      "askAssistant": "Demander à l'assistant"
+      "askAssistant": "Demander à l'assistant",
+      "busyRecording": "Terminez d'abord l'enregistrement en cours",
+      "startMeetingRecording": "Démarrer l’enregistrement de la réunion"
     }
   },
   "dictationAgent": {

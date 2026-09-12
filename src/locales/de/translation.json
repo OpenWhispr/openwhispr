@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "Die KI-Verarbeitung ist durch Ihre Organisation eingeschränkt.",
     "policyAgentRestricted": "Die Nutzung des KI-Assistenten ist durch Ihre Organisation eingeschränkt.",
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt.",
+    "policyUnresolved": "Die Einstellungen deiner Organisation wurden noch nicht geladen. Versuche es gleich noch einmal.",
     "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
     "managedConfigUnavailable": "Der verwaltete Unternehmenszugriff ist nicht verfügbar. Melden Sie sich erneut an oder wenden Sie sich an Ihren Administrator.",
     "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator."
@@ -3234,6 +3235,12 @@
       "hoursAgo": "vor {{count}}h",
       "daysAgo": "vor {{count}}T"
     },
+    "createMenu": {
+      "note": "Notiz",
+      "assistantChat": "Assistent-Chat",
+      "teamSpace": "Team-Bereich",
+      "chooseType": "Auswählen, was erstellt werden soll"
+    },
     "editor": {
       "untitled": "Unbenannt",
       "noteTitle": "Notiztitel",
@@ -3248,7 +3255,7 @@
       "asJson": "Als JSON (.json)",
       "asTranscriptMarkdown": "Als Markdown (.md)",
       "raw": "Roh",
-      "enhanced": "Verbessert",
+      "aiSummary": "KI-Zusammenfassung",
       "saving": "Wird gespeichert",
       "transcriptEmptyTitle": "Noch nichts aufgenommen",
       "transcriptEmptyDescription": "Drücke auf Aufnahme, um mit der Transkription zu beginnen. Alles Gesagte erscheint hier in Echtzeit.",
@@ -3701,7 +3708,9 @@
       "stopListening": "Aufnahme beenden",
       "startListening": "Aufnahme starten",
       "hideForNow": "Vorerst ausblenden",
-      "askAssistant": "Assistent fragen"
+      "askAssistant": "Assistent fragen",
+      "busyRecording": "Beende zuerst die laufende Aufnahme",
+      "startMeetingRecording": "Meeting-Aufnahme starten"
     }
   },
   "dictationAgent": {
