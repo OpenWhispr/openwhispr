@@ -60,6 +60,7 @@ export interface HotkeySettings {
   /** Hotkeys actually registered by the main process (may be a subset of
    * dictationKey, e.g. primary-only on GNOME/KDE/Hyprland). Display-only. */
   activeDictationKey: string | null;
+  pasteLastKey: string;
   meetingKey: string;
   voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
@@ -321,6 +322,7 @@ function useSettingsInternal() {
     deepgramApiKey: store.deepgramApiKey,
     assemblyaiApiKey: store.assemblyaiApiKey,
     dictationKey: store.dictationKey,
+    pasteLastKey: store.pasteLastKey,
     meetingKey: store.meetingKey,
     voiceAgentKey: store.voiceAgentKey,
     meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
@@ -365,6 +367,7 @@ function useSettingsInternal() {
     cleanupCustomApiKey: store.cleanupCustomApiKey,
     setCleanupCustomApiKey: store.setCleanupCustomApiKey,
     setDictationKey: store.setDictationKey,
+    setPasteLastKey: store.setPasteLastKey,
     setMeetingKey: store.setMeetingKey,
     setVoiceAgentKey: store.setVoiceAgentKey,
     onboardingUseCases: store.onboardingUseCases,
