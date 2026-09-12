@@ -14,6 +14,7 @@ export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Ob
   openai: openaiProvider,
   custom: openaiProvider,
   openrouter: openaiProvider,
+  atlascloud: openaiProvider,
   anthropic: anthropicProvider,
   gemini: geminiProvider,
   groq: groqProvider,
