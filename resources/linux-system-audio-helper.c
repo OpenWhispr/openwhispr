@@ -757,7 +757,7 @@ static gboolean run_pipewire_capture(Helper *app)
     struct pw_properties *props = pw_properties_new(
         PW_KEY_MEDIA_TYPE, "Audio",
         PW_KEY_MEDIA_CATEGORY, "Capture",
-        PW_KEY_MEDIA_ROLE, "Communication",
+        PW_KEY_MEDIA_ROLE, "Music",
         PW_KEY_STREAM_CAPTURE_SINK, "true",
         NULL);
     if (props && target_sink_name) {
