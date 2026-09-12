@@ -7,6 +7,7 @@ interface PillTooltipProps {
   emoji?: string;
   align?: "left" | "right" | "center";
   disabled?: boolean;
+  open?: boolean;
 }
 
 /**
@@ -20,6 +21,7 @@ export function PillTooltip({
   emoji,
   align = "center",
   disabled = false,
+  open,
 }: PillTooltipProps): React.JSX.Element {
   const [isVisible, setIsVisible] = useState(false);
 
@@ -34,7 +36,7 @@ export function PillTooltip({
       <div onMouseEnter={() => setIsVisible(true)} onMouseLeave={() => setIsVisible(false)}>
         {children}
       </div>
-      {isVisible && !disabled && (
+      {(open ?? isVisible) && !disabled && (
         <div
           className={`absolute bottom-full ${alignClass} mb-2 px-1.5 py-1 text-[10px] text-popover-foreground bg-popover border border-border rounded-full z-10 shadow-lg transition-opacity duration-150 whitespace-nowrap`}
         >
