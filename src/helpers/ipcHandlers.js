@@ -6264,6 +6264,28 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle(
+      "proxy-batch-dictation",
+      async (event, endpoint, headers, formDataFieldsArray, audioBuffer, mimeType, fileName) => {
+        const formData = new FormData();
+        for (const [key, value] of formDataFieldsArray || []) {
+          formData.append(key, value);
+        }
+        formData.append("file", new Blob([audioBuffer], { type: mimeType }), fileName);
+
+        const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
+        const responseText = await response.text();
+
+        return {
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          contentType: response.headers.get("content-type") || "",
+          text: responseText,
+        };
+      }
+    );
+
     ipcMain.handle("retry-transcription", async (event, id, settings) => {
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       if (!buffer) return { success: false, error: "Audio file not found" };

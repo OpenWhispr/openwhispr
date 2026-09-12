@@ -3548,6 +3548,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (language) {
         formData.append("language", language);
       }
+      formData.append("response_format", "json");
 
       const endpoint = this.getTranscriptionEndpoint(route);
 
@@ -3628,54 +3629,99 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "transcription"
       );
 
-      requestController = new AbortController();
-      this._activeTranscriptionAbortController = requestController;
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: formData,
-        signal: requestController.signal,
-      });
+      let responseOk,
+        responseStatus,
+        responseStatusText,
+        responseContentType,
+        rawText,
+        responseStream;
 
-      const responseContentType = response.headers.get("content-type") || "";
+      if (!shouldStream && window.electronAPI?.proxyBatchDictation) {
+        const formDataFieldsArray = [];
+        if (model) formDataFieldsArray.push(["model", model]);
+        if (language && language !== "auto") formDataFieldsArray.push(["language", language]);
+        formDataFieldsArray.push(["response_format", "json"]);
+        if (dictionaryPrompt) formDataFieldsArray.push(["prompt", dictionaryPrompt]);
+        if (usesKeywords) {
+          for (const keyword of dictionaryKeywords(dictionary)) {
+            formDataFieldsArray.push(["keywords[]", keyword]);
+          }
+        }
+
+        requestController = new AbortController();
+        this._activeTranscriptionAbortController = requestController;
+
+        const proxyResult = await window.electronAPI.proxyBatchDictation(
+          endpoint,
+          headers,
+          formDataFieldsArray,
+          await optimizedAudio.arrayBuffer(),
+          mimeType,
+          `audio.${extension}`
+        );
+
+        responseOk = proxyResult.ok;
+        responseStatus = proxyResult.status;
+        responseStatusText = proxyResult.statusText;
+        responseContentType = proxyResult.contentType;
+        rawText = proxyResult.text;
+      } else {
+        requestController = new AbortController();
+        this._activeTranscriptionAbortController = requestController;
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: formData,
+          signal: requestController.signal,
+        });
+
+        responseOk = response.ok;
+        responseStatus = response.status;
+        responseStatusText = response.statusText;
+        responseContentType = response.headers.get("content-type") || "";
+        if (!responseOk || !shouldStream || !responseContentType.includes("text/event-stream")) {
+          rawText = await response.text();
+        } else {
+          responseStream = response;
+        }
+      }
 
       logger.debug(
         "Transcription API response received",
         {
-          status: response.status,
-          statusText: response.statusText,
+          status: responseStatus,
+          statusText: responseStatusText,
           contentType: responseContentType,
-          ok: response.ok,
+          ok: responseOk,
         },
         "transcription"
       );
 
-      if (!response.ok) {
-        const errorText = await response.text();
+      if (!responseOk) {
         logger.error(
           "Transcription API error response",
           {
-            status: response.status,
-            errorText,
+            status: responseStatus,
+            errorText: rawText,
           },
           "transcription"
         );
-        const err = new Error(`API Error: ${response.status} ${errorText}`);
-        if (response.status === 401) err.code = "INVALID_KEY";
-        else if (response.status === 429) {
+        const err = new Error(`API Error: ${responseStatus} ${rawText}`);
+        if (responseStatus === 401) err.code = "INVALID_KEY";
+        else if (responseStatus === 429) {
           // The user's own provider rate-limited the request — not an OpenWhispr plan limit
           err.code = "PROVIDER_RATE_LIMITED";
           err.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";
-        } else if (response.status >= 500) err.code = "SERVER_ERROR";
+        } else if (responseStatus >= 500) err.code = "SERVER_ERROR";
         throw err;
       }
 
       let result;
       const contentType = responseContentType;
 
-      if (shouldStream && contentType.includes("text/event-stream")) {
+      if (shouldStream && contentType.includes("text/event-stream") && responseStream) {
         logger.debug("Processing streaming response", { contentType }, "transcription");
-        const streamedText = await this.readTranscriptionStream(response);
+        const streamedText = await this.readTranscriptionStream(responseStream);
         result = { text: streamedText };
         logger.debug(
           "Streaming response parsed",
@@ -3686,7 +3732,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           "transcription"
         );
       } else {
-        const rawText = await response.text();
         logger.debug(
           "Raw API response body",
           {
@@ -3699,15 +3744,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         try {
           result = JSON.parse(rawText);
         } catch (parseError) {
-          logger.error(
-            "Failed to parse JSON response",
-            {
-              parseError: parseError.message,
-              rawText: rawText.substring(0, 500),
-            },
-            "transcription"
-          );
-          throw new Error(`Failed to parse API response: ${parseError.message}`);
+          const trimmed = rawText.trim();
+          if (trimmed.length > 0 && !trimmed.startsWith("{") && !trimmed.startsWith("<")) {
+            result = { text: trimmed };
+          } else {
+            logger.error(
+              "Failed to parse JSON response",
+              {
+                parseError: parseError.message,
+                rawText: rawText.substring(0, 500),
+              },
+              "transcription"
+            );
+            throw new Error(`Failed to parse API response: ${parseError.message}`);
+          }
         }
 
         logger.debug(
@@ -3783,6 +3833,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       if (error.message === "No audio detected") {
         throw error;
+      }
+      if (error.message === "Failed to fetch") {
+        error.message = "Failed to fetch. Check your endpoint URL and network connection.";
       }
 
       const isOpenAIMode = !getSettings().useLocalWhisper;
