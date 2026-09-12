@@ -182,7 +182,7 @@ if (gioAvailable) {
 
 if (atspiAvailable) {
   log("atspi-2 found, enabling AT-SPI2 terminal detection");
-  compileArgs.push("-DHAVE_ATSPI", ...getAtspiFlags());
+  compileArgs.push("-DHAVE_ATSPI", ...getAtspiFlags(), "-lgobject-2.0");
 } else {
   log("atspi-2 not found, building without AT-SPI2 terminal detection");
 }

@@ -10,6 +10,8 @@ const MAX_SELECTION_EDIT_CODE_POINTS = 6000;
 const COPY_TIMEOUT_MS = 1200;
 const CLIPBOARD_POLL_MS = 20;
 const ATSPI_TARGET_TIMEOUT_MS = 2000;
+const TARGET_CAPTURE_FRESHNESS_MS = 250;
+const ATSPI_COOLDOWN_MS = 2000;
 
 // Editors that copy the whole current line when Ctrl+C (⌘C on macOS) lands with
 // an empty selection (VS Code's editor.emptySelectionClipboard, Scintilla,
@@ -60,19 +62,20 @@ function runFile(command, args, options = {}) {
 
 function runSpawn(command, args, options = {}) {
   return new Promise((resolve) => {
+    const { timeout = COPY_TIMEOUT_MS, ...spawnOptions } = options;
     const child = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
-      ...options,
+      ...spawnOptions,
     });
     let stdout = "";
     let stderr = "";
     let settled = false;
-    const finish = (success) => {
+    const finish = (success, timedOut = false) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ success, stdout, stderr });
+      resolve({ success, timedOut, stdout, stderr });
     };
     child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
     child.stderr?.on("data", (chunk) => (stderr += chunk.toString()));
@@ -83,8 +86,8 @@ function runSpawn(command, args, options = {}) {
     child.on("close", (code) => finish(code === 0));
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
-      finish(false);
-    }, options.timeout || COPY_TIMEOUT_MS);
+      finish(false, true);
+    }, timeout);
   });
 }
 
@@ -102,18 +105,34 @@ class SelectionManager {
     this.sessions = new Map();
     this.lastTarget = null;
     this._captureTargetPromise = null;
+    this._lastTargetCaptureAt = null;
+    this._atspiCooldownUntil = 0;
+    this._atspiProbeGeneration = 0;
   }
 
-  async captureTarget() {
+  async captureTarget({ force = false } = {}) {
     if (this.platform === "darwin") return;
+    if (!force) {
+      if (this._captureTargetPromise) return this._captureTargetPromise;
+      if (
+        this._lastTargetCaptureAt !== null &&
+        this.now() - this._lastTargetCaptureAt < TARGET_CAPTURE_FRESHNESS_MS
+      ) {
+        return;
+      }
+    }
     this.lastTarget = null;
     const probe = this._probeTarget();
     this._captureTargetPromise = probe;
-    const target = await probe;
-    // A newer toggle press may have started its own probe while this one ran;
-    // only the latest probe's result may land in lastTarget.
+    let target = null;
+    try {
+      target = await probe;
+    } catch (error) {
+      debugLogger.warn("Target probe failed", { error: error.message });
+    }
     if (this._captureTargetPromise === probe) {
       this.lastTarget = target;
+      this._lastTargetCaptureAt = this.now();
       this._captureTargetPromise = null;
     }
   }
@@ -156,6 +175,9 @@ class SelectionManager {
     // on); without it the probe's binary spawn would be pure waste.
     const probeEditable = options.probeEditable === true;
     return this.clipboardManager.runClipboardOperation(async () => {
+      if (this.platform === "darwin") {
+        await this.textEditMonitor?.captureTargetPid?.();
+      }
       // captureTarget() fires on every toggle press, including stop. Fast
       // cloud transcription can get here before the stop-press probe lands
       // (~1s on Wayland AT-SPI), when lastTarget is still nulled from the
@@ -531,8 +553,16 @@ class SelectionManager {
 
   async _readLinuxAtspiSelection(binary, expectedTarget) {
     if (!binary) return { status: "unavailable", code: "copy_helper_unavailable" };
+    if (this.now() < this._atspiCooldownUntil) {
+      return { status: "unavailable", code: "accessibility_unavailable" };
+    }
 
+    const generation = ++this._atspiProbeGeneration;
     const result = await runSpawn(binary, ["--atspi-selection"], { timeout: COPY_TIMEOUT_MS });
+    if (result.timedOut && generation === this._atspiProbeGeneration) {
+      this._atspiCooldownUntil = this.now() + ATSPI_COOLDOWN_MS;
+      debugLogger.warn("AT-SPI selection probe timed out", { cooldownMs: ATSPI_COOLDOWN_MS });
+    }
     if (!result.success) return { status: "unavailable", code: "accessibility_unavailable" };
 
     const selected = result.stdout.match(/^ATSPI_SELECTED\s+(\d+)\s+([A-Za-z0-9+/=]+)$/m);
@@ -561,7 +591,8 @@ class SelectionManager {
     // On native Wayland, xdotool can report a stale XWayland window. Prefer
     // AT-SPI when available so the target and selected text come from the
     // compositor's actual focused accessibility object.
-    if (this.clipboardManager._isWayland?.()) {
+    const isWayland = this.clipboardManager._isWayland?.() === true;
+    if (isWayland) {
       const atspiTarget = await this._getLinuxAtspiTarget();
       if (atspiTarget) return atspiTarget;
     }
@@ -607,15 +638,21 @@ class SelectionManager {
       }
     }
 
-    return this._getLinuxAtspiTarget();
+    return isWayland ? null : this._getLinuxAtspiTarget();
   }
 
   async _getLinuxAtspiTarget() {
+    if (this.now() < this._atspiCooldownUntil) return null;
     const binary = this.clipboardManager.resolveLinuxFastPasteBinary();
     if (!binary) return null;
+    const generation = ++this._atspiProbeGeneration;
     const result = await runSpawn(binary, ["--atspi-target"], {
       timeout: ATSPI_TARGET_TIMEOUT_MS,
     });
+    if (result.timedOut && generation === this._atspiProbeGeneration) {
+      this._atspiCooldownUntil = this.now() + ATSPI_COOLDOWN_MS;
+      debugLogger.warn("AT-SPI target probe timed out", { cooldownMs: ATSPI_COOLDOWN_MS });
+    }
     const match = result.stdout.match(/^TARGET\s+ATSPI\s+(\d+)$/m);
     return result.success && match ? { kind: "atspi-pid", id: match[1] } : null;
   }

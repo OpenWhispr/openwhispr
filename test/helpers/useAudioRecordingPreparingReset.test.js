@@ -39,12 +39,13 @@ export default class FakeAudioManager {
   cancelPreparedMicCapture() {}
   cleanup() {}
   async startRecording() {
+    globalThis.__openWhisprStartRecording?.();
     return false;
   }
 }
 `;
 
-test("a failed dictation start reports the lifecycle back to idle instead of sticking on preparing", async (t) => {
+test("dictation start does not wait for target capture and resets a failed start", async (t) => {
   // t.after hooks run in registration order, so this unmount must be
   // registered before installBrowserGlobals/installHookDom's own cleanup —
   // otherwise window/document are already torn down when unmount runs.
@@ -54,6 +55,17 @@ test("a failed dictation start reports the lifecycle back to idle instead of sti
   });
 
   const reported = [];
+  let startCalled = false;
+  let resolveTargetCapture;
+  const targetCapture = new Promise((resolve) => {
+    resolveTargetCapture = resolve;
+  });
+  globalThis.__openWhisprStartRecording = () => {
+    startCalled = true;
+  };
+  t.after(() => {
+    delete globalThis.__openWhisprStartRecording;
+  });
   const noopDispose = () => () => {};
   installBrowserGlobals(t, {
     window: {
@@ -69,6 +81,7 @@ test("a failed dictation start reports the lifecycle back to idle instead of sti
         onPrepareDictation: noopDispose,
         onCancelDictationPreparation: noopDispose,
         onStopDictation: noopDispose,
+        captureDictationTarget: () => targetCapture,
         dictationLifecycleStateChanged: (state, inputKind) =>
           reported.push(`${state}:${inputKind}`),
       },
@@ -107,8 +120,15 @@ test("a failed dictation start reports the lifecycle back to idle instead of sti
   reported.length = 0;
 
   let started;
+  let startPromise;
   await React.act(async () => {
-    started = await api.startRecording();
+    startPromise = api.startRecording();
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+  assert.equal(startCalled, true);
+  resolveTargetCapture({ success: true, pid: null });
+  await React.act(async () => {
+    started = await startPromise;
   });
 
   assert.equal(started, false);

@@ -488,6 +488,7 @@ static int atspi_active_pid(AtspiAccessible *app) {
 }
 
 static int print_atspi_target(void) {
+    if (atspi_init() != 0) return 1;
     AtspiAccessible *app = NULL;
     AtspiAccessible *win = find_active_atspi_window(&app);
     int pid = app ? atspi_active_pid(app) : 0;
@@ -499,6 +500,7 @@ static int print_atspi_target(void) {
 }
 
 static int print_atspi_selection(void) {
+    if (atspi_init() != 0) return 1;
     AtspiAccessible *app = NULL;
     AtspiAccessible *win = find_active_atspi_window(&app);
     int pid = app ? atspi_active_pid(app) : 0;
