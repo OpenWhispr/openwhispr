@@ -1940,6 +1940,8 @@ declare global {
       startControlPanelDrag: () => Promise<void>;
       stopControlPanelDrag: () => Promise<void>;
       setMainWindowInteractivity: (interactive: boolean) => Promise<void>;
+      getMainWindowPointerPosition: () => Promise<{ x: number; y: number } | null>;
+      onMainWindowVisibilityChanged: (callback: (visible: boolean) => void) => () => void;
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
       resizeMainWindow: (
         sizeKey:

@@ -1539,6 +1539,11 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("get-main-window-pointer-position", (event) => {
+      if (event.sender !== this.windowManager.mainWindow?.webContents) return null;
+      return this.windowManager.getMainWindowPointerPosition();
+    });
+
     ipcMain.handle("get-main-window-horizontal-direction", () => {
       return this.windowManager.getMainWindowHorizontalDirection();
     });

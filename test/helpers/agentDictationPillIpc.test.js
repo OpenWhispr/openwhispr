@@ -170,6 +170,18 @@ test.before(() => {
   );
 });
 
+test("only the main renderer can sample its window's native pointer", () => {
+  const { stub, mainContents, pillContents } = makeWindowManagerStub();
+  stub.getMainWindowPointerPosition = () => ({ x: 104, y: 60 });
+  installWindowManager(stub);
+  const handler = handlers.get("get-main-window-pointer-position");
+  assert.deepEqual(handler({ sender: mainContents }), { x: 104, y: 60 });
+  assert.equal(handler({ sender: pillContents }), null);
+  assert.equal(handler({ sender: {} }), null);
+  stub.mainWindow = null;
+  assert.equal(handler({ sender: mainContents }), null);
+});
+
 test.after(() => {
   Module._load = originalLoad;
 });

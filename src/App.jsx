@@ -5,6 +5,7 @@ import { useToast } from "./components/ui/useToast";
 import { useHotkey } from "./hooks/useHotkey";
 import { formatHotkeyListLabel } from "./utils/hotkeys";
 import { useWindowDrag } from "./hooks/useWindowDrag";
+import { useLinuxPillInteractivity } from "./hooks/useLinuxPillInteractivity";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useAssistantPanel } from "./hooks/useAssistantPanel";
 import { useOnboardingAssistantDemo } from "./hooks/useOnboardingAssistantDemo";
@@ -60,6 +61,7 @@ export default function App() {
   const [isHovered, setIsHovered] = useState(false);
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
   const buttonRef = useRef(null);
+  const pillPresenceRef = useRef(null);
   const { toast, dismiss, toastCount, dictationErrorActionCount, dismissByPresentation } =
     useToast();
   const { t } = useTranslation();
@@ -79,6 +81,9 @@ export default function App() {
   const [mainWindowHorizontalDirection, setMainWindowHorizontalDirection] = useState(null);
 
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
+    // Linux has one pointer-poll owner; native mouseleave must not undo its
+    // drag/menu capture or strand the next hover in click-through mode.
+    if (window.electronAPI?.getPlatform?.() === "linux") return;
     window.electronAPI?.setMainWindowInteractivity?.(shouldCapture);
   }, []);
   const dismissDictationError = React.useCallback(
@@ -588,6 +593,13 @@ export default function App() {
     hasLiveActivity: pillHasLiveActivity,
   });
 
+  useLinuxPillInteractivity({
+    pillRef: pillPresenceRef,
+    captureWindow: isCommandMenuOpen || toastCount > 0 || anyPanelMounted || isDragging,
+    pillInteractive: pillIsInteractive && !pillVisuallySuppressed,
+    onHoverChange: setIsHovered,
+  });
+
   return (
     <div className="dictation-window">
       {/* The panel footer can hide this pill, but never unmounts it. */}
@@ -603,6 +615,7 @@ export default function App() {
         aria-hidden={pillVisuallySuppressed || undefined}
       >
         <div
+          ref={pillPresenceRef}
           className="assistant-pill-presence relative flex items-center"
           data-assistant-footer-phase={assistant.open ? assistant.footerPhase : undefined}
           data-horizontal-direction={voiceHorizontalDirection}
@@ -626,6 +639,7 @@ export default function App() {
           <PillTooltip
             content={canReopenLiveTranscript ? t("transcriptionPreview.label") : micTooltip}
             disabled={anyPanelMounted}
+            open={window.electronAPI?.getPlatform?.() === "linux" ? isHovered : undefined}
             align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
           >
             <VoicePill

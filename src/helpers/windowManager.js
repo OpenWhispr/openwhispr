@@ -240,21 +240,31 @@ class WindowManager {
       return;
     }
 
-    if (process.platform !== "darwin") {
-      // Only macOS forwards hover through a click-through window. Windows
-      // forwarding is unreliable for this floating panel, and Linux ignores
-      // `forward` entirely (#1456): the pill stopped receiving mouseenter after
-      // the first hover-out, so its cancel button never came back (#2136).
-      // Keep the panel interactive so the mic and cancel buttons stay clickable.
+    if (process.platform === "win32") {
+      // Windows click-through forwarding is unreliable for this floating panel.
       this.mainWindow.setIgnoreMouseEvents(false);
       return;
     }
 
-    if (shouldCapture) {
+    if (process.platform === "linux") {
+      // The renderer samples the native pointer because Linux cannot forward
+      // hover through click-through windows. Reapply after native resizes,
+      // which can reset X11's input region even when capture has not changed.
+      this.mainWindow.setIgnoreMouseEvents(!shouldCapture);
+    } else if (shouldCapture) {
       this.mainWindow.setIgnoreMouseEvents(false);
     } else {
       this.mainWindow.setIgnoreMouseEvents(true, { forward: true });
     }
+  }
+
+  getMainWindowPointerPosition() {
+    const win = this.mainWindow;
+    if (!win || win.isDestroyed() || !win.isVisible() || win.isMinimized()) return null;
+    const cursor = screen.getCursorScreenPoint();
+    const bounds = win.getContentBounds();
+    const zoom = win.webContents.getZoomFactor();
+    return { x: (cursor.x - bounds.x) / zoom, y: (cursor.y - bounds.y) / zoom };
   }
 
   // Only the meeting prompt owns this: another overlay reporting its own hover
@@ -1923,6 +1933,20 @@ class WindowManager {
   registerMainWindowEvents() {
     if (!this.mainWindow) {
       return;
+    }
+
+    if (process.platform === "linux") {
+      const win = this.mainWindow;
+      // backgroundThrottling:false keeps document.visibilityState visible even
+      // after hide(). Native visibility owns the Linux pointer poll's lifetime.
+      for (const event of ["show", "hide", "minimize", "restore"]) {
+        win.on(event, () => {
+          win.webContents.send(
+            "main-window-visibility-changed",
+            win.isVisible() && !win.isMinimized()
+          );
+        });
+      }
     }
 
     // Safety timeout: force show the window if ready-to-show doesn't fire within 10 seconds

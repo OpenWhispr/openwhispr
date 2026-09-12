@@ -541,6 +541,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ackMainWindowResizeMask: (token) => ipcRenderer.send("main-window-resize-mask-ready", token),
   setMainWindowInteractivity: (interactive) =>
     ipcRenderer.invoke("set-main-window-interactivity", interactive),
+  getMainWindowPointerPosition: () => ipcRenderer.invoke("get-main-window-pointer-position"),
+  onMainWindowVisibilityChanged: registerListener(
+    "main-window-visibility-changed",
+    (callback) => (_event, visible) => callback(visible)
+  ),
   setNotificationInteractivity: (interactive) =>
     ipcRenderer.invoke("set-notification-interactivity", interactive),
   resizeMainWindow: (sizeKey) => ipcRenderer.invoke("resize-main-window", sizeKey),
