@@ -68,6 +68,10 @@ const MATRIX = [
     { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low", reasoning: { effort: "low" }, chat_template_kwargs: { enable_thinking: false } }],
   ["lan gpt-oss suppression sends the family floor, never the off value the family lacks", "lan", "gpt-oss-20b-mxfp4", null, AGENT_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning: { effort: "low" }, chat_template_kwargs: { enable_thinking: false } }],
+  ["lan glm-5.3 default sends no reasoning params, server applies its max default", "lan", "glm-5.3-flash", null, CLEANUP,
+    { max_tokens: MAX_TOKENS, temperature: 0 }],
+  ["lan glm-5.3 suppression floors at low, never the unsupported none", "lan", "glm-5.3-flash", null, CLEANUP_NO_THINK,
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning: { effort: "low" }, chat_template_kwargs: { enable_thinking: false } }],
   ["local llama.cpp gets think false plus chat_template_kwargs (#783)", "local", "qwen3.5-4b-gguf", null, CLEANUP_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0, think: false, chat_template_kwargs: { enable_thinking: false } }],
 
