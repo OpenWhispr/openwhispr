@@ -7,14 +7,16 @@ const REQUEST_TIMEOUT = 30000;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
 const MAX_REDIRECTS = 5;
+const RELEASE_PAGE_SIZE = 100;
+const MAX_RELEASE_PAGES = 20;
 
 /**
- * Fetch JSON from a URL with proper error handling.
+ * Fetch JSON and response headers from a URL.
  * @param {string} url - URL to fetch
  * @param {number} [redirectCount=0] - Current redirect count (internal use)
- * @returns {Promise<object>} - Parsed JSON response
+ * @returns {Promise<{json: object, headers: object}>}
  */
-function fetchJson(url, redirectCount = 0) {
+function fetchJsonResponse(url, redirectCount = 0) {
   return new Promise((resolve, reject) => {
     if (redirectCount > MAX_REDIRECTS) {
       reject(new Error("Too many redirects"));
@@ -46,7 +48,7 @@ function fetchJson(url, redirectCount = 0) {
             return;
           }
           const redirectUrl = location.startsWith("/") ? new URL(location, url).href : location;
-          fetchJson(redirectUrl, redirectCount + 1)
+          fetchJsonResponse(redirectUrl, redirectCount + 1)
             .then(resolve)
             .catch(reject);
           return;
@@ -61,7 +63,7 @@ function fetchJson(url, redirectCount = 0) {
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () => {
           try {
-            resolve(JSON.parse(data));
+            resolve({ json: JSON.parse(data), headers: res.headers });
           } catch (e) {
             reject(new Error(`Failed to parse JSON: ${e.message}`));
           }
@@ -73,17 +75,69 @@ function fetchJson(url, redirectCount = 0) {
   });
 }
 
+function fetchJson(url, redirectCount = 0) {
+  return fetchJsonResponse(url, redirectCount).then((response) => response.json);
+}
+
+/**
+ * Return the next URL from a GitHub `Link` header, or null when this is the last page.
+ * @param {string | string[] | undefined} linkHeader
+ * @returns {string | null}
+ */
+function parseGithubNextLink(linkHeader) {
+  const raw = Array.isArray(linkHeader) ? linkHeader.join(",") : linkHeader;
+  if (!raw) {
+    return null;
+  }
+
+  for (const part of raw.split(",")) {
+    if (!/rel=["']?next["']?/i.test(part)) {
+      continue;
+    }
+    const match = part.match(/<([^>]+)>/);
+    if (match) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+/**
+ * First non-draft release whose tag starts with `tagPrefix`.
+ * GitHub lists releases newest-first, so the first hit is the latest match.
+ * @param {unknown} releases
+ * @param {string} tagPrefix
+ * @param {boolean} includePrerelease
+ * @returns {object | null}
+ */
+function matchReleaseByPrefix(releases, tagPrefix, includePrerelease) {
+  if (!Array.isArray(releases)) {
+    return null;
+  }
+
+  for (const release of releases) {
+    if (!release || release.draft) continue;
+    if (!includePrerelease && release.prerelease) continue;
+    if (release.tag_name && release.tag_name.startsWith(tagPrefix)) {
+      return release;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Fetch a release from a GitHub repository.
  * @param {string} repo - Repository in "owner/repo" format
  * @param {object} options - Options
  * @param {string} [options.tag] - Exact tag to fetch (works for any release age, no pagination)
- * @param {string} [options.tagPrefix] - Latest release whose tag starts with this prefix (searches the 50 most recent only)
+ * @param {string} [options.tagPrefix] - Latest release whose tag starts with this prefix (walks GitHub release pages)
  * @param {boolean} [options.includePrerelease=false] - Include prereleases (tagPrefix only)
  * @returns {Promise<{tag: string, assets: Array<{name: string, url: string}>, url: string} | null>}
  */
 async function fetchLatestRelease(repo, options = {}) {
-  const { tag, tagPrefix, includePrerelease = false } = options;
+  const { tag, tagPrefix, includePrerelease = false, fetchPage } = options;
 
   try {
     if (tag) {
@@ -98,20 +152,22 @@ async function fetchLatestRelease(repo, options = {}) {
       return formatRelease(release);
     }
 
-    const url = `https://api.github.com/repos/${repo}/releases?per_page=50`;
-    const releases = await fetchJson(url);
+    const loadPage =
+      fetchPage ||
+      (async (url) => {
+        const { json, headers } = await fetchJsonResponse(url);
+        return { json, link: headers.link || headers.Link };
+      });
 
-    if (!Array.isArray(releases)) {
-      return null;
-    }
+    let pageUrl = `https://api.github.com/repos/${repo}/releases?per_page=${RELEASE_PAGE_SIZE}`;
 
-    // Find the latest release matching the prefix
-    for (const release of releases) {
-      if (release.draft) continue;
-      if (!includePrerelease && release.prerelease) continue;
-      if (release.tag_name && release.tag_name.startsWith(tagPrefix)) {
-        return formatRelease(release);
+    for (let page = 0; page < MAX_RELEASE_PAGES && pageUrl; page++) {
+      const { json, link } = await loadPage(pageUrl);
+      const match = matchReleaseByPrefix(json, tagPrefix, includePrerelease);
+      if (match) {
+        return formatRelease(match);
       }
+      pageUrl = parseGithubNextLink(link);
     }
 
     return null;
@@ -395,4 +451,8 @@ module.exports = {
   parseArgs,
   setExecutable,
   cleanupFiles,
+  matchReleaseByPrefix,
+  parseGithubNextLink,
+  RELEASE_PAGE_SIZE,
+  MAX_RELEASE_PAGES,
 };
