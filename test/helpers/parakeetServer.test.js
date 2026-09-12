@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const ParakeetServerManager = require("../../src/helpers/parakeetServer");
+const { computeFloat32RMS } = require("../../src/helpers/ffmpegUtils");
 
 const SAMPLE_RATE = 16000;
 const SEGMENT_BYTES = 15 * SAMPLE_RATE * 4; // float32, mirrors MAX_SEGMENT_SECONDS
@@ -26,7 +27,7 @@ function wavFromSeconds(spans) {
   buf.writeUInt32LE(dataSize, 40);
   let offset = 44;
   for (const span of spans) {
-    const amplitude = span.silent ? 0 : 8000;
+    const amplitude = span.silent ? 0 : (span.amplitude ?? 8000);
     for (let i = 0; i < span.seconds * SAMPLE_RATE; i++) {
       buf.writeInt16LE(i % 2 === 0 ? amplitude : -amplitude, offset);
       offset += 2;
@@ -129,6 +130,67 @@ test("a silent segment decoding to empty is not retried or flagged", async () =>
   assert.equal(result.text, "alpha omega");
   assert.ok(!result.truncated, "silence is not data loss");
   assert.equal(fake.calls.length, 3);
+});
+
+test("quiet-but-audible audio is boosted to normal speech level before decode", async () => {
+  const received = [];
+  const fake = fakeWsServer([{ text: "hello" }], {
+    onCall: () => {},
+  });
+  const innerTranscribe = fake.transcribe;
+  fake.transcribe = async (samplesBuffer, ...rest) => {
+    received.push(Buffer.from(samplesBuffer));
+    return innerTranscribe(samplesBuffer, ...rest);
+  };
+  const manager = managerWith(fake);
+
+  // 150/32768 ≈ 0.0046 RMS: inside the empty-decode band, above the silence gate.
+  const result = await manager.transcribe(wavFromSeconds([{ seconds: 10, amplitude: 150 }]));
+
+  assert.equal(result.text, "hello");
+  const decodedRms = computeFloat32RMS(received[0]);
+  assert.ok(
+    Math.abs(decodedRms - 0.08) < 0.005,
+    `expected decode-time RMS near the boost target, got ${decodedRms}`
+  );
+});
+
+test("normal-level audio is decoded unmodified", async () => {
+  const received = [];
+  const fake = fakeWsServer([{ text: "hello" }]);
+  const innerTranscribe = fake.transcribe;
+  fake.transcribe = async (samplesBuffer, ...rest) => {
+    received.push(Buffer.from(samplesBuffer));
+    return innerTranscribe(samplesBuffer, ...rest);
+  };
+  const manager = managerWith(fake);
+
+  await manager.transcribe(wavFromSeconds([{ seconds: 10 }]));
+
+  const decodedRms = computeFloat32RMS(received[0]);
+  assert.ok(
+    Math.abs(decodedRms - 8000 / 32768) < 0.01,
+    `expected decode-time RMS unchanged, got ${decodedRms}`
+  );
+});
+
+test("boosted room noise still reads as silence in the segment loop", async () => {
+  // 15s of quiet speech then 16s of sub-silence-gate noise. The boost lifts the
+  // noise above the unscaled gate, so an unscaled cutoff would retry the empty
+  // noise segments and falsely flag truncation.
+  const fake = fakeWsServer([{ text: "alpha" }, { text: "" }, { text: "" }]);
+  const manager = managerWith(fake);
+
+  const result = await manager.transcribe(
+    wavFromSeconds([
+      { seconds: 15, amplitude: 150 },
+      { seconds: 16, amplitude: 20 },
+    ])
+  );
+
+  assert.equal(result.text, "alpha");
+  assert.ok(!result.truncated, "boosted noise is not data loss");
+  assert.equal(fake.calls.length, 3, "empty noise segments must not be retried");
 });
 
 test("a pre-aborted signal rejects before any decode is issued", async () => {
