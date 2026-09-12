@@ -1,17 +1,16 @@
 import { useEffect } from "react";
-import { resolveTrayAssistantAction, resolveTrayMeetingAction } from "../helpers/trayActionPolicy";
+import { resolveTrayAssistantAction } from "../helpers/trayActionPolicy";
 
 /**
- * The tray's quick actions, answered by the one renderer that owns the policy and
- * recording state the pill's command menu gates them on.
+ * The tray's Ask assistant, answered by the one renderer that can open the panel.
  *
- * The pill menu hides an item it cannot run; the tray always shows it, so every
- * path here either acts or explains itself through `refuse` — a tray click never
- * just disappears.
+ * The pill's command menu hides the item when policy or a live recording rules it
+ * out; the tray always shows it, so this either opens the panel or explains
+ * itself through `refuse`. The tray's other two entries need no renderer: listen
+ * goes straight to the dictation start, and a meeting starts in the main process.
  */
 export function useTrayQuickActions({
   agentAllowed,
-  meetingAllowed,
   policyResolved,
   isRecording,
   liveTranscriptMounted,
@@ -19,12 +18,6 @@ export function useTrayQuickActions({
   openAssistantPanel,
   refuse,
 }) {
-  // Main holds the meeting entry on its own path until this lands: before the
-  // listeners below exist, anything it sends this window goes nowhere.
-  useEffect(() => {
-    window.electronAPI?.notifyDictationRendererReady?.();
-  }, []);
-
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onOpenAssistantPanel?.(() => {
       closeCommandMenu();
@@ -50,26 +43,4 @@ export function useTrayQuickActions({
     openAssistantPanel,
     refuse,
   ]);
-
-  useEffect(() => {
-    const unsubscribe = window.electronAPI?.onStartMeeting?.(() => {
-      closeCommandMenu();
-      const decision = resolveTrayMeetingAction({ meetingAllowed, policyResolved, isRecording });
-      if (decision.action === "refuse") {
-        refuse(decision.messageKey);
-        return;
-      }
-      void window.electronAPI?.startManualMeeting?.();
-    });
-    return () => unsubscribe?.();
-  }, [meetingAllowed, policyResolved, isRecording, closeCommandMenu, refuse]);
-
-  // Main refuses on the gates only it can see — a panel owning the pill, a
-  // transcription still settling, a hotkey being captured — and says so here.
-  useEffect(() => {
-    const unsubscribe = window.electronAPI?.onTrayActionRefused?.((data) => {
-      if (data?.messageKey) refuse(data.messageKey);
-    });
-    return () => unsubscribe?.();
-  }, [refuse]);
 }

@@ -3362,7 +3362,6 @@
       "description": "Transcriptions et résumés structurés",
       "back": "Retour",
       "restrictedByOrg": "La transcription des réunions est restreinte par votre organisation.",
-      "alreadyRecording": "Un enregistrement de réunion est déjà en cours.",
       "unsupportedSelfHosted": "L'enregistrement de notes ne peut pas encore utiliser un serveur auto-hébergé. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "unsupportedProvider": "L'enregistrement de notes ne peut pas utiliser {{provider}} pour la transcription en direct. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "noProviderSelected": "Aucun fournisseur n'est sélectionné pour l'enregistrement de notes. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
@@ -3706,7 +3705,6 @@
       "hideForNow": "Masquer pour l’instant",
       "askAssistant": "Demander à l'assistant",
       "busyRecording": "Terminez d'abord l'enregistrement en cours",
-      "busyHotkeyCapture": "Terminez d'abord de choisir votre raccourci",
       "startMeetingRecording": "Démarrer l’enregistrement de la réunion"
     }
   },

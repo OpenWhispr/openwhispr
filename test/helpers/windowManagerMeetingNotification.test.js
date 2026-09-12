@@ -791,9 +791,10 @@ test("manual meeting starts fail closed like the meeting hotkey", async () => {
   assert.equal(starts, 1);
 });
 
-// The renderer owns the policy and recording state these tray items are gated on,
-// so nothing may be shown, focused, or created before it accepts.
-test("the tray's quick actions ask the renderer without showing or focusing the pill", () => {
+// Only the renderer can open the assistant panel, and it owns the policy and
+// recording state the pill menu gates the item on, so nothing may be shown,
+// focused, or created before it accepts.
+test("the tray's Ask assistant asks the renderer without showing or focusing the pill", () => {
   const fakeMainWindow = (events) => ({
     isDestroyed: () => false,
     isMinimized: () => false,
@@ -808,87 +809,19 @@ test("the tray's quick actions ask the renderer without showing or focusing the 
   const onboarding = new WindowManager();
   onboarding.mainWindow = fakeMainWindow(onboardingEvents);
   onboarding.sendOpenAssistantPanel();
-  onboarding.sendStartMeeting();
   assert.deepEqual(onboardingEvents, []);
 
-  // Both entries wait for the renderer to say its listeners exist: AppRouter holds
-  // a loading screen while a signed-in launch resolves policy, and a send into
-  // that window would land nowhere.
   const events = [];
   const manager = createNormalWindowManager();
   manager.mainWindow = fakeMainWindow(events);
-  let mainProcessStarts = 0;
-  manager.meetingDetectionEngine = {
-    startManualMeeting: async () => {
-      mainProcessStarts += 1;
-    },
-  };
   manager.sendOpenAssistantPanel();
-  manager.sendStartMeeting();
-  assert.deepEqual(events, [], "nothing is sent into a window that cannot answer");
-  assert.equal(mainProcessStarts, 1, "the meeting keeps the main-process path meanwhile");
+  assert.deepEqual(events, ["open-assistant-panel"]);
 
-  manager.setDictationRendererReady(true);
-  manager.sendOpenAssistantPanel();
-  manager.sendStartMeeting();
-  assert.deepEqual(events, ["open-assistant-panel", "start-meeting"]);
-  assert.equal(mainProcessStarts, 1, "a listening renderer decides for itself");
-
-  // Capturing a hotkey swallows both, like every other input path.
+  // Capturing a hotkey swallows it, like every other input path.
   const capturingEvents = [];
   const capturing = createNormalWindowManager();
   capturing.mainWindow = fakeMainWindow(capturingEvents);
   capturing.hotkeyManager.isInListeningMode = () => true;
-  capturing.sendStartMeeting();
   capturing.sendOpenAssistantPanel();
   assert.deepEqual(capturingEvents, []);
-});
-
-// The tray shows its listen item whatever the state, so the gates only this
-// process can see have to answer rather than go quiet.
-test("the tray's listen item explains a refusal the renderer cannot see", () => {
-  const events = [];
-  const manager = createNormalWindowManager();
-  manager.mainWindow = {
-    isDestroyed: () => false,
-    isMinimized: () => false,
-    isVisible: () => true,
-    focus: () => events.push("focus"),
-    showInactive: () => events.push("show"),
-    webContents: { send: (channel, payload) => events.push([channel, payload?.messageKey]) },
-  };
-
-  // Capturing a hotkey is a state the user is actively in, so unlike onboarding
-  // it answers rather than swallowing the click.
-  manager.hotkeyManager.isInListeningMode = () => true;
-  manager.sendStartListening();
-  assert.deepEqual(events, [["tray-action-refused", "app.commandMenu.busyHotkeyCapture"]]);
-  events.length = 0;
-  manager.hotkeyManager.isInListeningMode = () => false;
-
-  // A panel owning the pill blocks dictation input; the click must say so.
-  // Stubbed because the real gate also re-kicks the companion pill's load.
-  manager._shouldBlockDictationInput = () => true;
-  manager.sendStartListening();
-  assert.deepEqual(events, [["tray-action-refused", "app.commandMenu.busyRecording"]]);
-
-  // A transcription still settling refuses the same way.
-  events.length = 0;
-  manager._shouldBlockDictationInput = () => false;
-  manager._dictationLifecycleState = "processing";
-  manager.sendStartListening();
-  assert.deepEqual(events, [["tray-action-refused", "app.commandMenu.busyRecording"]]);
-  manager._dictationLifecycleState = "idle";
-
-  // Idle again, it hands off to the ordinary dictation start, which carries the
-  // target capture and panel choreography its own tests cover.
-  events.length = 0;
-  manager._assistantPanelOpen = false;
-  let starts = 0;
-  manager.sendStartDictation = () => {
-    starts += 1;
-  };
-  manager.sendStartListening();
-  assert.equal(starts, 1);
-  assert.deepEqual(events, [], "an accepted click refuses nothing");
 });

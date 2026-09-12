@@ -57,14 +57,12 @@ function createEngine() {
   const shown = [];
   const meetingNavigations = [];
   const noteNavigations = [];
-  const refusals = [];
   const windowManager = {
     notificationPrefs: {},
     showMeetingNotification: (data) => shown.push(data),
     dismissMeetingNotification: () => {},
     queueMeetingNoteNavigation: async (payload) => meetingNavigations.push(payload),
     queueNoteNavigation: async (payload) => noteNavigations.push(payload),
-    notifyMeetingAlreadyRecording: () => refusals.push("already-recording"),
   };
 
   const engine = new MeetingDetectionEngine(
@@ -75,15 +73,7 @@ function createEngine() {
     {}
   );
 
-  return {
-    engine,
-    audioDetector,
-    processDetector,
-    shown,
-    meetingNavigations,
-    noteNavigations,
-    refusals,
-  };
+  return { engine, audioDetector, processDetector, shown, meetingNavigations, noteNavigations };
 }
 
 test("an unanswered audio prompt expires without cooling down the mic detector", () => {
@@ -141,13 +131,11 @@ test("a manual meeting start during a live recording surfaces that note, not a n
   assert.deepEqual(noteNavigations, [{ noteId: 42 }]);
 });
 
-// There is no note to surface, so the click gets a message instead of silence.
 test("a live recording with no note id still blocks a second manual meeting", async () => {
-  const { engine, noteNavigations, refusals } = createEngine();
+  const { engine, noteNavigations } = createEngine();
   engine._recordingSession = { sessionId: "s2", noteId: null };
 
   await engine.startManualMeeting();
 
   assert.deepEqual(noteNavigations, []);
-  assert.deepEqual(refusals, ["already-recording"]);
 });

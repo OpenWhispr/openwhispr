@@ -11494,14 +11494,6 @@ class IPCHandlers {
 
     ipcMain.handle("start-manual-meeting", () => this.windowManager.startManualMeeting());
 
-    // Only the dictation renderer knows the policy the tray's quick actions are
-    // gated on, and only once it has mounted. Until this ack, a meeting request
-    // takes the main-process path instead of disappearing into a loading screen.
-    ipcMain.on("dictation-renderer-ready", (event) => {
-      if (event.sender !== this.windowManager?.mainWindow?.webContents) return;
-      this.windowManager.setDictationRendererReady(true);
-    });
-
     ipcMain.handle("get-meeting-notification-data", async () => {
       return this.windowManager?._pendingNotificationData ?? null;
     });

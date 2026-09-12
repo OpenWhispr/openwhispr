@@ -397,7 +397,6 @@ export default function App() {
 
   useTrayQuickActions({
     agentAllowed,
-    meetingAllowed,
     policyResolved,
     isRecording,
     liveTranscriptMounted: liveTranscript.mounted,

@@ -1161,11 +1161,10 @@ async function startApp() {
 
   // Set up meeting mode hotkey
   const isMeetingPress = createHotkeyRepeatGate();
-  // Through the renderer, like the tray's item: it owns the meeting policy the
-  // main process cannot see, so both entries refuse the same way.
   const meetingHotkeyCallback = () => {
     if (!isMeetingPress()) return;
-    windowManager.sendStartMeeting();
+    debugLogger.info("Meeting hotkey triggered", {}, "meeting");
+    windowManager.startManualMeeting();
   };
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
@@ -1729,7 +1728,7 @@ async function startApp() {
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        windowManager.sendStartMeeting();
+        windowManager.startManualMeeting();
       }
     };
 

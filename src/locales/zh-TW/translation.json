@@ -3020,7 +3020,6 @@
       "description": "轉錄與結構化摘要",
       "back": "返回",
       "restrictedByOrg": "會議轉錄已被您的組織限制。",
-      "alreadyRecording": "會議錄製已在進行中。",
       "unsupportedSelfHosted": "筆記錄音尚不支援自架端點。請開啟設定，選擇本機或支援串流的服務商。",
       "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
       "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
@@ -3537,7 +3536,6 @@
       "hideForNow": "暫時隱藏",
       "askAssistant": "詢問助理",
       "busyRecording": "請先結束目前的錄音",
-      "busyHotkeyCapture": "請先完成快速鍵設定",
       "startMeetingRecording": "開始會議錄音"
     }
   },

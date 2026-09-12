@@ -685,7 +685,6 @@ class MeetingDetectionEngine {
       const { noteId } = this._recordingSession;
       debugLogger.info("Manual meeting ignored — a recording is live", { noteId }, "meeting");
       if (noteId != null) await this.windowManager.queueNoteNavigation({ noteId });
-      else this.windowManager.notifyMeetingAlreadyRecording?.();
       return;
     }
 

@@ -1,10 +1,10 @@
-// The pill's command menu hides quick actions that cannot run; the tray always
-// shows them, so a tray click needs an answer instead of silence. These decide
-// what the dictation renderer does with one, and the message it explains a
-// refusal with. Keys resolve through i18n in the renderer.
+// The pill's command menu hides Ask assistant when it cannot run; the tray always
+// shows it, and only this renderer can open the panel. This decides what it does
+// with the request, and the message it explains a refusal with. Keys resolve
+// through i18n in the renderer. The meeting entry needs none of this: it starts
+// in the main process, and the recording itself is policy-gated where it begins.
 export const TRAY_REFUSAL_KEYS = Object.freeze({
   agentRestricted: "common.policyAgentRestricted",
-  meetingRestricted: "notes.meeting.restrictedByOrg",
   policyUnresolved: "common.policyUnresolved",
   busy: "app.commandMenu.busyRecording",
 });
@@ -27,12 +27,5 @@ export function resolveTrayAssistantAction({
 }) {
   if (!agentAllowed) return policyRefusal(policyResolved, TRAY_REFUSAL_KEYS.agentRestricted);
   if (isRecording || liveTranscriptMounted) return refuse(TRAY_REFUSAL_KEYS.busy);
-  return run;
-}
-
-/** A meeting would capture the microphone a live dictation already holds. */
-export function resolveTrayMeetingAction({ meetingAllowed, policyResolved, isRecording }) {
-  if (!meetingAllowed) return policyRefusal(policyResolved, TRAY_REFUSAL_KEYS.meetingRestricted);
-  if (isRecording) return refuse(TRAY_REFUSAL_KEYS.busy);
   return run;
 }

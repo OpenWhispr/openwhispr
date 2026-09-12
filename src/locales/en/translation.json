@@ -3362,7 +3362,6 @@
       "description": "Transcriptions & structured summaries",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
-      "alreadyRecording": "A meeting recording is already running.",
       "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
@@ -3706,7 +3705,6 @@
       "hideForNow": "Hide for now",
       "askAssistant": "Ask assistant",
       "busyRecording": "Finish the current dictation first",
-      "busyHotkeyCapture": "Finish choosing your shortcut first",
       "startMeetingRecording": "Start meeting recording"
     }
   },
