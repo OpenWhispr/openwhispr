@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   HIDDEN_LAUNCH_FLAG,
   getLoginItemArgs,
+  getLoginItemLookupPath,
   resolveAutoStartState,
   needsHiddenFlagMigration,
   wasLaunchedHidden,
@@ -18,6 +19,41 @@ test("Windows login items are read and written with the same args", () => {
 test("platforms without a hidden-launch flag pass no args", () => {
   assert.deepEqual(getLoginItemArgs("darwin"), []);
   assert.deepEqual(getLoginItemArgs("linux"), []);
+});
+
+// Electron parses the lookup path AND every Run value with CommandLine::FromString,
+// then compares the parsed programs. Unquoted, "C:\Program Files\OpenWhispr\..."
+// truncates to "C:\Program" and compares equal to any other unquoted Run entry under
+// C:\Program Files, so executableWillLaunchAtLogin reports a stranger's startup entry
+// as ours — and keeps reporting true once ours is gone, which is what makes the
+// launch-at-login switch impossible to turn off.
+test("Windows passes a quoted lookup path so the exe comparison is exact", () => {
+  assert.equal(
+    getLoginItemLookupPath("win32", "C:\\Program Files\\OpenWhispr\\OpenWhispr.exe"),
+    '"C:\\Program Files\\OpenWhispr\\OpenWhispr.exe"'
+  );
+});
+
+// FormatCommandLineString strips one layer of surrounding quotes before re-quoting,
+// but double-quoting would still be wrong to write, so never wrap twice.
+test("an already quoted Windows path is not quoted twice", () => {
+  assert.equal(
+    getLoginItemLookupPath("win32", '"C:\\Program Files\\OpenWhispr\\OpenWhispr.exe"'),
+    '"C:\\Program Files\\OpenWhispr\\OpenWhispr.exe"'
+  );
+});
+
+// Only Windows parses the path this way, and passing one elsewhere would change what
+// macOS compares against.
+test("platforms other than Windows pass no lookup path", () => {
+  assert.equal(getLoginItemLookupPath("darwin", "/Applications/OpenWhispr.app"), null);
+  assert.equal(getLoginItemLookupPath("linux", "/usr/bin/open-whispr"), null);
+});
+
+// Falling back to no path is what the caller already did, and is still correct.
+test("a missing executable path yields no lookup path", () => {
+  assert.equal(getLoginItemLookupPath("win32", ""), null);
+  assert.equal(getLoginItemLookupPath("win32", undefined), null);
 });
 
 // The bug behind the reported "startup app not recognized": openAtLogin only

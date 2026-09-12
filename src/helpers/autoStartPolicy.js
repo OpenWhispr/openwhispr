@@ -13,6 +13,32 @@ function getLoginItemArgs(platform) {
   return platform === "win32" ? [HIDDEN_LAUNCH_FLAG] : [];
 }
 
+// Windows only: the executable path to hand getLoginItemSettings, quoted.
+//
+// executableWillLaunchAtLogin is built by comparing parsed program paths, and BOTH
+// sides go through CommandLine::FromString first (browser_win.cc,
+// GetLoginItemSettingsHelper). An unquoted path containing spaces therefore truncates
+// at the first space, so C:\Program Files\<app>\<app>.exe collapses to "C:\Program" —
+// and so does every OTHER unquoted Run entry under C:\Program Files, of which there
+// are usually several. Those then compare equal, so the field reports true because an
+// unrelated app is set to launch, and keeps reporting true after our own entry is
+// removed. Left unquoted it even returns true for a path that does not exist on disk.
+//
+// The same truncation excludes our own correctly quoted entry from launchItems, since
+// it parses to the full path and no longer matches the truncated lookup.
+//
+// Passing no path is not a way out: getLoginItemSettings then falls back to
+// GetProcessExecPath(), which is unquoted and truncates identically.
+//
+// Safe for openAtLogin, which uses this same path: FormatCommandLineString strips
+// surrounding double quotes before re-quoting with AddQuoteForArg, so the string
+// compared against the registry value is byte-for-byte the same either way.
+function getLoginItemLookupPath(platform, execPath) {
+  if (platform !== "win32" || !execPath) return null;
+  const alreadyQuoted = execPath.length >= 2 && execPath.startsWith('"') && execPath.endsWith('"');
+  return alreadyQuoted ? execPath : `"${execPath}"`;
+}
+
 // For the platforms setLoginItemSettings covers: win32 and darwin.
 function resolveAutoStartState({ platform, loginItemSettings }) {
   if (platform === "win32") {
@@ -48,6 +74,7 @@ function wasLaunchedHidden({ platform, argv, loginItemSettings }) {
 module.exports = {
   HIDDEN_LAUNCH_FLAG,
   getLoginItemArgs,
+  getLoginItemLookupPath,
   resolveAutoStartState,
   needsHiddenFlagMigration,
   wasLaunchedHidden,
