@@ -1,4 +1,5 @@
 import type { ReasoningConfig } from "../BaseReasoningService";
+import { S1_MINI_SYSTEM_PROMPT } from "../../config/s1Mini";
 import { getOpenAiApiConfig } from "../../models/ModelRegistry";
 import { detectEndpointDialect } from "./thinkingSuppressionDialects";
 import { getModelFamilyConstraints } from "./modelFamilyConstraints";
@@ -37,6 +38,12 @@ export function applyChatCompletionsParams(
     maxTokens: number;
   }
 ): void {
+  if (config.s1MiniCleanup) {
+    requestBody.max_tokens = maxTokens;
+    requestBody.temperature = 0;
+    requestBody.chat_template_kwargs = { enable_thinking: false };
+    return;
+  }
   const providerKey = provider.toLowerCase();
   // No systemPrompt override means the default cleanup path: a deterministic
   // transform, so zero temperature.
@@ -98,6 +105,15 @@ export async function fetchWithParamFallback(
   logRejection: (details: { status: number; stripped: string[] }) => void
 ): Promise<Response> {
   let res = await doFetch();
+  // S1-mini's template flag and greedy decoding are required, not optional hints.
+  if (
+    Array.isArray(requestBody.messages) &&
+    requestBody.messages.some(
+      (message: { role?: string; content?: unknown }) =>
+        message.role === "system" && message.content === S1_MINI_SYSTEM_PROMPT
+    )
+  )
+    return res;
   if (res.ok || (res.status !== 400 && res.status !== 422)) return res;
 
   if (requestBody.reasoning) {

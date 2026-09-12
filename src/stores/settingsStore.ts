@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { normalizeS1MiniOptions, type S1MiniOptions } from "../config/s1Mini";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
@@ -960,6 +961,8 @@ export interface SettingsState
   dictationAgentVisionCustomApiKey: string;
 
   cleanupDisableThinking: boolean;
+  s1MiniOptions: S1MiniOptions;
+  setS1MiniOptions: (options: Partial<S1MiniOptions>) => void;
   dictationAgentDisableThinking: boolean;
   dictationAgentVisionDisableThinking: boolean;
   noteFormattingDisableThinking: boolean;
@@ -1895,6 +1898,18 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentVisionCustomApiKey: readString("dictationAgentVisionCustomApiKey", ""),
 
   cleanupDisableThinking: readBoolean("cleanupDisableThinking", true),
+  s1MiniOptions: normalizeS1MiniOptions({
+    styling: readString("s1Mini.styling", "semi-formal") as S1MiniOptions["styling"],
+    structure: readString("s1Mini.structure", "prose") as S1MiniOptions["structure"],
+    context: readString("s1Mini.context", "general") as S1MiniOptions["context"],
+  }),
+  setS1MiniOptions: (options) => {
+    const next = normalizeS1MiniOptions({ ...get().s1MiniOptions, ...options });
+    if (isBrowser) {
+      for (const [key, value] of Object.entries(next)) localStorage.setItem(`s1Mini.${key}`, value);
+    }
+    set({ s1MiniOptions: next });
+  },
   dictationAgentDisableThinking: readBoolean("dictationAgentDisableThinking", true),
   dictationAgentVisionDisableThinking: readBoolean("dictationAgentVisionDisableThinking", true),
   noteFormattingDisableThinking: readBoolean("noteFormattingDisableThinking", true),

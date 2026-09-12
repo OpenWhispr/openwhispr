@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { isS1MiniModel } from "../../config/s1Mini";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "../icons";
@@ -162,6 +163,7 @@ export default function InferenceConfigEditor({
 
   const renderModelSelector = (mode?: "cloud" | "local") => (
     <ReasoningModelSelector
+      allowCleanupOnlyModels={scope === "dictationCleanup"}
       reasoningModel={config.model}
       setReasoningModel={setModel}
       localReasoningProvider={config.provider}
@@ -297,7 +299,7 @@ export default function InferenceConfigEditor({
         />
       )}
 
-      {showThinkingToggle && (
+      {showThinkingToggle && !(scope === "dictationCleanup" && isS1MiniModel(config.model)) && (
         <div className="flex items-start justify-between gap-3 pt-1">
           <div className="flex-1 min-w-0">
             <h4 className="text-sm font-medium text-foreground">

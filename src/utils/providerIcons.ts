@@ -5,6 +5,7 @@ import geminiIcon from "@/assets/icons/providers/gemini.svg";
 import llamaIcon from "@/assets/icons/providers/llama.svg";
 import mistralIcon from "@/assets/icons/providers/mistral.svg";
 import qwenIcon from "@/assets/icons/providers/qwen.svg";
+import superwhisperIcon from "@/assets/icons/providers/superwhisper.svg";
 import groqIcon from "@/assets/icons/providers/groq.svg";
 // The square brand tile (green field, white mark) rather than the bare eye: the
 // eye SVG is 163x108, and ProviderIcon renders a square img, so it came out
@@ -33,6 +34,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   llama: llamaIcon,
   mistral: mistralIcon,
   qwen: qwenIcon,
+  superwhisper: superwhisperIcon,
   groq: groqIcon,
   nvidia: nvidiaIcon,
   cohere: cohereIcon,
@@ -55,6 +57,7 @@ export function getProviderIcon(provider: string): string | undefined {
 }
 
 export const MONOCHROME_PROVIDERS = [
+  "superwhisper",
   "openai",
   "whisper",
   "anthropic",
