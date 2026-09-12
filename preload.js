@@ -599,6 +599,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
+  proxyBatchDictation: (endpoint, headers, formDataFieldsArray, audioBuffer, mimeType, fileName) =>
+    ipcRenderer.invoke(
+      "proxy-batch-dictation",
+      endpoint,
+      headers,
+      formDataFieldsArray,
+      audioBuffer,
+      mimeType,
+      fileName
+    ),
 
   // Corti API
   getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),
