@@ -186,7 +186,7 @@ export const openaiProvider: InferenceProvider = {
     const dialect = detectEndpointDialect(openAiBase);
     // OpenRouter and known dialect hosts speak Chat Completions only — no /responses probe needed.
     let endpointCandidates: Array<{ url: string; type: "responses" | "chat" }>;
-    if (isOpenRouter || dialect) {
+    if (isOpenRouter || dialect || config.s1MiniCleanup) {
       endpointCandidates = [{ url: buildApiUrl(openAiBase, "/chat/completions"), type: "chat" }];
     } else {
       await detectServerType(openAiBase);
@@ -405,7 +405,14 @@ export const openaiProvider: InferenceProvider = {
       isEmpty: responseText.length === 0,
     });
 
-    if (!responseText) {
+    if (
+      config.s1MiniCleanup &&
+      !responseText &&
+      typeof response.choices?.[0]?.message?.content !== "string"
+    ) {
+      throw new Error("Invalid response structure from S1-mini API");
+    }
+    if (!responseText && !config.s1MiniCleanup) {
       if (config.requireCompleteOutput) {
         throw new Error("Model returned an empty selection edit");
       }
