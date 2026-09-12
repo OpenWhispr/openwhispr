@@ -43,6 +43,8 @@ export const anthropicProvider: InferenceProvider = {
       model,
       processingTimeMs,
       resultLength: result.text.length,
+      finishReason: result.stopReason,
+      truncated: result.stopReason === "max_tokens",
     });
     return result.text;
   },

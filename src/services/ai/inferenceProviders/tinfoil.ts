@@ -56,10 +56,11 @@ export const tinfoilProvider: InferenceProvider = {
         .find((content: unknown) => typeof content === "string" && content.trim())
         ?.trim() || "";
 
-    if (
-      config.requireCompleteOutput &&
-      response.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason))
-    ) {
+    const truncated =
+      response.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason)) ??
+      false;
+
+    if (config.requireCompleteOutput && truncated) {
       throw new Error("Model output was truncated before the selection edit completed");
     }
 
@@ -67,6 +68,8 @@ export const tinfoilProvider: InferenceProvider = {
       model,
       responseLength: responseText.length,
       tokensUsed: response.usage?.total_tokens || 0,
+      finishReason: response.choices?.map((choice: any) => choice?.finish_reason)?.[0],
+      truncated,
       success: true,
       isEmpty: responseText.length === 0,
     });
