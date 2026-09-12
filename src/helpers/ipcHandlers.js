@@ -3337,6 +3337,24 @@ class IPCHandlers {
       );
     });
 
+    // Fire-and-forget prewarm issued when dictation recording starts (in parallel
+    // with opening the microphone), so a local Whisper cold start overlaps with
+    // the user speaking instead of happening after they stop. Resolves the same
+    // GPU + VAD options _runServerTranscription would use for a "dictation"
+    // request, so start()'s no-op guard recognizes an already-correct server and
+    // the real transcription never restarts what this just warmed up. Errors are
+    // swallowed into { success: false } — a failed prewarm never blocks
+    // recording, and the normal transcribe-local-whisper path retries the start.
+    ipcMain.handle("whisper-server-prewarm", async (event, modelName) => {
+      const vadOptions = this._resolveWhisperVadOptions("dictation");
+      const vadModelPath = vadOptions.vadEnabled ? this.whisperManager.getVadModelPath() : null;
+      return this.whisperManager.startServer(modelName, {
+        ...this.whisperManager.resolveGpuStartOptions(),
+        ...vadOptions,
+        vadModelPath,
+      });
+    });
+
     ipcMain.handle("whisper-server-stop", async () => {
       return this.whisperManager.stopServer();
     });

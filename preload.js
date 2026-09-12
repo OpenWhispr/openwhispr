@@ -420,6 +420,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Whisper server functions (faster repeated transcriptions)
   whisperServerStart: (modelName) => ipcRenderer.invoke("whisper-server-start", modelName),
+  whisperServerPrewarm: (modelName) => ipcRenderer.invoke("whisper-server-prewarm", modelName),
   whisperServerStop: () => ipcRenderer.invoke("whisper-server-stop"),
   whisperServerStatus: () => ipcRenderer.invoke("whisper-server-status"),
   whisperGpuRetry: () => ipcRenderer.invoke("whisper-gpu-retry"),
