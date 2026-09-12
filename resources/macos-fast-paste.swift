@@ -9,6 +9,10 @@ if !AXIsProcessTrusted() {
 // arguments this stays what the paste path expects: ⌘V, no output.
 let copyMode = CommandLine.arguments.contains("--copy")
 let virtualKey: CGKeyCode = copyMode ? 0x08 : 0x09  // kVK_ANSI_C : kVK_ANSI_V
+// Emit the character rather than the physical keycode so the event resolves to the
+// right glyph regardless of the active keyboard layout (Dvorak, AZERTY, …). Without
+// this, a non-QWERTY layout makes Cmd+V paste the wrong character (issues #1478/#643).
+let unicodeChar: UniChar = copyMode ? 0x63 : 0x76  // "c" : "v"
 
 // Resolved before the keystroke is posted: this is the app that will receive it.
 let target = copyMode ? NSWorkspace.shared.frontmostApplication : nil
@@ -23,6 +27,9 @@ guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: virtualKey, ke
 
 keyDown.flags = .maskCommand
 keyUp.flags = .maskCommand
+var uni = unicodeChar
+CGEventKeyboardSetUnicodeString(keyDown, 1, &uni)
+CGEventKeyboardSetUnicodeString(keyUp, 1, &uni)
 keyDown.post(tap: .cgSessionEventTap)
 usleep(8000)
 keyUp.post(tap: .cgSessionEventTap)
