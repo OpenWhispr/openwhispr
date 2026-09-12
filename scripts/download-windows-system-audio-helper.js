@@ -20,7 +20,7 @@ const {
 } = require("./lib/download-utils");
 
 const REPO = "OpenWhispr/openwhispr";
-const TAG_PREFIX = "windows-system-audio-helper-v";
+const PINNED_TAG = "windows-system-audio-helper-v1.1.0";
 const ZIP_NAME = "windows-system-audio-helper-win32-x64.zip";
 const BINARY_NAME = "windows-system-audio-helper.exe";
 
@@ -54,13 +54,13 @@ async function main() {
   }
   const release = await fetchLatestRelease(
     REPO,
-    VERSION_OVERRIDE ? { tag: VERSION_OVERRIDE } : { tagPrefix: TAG_PREFIX }
+    VERSION_OVERRIDE ? { tag: VERSION_OVERRIDE } : { tag: PINNED_TAG }
   );
 
   if (!release) {
     console.error(
-      "[windows-system-audio-helper] Could not find a release matching:",
-      VERSION_OVERRIDE || TAG_PREFIX
+      "[windows-system-audio-helper] Could not find release:",
+      VERSION_OVERRIDE || PINNED_TAG
     );
     console.log(
       "[windows-system-audio-helper] Meeting system audio will use Chromium loopback fallback"

@@ -20,7 +20,7 @@ const {
 } = require("./lib/download-utils");
 
 const REPO = "OpenWhispr/openwhispr";
-const TAG_PREFIX = "windows-key-listener-v";
+const PINNED_TAG = "windows-key-listener-v1.0.0";
 const ZIP_NAME = "windows-key-listener-win32-x64.zip";
 const BINARY_NAME = "windows-key-listener.exe";
 
@@ -52,11 +52,11 @@ async function main() {
   } else {
     console.log("\n[windows-key-listener] Fetching latest release...");
   }
-  const tagToFind = VERSION_OVERRIDE || TAG_PREFIX;
-  const release = await fetchLatestRelease(REPO, { tagPrefix: tagToFind });
+  const tagToFind = VERSION_OVERRIDE || PINNED_TAG;
+  const release = await fetchLatestRelease(REPO, { tag: tagToFind });
 
   if (!release) {
-    console.error("[windows-key-listener] Could not find a release matching prefix:", TAG_PREFIX);
+    console.error("[windows-key-listener] Could not find release:", tagToFind);
     console.log(
       "[windows-key-listener] Push-to-Talk will use fallback mode (compile locally or tap mode)"
     );
