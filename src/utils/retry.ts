@@ -44,11 +44,29 @@ export function httpError(message: string, status: number): Error & { status: nu
   return Object.assign(new Error(message), { status });
 }
 
+// Marks a client-side abort that fired after the full per-attempt timeout.
+// Unlike a network drop, the request *was* being answered — too slowly — and
+// each retry re-spends the entire budget relearning that (#1761).
+export function timeoutError(message: string): Error & { timedOut: true } {
+  return Object.assign(new Error(message), { timedOut: true as const });
+}
+
+// The OpenAI SDK (Tinfoil path) raises its own status-less timeout class
+// instead of going through timeoutError().
+function isClientTimeout(error: any): boolean {
+  return error?.timedOut === true || error?.name === "APIConnectionTimeoutError";
+}
+
 // Specific retry strategy for API calls
 export function createApiRetryStrategy() {
   return {
     shouldRetry: (error: any) => {
-      // No HTTP status means the request never got an answer (network drop, timeout).
+      // A timeout already consumed its whole budget proving the server slow;
+      // retrying it costs another full budget per attempt (127 s measured
+      // before the raw-paste fallback in #1761). Fail over instead.
+      if (isClientTimeout(error)) return false;
+
+      // No HTTP status means the request never got an answer (network drop).
       const status = error?.status ?? error?.response?.status;
       if (typeof status !== "number") return true;
 
