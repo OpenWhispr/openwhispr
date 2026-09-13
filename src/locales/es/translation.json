@@ -3093,6 +3093,7 @@
       "unsupportedSelfHosted": "La grabación de notas aún no puede usar un servidor propio. Abre Ajustes y elige Local o un proveedor de streaming.",
       "unsupportedProvider": "La grabación de notas no puede usar {{provider}} para transcripción en vivo. Abre Ajustes y elige Local o un proveedor de streaming.",
       "noProviderSelected": "No hay ningún proveedor seleccionado para la grabación de notas. Abre Ajustes y elige Local o un proveedor de streaming.",
+      "customEndpointNotConfigured": "El endpoint personalizado para la grabación de notas no está configurado. Abre Ajustes → Voz a texto → Grabación de notas e introduce su URL.",
       "autoEnded": "La grabación se detuvo automáticamente cuando terminó la reunión.",
       "restartFailed": "No se pudo reiniciar la grabación de la reunión.",
       "systemAudioSilent": {

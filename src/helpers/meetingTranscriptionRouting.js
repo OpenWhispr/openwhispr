@@ -1,3 +1,10 @@
+import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants.ts";
+import {
+  isSecureHttpEndpoint,
+  isAzureOpenAIEndpoint,
+  buildAzureTranscriptionUrl,
+} from "../utils/urlUtils.ts";
+
 // Note recording only offers providers the main process will actually run:
 // meeting prepare/start check ALLOWED_MEETING_PROVIDERS (derived from the
 // streaming client table in meetingStreamingProviders.js) and reject anything
@@ -15,6 +22,42 @@ export const MEETING_STREAMING_PROVIDER_IDS = [
 
 export function filterMeetingStreamingProviders(providers) {
   return providers.filter((provider) => MEETING_STREAMING_PROVIDER_IDS.includes(provider.id));
+}
+
+// Custom (OpenAI-compatible) endpoints have no realtime websocket, so Note
+// Recording runs them on the local chunk pipeline and POSTs each chunk to
+// `<base>/audio/transcriptions` — the same validation and Azure handling as the
+// dictation route in transcriptionRoute.ts, kept in sync by hand because that
+// module is per-scope batch routing and this one is the meeting start contract.
+export const MEETING_CUSTOM_PROVIDER_ID = "custom";
+
+function resolveCustomBatchOptions({ rawUrl, model, language }) {
+  const trimmedUrl = (rawUrl || "").trim();
+  const base = normalizeBaseUrl(trimmedUrl);
+  if (
+    !trimmedUrl ||
+    // The untouched store default — Custom was selected but never configured;
+    // passing it through would route the custom key + audio to OpenAI.
+    trimmedUrl === API_ENDPOINTS.TRANSCRIPTION_BASE ||
+    !base ||
+    !isSecureHttpEndpoint(base)
+  ) {
+    throw new Error("customEndpointNotConfigured");
+  }
+  const resolvedModel = (model || "").trim() || null;
+  const fallback = buildApiUrl(base, "/audio/transcriptions");
+  const isAzure = isAzureOpenAIEndpoint(base);
+  return {
+    provider: MEETING_CUSTOM_PROVIDER_ID,
+    endpoint: isAzure
+      ? buildAzureTranscriptionUrl(trimmedUrl, resolvedModel || "") || fallback
+      : fallback,
+    model: resolvedModel,
+    // Azure authenticates with the `api-key` header; Bearer is reserved for Entra ID.
+    authScheme: isAzure ? "azure-api-key" : "bearer",
+    mode: "byok",
+    language,
+  };
 }
 
 const DEFAULT_MANAGED_PROVIDER = {
@@ -41,6 +84,7 @@ export function resolveMeetingTranscriptionOptions({
   cortiEnvironment,
   cortiTenant,
   keyterms,
+  customBaseUrl,
 }) {
   if (transcriptionMode === "local") {
     return {
@@ -76,6 +120,10 @@ export function resolveMeetingTranscriptionOptions({
 
   if (transcriptionMode !== "providers") {
     throw new Error(`Unsupported Note Recording transcription mode: ${transcriptionMode}`);
+  }
+
+  if (selectedProvider === MEETING_CUSTOM_PROVIDER_ID) {
+    return resolveCustomBatchOptions({ rawUrl: customBaseUrl, model: selectedModel, language });
   }
 
   const provider = byokProviders.find((candidate) => candidate.id === selectedProvider);
