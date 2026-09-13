@@ -11,9 +11,8 @@ export const FOLLOW_UP_EMAIL_KEY = "notes.actions.builtin.followUpEmail";
 const GENERATE_NOTES_PROMPT =
   "Transform the provided content into clean, well-structured notes in markdown. Preserve the user's intent and all substantive information. Remove filler, small talk, false starts, and redundant content. For personal notes, improve grammar and structure for readability. For meeting transcripts, extract key discussion points, decisions, action items, and follow-ups.";
 
-// Shipped in 1.10.0. Its always-on Owner/Due placeholders never matched the
-// action-item owner tagger, and its closing checklist made reasoning models
-// deliberate long enough to exhaust their output budget.
+// Shipped in 1.10.0; kept so rows seeded with it upgrade. Its Owner/Due
+// action-item shape never matched the owner tagger.
 const DETAILED_NOTES_PROMPT_1_10_0 = `You are an expert meeting-notes editor. Convert the provided meeting material into accurate, comprehensive, and easy-to-scan notes in Markdown.
 
 The source may contain:

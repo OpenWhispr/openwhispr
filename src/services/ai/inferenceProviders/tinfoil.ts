@@ -4,8 +4,8 @@ import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import {
   applyChatCompletionsParams,
+  emptyResponseError,
   isTruncatedFinishReason,
-  OUTPUT_TOKENS_EXHAUSTED_MESSAGE,
 } from "../chatRequestBody";
 import { getTinfoilChatClient } from "../tinfoilClient";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
@@ -76,16 +76,8 @@ export const tinfoilProvider: InferenceProvider = {
     });
 
     if (!responseText) {
-      if (config.requireCompleteOutput) {
-        throw new Error("Model returned an empty selection edit");
-      }
-      if (responseIncomplete) {
-        throw new Error(OUTPUT_TOKENS_EXHAUSTED_MESSAGE);
-      }
-      // Only the default cleanup transform may fall back to its input.
-      if (config.systemPrompt) {
-        throw new Error("Tinfoil returned empty response");
-      }
+      const error = emptyResponseError("Tinfoil", config, !!responseIncomplete);
+      if (error) throw error;
       logger.logReasoning("TINFOIL_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,

@@ -7,9 +7,9 @@ import logger from "../../../utils/logger";
 import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
 import {
   applyChatCompletionsParams,
+  emptyResponseError,
   fetchWithParamFallback,
   isTruncatedFinishReason,
-  OUTPUT_TOKENS_EXHAUSTED_MESSAGE,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
@@ -19,10 +19,9 @@ import { openCodeSessionHeaders } from "../openCodeSession";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const PROBE_TIMEOUT_MS = 2_000;
-// OpenAI counts a reasoning model's hidden reasoning against the output cap, so
-// a summary-sized cap can be spent entirely on reasoning and the response comes
-// back "incomplete" with no message. OpenAI's guidance is to reserve at least
-// 25k tokens for reasoning plus output; an unused allowance costs nothing.
+// OpenAI counts a reasoning model's hidden reasoning against the output cap and
+// recommends reserving at least 25k tokens for reasoning plus output. A cap,
+// not a spend: an unused allowance costs nothing.
 const REASONING_MODEL_MIN_OUTPUT_TOKENS = 25_000;
 
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
@@ -420,20 +419,11 @@ export const openaiProvider: InferenceProvider = {
     });
 
     if (!responseText) {
-      if (config.requireCompleteOutput) {
-        throw new Error("Model returned an empty selection edit");
-      }
       if (refusal) {
         throw new Error(`Model declined the request: ${refusal}`);
       }
-      if (responseIncomplete) {
-        throw new Error(OUTPUT_TOKENS_EXHAUSTED_MESSAGE);
-      }
-      // Only the default cleanup transform may fall back to its input; a task
-      // with its own prompt would take the raw material as the finished result.
-      if (config.systemPrompt) {
-        throw new Error("OpenAI returned empty response");
-      }
+      const error = emptyResponseError("OpenAI", config, !!responseIncomplete);
+      if (error) throw error;
       logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,

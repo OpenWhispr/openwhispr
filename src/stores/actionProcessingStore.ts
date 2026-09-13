@@ -187,6 +187,12 @@ export function runBackgroundAction(
         ...providerOverrides,
       });
 
+      // IPC-bridged providers relay whatever the model returned; a blank
+      // result must not be saved as the enhanced note.
+      if (!enhanced.trim()) {
+        throw new Error("Model returned no text");
+      }
+
       if (cancelledFlags.get(noteId)) return;
 
       let title: string | undefined;

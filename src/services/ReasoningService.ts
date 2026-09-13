@@ -28,9 +28,9 @@ import {
 } from "./ai/openaiBase";
 import {
   applyChatCompletionsParams,
+  emptyResponseError,
   fetchWithParamFallback,
   isTruncatedFinishReason,
-  OUTPUT_TOKENS_EXHAUSTED_MESSAGE,
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
@@ -431,10 +431,10 @@ class ReasoningService extends BaseReasoningService {
         hasMessage: !!choice.message,
         response: JSON.stringify(choice).substring(0, 500),
       });
-      if (isTruncatedFinishReason(choice.finish_reason)) {
-        throw new Error(OUTPUT_TOKENS_EXHAUSTED_MESSAGE);
-      }
-      throw new Error(`${providerName} returned empty response`);
+      throw (
+        emptyResponseError(providerName, config, isTruncatedFinishReason(choice.finish_reason)) ??
+        new Error(`${providerName} returned empty response`)
+      );
     }
 
     logger.logReasoning(`${providerName.toUpperCase()}_RESPONSE`, {
@@ -513,11 +513,6 @@ class ReasoningService extends BaseReasoningService {
         config: dispatchConfig,
         ctx: this.providerContext,
       });
-      // Providers that bridge through IPC relay whatever the model returned;
-      // a blank result must fail here rather than be saved or pasted as output.
-      if (!result.trim()) {
-        throw new Error(`${providerId} returned empty response`);
-      }
 
       logger.logReasoning("PROVIDER_SUCCESS", {
         provider: providerId,

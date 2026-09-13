@@ -70,9 +70,23 @@ export function isTruncatedFinishReason(reason: unknown): boolean {
   return reason === "length" || reason === "max_tokens";
 }
 
-/** The cap was exhausted, typically by hidden reasoning, before any text was written. */
-export const OUTPUT_TOKENS_EXHAUSTED_MESSAGE =
-  "Model ran out of output tokens before producing a response";
+/**
+ * Error for a completion that produced no text, or null when the caller may
+ * echo its input instead. Only the default cleanup transform (no systemPrompt)
+ * may echo: a prompted task would take its raw material as the finished result.
+ */
+export function emptyResponseError(
+  providerName: string,
+  config: ReasoningConfig,
+  responseIncomplete: boolean
+): Error | null {
+  if (config.requireCompleteOutput) return new Error("Model returned an empty selection edit");
+  if (responseIncomplete) {
+    return new Error("Model ran out of output tokens before producing a response");
+  }
+  if (config.systemPrompt) return new Error(`${providerName} returned empty response`);
+  return null;
+}
 
 /**
  * Shaped params a backend may reject by name with a 400/422. Only params this
