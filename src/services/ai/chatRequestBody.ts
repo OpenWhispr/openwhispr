@@ -70,6 +70,10 @@ export function isTruncatedFinishReason(reason: unknown): boolean {
   return reason === "length" || reason === "max_tokens";
 }
 
+/** The cap was exhausted, typically by hidden reasoning, before any text was written. */
+export const OUTPUT_TOKENS_EXHAUSTED_MESSAGE =
+  "Model ran out of output tokens before producing a response";
+
 /**
  * Shaped params a backend may reject by name with a 400/422. Only params this
  * module's shaping layer added are strippable — never messages or model — so a

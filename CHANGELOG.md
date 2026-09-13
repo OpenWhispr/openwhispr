@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Notes
+
+- **Generate AI Summary no longer saves your transcript back as the "Enhanced" note.** With an OpenAI reasoning model such as GPT-5.6 Terra, the summary could finish with no error and an Enhanced tab that was just the raw transcript run together. OpenAI counts a reasoning model's hidden reasoning against the output cap, and the Detailed Notes prompt on a long transcript could spend the whole 4,096-token budget on reasoning before writing a word; the response came back "incomplete" with no text, and the app fell back to handing the input straight back and saving it. OpenAI's reasoning models now get at least 25k output tokens so the reasoning has room, and every reasoning path, bring-your-own-key, local, enterprise, and OpenWhispr Cloud alike, now reports an error when the model runs out of tokens before writing anything or returns no text at all, instead of passing the input or a blank page off as the result.
+- **Detailed Notes gets a shorter, sharper prompt.** The 1.10.0 prompt was three times longer than it needed to be, described the transcript layout incorrectly, ended with a self-check list that made reasoning models deliberate far longer, and asked for action items in a shape the editor's owner tagging could never match, so nobody got an owner chip. The rewrite keeps the rules that matter, uses the same `- [ ] Action — Owner` shape as Generate Notes, drops the "Owner not specified" filler, and says what to do with plain notes that have no transcript. Anyone still on the shipped prompt moves to the new one automatically; an edited prompt is left alone.
+
 ### Transcription
 
 - **Your own Deepgram key works again.** Every Deepgram connection failed with `Unexpected server response: 401`, even though the same key tested fine in Settings and worked against Deepgram directly. Deepgram accepts a raw API key only under its `Token` authorization scheme and reserves `Bearer` for the short-lived tokens OpenWhispr Cloud mints on your behalf — and the app was presenting your key as a `Bearer`. This broke bring-your-own-key dictation as well as Note Recording. (#2140, thanks @nikhilmaddirala)
