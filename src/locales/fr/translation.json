@@ -3441,6 +3441,7 @@
       "unsupportedSelfHosted": "L'enregistrement de notes ne peut pas encore utiliser un serveur auto-hébergé. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "unsupportedProvider": "L'enregistrement de notes ne peut pas utiliser {{provider}} pour la transcription en direct. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "noProviderSelected": "Aucun fournisseur n'est sélectionné pour l'enregistrement de notes. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
+      "customEndpointNotConfigured": "Le point de terminaison personnalisé pour l'enregistrement de notes n'est pas configuré. Ouvrez Réglages → Reconnaissance vocale → Enregistrement de notes et saisissez son URL.",
       "systemAudioSilent": {
         "title": "Aucun son de réunion détecté pour le moment",
         "description": "Seul votre microphone a capté du son jusqu'à présent. Vous êtes en visioconférence ? Vérifiez que le son de la réunion est diffusé sur cet ordinateur et qu'il n'est pas coupé. Vous enregistrez en présentiel ? Vous pouvez ignorer ce message : votre microphone capte la salle."

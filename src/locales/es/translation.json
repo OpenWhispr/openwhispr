@@ -3151,6 +3151,7 @@
       "unsupportedSelfHosted": "La grabación de notas aún no puede usar un servidor propio. Abre Ajustes y elige Local o un proveedor de streaming.",
       "unsupportedProvider": "La grabación de notas no puede usar {{provider}} para transcripción en vivo. Abre Ajustes y elige Local o un proveedor de streaming.",
       "noProviderSelected": "No hay ningún proveedor seleccionado para la grabación de notas. Abre Ajustes y elige Local o un proveedor de streaming.",
+      "customEndpointNotConfigured": "El endpoint personalizado para la grabación de notas no está configurado. Abre Ajustes → Voz a texto → Grabación de notas e introduce su URL.",
       "systemAudioSilent": {
         "title": "Aún no se detecta el audio de la reunión",
         "description": "Hasta ahora solo tu micrófono ha captado sonido. ¿Estás en una videollamada? Comprueba que el audio de la reunión se reproduce en este equipo y no está silenciado. ¿Estás grabando en persona? Puedes ignorar este aviso: tu micrófono capta la sala."

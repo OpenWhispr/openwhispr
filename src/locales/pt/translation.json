@@ -3098,6 +3098,7 @@
       "unsupportedSelfHosted": "A gravação de notas ainda não pode usar um endpoint auto-hospedado. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "unsupportedProvider": "A gravação de notas não pode usar {{provider}} para transcrição ao vivo. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "noProviderSelected": "Nenhum provedor está selecionado para a gravação de notas. Abra as Configurações e escolha Local ou um provedor de streaming.",
+      "customEndpointNotConfigured": "O endpoint personalizado para gravação de notas não está configurado. Abra Configurações → Fala para texto → Gravação de notas e insira o URL.",
       "systemAudioSilent": {
         "title": "Nenhum áudio da reunião detectado até agora",
         "description": "Até agora, apenas o seu microfone captou som. Está em uma videochamada? Verifique se o áudio da reunião está sendo reproduzido neste computador e não está silenciado. Está gravando presencialmente? Você pode ignorar este aviso: seu microfone capta o ambiente."
