@@ -51,6 +51,24 @@ test("a Tinfoil result cut off before any text is an error, not the input echoed
   );
 });
 
+test("an empty but complete Tinfoil response on a task with its own prompt is an error", async (t) => {
+  const tinfoilProvider = await loadProvider(t);
+  globalThis.__tinfoilResponse = {
+    choices: [{ message: { content: "" }, finish_reason: "stop" }],
+  };
+
+  await assert.rejects(
+    tinfoilProvider.call({
+      text: "## Meeting Transcript\nYou: ship on Friday.",
+      model: "gpt-oss-120b",
+      agentName: null,
+      config: { systemPrompt: "Summarize", maxTokens: 4096 },
+      ctx,
+    }),
+    /empty response/
+  );
+});
+
 test("an empty but complete Tinfoil response still falls back to the input for cleanup", async (t) => {
   const tinfoilProvider = await loadProvider(t);
   globalThis.__tinfoilResponse = {

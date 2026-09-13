@@ -82,6 +82,10 @@ export const tinfoilProvider: InferenceProvider = {
       if (responseIncomplete) {
         throw new Error(OUTPUT_TOKENS_EXHAUSTED_MESSAGE);
       }
+      // Only the default cleanup transform may fall back to its input.
+      if (config.systemPrompt) {
+        throw new Error("Tinfoil returned empty response");
+      }
       logger.logReasoning("TINFOIL_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,

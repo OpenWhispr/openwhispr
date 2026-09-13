@@ -179,6 +179,45 @@ test("a Chat Completions result cut off before any text is an error, not the inp
   );
 });
 
+test("an empty but complete response on a task with its own prompt is an error, not the input echoed back", async (t) => {
+  installFetch(t, () => completeMessage(""));
+  const { openaiProvider } = await load();
+
+  await assert.rejects(
+    openaiProvider.call({
+      text: TRANSCRIPT,
+      model: "gpt-5.6-terra",
+      agentName: null,
+      config: { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
+      ctx: makeCtx(),
+    }),
+    /empty response/
+  );
+});
+
+test("a refusal surfaces as an error carrying the model's reason", async (t) => {
+  installFetch(t, () =>
+    jsonResponse({
+      status: "completed",
+      output: [
+        { type: "message", content: [{ type: "refusal", refusal: "I can't help with that." }] },
+      ],
+    })
+  );
+  const { openaiProvider } = await load();
+
+  await assert.rejects(
+    openaiProvider.call({
+      text: TRANSCRIPT,
+      model: "gpt-5.6-terra",
+      agentName: null,
+      config: { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
+      ctx: makeCtx(),
+    }),
+    /declined the request: I can't help with that\./
+  );
+});
+
 test("an empty but complete response still falls back to the input for cleanup", async (t) => {
   installFetch(t, () => completeMessage(""));
   const { openaiProvider } = await load();

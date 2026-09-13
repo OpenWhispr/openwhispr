@@ -360,6 +360,7 @@ export const openaiProvider: InferenceProvider = {
     });
 
     let responseText = "";
+    let refusal = "";
 
     if (isResponsesApi) {
       for (const item of response.output) {
@@ -368,6 +369,9 @@ export const openaiProvider: InferenceProvider = {
             if (content.type === "output_text" && content.text) {
               responseText = content.text.trim();
               break;
+            }
+            if (content.type === "refusal" && content.refusal) {
+              refusal = content.refusal;
             }
           }
           if (responseText) break;
@@ -419,9 +423,16 @@ export const openaiProvider: InferenceProvider = {
       if (config.requireCompleteOutput) {
         throw new Error("Model returned an empty selection edit");
       }
-      // Echoing the input here would hand the caller its own text as the result.
+      if (refusal) {
+        throw new Error(`Model declined the request: ${refusal}`);
+      }
       if (responseIncomplete) {
         throw new Error(OUTPUT_TOKENS_EXHAUSTED_MESSAGE);
+      }
+      // Only the default cleanup transform may fall back to its input; a task
+      // with its own prompt would take the raw material as the finished result.
+      if (config.systemPrompt) {
+        throw new Error("OpenAI returned empty response");
       }
       logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
         model,
