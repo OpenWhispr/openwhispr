@@ -44,10 +44,10 @@ function dateFromLocalKey(value: string) {
   return new Date(year, month - 1, day, 12);
 }
 
-function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] }) {
+function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] | null }) {
   const { t, i18n } = useTranslation();
   const calendar = useMemo(() => {
-    const days: ActivityDay[] = buildAnalyticsActivityDays(daily);
+    const days: ActivityDay[] = buildAnalyticsActivityDays(daily ?? []);
     const cells: Array<ActivityDay | null> = [
       ...Array(dateFromLocalKey(days[0].date).getDay()).fill(null),
       ...days,
@@ -128,7 +128,13 @@ function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] }) {
             ))}
           </div>
 
-          <div className="grid gap-2" style={columnStyle}>
+          {/* Until the summary arrives every day reads as empty, so the cells pulse and
+              stay inert: no "0 words" tooltip or label for a day that isn't counted yet. */}
+          <div
+            className={cn("grid gap-2", !daily && "animate-pulse")}
+            style={columnStyle}
+            inert={!daily}
+          >
             {calendar.weeks.map((week, weekIndex) => (
               <div key={weekIndex} className="grid grid-rows-7 gap-0.5">
                 {week.map((day, dayIndex) => {
@@ -196,8 +202,9 @@ function MetricCard({
 }: {
   icon: typeof BarChart3;
   label: string;
-  value: string;
-  detail: string;
+  // Null until the summary loads; the line holds a skeleton meanwhile.
+  value: string | null;
+  detail: string | null;
   largeValue?: boolean;
 }) {
   return (
@@ -212,45 +219,13 @@ function MetricCard({
           largeValue ? "text-3xl" : "text-2xl"
         )}
       >
-        {value}
+        {value ?? (
+          <Skeleton className={cn("inline-block w-20 align-middle", largeValue ? "h-7" : "h-6")} />
+        )}
       </p>
-      <p className="mt-1 text-[11px] text-muted-foreground/70">{detail}</p>
-    </div>
-  );
-}
-
-function YourUsageSkeleton() {
-  const { t } = useTranslation();
-  const days = buildAnalyticsActivityDays([]);
-  const weekCount = Math.ceil((dateFromLocalKey(days[0].date).getDay() + days.length) / 7);
-
-  return (
-    <div role="status">
-      <span className="sr-only">{t("controlPanel.loading")}</span>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((index) => (
-          <div
-            key={index}
-            className="rounded-xl border border-border/70 dark:border-white/10 bg-card/70 p-4"
-          >
-            <Skeleton className="mt-0.5 h-3 w-24" />
-            <Skeleton className="mt-4 h-8 w-20" />
-            <Skeleton className="mt-2.5 h-3 w-16" />
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-5 rounded-2xl border border-border/70 bg-card/70 px-5 py-2.5 dark:border-white/10">
-        <Skeleton className="mt-0.5 h-4 w-20" />
-        <div className="mt-2 overflow-hidden pb-1">
-          <div className="mt-4 grid w-max animate-pulse auto-cols-[1.5rem] grid-flow-col grid-rows-7 gap-2 ps-8">
-            {Array.from({ length: weekCount * 7 }, (_, index) => (
-              <div key={index} className={cn("size-6 rounded-sm", ACTIVITY_INTENSITY_CLASSES[0])} />
-            ))}
-          </div>
-          <Skeleton className="mt-3.5 h-3.5 w-24" />
-        </div>
-      </div>
+      <p className="mt-1 text-[11px] text-muted-foreground/70">
+        {detail ?? <Skeleton className="inline-block h-2.5 w-24 align-middle" />}
+      </p>
     </div>
   );
 }
@@ -353,8 +328,6 @@ function YourUsage({
     );
   }
 
-  if (!summary) return <YourUsageSkeleton />;
-
   return (
     <>
       {!dataRetentionEnabled && (
@@ -366,7 +339,7 @@ function YourUsage({
         </div>
       )}
 
-      {summary.totalDictations === 0 ? (
+      {summary?.totalDictations === 0 ? (
         <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
           <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
             <BarChart3 size={40} className="mb-4 text-foreground/45" aria-hidden="true" />
@@ -378,40 +351,47 @@ function YourUsage({
         </div>
       ) : (
         <>
+          {!summary && (
+            <p role="status" className="sr-only">
+              {t("controlPanel.loading")}
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <MetricCard
               icon={Mic2}
               label={t("insights.wordsSpoken")}
-              value={number.format(summary.totalWords)}
+              value={summary && number.format(summary.totalWords)}
               detail={t("insights.allTime")}
               largeValue
             />
             <MetricCard
               icon={Gauge}
               label={t("insights.wordsPerMinute")}
-              value={summary.averageWpm == null ? "—" : number.format(summary.averageWpm)}
-              detail={t("insights.wpmCoverage", { count: summary.wpmCoveragePercent })}
+              value={
+                summary && (summary.averageWpm == null ? "—" : number.format(summary.averageWpm))
+              }
+              detail={summary && t("insights.wpmCoverage", { count: summary.wpmCoveragePercent })}
               largeValue
             />
             <MetricCard
               icon={BarChart3}
               label={t("insights.dictations")}
-              value={number.format(summary.totalDictations)}
+              value={summary && number.format(summary.totalDictations)}
               detail={t("insights.allTime")}
               largeValue
             />
             <MetricCard
               icon={Flame}
               label={t("insights.currentStreak")}
-              value={t("insights.days", { count: summary.currentStreakDays })}
-              detail={t("insights.longestStreak", { count: summary.longestStreakDays })}
+              value={summary && t("insights.days", { count: summary.currentStreakDays })}
+              detail={summary && t("insights.longestStreak", { count: summary.longestStreakDays })}
             />
           </div>
 
           <div className="mt-5 rounded-2xl border border-border/70 bg-card/70 px-5 py-2.5 dark:border-white/10">
             <h2 className="text-base font-medium text-foreground">{t("insights.activity")}</h2>
             <div className="mt-2">
-              <Heatmap daily={summary.daily} />
+              <Heatmap daily={summary?.daily ?? null} />
             </div>
           </div>
         </>

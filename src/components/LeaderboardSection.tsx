@@ -76,6 +76,7 @@ import {
 } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Skeleton } from "./ui/skeleton";
 import { Tooltip } from "./ui/tooltip";
 import { useToast } from "./ui/useToast";
 
@@ -828,6 +829,9 @@ export default function LeaderboardSection({
         workspaceName={access.joinableWorkspace.name}
       />
     ) : null;
+  // While the body below shows its skeleton, the header holds the member count
+  // and period picker a loaded board adds.
+  const boardLoading = !visibleLeaderboard && !visibleFailure && !isSoloScope && cloudAccessAllowed;
 
   return (
     <section
@@ -854,12 +858,16 @@ export default function LeaderboardSection({
               <h2 className="truncate text-sm font-semibold">{selectedScope.name}</h2>
             )}
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-              {boardParticipantCount != null && (
+              {(boardParticipantCount != null || boardLoading) && (
                 <>
-                  <span className="flex items-center gap-1">
-                    <Users size={11} />
-                    {t("workspaces.join.memberCount", { count: boardParticipantCount })}
-                  </span>
+                  {boardParticipantCount != null ? (
+                    <span className="flex items-center gap-1">
+                      <Users size={11} />
+                      {t("workspaces.join.memberCount", { count: boardParticipantCount })}
+                    </span>
+                  ) : (
+                    <Skeleton className="h-2.5 w-18" />
+                  )}
                   <span
                     aria-hidden="true"
                     className="size-0.5 rounded-full bg-muted-foreground/50"
@@ -874,7 +882,7 @@ export default function LeaderboardSection({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {visibleLeaderboard && (
+          {visibleLeaderboard ? (
             <Select
               value={range === "all" ? "all" : activeWeekStart}
               onValueChange={(value) => {
@@ -907,6 +915,8 @@ export default function LeaderboardSection({
                 ))}
               </SelectContent>
             </Select>
+          ) : (
+            boardLoading && <Skeleton className="h-8 w-44 rounded-lg" />
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
