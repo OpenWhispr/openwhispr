@@ -32,8 +32,7 @@ interface ControlPanelSidebarProps {
   onViewChange: (view: ControlPanelView) => void;
   onOpenSettings: () => void;
   onOpenReferrals?: () => void;
-  /** Present only when the signed-in user can invite to a workspace. */
-  onInviteTeammates?: () => void;
+  onInviteTeam?: () => void;
   onUpgrade?: () => void;
   isOverLimit?: boolean;
   userName?: string | null;
@@ -50,7 +49,7 @@ export default function ControlPanelSidebar({
   onViewChange,
   onOpenSettings,
   onOpenReferrals,
-  onInviteTeammates,
+  onInviteTeam,
   onUpgrade,
   isOverLimit,
   userName,
@@ -188,14 +187,14 @@ export default function ControlPanelSidebar({
           </div>
         )}
 
-        {onInviteTeammates && (
+        {onInviteTeam && (
           <button
-            onClick={onInviteTeammates}
-            aria-label={t("sidebar.inviteTeammates")}
+            onClick={onInviteTeam}
+            aria-label={t("sidebar.inviteTeam")}
             className={rowButtonClass}
           >
             <UserPlus size={16} className={rowIconClass} />
-            <span className={rowLabelClass}>{t("sidebar.inviteTeammates")}</span>
+            <span className={rowLabelClass}>{t("sidebar.inviteTeam")}</span>
           </button>
         )}
 

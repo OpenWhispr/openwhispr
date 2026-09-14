@@ -16,7 +16,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
 import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { canManageWorkspace } from "../lib/spacePermissions";
+import { manageableWorkspaces, selectWorkspaceForSpaceCreation } from "../lib/workspaceSelection";
 import { useUsage } from "../hooks/useUsage";
 import { decideUpsell } from "../lib/upsell";
 import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
@@ -124,7 +124,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
   const [showReferrals, setShowReferrals] = useState(false);
-  const [showInviteTeammates, setShowInviteTeammates] = useState(false);
+  const [showInviteTeam, setShowInviteTeam] = useState(false);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [invitationNotesEntry, setInvitationNotesEntry] = useState<{
     workspaceId: string;
@@ -169,13 +169,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     markRequested,
   } = useJoinableWorkspaces(user?.id ?? null, isSignedIn && !invitationToken);
   const { workspaces, active: activeWorkspace } = useWorkspace();
-  // Only owners and admins can send invitations (server-enforced). Prefer the
-  // active workspace; with several and none selected, fall back to the first
-  // the user can invite to — the dialog names its target either way.
-  const inviteWorkspace =
-    activeWorkspace && canManageWorkspace(activeWorkspace.role)
-      ? activeWorkspace
-      : (workspaces.find((w) => canManageWorkspace(w.role)) ?? null);
+  // Invitations are owner/admin-only (server-enforced), so the sidebar row
+  // only exists when the user can manage a workspace.
+  const inviteWorkspace = selectWorkspaceForSpaceCreation(
+    manageableWorkspaces(workspaces),
+    activeWorkspace,
+    null
+  );
   const usage = useUsage();
   const upsell = decideUpsell({
     authLoaded,
@@ -909,11 +909,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </Suspense>
       )}
 
-      {showInviteTeammates && inviteWorkspace && (
+      {showInviteTeam && inviteWorkspace && (
         <Suspense fallback={null}>
           <InviteTeammateDialog
-            open={showInviteTeammates}
-            onOpenChange={setShowInviteTeammates}
+            open={showInviteTeam}
+            onOpenChange={setShowInviteTeam}
             workspaceId={inviteWorkspace.id}
             workspaceName={inviteWorkspace.name}
           />
@@ -985,7 +985,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               setShowSettings(true);
             }}
             onOpenReferrals={() => setShowReferrals(true)}
-            onInviteTeammates={inviteWorkspace ? () => setShowInviteTeammates(true) : undefined}
+            onInviteTeam={inviteWorkspace ? () => setShowInviteTeam(true) : undefined}
             onUpgrade={() => {
               setSettingsSection("plansBilling");
               setShowSettings(true);
