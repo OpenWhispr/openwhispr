@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Clock3,
   Globe2,
-  Loader2,
   LocateFixed,
   LogOut,
   MoreHorizontal,
@@ -63,6 +62,7 @@ import LeaderboardPodium from "./LeaderboardPodium";
 import LeaderboardSetupCard from "./LeaderboardSetupCard";
 import LeaderboardShareDialog from "./LeaderboardShareDialog";
 import LeaderboardSignInPreview from "./LeaderboardSignInPreview";
+import LeaderboardSkeleton, { LeaderboardBoardSkeleton } from "./LeaderboardSkeleton";
 import LeaderboardSoloEmptyState from "./LeaderboardSoloEmptyState";
 import LeaderboardWorkspaceNudge from "./LeaderboardWorkspaceNudge";
 import LeaderboardJoinPreview from "./LeaderboardJoinPreview";
@@ -642,13 +642,7 @@ export default function LeaderboardSection({
   const funnelCardClassName = funnelScopeSelect ? "mt-4" : "mt-6";
 
   if (!isSignedIn) return <LeaderboardSignInPreview className="mt-6" onSignIn={onSignIn} />;
-  if (accessLoading && !access) {
-    return (
-      <section className="mt-6 flex min-h-48 items-center justify-center rounded-2xl border border-border/70 bg-card/70 text-muted-foreground dark:border-white/10">
-        <Loader2 size={18} className="animate-spin" />
-      </section>
-    );
-  }
+  if (accessLoading && !access) return <LeaderboardSkeleton />;
   if (accessError && !access) {
     return (
       <LeaderboardRetryCard
@@ -726,13 +720,7 @@ export default function LeaderboardSection({
       />
     );
   }
-  if (surface === "participation_loading") {
-    return (
-      <section className="mt-6 flex min-h-48 items-center justify-center rounded-2xl border border-border/70 bg-card/70 text-muted-foreground dark:border-white/10">
-        <Loader2 size={18} className="animate-spin" />
-      </section>
-    );
-  }
+  if (surface === "participation_loading") return <LeaderboardSkeleton />;
   if (surface === "join") {
     return (
       <LeaderboardJoinPreview
@@ -1014,9 +1002,7 @@ export default function LeaderboardSection({
           }
         />
       ) : !visibleLeaderboard ? (
-        <div className="flex min-h-48 items-center justify-center text-muted-foreground">
-          <Loader2 size={18} className="animate-spin" />
-        </div>
+        <LeaderboardBoardSkeleton />
       ) : (
         <div
           aria-busy={leaderboardStale}

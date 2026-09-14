@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Cloud, CloudUpload, Flame, Gauge, Loader2, Mic2, Trophy } from "./icons";
+import { BarChart3, Cloud, CloudUpload, Flame, Gauge, Mic2, Trophy } from "./icons";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
@@ -17,7 +17,9 @@ import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipa
 import { usePolicyStore } from "../stores/policyStore";
 import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
+import LeaderboardSkeleton from "./LeaderboardSkeleton";
 import { Button } from "./ui/button";
+import { Skeleton } from "./ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Tooltip } from "./ui/tooltip";
 
@@ -217,6 +219,42 @@ function MetricCard({
   );
 }
 
+function YourUsageSkeleton() {
+  const { t } = useTranslation();
+  const days = buildAnalyticsActivityDays([]);
+  const weekCount = Math.ceil((dateFromLocalKey(days[0].date).getDay() + days.length) / 7);
+
+  return (
+    <div role="status">
+      <span className="sr-only">{t("controlPanel.loading")}</span>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((index) => (
+          <div
+            key={index}
+            className="rounded-xl border border-border/70 dark:border-white/10 bg-card/70 p-4"
+          >
+            <Skeleton className="mt-0.5 h-3 w-24" />
+            <Skeleton className="mt-4 h-8 w-20" />
+            <Skeleton className="mt-2.5 h-3 w-16" />
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-border/70 bg-card/70 px-5 py-2.5 dark:border-white/10">
+        <Skeleton className="mt-0.5 h-4 w-20" />
+        <div className="mt-2 overflow-hidden pb-1">
+          <div className="mt-4 grid w-max animate-pulse auto-cols-[1.5rem] grid-flow-col grid-rows-7 gap-2 ps-8">
+            {Array.from({ length: weekCount * 7 }, (_, index) => (
+              <div key={index} className={cn("size-6 rounded-sm", ACTIVITY_INTENSITY_CLASSES[0])} />
+            ))}
+          </div>
+          <Skeleton className="mt-3.5 h-3.5 w-24" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function YourUsage({
   accountId,
   dataRetentionEnabled,
@@ -315,16 +353,7 @@ function YourUsage({
     );
   }
 
-  if (!summary) {
-    return (
-      <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
-        <div className="flex items-center justify-center gap-2 py-8">
-          <Loader2 size={14} className="animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">{t("controlPanel.loading")}</span>
-        </div>
-      </div>
-    );
-  }
+  if (!summary) return <YourUsageSkeleton />;
 
   return (
     <>
@@ -496,7 +525,7 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
           )}
         </TabsContent>
         <TabsContent value="leaderboard" className="mt-0">
-          <Suspense fallback={null}>
+          <Suspense fallback={isSignedIn ? <LeaderboardSkeleton /> : null}>
             <LeaderboardView
               enableInsightsSync={enableInsightsSync}
               insightsSyncEnabled={insightsSyncEnabled}
