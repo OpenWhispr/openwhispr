@@ -24,8 +24,9 @@ import {
 import type { OnboardingSetupMode } from "./flow";
 import { getOnboardingSetupAvailability, hasAvailableOnboardingSetup } from "./setupEligibility";
 import { BrandMark } from "./OnboardingShell";
-import openAIIcon from "../../assets/icons/providers/openai.svg";
-import nvidiaIcon from "../../assets/icons/providers/nvidia.webp";
+import { LOCAL_ASR_ORGANIZATIONS } from "../../helpers/localASROrganization";
+import { getProviderIcon, isMonochromeProvider } from "@/utils/providerIcons";
+import { cn } from "../lib/utils";
 // Only the Local card opens the warning dialog now — BYOK goes
 // straight through from the "Choose your API setup" modal.
 import warningBackdrop from "../../assets/onboarding-setup-warning-hero.webp";
@@ -226,38 +227,30 @@ export default function SetupChoiceStep({
           <SetupCard>
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                {/* Frame 2147259034: the two model marks overlap by 8, each on a
-                    1.33px white ring so the stack reads front-to-back. */}
+                {/* Frame 2147259034: the local model marks overlap by 8, each on a
+                    1.33px surface ring so the stack reads front-to-back. NVIDIA's
+                    tile is its own green field, so it fills the chip and is clipped
+                    to the circle; the other marks sit inside it, with OpenAI's
+                    inverted onto the dark chip. */}
                 <span className="flex -space-x-2">
-                  <span className="flex size-9 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] ring-[1.33px] ring-[var(--onboarding-surface)]">
-                    <img
-                      src={openAIIcon}
-                      alt=""
-                      aria-hidden="true"
-                      width={20}
-                      height={20}
-                      decoding="async"
-                      draggable={false}
-                      className="size-4 invert dark:invert-0"
-                    />
-                  </span>
-                  {/* The tile is its own green field, so it fills the chip and gets
-                      clipped to the circle — the old lime-500 circle sat behind a
-                      green eye mark, which read as green on green. The mark and
-                      wordmark both fall inside the inscribed circle, so nothing of
-                      the logo is lost to the crop. */}
-                  <span className="size-9 overflow-hidden rounded-full ring-[1.33px] ring-[var(--onboarding-surface)]">
-                    <img
-                      src={nvidiaIcon}
-                      alt=""
-                      aria-hidden="true"
-                      width={40}
-                      height={40}
-                      decoding="async"
-                      draggable={false}
-                      className="size-full object-cover"
-                    />
-                  </span>
+                  {LOCAL_ASR_ORGANIZATIONS.map(({ id }) => (
+                    <span
+                      key={id}
+                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-[var(--onboarding-inverse-surface)] ring-[1.33px] ring-[var(--onboarding-surface)]"
+                    >
+                      <img
+                        src={getProviderIcon(id)}
+                        alt=""
+                        aria-hidden="true"
+                        decoding="async"
+                        draggable={false}
+                        className={cn(
+                          id === "nvidia" ? "size-full object-cover" : "size-4",
+                          isMonochromeProvider(id) && "invert dark:invert-0"
+                        )}
+                      />
+                    </span>
+                  ))}
                 </span>
                 {/* Frame 49: pad 4 9, radius 47, surface-tertiary, 10/140%. */}
                 <span className="rounded-[47px] bg-[var(--onboarding-surface-tertiary)] px-[9px] py-1 text-[10px] leading-[1.4] text-[var(--onboarding-text-primary)]">

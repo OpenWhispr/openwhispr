@@ -152,3 +152,18 @@ test("canMoveOrDeleteSpaceFolder: private and local-only spaces stay manageable"
   assert.equal(canMoveOrDeleteSpaceFolder(localOnlySpace, null), true);
   assert.equal(canMoveOrDeleteSpaceFolder(undefined, null), true);
 });
+
+test("teamsUserCanLeave: only teams the user explicitly belongs to", () => {
+  const { teamsUserCanLeave } = require("../../src/lib/spacePermissions.ts");
+  const teams = [
+    { id: "t1", name: "Sales", my_role: "member" },
+    { id: "t2", name: "Leads", my_role: "admin" },
+    { id: "t3", name: "Ops", my_role: null },
+    { id: "t4", name: "Legacy" },
+  ];
+  assert.deepEqual(
+    teamsUserCanLeave({ teams }).map((team) => team.id),
+    ["t1", "t2"]
+  );
+  assert.deepEqual(teamsUserCanLeave({ teams: [] }), []);
+});

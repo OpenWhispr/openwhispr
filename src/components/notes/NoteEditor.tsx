@@ -25,7 +25,7 @@ import {
   type NoteAclState,
 } from "../../lib/notePermissions";
 import { ownsNote } from "../../lib/spacePermissions";
-import SpaceMembersDialog from "./SpaceMembersDialog";
+import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
   useShareCacheEntry,
   useNoteConflict,
@@ -1291,10 +1291,11 @@ export default function NoteEditor({
         copyLinkOnOpen={shareIntent === "copy-link"}
       />
       {isTeamNote && space?.cloud_space_id && (
-        <SpaceMembersDialog
+        <SpaceSettingsDialog
           space={space}
           open={membersDialogOpen}
           onOpenChange={setMembersDialogOpen}
+          initialTab="members"
         />
       )}
     </div>

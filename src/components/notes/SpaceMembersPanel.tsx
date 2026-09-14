@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, Info, Loader2, Plus, X } from "../icons";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, ConfirmDialog } from "../ui/dialog";
+import { ConfirmDialog } from "../ui/dialog";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "../ui/select";
 import { Button } from "../ui/button";
 import { useDialogs } from "../../hooks/useDialogs";
@@ -28,13 +28,13 @@ import {
 } from "../../lib/spacePermissions";
 import type { SpaceItem, SpaceTeamRef, Team, TeamMember } from "../../types/electron";
 
-interface SpaceMembersDialogProps {
+interface SpaceMembersPanelProps {
   space: SpaceItem;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
 }
 
-export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceMembersDialogProps) {
+// Teams assigned to a space, their rosters, and the controls to change them.
+// Rendered inside SpaceSettingsDialog's Members tab.
+export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -91,21 +91,11 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
   }, []);
 
   useEffect(() => {
-    if (!open) {
-      setInviteEmail(undefined);
-      setInviteTeamId(null);
-      setPendingTeamId(null);
-      setExpandedOverrides(new Map());
-      setNewTeamOpen(false);
-      setAccessBusyTeamId(null);
-      return;
-    }
-    if (space.workspace_id) {
-      void refreshMembers(space.workspace_id).catch(() => {});
-      // Any workspace member may list teams; counts feed the collapsed rows.
-      void loadWorkspaceTeams(space.workspace_id);
-    }
-  }, [open, space.workspace_id, refreshMembers, loadWorkspaceTeams]);
+    if (!space.workspace_id) return;
+    void refreshMembers(space.workspace_id).catch(() => {});
+    // Any workspace member may list teams; counts feed the collapsed rows.
+    void loadWorkspaceTeams(space.workspace_id);
+  }, [space.workspace_id, refreshMembers, loadWorkspaceTeams]);
 
   // How many OTHER spaces each assigned team has access to — roster edits ripple there.
   const otherSpacesByTeam = useMemo(() => {
@@ -244,201 +234,193 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t("notes.spaces.teamsMembers.title", { space: space.name })}</DialogTitle>
-          </DialogHeader>
+      <div className="space-y-4">
+        {teamsError && space.workspace_id && (
+          <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">{t("notes.spaces.teams.loadError")}</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={teamsLoading}
+              onClick={() => {
+                if (space.workspace_id) {
+                  void loadWorkspaceTeams(space.workspace_id);
+                }
+              }}
+              className="h-6 px-2 text-xs shrink-0"
+            >
+              {teamsLoading && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
+              {t("common.retry")}
+            </Button>
+          </div>
+        )}
 
-          {teamsError && space.workspace_id && (
-            <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">{t("notes.spaces.teams.loadError")}</p>
+        {space.teams.length === 0 && (
+          <p className="text-xs text-muted-foreground">{t("notes.spaces.teamsMembers.noTeams")}</p>
+        )}
+
+        {space.teams.map((teamRef) => {
+          const otherSpaces = otherSpacesByTeam.get(teamRef.id) ?? 0;
+          const memberCount = memberCountByTeam.get(teamRef.id);
+          const expanded = isTeamExpanded(teamRef.id);
+          return (
+            <div key={teamRef.id} className="space-y-2">
+              <div className="flex items-center gap-1 -mx-1">
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={() => toggleTeamExpanded(teamRef.id)}
+                  className={cn(
+                    "flex flex-1 min-w-0 items-center gap-1.5 h-8 px-1.5 rounded-md",
+                    "transition-colors duration-150 outline-none",
+                    "hover:bg-foreground/4 dark:hover:bg-white/4",
+                    "focus-visible:ring-1 focus-visible:ring-ring/30"
+                  )}
+                >
+                  <ChevronRight
+                    size={12}
+                    aria-hidden="true"
+                    className={cn(
+                      "shrink-0 text-foreground/45 transition-transform duration-150",
+                      expanded ? "rotate-90" : "rtl:rotate-180"
+                    )}
+                  />
+                  <span dir="auto" className="text-xs font-semibold text-foreground truncate">
+                    {teamRef.name}
+                  </span>
+                  {memberCount != null && (
+                    <span className="ms-auto text-[10px] text-foreground/45 shrink-0">
+                      {t("settingsPage.workspace.teams.memberCount", { count: memberCount })}
+                    </span>
+                  )}
+                </button>
+                {canManage ? (
+                  <Select
+                    value={teamRef.access ?? "admin"}
+                    disabled={accessBusyTeamId === teamRef.id}
+                    onValueChange={(access) =>
+                      void handleAccessChange(teamRef, access as "admin" | "member")
+                    }
+                  >
+                    <SelectTrigger
+                      className="h-7 w-25 px-2 text-xs rounded-md shrink-0"
+                      aria-label={t("notes.spaces.teamsMembers.accessLabel")}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin" className="text-xs">
+                        {t("notes.spaces.teamsMembers.accessAdmin")}
+                      </SelectItem>
+                      <SelectItem value="member" className="text-xs">
+                        {t("notes.spaces.teamsMembers.accessMember")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="text-[10px] text-foreground/45 shrink-0 px-1">
+                    {t(
+                      (teamRef.access ?? "admin") === "admin"
+                        ? "notes.spaces.teamsMembers.accessAdmin"
+                        : "notes.spaces.teamsMembers.accessMember"
+                    )}
+                  </span>
+                )}
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => confirmUnassignTeam(teamRef.id, teamRef.name)}
+                    aria-label={t("notes.spaces.teamsMembers.removeTeamFromSpace")}
+                    className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-primary/30 shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {expanded && (
+                <>
+                  {otherSpaces > 0 && (
+                    <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                      <Info size={12} className="shrink-0 mt-px" />
+                      {t("notes.spaces.teamsMembers.affectsOtherSpaces", {
+                        count: otherSpaces,
+                        team: teamRef.name,
+                      })}
+                    </p>
+                  )}
+                  {(teamRef.access ?? "admin") === "member" && (
+                    <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                      <Info size={12} className="shrink-0 mt-px" />
+                      {t("notes.spaces.teamsMembers.accessHint", { team: teamRef.name })}
+                    </p>
+                  )}
+                  <TeamRosterSection
+                    teamId={teamRef.id}
+                    teamName={teamRef.name}
+                    canManage={canManageTeamRoster(teamRef.my_role, workspace?.role ?? null)}
+                    workspaceMembers={roster}
+                    currentUserId={user?.id}
+                    onInvite={
+                      canInviteToWorkspace
+                        ? (email) => {
+                            setInviteEmail(email);
+                            setInviteTeamId(teamRef.id);
+                            setInviteOpen(true);
+                          }
+                        : undefined
+                    }
+                    removeConfirm={confirmRemoveMember}
+                  />
+                </>
+              )}
+            </div>
+          );
+        })}
+
+        {((canManage && unassignedTeams.length > 0) || isWorkspaceAdmin) && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground/50">
+              {t("notes.spaces.teamsMembers.addTeamLabel")}
+            </label>
+            {canManage && unassignedTeams.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Select value={pendingTeamId ?? ""} onValueChange={setPendingTeamId}>
+                  <SelectTrigger className="h-8 flex-1 text-xs">
+                    <SelectValue placeholder={t("notes.spaces.teamsMembers.chooseTeam")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unassignedTeams.map((team) => (
+                      <SelectItem key={team.id} value={team.id} className="text-xs">
+                        <span dir="auto">{team.name}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  onClick={() => void handleAssignTeam()}
+                  disabled={!pendingTeamId || isAssigning}
+                  className="h-8 shrink-0"
+                >
+                  {showAssignSpinner && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
+                  {t("common.add")}
+                </Button>
+              </div>
+            )}
+            {isWorkspaceAdmin && (
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={teamsLoading}
-                onClick={() => {
-                  if (space.workspace_id) {
-                    void loadWorkspaceTeams(space.workspace_id);
-                  }
-                }}
-                className="h-6 px-2 text-xs shrink-0"
+                onClick={() => setNewTeamOpen(true)}
+                className="h-7 px-2 text-xs text-foreground/60"
               >
-                {teamsLoading && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
-                {t("common.retry")}
+                <Plus size={12} className="me-1" />
+                {t("notes.spaces.teams.newTeam")}
               </Button>
-            </div>
-          )}
-
-          {space.teams.length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              {t("notes.spaces.teamsMembers.noTeams")}
-            </p>
-          )}
-
-          {space.teams.map((teamRef) => {
-            const otherSpaces = otherSpacesByTeam.get(teamRef.id) ?? 0;
-            const memberCount = memberCountByTeam.get(teamRef.id);
-            const expanded = isTeamExpanded(teamRef.id);
-            return (
-              <div key={teamRef.id} className="space-y-2">
-                <div className="flex items-center gap-1 -mx-1">
-                  <button
-                    type="button"
-                    aria-expanded={expanded}
-                    onClick={() => toggleTeamExpanded(teamRef.id)}
-                    className={cn(
-                      "flex flex-1 min-w-0 items-center gap-1.5 h-8 px-1.5 rounded-md",
-                      "transition-colors duration-150 outline-none",
-                      "hover:bg-foreground/4 dark:hover:bg-white/4",
-                      "focus-visible:ring-1 focus-visible:ring-ring/30"
-                    )}
-                  >
-                    <ChevronRight
-                      size={12}
-                      aria-hidden="true"
-                      className={cn(
-                        "shrink-0 text-foreground/45 transition-transform duration-150",
-                        expanded ? "rotate-90" : "rtl:rotate-180"
-                      )}
-                    />
-                    <span dir="auto" className="text-xs font-semibold text-foreground truncate">
-                      {teamRef.name}
-                    </span>
-                    {memberCount != null && (
-                      <span className="ms-auto text-[10px] text-foreground/45 shrink-0">
-                        {t("settingsPage.workspace.teams.memberCount", { count: memberCount })}
-                      </span>
-                    )}
-                  </button>
-                  {canManage ? (
-                    <Select
-                      value={teamRef.access ?? "admin"}
-                      disabled={accessBusyTeamId === teamRef.id}
-                      onValueChange={(access) =>
-                        void handleAccessChange(teamRef, access as "admin" | "member")
-                      }
-                    >
-                      <SelectTrigger
-                        className="h-7 w-25 px-2 text-xs rounded-md shrink-0"
-                        aria-label={t("notes.spaces.teamsMembers.accessLabel")}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin" className="text-xs">
-                          {t("notes.spaces.teamsMembers.accessAdmin")}
-                        </SelectItem>
-                        <SelectItem value="member" className="text-xs">
-                          {t("notes.spaces.teamsMembers.accessMember")}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <span className="text-[10px] text-foreground/45 shrink-0 px-1">
-                      {t(
-                        (teamRef.access ?? "admin") === "admin"
-                          ? "notes.spaces.teamsMembers.accessAdmin"
-                          : "notes.spaces.teamsMembers.accessMember"
-                      )}
-                    </span>
-                  )}
-                  {canManage && (
-                    <button
-                      type="button"
-                      onClick={() => confirmUnassignTeam(teamRef.id, teamRef.name)}
-                      aria-label={t("notes.spaces.teamsMembers.removeTeamFromSpace")}
-                      className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-primary/30 shrink-0"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-                {expanded && (
-                  <>
-                    {otherSpaces > 0 && (
-                      <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
-                        <Info size={12} className="shrink-0 mt-px" />
-                        {t("notes.spaces.teamsMembers.affectsOtherSpaces", {
-                          count: otherSpaces,
-                          team: teamRef.name,
-                        })}
-                      </p>
-                    )}
-                    {(teamRef.access ?? "admin") === "member" && (
-                      <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
-                        <Info size={12} className="shrink-0 mt-px" />
-                        {t("notes.spaces.teamsMembers.accessHint", { team: teamRef.name })}
-                      </p>
-                    )}
-                    <TeamRosterSection
-                      teamId={teamRef.id}
-                      teamName={teamRef.name}
-                      canManage={canManageTeamRoster(teamRef.my_role, workspace?.role ?? null)}
-                      workspaceMembers={roster}
-                      currentUserId={user?.id}
-                      onInvite={
-                        canInviteToWorkspace
-                          ? (email) => {
-                              setInviteEmail(email);
-                              setInviteTeamId(teamRef.id);
-                              setInviteOpen(true);
-                            }
-                          : undefined
-                      }
-                      removeConfirm={confirmRemoveMember}
-                    />
-                  </>
-                )}
-              </div>
-            );
-          })}
-
-          {((canManage && unassignedTeams.length > 0) || isWorkspaceAdmin) && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground/50">
-                {t("notes.spaces.teamsMembers.addTeamLabel")}
-              </label>
-              {canManage && unassignedTeams.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <Select value={pendingTeamId ?? ""} onValueChange={setPendingTeamId}>
-                    <SelectTrigger className="h-8 flex-1 text-xs">
-                      <SelectValue placeholder={t("notes.spaces.teamsMembers.chooseTeam")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {unassignedTeams.map((team) => (
-                        <SelectItem key={team.id} value={team.id} className="text-xs">
-                          <span dir="auto">{team.name}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    size="sm"
-                    onClick={() => void handleAssignTeam()}
-                    disabled={!pendingTeamId || isAssigning}
-                    className="h-8 shrink-0"
-                  >
-                    {showAssignSpinner && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
-                    {t("common.add")}
-                  </Button>
-                </div>
-              )}
-              {isWorkspaceAdmin && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setNewTeamOpen(true)}
-                  className="h-7 px-2 text-xs text-foreground/60"
-                >
-                  <Plus size={12} className="me-1" />
-                  {t("notes.spaces.teams.newTeam")}
-                </Button>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            )}
+          </div>
+        )}
+      </div>
 
       {space.workspace_id && (
         <CreateTeamDialog

@@ -125,7 +125,7 @@ async function renderTree(t, direction) {
       "/ui/dialog": "export const ConfirmDialog = () => null;",
       "/CreateSpaceDialog": "export default function Mock() { return null; }",
       "/DeleteSpaceDialog": "export default function Mock() { return null; }",
-      "/SpaceMembersDialog": "export default function Mock() { return null; }",
+      "/SpaceSettingsDialog": "export default function Mock() { return null; }",
     },
   });
   const { I18nextProvider } = await vite.ssrLoadModule("react-i18next");

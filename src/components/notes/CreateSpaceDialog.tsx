@@ -23,7 +23,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
-import { EmojiPickerInput } from "./EmojiPickerInput";
+import SpaceNameField from "./SpaceNameField";
 import { orderMemberCandidates } from "../../lib/memberCandidates";
 import { canManageWorkspace } from "../../lib/spacePermissions";
 import {
@@ -64,7 +64,7 @@ export default function CreateSpaceDialog({
     }))
   );
   const [name, setName] = useState("");
-  const [emoji, setEmoji] = useState("");
+  const [emoji, setEmoji] = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [membersError, setMembersError] = useState(false);
@@ -146,7 +146,7 @@ export default function CreateSpaceDialog({
     onOpenChange(nextOpen);
     if (!nextOpen) {
       setName("");
-      setEmoji("");
+      setEmoji(null);
       setMemberSearch("");
       setSelectedIds(new Set());
       setRosterWorkspaceId(null);
@@ -219,7 +219,7 @@ export default function CreateSpaceDialog({
       const memberIds = [...selectedIds].filter((id) => id !== user?.id);
       const { space, failedMembers } = await createSpace(
         workspace.id,
-        { name: trimmed, emoji: emoji.trim() || null },
+        { name: trimmed, emoji },
         {
           existingTeamIds: [...selectedTeamIds],
           newTeam: newTeamOpen ? { name: newTeamName.trim() || trimmed, memberIds } : undefined,
@@ -334,40 +334,22 @@ export default function CreateSpaceDialog({
                 </div>
               )}
 
-              <div className="flex gap-3">
-                <div className="space-y-1.5 w-14 shrink-0">
-                  <label
-                    htmlFor="create-space-emoji"
-                    className="text-xs font-medium text-foreground/50"
-                  >
-                    {t("notes.spaces.emojiLabel")}
-                  </label>
-                  <EmojiPickerInput
-                    id="create-space-emoji"
-                    value={emoji}
-                    onChange={setEmoji}
-                    ariaLabel={t("notes.spaces.changeEmoji")}
-                  />
-                </div>
-                <div className="space-y-1.5 flex-1">
-                  <label
-                    htmlFor="create-space-name"
-                    className="text-xs font-medium text-foreground/50"
-                  >
-                    {t("notes.spaces.nameLabel")}
-                  </label>
-                  <Input
-                    dir="auto"
-                    id="create-space-name"
-                    value={name}
-                    autoFocus
-                    maxLength={80}
-                    onChange={(e) => setName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleCreate();
-                    }}
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="create-space-name"
+                  className="text-xs font-medium text-foreground/50"
+                >
+                  {t("notes.spaces.nameAndIconLabel")}
+                </label>
+                <SpaceNameField
+                  id="create-space-name"
+                  name={name}
+                  emoji={emoji}
+                  autoFocus
+                  onNameChange={setName}
+                  onEmojiChange={setEmoji}
+                  onEnter={() => handleCreate()}
+                />
               </div>
 
               <div className="space-y-1.5">

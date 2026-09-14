@@ -198,8 +198,8 @@ test("user-authored names and previews detect direction at their display boundar
     ["src/components/notes/CreateSpaceDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{item\.name\}/],
     ["src/components/notes/CreateSpaceDialog.tsx", /<p\s+dir="auto"[^>]*>\s*\{workspace\.name\}/],
     ["src/components/notes/CreateSpaceDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
-    ["src/components/notes/SpaceMembersDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{teamRef\.name\}/],
-    ["src/components/notes/SpaceMembersDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
+    ["src/components/notes/SpaceMembersPanel.tsx", /<span\s+dir="auto"[^>]*>\s*\{teamRef\.name\}/],
+    ["src/components/notes/SpaceMembersPanel.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
     [
       "src/components/settings/WorkspaceSection.tsx",
       /<h2\s+dir="auto"[^>]*>\s*\{workspace\.name\}/,
