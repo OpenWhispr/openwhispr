@@ -139,6 +139,8 @@ export default function CreateSpaceDialog({
     [roster, rosterWorkspaceId, user?.id, workspace?.id]
   );
   const workspaceTeams = teamsWorkspaceId === workspace?.id ? teams : [];
+  // Hold the section's place while the roster loads so the footer doesn't jump.
+  const peopleLoading = workspace != null && rosterWorkspaceId !== workspace.id && !membersError;
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
     if (!nextOpen) {
@@ -309,12 +311,14 @@ export default function CreateSpaceDialog({
 
               {/* A workspace of one has nobody to add; the section only
                   appears once the roster shows other people (or failed). */}
-              {(membersError || candidates.length > 0) && (
+              {(peopleLoading || membersError || candidates.length > 0) && (
                 <div className="space-y-1.5">
                   <p className="text-xs font-medium text-foreground/50">
                     {t("notes.spaces.members.addPeople")}
                   </p>
-                  {membersError ? (
+                  {peopleLoading ? (
+                    <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
+                  ) : membersError ? (
                     <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
                       <p className="text-xs text-muted-foreground">
                         {t("settingsPage.workspace.members.loadError")}

@@ -14,6 +14,7 @@ import { cn } from "./lib/utils";
 import MemberAvatar from "./MemberAvatar";
 import MemberPickList from "./MemberPickList";
 import RoleBadge from "./RoleBadge";
+import { formatList } from "../lib/formatList";
 import type { TeamRole, WorkspaceMember } from "../types/electron";
 
 const ROLES: TeamRole[] = ["admin", "member"];
@@ -81,8 +82,7 @@ export default function MemberRoster<M extends RosterMember>({
 }: MemberRosterProps<M>) {
   const { t, i18n } = useTranslation();
   const [addSearch, setAddSearch] = useState("");
-  const formatGroups = (names: string[]) =>
-    new Intl.ListFormat(i18n.language, { type: "conjunction" }).format(names);
+  const formatGroups = (names: string[]) => formatList(i18n.language, names);
 
   const searchEmail = addSearch.trim().toLowerCase();
   // addCandidates is the workspace roster minus current members, so together
@@ -114,6 +114,9 @@ export default function MemberRoster<M extends RosterMember>({
             const groups = member.via ?? [];
             // Only a group grants this row: removal happens in that group.
             const viaGroupOnly = !member.direct_role && groups.length > 0;
+            // An admin role that comes from a group can't be lowered here.
+            const adminViaGroup =
+              member.role === "admin" && member.direct_role !== "admin" && groups.length > 0;
             return (
               <div key={member.user_id} className="flex items-center gap-3 px-4 h-14">
                 <MemberAvatar name={member.name} email={member.email} image={member.image} />
@@ -127,7 +130,7 @@ export default function MemberRoster<M extends RosterMember>({
                     </p>
                   )}
                 </div>
-                {viaGroupOnly && (
+                {groups.length > 0 && (
                   <span className="text-[10px] text-foreground/45 truncate max-w-32">
                     {t("notes.spaces.members.viaGroup", { group: formatGroups(groups) })}
                   </span>
@@ -145,25 +148,33 @@ export default function MemberRoster<M extends RosterMember>({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-60">
-                      {ROLES.map((role) => (
-                        <DropdownMenuItem
-                          key={role}
-                          onClick={() => {
-                            if (role !== member.role) onRoleChange(member, role);
-                          }}
-                          className="flex-col items-start gap-0.5 rounded-md px-2 py-1.5"
-                        >
-                          <span className="flex w-full items-center text-xs font-medium">
-                            {t(ROLE_LABEL_KEY[role])}
-                            {member.role === role && (
-                              <Check size={12} className="ms-auto text-primary" />
-                            )}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">
-                            {t(ROLE_DESCRIPTION_KEY[role])}
-                          </span>
-                        </DropdownMenuItem>
-                      ))}
+                      {ROLES.map((role) => {
+                        const lockedByGroup = role === "member" && adminViaGroup;
+                        return (
+                          <DropdownMenuItem
+                            key={role}
+                            disabled={lockedByGroup}
+                            onClick={() => {
+                              if (role !== member.role) onRoleChange(member, role);
+                            }}
+                            className="flex-col items-start gap-0.5 rounded-md px-2 py-1.5"
+                          >
+                            <span className="flex w-full items-center text-xs font-medium">
+                              {t(ROLE_LABEL_KEY[role])}
+                              {member.role === role && (
+                                <Check size={12} className="ms-auto text-primary" />
+                              )}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground whitespace-normal">
+                              {lockedByGroup
+                                ? t("notes.spaces.members.roleFromGroup", {
+                                    group: formatGroups(groups),
+                                  })
+                                : t(ROLE_DESCRIPTION_KEY[role])}
+                            </span>
+                          </DropdownMenuItem>
+                        );
+                      })}
                       <DropdownMenuSeparator />
                       {viaGroupOnly ? (
                         <DropdownMenuItem

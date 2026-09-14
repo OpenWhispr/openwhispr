@@ -19,6 +19,7 @@ import {
 } from "../../services/spaceActions";
 import { useToast } from "../ui/useToast";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { formatList } from "../../lib/formatList";
 import { orderMemberCandidates } from "../../lib/memberCandidates";
 import { canManageSpace, canManageWorkspace } from "../../lib/spacePermissions";
 import type { SpaceItem, TeamRole, WorkspaceMember } from "../../types/electron";
@@ -31,7 +32,7 @@ interface SpaceMembersPanelProps {
 // one flat list, with group assignment tucked into a disclosure below.
 // Rendered inside SpaceSettingsDialog's Members tab.
 export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
@@ -103,23 +104,36 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
     });
   };
 
+  // Removing drops the direct grant only; access through a group stays and
+  // is said so up front and after the fact.
   const handleRemove = (member: SpaceMemberEntry) => {
+    const name = member.name || member.email;
+    const groupNames = (teams: { name: string }[]) =>
+      formatList(
+        i18n.language,
+        teams.map((team) => team.name)
+      );
     showConfirmDialog({
-      title: t("notes.spaces.members.removeConfirm", {
-        name: member.name || member.email,
-        space: space.name,
-      }),
-      description: t("notes.spaces.members.removeConfirmDescription"),
+      title: t("notes.spaces.members.removeConfirm", { name, space: space.name }),
+      description:
+        member.via_teams.length > 0
+          ? t("notes.spaces.members.removeKeepsGroupAccess", {
+              groups: groupNames(member.via_teams),
+            })
+          : t("notes.spaces.members.removeConfirmDescription"),
       confirmText: t("notes.spaces.members.remove"),
       variant: "destructive",
       onConfirm: () =>
         void mutate(member.user_id, async () => {
-          await removeSpaceMember(space, member.user_id);
+          const { still_via_teams } = await removeSpaceMember(space, member.user_id);
           toast({
-            title: t("notes.spaces.members.removedFromTeam", {
-              name: member.name || member.email,
-              team: space.name,
-            }),
+            title:
+              still_via_teams.length > 0
+                ? t("notes.spaces.members.stillViaGroups", {
+                    name,
+                    groups: groupNames(still_via_teams),
+                  })
+                : t("notes.spaces.members.removedFromTeam", { name, team: space.name }),
           });
         }),
     });

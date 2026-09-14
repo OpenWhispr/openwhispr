@@ -13,6 +13,7 @@ import {
   canManageWorkspace,
   teamsUserCanLeave,
 } from "../../lib/spacePermissions";
+import { formatList } from "../../lib/formatList";
 import { localMutationErrorKey } from "../../lib/localMutationError";
 import { leaveSpace, leaveTeam, renameSpace } from "../../services/spaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -135,26 +136,40 @@ export default function SpaceSettingsDialog({
   const canLeave =
     Boolean(space.cloud_space_id) && !isWorkspaceAdmin && canLeaveSpace(space) && Boolean(user?.id);
 
-  // Leaving drops the direct grant and every group membership that opens
-  // this space; the group copy only applies when groups are the sole grant.
+  // A direct grant is dropped on its own and access through groups is left
+  // where it is: groups are managed in the group. Leaving through groups is
+  // offered only when they are the sole grant, with its own warning.
   const confirmLeave = () => {
     if (!canLeave || !user?.id) return;
     const userId = user.id;
-    const teamNames = new Intl.ListFormat(i18n.language, { type: "conjunction" }).format(
-      leaveTeams.map((team) => team.name)
-    );
+    const direct = space.my_direct_role != null;
+    const groupNames = (names: string[]) => formatList(i18n.language, names);
     showConfirmDialog({
       title: t("notes.spaces.leaveConfirmTitle", { space: space.name }),
-      description: space.my_direct_role
+      description: direct
         ? t("notes.spaces.leaveDirectDescription")
-        : t("notes.spaces.leaveConfirmDescription", { teams: teamNames }),
+        : t("notes.spaces.leaveConfirmDescription", {
+            teams: groupNames(leaveTeams.map((team) => team.name)),
+          }),
       confirmText: t("notes.spaces.leave"),
       variant: "destructive",
       onConfirm: async () => {
         setLeaving(true);
         try {
-          if (space.my_direct_role) await leaveSpace(space, userId);
-          for (const team of leaveTeams) await leaveTeam(team.id, userId);
+          if (direct) {
+            const { still_via_teams } = await leaveSpace(space, userId);
+            if (still_via_teams.length > 0) {
+              toast({
+                title: t("notes.spaces.stillViaGroups", {
+                  space: space.name,
+                  groups: groupNames(still_via_teams.map((team) => team.name)),
+                }),
+              });
+              return;
+            }
+          } else {
+            for (const team of leaveTeams) await leaveTeam(team.id, userId);
+          }
           toast({ title: t("notes.spaces.left", { space: space.name }) });
           onOpenChange(false);
         } catch (err) {
