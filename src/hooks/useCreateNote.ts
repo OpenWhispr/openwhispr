@@ -28,9 +28,8 @@ export function startRecordingForNote(note: NoteItem | null): Promise<boolean> {
 }
 
 /**
- * Creates a note, opens it in the tree, and starts recording into it. Usable
- * from any view: a null space resolves to the private space in the database,
- * so nothing here depends on the Notes tree having loaded.
+ * Creates a note, opens it, and starts recording into it. A null space resolves
+ * to the private space in the database, so this works before the Notes tree loads.
  */
 export function useCreateNote() {
   const { t } = useTranslation();
@@ -59,7 +58,6 @@ export function useCreateNote() {
     [t, recordingAllowed, isRecording]
   );
 
-  /** Creates in the active container, or the private space when none is selected. */
   const createNote = useCallback(
     () => createNoteIn(activeContext?.spaceId ?? null, activeContext?.folderId ?? null),
     [activeContext, createNoteIn]
