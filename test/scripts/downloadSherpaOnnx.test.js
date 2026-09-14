@@ -15,6 +15,7 @@ const {
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
   extractTarBz2,
+  findObsoleteLibraries,
   isCompleteInstall,
   privatizeWindowsOnnxRuntime,
 } = require("../../scripts/download-sherpa-onnx");
@@ -24,6 +25,16 @@ const EXE_NAMES = [
   "sherpa-onnx-online-ws-win32-x64.exe",
   "sherpa-onnx-diarize-win32-x64.exe",
 ];
+
+test("removes only libraries from the previous sherpa-onnx install", () => {
+  const obsolete = findObsoleteLibraries(
+    ["libonnxruntime.1.27.0.dylib", "libonnxruntime.dylib", "libsherpa-onnx-c-api.dylib"],
+    ["libonnxruntime.dylib", "libsherpa-onnx-c-api.dylib"],
+    ["libonnxruntime.1.27.0.dylib", "libonnxruntime.dylib", "libllama.dylib"]
+  );
+
+  assert.deepEqual(obsolete, ["libonnxruntime.1.27.0.dylib"]);
+});
 
 function makeBinDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sherpa-win32-"));

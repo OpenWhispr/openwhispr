@@ -4,13 +4,13 @@ const assert = require("node:assert/strict");
 const sherpaDownloader = require("../../scripts/download-sherpa-onnx");
 
 const UNIVERSAL_VTOOL_OUTPUT = `
-/tmp/libonnxruntime.1.27.0.dylib (architecture x86_64):
+/tmp/libonnxruntime.dylib (architecture x86_64):
 Load command 10
       cmd LC_BUILD_VERSION
  platform MACOS
     minos 15.5
       sdk 15.5
-/tmp/libonnxruntime.1.27.0.dylib (architecture arm64):
+/tmp/libonnxruntime.dylib (architecture arm64):
 Load command 10
       cmd LC_BUILD_VERSION
  platform MACOS
@@ -60,22 +60,22 @@ test("rejects a packaged ONNX Runtime library missing a universal architecture s
   );
 });
 
-test("validates the versioned ONNX Runtime library from a packaged app", () => {
+test("validates the ONNX Runtime library the sherpa binaries load", () => {
   const appPath = "/tmp/OpenWhispr.app";
   const result = sherpaDownloader.verifyPackagedMacosParakeet?.(appPath, {
     readDirectory(directory) {
       assert.equal(directory, `${appPath}/Contents/Resources/bin`);
-      return ["libonnxruntime.dylib", "libonnxruntime.1.27.0.dylib"];
+      return ["libonnxruntime.dylib"];
     },
     runVtool(libraryPath) {
-      assert.equal(libraryPath, `${appPath}/Contents/Resources/bin/libonnxruntime.1.27.0.dylib`);
+      assert.equal(libraryPath, `${appPath}/Contents/Resources/bin/libonnxruntime.dylib`);
       return UNIVERSAL_VTOOL_OUTPUT;
     },
   });
 
   assert.deepEqual(result, {
     architectures: ["x86_64", "arm64"],
-    libraryPath: `${appPath}/Contents/Resources/bin/libonnxruntime.1.27.0.dylib`,
+    libraryPath: `${appPath}/Contents/Resources/bin/libonnxruntime.dylib`,
     minimumVersion: "15.5",
   });
 });

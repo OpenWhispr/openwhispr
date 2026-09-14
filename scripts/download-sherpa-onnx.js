@@ -17,7 +17,7 @@ const {
 } = require("../src/helpers/parakeetCapability");
 const { renameImportedModule } = require("./lib/pe-imports");
 
-const SHERPA_ONNX_VERSION = "1.13.4";
+const SHERPA_ONNX_VERSION = "1.13.7";
 const GITHUB_RELEASE_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}`;
 
 // Windows 11 ships an older onnxruntime.dll in System32, and on some machines
@@ -37,10 +37,10 @@ const WINDOWS_ONNXRUNTIME_PRIVATE_NAME = "ow-onnxrt.dll";
 // cmake/onnxruntime-osx-arm64.cmake pins). On macOS hosts we swap that slice
 // in and keep the x86_64 slice, so the file stays universal2.
 const MACOS_ARM64_ONNXRUNTIME = {
-  url: "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/onnxruntime-osx-arm64-1.27.0.zip",
-  sha256: "5f05b2653eb0af852dab46c85778f0e012c514ed2e71a6dbb9c9550434b0a514",
-  libraryName: "libonnxruntime.1.27.0.dylib",
-  marker: "arm64-1.27.0", // recorded in the install marker so older installs re-extract
+  url: "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/onnxruntime-osx-arm64-1.27.1.zip",
+  sha256: "8258cf05abc011df06706646f73bdddb735d90348ae3d211bd5c471c20a617b0",
+  libraryName: "libonnxruntime.dylib",
+  marker: "arm64-1.27.1", // recorded in the install marker so older installs re-extract
 };
 
 // Binary configurations for each platform
@@ -198,17 +198,11 @@ function verifyPackagedMacosParakeet(
   } = {}
 ) {
   const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
-  const libraries = readDirectory(binDirectory).filter((fileName) =>
-    /^libonnxruntime\.\d+(?:\.\d+)*\.dylib$/.test(fileName)
-  );
-
-  if (libraries.length !== 1) {
-    throw new Error(
-      `Expected one versioned ONNX Runtime library in ${binDirectory}, found ${libraries.length}`
-    );
+  if (!readDirectory(binDirectory).includes(MACOS_ARM64_ONNXRUNTIME.libraryName)) {
+    throw new Error(`Expected ${MACOS_ARM64_ONNXRUNTIME.libraryName} in ${binDirectory}`);
   }
 
-  const libraryPath = path.join(binDirectory, libraries[0]);
+  const libraryPath = path.join(binDirectory, MACOS_ARM64_ONNXRUNTIME.libraryName);
   const targets = parseMacosDeploymentTargets(runVtool(libraryPath));
   return { ...validateMacosDeploymentTargets(targets), libraryPath };
 }
@@ -289,25 +283,35 @@ function privatizeWindowsOnnxRuntime({ binDir, binaryPaths, libraryNames }) {
   return shippedLibraries;
 }
 
+function readInstallMarker(markerPath) {
+  try {
+    return JSON.parse(fs.readFileSync(markerPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function findObsoleteLibraries(previousLibraries, installedLibraries, directoryEntries) {
+  const previous = new Set(previousLibraries);
+  const installed = new Set(installedLibraries);
+  return directoryEntries.filter((file) => previous.has(file) && !installed.has(file));
+}
+
 function isCompleteInstall(markerPath, binaryPaths, { platformArch, binDir = BIN_DIR }) {
   if (binaryPaths.some((binaryPath) => !fs.existsSync(binaryPath))) return false;
 
-  try {
-    const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
-    if (marker.version !== SHERPA_ONNX_VERSION || !Array.isArray(marker.libraries)) return false;
-    if (marker.libraries.some((lib) => !fs.existsSync(path.join(binDir, lib)))) return false;
-    // A win32 marker without this field predates the rename: the exes on disk
-    // still import onnxruntime.dll and must be re-extracted.
-    if (platformArch.startsWith("win32")) {
-      return marker.onnxRuntime === WINDOWS_ONNXRUNTIME_PRIVATE_NAME;
-    }
-    // A macOS marker without this field still holds the slow universal2 slice.
-    return (
-      !isMacosHostTarget(platformArch) || marker.onnxRuntime === MACOS_ARM64_ONNXRUNTIME.marker
-    );
-  } catch {
-    return false;
+  const marker = readInstallMarker(markerPath);
+  if (marker?.version !== SHERPA_ONNX_VERSION || !Array.isArray(marker?.libraries)) return false;
+  if (marker.libraries.some((lib) => !fs.existsSync(path.join(binDir, lib)))) return false;
+  // A win32 marker without this field predates the rename: the exes on disk
+  // still import onnxruntime.dll and must be re-extracted.
+  if (platformArch.startsWith("win32")) {
+    return marker.onnxRuntime === WINDOWS_ONNXRUNTIME_PRIVATE_NAME;
   }
+  // A macOS marker without this field still holds the slow universal2 slice.
+  return (
+    !isMacosHostTarget(platformArch) || marker.onnxRuntime === MACOS_ARM64_ONNXRUNTIME.marker
+  );
 }
 
 async function downloadBinary(platformArch, config, isForce = false) {
@@ -320,6 +324,10 @@ async function downloadBinary(platformArch, config, isForce = false) {
   const onlineOutputPath = path.join(BIN_DIR, config.onlineOutputName);
   const diarizeOutputPath = path.join(BIN_DIR, config.diarizeOutputName);
   const installMarkerPath = path.join(BIN_DIR, `.sherpa-onnx-${platformArch}.json`);
+  const previousInstall = readInstallMarker(installMarkerPath);
+  const previousLibraries = Array.isArray(previousInstall?.libraries)
+    ? previousInstall.libraries
+    : [];
 
   if (
     !isForce &&
@@ -377,12 +385,24 @@ async function downloadBinary(platformArch, config, isForce = false) {
         fs.rmSync(destPath, { force: true });
         fs.copyFileSync(libPath, destPath);
         setExecutable(destPath);
-        if (isMacosHostTarget(platformArch) && versionMatch?.[1] === "libonnxruntime") {
+        if (
+          isMacosHostTarget(platformArch) &&
+          libName === MACOS_ARM64_ONNXRUNTIME.libraryName
+        ) {
           await replaceMacosArm64OnnxRuntime(destPath, platformArch);
         }
         adhocSign(destPath, platformArch);
         copiedLibraries.push(libName);
         console.log(`  ${platformArch}: Copied library ${libName}`);
+      }
+
+      for (const file of findObsoleteLibraries(
+        previousLibraries,
+        copiedLibraries,
+        fs.readdirSync(BIN_DIR)
+      )) {
+        fs.rmSync(path.join(BIN_DIR, file), { force: true });
+        console.log(`  ${platformArch}: Removed stale ${file}`);
       }
 
       // Replace unversioned copies with symlinks to versioned ones (macOS/Linux only)
@@ -506,6 +526,7 @@ module.exports = {
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
   getDownloadUrl,
   extractTarBz2,
+  findObsoleteLibraries,
   isCompleteInstall,
   parseMacosDeploymentTargets,
   privatizeWindowsOnnxRuntime,
