@@ -110,15 +110,17 @@ async function setMemberRole(spaceId: string, userId: string, role: TeamRole): P
   await cloudPatch(`/api/spaces/${spaceId}/members/${userId}`, { role });
 }
 
+export interface SpaceMemberRemoval {
+  removed: boolean;
+  still_via_teams: { team_id: string; name: string }[];
+}
+
 // Deletes only the direct grant; still_via_teams names the teams that keep
 // the user in the space, so callers can say so.
-async function removeMember(
-  spaceId: string,
-  userId: string
-): Promise<{ removed: boolean; still_via_teams: { team_id: string; name: string }[] }> {
-  const res = await cloudDelete<
-    DataWrap<{ removed: boolean; still_via_teams: { team_id: string; name: string }[] }>
-  >(`/api/spaces/${spaceId}/members/${userId}`);
+async function removeMember(spaceId: string, userId: string): Promise<SpaceMemberRemoval> {
+  const res = await cloudDelete<DataWrap<SpaceMemberRemoval>>(
+    `/api/spaces/${spaceId}/members/${userId}`
+  );
   return res.data;
 }
 

@@ -1,14 +1,9 @@
 import type { SpaceItem, TeamRole } from "../types/electron";
-import type { MySpace } from "./SpacesService";
+import type { MySpace, SpaceMemberRemoval } from "./SpacesService";
 
 interface MutationResult {
   success: boolean;
   error?: string;
-}
-
-export interface SpaceMemberRemoval {
-  removed: boolean;
-  still_via_teams: { team_id: string; name: string }[];
 }
 
 export interface SpaceActionsDependencies {
@@ -204,8 +199,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
   // Dropping one's own direct grant can revoke container access, so the
   // sync pass runs to purge content the mirror no longer lists.
   async function leaveSpace(space: SpaceItem, userId: string): Promise<SpaceMemberRemoval> {
-    const result = await deps.spaces.removeMember(requireCloudSpaceId(space), userId);
-    await refreshSpaceMirror();
+    const result = await removeSpaceMember(space, userId);
     deps.sync.requestSyncAll("manual");
     return result;
   }
