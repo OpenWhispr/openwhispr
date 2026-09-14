@@ -1539,9 +1539,9 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("get-main-window-pointer-position", (event) => {
+    ipcMain.handle("set-main-window-input-region", (event, region) => {
       if (event.sender !== this.windowManager.mainWindow?.webContents) return null;
-      return this.windowManager.getMainWindowPointerPosition();
+      return this.windowManager.setMainWindowInputRegion(region);
     });
 
     ipcMain.handle("get-main-window-horizontal-direction", () => {

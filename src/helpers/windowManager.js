@@ -1,5 +1,6 @@
 const { app, screen, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
 const debugLogger = require("./debugLogger");
+const { createLinuxWindowInputRegion } = require("./linuxWindowInputRegion");
 // Aliased: this class has an openExternalUrl method wrapping the helper.
 const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
 const HotkeyManager = require("./hotkeyManager");
@@ -247,9 +248,7 @@ class WindowManager {
     }
 
     if (process.platform === "linux") {
-      // The renderer samples the native pointer because Linux cannot forward
-      // hover through click-through windows. Reapply after native resizes,
-      // which can reset X11's input region even when capture has not changed.
+      // Native capture is the fallback when the input-region helper is unavailable.
       this.mainWindow.setIgnoreMouseEvents(!shouldCapture);
     } else if (shouldCapture) {
       this.mainWindow.setIgnoreMouseEvents(false);
@@ -258,13 +257,22 @@ class WindowManager {
     }
   }
 
-  getMainWindowPointerPosition() {
+  async setMainWindowInputRegion(region) {
     const win = this.mainWindow;
-    if (!win || win.isDestroyed() || !win.isVisible() || win.isMinimized()) return null;
-    const cursor = screen.getCursorScreenPoint();
-    const bounds = win.getContentBounds();
-    const zoom = win.webContents.getZoomFactor();
-    return { x: (cursor.x - bounds.x) / zoom, y: (cursor.y - bounds.y) / zoom };
+    if (process.platform !== "linux" || !win || win.isDestroyed()) return false;
+    if (this._linuxWindowInputRegion?.window !== win) {
+      this._linuxWindowInputRegion?.stop();
+      this._linuxWindowInputRegion = { window: win, ...createLinuxWindowInputRegion(win) };
+    }
+    try {
+      await this._linuxWindowInputRegion.set(region);
+      return !win.isDestroyed() && win.isVisible() && !win.isMinimized();
+    } catch (error) {
+      // The writer rejects after its process closes, so an old shape cannot
+      // overwrite this fallback and leave native hover unreachable.
+      if (!win.isDestroyed()) win.setIgnoreMouseEvents(false);
+      throw error;
+    }
   }
 
   // Only the meeting prompt owns this: another overlay reporting its own hover
@@ -1938,7 +1946,7 @@ class WindowManager {
     if (process.platform === "linux") {
       const win = this.mainWindow;
       // backgroundThrottling:false keeps document.visibilityState visible even
-      // after hide(). Native visibility owns the Linux pointer poll's lifetime.
+      // after hide(). Native visibility owns the Linux input-region updates.
       for (const event of ["show", "hide", "minimize", "restore"]) {
         win.on(event, () => {
           win.webContents.send(

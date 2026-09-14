@@ -8,30 +8,37 @@ const {
   installHookDom,
 } = require("../lib/rendererTestHarness");
 
-async function mountPill(t, { platform = "linux" } = {}) {
+const PILL_RECT = { x: 156, y: 68, width: 40, height: 40 };
+const VIEWPORT = { viewportWidth: 208, viewportHeight: 120 };
+const EMPTY_REGION = { x: 0, y: 0, width: 0, height: 0, ...VIEWPORT };
+
+async function mountPill(t, { platform = "linux", visible = true } = {}) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  const captures = [];
-  const hovers = [];
-  const hitPoints = [];
-  let pointerReads = 0;
+  const regions = [];
+  let measurements = 0;
   let visibilityListener;
-  let readPointer = async () => ({ x: 104, y: 60 });
-  const pill = {};
-  const cancel = {};
-  const padding = {};
-  let hit = padding;
+  let writeRegion = async () => visible;
+  let rect = PILL_RECT;
+  const pill = {
+    getBoundingClientRect: () => {
+      measurements += 1;
+      return rect;
+    },
+  };
+  const pillRef = { current: pill };
   installBrowserGlobals(t, {
     window: {
+      innerWidth: VIEWPORT.viewportWidth,
+      innerHeight: VIEWPORT.viewportHeight,
       electronAPI: {
         getPlatform: () => platform,
-        getMainWindowPointerPosition: () => {
-          pointerReads += 1;
-          return readPointer();
+        setMainWindowInputRegion: (region) => {
+          regions.push(region);
+          return writeRegion(region);
         },
-        setMainWindowInteractivity: async (capture) => captures.push(capture),
         onMainWindowVisibilityChanged: (listener) => {
           visibilityListener = listener;
           return () => {
@@ -43,21 +50,12 @@ async function mountPill(t, { platform = "linux" } = {}) {
   });
   const container = installHookDom(t);
   globalThis.document.hidden = false;
-  globalThis.document.elementFromPoint = (x, y) => {
-    hitPoints.push({ x, y });
-    return hit;
-  };
   const vite = await createRendererServer(t);
   const { useLinuxPillInteractivity } = await vite.ssrLoadModule(
     "/hooks/useLinuxPillInteractivity.ts"
   );
   t.mock.timers.enable({ apis: ["setInterval"] });
-  let props = {
-    pillRef: { current: { contains: (element) => element === pill || element === cancel } },
-    captureWindow: false,
-    pillInteractive: true,
-    onHoverChange: (hovered) => hovers.push(hovered),
-  };
+  let props = { pillRef, captureWindow: false, pillInteractive: true };
   function Harness() {
     useLinuxPillInteractivity(props);
     return null;
@@ -72,19 +70,17 @@ async function mountPill(t, { platform = "linux" } = {}) {
   };
   await render();
   return {
-    captures,
-    hovers,
-    hitPoints,
-    pill,
-    cancel,
-    padding,
-    setHit: (element) => {
-      hit = element;
+    regions,
+    setRect: (next) => {
+      rect = next;
     },
-    setPointerReader: (reader) => {
-      readPointer = reader;
+    setPillPresent: (present) => {
+      pillRef.current = present ? pill : null;
     },
-    pointerReads: () => pointerReads,
+    setRegionWriter: (writer) => {
+      writeRegion = writer;
+    },
+    measurements: () => measurements,
     setVisible: async (visible) => {
       await React.act(async () => visibilityListener(visible));
     },
@@ -97,155 +93,206 @@ async function mountPill(t, { platform = "linux" } = {}) {
   };
 }
 
-test("Linux recovers every hover without native mouse events and releases transparent padding", async (t) => {
+test("Linux measures the rendered pill and follows cancel emergence, docking and viewport changes", async (t) => {
   const mounted = await mountPill(t);
-  assert.equal(mounted.captures.at(-1), false);
-  for (const target of [mounted.pill, mounted.cancel, mounted.padding, mounted.pill]) {
-    mounted.setHit(target);
-    await mounted.tick();
-    const inside = target !== mounted.padding;
-    assert.equal(mounted.captures.at(-1), inside);
-    assert.equal(mounted.hovers.at(-1), inside);
-  }
-  assert.deepEqual(mounted.hitPoints.at(-1), { x: 104, y: 60 });
+  assert.deepEqual(mounted.regions, [{ ...PILL_RECT, ...VIEWPORT }]);
+
+  const expanded = { x: 62.5, y: 72, width: 133.5, height: 36 };
+  mounted.setRect(expanded);
+  await mounted.tick();
+  assert.deepEqual(mounted.regions.at(-1), { ...expanded, ...VIEWPORT });
+
+  const docked = { x: 12, y: 452.25, width: 98, height: 36 };
+  mounted.setRect(docked);
+  globalThis.window.innerWidth = 400;
+  globalThis.window.innerHeight = 500;
+  await mounted.tick();
+  assert.deepEqual(mounted.regions.at(-1), {
+    ...docked,
+    viewportWidth: 400,
+    viewportHeight: 500,
+  });
 });
 
-test("menus, error cards, panels and dragging retain capture without waiting for a pointer read", async (t) => {
+test("unchanged geometry is reapplied because native resizes can reset the input region", async (t) => {
   const mounted = await mountPill(t);
-  mounted.setPointerReader(() => new Promise(() => {}));
+  await mounted.tick();
+  assert.deepEqual(mounted.regions, [
+    { ...PILL_RECT, ...VIEWPORT },
+    { ...PILL_RECT, ...VIEWPORT },
+  ]);
+});
+
+test("controls and dragging request full input immediately despite an older pending region", async (t) => {
+  const mounted = await mountPill(t);
+  const pending = Promise.withResolvers();
+  mounted.setRegionWriter((region) => (region ? pending.promise : Promise.resolve(true)));
+  await mounted.tick();
   await mounted.render({ captureWindow: true });
-  assert.equal(mounted.captures.at(-1), true);
-  const reads = mounted.pointerReads();
+  assert.equal(mounted.regions.at(-1), null);
+  const writes = mounted.regions.length;
+  const measurements = mounted.measurements();
   await mounted.tick();
-  assert.equal(mounted.pointerReads(), reads);
-});
+  assert.equal(mounted.regions.length, writes);
+  assert.equal(mounted.measurements(), measurements);
 
-test("suppressed pill and hidden windows do not gain hover or capture", async (t) => {
-  const mounted = await mountPill(t);
-  mounted.setHit(mounted.pill);
-  await mounted.render({ pillInteractive: false });
-  assert.equal(mounted.captures.at(-1), false);
-  assert.equal(mounted.hovers.at(-1), false);
-  globalThis.document.hidden = true;
-  const reads = mounted.pointerReads();
-  await mounted.tick();
-  assert.equal(mounted.pointerReads(), reads);
-  globalThis.document.hidden = false;
-  mounted.setPointerReader(async () => null);
-  const captures = mounted.captures.length;
-  await mounted.tick();
-  assert.equal(mounted.captures.length, captures);
-});
-
-test("late pointer replies cannot disable newly opened controls or outlive unmount", async (t) => {
-  const mounted = await mountPill(t);
-  let finishRead;
-  mounted.setPointerReader(
-    () =>
-      new Promise((resolve) => {
-        finishRead = resolve;
-      })
-  );
-  await mounted.tick();
-  const reads = mounted.pointerReads();
-  await mounted.tick();
-  assert.equal(mounted.pointerReads(), reads, "only one pointer read may be in flight");
-  await mounted.render({ captureWindow: true });
-  await React.act(async () => finishRead({ x: 104, y: 60 }));
-  assert.equal(mounted.captures.at(-1), true);
+  await React.act(async () => pending.resolve(true));
+  assert.equal(mounted.regions.at(-1), null);
   await mounted.render({ captureWindow: false });
-  await mounted.unmount();
-  const captures = mounted.captures.length;
-  await React.act(async () => finishRead({ x: 104, y: 60 }));
-  await mounted.tick();
-  assert.equal(mounted.captures.length, captures);
+  assert.deepEqual(mounted.regions.at(-1), { ...PILL_RECT, ...VIEWPORT });
 });
 
-test("a rejected pointer query is retried on the next poll", async (t) => {
+test("suppressed and absent pills request an empty region while overlays keep full input", async (t) => {
   const mounted = await mountPill(t);
-  mounted.setPointerReader(async () => {
-    throw new Error("renderer reloading");
+  await mounted.render({ pillInteractive: false });
+  assert.deepEqual(mounted.regions.at(-1), EMPTY_REGION);
+  await mounted.render({ captureWindow: true });
+  assert.equal(mounted.regions.at(-1), null);
+
+  mounted.setPillPresent(false);
+  await mounted.render({ captureWindow: false, pillInteractive: true });
+  assert.deepEqual(mounted.regions.at(-1), EMPTY_REGION);
+  mounted.setPillPresent(true);
+  await mounted.tick();
+  assert.deepEqual(mounted.regions.at(-1), { ...PILL_RECT, ...VIEWPORT });
+});
+
+test("only one measurement update is pending and the next sample uses current geometry", async (t) => {
+  const mounted = await mountPill(t);
+  const pending = Promise.withResolvers();
+  mounted.setRegionWriter(() => pending.promise);
+  await mounted.tick();
+  const writes = mounted.regions.length;
+  const measurements = mounted.measurements();
+  mounted.setRect({ x: 12, y: 72, width: 134, height: 36 });
+  await mounted.tick();
+  assert.equal(mounted.regions.length, writes);
+  assert.equal(mounted.measurements(), measurements);
+
+  await React.act(async () => pending.resolve(true));
+  await mounted.tick();
+  assert.deepEqual(mounted.regions.at(-1), {
+    x: 12,
+    y: 72,
+    width: 134,
+    height: 36,
+    ...VIEWPORT,
+  });
+});
+
+test("native hide stops sampling across prop changes and show applies the current region", async (t) => {
+  const mounted = await mountPill(t);
+  await mounted.setVisible(false);
+  const writes = mounted.regions.length;
+  await mounted.tick();
+  assert.equal(mounted.regions.length, writes);
+  assert.equal(globalThis.document.hidden, false);
+
+  await mounted.render({ pillInteractive: false });
+  assert.equal(mounted.regions.at(-1), null, "effect cleanup releases its previous region");
+  const hiddenWrites = mounted.regions.length;
+  await mounted.tick();
+  assert.equal(mounted.regions.length, hiddenWrites);
+  await mounted.setVisible(true);
+  assert.deepEqual(mounted.regions.at(-1), EMPTY_REGION);
+});
+
+test("an initially hidden window stops after one update until native show", async (t) => {
+  const mounted = await mountPill(t, { visible: false });
+  assert.equal(mounted.regions.length, 1);
+  await mounted.tick();
+  assert.equal(mounted.regions.length, 1);
+
+  await mounted.render({ pillInteractive: false });
+  assert.equal(mounted.regions.at(-1), null);
+  const writes = mounted.regions.length;
+  await mounted.tick();
+  assert.equal(mounted.regions.length, writes);
+
+  mounted.setRegionWriter(async () => true);
+  await mounted.setVisible(true);
+  assert.deepEqual(mounted.regions.at(-1), EMPTY_REGION);
+});
+
+test("a region failure stops sampling and a later show starts a fresh update", async (t) => {
+  const mounted = await mountPill(t);
+  mounted.setRegionWriter(async () => {
+    throw new Error("native input shaping unavailable");
   });
   await mounted.tick();
-  mounted.setPointerReader(async () => ({ x: 150, y: 80 }));
-  mounted.setHit(mounted.pill);
+  const writes = mounted.regions.length;
+  mounted.setRegionWriter(async () => true);
   await mounted.tick();
-  assert.equal(mounted.captures.at(-1), true);
-});
-
-test("native hide suspends polling even when Chromium stays visible, and show samples immediately", async (t) => {
-  const mounted = await mountPill(t);
-  mounted.setHit(mounted.pill);
-  await mounted.tick();
-  let finishRead;
-  mounted.setPointerReader(
-    () =>
-      new Promise((resolve) => {
-        finishRead = resolve;
-      })
-  );
-  await mounted.tick();
-  await mounted.setVisible(false);
-  assert.equal(mounted.hovers.at(-1), false);
-  const captures = mounted.captures.length;
-  const reads = mounted.pointerReads();
-  await React.act(async () => finishRead({ x: 104, y: 60 }));
-  await mounted.tick();
-  assert.equal(mounted.captures.length, captures);
-  assert.equal(mounted.pointerReads(), reads);
-  mounted.setPointerReader(async () => ({ x: 104, y: 60 }));
+  assert.equal(mounted.regions.length, writes);
   await mounted.setVisible(true);
-  assert.equal(mounted.pointerReads(), reads + 1);
-  assert.equal(mounted.hovers.at(-1), true);
-  assert.equal(mounted.captures.at(-1), true);
+  assert.equal(mounted.regions.length, writes + 1);
+  assert.deepEqual(mounted.regions.at(-1), { ...PILL_RECT, ...VIEWPORT });
 });
 
-test("a hidden native window stops polling until the next show", async (t) => {
+test("an old rejected update cannot stop a new effect's sampling", async (t) => {
   const mounted = await mountPill(t);
-  mounted.setPointerReader(async () => null);
+  const pending = Promise.withResolvers();
+  mounted.setRegionWriter(() => pending.promise);
   await mounted.tick();
-  const reads = mounted.pointerReads();
+  mounted.setRegionWriter(async () => true);
+  await mounted.render({ pillInteractive: false });
+  await React.act(async () => pending.reject(new Error("old update failed")));
+  const writes = mounted.regions.length;
   await mounted.tick();
-  assert.equal(mounted.pointerReads(), reads);
-  mounted.setPointerReader(async () => ({ x: 104, y: 60 }));
-  await mounted.setVisible(true);
-  assert.equal(mounted.pointerReads(), reads + 1);
+  assert.equal(mounted.regions.length, writes + 1);
+  assert.deepEqual(mounted.regions.at(-1), EMPTY_REGION);
 });
 
-test("an old hidden-window reply cannot stop polling after the window reopens", async (t) => {
+test("an old rejected update cannot stop sampling after native hide and show", async (t) => {
   const mounted = await mountPill(t);
-  let finishRead;
-  mounted.setPointerReader(
-    () =>
-      new Promise((resolve) => {
-        finishRead = resolve;
-      })
-  );
+  const pending = Promise.withResolvers();
+  mounted.setRegionWriter(() => pending.promise);
   await mounted.tick();
   await mounted.setVisible(false);
   await mounted.setVisible(true);
-  await React.act(async () => finishRead(null));
-  mounted.setPointerReader(async () => ({ x: 104, y: 60 }));
-  mounted.setHit(mounted.pill);
+  mounted.setRegionWriter(async () => true);
+  await React.act(async () => pending.reject(new Error("hidden update failed")));
+  const writes = mounted.regions.length;
   await mounted.tick();
-  assert.equal(mounted.captures.at(-1), true);
-  assert.equal(mounted.hovers.at(-1), true);
+  assert.equal(mounted.regions.length, writes + 1);
+  assert.deepEqual(mounted.regions.at(-1), { ...PILL_RECT, ...VIEWPORT });
 });
 
-test("closing controls restores click-through when the pointer is over padding", async (t) => {
+test("an old hidden response cannot suspend sampling after native show", async (t) => {
   const mounted = await mountPill(t);
-  await mounted.render({ captureWindow: true });
-  assert.equal(mounted.captures.at(-1), true);
-  await mounted.render({ captureWindow: false });
-  assert.equal(mounted.captures.at(-1), false);
+  const pending = Promise.withResolvers();
+  mounted.setRegionWriter(() => pending.promise);
+  await mounted.tick();
+  await mounted.setVisible(false);
+  await mounted.setVisible(true);
+  mounted.setRegionWriter(async () => true);
+  await React.act(async () => pending.resolve(false));
+  const writes = mounted.regions.length;
+  await mounted.tick();
+  assert.equal(mounted.regions.length, writes + 1);
+  assert.deepEqual(mounted.regions.at(-1), { ...PILL_RECT, ...VIEWPORT });
+});
+
+test("unmount queues full input after a pending narrow region and silences later failures", async (t) => {
+  const mounted = await mountPill(t);
+  const pending = Promise.withResolvers();
+  mounted.setRegionWriter((region) => (region ? pending.promise : Promise.resolve(true)));
+  await mounted.tick();
+  await mounted.unmount();
+  assert.deepEqual(mounted.regions.slice(-2), [{ ...PILL_RECT, ...VIEWPORT }, null]);
+  const writes = mounted.regions.length;
+  await React.act(async () => pending.reject(new Error("unmounted update failed")));
+  await mounted.tick();
+  assert.equal(mounted.regions.length, writes);
 });
 
 for (const platform of ["darwin", "win32"]) {
-  test(`${platform} keeps native hover handling`, async (t) => {
+  test(`${platform} keeps its native interactivity implementation`, async (t) => {
     const mounted = await mountPill(t, { platform });
     await mounted.render({ captureWindow: true });
     await mounted.tick();
-    assert.deepEqual(mounted.captures, []);
-    assert.equal(mounted.pointerReads(), 0);
+    await mounted.unmount();
+    assert.deepEqual(mounted.regions, []);
+    assert.equal(mounted.measurements(), 0);
   });
 }

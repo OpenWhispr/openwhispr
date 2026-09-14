@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
-let cursorPosition = { x: 0, y: 0 };
+let applyInputRegion;
 
 // Load the real WindowManager with the module surface it touches at require
 // time. setMainWindowInteractivity only reads `this.mainWindow`, so the tests
@@ -14,7 +14,6 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       app: { on: () => undefined },
       screen: {
         getPrimaryDisplay: () => ({}),
-        getCursorScreenPoint: () => cursorPosition,
         on: () => undefined,
       },
       BrowserWindow: class {},
@@ -26,6 +25,14 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   }
   if (request === "./debugLogger") {
     return { warn: () => undefined, debug: () => undefined, info: () => undefined };
+  }
+  if (request === "./linuxWindowInputRegion") {
+    return {
+      createLinuxWindowInputRegion: () => ({
+        set: (region) => applyInputRegion(region),
+        stop: () => undefined,
+      }),
+    };
   }
   if (request === "./hotkeyManager") return class {};
   if (request === "./dragManager") return class {};
@@ -87,7 +94,7 @@ test("Windows keeps the existing always-interactive behavior", () => {
   assert.deepEqual(hoverCycle("win32"), [INTERACTIVE, INTERACTIVE, INTERACTIVE]);
 });
 
-test("Linux lets transparent padding pass clicks through between pointer-detected hovers", () => {
+test("Linux native capture fallback does not request unsupported forwarding", () => {
   assert.deepEqual(hoverCycle("linux"), [
     INTERACTIVE,
     { ignore: true, options: undefined },
@@ -110,31 +117,31 @@ test("a destroyed window is never touched", () => {
   assert.deepEqual(hoverCycle("linux", win), []);
 });
 
-test("native pointer coordinates follow content position and renderer zoom", () => {
-  cursorPosition = { x: -660, y: 250 };
-  const win = {
-    isDestroyed: () => false,
-    isVisible: () => true,
-    isMinimized: () => false,
-    getContentBounds: () => ({ x: -800, y: 100, width: 208, height: 120 }),
-    webContents: { getZoomFactor: () => 2 },
-  };
-  const getPointer = () =>
-    WindowManager.prototype.getMainWindowPointerPosition.call({ mainWindow: win });
-
-  assert.deepEqual(getPointer(), { x: 70, y: 75 });
-  win.getContentBounds = () => ({ x: -700, y: 200, width: 208, height: 120 });
-  assert.deepEqual(getPointer(), { x: 20, y: 25 });
-});
-
-test("hidden and destroyed windows do not expose a pointer position", () => {
-  for (const mainWindow of [
-    null,
-    { isDestroyed: () => true },
-    { isDestroyed: () => false, isVisible: () => false },
-    { isDestroyed: () => false, isVisible: () => true, isMinimized: () => true },
-  ]) {
-    assert.equal(WindowManager.prototype.getMainWindowPointerPosition.call({ mainWindow }), null);
+test("Linux reports visibility and restores capture only after a failed shape writer settles", async () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  try {
+    let visible = false;
+    const win = { ...fakeWindow(), isVisible: () => visible, isMinimized: () => false };
+    const manager = Object.assign(Object.create(WindowManager.prototype), { mainWindow: win });
+    applyInputRegion = async () => undefined;
+    assert.equal(await manager.setMainWindowInputRegion(null), false);
+    visible = true;
+    assert.equal(await manager.setMainWindowInputRegion(null), true);
+    let rejectAfterClose;
+    applyInputRegion = () =>
+      new Promise((_, reject) => {
+        rejectAfterClose = reject;
+      });
+    const applying = manager.setMainWindowInputRegion(null);
+    assert.deepEqual(win.calls, []);
+    rejectAfterClose(new Error("helper closed"));
+    await assert.rejects(applying, /helper closed/);
+    assert.deepEqual(win.calls, [INTERACTIVE]);
+    win.isDestroyed = () => true;
+    assert.equal(await manager.setMainWindowInputRegion(null), false);
+  } finally {
+    Object.defineProperty(process, "platform", original);
   }
 });
 

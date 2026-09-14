@@ -597,7 +597,6 @@ export default function App() {
     pillRef: pillPresenceRef,
     captureWindow: isCommandMenuOpen || toastCount > 0 || anyPanelMounted || isDragging,
     pillInteractive: pillIsInteractive && !pillVisuallySuppressed,
-    onHoverChange: setIsHovered,
   });
 
   return (
@@ -639,7 +638,6 @@ export default function App() {
           <PillTooltip
             content={canReopenLiveTranscript ? t("transcriptionPreview.label") : micTooltip}
             disabled={anyPanelMounted}
-            open={window.electronAPI?.getPlatform?.() === "linux" ? isHovered : undefined}
             align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
           >
             <VoicePill

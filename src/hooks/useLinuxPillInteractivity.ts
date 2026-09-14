@@ -1,20 +1,19 @@
-import { useLayoutEffect, type RefObject } from "react";
+import { useLayoutEffect, useRef, type RefObject } from "react";
 
 interface LinuxPillInteractivityOptions {
   pillRef: RefObject<HTMLElement | null>;
   captureWindow: boolean;
   pillInteractive: boolean;
-  onHoverChange: (hovered: boolean) => void;
 }
 
-// Linux ignores Electron's hover forwarding. Hit-test the rendered pill so
-// animation, cancel emergence and dock changes need no duplicate geometry.
+// Native input shaping leaves hover delivery to the compositor, including
+// when the pointer crosses between XWayland and native Wayland applications.
 export function useLinuxPillInteractivity({
   pillRef,
   captureWindow,
   pillInteractive,
-  onHoverChange,
 }: LinuxPillInteractivityOptions): void {
+  const nativeVisibleRef = useRef(true);
   useLayoutEffect(() => {
     const api = window.electronAPI;
     if (api?.getPlatform?.() !== "linux") return;
@@ -28,52 +27,65 @@ export function useLinuxPillInteractivity({
       clearInterval(timer);
       timer = undefined;
     };
-    const poll = async (): Promise<void> => {
-      if (disposed || pending || document.hidden) return;
-      pending = true;
+    const applyRegion = async (
+      region: Parameters<typeof api.setMainWindowInputRegion>[0]
+    ): Promise<void> => {
       const requestGeneration = generation;
       try {
-        const point = await api.getMainWindowPointerPosition();
+        const visible = await api.setMainWindowInputRegion(region);
         if (disposed || requestGeneration !== generation) return;
-        if (!point) {
+        if (!visible) {
+          nativeVisibleRef.current = false;
           stop();
-          onHoverChange(false);
-          return;
         }
-        const hovered = Boolean(
-          pillInteractive && pillRef.current?.contains(document.elementFromPoint(point.x, point.y))
-        );
-        onHoverChange(hovered);
-        await api.setMainWindowInteractivity(hovered);
       } catch {
-        // Reload/teardown can reject either IPC. The next live poll retries.
+        // The native writer restores full input when shaping is unavailable.
+        // A failure from an older effect must not stop its replacement.
+        if (!disposed && requestGeneration === generation) stop();
+      }
+    };
+    const sample = async (): Promise<void> => {
+      if (disposed || pending || !nativeVisibleRef.current || document.hidden) return;
+      pending = true;
+      try {
+        const rect = pillInteractive ? pillRef.current?.getBoundingClientRect() : null;
+        await applyRegion({
+          x: rect?.x ?? 0,
+          y: rect?.y ?? 0,
+          width: rect?.width ?? 0,
+          height: rect?.height ?? 0,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+        });
       } finally {
         pending = false;
       }
     };
     const start = (): void => {
       stop();
+      if (!nativeVisibleRef.current) return;
       if (captureWindow) {
-        // Never wait for a pointer reply before keeping controls or a drag
-        // interactive. Cleanup invalidates any older click-through decision.
-        void api.setMainWindowInteractivity(true).catch(() => {});
+        // Full input joins the same native FIFO immediately, even while an
+        // older narrow-region update is still awaiting acknowledgement.
+        void applyRegion(null);
         return;
       }
-      timer = setInterval(() => void poll(), 50);
-      void poll();
+      // Reapply even unchanged geometry: native resizes can reset input shape.
+      timer = setInterval(() => void sample(), 50);
+      void sample();
     };
     const unsubscribe = api.onMainWindowVisibilityChanged((visible) => {
+      nativeVisibleRef.current = visible;
       if (visible) start();
-      else {
-        stop();
-        onHoverChange(false);
-      }
+      else stop();
     });
     start();
     return () => {
       disposed = true;
       stop();
       unsubscribe();
+      // The native writer orders this after any pending narrow-region update.
+      void api.setMainWindowInputRegion(null).catch(() => {});
     };
-  }, [captureWindow, onHoverChange, pillInteractive, pillRef]);
+  }, [captureWindow, pillInteractive, pillRef]);
 }
