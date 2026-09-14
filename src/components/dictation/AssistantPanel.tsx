@@ -608,7 +608,7 @@ export function AssistantPanel({
               type="button"
               variant="secondary"
               size="sm"
-              className="rounded-full px-4"
+              className="px-4"
               onClick={onClose}
               tabIndex={footerPhase === "actions" ? 0 : -1}
             >
@@ -618,7 +618,8 @@ export function AssistantPanel({
             <Button
               type="button"
               size="sm"
-              className="rounded-full border-border/70 bg-surface-raised px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
+              variant="outline"
+              className="px-4 dark:border-foreground dark:bg-foreground dark:text-background dark:hover:bg-foreground/90"
               onClick={() => void handleCopy()}
               aria-live="polite"
               tabIndex={footerPhase === "actions" ? 0 : -1}
