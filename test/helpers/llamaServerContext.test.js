@@ -281,6 +281,7 @@ test("countPromptTokens returns null when the server cannot measure", async () =
 });
 
 // --- reading the reply ---------------------------------------------------
+//
 // With thinking on, `reasoning_content` is the reasoning, not the answer (#2187).
 
 const MESSAGES = [{ role: "user", content: "hi" }];
@@ -320,6 +321,7 @@ test("an answer routed into reasoning_content with thinking suppressed is still 
   const misrouted = withReply({ content: "", reasoning_content: "Cleaned text." });
   await misrouted.run(async (manager) => {
     assert.equal(await manager.inference(MESSAGES, { disableThinking: true }), "Cleaned text.");
+    assert.equal(await manager.inference(MESSAGES, {}), "Cleaned text.");
   });
   assert.deepEqual(misrouted.requests[0].chat_template_kwargs, { enable_thinking: false });
 });

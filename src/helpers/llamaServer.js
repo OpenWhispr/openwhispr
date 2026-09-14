@@ -720,8 +720,8 @@ class LlamaServerManager {
       stream: false,
     };
 
-    // Without this, Qwen chat templates leave `message.content` empty and
-    // route output into `reasoning_content`. Non-Qwen templates ignore it.
+    // Without this, Qwen chat templates think into `reasoning_content` first
+    // and can spend the whole budget there. Non-Qwen templates ignore it.
     const suppressThinking = options.disableThinking !== false;
     if (suppressThinking) {
       requestBody.chat_template_kwargs = { enable_thinking: false };
