@@ -245,7 +245,8 @@ export default function NoteEditor({
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
-  const [viewMode, setViewMode] = useState<MeetingViewMode>("raw");
+  const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
+  const [viewMode, setViewMode] = useState<MeetingViewMode>(defaultViewMode);
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   const [folderSearch, setFolderSearch] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -501,14 +502,14 @@ export default function NoteEditor({
         setDiarizedSegments(null);
         setIsDiarizing(false);
         setSpeakerMappings({});
-        setViewMode("raw");
+        setViewMode(defaultViewMode);
         if (titleRef.current && titleRef.current.textContent !== note.title) {
           titleRef.current.textContent = note.title || "";
         }
         editorRef.current?.commands.focus();
       });
     }
-  }, [note.id, note.title, scheduleUiUpdate]);
+  }, [note.id, note.title, defaultViewMode, scheduleUiUpdate]);
 
   useEffect(() => {
     window.electronAPI?.getSpeakerMappings?.(note.id).then((mappings) => {
