@@ -1,7 +1,7 @@
 import type { InferenceProvider } from "./types";
 import { getCloudModel } from "../../../models/ModelRegistry";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
-import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
+import { API_ENDPOINTS } from "../../../config/constants";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
@@ -19,7 +19,6 @@ interface GeminiResponse {
 
 interface GeminiGenerationConfig {
   temperature: number;
-  maxOutputTokens: number;
   thinkingConfig?: {
     thinkingLevel: "minimal" | "low" | "medium" | "high";
     includeThoughts: boolean;
@@ -39,20 +38,10 @@ export const geminiProvider: InferenceProvider = {
 
     const generationConfig: GeminiGenerationConfig = {
       temperature: config.temperature ?? (config.systemPrompt ? 0.3 : 0),
-      // A caller's budget raises this ceiling, never lowers it: note formatting
-      // pins maxTokens so the local path can price it against the context
-      // window, and letting that short-circuit Gemini's own allowance halved
-      // long summaries on the provider with the most room to give (#2142).
-      maxOutputTokens: Math.max(
-        config.maxTokens || 0,
-        2000,
-        ctx.calculateMaxTokens(
-          text.length,
-          TOKEN_LIMITS.MIN_TOKENS_GEMINI,
-          TOKEN_LIMITS.MAX_TOKENS_GEMINI,
-          TOKEN_LIMITS.TOKEN_MULTIPLIER
-        )
-      ),
+      // No maxOutputTokens. Gemini bills thinking against it, so any budget sized
+      // for the text starved thinking models (#2091), and a caller's pinned budget
+      // is priced for the local path, not for Gemini (#2142). The model's own
+      // limit and the request timeout bound the reply.
     };
 
     if (config.disableThinking === true && getCloudModel(model)?.supportsThinking) {
