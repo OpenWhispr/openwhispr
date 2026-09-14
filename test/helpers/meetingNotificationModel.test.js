@@ -8,7 +8,6 @@ test("detection presentation preserves event title, join action, and dismissal",
 
   assert.deepEqual(
     getMeetingNotificationPresentation({
-      kind: "detection",
       detectionId: "calendar:event-1",
       source: "calendar",
       key: "event-1",
@@ -81,14 +80,14 @@ test("overlay initialization cleanup cancels reveal and invalidates a pending pu
     },
   });
 
-  subscribed({ kind: "detection", detectionId: "calendar:first" });
+  subscribed({ detectionId: "calendar:first" });
   cleanup();
   reveal();
-  resolvePendingData({ kind: "detection", detectionId: "calendar:second" });
+  resolvePendingData({ detectionId: "calendar:second" });
   await pendingData;
   await Promise.resolve();
 
-  assert.deepEqual(received, [{ kind: "detection", detectionId: "calendar:first" }]);
+  assert.deepEqual(received, [{ detectionId: "calendar:first" }]);
   assert.equal(canceledTimer, 11);
   assert.equal(visibleCount, 0);
   assert.equal(readyCount, 0);

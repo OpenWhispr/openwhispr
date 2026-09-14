@@ -325,8 +325,8 @@ class WindowPositionUtil {
     };
   }
 
-  static getNotificationPosition(display, customSize = null) {
-    const { width, height } = customSize || NOTIFICATION_WINDOW_CONFIG;
+  static getNotificationPosition(display) {
+    const { width, height } = NOTIFICATION_WINDOW_CONFIG;
     const MARGIN = 16;
     const workArea = display.workArea || display.bounds;
     // Same negative-origin trap as getMainWindowPosition: clamp to the display,

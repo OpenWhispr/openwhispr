@@ -68,15 +68,12 @@ class WindowManager {
     this._agentDictationPillHorizontalDirection = "left";
     this._agentDictationPillScreenListener = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
-      const notification = this._pendingNotificationData;
       // Dismiss first: a prompt raised from the timeout handler must not be
       // closed by this dismissal. The engine is not told the card closed either —
       // handleNotificationTimeout below settles this expiry, and a close report
       // here would flush the queue into a card that handler is about to clear.
       this.dismissMeetingNotification({ notifyEngine: false });
-      if (this.meetingDetectionEngine) {
-        this.meetingDetectionEngine.handleNotificationTimeout(notification);
-      }
+      this.meetingDetectionEngine?.handleNotificationTimeout();
     });
     this.notificationPrefs = {
       notificationsEnabled: true,
@@ -2022,9 +2019,7 @@ class WindowManager {
     // after the replacement already took over the reference and the countdown.
     win.on("closed", () => {
       if (this.notificationWindow !== win) return;
-      const closedNotification = this._pendingNotificationData;
-      const closedDetectionId =
-        closedNotification?.kind === "detection" ? closedNotification.detectionId : null;
+      const closedDetectionId = this._pendingNotificationData?.detectionId ?? null;
       this.notificationWindow = null;
       this._pendingNotificationData = null;
       this._notificationDismissTimer.cancel();
@@ -2122,7 +2117,7 @@ class WindowManager {
     const win = this.notificationWindow;
     this.notificationWindow = null;
     if (win && !win.isDestroyed()) win.close();
-    if (notifyEngine && notification?.kind === "detection") {
+    if (notifyEngine && notification?.detectionId) {
       this.meetingDetectionEngine?.handleDetectionNotificationClosed?.(notification.detectionId, {
         flushQueued,
       });

@@ -79,7 +79,6 @@ export type TranscriptionErrorCode =
 export type MeetingPromptVariant = "detected" | "starting" | "underway";
 
 export interface MeetingNotificationData {
-  kind: "detection";
   detectionId: string;
   source: string;
   key: string;

@@ -356,7 +356,7 @@ test("window manager starts fail-closed and suppresses normal-app popup surfaces
 
 test("window creation uses the notification dimensions and position", async () => {
   const manager = createNormalWindowManager();
-  const notification = { kind: "detection", detectionId: "calendar:next", source: "calendar" };
+  const notification = { detectionId: "calendar:next", source: "calendar" };
 
   try {
     const showPromise = manager.showMeetingNotification(notification, { autoDismiss: false });
@@ -508,7 +508,7 @@ test("a notification raised from the timeout handler survives the dismissal that
   manager.meetingDetectionEngine = {
     handleNotificationTimeout: () => {
       replacementPromise = manager.showMeetingNotification(
-        { kind: "detection", detectionId: "calendar:next", source: "calendar" },
+        { detectionId: "calendar:next", source: "calendar" },
         { autoDismiss: false }
       );
     },
@@ -516,7 +516,6 @@ test("a notification raised from the timeout handler survives the dismissal that
   };
 
   const showPromise = manager.showMeetingNotification({
-    kind: "detection",
     detectionId: "calendar:first",
     source: "calendar",
   });
@@ -546,7 +545,6 @@ test("unexpected detection card closure releases that detection", async () => {
   };
 
   const showPromise = manager.showMeetingNotification({
-    kind: "detection",
     detectionId: "audio:sustained-audio",
     source: "audio",
   });
@@ -573,7 +571,6 @@ test("an expired detection reports the timeout once, not also as a close", async
   };
 
   const showPromise = manager.showMeetingNotification({
-    kind: "detection",
     detectionId: "audio:sustained-audio",
     source: "audio",
   });
@@ -598,7 +595,6 @@ test("a detection card whose load fails releases that detection", async () => {
   };
 
   const showPromise = manager.showMeetingNotification({
-    kind: "detection",
     detectionId: "audio:sustained-audio",
     source: "audio",
   });

@@ -22,7 +22,6 @@ function createElectronAPI({ stopResult }) {
   const noopListener = () => () => {};
   const notes = new Map([[11, { id: 11, transcript: "", deleted_at: null }]]);
   return {
-    updatedTranscripts: [],
     api: {
       checkSystemAudioAccess: async () => ({
         granted: true,

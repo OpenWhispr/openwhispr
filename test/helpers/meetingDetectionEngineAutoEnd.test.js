@@ -164,7 +164,7 @@ async function triggerOwnershipStop(engineHarness, ownerWebContents) {
   engineHarness.clock.advance(OWNERSHIP_CONFIRM_MS);
 }
 
-test("detection prompts retain their existing payload with a detection discriminator", () => {
+test("detection prompts carry the detection payload", () => {
   const { engine, shownNotifications } = createEngine();
   const event = {
     id: "calendar-1",
@@ -176,7 +176,6 @@ test("detection prompts retain their existing payload with a detection discrimin
 
   assert.deepEqual(shownNotifications, [
     {
-      kind: "detection",
       detectionId: "calendar:calendar-1",
       source: "calendar",
       key: "calendar-1",

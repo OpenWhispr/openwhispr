@@ -419,7 +419,6 @@ class MeetingDetectionEngine {
     }
 
     this.windowManager.showMeetingNotification({
-      kind: "detection",
       detectionId,
       source,
       key,
