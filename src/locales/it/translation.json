@@ -2773,6 +2773,7 @@
       "leaveConfirmTitle": "Lasciare {{space}}?",
       "leaveConfirmDescription": "Verrai rimosso da {{teams}} e perderai l'accesso agli altri spazi che quei gruppi possono aprire.",
       "leaveDirectDescription": "Perderai l'accesso a questo spazio.",
+      "leaveKeepsGroupAccess": "Manterrai l'accesso tramite {{groups}}.",
       "left": "Hai lasciato {{space}}",
       "stillViaGroups": "Hai ancora accesso a {{space}} tramite {{groups}}.",
       "couldNotLeave": "Impossibile lasciare lo spazio",
@@ -2840,6 +2841,7 @@
       },
       "invitedTo_one": "Entrerai in {{count}} spazio del team",
       "invitedTo_other": "Entrerai in {{count}} spazi del team",
+      "invitedToSpaces": "Entrerai in {{spaces}}",
       "teamsMembers": {
         "title": "Membri di {{space}}",
         "noTeams": "Nessun gruppo ha ancora accesso a questo spazio.",

@@ -628,6 +628,8 @@ export interface InvitationPreview {
   email: string;
   workspace_role: WorkspaceRole;
   team_ids: string[];
+  /** Live spaces the invite grants directly; absent from APIs that predate space grants. */
+  space_names?: string[];
   expires_at: string;
   workspace_id: string;
   workspace_name: string;

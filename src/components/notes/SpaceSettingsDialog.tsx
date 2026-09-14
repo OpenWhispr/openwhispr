@@ -144,13 +144,15 @@ export default function SpaceSettingsDialog({
     const userId = user.id;
     const direct = space.my_direct_role != null;
     const groupNames = (names: string[]) => formatList(i18n.language, names);
+    const groups = groupNames(leaveTeams.map((team) => team.name));
+    const description = !direct
+      ? t("notes.spaces.leaveConfirmDescription", { teams: groups })
+      : leaveTeams.length > 0
+        ? t("notes.spaces.leaveKeepsGroupAccess", { groups })
+        : t("notes.spaces.leaveDirectDescription");
     showConfirmDialog({
       title: t("notes.spaces.leaveConfirmTitle", { space: space.name }),
-      description: direct
-        ? t("notes.spaces.leaveDirectDescription")
-        : t("notes.spaces.leaveConfirmDescription", {
-            teams: groupNames(leaveTeams.map((team) => team.name)),
-          }),
+      description,
       confirmText: t("notes.spaces.leave"),
       variant: "destructive",
       onConfirm: async () => {

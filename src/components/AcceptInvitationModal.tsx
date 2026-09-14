@@ -21,6 +21,7 @@ import { syncService } from "../services/SyncService.js";
 import { afterWorkspaceJoined } from "../services/membershipActions";
 import { useToast } from "./ui/useToast";
 import SignInDialog from "./SignInDialog";
+import { formatList } from "../lib/formatList";
 import type { InvitationPreview } from "../types/electron";
 
 interface Props {
@@ -30,7 +31,7 @@ interface Props {
 }
 
 export default function AcceptInvitationModal({ token, onClose, onAccepted }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { isSignedIn, user } = useAuth();
   const [preview, setPreview] = useState<InvitationPreview | null>(null);
@@ -137,11 +138,19 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
                     role: t(`settingsPage.workspace.role.${preview.workspace_role}`),
                   })}
                 </DialogDescription>
-                {(preview.team_ids?.length ?? 0) > 0 && (
-                  // The preview endpoint returns team ids only, so show a count.
+                {(preview.space_names?.length ?? 0) > 0 ? (
                   <DialogDescription className="text-xs text-muted-foreground/80 mt-1">
-                    {t("notes.spaces.invitedTo", { count: preview.team_ids.length })}
+                    {t("notes.spaces.invitedToSpaces", {
+                      spaces: formatList(i18n.language, preview.space_names ?? []),
+                    })}
                   </DialogDescription>
+                ) : (
+                  (preview.team_ids?.length ?? 0) > 0 && (
+                    // Group grants arrive as ids only, so show a count.
+                    <DialogDescription className="text-xs text-muted-foreground/80 mt-1">
+                      {t("notes.spaces.invitedTo", { count: preview.team_ids.length })}
+                    </DialogDescription>
+                  )
                 )}
                 {wrongAccount ? (
                   <DialogDescription className="text-xs text-destructive mt-1">

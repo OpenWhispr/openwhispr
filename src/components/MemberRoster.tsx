@@ -42,6 +42,8 @@ export interface RosterMember {
   direct_role?: TeamRole | null;
   /** Names of the groups that grant this row access. */
   via?: string[];
+  /** Groups whose grant alone makes this row an admin; a demotion here can't lower that. */
+  adminVia?: string[];
 }
 
 interface MemberRosterProps<M extends RosterMember> {
@@ -114,9 +116,7 @@ export default function MemberRoster<M extends RosterMember>({
             const groups = member.via ?? [];
             // Only a group grants this row: removal happens in that group.
             const viaGroupOnly = !member.direct_role && groups.length > 0;
-            // An admin role that comes from a group can't be lowered here.
-            const adminViaGroup =
-              member.role === "admin" && member.direct_role !== "admin" && groups.length > 0;
+            const adminVia = member.adminVia ?? [];
             return (
               <div key={member.user_id} className="flex items-center gap-3 px-4 h-14">
                 <MemberAvatar name={member.name} email={member.email} image={member.image} />
@@ -149,7 +149,7 @@ export default function MemberRoster<M extends RosterMember>({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-60">
                       {ROLES.map((role) => {
-                        const lockedByGroup = role === "member" && adminViaGroup;
+                        const lockedByGroup = role === "member" && adminVia.length > 0;
                         return (
                           <DropdownMenuItem
                             key={role}
@@ -168,7 +168,7 @@ export default function MemberRoster<M extends RosterMember>({
                             <span className="text-[11px] text-muted-foreground whitespace-normal">
                               {lockedByGroup
                                 ? t("notes.spaces.members.roleFromGroup", {
-                                    group: formatGroups(groups),
+                                    group: formatGroups(adminVia),
                                   })
                                 : t(ROLE_DESCRIPTION_KEY[role])}
                             </span>

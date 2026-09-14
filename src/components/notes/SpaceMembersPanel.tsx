@@ -70,7 +70,14 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
   }, [space.workspace_id, refreshMembers]);
 
   const rows = useMemo(
-    () => members.map((m) => ({ ...m, via: m.via_teams.map((team) => team.name) })),
+    () =>
+      members.map((m) => ({
+        ...m,
+        via: m.via_teams.map((team) => team.name),
+        adminVia: m.via_teams
+          .filter((team) => team.role === "admin" && team.access === "admin")
+          .map((team) => team.name),
+      })),
     [members]
   );
 

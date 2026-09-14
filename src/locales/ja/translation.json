@@ -2701,6 +2701,7 @@
       "leaveConfirmTitle": "{{space}} から退出しますか？",
       "leaveConfirmDescription": "{{teams}} から削除され、それらのグループが開ける他のスペースへのアクセスも失われます。",
       "leaveDirectDescription": "このスペースへのアクセスを失います。",
+      "leaveKeepsGroupAccess": "{{groups}} 経由のアクセスは維持されます。",
       "left": "{{space}} から退出しました",
       "stillViaGroups": "{{groups}} 経由で引き続き {{space}} にアクセスできます。",
       "couldNotLeave": "スペースから退出できませんでした",
@@ -2768,6 +2769,7 @@
       },
       "invitedTo_one": "{{count}} 件のチームスペースに参加します",
       "invitedTo_other": "{{count}} 件のチームスペースに参加します",
+      "invitedToSpaces": "{{spaces}} に参加します",
       "teamsMembers": {
         "title": "{{space}} のメンバー",
         "noTeams": "このスペースにアクセスできるグループはまだありません。",

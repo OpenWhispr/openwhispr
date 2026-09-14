@@ -3116,6 +3116,7 @@
       "leaveConfirmTitle": "Quitter {{space}} ?",
       "leaveConfirmDescription": "Vous serez retiré de {{teams}} et perdrez l'accès aux autres espaces ouverts par ces groupes.",
       "leaveDirectDescription": "Vous perdrez l'accès à cet espace.",
+      "leaveKeepsGroupAccess": "Vous garderez l'accès via {{groups}}.",
       "left": "Vous avez quitté {{space}}",
       "stillViaGroups": "Vous avez toujours accès à {{space}} via {{groups}}.",
       "couldNotLeave": "Impossible de quitter l'espace",
@@ -3183,6 +3184,7 @@
       },
       "invitedTo_one": "Vous rejoindrez {{count}} espace d'équipe",
       "invitedTo_other": "Vous rejoindrez {{count}} espaces d'équipe",
+      "invitedToSpaces": "Vous rejoindrez {{spaces}}",
       "teamsMembers": {
         "title": "Membres de {{space}}",
         "noTeams": "Aucun groupe n'est encore rattaché à cet espace.",

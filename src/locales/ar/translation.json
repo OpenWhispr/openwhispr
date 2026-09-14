@@ -1445,6 +1445,7 @@
       "leaveConfirmTitle": "مغادرة {{space}}؟",
       "leaveConfirmDescription": "ستتم إزالتك من {{teams}} وستفقد الوصول إلى أي مساحات أخرى تفتحها تلك المجموعات.",
       "leaveDirectDescription": "ستفقد إمكانية الوصول إلى هذه المساحة.",
+      "leaveKeepsGroupAccess": "ستحتفظ بالوصول عبر {{groups}}.",
       "left": "غادرت {{space}}",
       "stillViaGroups": "لا يزال بإمكانك الوصول إلى {{space}} عبر {{groups}}.",
       "couldNotLeave": "تعذّرت مغادرة المساحة",
@@ -1520,6 +1521,7 @@
       "invitedTo_few": "ستنضم إلى {{count}} مساحات فريق",
       "invitedTo_many": "ستنضم إلى {{count}} مساحة فريق",
       "invitedTo_other": "ستنضم إلى {{count}} مساحة فريق",
+      "invitedToSpaces": "ستنضم إلى {{spaces}}",
       "teamsMembers": {
         "title": "أعضاء {{space}}",
         "noTeams": "لا توجد مجموعات لديها وصول إلى هذه المساحة بعد.",

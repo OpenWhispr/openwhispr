@@ -2773,6 +2773,7 @@
       "leaveConfirmTitle": "退出 {{space}}？",
       "leaveConfirmDescription": "你将从 {{teams}} 中移除，并失去这些群组可访问的其他空间的权限。",
       "leaveDirectDescription": "你将失去对此空间的访问权限。",
+      "leaveKeepsGroupAccess": "你将保留通过 {{groups}} 的访问权限。",
       "left": "已退出 {{space}}",
       "stillViaGroups": "你仍可通过 {{groups}} 访问 {{space}}。",
       "couldNotLeave": "无法退出空间",
@@ -2840,6 +2841,7 @@
       },
       "invitedTo_one": "你将加入 {{count}} 个团队空间",
       "invitedTo_other": "你将加入 {{count}} 个团队空间",
+      "invitedToSpaces": "你将加入 {{spaces}}",
       "teamsMembers": {
         "title": "{{space}} 的成员",
         "noTeams": "尚无群组可访问此空间。",

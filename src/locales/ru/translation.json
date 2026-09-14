@@ -2789,6 +2789,7 @@
       "leaveConfirmTitle": "Покинуть {{space}}?",
       "leaveConfirmDescription": "Вы будете удалены из {{teams}} и потеряете доступ к другим пространствам, которые открывают эти группы.",
       "leaveDirectDescription": "Вы потеряете доступ к этому пространству.",
+      "leaveKeepsGroupAccess": "Вы сохраните доступ через {{groups}}.",
       "left": "Вы покинули {{space}}",
       "stillViaGroups": "У вас остаётся доступ к {{space}} через {{groups}}.",
       "couldNotLeave": "Не удалось покинуть пространство",
@@ -2860,6 +2861,7 @@
       "invitedTo_few": "Вы присоединитесь к {{count}} командным пространствам",
       "invitedTo_many": "Вы присоединитесь к {{count}} командным пространствам",
       "invitedTo_other": "Вы присоединитесь к {{count}} командным пространствам",
+      "invitedToSpaces": "Вы присоединитесь к {{spaces}}",
       "teamsMembers": {
         "title": "Участники {{space}}",
         "noTeams": "К этому пространству пока не привязана ни одна группа.",

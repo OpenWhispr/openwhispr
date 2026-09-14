@@ -3116,6 +3116,7 @@
       "leaveConfirmTitle": "{{space}} verlassen?",
       "leaveConfirmDescription": "Du wirst aus {{teams}} entfernt und verlierst den Zugriff auf alle anderen Spaces, die diese Gruppen öffnen können.",
       "leaveDirectDescription": "Du verlierst den Zugriff auf diesen Space.",
+      "leaveKeepsGroupAccess": "Du behältst den Zugriff über {{groups}}.",
       "left": "Du hast {{space}} verlassen",
       "stillViaGroups": "Du hast weiterhin Zugriff auf {{space}} über {{groups}}.",
       "couldNotLeave": "Space konnte nicht verlassen werden",
@@ -3183,6 +3184,7 @@
       },
       "invitedTo_one": "Sie treten {{count}} Team-Bereich bei",
       "invitedTo_other": "Sie treten {{count}} Team-Bereichen bei",
+      "invitedToSpaces": "Du trittst {{spaces}} bei",
       "teamsMembers": {
         "title": "Mitglieder von {{space}}",
         "noTeams": "Diesem Space sind noch keine Gruppen zugewiesen.",
