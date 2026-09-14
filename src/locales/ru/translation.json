@@ -2974,8 +2974,9 @@
     "upload": {
       "title": "Загрузить аудио",
       "using": "Используется {{model}}",
-      "dropOrBrowse": "Перетащите аудиофайл или нажмите для выбора",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "Перетащите аудио- или видеофайл или нажмите для выбора",
+      "supportedFormats": "MP3, WAV, M4A, MP4, MOV и большинство других аудио- и видеоформатов",
+      "unsupportedFiles": "Пропущено {{names}}: неподдерживаемый аудио- или видеоформат.",
       "dropToUpload": "Отпустите для загрузки",
       "transcribe": "Транскрибировать",
       "cancel": "Отмена",

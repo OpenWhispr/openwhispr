@@ -75,10 +75,9 @@ import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes"
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
 import { isManagedTranscriptionActive } from "../../services/managedTranscription";
 import { UploadCompleteWarnings, UploadModelSettingsButton } from "./UploadAudioFeedback";
+import { isSupportedUploadFile, uploadFileUrlPattern } from "../../utils/uploadAudioFormats";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
-
-const SUPPORTED_EXTENSIONS = ["mp3", "wav", "m4a", "webm", "ogg", "oga", "flac", "aac", "opus"];
 
 const CLOUD_FREE_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB — free plan cloud limit
 const CLOUD_PRO_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB — pro plan cloud limit
@@ -181,7 +180,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     downloadedTempPathRef.current = downloadedTempPath;
   }, [downloadedTempPath]);
   const [urlExpanded, setUrlExpanded] = useState(false);
-  const [batchUrlNotice, setBatchUrlNotice] = useState<string | null>(null);
+  const [skippedNotice, setSkippedNotice] = useState<string | null>(null);
   const singleDownloadIdRef = useRef<string | null>(null);
 
   const batch = useBatchQueue();
@@ -583,17 +582,24 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (!files || files.length === 0) return;
 
     const validFiles: Array<{ name: string; path: string; sizeBytes: number }> = [];
+    const skippedNames: string[] = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      const ext = f.name.split(".").pop()?.toLowerCase() || "";
-      if (SUPPORTED_EXTENSIONS.includes(ext)) {
-        const filePath = window.electronAPI.getPathForFile(f);
-        if (filePath) {
-          validFiles.push({ name: f.name, path: filePath, sizeBytes: f.size });
-        }
+      if (!isSupportedUploadFile(f.name)) {
+        skippedNames.push(f.name);
+        continue;
+      }
+      const filePath = window.electronAPI.getPathForFile(f);
+      if (filePath) {
+        validFiles.push({ name: f.name, path: filePath, sizeBytes: f.size });
       }
     }
 
+    setSkippedNotice(
+      skippedNames.length > 0
+        ? t("notes.upload.unsupportedFiles", { names: skippedNames.join(", ") })
+        : null
+    );
     if (validFiles.length === 0) return;
 
     if (validFiles.length === 1 && !batch.isProcessing && !batch.hasQueue) {
@@ -630,7 +636,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setChunkProgress(null);
     setUrlInput("");
     setDownloadProgress(null);
-    setBatchUrlNotice(null);
+    setSkippedNotice(null);
     const personal = findDefaultFolder(folders);
     if (personal) setSelectedFolderId(String(personal.id));
   };
@@ -883,7 +889,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       setUrlInput("");
       setUrlExpanded(false);
     }
-    setBatchUrlNotice(skipped > 0 ? t("notes.upload.urlsSkipped", { n: skipped }) : null);
+    setSkippedNotice(skipped > 0 ? t("notes.upload.urlsSkipped", { n: skipped }) : null);
   };
 
   const startBatchProcessing = async () => {
@@ -892,10 +898,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       !isManagedTranscriptionActive() &&
       !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
     ) {
-      setBatchUrlNotice(t("common.managedByOrg"));
+      setSkippedNotice(t("common.managedByOrg"));
       return;
     }
-    setBatchUrlNotice(null);
+    setSkippedNotice(null);
 
     const transcribeOpts: TranscribeOptions = {
       transcription: buildTranscriptionConfig(),
@@ -1028,7 +1034,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                       <rect width="28" height="20" rx="4" fill="#FF0000" />
                       <polygon points="11,4 11,16 21,10" fill="white" />
                     </svg>
-                  ) : /\.(mp3|wav|m4a|ogg|flac|aac|webm|opus)(\?|$)/i.test(urlInput) ? (
+                  ) : uploadFileUrlPattern.test(urlInput) ? (
                     <FileAudio
                       size={13}
                       className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
@@ -1083,8 +1089,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             </>
           )}
 
-          {batchUrlNotice && (
-            <p className="text-[10px] text-amber-500/60 mt-2 text-center">{batchUrlNotice}</p>
+          {skippedNotice && (
+            <p className="text-[10px] text-amber-500/60 mt-2 text-center">{skippedNotice}</p>
           )}
 
           {batch.hasQueue && (
@@ -1099,7 +1105,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 onRemoveItem={batch.removeItem}
                 onCancelAll={batch.cancelAll}
                 onClearQueue={() => {
-                  setBatchUrlNotice(null);
+                  setSkippedNotice(null);
                   batch.clearQueue();
                 }}
                 onOpenNote={(noteId) =>
@@ -1469,18 +1475,6 @@ function IdleView({
   setIsDragOver,
   onOpenSettings,
 }: IdleViewProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    // Delegate to handleBrowse which uses Electron's file dialog;
-    // the hidden input is for keyboard-triggered file selection only.
-    handleBrowse();
-    // Reset input so the same file can be re-selected
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -1506,16 +1500,6 @@ function IdleView({
           className="text-xs text-foreground/70"
         />
       </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".mp3,.wav,.m4a,.webm,.ogg,.oga,.flac,.aac,.opus"
-        onChange={handleFileInputChange}
-        className="sr-only"
-        tabIndex={-1}
-        aria-hidden="true"
-      />
 
       <div
         role="button"

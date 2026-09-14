@@ -2945,8 +2945,9 @@
     "upload": {
       "title": "音声をアップロード",
       "using": "{{model}} を使用中",
-      "dropOrBrowse": "音声ファイルをドロップまたはクリックして選択",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "音声または動画ファイルをドロップ、またはクリックして選択",
+      "supportedFormats": "MP3、WAV、M4A、MP4、MOV など、ほとんどの音声・動画形式",
+      "unsupportedFiles": "{{names}} をスキップしました: 対応していない音声・動画形式です。",
       "dropToUpload": "ドロップしてアップロード",
       "transcribe": "文字起こし",
       "cancel": "キャンセル",

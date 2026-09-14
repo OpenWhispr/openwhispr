@@ -3295,8 +3295,9 @@
     "upload": {
       "title": "Audio hochladen",
       "using": "Verwendet {{model}}",
-      "dropOrBrowse": "Audiodatei ablegen oder klicken zum Durchsuchen",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "Audio- oder Videodatei ablegen oder klicken zum Durchsuchen",
+      "supportedFormats": "MP3, WAV, M4A, MP4, MOV und die meisten anderen Audio- oder Videoformate",
+      "unsupportedFiles": "{{names}} übersprungen: kein unterstütztes Audio- oder Videoformat.",
       "dropToUpload": "Zum Hochladen ablegen",
       "transcribe": "Transkribieren",
       "cancel": "Abbrechen",

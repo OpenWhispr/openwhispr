@@ -3295,8 +3295,9 @@
     "upload": {
       "title": "Téléverser un fichier audio",
       "using": "Utilisation de {{model}}",
-      "dropOrBrowse": "Déposez un fichier audio ou cliquez pour parcourir",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "Déposez un fichier audio ou vidéo, ou cliquez pour parcourir",
+      "supportedFormats": "MP3, WAV, M4A, MP4, MOV et la plupart des autres formats audio ou vidéo",
+      "unsupportedFiles": "{{names}} ignoré : format audio ou vidéo non pris en charge.",
       "dropToUpload": "Déposez pour téléverser",
       "transcribe": "Transcrire",
       "cancel": "Annuler",

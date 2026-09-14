@@ -2952,8 +2952,9 @@
     "upload": {
       "title": "Carica audio",
       "using": "Utilizzando {{model}}",
-      "dropOrBrowse": "Trascina un file audio o clicca per sfogliare",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "Trascina un file audio o video, oppure clicca per sfogliare",
+      "supportedFormats": "MP3, WAV, M4A, MP4, MOV e la maggior parte degli altri formati audio o video",
+      "unsupportedFiles": "{{names}} ignorato: formato audio o video non supportato.",
       "dropToUpload": "Rilascia per caricare",
       "transcribe": "Trascrivi",
       "cancel": "Annulla",

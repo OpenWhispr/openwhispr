@@ -3295,8 +3295,9 @@
     "upload": {
       "title": "Upload Audio",
       "using": "Using {{model}}",
-      "dropOrBrowse": "Drop audio file or click to browse",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "Drop an audio or video file, or click to browse",
+      "supportedFormats": "MP3, WAV, M4A, MP4, MOV and most other audio or video formats",
+      "unsupportedFiles": "Skipped {{names}}: not a supported audio or video format.",
       "dropToUpload": "Drop to upload",
       "transcribe": "Transcribe",
       "cancel": "Cancel",

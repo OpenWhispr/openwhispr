@@ -103,7 +103,7 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/notes/ShareNoteDialog.tsx": ["auto"],
   "src/components/notes/SpaceNameField.tsx": ["auto"],
   "src/components/notes/SpacesTree.tsx": ["auto", "auto", "auto", "auto"],
-  "src/components/notes/UploadAudioView.tsx": ["ltr", "ltr", "inherit", "inherit"],
+  "src/components/notes/UploadAudioView.tsx": ["ltr", "ltr", "inherit"],
   "src/components/onboarding/DemoStep.tsx": ["auto"],
   "src/components/onboarding/LanguageSelectionStep.tsx": ["auto"],
   "src/components/onboarding/UseCaseStep.tsx": ["auto"],

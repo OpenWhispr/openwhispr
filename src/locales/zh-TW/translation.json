@@ -2952,8 +2952,9 @@
     "upload": {
       "title": "上傳音訊",
       "using": "使用 {{model}}",
-      "dropOrBrowse": "拖放音訊檔案或點擊瀏覽",
-      "supportedFormats": "MP3、WAV、M4A、WebM、OGG、FLAC、AAC、Opus",
+      "dropOrBrowse": "拖放音訊或影片檔案，或點擊瀏覽",
+      "supportedFormats": "MP3、WAV、M4A、MP4、MOV 及大多數其他音訊或影片格式",
+      "unsupportedFiles": "已略過 {{names}}：不支援的音訊或影片格式。",
       "dropToUpload": "拖放以上傳",
       "transcribe": "轉錄",
       "cancel": "取消",

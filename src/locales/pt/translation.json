@@ -2952,8 +2952,9 @@
     "upload": {
       "title": "Enviar áudio",
       "using": "Usando {{model}}",
-      "dropOrBrowse": "Arraste um arquivo de áudio ou clique para procurar",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "Arraste um arquivo de áudio ou vídeo, ou clique para procurar",
+      "supportedFormats": "MP3, WAV, M4A, MP4, MOV e a maioria dos outros formatos de áudio ou vídeo",
+      "unsupportedFiles": "{{names}} ignorado: formato de áudio ou vídeo não suportado.",
       "dropToUpload": "Solte para enviar",
       "transcribe": "Transcrever",
       "cancel": "Cancelar",

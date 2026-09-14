@@ -1636,8 +1636,9 @@
     "upload": {
       "title": "رفع ملف صوتي",
       "using": "باستخدام {{model}}",
-      "dropOrBrowse": "أسقط ملفًا صوتيًا أو انقر للتصفح",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "أفلت ملف صوت أو فيديو، أو انقر للتصفح",
+      "supportedFormats": "MP3 وWAV وM4A وMP4 وMOV ومعظم صيغ الصوت أو الفيديو الأخرى",
+      "unsupportedFiles": "تم تخطي {{names}}: صيغة صوت أو فيديو غير مدعومة.",
       "dropToUpload": "أسقط للرفع",
       "transcribe": "تفريغ",
       "cancel": "إلغاء",

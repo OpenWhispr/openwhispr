@@ -2952,8 +2952,9 @@
     "upload": {
       "title": "上传音频",
       "using": "使用 {{model}}",
-      "dropOrBrowse": "拖放音频文件或点击浏览",
-      "supportedFormats": "MP3、WAV、M4A、WebM、OGG、FLAC、AAC、Opus",
+      "dropOrBrowse": "拖放音频或视频文件，或点击浏览",
+      "supportedFormats": "MP3、WAV、M4A、MP4、MOV 及大多数其他音频或视频格式",
+      "unsupportedFiles": "已跳过 {{names}}：不支持的音频或视频格式。",
       "dropToUpload": "拖放以上传",
       "transcribe": "转录",
       "cancel": "取消",

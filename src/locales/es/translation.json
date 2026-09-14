@@ -3005,8 +3005,9 @@
     "upload": {
       "title": "Subir audio",
       "using": "Usando {{model}}",
-      "dropOrBrowse": "Arrastra un archivo de audio o haz clic para explorar",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "Arrastra un archivo de audio o video, o haz clic para explorar",
+      "supportedFormats": "MP3, WAV, M4A, MP4, MOV y la mayoría de los demás formatos de audio o video",
+      "unsupportedFiles": "Se omitió {{names}}: no es un formato de audio o video compatible.",
       "dropToUpload": "Suelta para subir",
       "transcribe": "Transcribir",
       "cancel": "Cancelar",
