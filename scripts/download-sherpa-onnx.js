@@ -17,7 +17,7 @@ const {
 } = require("../src/helpers/parakeetCapability");
 const { renameImportedModule } = require("./lib/pe-imports");
 
-const SHERPA_ONNX_VERSION = "1.13.7";
+const SHERPA_ONNX_VERSION = "1.13.8";
 const GITHUB_RELEASE_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}`;
 
 // Windows 11 ships an older onnxruntime.dll in System32, and on some machines
@@ -37,10 +37,10 @@ const WINDOWS_ONNXRUNTIME_PRIVATE_NAME = "ow-onnxrt.dll";
 // cmake/onnxruntime-osx-arm64.cmake pins). On macOS hosts we swap that slice
 // in and keep the x86_64 slice, so the file stays universal2.
 const MACOS_ARM64_ONNXRUNTIME = {
-  url: "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/onnxruntime-osx-arm64-1.27.1.zip",
-  sha256: "8258cf05abc011df06706646f73bdddb735d90348ae3d211bd5c471c20a617b0",
+  url: "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.28.2/onnxruntime-osx-arm64-1.28.2.zip",
+  sha256: "d9e5c0c79929e201f5b8eb095e6809a91ce78be9866a1bca0dfab7e20b40ae40",
   libraryName: "libonnxruntime.dylib",
-  marker: "arm64-1.27.1", // recorded in the install marker so older installs re-extract
+  marker: "arm64-1.28.2", // recorded in the install marker so older installs re-extract
 };
 
 // Binary configurations for each platform
