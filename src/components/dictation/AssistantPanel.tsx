@@ -618,8 +618,7 @@ export function AssistantPanel({
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              className="px-4 dark:border-foreground dark:bg-foreground dark:text-background dark:hover:bg-foreground/90"
+              className="border-border/70 bg-surface-raised bg-none px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
               onClick={() => void handleCopy()}
               aria-live="polite"
               tabIndex={footerPhase === "actions" ? 0 : -1}

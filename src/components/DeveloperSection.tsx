@@ -169,8 +169,8 @@ export default function DeveloperSection() {
               <Button
                 onClick={handleCopyPath}
                 variant="ghost"
-                size="sm"
-                className="shrink-0 h-8 w-8 p-0"
+                size="icon"
+                className="size-8"
               >
                 {copiedPath ? (
                   <Check className="h-3.5 w-3.5 text-success" />
