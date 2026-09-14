@@ -319,3 +319,6 @@ src/assets/Assets.car
 # Licensed brand font binaries (Blaze Type EULA forbids redistribution).
 # Fetched at build time by scripts/download-brand-fonts.js.
 src/assets/fonts/yowza/*.otf
+
+# Local scratch output from the Superpowers Claude Code plugin (SDD fix reports etc.).
+.superpowers/
