@@ -3030,6 +3030,7 @@
       "unsupportedSelfHosted": "筆記錄音尚不支援自架端點。請開啟設定，選擇本機或支援串流的服務商。",
       "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
       "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
+      "autoEnded": "會議結束後，錄音已自動停止。",
       "restartFailed": "無法重新開始會議錄音。",
       "systemAudioSilent": {
         "title": "尚未偵測到會議音訊",

@@ -2,6 +2,7 @@ const debugLogger = require("./debugLogger");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { getMeetingJoinUrl } = require("./meetingJoinUrl");
 const createMeetingAutoEndController = require("./meetingAutoEndController");
+const { MEETING_AUTO_END_ACTIONS } = require("./meetingAutoEndLifecycle");
 const { createMeetingAudioActivityMonitor } = require("./meetingAudioActivityMonitor");
 const { broadcastToWindows } = require("./windowBroadcast");
 
@@ -17,7 +18,6 @@ const AUTO_END_RESTART_GRACE_MS = 5 * 60_000;
 // with a reload, or a manual recording won the race), so an unclaimed grace has
 // to lapse rather than wait to be taken by whatever recording starts next.
 const AUTO_END_RESTART_CLAIM_MS = 30_000;
-const MEETING_AUTO_END_ACTIONS = new Set(["restart", "summary", "dismiss"]);
 
 const PLACEHOLDER_PREFIX = { __detected__: "detected", __manual__: "manual" };
 

@@ -67,8 +67,7 @@ export default function NoteRecordControl({
     return () => clearInterval(id);
   }, [isRecording]);
 
-  const elapsed =
-    isRecording && startedAt != null ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+  const elapsed = isRecording && startedAt != null ? Math.floor((now - startedAt) / 1000) : 0;
 
   return (
     <div

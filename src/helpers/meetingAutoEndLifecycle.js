@@ -58,6 +58,7 @@ function registerMeetingAutoEndLifecycleHandlers(ipcMain, getMeetingDetectionEng
 }
 
 module.exports = {
+  MEETING_AUTO_END_ACTIONS,
   completeMeetingAutoEndSession,
   respondToMeetingAutoEndNotification,
   registerMeetingAutoEndLifecycleHandlers,

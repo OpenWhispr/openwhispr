@@ -194,9 +194,6 @@ interface NoteEditorProps {
   actionPicker?: React.ReactNode;
   /** Runs the built-in Generate Notes action; enables the post-recording summary pill. */
   onGenerateSummary?: () => void;
-  /** Set by the auto-end card's summary action: run this note's AI summary on arrival. */
-  generateSummaryRequested?: boolean;
-  onGenerateSummaryRequestHandled?: () => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   diarizationSessionId?: string | null;
@@ -230,8 +227,6 @@ export default function NoteEditor({
   enhancement,
   actionPicker,
   onGenerateSummary,
-  generateSummaryRequested,
-  onGenerateSummaryRequestHandled,
   actionProcessingState,
   actionName,
   diarizationSessionId,
@@ -383,13 +378,6 @@ export default function NoteEditor({
     noteContent: note.content,
     noteTranscript: note.transcript ?? undefined,
   });
-  // The auto-end card's summary action opens the note through main, then lands
-  // here to run the same action the bottom bar's offer would.
-  useEffect(() => {
-    if (!generateSummaryRequested) return;
-    onGenerateSummary?.();
-    onGenerateSummaryRequestHandled?.();
-  }, [generateSummaryRequested, onGenerateSummary, onGenerateSummaryRequestHandled]);
   const titleRef = useRef<HTMLDivElement>(null);
   const prevNoteIdRef = useRef<number>(note.id);
 

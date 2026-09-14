@@ -472,9 +472,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const handleSummaryRequestHandled = useCallback(() => setSummaryRequest(null), []);
   // A request the editor never consumed must not stay armed: once the user is
   // looking at another note, or has left Notes altogether, generating a summary
-  // for the auto-ended one would be a surprise they no longer asked for. The
-  // drain sets the note and the view in the same batch, so this cannot cancel
-  // the request it was just handed.
+  // for the auto-ended one would be a surprise they no longer asked for.
+  // Cancelling needs an already-armed request, so the drain's own updates
+  // (note, view and request together) never trip it.
   useEffect(() => {
     if (!summaryRequest) return;
     if (activeNoteId !== summaryRequest.noteId || activeView !== "personal-notes") {

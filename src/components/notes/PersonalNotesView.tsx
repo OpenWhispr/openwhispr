@@ -702,18 +702,6 @@ export default function PersonalNotesView({
   // the store — this view can be unmounted when an auto-end stop fires.
   const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
 
-  if (!isOnboardingComplete) {
-    return (
-      <>
-        <NotesOnboarding onComplete={completeOnboarding} />
-        <NotesStructureIntroDialog
-          open={showStructureIntro}
-          onOpenChange={handleStructureIntroOpenChange}
-        />
-      </>
-    );
-  }
-
   const runNoteAction = async (action: ActionItem) => {
     if (!editorNote) return;
     const { recordingNoteId: liveNoteId, transcript: liveTranscript } =
@@ -771,14 +759,39 @@ export default function PersonalNotesView({
       ),
     });
   };
+  const summaryAction = actions.find((a) => a.translation_key === DETAILED_NOTES_KEY);
   const generateSummary = () => {
-    const action = actions.find((a) => a.translation_key === DETAILED_NOTES_KEY);
-    if (action) void runNoteAction(action);
+    if (summaryAction) void runNoteAction(summaryAction);
   };
-  // Actions load asynchronously (ActionPicker's initializeActions), and a control
-  // panel opened by the auto-end card boots from cold: requesting the summary
-  // before the action exists would run nothing and clear the request.
-  const summaryActionReady = actions.some((a) => a.translation_key === DETAILED_NOTES_KEY);
+  // The auto-end card's summary action arrives through note navigation, so it
+  // waits for its note to be the one on screen and for the built-in action to
+  // have loaded: actions load asynchronously (ActionPicker's initializeActions),
+  // and a control panel opened by the card boots from cold.
+  const summaryRequestReady =
+    !!summaryRequest && !!summaryAction && summaryRequest.noteId === editorNote?.id;
+  // Held in a ref, like MeetingRecordingMount does with its notifiers, so the
+  // effect fires on readiness alone rather than on every render.
+  const generateSummaryRef = useRef(generateSummary);
+  useEffect(() => {
+    generateSummaryRef.current = generateSummary;
+  });
+  useEffect(() => {
+    if (!summaryRequestReady) return;
+    generateSummaryRef.current();
+    onSummaryRequestHandled?.();
+  }, [summaryRequestReady, onSummaryRequestHandled]);
+
+  if (!isOnboardingComplete) {
+    return (
+      <>
+        <NotesOnboarding onComplete={completeOnboarding} />
+        <NotesStructureIntroDialog
+          open={showStructureIntro}
+          onOpenChange={handleStructureIntroOpenChange}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="flex h-full">
@@ -858,10 +871,6 @@ export default function PersonalNotesView({
               actionProcessingState={actionProcessingState}
               actionName={actionName}
               onGenerateSummary={generateSummary}
-              generateSummaryRequested={
-                summaryActionReady && summaryRequest?.noteId === editorNote.id
-              }
-              onGenerateSummaryRequestHandled={onSummaryRequestHandled}
               actionPicker={
                 <ActionPicker
                   onRunAction={runNoteAction}
