@@ -479,9 +479,13 @@ export interface SpaceItem {
   name: string;
   emoji: string | null;
   sort_order: number;
-  // Server-computed max effective role across assigned teams (ws owner/admin ⇒ admin).
+  // Server-computed effective role: direct grant or best role across assigned
+  // teams (ws owner/admin ⇒ admin).
   my_role: "admin" | "member" | null;
-  // Server-computed deduped union of assigned team rosters.
+  // Direct space_members grant, null when access comes only via teams or the
+  // workspace role. Absent on mirrors written before the API shipped it.
+  my_direct_role?: TeamRole | null;
+  // Server-computed deduped union of direct members and assigned team rosters.
   member_count: number | null;
   teams: SpaceTeamRef[];
   sync_status: "synced" | "pending" | "error";

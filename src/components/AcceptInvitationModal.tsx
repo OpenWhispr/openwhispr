@@ -26,7 +26,7 @@ import type { InvitationPreview } from "../types/electron";
 interface Props {
   token: string | null;
   onClose: () => void;
-  onAccepted?: (entry: { workspaceId: string; teamIds: string[] }) => void;
+  onAccepted?: (entry: { workspaceId: string; teamIds: string[]; spaceIds: string[] }) => void;
 }
 
 export default function AcceptInvitationModal({ token, onClose, onAccepted }: Props) {
@@ -90,11 +90,12 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
       onClose();
       // Navigate with the accept response, not the preview: the invitation
       // may have been re-targeted since it was previewed, and the server's
-      // team_ids are authoritative. The preview only fills in for API
-      // responses that predate team_ids.
+      // team_ids/space_ids are authoritative. The preview only fills in for
+      // API responses that predate team_ids.
       onAccepted?.({
         workspaceId: accepted.workspace_id,
         teamIds: accepted.team_ids ?? preview?.team_ids ?? [],
+        spaceIds: accepted.space_ids ?? [],
       });
     } catch (err) {
       toast({

@@ -2302,7 +2302,7 @@
       "tab": {
         "general": "一般",
         "members": "メンバー",
-        "teams": "チーム",
+        "teams": "グループ",
         "developer": "開発者"
       },
       "role": {
@@ -2360,33 +2360,33 @@
         "errorTitle": "リクエストを更新できませんでした"
       },
       "teams": {
-        "title": "チーム",
-        "description": "チームスペースへのアクセスを付与するワークスペースメンバーのグループ。",
-        "new": "新しいチーム",
-        "empty": "チームはまだありません。",
-        "createFirst": "最初のチームを作成",
+        "title": "グループ",
+        "description": "チームスペースへのアクセスをまとめて付与できるワークスペースメンバーのグループ。",
+        "new": "新しいグループ",
+        "empty": "グループはまだありません。",
+        "createFirst": "最初のグループを作成",
         "addMembersLabel": "メンバーを追加",
-        "createTitle": "チームを作成",
-        "nameLabel": "チーム名",
+        "createTitle": "グループを作成",
+        "nameLabel": "グループ名",
         "memberCount_one": "{{count}}人のメンバー",
         "memberCount_other": "{{count}}人のメンバー",
         "membersButton": "メンバー",
         "grantsAccessToSpaces_one": "{{count}} 件のスペースへのアクセスを付与しています",
         "grantsAccessToSpaces_other": "{{count}} 件のスペースへのアクセスを付与しています",
-        "couldNotCreate": "チームを作成できませんでした",
+        "couldNotCreate": "グループを作成できませんでした",
         "created": "{{team}} を作成しました",
         "deleted": "{{team}} を削除しました",
         "deleteConfirmTitle": "{{team}} を削除しますか？",
-        "deleteConfirmDescription": "チームをアーカイブします。このチームが付与していたアクセスは失われます。",
-        "deleteConfirmSpaceAccess_one": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
-        "deleteConfirmSpaceAccess_other": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
+        "deleteConfirmDescription": "グループをアーカイブします。このグループが付与していたアクセスは失われます。",
+        "deleteConfirmSpaceAccess_one": "このグループは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
+        "deleteConfirmSpaceAccess_other": "このグループは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
         "members": {
           "title": "{{team}} のメンバー",
           "removeConfirm": "{{name}} を {{team}} から外しますか？",
-          "leave": "チームから退出",
+          "leave": "グループから退出",
           "leftTeam": "{{team}} から退出しました",
           "leaveConfirm": "{{team}} から退出しますか？",
-          "leaveConfirmDescription": "他のチームに含まれていない限り、このチームが付与するスペースへのアクセスを失います。"
+          "leaveConfirmDescription": "直接追加されているか他のグループに含まれていない限り、このグループが付与するスペースへのアクセスを失います。"
         }
       },
       "invites": {
@@ -2682,7 +2682,7 @@
       "newSpace": "新しいチームスペース",
       "newSpaceInWorkspace": "{{workspace}} に新しいチームスペース",
       "createTitle": "チームスペースを作成",
-      "createDescription": "ワークスペース内の共有エリアで、1つ以上のチームがアクセスできます。",
+      "createDescription": "ワークスペース内の共有エリアです。追加した人やグループがアクセスできます。",
       "nameAndIconLabel": "名前とアイコン",
       "create": "作成",
       "couldNotCreate": "スペースを作成できませんでした",
@@ -2693,18 +2693,19 @@
       "couldNotRename": "スペースの名前を変更できませんでした",
       "couldNotChangeEmoji": "絵文字を変更できませんでした",
       "deleteSpace": "スペースを削除",
-      "deleteHintTeam": "全員からこのスペースを削除します。チームは残ります。",
+      "deleteHintTeam": "全員からこのスペースを削除します。グループは残ります。",
       "deleteHintLocal": "このデバイス上のフォルダーとノートを含め、このスペースを完全に削除します。",
       "leaveTitle": "スペースから退出",
       "leaveDescription": "あなたのノートは他のメンバーが引き続き利用できます。",
       "leave": "スペースから退出",
       "leaveConfirmTitle": "{{space}} から退出しますか？",
-      "leaveConfirmDescription": "{{teams}} から削除され、それらのチームが開ける他のスペースへのアクセスも失われます。",
+      "leaveConfirmDescription": "{{teams}} から削除され、それらのグループが開ける他のスペースへのアクセスも失われます。",
+      "leaveDirectDescription": "このスペースへのアクセスを失います。",
       "left": "{{space}} から退出しました",
       "couldNotLeave": "スペースから退出できませんでした",
       "deleteConfirmTitle": "スペースを削除しますか？",
       "deleteConfirmDescription": "{{space}}とそのすべてのフォルダとノートがこのデバイスから完全に削除されます。",
-      "deleteConfirmTeamDescription": "{{space}} を全員に対して削除します。チームは残りますが、メンバーはすべてのフォルダーとノートへのアクセスを失います。",
+      "deleteConfirmTeamDescription": "{{space}} を全員に対して削除します。グループは残りますが、メンバーはすべてのフォルダーとノートへのアクセスを失います。",
       "deleteTypeName": "確認のため {{space}} と入力してください",
       "couldNotDelete": "スペースを削除できませんでした",
       "deleted": "{{space}} を削除しました",
@@ -2756,23 +2757,23 @@
         "removeConfirm": "{{name}} を {{space}} から削除しますか？",
         "removeConfirmDescription": "このスペースのすべてのノートにアクセスできなくなります。",
         "inviteFooter": "{{email}} をワークスペースに招待…",
-        "empty": "まだ誰も追加されていません"
+        "empty": "まだ誰も追加されていません",
+        "viaGroup": "{{group}} 経由",
+        "managedByGroup": "{{group}} 経由で追加されています。削除はそのグループで行ってください。",
+        "invited": "{{email}} に招待を送信しました"
       },
       "invitedTo_one": "{{count}} 件のチームスペースに参加します",
       "invitedTo_other": "{{count}} 件のチームスペースに参加します",
       "teamsMembers": {
-        "title": "{{space}} のチームとメンバー",
-        "noTeams": "このスペースにアクセスできるチームはまだありません。ワークスペース管理者のみが閲覧できます。",
-        "addTeamLabel": "このスペースにチームを追加",
-        "chooseTeam": "チームを選択…",
+        "title": "{{space}} のメンバー",
+        "noTeams": "このスペースにアクセスできるグループはまだありません。",
+        "addTeamLabel": "このスペースにグループを追加",
+        "chooseTeam": "グループを選択…",
         "teamAdded": "{{team}} を {{space}} に追加しました",
         "teamRemoved": "{{team}} を {{space}} から削除しました",
         "removeTeamFromSpace": "スペースから外す",
         "removeTeamConfirm": "{{team}} を {{space}} から外しますか？",
-        "removeTeamConfirmDescription": "他の割り当て済みチームに含まれていない限り、そのメンバーはこのスペースへのアクセスを失います。",
-        "lastTeamWarning": "このスペースにアクセスできる唯一のチームです。外すと、ワークスペース管理者のみがアクセスを保持します。",
-        "affectsOtherSpaces_one": "{{team}} への変更は、このチームがアクセスできる他 {{count}} 件のスペースにも適用されます。",
-        "affectsOtherSpaces_other": "{{team}} への変更は、このチームがアクセスできる他 {{count}} 件のスペースにも適用されます。",
+        "removeTeamConfirmDescription": "直接追加されているか他の割り当て済みグループに含まれていない限り、そのメンバーはこのスペースへのアクセスを失います。",
         "accessLabel": "スペースへのアクセス",
         "accessAdmin": "管理者",
         "accessMember": "メンバー",
@@ -2780,10 +2781,12 @@
         "accessHint": "{{team}} の管理者は、アクセスが「管理者」に設定されている場合のみこのスペースを管理できます。"
       },
       "teams": {
-        "assignLabel": "チーム",
-        "newTeam": "新しいチーム",
-        "newTeamNameLabel": "チーム名",
-        "loadError": "チームを読み込めませんでした。"
+        "newTeam": "新しいグループ",
+        "loadError": "グループを読み込めませんでした。"
+      },
+      "groups": {
+        "title": "アクセスできるグループ",
+        "optional": "グループ（任意）"
       }
     },
     "structureIntro": {
@@ -2799,7 +2802,7 @@
       },
       "teamSpace": {
         "title": "チームスペース",
-        "description": "ワークスペース内の共有エリア。1つ以上のチームがアクセスを付与します。"
+        "description": "ワークスペース内の共有エリア。人やグループを追加してアクセスを付与します。"
       },
       "contents": "各スペースにはフォルダーとノートを作成できます。",
       "done": "了解",

@@ -169,7 +169,7 @@ export function ContainerOverview({
           onOpenChange={setShowInviteDialog}
           workspaceId={workspace.id}
           workspaceName={workspace.name}
-          teamIds={space.teams.map((team) => team.id)}
+          spaceIds={[space.cloud_space_id]}
         />
       )}
     </div>

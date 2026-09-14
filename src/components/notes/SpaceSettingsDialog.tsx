@@ -7,9 +7,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { useToast } from "../ui/useToast";
 import { useAuth } from "../../hooks/useAuth";
 import { useDialogs } from "../../hooks/useDialogs";
-import { canManageSpace, canManageWorkspace, teamsUserCanLeave } from "../../lib/spacePermissions";
+import {
+  canLeaveSpace,
+  canManageSpace,
+  canManageWorkspace,
+  teamsUserCanLeave,
+} from "../../lib/spacePermissions";
 import { localMutationErrorKey } from "../../lib/localMutationError";
-import { leaveTeam, renameSpace } from "../../services/spaceActions";
+import { leaveSpace, leaveTeam, renameSpace } from "../../services/spaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import SpaceMembersPanel from "./SpaceMembersPanel";
@@ -128,11 +133,10 @@ export default function SpaceSettingsDialog({
 
   const leaveTeams = teamsUserCanLeave(space);
   const canLeave =
-    Boolean(space.cloud_space_id) &&
-    !isWorkspaceAdmin &&
-    leaveTeams.length > 0 &&
-    Boolean(user?.id);
+    Boolean(space.cloud_space_id) && !isWorkspaceAdmin && canLeaveSpace(space) && Boolean(user?.id);
 
+  // Leaving drops the direct grant and every group membership that opens
+  // this space; the group copy only applies when groups are the sole grant.
   const confirmLeave = () => {
     if (!canLeave || !user?.id) return;
     const userId = user.id;
@@ -141,12 +145,15 @@ export default function SpaceSettingsDialog({
     );
     showConfirmDialog({
       title: t("notes.spaces.leaveConfirmTitle", { space: space.name }),
-      description: t("notes.spaces.leaveConfirmDescription", { teams: teamNames }),
+      description: space.my_direct_role
+        ? t("notes.spaces.leaveDirectDescription")
+        : t("notes.spaces.leaveConfirmDescription", { teams: teamNames }),
       confirmText: t("notes.spaces.leave"),
       variant: "destructive",
       onConfirm: async () => {
         setLeaving(true);
         try {
+          if (space.my_direct_role) await leaveSpace(space, userId);
           for (const team of leaveTeams) await leaveTeam(team.id, userId);
           toast({ title: t("notes.spaces.left", { space: space.name }) });
           onOpenChange(false);

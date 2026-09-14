@@ -1592,7 +1592,7 @@
       "tab": {
         "general": "Allgemein",
         "members": "Mitglieder",
-        "teams": "Teams",
+        "teams": "Gruppen",
         "developer": "Entwickler"
       },
       "role": {
@@ -1650,33 +1650,33 @@
         "errorTitle": "Anfrage konnte nicht aktualisiert werden"
       },
       "teams": {
-        "title": "Teams",
-        "description": "Gruppen von Workspace-Mitgliedern, die Zugriff auf Team-Spaces gewähren.",
-        "new": "Neues Team",
-        "empty": "Noch keine Teams.",
-        "createFirst": "Erstelle dein erstes Team",
+        "title": "Gruppen",
+        "description": "Gruppen von Workspace-Mitgliedern, denen gemeinsam Zugriff auf Team-Spaces gewährt werden kann.",
+        "new": "Neue Gruppe",
+        "empty": "Noch keine Gruppen.",
+        "createFirst": "Erstelle deine erste Gruppe",
         "addMembersLabel": "Mitglieder hinzufügen",
-        "createTitle": "Team erstellen",
-        "nameLabel": "Teamname",
+        "createTitle": "Gruppe erstellen",
+        "nameLabel": "Gruppenname",
         "memberCount_one": "{{count}} Mitglied",
         "memberCount_other": "{{count}} Mitglieder",
         "membersButton": "Mitglieder",
         "grantsAccessToSpaces_one": "Gewährt Zugriff auf {{count}} Space",
         "grantsAccessToSpaces_other": "Gewährt Zugriff auf {{count}} Spaces",
-        "couldNotCreate": "Team konnte nicht erstellt werden",
+        "couldNotCreate": "Gruppe konnte nicht erstellt werden",
         "created": "{{team}} erstellt",
         "deleted": "{{team}} gelöscht",
         "deleteConfirmTitle": "{{team}} löschen?",
-        "deleteConfirmDescription": "Das Team wird archiviert. Seine Mitglieder verlieren den dadurch gewährten Zugriff.",
-        "deleteConfirmSpaceAccess_one": "Dieses Team gewährt Zugriff auf {{count}} Space. Seine Mitglieder verlieren diesen Zugriff.",
-        "deleteConfirmSpaceAccess_other": "Dieses Team gewährt Zugriff auf {{count}} Spaces. Seine Mitglieder verlieren diesen Zugriff.",
+        "deleteConfirmDescription": "Die Gruppe wird archiviert. Ihre Mitglieder verlieren den dadurch gewährten Zugriff.",
+        "deleteConfirmSpaceAccess_one": "Diese Gruppe gewährt Zugriff auf {{count}} Space. Ihre Mitglieder verlieren diesen Zugriff.",
+        "deleteConfirmSpaceAccess_other": "Diese Gruppe gewährt Zugriff auf {{count}} Spaces. Ihre Mitglieder verlieren diesen Zugriff.",
         "members": {
           "title": "Mitglieder von {{team}}",
           "removeConfirm": "{{name}} aus {{team}} entfernen?",
-          "leave": "Team verlassen",
+          "leave": "Gruppe verlassen",
           "leftTeam": "Du hast {{team}} verlassen",
           "leaveConfirm": "{{team}} verlassen?",
-          "leaveConfirmDescription": "Du verlierst den Zugriff auf die Spaces, denen dieses Team zugewiesen ist, sofern dich kein anderes Team einschließt."
+          "leaveConfirmDescription": "Du verlierst den Zugriff auf die Spaces, denen diese Gruppe zugewiesen ist, sofern du nicht direkt hinzugefügt wurdest oder eine andere Gruppe dich einschließt."
         }
       },
       "invites": {
@@ -3097,7 +3097,7 @@
       "newSpace": "Neuer Team-Bereich",
       "newSpaceInWorkspace": "Neuer Team-Bereich in {{workspace}}",
       "createTitle": "Team-Bereich erstellen",
-      "createDescription": "Ein gemeinsamer Bereich in einem Workspace, auf den ein oder mehrere Teams Zugriff haben.",
+      "createDescription": "Ein gemeinsamer Bereich in einem Workspace für die Personen und Gruppen, die du hinzufügst.",
       "nameAndIconLabel": "Name und Symbol",
       "create": "Erstellen",
       "couldNotCreate": "Bereich konnte nicht erstellt werden",
@@ -3108,18 +3108,19 @@
       "couldNotRename": "Bereich konnte nicht umbenannt werden",
       "couldNotChangeEmoji": "Emoji konnte nicht geändert werden",
       "deleteSpace": "Bereich löschen",
-      "deleteHintTeam": "Entfernt diesen Space für alle. Seine Teams bleiben bestehen.",
+      "deleteHintTeam": "Entfernt diesen Space für alle. Seine Gruppen bleiben bestehen.",
       "deleteHintLocal": "Löscht diesen Space mit seinen Ordnern und Notizen auf diesem Gerät endgültig.",
       "leaveTitle": "Space verlassen",
       "leaveDescription": "Deine Notizen bleiben für die anderen Mitglieder verfügbar.",
       "leave": "Space verlassen",
       "leaveConfirmTitle": "{{space}} verlassen?",
-      "leaveConfirmDescription": "Du wirst aus {{teams}} entfernt und verlierst den Zugriff auf alle anderen Spaces, die diese Teams öffnen können.",
+      "leaveConfirmDescription": "Du wirst aus {{teams}} entfernt und verlierst den Zugriff auf alle anderen Spaces, die diese Gruppen öffnen können.",
+      "leaveDirectDescription": "Du verlierst den Zugriff auf diesen Space.",
       "left": "Du hast {{space}} verlassen",
       "couldNotLeave": "Space konnte nicht verlassen werden",
       "deleteConfirmTitle": "Bereich löschen?",
       "deleteConfirmDescription": "Dadurch werden {{space}} und alle zugehörigen Ordner und Notizen auf diesem Gerät endgültig gelöscht.",
-      "deleteConfirmTeamDescription": "Dies löscht {{space}} für alle. Die Teams bleiben bestehen, aber Mitglieder verlieren den Zugriff auf alle Ordner und Notizen.",
+      "deleteConfirmTeamDescription": "Dies löscht {{space}} für alle. Die Gruppen bleiben bestehen, aber Mitglieder verlieren den Zugriff auf alle Ordner und Notizen.",
       "deleteTypeName": "Geben Sie {{space}} zur Bestätigung ein",
       "couldNotDelete": "Bereich konnte nicht gelöscht werden",
       "deleted": "{{space}} gelöscht",
@@ -3171,23 +3172,23 @@
         "removeConfirm": "{{name}} aus {{space}} entfernen?",
         "removeConfirmDescription": "Diese Person verliert den Zugriff auf alle Notizen in diesem Bereich.",
         "inviteFooter": "{{email}} in den Workspace einladen…",
-        "empty": "Noch niemand hinzugefügt"
+        "empty": "Noch niemand hinzugefügt",
+        "viaGroup": "über {{group}}",
+        "managedByGroup": "Über {{group}} hinzugefügt. Entferne die Person dort.",
+        "invited": "Einladung an {{email}} gesendet"
       },
       "invitedTo_one": "Sie treten {{count}} Team-Bereich bei",
       "invitedTo_other": "Sie treten {{count}} Team-Bereichen bei",
       "teamsMembers": {
-        "title": "Teams & Mitglieder von {{space}}",
-        "noTeams": "Diesem Space sind noch keine Teams zugewiesen. Nur Workspace-Admins können ihn sehen.",
-        "addTeamLabel": "Team zu diesem Bereich hinzufügen",
-        "chooseTeam": "Team auswählen…",
+        "title": "Mitglieder von {{space}}",
+        "noTeams": "Diesem Space sind noch keine Gruppen zugewiesen.",
+        "addTeamLabel": "Gruppe zu diesem Space hinzufügen",
+        "chooseTeam": "Gruppe auswählen…",
         "teamAdded": "{{team}} wurde zu {{space}} hinzugefügt",
         "teamRemoved": "{{team}} wurde aus {{space}} entfernt",
         "removeTeamFromSpace": "Aus dem Space entfernen",
         "removeTeamConfirm": "{{team}} aus {{space}} entfernen?",
-        "removeTeamConfirmDescription": "Seine Mitglieder verlieren den Zugriff auf diesen Space, sofern kein anderes zugewiesenes Team sie einschließt.",
-        "lastTeamWarning": "Dies ist das einzige Team mit Zugriff auf diesen Space. Danach behalten nur Workspace-Admins Zugriff.",
-        "affectsOtherSpaces_one": "Änderungen an {{team}} gelten auch für {{count}} weiteren Space.",
-        "affectsOtherSpaces_other": "Änderungen an {{team}} gelten auch für {{count}} weitere Spaces.",
+        "removeTeamConfirmDescription": "Ihre Mitglieder verlieren den Zugriff auf diesen Space, sofern sie nicht direkt hinzugefügt wurden oder eine andere Gruppe sie einschließt.",
         "accessLabel": "Space-Zugriff",
         "accessAdmin": "Admin",
         "accessMember": "Mitglied",
@@ -3195,10 +3196,12 @@
         "accessHint": "Admins von {{team}} verwalten diesen Space nur, wenn sein Zugriff auf Admin gesetzt ist."
       },
       "teams": {
-        "assignLabel": "Teams",
-        "newTeam": "Neues Team",
-        "newTeamNameLabel": "Teamname",
-        "loadError": "Teams konnten nicht geladen werden."
+        "newTeam": "Neue Gruppe",
+        "loadError": "Gruppen konnten nicht geladen werden."
+      },
+      "groups": {
+        "title": "Gruppen mit Zugriff",
+        "optional": "Gruppen (optional)"
       }
     },
     "structureIntro": {
@@ -3214,7 +3217,7 @@
       },
       "teamSpace": {
         "title": "Team-Bereich",
-        "description": "Ein gemeinsamer Bereich in einem Workspace. Ein oder mehrere Teams gewähren Zugriff."
+        "description": "Ein gemeinsamer Bereich in einem Workspace. Füge Personen oder Gruppen hinzu, um ihnen Zugriff zu geben."
       },
       "contents": "Jeder Bereich kann Ordner und Notizen enthalten.",
       "done": "Verstanden",

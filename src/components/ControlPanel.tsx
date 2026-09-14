@@ -129,6 +129,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [invitationNotesEntry, setInvitationNotesEntry] = useState<{
     workspaceId: string;
     teamIds: string[];
+    spaceIds: string[];
   } | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();

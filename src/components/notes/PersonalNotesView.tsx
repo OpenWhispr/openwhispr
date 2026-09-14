@@ -125,7 +125,7 @@ interface PersonalNotesViewProps {
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
-  invitationEntry?: { workspaceId: string; teamIds: string[] } | null;
+  invitationEntry?: { workspaceId: string; teamIds: string[]; spaceIds: string[] } | null;
   onInvitationEntryHandled?: () => void;
   /** The topbar slot the New note button portals into; null while the topbar hides it. */
   topBarActions?: HTMLElement | null;
@@ -303,21 +303,25 @@ export default function PersonalNotesView({
   }, [invitationEntry, isSidePanelLayout]);
 
   // The acceptance modal starts a sync before navigating here. Once the first
-  // space an invited team can access appears in the local mirror, take the
-  // user to it instead of leaving the newly shared content hidden behind
-  // Personal.
+  // space the invitation granted (directly or via a team) appears in the local
+  // mirror, take the user to it instead of leaving the newly shared content
+  // hidden behind Personal.
   useEffect(() => {
     if (!invitationEntry) return;
     const invitedTeamIds = new Set(invitationEntry.teamIds);
+    const invitedSpaceIds = new Set(invitationEntry.spaceIds);
+    // Workspace owners/admins receive implicit access, so their invitation
+    // may enumerate no grants at all. In that case, open the first accessible
+    // team space belonging to the accepted workspace.
+    const anyGrant = invitedTeamIds.size === 0 && invitedSpaceIds.size === 0;
     const invitedSpace = spaces.find(
       (space) =>
         space.kind === "team" &&
         space.workspace_id === invitationEntry.workspaceId &&
         space.cloud_space_id != null &&
-        // Workspace owners/admins receive implicit access, so their invitation
-        // may not enumerate team ids. In that case, open the first accessible
-        // team space belonging to the accepted workspace.
-        (invitedTeamIds.size === 0 || space.teams.some((team) => invitedTeamIds.has(team.id)))
+        (anyGrant ||
+          invitedSpaceIds.has(space.cloud_space_id) ||
+          space.teams.some((team) => invitedTeamIds.has(team.id)))
     );
     if (!invitedSpace) return;
 
