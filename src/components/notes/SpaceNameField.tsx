@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useState, type Ref } from "react";
 import { Smile } from "../icons";
 import { Popover, PopoverTrigger } from "../ui/popover";
 import { EmojiPickerContent } from "../ui/EmojiPicker";
@@ -26,8 +26,6 @@ function initialOf(name: string): string | null {
   return null;
 }
 
-const selectAll = (input: HTMLInputElement | null) => input?.select();
-
 function TileGlyph({ emoji, name }: { emoji: string | null; name: string }) {
   if (emoji) return <span className="font-emoji text-lg leading-none">{emoji}</span>;
   const initial = initialOf(name);
@@ -43,8 +41,8 @@ interface SpaceNameFieldProps {
   onEmojiChange: (emoji: string | null) => void;
   /** Presents the current values without editing affordances. */
   readOnly?: boolean;
-  /** Focuses the name and selects it, like a rename field. */
   autoFocus?: boolean;
+  inputRef?: Ref<HTMLInputElement>;
   onBlur?: () => void;
   onEnter?: () => void;
 }
@@ -59,6 +57,7 @@ export default function SpaceNameField({
   onEmojiChange,
   readOnly = false,
   autoFocus,
+  inputRef,
   onBlur,
   onEnter,
 }: SpaceNameFieldProps) {
@@ -97,7 +96,8 @@ export default function SpaceNameField({
         id={id}
         type="text"
         value={name}
-        ref={autoFocus ? selectAll : undefined}
+        ref={inputRef}
+        autoFocus={autoFocus}
         maxLength={80}
         readOnly={readOnly}
         tabIndex={readOnly ? -1 : undefined}

@@ -65,6 +65,13 @@ export default function SpaceSettingsDialog({
   useEffect(() => {
     latestSpace.current = space;
   }, [space]);
+  // Select the name once per open, like a rename field. Not autoFocus: the
+  // field remounts with the General tab, and re-selecting on each return
+  // would pull focus out of the tab list.
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (open && canManage) nameInputRef.current?.select();
+  }, [open, canManage]);
 
   // Seed on open, and follow renames made elsewhere until the user edits.
   if (open && (baseline === null || (draftName === baseline && space.name !== baseline))) {
@@ -167,7 +174,7 @@ export default function SpaceSettingsDialog({
           name={draftName}
           emoji={space.emoji}
           readOnly={!canManage}
-          autoFocus={canManage}
+          inputRef={nameInputRef}
           onNameChange={setDraftName}
           onEmojiChange={changeEmoji}
           onBlur={() => void commitName()}
@@ -232,7 +239,12 @@ export default function SpaceSettingsDialog({
       <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
         <DialogContent
           className="max-w-xl max-h-[80vh] overflow-y-auto p-6 gap-5"
-          onCloseAutoFocus={onCloseAutoFocus}
+          onCloseAutoFocus={(event) => {
+            // Handing off to the delete confirm: leave focus in its input
+            // instead of returning it to the host.
+            if (deleteTarget) event.preventDefault();
+            else onCloseAutoFocus?.(event);
+          }}
         >
           <DialogHeader>
             <DialogTitle>{t("notes.spaces.settingsTitle")}</DialogTitle>
