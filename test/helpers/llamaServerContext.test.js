@@ -281,42 +281,52 @@ test("countPromptTokens returns null when the server cannot measure", async () =
 });
 
 // --- reading the reply ---------------------------------------------------
-//
-// With thinking on, a reasoning model can spend its whole budget thinking and
-// come back with an empty `content` and everything in `reasoning_content`.
-// Returning that field pasted "Thinking Process: …" into the user's app (#2187).
+// With thinking on, `reasoning_content` is the reasoning, not the answer (#2187).
 
 const MESSAGES = [{ role: "user", content: "hi" }];
 
+// Stubs one chat completion and records the request bodies it receives.
 function withReply(message, finishReason = "stop") {
-  return withStubServer({
-    "/v1/chat/completions": () => ({
-      payload: { choices: [{ message, finish_reason: finishReason }] },
-    }),
+  const requests = [];
+  const run = withStubServer({
+    "/v1/chat/completions": (body) => {
+      requests.push(JSON.parse(body));
+      return { payload: { choices: [{ message, finish_reason: finishReason }] } };
+    },
   });
+  return { run, requests };
 }
 
 test("reasoning never stands in for the answer when thinking was requested", async () => {
-  const reasoningOnly = withReply(
-    { content: "", reasoning_content: "Thinking Process:\n\n1. Analyze" },
-    "length"
-  );
-  await reasoningOnly(async (manager) => {
+  const reasoningOnly = { content: "", reasoning_content: "Thinking Process:\n\n1. Analyze" };
+
+  // Cut off mid-reasoning: reaches callers without requireCompleteOutput.
+  const truncated = withReply(reasoningOnly, "length");
+  await truncated.run(async (manager) => {
     assert.equal(await manager.inference(MESSAGES, { disableThinking: false }), "");
+  });
+  assert.equal(truncated.requests[0].chat_template_kwargs, undefined);
+
+  // Finished with no answer: reaches strict callers such as dictation cleanup too.
+  const finished = withReply(reasoningOnly, "stop");
+  await finished.run(async (manager) => {
+    const options = { disableThinking: false, requireCompleteOutput: true };
+    assert.equal(await manager.inference(MESSAGES, options), "");
   });
 });
 
 test("an answer routed into reasoning_content with thinking suppressed is still returned", async () => {
   // Some llama-server builds do this despite enable_thinking: false (#809).
   const misrouted = withReply({ content: "", reasoning_content: "Cleaned text." });
-  await misrouted(async (manager) => {
+  await misrouted.run(async (manager) => {
     assert.equal(await manager.inference(MESSAGES, { disableThinking: true }), "Cleaned text.");
   });
+  assert.deepEqual(misrouted.requests[0].chat_template_kwargs, { enable_thinking: false });
 });
 
 test("content is returned over reasoning_content whether or not thinking was on", async () => {
   const both = withReply({ content: "Cleaned text.", reasoning_content: "Thinking Process:" });
-  await both(async (manager) => {
+  await both.run(async (manager) => {
     assert.equal(await manager.inference(MESSAGES, { disableThinking: false }), "Cleaned text.");
     assert.equal(await manager.inference(MESSAGES, {}), "Cleaned text.");
   });
