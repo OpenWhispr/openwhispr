@@ -302,16 +302,20 @@ function isCompleteInstall(markerPath, binaryPaths, { platformArch, binDir = BIN
 
   const marker = readInstallMarker(markerPath);
   if (marker?.version !== SHERPA_ONNX_VERSION || !Array.isArray(marker?.libraries)) return false;
-  if (marker.libraries.some((lib) => !fs.existsSync(path.join(binDir, lib)))) return false;
+  if (
+    marker.libraries.some(
+      (library) => typeof library !== "string" || !fs.existsSync(path.join(binDir, library))
+    )
+  ) {
+    return false;
+  }
   // A win32 marker without this field predates the rename: the exes on disk
   // still import onnxruntime.dll and must be re-extracted.
   if (platformArch.startsWith("win32")) {
     return marker.onnxRuntime === WINDOWS_ONNXRUNTIME_PRIVATE_NAME;
   }
   // A macOS marker without this field still holds the slow universal2 slice.
-  return (
-    !isMacosHostTarget(platformArch) || marker.onnxRuntime === MACOS_ARM64_ONNXRUNTIME.marker
-  );
+  return !isMacosHostTarget(platformArch) || marker.onnxRuntime === MACOS_ARM64_ONNXRUNTIME.marker;
 }
 
 async function downloadBinary(platformArch, config, isForce = false) {
@@ -385,10 +389,7 @@ async function downloadBinary(platformArch, config, isForce = false) {
         fs.rmSync(destPath, { force: true });
         fs.copyFileSync(libPath, destPath);
         setExecutable(destPath);
-        if (
-          isMacosHostTarget(platformArch) &&
-          libName === MACOS_ARM64_ONNXRUNTIME.libraryName
-        ) {
+        if (isMacosHostTarget(platformArch) && libName === MACOS_ARM64_ONNXRUNTIME.libraryName) {
           await replaceMacosArm64OnnxRuntime(destPath, platformArch);
         }
         adhocSign(destPath, platformArch);

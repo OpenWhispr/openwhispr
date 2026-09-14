@@ -205,6 +205,19 @@ test("Linux markers do not need the onnxRuntime field", (t) => {
   );
 });
 
+test("a malformed marker is not a complete install", (t) => {
+  const dir = makeBinDir(t);
+  const binary = path.join(dir, "sherpa-onnx-ws-linux-x64");
+  const marker = path.join(dir, ".sherpa-onnx-linux-x64.json");
+  fs.writeFileSync(binary, "");
+  fs.writeFileSync(marker, JSON.stringify({ version: SHERPA_ONNX_VERSION, libraries: [null] }));
+
+  assert.equal(
+    isCompleteInstall(marker, [binary], { platformArch: "linux-x64", binDir: dir }),
+    false
+  );
+});
+
 test(
   "a macOS marker written before the arm64 ONNX Runtime slice is not a complete install",
   { skip: process.platform !== "darwin" && "the slice is only replaced on macOS hosts" },
