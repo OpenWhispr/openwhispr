@@ -1466,7 +1466,7 @@
       "reset": "Réinitialiser",
       "save": "Enregistrer"
     },
-    "defaultTestInput": "Hey Whispr, quel temps fait-il aujourd'hui ?",
+    "defaultTestInput": "Quel temps fait-il aujourd'hui ?",
     "dialogs": {
       "reset": {
         "description": "Le prompt a été réinitialisé à la valeur par défaut.",
@@ -1481,7 +1481,7 @@
       "agentNameLabel": "Nom de l'assistant :",
       "cautionLabel": "Attention",
       "cautionTextPrefix": "Modifier ce prompt peut affecter la qualité de la transcription.",
-      "cautionTextSuffix": "Conservez le placeholder {{agentName}} pour préserver la détection de l'assistant.",
+      "cautionTextSuffix": "Conservez le placeholder {{agentName}} pour que l'assistant connaisse son nom.",
       "placeholder": "Saisissez votre prompt système personnalisé..."
     },
     "tabs": {
@@ -1490,7 +1490,6 @@
       "view": "Afficher"
     },
     "test": {
-      "addressHint": "Essayez d'interpeller « {{agentName}} » pour tester le mode instruction",
       "aiModels": "Modèles IA",
       "baseUrlMissing": "URL de base {{provider}} manquante. Ajoutez-la dans les paramètres Modèles IA.",
       "cleanup": "Correction",
@@ -2021,24 +2020,27 @@
     },
     "agentConfig": {
       "agentName": "Nom de l'assistant",
-      "description": "Nommez votre assistant IA pour pouvoir l'interpeller directement pendant la dictée",
+      "description": "Nommez votre assistant et découvrez comment lui donner des commandes.",
       "dialogs": {
-        "updatedDescription": "Votre assistant s'appelle désormais « {{name}} ». Interpellez-le en disant « Hey {{name}} » suivi de vos instructions.",
+        "updatedDescription": "Votre assistant s'appelle désormais « {{name}} ».",
         "updatedTitle": "Nom de l'assistant mis à jour"
       },
       "examplesTitle": "Exemples",
-      "helper": "Choisissez un nom court et naturel à prononcer",
-      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, le texte surligné est remplacé en toute sécurité par le résultat. Si le collage automatique est activé, la réponse est collée au curseur d'un champ modifiable actif ; sinon, elle s'ouvre dans le panneau flottant de l'assistant.",
+      "helper": "Choisissez un nom court pour votre assistant.",
+      "howItWorksDescription": "Appuyez sur le raccourci de l'assistant vocal et dictez une commande. Le texte surligné est remplacé en toute sécurité par le résultat. Si le collage automatique est activé, la réponse est collée au curseur d'un champ modifiable actif ; sinon, elle s'ouvre dans le panneau flottant de l'assistant.",
       "howItWorksTitle": "Comment ça marche",
       "instructionMode": "Instruction",
       "placeholder": "ex. Jarvis, Nova, Atlas...",
       "save": "Enregistrer",
       "title": "Assistant vocal",
       "examples": {
-        "formalEmail": "Hey {{agentName}}, rédige un e-mail formel sur le budget",
-        "professional": "Sélectionnez du texte, puis dites : Hey {{agentName}}, rends ça plus professionnel",
-        "bulletPoints": "Hey {{agentName}}, convertis ça en liste à puces"
-      }
+        "formalEmail": "Rédige un e-mail formel sur le budget",
+        "professional": "Sélectionnez du texte, puis dites : Rends ça plus professionnel",
+        "bulletPoints": "Convertis ça en liste à puces"
+      },
+      "hotkeyMissing": "Aucun raccourci de l'assistant vocal défini",
+      "hotkeyMissingDescription": "Ajoutez-en un dans Raccourcis pour commencer à dicter des commandes.",
+      "setUpHotkey": "Configurer le raccourci"
     },
     "aiModels": {
       "customSetup": "Configuration personnalisée",
@@ -3707,7 +3709,7 @@
   },
   "dictationAgent": {
     "enabled": "Activer l'assistant vocal",
-    "enabledDescription": "Dictez des instructions à votre assistant. Le texte surligné est envoyé au modèle configuré et modifié sur place. Activez-le en disant « \"{{agentName}}\" ».",
+    "enabledDescription": "Dictez des commandes avec le raccourci de l'assistant vocal. Le texte surligné est envoyé au modèle configuré et modifié sur place.",
     "screenContext": {
       "title": "Contexte d'écran",
       "description": "Joint une capture de votre écran actif aux commandes de l'assistant vocal.",
@@ -3734,7 +3736,7 @@
     },
     "prompt": {
       "title": "Invite de l'assistant",
-      "description": "L'invite système utilisée lorsque le mot de réveil est détecté. Revient à l'invite par défaut intégrée."
+      "description": "L'invite système utilisée pour les commandes de l'assistant vocal. Revient à l'invite par défaut intégrée."
     }
   },
   "agentMode": {

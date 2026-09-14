@@ -1373,7 +1373,7 @@
       "reset": "リセット",
       "save": "保存"
     },
-    "defaultTestInput": "ねぇ Whispr、今日の天気はどう？",
+    "defaultTestInput": "今日の天気はどう？",
     "dialogs": {
       "reset": {
         "description": "プロンプトをデフォルト値にリセットしました。",
@@ -1388,7 +1388,7 @@
       "agentNameLabel": "アシスタント名:",
       "cautionLabel": "注意",
       "cautionTextPrefix": "このプロンプトを変更すると文字起こしの品質に影響する場合があります。",
-      "cautionTextSuffix": "アシスタント検出を維持するために {{agentName}} プレースホルダーを残してください。",
+      "cautionTextSuffix": "アシスタントが自分の名前を認識できるよう、{{agentName}} プレースホルダーを残してください。",
       "placeholder": "カスタムシステムプロンプトを入力..."
     },
     "tabs": {
@@ -1397,7 +1397,6 @@
       "view": "表示"
     },
     "test": {
-      "addressHint": "「{{agentName}}」と呼びかけて指示モードをテストしてみてください",
       "aiModels": "AI モデル",
       "baseUrlMissing": "{{provider}} のベース URL が未設定です。AI モデル設定で追加してください。",
       "cleanup": "クリーンアップ",
@@ -1728,24 +1727,27 @@
     },
     "agentConfig": {
       "agentName": "アシスタント名",
-      "description": "ディクテーション中に直接呼びかけられるよう、AI アシスタントに名前を付けましょう",
+      "description": "アシスタントに名前を付け、指示の出し方を確認しましょう。",
       "dialogs": {
-        "updatedDescription": "アシスタントの名前が「{{name}}」になりました。「ねぇ {{name}}」と呼びかけて指示を出してください。",
+        "updatedDescription": "アシスタントの名前が「{{name}}」になりました。",
         "updatedTitle": "アシスタント名を更新しました"
       },
       "examplesTitle": "例",
-      "helper": "声に出して言いやすい短い名前を選びましょう",
-      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、選択中のテキストは結果で安全に置き換えられます。自動貼り付けが有効で編集可能なテキスト欄にフォーカスがある場合、回答はカーソル位置に貼り付けられ、それ以外の場合はフローティングのアシスタントパネルに表示されます。",
+      "helper": "アシスタントの短い名前を選びましょう。",
+      "howItWorksDescription": "音声アシスタントのホットキーを押して指示を話します。選択中のテキストは結果で安全に置き換えられます。自動貼り付けが有効で編集可能なテキスト欄にフォーカスがある場合、回答はカーソル位置に貼り付けられ、それ以外の場合はフローティングのアシスタントパネルに表示されます。",
       "howItWorksTitle": "仕組み",
       "instructionMode": "指示",
       "placeholder": "例: ジャービス、ノヴァ、アトラス...",
       "save": "保存",
       "title": "音声アシスタント",
       "examples": {
-        "formalEmail": "Hey {{agentName}}、予算についてフォーマルなメールを書いて",
-        "professional": "テキストを選択してから話しかけます：Hey {{agentName}}、これをもっとプロフェッショナルにして",
-        "bulletPoints": "Hey {{agentName}}、これを箇条書きに変換して"
-      }
+        "formalEmail": "予算についてフォーマルなメールを書いて",
+        "professional": "テキストを選択してから話しかけます：これをもっとプロフェッショナルにして",
+        "bulletPoints": "これを箇条書きに変換して"
+      },
+      "hotkeyMissing": "音声アシスタントのホットキーが未設定です",
+      "hotkeyMissingDescription": "「ホットキー」で追加すると、音声で指示を出せるようになります。",
+      "setUpHotkey": "ホットキーを設定"
     },
     "aiModels": {
       "customSetup": "カスタム設定",
@@ -3538,7 +3540,7 @@
   },
   "dictationAgent": {
     "enabled": "音声アシスタントを有効にする",
-    "enabledDescription": "アシスタントに指示を口述できます。選択中のテキストは設定済みのモデルに送信され、その場で編集されます。「{{agentName}}」と話しかけて起動します。",
+    "enabledDescription": "音声アシスタントのホットキーで指示を話せます。選択中のテキストは設定済みのモデルに送信され、その場で編集されます。",
     "screenContext": {
       "title": "画面コンテキスト",
       "description": "音声アシスタントのコマンドに、作業中の画面のスクリーンショットを添付します。",
@@ -3565,7 +3567,7 @@
     },
     "prompt": {
       "title": "アシスタントプロンプト",
-      "description": "ウェイクワードが検出されたときに使用するシステムプロンプト。未設定の場合は組み込みのデフォルトが使われます。"
+      "description": "音声アシスタントの指示に使用するシステムプロンプト。未設定の場合は組み込みのデフォルトが使われます。"
     }
   },
   "agentMode": {

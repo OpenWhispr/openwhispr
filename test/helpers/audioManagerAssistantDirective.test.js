@@ -107,20 +107,6 @@ test("a verified caret stays panel-first when auto-paste is disabled", async (t)
   });
 });
 
-test("a wake-word command is banked without the address", async (t) => {
-  const { createManager } = await loadAudioManager(t, {
-    cachePrefix: "openwhispr-assistant-wakeword-",
-    settingsKey: "__assistantWakewordSettings",
-  });
-  const { manager } = managerWithCapture(createManager, null);
-  manager.voiceAgentRequested = false;
-  const result = await manager.processAgentCommand("Hey Aria, draft a reply", "gpt", "Aria", {
-    selectionEditReachable: true,
-  });
-  assert.equal(result, "Hey Aria, draft a reply");
-  assert.equal(manager.pendingAssistantConversation.transcript, "draft a reply");
-});
-
 test("a policy-restricted org never gets a panel command banked", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-assistant-policy-",
@@ -133,7 +119,7 @@ test("a policy-restricted org never gets a panel command banked", async (t) => {
     throw error;
   };
   await assert.rejects(
-    manager.processAgentCommand("Hey Aria, summarize this", "gpt", "Aria", {
+    manager.processAgentCommand("summarize this", "gpt", "Aria", {
       selectionEditReachable: true,
     }),
     /restricted/

@@ -1373,7 +1373,7 @@
       "reset": "重設",
       "save": "儲存"
     },
-    "defaultTestInput": "嘿 Whispr，今天天氣怎麼樣？",
+    "defaultTestInput": "今天天氣怎麼樣？",
     "dialogs": {
       "reset": {
         "description": "提示詞已重設為預設值。",
@@ -1388,7 +1388,7 @@
       "agentNameLabel": "助理名稱：",
       "cautionLabel": "注意",
       "cautionTextPrefix": "修改此提示詞可能影響轉錄品質。",
-      "cautionTextSuffix": "請保留 {{agentName}} 佔位符以維持助理偵測功能。",
+      "cautionTextSuffix": "請保留 {{agentName}} 佔位符，讓助理知道自己的名字。",
       "placeholder": "輸入你的自訂系統提示詞..."
     },
     "tabs": {
@@ -1397,7 +1397,6 @@
       "view": "檢視"
     },
     "test": {
-      "addressHint": "試試對「{{agentName}}」說話以測試指令模式",
       "aiModels": "AI 模型",
       "baseUrlMissing": "缺少 {{provider}} 的 URL。請在 AI 模型設定中新增。",
       "cleanup": "文字整理",
@@ -1728,24 +1727,27 @@
     },
     "agentConfig": {
       "agentName": "助理名稱",
-      "description": "為你的 AI 助理取個名字，這樣你可以在語音輸入時直接呼叫它",
+      "description": "為你的助理命名，並了解如何對它下指令。",
       "dialogs": {
-        "updatedDescription": "你的助理現在叫做「{{name}}」。說「Hey {{name}}」加上你的指令即可使用。",
+        "updatedDescription": "你的助理現在叫做「{{name}}」。",
         "updatedTitle": "助理名稱已更新"
       },
       "examplesTitle": "範例",
-      "helper": "選個簡短、自然、好說的名字",
-      "howItWorksDescription": "當你說「Hey {{agentName}}」加上一個指令時，選取的文字會安全地取代為結果。啟用自動貼上後，如果可編輯文字欄位已取得焦點，回答會貼到游標處；否則會在浮動助理面板中開啟。",
+      "helper": "為你的助理選一個簡短的名字。",
+      "howItWorksDescription": "按下語音助理快捷鍵並說出指令。選取的文字會安全地取代為結果。啟用自動貼上後，如果可編輯文字欄位已取得焦點，回答會貼到游標處；否則會在浮動助理面板中開啟。",
       "howItWorksTitle": "運作方式",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
       "save": "儲存",
       "title": "語音助理",
       "examples": {
-        "formalEmail": "Hey {{agentName}}，撰寫一封關於預算的正式郵件",
-        "professional": "先選取文字，再說：Hey {{agentName}}，讓這個更專業",
-        "bulletPoints": "Hey {{agentName}}，將這個轉換成要點列表"
-      }
+        "formalEmail": "撰寫一封關於預算的正式郵件",
+        "professional": "先選取文字，再說：讓這個更專業",
+        "bulletPoints": "將這個轉換成要點列表"
+      },
+      "hotkeyMissing": "尚未設定語音助理快捷鍵",
+      "hotkeyMissingDescription": "在「快捷鍵」中新增一個，即可開始用語音下指令。",
+      "setUpHotkey": "設定快捷鍵"
     },
     "aiModels": {
       "customSetup": "自訂設定",
@@ -3538,7 +3540,7 @@
   },
   "dictationAgent": {
     "enabled": "啟用語音助理",
-    "enabledDescription": "向你的助理口述指令。選取的文字會傳送到所設定的模型並就地編輯。說出 \"{{agentName}}\" 即可啟用。",
+    "enabledDescription": "使用語音助理快捷鍵說出指令。選取的文字會傳送到所設定的模型並就地編輯。",
     "screenContext": {
       "title": "螢幕內容",
       "description": "在語音助理指令中附上目前螢幕的截圖。",
@@ -3565,7 +3567,7 @@
     },
     "prompt": {
       "title": "助理提示詞",
-      "description": "偵測到喚醒詞時使用的系統提示詞。若未設定則使用內建預設值。"
+      "description": "用於語音助理指令的系統提示詞。若未設定則使用內建預設值。"
     }
   },
   "agentMode": {

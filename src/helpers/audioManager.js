@@ -84,12 +84,7 @@ import {
   resolveTranslatedText,
   shouldRunTranslateStep,
 } from "./translationChain";
-import { detectAgentName, stripAgentAddress } from "../config/agentDetection";
-import {
-  resolveDictationRouteKind,
-  resolveAgentImageTarget,
-  resolveWakeWordLanguage,
-} from "./dictationRouting";
+import { resolveDictationRouteKind, resolveAgentImageTarget } from "./dictationRouting";
 import {
   resolveDictationAgentInference,
   resolveDictationAgentVisionInference,
@@ -181,11 +176,6 @@ function dictationAgentPrompt(settings, agentName) {
   });
 }
 
-function dictationAgentReachable(settings) {
-  return resolveDictationAgentInference(settings, { isCloudAgent: isCloudDictationAgentMode() })
-    .reachable;
-}
-
 function translationChainReachable(settings) {
   return resolveDictationTranslationInference(settings, {
     isCloudTranslation: isCloudTranslationMode(),
@@ -193,15 +183,12 @@ function translationChainReachable(settings) {
 }
 
 function resolveReasoningRoute(
-  text,
   settings,
   agentName,
   voiceAgentRequested,
   translationRequested,
-  screenContext,
-  detectedLanguage
+  screenContext
 ) {
-  const wakeWordLanguage = resolveWakeWordLanguage(settings, detectedLanguage, text);
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
   const cleanupReachable =
     !!settings.useCleanupModel && (!!cleanup.model?.trim() || isCloudCleanupMode());
@@ -215,12 +202,6 @@ function resolveReasoningRoute(
 
   const kind = resolveDictationRouteKind({
     cleanupReachable,
-    agentReachable: agent.reachable,
-    // A translation recording never routes to the agent, so skip the scan.
-    agentInvoked:
-      !translationRequested &&
-      !!agentName &&
-      detectAgentName(text, agentName, wakeWordLanguage, settings.snippets),
     voiceAgentRequested,
     translationRequested,
     translationReachable: translation.reachable,
@@ -303,10 +284,6 @@ function resolveReasoningRoute(
         // reachable; standalone commands resolve the same scope again in the
         // panel and report their own configuration problems in-conversation.
         selectionEditReachable: agent.reachable,
-        // Detection and stripping must read the transcript identically, so both
-        // inputs ride the route rather than being re-read after the await.
-        wakeWordLanguage,
-        snippets: settings.snippets,
         // The panel re-decides attach/drop for its own request, so carry the
         // raw screenshot past this attach gate for that path.
         ...(screenContext ? { rawScreenContext: screenContext } : {}),
@@ -2622,23 +2599,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   // Panel-first commands make no LLM call here — the panel resolves the Voice
   // Assistant scope itself — so the org policy guard must run at bank time.
-  _bankPanelAgentCommand(
-    text,
-    agentName,
-    config,
-    { selectedContext, selectedText, deliverySessionId } = {}
-  ) {
+  _bankPanelAgentCommand(text, config, { selectedContext, selectedText, deliverySessionId } = {}) {
     this.assertAgentAllowedByPolicy();
-    const settings = getSettings();
-    const command = this.voiceAgentRequested
-      ? text
-      : stripAgentAddress(
-          text,
-          agentName,
-          config?.wakeWordLanguage ?? resolveWakeWordLanguage(settings),
-          config?.snippets ?? settings.snippets
-        );
-    const transcript = selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
+    const transcript = selectedText === undefined ? text : `${text}\n\n"${selectedText}"`;
     this._bankAssistantDirective(transcript, config, { selectedContext, deliverySessionId });
     return text;
   }
@@ -2651,7 +2614,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // target. Keep it on the existing panel-first route and leave the
       // external selection replacement path completely untouched.
       this.selectionCapturePromise = null;
-      return this._bankPanelAgentCommand(text, agentName, config, {
+      return this._bankPanelAgentCommand(text, config, {
         selectedContext: assistantSelectionContext,
       });
     }
@@ -2680,7 +2643,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (!config?.selectionEditReachable) {
       // No in-place editor: the panel never types, so only a readable
       // selection is quoted; every other capture sends the plain command.
-      return this._bankPanelAgentCommand(text, agentName, config, {
+      return this._bankPanelAgentCommand(text, config, {
         selectedText:
           captureDisposition === "selection" && typeof capture?.text === "string"
             ? capture.text
@@ -2703,7 +2666,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (captureDisposition === "standalone" || captureDisposition === "caret") {
-      return this._bankPanelAgentCommand(text, agentName, config, { deliverySessionId });
+      return this._bankPanelAgentCommand(text, config, { deliverySessionId });
     }
 
     if (capture?.status !== "selected") {
@@ -2722,8 +2685,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     // These are routing directives for this method, not reasoning options —
     // strip them before the config reaches ReasoningService.
-    const { selectionEditReachable, rawScreenContext, wakeWordLanguage, ...reasoningOptions } =
-      config ?? {};
+    const { selectionEditReachable, rawScreenContext, ...reasoningOptions } = config ?? {};
     const selectionConfig = {
       ...reasoningOptions,
       maxTokens: Math.max(config?.maxTokens || 0, 8192),
@@ -2773,8 +2735,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     const s = getSettings();
-    const useReasoning =
-      !!s.useCleanupModel || dictationAgentReachable(s) || translationChainReachable(s);
+    const useReasoning = !!s.useCleanupModel || translationChainReachable(s);
     const now = Date.now();
     const cacheValid =
       this.reasoningAvailabilityCache &&
@@ -2949,19 +2910,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const settings = getSettings();
     const cleanupProvider = settings.cleanupProvider || "auto";
     const cleanupReachable = !!settings.useCleanupModel && (!!cleanupModel || isCloud);
-    const agentReachable = dictationAgentReachable(settings);
     const agentName =
       typeof window !== "undefined" && window.localStorage ? getAgentName() : "OpenWhispr";
     if (
       !cleanupReachable &&
-      !agentReachable &&
       !(this.translationRequested && translationChainReachable(settings)) &&
       // A voice-assistant command always routes: standalone commands stream
       // in the panel, which reports a missing model in-conversation.
       !this.voiceAgentRequested
     ) {
       logger.logReasoning("REASONING_SKIPPED", {
-        reason: "No cleanup or dictation-agent model available",
+        reason: "No cleanup model available",
       });
       return normalizedText;
     }
@@ -2981,7 +2940,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       try {
         const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
         route = resolveReasoningRoute(
-          normalizedText,
           settings,
           agentName,
           this.voiceAgentRequested,
@@ -3295,13 +3253,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const agentName = getAgentName();
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
       const route = resolveReasoningRoute(
-        processedText,
         settings,
         agentName,
         this.voiceAgentRequested,
         this.translationRequested,
-        screenContext,
-        result.sttLanguage
+        screenContext
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
@@ -4983,13 +4939,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
       if (wasCancelled()) return true;
       const route = resolveReasoningRoute(
-        finalText,
         stSettings,
         agentName,
         this.voiceAgentRequested,
         this.translationRequested,
-        screenContext,
-        streamingSttLanguage
+        screenContext
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");

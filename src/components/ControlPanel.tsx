@@ -629,7 +629,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               ]);
               const settings = getEffectiveSettings();
               const agentName = getAgentName();
-              const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
+              const route = resolveReasoningRoute(settings, agentName, false, true);
               if (route.kind === "translation") {
                 const { text, translated } = await executeTranslationChain({
                   text: rawText,

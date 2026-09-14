@@ -1426,7 +1426,7 @@
       "reset": "Restablecer",
       "save": "Guardar"
     },
-    "defaultTestInput": "Hola Whispr, ¿cómo está el clima hoy?",
+    "defaultTestInput": "¿Cómo está el clima hoy?",
     "dialogs": {
       "reset": {
         "description": "El prompt ha sido restablecido al valor predeterminado.",
@@ -1441,7 +1441,7 @@
       "agentNameLabel": "Nombre del asistente:",
       "cautionLabel": "Precaución",
       "cautionTextPrefix": "Modificar este prompt puede afectar la calidad de transcripción.",
-      "cautionTextSuffix": "Mantén el marcador {{agentName}} para preservar la detección del asistente.",
+      "cautionTextSuffix": "Mantén el marcador {{agentName}} para que el asistente conozca su nombre.",
       "placeholder": "Introduce tu prompt de sistema personalizado..."
     },
     "tabs": {
@@ -1450,7 +1450,6 @@
       "view": "Ver"
     },
     "test": {
-      "addressHint": "Intenta dirigirte a \"{{agentName}}\" para probar el modo de instrucción",
       "aiModels": "Modelos de IA",
       "baseUrlMissing": "Falta la URL base de {{provider}}. Agrégala en la configuración de Modelos de IA.",
       "cleanup": "Corrección",
@@ -1781,24 +1780,27 @@
     },
     "agentConfig": {
       "agentName": "Nombre del asistente",
-      "description": "Nombra a tu asistente de IA para que puedas dirigirte a él directamente durante el dictado",
+      "description": "Nombra a tu asistente y descubre cómo darle órdenes.",
       "dialogs": {
-        "updatedDescription": "Tu asistente ahora se llama \"{{name}}\". Dirígete a él diciendo \"Hey {{name}}\" seguido de tus instrucciones.",
+        "updatedDescription": "Tu asistente ahora se llama \"{{name}}\".",
         "updatedTitle": "Nombre del asistente actualizado"
       },
       "examplesTitle": "Ejemplos",
-      "helper": "Elige algo corto y natural para decir en voz alta",
-      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, el texto resaltado se reemplaza de forma segura por el resultado. Con el pegado automático activado, la respuesta se pega en el cursor de un campo editable con foco; si no, se abre en el panel flotante del asistente.",
+      "helper": "Elige un nombre corto para tu asistente.",
+      "howItWorksDescription": "Pulsa el atajo del asistente de voz y di una orden. El texto resaltado se reemplaza de forma segura por el resultado. Con el pegado automático activado, la respuesta se pega en el cursor de un campo editable con foco; si no, se abre en el panel flotante del asistente.",
       "howItWorksTitle": "Cómo funciona",
       "instructionMode": "Instrucción",
       "placeholder": "p. ej. Jarvis, Nova, Atlas...",
       "save": "Guardar",
       "title": "Asistente de voz",
       "examples": {
-        "formalEmail": "Hey {{agentName}}, escribe un correo formal sobre el presupuesto",
-        "professional": "Selecciona texto y luego di: Hey {{agentName}}, hazlo más profesional",
-        "bulletPoints": "Hey {{agentName}}, convierte esto en viñetas"
-      }
+        "formalEmail": "Escribe un correo formal sobre el presupuesto",
+        "professional": "Selecciona texto y luego di: Hazlo más profesional",
+        "bulletPoints": "Convierte esto en viñetas"
+      },
+      "hotkeyMissing": "No hay atajo del asistente de voz",
+      "hotkeyMissingDescription": "Añade uno en Atajos para empezar a dar órdenes por voz.",
+      "setUpHotkey": "Configurar atajo"
     },
     "aiModels": {
       "customSetup": "Configuración personalizada",
@@ -3591,7 +3593,7 @@
   },
   "dictationAgent": {
     "enabled": "Activar asistente de voz",
-    "enabledDescription": "Dicta instrucciones a tu asistente. El texto resaltado se envía al modelo configurado y se edita en su lugar. Actívalo diciendo \"{{agentName}}\".",
+    "enabledDescription": "Da órdenes por voz con el atajo del asistente de voz. El texto resaltado se envía al modelo configurado y se edita en su lugar.",
     "screenContext": {
       "title": "Contexto de pantalla",
       "description": "Adjunta una captura de tu pantalla activa a los comandos del asistente de voz.",
@@ -3618,7 +3620,7 @@
     },
     "prompt": {
       "title": "Prompt del asistente",
-      "description": "El prompt de sistema usado cuando se detecta la palabra de activación. Recurre al valor predeterminado integrado."
+      "description": "El prompt de sistema usado para las órdenes del asistente de voz. Recurre al valor predeterminado integrado."
     }
   },
   "agentMode": {

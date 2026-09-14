@@ -3,87 +3,38 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/helpers/dictationRouting.js");
 
-test("voice agent hotkey routes to the agent without a wake word", async () => {
+test("voice agent hotkey routes to the agent", async () => {
   const { resolveDictationRouteKind } = await load();
 
   assert.equal(
     resolveDictationRouteKind({
       cleanupReachable: true,
-      agentReachable: true,
-      agentInvoked: false,
       voiceAgentRequested: true,
     }),
     "agent"
   );
 });
 
-test("voice agent hotkey never triggers cleanup", async () => {
+test("voice agent hotkey never falls back to cleanup or skip", async () => {
   const { resolveDictationRouteKind } = await load();
 
-  // Even with the dictation agent unreachable, a voice assistant recording
-  // takes the agent route: standalone commands run on the chat scope in the
-  // panel, so only selection edits (decided later) need this scope.
-  assert.equal(
-    resolveDictationRouteKind({
-      cleanupReachable: true,
-      agentReachable: false,
-      agentInvoked: false,
-      voiceAgentRequested: true,
-    }),
-    "agent"
-  );
-});
-
-test("voice agent hotkey ignores the wake word state", async () => {
-  const { resolveDictationRouteKind } = await load();
-
+  // Standalone commands run in the panel, which resolves its own scope, so the
+  // route holds even when nothing else is reachable.
   assert.equal(
     resolveDictationRouteKind({
       cleanupReachable: false,
-      agentReachable: true,
-      agentInvoked: true,
       voiceAgentRequested: true,
     }),
     "agent"
   );
 });
 
-test("normal dictation with wake word routes to the agent", async () => {
+test("normal dictation routes to cleanup, never to the agent", async () => {
   const { resolveDictationRouteKind } = await load();
 
   assert.equal(
     resolveDictationRouteKind({
       cleanupReachable: true,
-      agentReachable: true,
-      agentInvoked: true,
-      voiceAgentRequested: false,
-    }),
-    "agent"
-  );
-});
-
-test("normal dictation without wake word routes to cleanup", async () => {
-  const { resolveDictationRouteKind } = await load();
-
-  assert.equal(
-    resolveDictationRouteKind({
-      cleanupReachable: true,
-      agentReachable: true,
-      agentInvoked: false,
-      voiceAgentRequested: false,
-    }),
-    "cleanup"
-  );
-});
-
-test("wake word with unreachable agent falls back to cleanup", async () => {
-  const { resolveDictationRouteKind } = await load();
-
-  assert.equal(
-    resolveDictationRouteKind({
-      cleanupReachable: true,
-      agentReachable: false,
-      agentInvoked: true,
       voiceAgentRequested: false,
     }),
     "cleanup"
@@ -96,8 +47,6 @@ test("skips reasoning when nothing is reachable", async () => {
   assert.equal(
     resolveDictationRouteKind({
       cleanupReachable: false,
-      agentReachable: false,
-      agentInvoked: false,
       voiceAgentRequested: false,
     }),
     "skip"
@@ -190,8 +139,6 @@ test("translation hotkey routes to translation when reachable", async () => {
   assert.equal(
     resolveDictationRouteKind({
       cleanupReachable: true,
-      agentReachable: true,
-      agentInvoked: false,
       voiceAgentRequested: false,
       translationRequested: true,
       translationReachable: true,
@@ -200,23 +147,7 @@ test("translation hotkey routes to translation when reachable", async () => {
   );
 });
 
-test("translation hotkey ignores the wake word state", async () => {
-  const { resolveDictationRouteKind } = await load();
-
-  assert.equal(
-    resolveDictationRouteKind({
-      cleanupReachable: false,
-      agentReachable: true,
-      agentInvoked: true,
-      voiceAgentRequested: false,
-      translationRequested: true,
-      translationReachable: true,
-    }),
-    "translation"
-  );
-});
-
-test("unreachable translation degrades to cleanup, not to the agent", async () => {
+test("unreachable translation degrades to cleanup", async () => {
   const { resolveDictationRouteKind } = await load();
 
   // Deliberately different from the voice agent's hard skip: a dictation meant
@@ -224,8 +155,6 @@ test("unreachable translation degrades to cleanup, not to the agent", async () =
   assert.equal(
     resolveDictationRouteKind({
       cleanupReachable: true,
-      agentReachable: true,
-      agentInvoked: true,
       voiceAgentRequested: false,
       translationRequested: true,
       translationReachable: false,
@@ -240,8 +169,6 @@ test("unreachable translation with unreachable cleanup skips reasoning", async (
   assert.equal(
     resolveDictationRouteKind({
       cleanupReachable: false,
-      agentReachable: true,
-      agentInvoked: false,
       voiceAgentRequested: false,
       translationRequested: true,
       translationReachable: false,
@@ -256,8 +183,6 @@ test("normal dictation never takes the translation route", async () => {
   assert.equal(
     resolveDictationRouteKind({
       cleanupReachable: true,
-      agentReachable: false,
-      agentInvoked: false,
       voiceAgentRequested: false,
       translationRequested: false,
       translationReachable: true,
@@ -693,73 +618,6 @@ test("an override toggled on but never configured falls back to the base rules",
     attach: false,
     useVisionOverride: false,
   });
-});
-
-test("wake-word language follows the dictation language when it is explicit", async () => {
-  const { resolveWakeWordLanguage } = await load();
-
-  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "it", uiLanguage: "en" }, "fr"), "it");
-  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "zh-CN", uiLanguage: "en" }), "zh-CN");
-});
-
-test("wake-word language uses detected speech before the UI language on auto", async () => {
-  const { resolveWakeWordLanguage } = await load();
-
-  assert.equal(
-    resolveWakeWordLanguage({ preferredLanguage: "auto", uiLanguage: "it" }, "en"),
-    "en"
-  );
-  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "", uiLanguage: "en" }, "it"), "it");
-});
-
-test("wake-word language infers Arabic script before the UI fallback on auto", async () => {
-  const { resolveWakeWordLanguage } = await load();
-
-  assert.equal(
-    resolveWakeWordLanguage(
-      { preferredLanguage: "auto", uiLanguage: "en" },
-      undefined,
-      "يا Max، لخّص هذه الملاحظة"
-    ),
-    "ar"
-  );
-  assert.equal(
-    resolveWakeWordLanguage(
-      { preferredLanguage: "en", uiLanguage: "ar" },
-      undefined,
-      "يا Max، summarize this note"
-    ),
-    "en",
-    "an explicit dictation language must remain authoritative"
-  );
-  assert.equal(
-    resolveWakeWordLanguage(
-      { preferredLanguage: "auto", uiLanguage: "ar" },
-      "en",
-      "يا Max، summarize this note"
-    ),
-    "en",
-    "provider detection must remain authoritative"
-  );
-});
-
-test("wake-word language falls back to the UI language on auto or unset", async () => {
-  const { resolveWakeWordLanguage } = await load();
-
-  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "auto", uiLanguage: "it" }), "it");
-  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "", uiLanguage: "pt" }), "pt");
-  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "  ", uiLanguage: "de" }), "de");
-  assert.equal(resolveWakeWordLanguage({ preferredLanguage: undefined, uiLanguage: "fr" }), "fr");
-});
-
-test("wake-word language is undefined when no usable hint exists", async () => {
-  const { resolveWakeWordLanguage } = await load();
-
-  assert.equal(
-    resolveWakeWordLanguage({ preferredLanguage: "auto", uiLanguage: undefined }),
-    undefined
-  );
-  assert.equal(resolveWakeWordLanguage({}), undefined);
 });
 
 test("lifecycle input kind prefers assistant, then translation, then dictation", async () => {

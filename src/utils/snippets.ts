@@ -11,13 +11,6 @@ interface SnippetMatcher {
   replacements: Map<string, string>;
 }
 
-export interface SnippetTriggerRange {
-  /** Index of the trigger's first character. */
-  start: number;
-  /** Index one past the trigger's last character. */
-  end: number;
-}
-
 let cachedSnippets: Snippet[] | null = null;
 let cachedMatcher: SnippetMatcher | null = null;
 
@@ -70,8 +63,7 @@ function getMatcher(snippets?: Snippet[] | null): SnippetMatcher | null {
 
 // The pattern case-folds the Unicode way (/iu) while the keys are toLowerCase'd,
 // so a match is not proof of a replacement: "[ıI]mza" matches a plain "imza",
-// which is no key at all. Both callers resolve through here, so a reported range
-// always means an expansion — wake-word suppression depends on it.
+// which is no key at all.
 function resolveReplacement(match: string, replacements: Map<string, string>): string | undefined {
   const folded = foldCapitalIDot(match);
   return (
@@ -79,27 +71,6 @@ function resolveReplacement(match: string, replacements: Map<string, string>): s
     // An uppercase I can be capital dotless ı as well as English i.
     replacements.get(folded.replace(/I/g, "ı").toLowerCase())
   );
-}
-
-/**
- * Character ranges of every trigger occurrence, matched against `text` exactly
- * as given so the offsets index that same string. Wake-word detection uses
- * these to ignore an agent name that only appears because it opens a trigger
- * the user chose, such as "openwhispr review" (see `agentDetection`).
- */
-export function findSnippetTriggerRanges(
-  text: string,
-  snippets?: Snippet[] | null
-): SnippetTriggerRange[] {
-  if (!text) return [];
-  const matcher = getMatcher(snippets);
-  if (!matcher) return [];
-  return [...text.matchAll(matcher.regex)]
-    .filter((match) => resolveReplacement(match[0], matcher.replacements) !== undefined)
-    .map((match) => ({
-      start: match.index,
-      end: match.index + match[0].length,
-    }));
 }
 
 /**

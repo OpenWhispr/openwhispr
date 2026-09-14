@@ -291,7 +291,6 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
     }
   };
 
-  const isAgentAddressed = testText.toLowerCase().includes(agentName.toLowerCase());
   const isCustomPrompt = customPrompt.length > 0;
   const currentPrompt = customPrompt || defaultPrompt;
 
@@ -535,14 +534,14 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     {testText && (
                       <span
                         className={`text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded ${
-                          isTranslate || isAgent || isAgentAddressed
+                          isTranslate || isAgent
                             ? "bg-primary/10 text-primary dark:bg-primary/15"
                             : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {isTranslate
                           ? t("promptStudio.test.translation")
-                          : isAgent || isAgentAddressed
+                          : isAgent
                             ? t("promptStudio.test.instruction")
                             : t("promptStudio.test.cleanup")}
                       </span>
@@ -556,14 +555,11 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     className="text-xs"
                     placeholder={t("promptStudio.test.inputPlaceholder")}
                   />
-                  {/* The agent tab always runs the agent prompt, addressed or not. */}
-                  {!isAgent && (
+                  {isTranslate && (
                     <p className="text-xs text-muted-foreground/70 mt-1.5">
-                      {isTranslate
-                        ? t("promptStudio.test.translateHint", {
-                            language: getLanguageLabel(translationTargetLanguage),
-                          })
-                        : t("promptStudio.test.addressHint", { agentName })}
+                      {t("promptStudio.test.translateHint", {
+                        language: getLanguageLabel(translationTargetLanguage),
+                      })}
                     </p>
                   )}
                 </div>

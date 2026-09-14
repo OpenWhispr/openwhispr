@@ -8,7 +8,6 @@ export {
   wrapCleanupTranscript,
 } from "./prompts/index";
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./prompts/registry";
-export { detectAgentName } from "./agentDetection";
 
 export function getCleanupSystemPrompt(
   agentName: string | null,

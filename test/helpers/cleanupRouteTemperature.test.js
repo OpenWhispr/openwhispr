@@ -52,14 +52,14 @@ async function loadRouteResolver(t) {
   const settings = { useCleanupModel: true, cleanupDisableThinking: true };
   const resolveReasoningRoute = (await vite.ssrLoadModule("/helpers/audioManager.js"))
     .resolveReasoningRoute;
-  return (text, { voiceAgentRequested = false, translationRequested = false } = {}) =>
-    resolveReasoningRoute(text, settings, "Jarvis", voiceAgentRequested, translationRequested);
+  return ({ voiceAgentRequested = false, translationRequested = false } = {}) =>
+    resolveReasoningRoute(settings, "Jarvis", voiceAgentRequested, translationRequested);
 }
 
 test("the cleanup route pins temperature 0", async (t) => {
   const resolveRoute = await loadRouteResolver(t);
 
-  const route = resolveRoute("so um clean this up");
+  const route = resolveRoute();
 
   assert.equal(route.kind, "cleanup");
   assert.equal(route.config.inferenceScope, "dictationCleanup");
@@ -69,7 +69,7 @@ test("the cleanup route pins temperature 0", async (t) => {
 test("the translation chain's cleanup step pins temperature 0 too", async (t) => {
   const resolveRoute = await loadRouteResolver(t);
 
-  const route = resolveRoute("so um translate this", { translationRequested: true });
+  const route = resolveRoute({ translationRequested: true });
 
   assert.equal(route.kind, "translation");
   assert.equal(route.cleanupConfig.inferenceScope, "dictationCleanup");
@@ -79,7 +79,7 @@ test("the translation chain's cleanup step pins temperature 0 too", async (t) =>
 test("the agent route keeps its provider default temperature", async (t) => {
   const resolveRoute = await loadRouteResolver(t);
 
-  const route = resolveRoute("Jarvis, what is on my calendar", { voiceAgentRequested: true });
+  const route = resolveRoute({ voiceAgentRequested: true });
 
   assert.equal(route.kind, "agent");
   assert.equal(route.config.temperature, undefined);

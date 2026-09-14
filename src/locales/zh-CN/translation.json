@@ -1373,7 +1373,7 @@
       "reset": "重置",
       "save": "保存"
     },
-    "defaultTestInput": "你好 Whispr，今天天气怎么样？",
+    "defaultTestInput": "今天天气怎么样？",
     "dialogs": {
       "reset": {
         "description": "提示词已重置为默认值。",
@@ -1388,7 +1388,7 @@
       "agentNameLabel": "助手名称：",
       "cautionLabel": "注意",
       "cautionTextPrefix": "修改此提示词可能影响转录质量。",
-      "cautionTextSuffix": "保留 {{agentName}} 占位符以确保助手识别功能正常。",
+      "cautionTextSuffix": "保留 {{agentName}} 占位符，以便助手知道自己的名字。",
       "placeholder": "输入你的自定义系统提示词..."
     },
     "tabs": {
@@ -1397,7 +1397,6 @@
       "view": "查看"
     },
     "test": {
-      "addressHint": "试试说“{{agentName}}”来测试指令模式",
       "aiModels": "AI 模型",
       "baseUrlMissing": "{{provider}} 的 URL 缺失，请在 AI 模型设置中添加。",
       "cleanup": "文本整理",
@@ -1728,24 +1727,27 @@
     },
     "agentConfig": {
       "agentName": "助手名称",
-      "description": "为你的 AI 助手取个名字，这样你就能在听写时直接呼唤它",
+      "description": "为你的助手命名，并了解如何向它发出指令。",
       "dialogs": {
-        "updatedDescription": "你的助手已命名为“{{name}}”。说“Hey {{name}}”然后说出指令即可使用。",
+        "updatedDescription": "你的助手已命名为“{{name}}”。",
         "updatedTitle": "助手名称已更新"
       },
       "examplesTitle": "示例",
-      "helper": "选一个简短、说起来自然的名字",
-      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，选中的文本会安全地替换为结果。启用自动粘贴后，如果可编辑文本框已获得焦点，回答会粘贴到光标处；否则会在悬浮助手面板中打开。",
+      "helper": "为你的助手选一个简短的名字。",
+      "howItWorksDescription": "按下语音助手快捷键并说出指令。选中的文本会安全地替换为结果。启用自动粘贴后，如果可编辑文本框已获得焦点，回答会粘贴到光标处；否则会在悬浮助手面板中打开。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
       "save": "保存",
       "title": "语音助手",
       "examples": {
-        "formalEmail": "Hey {{agentName}}，写一封关于预算的正式邮件",
-        "professional": "先选中文本，再说：Hey {{agentName}}，让这个更专业",
-        "bulletPoints": "Hey {{agentName}}，把这个转换成要点列表"
-      }
+        "formalEmail": "写一封关于预算的正式邮件",
+        "professional": "先选中文本，再说：让这个更专业",
+        "bulletPoints": "把这个转换成要点列表"
+      },
+      "hotkeyMissing": "尚未设置语音助手快捷键",
+      "hotkeyMissingDescription": "在“快捷键”中添加一个，即可开始语音下达指令。",
+      "setUpHotkey": "设置快捷键"
     },
     "aiModels": {
       "customSetup": "自定义设置",
@@ -3538,7 +3540,7 @@
   },
   "dictationAgent": {
     "enabled": "启用语音助手",
-    "enabledDescription": "向助手口述指令。选中的文本会发送到所配置的模型并就地编辑。说出“{{agentName}}”即可激活。",
+    "enabledDescription": "使用语音助手快捷键说出指令。选中的文本会发送到所配置的模型并就地编辑。",
     "screenContext": {
       "title": "屏幕上下文",
       "description": "在语音助手命令中附带当前屏幕的截图。",
@@ -3565,7 +3567,7 @@
     },
     "prompt": {
       "title": "助手提示词",
-      "description": "检测到唤醒词时使用的系统提示词。未设置时回退到内置默认值。"
+      "description": "用于语音助手指令的系统提示词。未设置时回退到内置默认值。"
     }
   },
   "agentMode": {

@@ -1466,7 +1466,7 @@
       "reset": "Reset",
       "save": "Save"
     },
-    "defaultTestInput": "Hey Whispr, what's the weather like today?",
+    "defaultTestInput": "What's the weather like today?",
     "dialogs": {
       "reset": {
         "description": "Prompt has been reset to the default value.",
@@ -1481,7 +1481,7 @@
       "agentNameLabel": "Assistant name:",
       "cautionLabel": "Caution",
       "cautionTextPrefix": "Modifying this prompt may affect transcription quality.",
-      "cautionTextSuffix": "Keep the {{agentName}} placeholder to preserve assistant detection.",
+      "cautionTextSuffix": "Keep the {{agentName}} placeholder so the assistant knows its name.",
       "placeholder": "Enter your custom system prompt..."
     },
     "tabs": {
@@ -1490,7 +1490,6 @@
       "view": "View"
     },
     "test": {
-      "addressHint": "Try addressing \"{{agentName}}\" to test instruction mode",
       "aiModels": "AI Models",
       "baseUrlMissing": "{{provider}} base URL missing. Add it in AI Models settings.",
       "cleanup": "Cleanup",
@@ -2021,24 +2020,27 @@
     },
     "agentConfig": {
       "agentName": "Assistant name",
-      "description": "Name your AI assistant so you can address it directly during dictation",
+      "description": "Name your assistant and learn how to give it commands.",
       "dialogs": {
-        "updatedDescription": "Your assistant is now named \"{{name}}\". Address it by saying \"Hey {{name}}\" followed by your instructions.",
+        "updatedDescription": "Your assistant is now named \"{{name}}\".",
         "updatedTitle": "Assistant name updated"
       },
       "examplesTitle": "Examples",
-      "helper": "Pick something short and natural to say aloud",
-      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, highlighted text is safely replaced with the result. With auto-paste enabled, an answer pastes at a focused writable cursor; otherwise it opens in the floating assistant panel.",
+      "helper": "Pick a short name your assistant will go by.",
+      "howItWorksDescription": "Press the Voice Assistant hotkey and speak a command. Highlighted text is safely replaced with the result. With auto-paste enabled, an answer pastes at a focused writable cursor; otherwise it opens in the floating assistant panel.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
       "save": "Save",
       "title": "Voice Assistant",
       "examples": {
-        "formalEmail": "Hey {{agentName}}, write a formal email about the budget",
-        "professional": "Select text, then say: Hey {{agentName}}, make this more professional",
-        "bulletPoints": "Hey {{agentName}}, convert this to bullet points"
-      }
+        "formalEmail": "Write a formal email about the budget",
+        "professional": "Select text, then say: Make this more professional",
+        "bulletPoints": "Convert this to bullet points"
+      },
+      "hotkeyMissing": "No Voice Assistant hotkey set",
+      "hotkeyMissingDescription": "Add one under Hotkeys to start speaking commands.",
+      "setUpHotkey": "Set up hotkey"
     },
     "aiModels": {
       "customSetup": "Custom Setup",
@@ -3707,7 +3709,7 @@
   },
   "dictationAgent": {
     "enabled": "Enable voice assistant",
-    "enabledDescription": "Dictate instructions to your assistant. Highlighted text is sent to the configured model and edited in place. Activate by saying \"{{agentName}}\".",
+    "enabledDescription": "Speak commands with the Voice Assistant hotkey. Highlighted text is sent to the configured model and edited in place.",
     "screenContext": {
       "title": "Screen Context",
       "description": "Attach a screenshot of your active screen to voice assistant commands.",
@@ -3734,7 +3736,7 @@
     },
     "prompt": {
       "title": "Assistant prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "description": "The system prompt used for Voice Assistant commands. Falls back to the built-in default."
     }
   },
   "agentMode": {

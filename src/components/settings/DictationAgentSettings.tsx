@@ -9,6 +9,7 @@ import {
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { useAgentName } from "../../utils/agentName";
+import { parseHotkeyList } from "../../utils/hotkeys";
 import { useDialogs } from "../../hooks/useDialogs";
 import { useScreenRecordingPermission } from "../../hooks/useScreenRecordingPermission";
 import { Toggle } from "../ui/toggle";
@@ -19,10 +20,15 @@ import PermissionCard from "../ui/PermissionCard";
 import PromptStudio from "../ui/PromptStudio";
 import InferenceConfigEditor from "./InferenceConfigEditor";
 
-export default function DictationAgentSettings() {
+interface DictationAgentSettingsProps {
+  onOpenHotkeys?: () => void;
+}
+
+export default function DictationAgentSettings({ onOpenHotkeys }: DictationAgentSettingsProps) {
   const { t } = useTranslation();
   const useDictationAgent = useSettingsStore((s) => s.useDictationAgent);
   const setUseDictationAgent = useSettingsStore((s) => s.setUseDictationAgent);
+  const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const voiceAgentScreenContext = useSettingsStore((s) => s.voiceAgentScreenContext);
   const setVoiceAgentScreenContext = useSettingsStore((s) => s.setVoiceAgentScreenContext);
   const useDictationAgentVisionModel = useSettingsStore((s) => s.useDictationAgentVisionModel);
@@ -78,10 +84,13 @@ export default function DictationAgentSettings() {
 
   const instructionMode = t("settingsPage.agentConfig.instructionMode");
   const examples = [
-    t("settingsPage.agentConfig.examples.formalEmail", { agentName }),
-    t("settingsPage.agentConfig.examples.professional", { agentName }),
-    t("settingsPage.agentConfig.examples.bulletPoints", { agentName }),
+    t("settingsPage.agentConfig.examples.formalEmail"),
+    t("settingsPage.agentConfig.examples.professional"),
+    t("settingsPage.agentConfig.examples.bulletPoints"),
   ];
+  // The hotkey is the only way to invoke the assistant by voice and ships with
+  // no default, so an install without one has no working entry point.
+  const hasVoiceAgentHotkey = parseHotkeyList(voiceAgentKey).length > 0;
 
   const voiceAgentSection = (
     <div className="border-t border-border/70 pt-6 space-y-5">
@@ -122,9 +131,23 @@ export default function DictationAgentSettings() {
         <SettingsPanel>
           <SettingsPanelRow>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              {t("settingsPage.agentConfig.howItWorksDescription", { agentName })}
+              {t("settingsPage.agentConfig.howItWorksDescription")}
             </p>
           </SettingsPanelRow>
+          {!hasVoiceAgentHotkey && (
+            <SettingsPanelRow>
+              <SettingsRow
+                label={t("settingsPage.agentConfig.hotkeyMissing")}
+                description={t("settingsPage.agentConfig.hotkeyMissingDescription")}
+              >
+                {onOpenHotkeys && (
+                  <Button onClick={onOpenHotkeys} variant="outline" size="sm">
+                    {t("settingsPage.agentConfig.setUpHotkey")}
+                  </Button>
+                )}
+              </SettingsRow>
+            </SettingsPanelRow>
+          )}
         </SettingsPanel>
       </div>
 
@@ -155,9 +178,7 @@ export default function DictationAgentSettings() {
           <SettingsRow
             label={t("dictationAgent.enabled")}
             description={
-              agentAllowed
-                ? t("dictationAgent.enabledDescription", { agentName })
-                : t("common.managedByOrg")
+              agentAllowed ? t("dictationAgent.enabledDescription") : t("common.managedByOrg")
             }
           >
             <Toggle

@@ -1352,7 +1352,7 @@
       "reset": "Redefinir",
       "save": "Salvar"
     },
-    "defaultTestInput": "Ei Whispr, como está o tempo hoje?",
+    "defaultTestInput": "Como está o tempo hoje?",
     "dialogs": {
       "reset": {
         "description": "O prompt foi redefinido para o valor padrão.",
@@ -1367,7 +1367,7 @@
       "agentNameLabel": "Nome do assistente:",
       "cautionLabel": "Cuidado",
       "cautionTextPrefix": "Modificar este prompt pode afetar a qualidade da transcrição.",
-      "cautionTextSuffix": "Mantenha o marcador {{agentName}} para preservar a detecção do assistente.",
+      "cautionTextSuffix": "Mantenha o marcador {{agentName}} para que o assistente saiba o próprio nome.",
       "placeholder": "Digite seu prompt de sistema personalizado..."
     },
     "tabs": {
@@ -1376,7 +1376,6 @@
       "view": "Visualizar"
     },
     "test": {
-      "addressHint": "Tente chamar \"{{agentName}}\" para testar o modo de instrução",
       "aiModels": "Modelos de IA",
       "baseUrlMissing": "URL base do {{provider}} ausente. Adicione nas configurações de Modelos de IA.",
       "cleanup": "Limpeza",
@@ -1707,24 +1706,27 @@
     },
     "agentConfig": {
       "agentName": "Nome do assistente",
-      "description": "Dê um nome ao seu assistente de IA para poder chamá-lo diretamente durante o ditado",
+      "description": "Dê um nome ao seu assistente e veja como dar comandos a ele.",
       "dialogs": {
-        "updatedDescription": "Seu assistente agora se chama \"{{name}}\". Chame-o dizendo \"Ei {{name}}\" seguido das suas instruções.",
+        "updatedDescription": "Seu assistente agora se chama \"{{name}}\".",
         "updatedTitle": "Nome do assistente atualizado"
       },
       "examplesTitle": "Exemplos",
-      "helper": "Escolha algo curto e natural de se dizer em voz alta",
-      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, o texto destacado é substituído com segurança pelo resultado. Com a colagem automática ativada, a resposta é colada no cursor de um campo editável em foco; caso contrário, abre no painel flutuante do assistente.",
+      "helper": "Escolha um nome curto para o seu assistente.",
+      "howItWorksDescription": "Pressione o atalho do assistente de voz e diga um comando. O texto destacado é substituído com segurança pelo resultado. Com a colagem automática ativada, a resposta é colada no cursor de um campo editável em foco; caso contrário, abre no painel flutuante do assistente.",
       "howItWorksTitle": "Como funciona",
       "instructionMode": "Instrução",
       "placeholder": "ex.: Jarvis, Nova, Atlas...",
       "save": "Salvar",
       "title": "Assistente de voz",
       "examples": {
-        "formalEmail": "Hey {{agentName}}, escreva um e-mail formal sobre o orçamento",
-        "professional": "Selecione o texto e depois diga: Hey {{agentName}}, torne isso mais profissional",
-        "bulletPoints": "Hey {{agentName}}, converta isso em tópicos"
-      }
+        "formalEmail": "Escreva um e-mail formal sobre o orçamento",
+        "professional": "Selecione o texto e depois diga: Torne isso mais profissional",
+        "bulletPoints": "Converta isso em tópicos"
+      },
+      "hotkeyMissing": "Nenhum atalho do assistente de voz definido",
+      "hotkeyMissingDescription": "Adicione um em Atalhos para começar a dar comandos por voz.",
+      "setUpHotkey": "Configurar atalho"
     },
     "aiModels": {
       "customSetup": "Configuração personalizada",
@@ -3538,7 +3540,7 @@
   },
   "dictationAgent": {
     "enabled": "Ativar assistente de voz",
-    "enabledDescription": "Dite instruções para o seu assistente. O texto destacado é enviado ao modelo configurado e editado no lugar. Ative dizendo \"{{agentName}}\".",
+    "enabledDescription": "Diga comandos com o atalho do assistente de voz. O texto destacado é enviado ao modelo configurado e editado no lugar.",
     "screenContext": {
       "title": "Contexto de tela",
       "description": "Anexa uma captura da tela ativa aos comandos do assistente de voz.",
@@ -3565,7 +3567,7 @@
     },
     "prompt": {
       "title": "Prompt do assistente",
-      "description": "O prompt de sistema usado quando a palavra de ativação é detectada. Recorre ao padrão integrado."
+      "description": "O prompt de sistema usado para os comandos do assistente de voz. Recorre ao padrão integrado."
     }
   },
   "agentMode": {

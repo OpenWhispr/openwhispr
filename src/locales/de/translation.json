@@ -1466,7 +1466,7 @@
       "reset": "Zurücksetzen",
       "save": "Speichern"
     },
-    "defaultTestInput": "Hey Whispr, wie ist das Wetter heute?",
+    "defaultTestInput": "Wie ist das Wetter heute?",
     "dialogs": {
       "reset": {
         "description": "Der Prompt wurde auf den Standardwert zurückgesetzt.",
@@ -1481,7 +1481,7 @@
       "agentNameLabel": "Assistent-Name:",
       "cautionLabel": "Vorsicht",
       "cautionTextPrefix": "Änderungen an diesem Prompt können die Transkriptionsqualität beeinträchtigen.",
-      "cautionTextSuffix": "Behalten Sie den Platzhalter {{agentName}} bei, um die Assistent-Erkennung zu gewährleisten.",
+      "cautionTextSuffix": "Behalten Sie den Platzhalter {{agentName}} bei, damit der Assistent seinen Namen kennt.",
       "placeholder": "Geben Sie Ihren benutzerdefinierten System-Prompt ein..."
     },
     "tabs": {
@@ -1490,7 +1490,6 @@
       "view": "Ansicht"
     },
     "test": {
-      "addressHint": "Versuchen Sie, '{{agentName}}' anzusprechen, um den Anweisungsmodus zu testen",
       "aiModels": "KI-Modelle",
       "baseUrlMissing": "{{provider}} Basis-URL fehlt. Fügen Sie sie in den KI-Modelle-Einstellungen hinzu.",
       "cleanup": "Textbereinigung",
@@ -2021,24 +2020,27 @@
     },
     "agentConfig": {
       "agentName": "Assistent-Name",
-      "description": "Benennen Sie Ihren KI-Assistenten, damit Sie ihn beim Diktieren direkt ansprechen können",
+      "description": "Benennen Sie Ihren Assistenten und erfahren Sie, wie Sie ihm Befehle geben.",
       "dialogs": {
-        "updatedDescription": "Ihr Assistent heißt jetzt '{{name}}'. Sprechen Sie ihn an, indem Sie 'Hey {{name}}' gefolgt von Ihren Anweisungen sagen.",
+        "updatedDescription": "Ihr Assistent heißt jetzt '{{name}}'.",
         "updatedTitle": "Assistent-Name aktualisiert"
       },
       "examplesTitle": "Beispiele",
-      "helper": "Wählen Sie etwas Kurzes und Natürliches zum Aussprechen",
-      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, wird markierter Text sicher durch das Ergebnis ersetzt. Bei aktiviertem automatischen Einfügen landet die Antwort am Cursor eines fokussierten beschreibbaren Textfelds; andernfalls öffnet sie sich im schwebenden Assistenten-Panel.",
+      "helper": "Wählen Sie einen kurzen Namen für Ihren Assistenten.",
+      "howItWorksDescription": "Drücken Sie den Sprachassistent-Hotkey und sprechen Sie einen Befehl. Markierter Text wird sicher durch das Ergebnis ersetzt. Bei aktiviertem automatischen Einfügen landet die Antwort am Cursor eines fokussierten beschreibbaren Textfelds; andernfalls öffnet sie sich im schwebenden Assistenten-Panel.",
       "howItWorksTitle": "So funktioniert es",
       "instructionMode": "Anweisung",
       "placeholder": "z. B. Jarvis, Nova, Atlas...",
       "save": "Speichern",
       "title": "Sprachassistent",
       "examples": {
-        "formalEmail": "Hey {{agentName}}, schreibe eine formelle E-Mail zum Thema Budget",
-        "professional": "Text markieren, dann sagen: Hey {{agentName}}, mach das professioneller",
-        "bulletPoints": "Hey {{agentName}}, wandle das in Stichpunkte um"
-      }
+        "formalEmail": "Schreibe eine formelle E-Mail zum Thema Budget",
+        "professional": "Text markieren, dann sagen: Mach das professioneller",
+        "bulletPoints": "Wandle das in Stichpunkte um"
+      },
+      "hotkeyMissing": "Kein Sprachassistent-Hotkey festgelegt",
+      "hotkeyMissingDescription": "Legen Sie unter Hotkeys einen fest, um Befehle sprechen zu können.",
+      "setUpHotkey": "Hotkey einrichten"
     },
     "aiModels": {
       "customSetup": "Benutzerdefinierte Einrichtung",
@@ -3707,7 +3709,7 @@
   },
   "dictationAgent": {
     "enabled": "Sprachassistenten aktivieren",
-    "enabledDescription": "Diktieren Sie Anweisungen an Ihren Assistenten. Markierter Text wird an das konfigurierte Modell gesendet und direkt bearbeitet. Aktivieren Sie ihn, indem Sie \"{{agentName}}\" sagen.",
+    "enabledDescription": "Sprechen Sie Befehle über den Sprachassistent-Hotkey. Markierter Text wird an das konfigurierte Modell gesendet und direkt bearbeitet.",
     "screenContext": {
       "title": "Bildschirmkontext",
       "description": "Hängt einen Screenshot Ihres aktiven Bildschirms an Sprachassistent-Befehle an.",
@@ -3734,7 +3736,7 @@
     },
     "prompt": {
       "title": "Assistent-Prompt",
-      "description": "Der System-Prompt, der bei Erkennung des Aktivierungsworts verwendet wird. Fällt auf die integrierte Standardvorgabe zurück."
+      "description": "Der System-Prompt für Sprachassistent-Befehle. Fällt auf die integrierte Standardvorgabe zurück."
     }
   },
   "agentMode": {

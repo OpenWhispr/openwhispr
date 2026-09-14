@@ -310,7 +310,7 @@ async function loadCancelGuardManagerClass(t) {
       // reads the real useSettingsStore zustand store for custom prompts.
       // Mocking /config/prompts (as the real ReasoningService flow does in
       // production) sidesteps that store entirely, matching the established
-      // pattern in audioManagerWakeWordLanguage.test.js.
+      // pattern in cleanupRouteTemperature.test.js.
       "/config/prompts": `
         export const resolvePrompt = () => "agent prompt";
         export const appendScreenContextSuffix = (prompt) => prompt;

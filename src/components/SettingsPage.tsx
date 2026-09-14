@@ -4992,7 +4992,13 @@ EOF`,
                 </div>
               </div>
             )}
-            renderDictationAgent={() => <DictationAgentSettings />}
+            renderDictationAgent={() => (
+              <DictationAgentSettings
+                onOpenHotkeys={
+                  onNavigateToSection ? () => onNavigateToSection("hotkeys") : undefined
+                }
+              />
+            )}
             renderDictationTranslation={() => <DictationTranslationSettings />}
             renderNoteFormatting={() => <NoteFormattingSettings />}
           />
