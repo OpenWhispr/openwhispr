@@ -160,8 +160,8 @@ export default function ApiKeysSection() {
                 </div>
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  size="icon"
+                  className="h-8 w-10 text-muted-foreground hover:text-destructive"
                   onClick={() => setRevokeTarget(apiKey)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />

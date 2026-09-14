@@ -166,12 +166,7 @@ export default function DeveloperSection() {
               >
                 {logPath}
               </code>
-              <Button
-                onClick={handleCopyPath}
-                variant="ghost"
-                size="icon"
-                className="size-8"
-              >
+              <Button onClick={handleCopyPath} variant="ghost" size="icon" className="size-8">
                 {copiedPath ? (
                   <Check className="h-3.5 w-3.5 text-success" />
                 ) : (

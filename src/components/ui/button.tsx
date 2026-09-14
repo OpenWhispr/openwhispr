@@ -111,7 +111,7 @@ const buttonVariants = cva(
         default: "h-10 px-4 py-2",
         sm: "h-8 px-3 text-xs gap-1.5",
         lg: "h-12 px-6 text-sm",
-        // Icon buttons stay square; the pill base is sized for text labels.
+        // Icon buttons keep the 4px radius; the pill base is sized for text labels.
         icon: "size-10 rounded",
       },
     },
