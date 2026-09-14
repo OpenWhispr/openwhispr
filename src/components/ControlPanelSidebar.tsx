@@ -1,5 +1,15 @@
 import React, { useState } from "react";
-import { Gift, Lock, Settings, ShieldCheck, HelpCircle, UserCircle, X, Zap } from "./icons";
+import {
+  Gift,
+  Lock,
+  Settings,
+  ShieldCheck,
+  HelpCircle,
+  UserCircle,
+  UserPlus,
+  X,
+  Zap,
+} from "./icons";
 import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
@@ -22,6 +32,8 @@ interface ControlPanelSidebarProps {
   onViewChange: (view: ControlPanelView) => void;
   onOpenSettings: () => void;
   onOpenReferrals?: () => void;
+  /** Present only when the signed-in user can invite to a workspace. */
+  onInviteTeammates?: () => void;
   onUpgrade?: () => void;
   isOverLimit?: boolean;
   userName?: string | null;
@@ -38,6 +50,7 @@ export default function ControlPanelSidebar({
   onViewChange,
   onOpenSettings,
   onOpenReferrals,
+  onInviteTeammates,
   onUpgrade,
   isOverLimit,
   userName,
@@ -173,6 +186,17 @@ export default function ControlPanelSidebar({
           <div className="px-1 pb-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
             {updateAction}
           </div>
+        )}
+
+        {onInviteTeammates && (
+          <button
+            onClick={onInviteTeammates}
+            aria-label={t("sidebar.inviteTeammates")}
+            className={rowButtonClass}
+          >
+            <UserPlus size={16} className={rowIconClass} />
+            <span className={rowLabelClass}>{t("sidebar.inviteTeammates")}</span>
+          </button>
         )}
 
         {isSignedIn && onOpenReferrals && (
