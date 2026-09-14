@@ -45,16 +45,53 @@ function wasLaunchedHidden({ platform, argv, loginItemSettings }) {
   return argv.includes(HIDDEN_LAUNCH_FLAG);
 }
 
-// A relaunch is the user restarting us, so it must not replay how this process was
-// launched: the flag that sent a login launch to the tray, or a deep link, which
-// startup handles again (a sign-in link would restore the session a reset cleared).
-// On AppImage, execPath is the FUSE mount, which is gone once this process exits, so
-// the relaunch has to start the AppImage file itself.
-function getRelaunchOptions({ argv, protocol, appImagePath }) {
+// A relaunch must not replay how this process was launched: --hidden would put the
+// restarted app in the tray, and startup would handle a cold-start deep link again
+// (a sign-in link would restore the session a reset just cleared). An AppImage and
+// the Windows portable build run from a directory that is gone once this process
+// exits (the FUSE mount; the stub's %TEMP% unpack dir), so app.relaunch() cannot
+// bring them back: getRelaunchWaiter() starts the on-disk file from outside instead.
+function getRelaunchOptions({ argv, protocol, appImagePath, portableExecutablePath }) {
   const args = argv
     .slice(1)
     .filter((arg) => arg !== HIDDEN_LAUNCH_FLAG && !arg.startsWith(`${protocol}://`));
-  return appImagePath ? { execPath: appImagePath, args } : { args };
+  const launcherPath = appImagePath || portableExecutablePath;
+  return launcherPath ? { launcherPath, args } : { args };
+}
+
+// The portable stub deletes its unpack dir only after the app exits, so on Windows the
+// waiter must outlive the stub (this process's parent), not just this process.
+function getRelaunchWaiter({
+  platform,
+  launcherPath,
+  args,
+  pid,
+  ppid,
+  systemRoot = "C:\\Windows",
+}) {
+  if (platform === "win32") {
+    const quote = (value) => `'${String(value).replace(/'/g, "''")}'`;
+    const argumentList = args.length ? ` -ArgumentList ${args.map(quote).join(",")}` : "";
+    return {
+      file: `${systemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`,
+      args: [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `Wait-Process -Id ${ppid}; Start-Process -FilePath ${quote(launcherPath)}${argumentList}`,
+      ],
+    };
+  }
+  return {
+    file: "/bin/sh",
+    args: [
+      "-c",
+      'while kill -0 "$0"; do sleep 0.2; done; exec "$@"',
+      String(pid),
+      launcherPath,
+      ...args,
+    ],
+  };
 }
 
 module.exports = {
@@ -64,4 +101,5 @@ module.exports = {
   needsHiddenFlagMigration,
   wasLaunchedHidden,
   getRelaunchOptions,
+  getRelaunchWaiter,
 };

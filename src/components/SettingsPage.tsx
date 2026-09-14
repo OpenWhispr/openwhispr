@@ -2026,7 +2026,7 @@ export default function SettingsPage({
             ? t("settingsPage.account.deleteAccount.partialCleanupDescription")
             : t("settingsPage.account.deleteAccount.successDescription"),
       });
-      // Erasing device data closes the database and stops services; only a relaunch restores them.
+      // cleanup-app leaves the database closed; only a relaunch reopens it.
       setTimeout(() => {
         if (eraseDeviceData) {
           window.electronAPI?.relaunchApp();
@@ -4816,9 +4816,7 @@ EOF`,
                                     "settingsPage.developer.resetAll.successDescription"
                                   ),
                                 });
-                                setTimeout(() => {
-                                  window.electronAPI?.relaunchApp();
-                                }, 1000);
+                                setTimeout(() => window.electronAPI?.relaunchApp(), 1000);
                               } catch {
                                 showAlertDialog({
                                   title: t("settingsPage.developer.resetAll.failedTitle"),

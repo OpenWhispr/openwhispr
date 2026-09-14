@@ -79,7 +79,7 @@ const diarizationHost = (endpoint) => {
 };
 const { resolveLocalServerNeeds } = require("./localServerPolicy");
 const autoStart = require("./autoStart");
-const { getRelaunchOptions } = require("./autoStartPolicy");
+const { getRelaunchOptions, getRelaunchWaiter } = require("./autoStartPolicy");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
@@ -3866,36 +3866,43 @@ class IPCHandlers {
       return this.diarizationManager.cancelDownload();
     });
 
-    // The renderer calls this after cleanup-app, which closes the database and stops
-    // local services for good. `npm run dev` stops the Vite server once Electron
-    // exits, so a relaunched dev instance would have no renderer: just quit there.
-    ipcMain.handle("relaunch-app", () => {
-      if (process.env.NODE_ENV !== "development") {
-        this.updateManager.deferInstallOnQuit();
-        const { execPath, args } = getRelaunchOptions({
-          argv: process.argv,
-          protocol: this.oauthProtocol,
-          appImagePath: process.env.APPIMAGE,
+    // Under `npm run dev` the Vite server dies with Electron, so a relaunched dev
+    // instance would have no renderer: just quit there.
+    ipcMain.handle("relaunch-app", async () => {
+      if (process.env.NODE_ENV === "development") return app.quit();
+      // Once Squirrel.Mac holds a downloaded update it installs it on this quit regardless
+      // of any flag, so the updater owns that restart instead of racing app.relaunch().
+      if (this.updateManager.hasStagedUpdate()) {
+        const { success } = await this.updateManager
+          .installUpdate()
+          .catch(() => ({ success: false }));
+        if (success) return;
+      }
+      this.updateManager.deferInstallOnQuit();
+      const { launcherPath, args } = getRelaunchOptions({
+        argv: process.argv,
+        protocol: this.oauthProtocol,
+        appImagePath: process.env.APPIMAGE,
+        portableExecutablePath: process.env.PORTABLE_EXECUTABLE_FILE,
+      });
+      if (launcherPath) {
+        const waiter = getRelaunchWaiter({
+          platform: process.platform,
+          launcherPath,
+          args,
+          pid: process.pid,
+          ppid: process.ppid,
+          systemRoot: process.env.SystemRoot,
         });
-        if (execPath) {
-          // Electron's relaunch helper runs from inside the AppImage mount and dies with
-          // it, so a shell outside the mount waits for this process to exit (releasing
-          // the single-instance lock) and then starts the AppImage file.
-          const { spawn } = require("child_process");
-          spawn(
-            "/bin/sh",
-            [
-              "-c",
-              'while kill -0 "$0" 2>/dev/null; do sleep 0.2; done; exec "$@"',
-              String(process.pid),
-              execPath,
-              ...args,
-            ],
-            { detached: true, stdio: "ignore" }
-          ).unref();
-        } else {
-          app.relaunch({ args });
-        }
+        require("child_process")
+          .spawn(waiter.file, waiter.args, {
+            detached: true,
+            stdio: "ignore",
+            cwd: path.dirname(launcherPath), // never inside the directory being removed
+          })
+          .unref();
+      } else {
+        app.relaunch({ args });
       }
       app.quit();
     });
