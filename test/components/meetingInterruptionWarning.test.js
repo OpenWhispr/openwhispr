@@ -15,7 +15,6 @@ async function setup(t) {
     if (root) await React.act(async () => root.unmount());
     delete globalThis.__interruptionToasts;
     delete globalThis.__interruptionDismissals;
-    delete globalThis.__autoEndCompletions;
   });
   const listeners = {};
   const noop = () => () => {};
@@ -59,10 +58,6 @@ async function setup(t) {
         if (listeners.autoEnd === callback) listeners.autoEnd = null;
       };
     },
-    meetingAutoEndCompleted: async (sessionId) => {
-      globalThis.__autoEndCompletions.push(sessionId);
-      return { success: false, reason: "notification-disabled" };
-    },
   };
   installBrowserGlobals(t, { window: { electronAPI: api } });
   installMicCaptureGlobals(t);
@@ -89,7 +84,6 @@ async function setup(t) {
   };
   globalThis.__interruptionToasts = [];
   globalThis.__interruptionDismissals = [];
-  globalThis.__autoEndCompletions = [];
   const vite = await createRendererServer(t, {
     cachePrefix: "pr2040-renderer-warning-review-",
     mockModules: {
@@ -136,13 +130,12 @@ async function setup(t) {
   return { store, render, interrupt, resume, autoEnd, focus, reveal, i18n };
 }
 
-test("an automatic meeting stop does not request or render a post-meeting notification", async (t) => {
+test("an automatic meeting stop ends the recording without a toast", async (t) => {
   const { store, autoEnd } = await setup(t);
 
   await autoEnd();
 
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
-  assert.deepEqual(globalThis.__autoEndCompletions, []);
   assert.deepEqual(globalThis.__interruptionToasts, []);
 });
 

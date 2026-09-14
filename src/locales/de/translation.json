@@ -3384,8 +3384,6 @@
       "unsupportedSelfHosted": "Die Notizaufnahme kann noch keinen selbst gehosteten Endpunkt verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "unsupportedProvider": "Die Notizaufnahme kann {{provider}} nicht für die Live-Transkription verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
-      "autoEnded": "Die Aufnahme wurde nach dem Ende des Meetings automatisch beendet.",
-      "restartFailed": "Die Meeting-Aufnahme konnte nicht neu gestartet werden.",
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
@@ -4124,16 +4122,6 @@
       "underway": "Es klingt, als wäre dein Meeting schon im Gange. Notizen aufnehmen?"
     },
     "start": "Notizen aufnehmen",
-    "join": "Beitreten & transkribieren",
-    "autoEnd": {
-      "title": "Meeting-Aufnahme beendet",
-      "body": {
-        "micReleased": "Keine andere App nutzt Ihr Mikrofon, daher wurde die Aufnahme automatisch beendet. Neustart innerhalb von {{seconds}} s.",
-        "silence": "Es wurde kein Ton erkannt, daher wurde die Aufnahme automatisch beendet. Neustart innerhalb von {{seconds}} s.",
-        "processExit": "Ihre Meeting-App wurde geschlossen, daher wurde die Aufnahme automatisch beendet. Neustart innerhalb von {{seconds}} s."
-      },
-      "restart": "Aufnahme neu starten",
-      "summary": "KI-Zusammenfassung erstellen"
-    }
+    "join": "Beitreten & transkribieren"
   }
 }

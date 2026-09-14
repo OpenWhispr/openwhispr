@@ -1653,8 +1653,8 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
 
     logger.info("Meeting transcription stopped", {}, "meeting");
     // Reaching here means this call ended a live recording and its transcript
-    // was written above, so its note is resumable. A failed main-side teardown
-    // is surfaced by reportMeetingError and must not void the restart offer.
+    // was written above. A failed main-side teardown is surfaced by
+    // reportMeetingError and must not be reported as a recording that never stopped.
     return { diarizationSessionId, stopped: true };
   });
 }

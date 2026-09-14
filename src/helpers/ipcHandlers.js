@@ -100,7 +100,6 @@ const AudioStorageManager = require("./audioStorage");
 const LocalModelDownloadStatus = require("./localModelDownloadStatus");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
-const { registerMeetingAutoEndLifecycleHandlers } = require("./meetingAutoEndLifecycle");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
@@ -11521,8 +11520,6 @@ class IPCHandlers {
         return { success: false, error: error.message };
       }
     });
-
-    registerMeetingAutoEndLifecycleHandlers(ipcMain, () => this.meetingDetectionEngine);
 
     ipcMain.handle("join-calendar-meeting", async (_event, eventId) => {
       try {

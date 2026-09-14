@@ -78,7 +78,7 @@ export type TranscriptionErrorCode =
 
 export type MeetingPromptVariant = "detected" | "starting" | "underway";
 
-export interface MeetingDetectionNotificationData {
+export interface MeetingNotificationData {
   kind: "detection";
   detectionId: string;
   source: string;
@@ -91,34 +91,9 @@ export interface MeetingDetectionNotificationData {
 /** Why auto-end concluded the meeting is over. */
 export type MeetingAutoEndReason = "mic-released" | "silence" | "process-exit";
 
-export interface MeetingAutoEndNotificationData {
-  kind: "auto-end";
-  sessionId: string;
-  expiresAt: number;
-  reason?: MeetingAutoEndReason;
-  /** True when the auto-ended note has a transcript and no AI summary yet, which
-   * is when the card also offers to generate one. */
-  canSummarize?: boolean;
-}
-
-export type MeetingNotificationData =
-  MeetingDetectionNotificationData | MeetingAutoEndNotificationData;
-
 export interface MeetingAutoEndRequest {
   sessionId: string;
   reason?: MeetingAutoEndReason;
-}
-
-export type MeetingAutoEndAction = "restart" | "summary" | "dismiss";
-
-export interface MeetingAutoEndRestartRequest {
-  sessionId: string;
-}
-
-export interface MeetingAutoEndLifecycleResult {
-  success: boolean;
-  reason?: "invalid-session" | "invalid-action" | "stale-session";
-  error?: string;
 }
 
 /**
@@ -3149,14 +3124,6 @@ declare global {
       onMeetingAutoEndRequested?: (
         callback: (request: MeetingAutoEndRequest) => void
       ) => () => void;
-      meetingAutoEndCompleted?: (sessionId: string) => Promise<MeetingAutoEndLifecycleResult>;
-      meetingAutoEndRespond?: (
-        sessionId: string,
-        action: MeetingAutoEndAction
-      ) => Promise<MeetingAutoEndLifecycleResult>;
-      onMeetingAutoEndRestartRequested?: (
-        callback: (request: MeetingAutoEndRestartRequest) => void
-      ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (
@@ -3175,8 +3142,6 @@ declare global {
       getPendingNoteNavigation?: () => Promise<{
         noteId: number;
         folderId: number | null;
-        /** Set by the auto-end card's summary action: open the note and run its AI summary. */
-        generateSummary?: boolean;
       } | null>;
       onNoteNavigationPending?: (callback: () => void) => () => void;
       onPreviewText?: (callback: (text: string) => void) => () => void;

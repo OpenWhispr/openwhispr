@@ -41,8 +41,6 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       MAIN_WINDOW_CONFIG: {},
       CONTROL_PANEL_CONFIG: {},
       NOTIFICATION_WINDOW_CONFIG: {},
-      AUTO_END_NOTIFICATION_WINDOW_SIZE: { width: 620, height: 116 },
-      getMeetingNotificationWindowSize: () => ({ width: 392, height: 92 }),
       WINDOW_SIZES: { BASE: { width: 96, height: 96 } },
       ONBOARDING_WINDOW_SIZES: { COMPACT: {}, EXPANDED: {} },
       WindowPositionUtil: {

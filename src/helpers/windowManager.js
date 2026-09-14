@@ -24,7 +24,6 @@ const {
   shouldBlockDictationWhilePanelOpen,
 } = require("./dictationLifecycle");
 const { DEV_SERVER_PORT } = DevServerManager;
-const AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS = 10_000;
 const DRAG_MOVE_TOLERANCE_PX = 2;
 const {
   MAIN_WINDOW_CONFIG,
@@ -36,7 +35,6 @@ const {
   fitDictationErrorContentWindowToWorkArea,
   fitDictationErrorWindowToWorkArea,
   resolveHorizontalWindowDirection,
-  getMeetingNotificationWindowSize,
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
@@ -69,15 +67,12 @@ class WindowManager {
     this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
     this._agentDictationPillHorizontalDirection = "left";
     this._agentDictationPillScreenListener = null;
-    this._notificationLoadTimeout = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
       const notification = this._pendingNotificationData;
-      // Dismiss first: an expiring restart offer lets the engine flush the
-      // detections it was holding, and a prompt raised from that handler must
-      // not be closed by this dismissal. The engine is not told the card closed
-      // either — handleNotificationTimeout below settles this expiry, and a
-      // close report here would flush the queue into a card that handler is
-      // about to clear.
+      // Dismiss first: a prompt raised from the timeout handler must not be
+      // closed by this dismissal. The engine is not told the card closed either —
+      // handleNotificationTimeout below settles this expiry, and a close report
+      // here would flush the queue into a card that handler is about to clear.
       this.dismissMeetingNotification({ notifyEngine: false });
       if (this.meetingDetectionEngine) {
         this.meetingDetectionEngine.handleNotificationTimeout(notification);
@@ -270,13 +265,12 @@ class WindowManager {
     // begin with, so on Linux leave the hit-testing alone and move the
     // countdown alone.
     const togglesClickThrough = process.platform !== "linux";
-    const hasFixedExpiry = this._pendingNotificationData?.kind === "auto-end";
     if (interactive) {
       if (togglesClickThrough) win.setIgnoreMouseEvents(false);
-      if (!hasFixedExpiry) this._notificationDismissTimer.pause();
+      this._notificationDismissTimer.pause();
     } else {
       if (togglesClickThrough) win.setIgnoreMouseEvents(true, { forward: true });
-      if (!hasFixedExpiry) this._notificationDismissTimer.resume();
+      this._notificationDismissTimer.resume();
     }
   }
 
@@ -2001,40 +1995,25 @@ class WindowManager {
     }
   }
 
-  async showMeetingNotification(promptData, { autoDismiss = true, autoDismissAt = null } = {}) {
+  async showMeetingNotification(promptData, { autoDismiss = true } = {}) {
     if (this._onboardingActive) return false;
     if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
       const previousWindow = this.notificationWindow;
-      const replacedAutoEndSessionId =
-        this._pendingNotificationData?.kind === "auto-end"
-          ? this._pendingNotificationData.sessionId
-          : null;
       this.notificationWindow = null;
       this._pendingNotificationData = null;
       previousWindow.close();
-      if (replacedAutoEndSessionId) {
-        this.meetingDetectionEngine?.handleAutoEndNotificationClosed?.(replacedAutoEndSessionId, {
-          flushQueued: false,
-        });
-      }
     }
     this._notificationDismissTimer.cancel();
-    if (this._notificationLoadTimeout) {
-      clearTimeout(this._notificationLoadTimeout);
-      this._notificationLoadTimeout = null;
-    }
     if (this._notificationReadyFallback) {
       clearTimeout(this._notificationReadyFallback);
       this._notificationReadyFallback = null;
     }
 
     const display = screen.getPrimaryDisplay();
-    const notificationSize = getMeetingNotificationWindowSize(promptData);
-    const position = WindowPositionUtil.getNotificationPosition(display, notificationSize);
+    const position = WindowPositionUtil.getNotificationPosition(display);
 
     const win = new BrowserWindow({
       ...NOTIFICATION_WINDOW_CONFIG,
-      ...notificationSize,
       ...position,
     });
     this.notificationWindow = win;
@@ -2044,24 +2023,16 @@ class WindowManager {
     win.on("closed", () => {
       if (this.notificationWindow !== win) return;
       const closedNotification = this._pendingNotificationData;
-      const closedAutoEndSessionId =
-        closedNotification?.kind === "auto-end" ? closedNotification.sessionId : null;
       const closedDetectionId =
         closedNotification?.kind === "detection" ? closedNotification.detectionId : null;
       this.notificationWindow = null;
       this._pendingNotificationData = null;
       this._notificationDismissTimer.cancel();
-      if (this._notificationLoadTimeout) {
-        clearTimeout(this._notificationLoadTimeout);
-        this._notificationLoadTimeout = null;
-      }
       if (this._notificationReadyFallback) {
         clearTimeout(this._notificationReadyFallback);
         this._notificationReadyFallback = null;
       }
-      if (closedAutoEndSessionId) {
-        this.meetingDetectionEngine?.handleAutoEndNotificationClosed?.(closedAutoEndSessionId);
-      } else if (closedDetectionId) {
+      if (closedDetectionId) {
         this.meetingDetectionEngine?.handleDetectionNotificationClosed?.(closedDetectionId);
       }
     });
@@ -2081,35 +2052,16 @@ class WindowManager {
     // Everything past the load addresses `win` directly: a replacement taking
     // over mid-load must not have this prompt's data, countdown or force-show
     // applied to its window.
-    let loadTimeout = null;
     try {
-      const loadNotification = async () => {
-        if (process.env.NODE_ENV === "development") {
-          await DevServerManager.waitForDevServer();
-          if (this.notificationWindow !== win) return;
-          await win.loadURL(`${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`);
-          return;
-        }
-
+      if (process.env.NODE_ENV === "development") {
+        await DevServerManager.waitForDevServer();
+        if (this.notificationWindow !== win) return false;
+        await win.loadURL(`${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`);
+      } else {
         const fileInfo = DevServerManager.getAppFilePath(false);
         await win.loadFile(fileInfo.path, {
           query: { ...fileInfo.query, "meeting-notification": "true" },
         });
-      };
-      const loadPromise = loadNotification();
-      if (promptData?.kind === "auto-end") {
-        const timeoutPromise = new Promise((_, reject) => {
-          loadTimeout = setTimeout(() => {
-            if (this._notificationLoadTimeout === loadTimeout) {
-              this._notificationLoadTimeout = null;
-            }
-            reject(new Error("Meeting auto-end notification load timed out"));
-          }, AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS);
-          this._notificationLoadTimeout = loadTimeout;
-        });
-        await Promise.race([loadPromise, timeoutPromise]);
-      } else {
-        await loadPromise;
       }
     } catch (error) {
       // A load aborted by our own replacement or dismissal is not a failure —
@@ -2117,11 +2069,6 @@ class WindowManager {
       if (this.notificationWindow !== win) return false;
       this.dismissMeetingNotification();
       throw error;
-    } finally {
-      if (loadTimeout && this._notificationLoadTimeout === loadTimeout) {
-        clearTimeout(loadTimeout);
-        this._notificationLoadTimeout = null;
-      }
     }
     if (this.notificationWindow !== win) return false;
     if (this._onboardingActive) {
@@ -2140,11 +2087,7 @@ class WindowManager {
     this._notificationReadyFallback = readyFallback;
 
     if (autoDismiss) {
-      this._notificationDismissTimer.start(
-        autoDismissAt === null
-          ? getNotificationTimeoutMs(promptData.source)
-          : Math.max(0, autoDismissAt - Date.now())
-      );
+      this._notificationDismissTimer.start(getNotificationTimeoutMs(promptData.source));
     }
     return true;
   }
@@ -2176,10 +2119,6 @@ class WindowManager {
       this._notificationReadyFallback = null;
     }
     this._notificationDismissTimer.cancel();
-    if (this._notificationLoadTimeout) {
-      clearTimeout(this._notificationLoadTimeout);
-      this._notificationLoadTimeout = null;
-    }
     const win = this.notificationWindow;
     this.notificationWindow = null;
     if (win && !win.isDestroyed()) win.close();
@@ -2188,30 +2127,6 @@ class WindowManager {
         flushQueued,
       });
     }
-  }
-
-  showMeetingAutoEndNotification({ sessionId, expiresAt, reason, canSummarize }) {
-    return this.showMeetingNotification(
-      // This object is the payload the overlay fetches verbatim, so a field left
-      // out here is a field the card can never render.
-      { kind: "auto-end", sessionId, expiresAt, reason, ...(canSummarize ? { canSummarize } : {}) },
-      { autoDismissAt: expiresAt }
-    );
-  }
-
-  dismissMeetingAutoEndNotification(sessionId) {
-    if (
-      this._pendingNotificationData?.kind !== "auto-end" ||
-      this._pendingNotificationData.sessionId !== sessionId
-    ) {
-      return;
-    }
-    this.dismissMeetingNotification();
-  }
-
-  isMeetingNotificationSender(sender) {
-    const win = this.notificationWindow;
-    return !!win && !win.isDestroyed() && win.webContents === sender;
   }
 
   sendToControlPanel(channel, data) {

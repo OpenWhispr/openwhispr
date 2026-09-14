@@ -285,23 +285,6 @@ const NOTIFICATION_WINDOW_CONFIG = {
   type: OVERLAY_WINDOW_TYPES.notification,
 };
 
-const AUTO_END_NOTIFICATION_WINDOW_SIZE = {
-  width: 480,
-  // Taller than the countdown copy alone needs: the card stacks a second action
-  // (the note's AI summary) beside a body that wraps further in some locales.
-  height: 144,
-};
-
-function getMeetingNotificationWindowSize(promptData) {
-  if (promptData?.kind === "auto-end") {
-    return AUTO_END_NOTIFICATION_WINDOW_SIZE;
-  }
-  return {
-    width: NOTIFICATION_WINDOW_CONFIG.width,
-    height: NOTIFICATION_WINDOW_CONFIG.height,
-  };
-}
-
 class WindowPositionUtil {
   static getMainWindowPosition(display, customSize = null, position = "bottom-right") {
     const { width, height } = customSize || WINDOW_SIZES.BASE;
@@ -404,8 +387,6 @@ module.exports = {
   fitDictationErrorContentWindowToWorkArea,
   fitDictationErrorWindowToWorkArea,
   resolveHorizontalWindowDirection,
-  AUTO_END_NOTIFICATION_WINDOW_SIZE,
-  getMeetingNotificationWindowSize,
   WINDOW_SIZES,
   WindowPositionUtil,
   resolveOverlayWindowType,

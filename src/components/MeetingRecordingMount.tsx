@@ -47,18 +47,13 @@ export default function MeetingRecordingMount(): null {
 
   useEffect(() => {
     const unsubscribeStop = window.electronAPI?.onMeetingAutoEndRequested?.((request) => {
-      requestMeetingRecordingAutoEnd(
-        request,
-        stopRecording,
-        () => undefined,
-        (error, sessionId) => {
-          logger.error(
-            "Meeting auto-end stop failed; recording is still running",
-            { error: error instanceof Error ? error.message : String(error), sessionId },
-            "meeting"
-          );
-        }
-      );
+      requestMeetingRecordingAutoEnd(request, stopRecording, (error, sessionId) => {
+        logger.error(
+          "Meeting auto-end stop failed; recording is still running",
+          { error: error instanceof Error ? error.message : String(error), sessionId },
+          "meeting"
+        );
+      });
     });
 
     return () => {

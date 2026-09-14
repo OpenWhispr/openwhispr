@@ -125,9 +125,6 @@ interface PersonalNotesViewProps {
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
-  /** Set by the auto-end card's summary action, routed through note navigation. */
-  summaryRequest?: { noteId: number } | null;
-  onSummaryRequestHandled?: () => void;
   invitationEntry?: { workspaceId: string; teamIds: string[] } | null;
   onInvitationEntryHandled?: () => void;
   /** The topbar slot the New note button portals into; null while the topbar hides it. */
@@ -140,8 +137,6 @@ export default function PersonalNotesView({
   onOpenSettings,
   meetingRecordingRequest,
   onMeetingRecordingRequestHandled,
-  summaryRequest,
-  onSummaryRequestHandled,
   invitationEntry,
   onInvitationEntryHandled,
   topBarActions,
@@ -759,27 +754,10 @@ export default function PersonalNotesView({
       ),
     });
   };
-  const summaryAction = actions.find((a) => a.translation_key === DETAILED_NOTES_KEY);
   const generateSummary = () => {
-    if (summaryAction) void runNoteAction(summaryAction);
+    const action = actions.find((a) => a.translation_key === DETAILED_NOTES_KEY);
+    if (action) void runNoteAction(action);
   };
-  // The auto-end card's summary action arrives through note navigation, so it
-  // waits for its note to be the one on screen and for the built-in action to
-  // have loaded: actions load asynchronously (ActionPicker's initializeActions),
-  // and a control panel opened by the card boots from cold.
-  const summaryRequestReady =
-    !!summaryRequest && !!summaryAction && summaryRequest.noteId === editorNote?.id;
-  // Held in a ref, like MeetingRecordingMount does with its notifiers, so the
-  // effect fires on readiness alone rather than on every render.
-  const generateSummaryRef = useRef(generateSummary);
-  useEffect(() => {
-    generateSummaryRef.current = generateSummary;
-  });
-  useEffect(() => {
-    if (!summaryRequestReady) return;
-    generateSummaryRef.current();
-    onSummaryRequestHandled?.();
-  }, [summaryRequestReady, onSummaryRequestHandled]);
 
   if (!isOnboardingComplete) {
     return (

@@ -3041,8 +3041,6 @@
       "unsupportedSelfHosted": "La registrazione delle note non può ancora usare un endpoint self-hosted. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "unsupportedProvider": "La registrazione delle note non può usare {{provider}} per la trascrizione dal vivo. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "noProviderSelected": "Nessun provider selezionato per la registrazione delle note. Apri le Impostazioni e scegli Locale o un provider in streaming.",
-      "autoEnded": "La registrazione si è interrotta automaticamente al termine della riunione.",
-      "restartFailed": "Impossibile riavviare la registrazione della riunione.",
       "systemAudioSilent": {
         "title": "Nessun audio della riunione rilevato finora",
         "description": "Finora solo il tuo microfono ha captato suoni. Sei in una videochiamata? Verifica che l'audio della riunione venga riprodotto su questo computer e non sia disattivato. Stai registrando di persona? Puoi ignorare questo avviso: il tuo microfono cattura la stanza."
@@ -4124,16 +4122,6 @@
       "underway": "Sembra che la tua riunione sia già in corso. Vuoi prendere appunti?"
     },
     "start": "Prendi appunti",
-    "join": "Partecipa e trascrivi",
-    "autoEnd": {
-      "title": "Registrazione della riunione terminata",
-      "body": {
-        "micReleased": "Nessun’altra app sta usando il microfono, quindi la registrazione si è interrotta automaticamente. Riavviala entro {{seconds}} s.",
-        "silence": "Non è stato rilevato audio, quindi la registrazione si è interrotta automaticamente. Riavviala entro {{seconds}} s.",
-        "processExit": "L’app della riunione è stata chiusa, quindi la registrazione si è interrotta automaticamente. Riavviala entro {{seconds}} s."
-      },
-      "restart": "Riavvia registrazione",
-      "summary": "Genera riepilogo AI"
-    }
+    "join": "Partecipa e trascrivi"
   }
 }

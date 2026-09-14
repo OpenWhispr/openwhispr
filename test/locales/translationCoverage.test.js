@@ -49,12 +49,6 @@ const ARABIC_NUMBER_NEUTRAL_TEMPLATES = {
     "عدد الأجزاء الصوتية التي تعذر تفريغها: {{failed}} من أصل {{total}}.",
   "settingsPage.account.planDescriptions.trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
   "emailVerification.resendIn": "إعادة الإرسال بعد {{seconds}} ث",
-  "meetingNotification.autoEnd.body.micReleased":
-    "لا يستخدم أي تطبيق آخر ميكروفونك، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
-  "meetingNotification.autoEnd.body.silence":
-    "لم يُكتشف أي صوت، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
-  "meetingNotification.autoEnd.body.processExit":
-    "أُغلق تطبيق الاجتماع، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
   "insights.wpmCoverage": "استنادًا إلى نسبة {{count}}% من الكلمات المقاسة",
   "dictionary.promptLimitNotice":
     "عدد أحرف قاموسك: {{chars}}. لا تقرأ نماذج Groq وWhisper سوى بضع مئات من الأحرف الأخيرة منه، لذا تعمل القوائم الأقصر بشكل أفضل معها. أما النماذج الأخرى فتحصل على القائمة كاملة.",
