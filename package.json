@@ -1,6 +1,6 @@
 {
   "name": "open-whispr",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "description": "A desktop dictation application using whisper.cpp for speech-to-text transcription",
   "main": "main.js",
   "private": true,
@@ -107,6 +107,7 @@
     "cross-env": "^10.0.0",
     "electron": "^41.2.0",
     "electron-builder": "^26.4.0",
+    "emojibase-data": "^17.0.0",
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
@@ -176,6 +177,7 @@
     "react-dom": "^19.1.0",
     "react-i18next": "^17.0.10",
     "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "shadcn-ui": "^0.9.5",
     "tailwind-merge": "^3.3.1",
     "tar": "^7.5.22",

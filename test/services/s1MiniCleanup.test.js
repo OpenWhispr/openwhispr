@@ -64,6 +64,7 @@ test("S1-mini cleanup uses its trained format on local and custom transports", a
         baseUrl: "http://127.0.0.1:8000/v1",
         ...(provider === "lan" ? { lanUrl: "http://127.0.0.1:8000/v1" } : {}),
         inferenceScope: "dictationCleanup",
+        requireCompleteOutput: true,
         disableThinking: false,
       }),
       ""
@@ -89,6 +90,21 @@ test("S1-mini cleanup uses its trained format on local and custom transports", a
         inferenceScope: "dictationCleanup",
       }),
       /Invalid response structure/
+    );
+  }
+
+  globalThis.fetch = async () =>
+    Response.json({ choices: [{ message: { content: "" }, finish_reason: "length" }] });
+  for (const provider of ["custom", "lan"]) {
+    await assert.rejects(
+      service.processText(raw, "s1-mini", null, {
+        provider,
+        baseUrl: "http://127.0.0.1:8000/v1",
+        lanUrl: "http://127.0.0.1:8000/v1",
+        inferenceScope: "dictationCleanup",
+        requireCompleteOutput: true,
+      }),
+      /Model output was truncated/
     );
   }
 

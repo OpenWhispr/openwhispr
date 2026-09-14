@@ -1163,11 +1163,8 @@ async function startApp() {
   const isMeetingPress = createHotkeyRepeatGate();
   const meetingHotkeyCallback = () => {
     if (!isMeetingPress()) return;
-    if (hotkeyManager.isInListeningMode()) return;
-    // Fail closed during onboarding, like every other hotkey slot.
-    if (!windowManager.isMeetingInputAllowed()) return;
     debugLogger.info("Meeting hotkey triggered", {}, "meeting");
-    meetingDetectionEngine?.startManualMeeting();
+    windowManager.startManualMeeting();
   };
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
@@ -1334,6 +1331,9 @@ async function startApp() {
 
   trayManager.setWindows(windowManager.mainWindow, windowManager.controlPanelWindow);
   trayManager.setWindowManager(windowManager);
+  // The tray's listen item is a toggle, so it has to rebuild when dictation
+  // starts or stops.
+  windowManager.onDictationStateChanged = () => trayManager.updateTrayMenu();
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
   await trayManager.createTray();
 
@@ -1728,9 +1728,7 @@ async function startApp() {
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        if (!hotkeyManager.isInListeningMode() && windowManager.isMeetingInputAllowed()) {
-          meetingDetectionEngine?.startManualMeeting();
-        }
+        windowManager.startManualMeeting();
       }
     };
 

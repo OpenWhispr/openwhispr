@@ -7,7 +7,9 @@
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/XTest.h>
+#include <X11/extensions/shape.h>
 #include <X11/keysym.h>
+#include <math.h>
 #include <unistd.h>
 
 #ifdef HAVE_UINPUT
@@ -784,6 +786,63 @@ static paste_mode_t resolve_paste_mode(int force_terminal, int force_shift_inser
     return is_term ? PASTE_MODE_CTRL_SHIFT_V : PASTE_MODE_CTRL_V;
 }
 
+/* Shape only input, leaving transparent shadows/tooltips free to render.
+ * Keeping the visible pill in the compositor's input region also works over
+ * native Wayland apps, where XWayland cannot query a fresh global cursor. */
+static int serve_input_region(Window window)
+{
+    if (window == None) return 1;
+    Display *display = XOpenDisplay(NULL);
+    if (!display) return 1;
+    int event_base, error_base, major, minor;
+    if (!XShapeQueryExtension(display, &event_base, &error_base) ||
+        !XShapeQueryVersion(display, &major, &minor) ||
+        (major == 1 && minor < 1)) {
+        XCloseDisplay(display);
+        return 1;
+    }
+
+    char request[512];
+    while (fgets(request, sizeof(request), stdin)) {
+        if (strcmp(request, "full\n") == 0) {
+            XShapeCombineMask(display, window, ShapeInput, 0, 0, None, ShapeSet);
+        } else {
+            double viewport_width, viewport_height, x, y, width, height;
+            if (sscanf(request, "%lf %lf %lf %lf %lf %lf", &viewport_width,
+                       &viewport_height, &x, &y, &width, &height) != 6 ||
+                !isfinite(viewport_width) || !isfinite(viewport_height) ||
+                !isfinite(x) || !isfinite(y) || !isfinite(width) || !isfinite(height) ||
+                viewport_width <= 0 || viewport_height <= 0 || width < 0 || height < 0) {
+                XCloseDisplay(display);
+                return 1;
+            }
+            Window root;
+            int window_x, window_y;
+            unsigned int native_width, native_height, border, depth;
+            if (!XGetGeometry(display, window, &root, &window_x, &window_y,
+                              &native_width, &native_height, &border, &depth)) {
+                XCloseDisplay(display);
+                return 1;
+            }
+            int left = (int)floor(fmax(0, fmin(native_width, x * native_width / viewport_width)));
+            int top = (int)floor(fmax(0, fmin(native_height, y * native_height / viewport_height)));
+            int right = (int)ceil(fmax(0, fmin(native_width, (x + width) * native_width / viewport_width)));
+            int bottom = (int)ceil(fmax(0, fmin(native_height, (y + height) * native_height / viewport_height)));
+            XRectangle rectangle = { left, top, right - left, bottom - top };
+            int count = width > 0 && height > 0 && right > left && bottom > top ? 1 : 0;
+            XShapeCombineRectangles(display, window, ShapeInput, 0, 0,
+                                    &rectangle, count, ShapeSet, Unsorted);
+        }
+        /* Acknowledging after the server applies the shape orders panel capture
+         * after any older pill-only requests from a replaced React effect. */
+        XSync(display, False);
+        printf("OK\n");
+        fflush(stdout);
+    }
+    XCloseDisplay(display);
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     int force_terminal = 0;
     int force_shift_insert = 0;
@@ -792,6 +851,7 @@ int main(int argc, char *argv[]) {
     int media_play_pause = 0;
     int copy_mode = 0;
     int capabilities_only = 0;
+    int input_region_server = 0;
     int atspi_target_only = 0;
     int atspi_selection = 0;
     const char *restore_token = NULL;
@@ -812,6 +872,8 @@ int main(int argc, char *argv[]) {
             copy_mode = 1;
         } else if (strcmp(argv[i], "--capabilities") == 0) {
             capabilities_only = 1;
+        } else if (strcmp(argv[i], "--input-region-server") == 0) {
+            input_region_server = 1;
         } else if (strcmp(argv[i], "--atspi-target") == 0) {
             atspi_target_only = 1;
         } else if (strcmp(argv[i], "--atspi-selection") == 0) {
@@ -822,6 +884,10 @@ int main(int argc, char *argv[]) {
             target_window = (Window)strtoul(argv[++i], NULL, 0);
         }
     }
+
+    /* --capabilities makes older binaries exit harmlessly instead of pasting
+     * when they encounter the new server flag. */
+    if (input_region_server) return serve_input_region(target_window);
 
     if (capabilities_only) {
         printf("paste-v1 selection-copy-v1 target-window-v1");

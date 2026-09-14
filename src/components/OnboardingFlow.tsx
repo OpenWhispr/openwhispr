@@ -199,6 +199,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const systemAudio = useSystemAudioPermission();
   const {
+    isMacOS,
     granted: screenRecordingGranted,
     needsRelaunch: screenRecordingNeedsRelaunch,
     request: requestScreenRecordingAccess,
@@ -279,10 +280,24 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   // macOS grants Screen Recording in System Settings, outside the app; the
   // permission hook re-checks on mount and window focus. When the grant lands,
-  // complete the opt-in the Enable click started.
+  // complete the opt-in the Enable click started. On macOS the grant serves
+  // only this feature, so one that already exists (a reset wipes the setting
+  // but not the permission) counts as the opt-in too; Windows is permissionless
+  // and keeps its explicit Enable.
   useEffect(() => {
-    if (screenContextRequested && screenRecordingGranted) applyScreenContext();
-  }, [screenContextRequested, screenRecordingGranted, applyScreenContext]);
+    if (!screenRecordingGranted || !agentAllowed || !screenContextAllowed) return;
+    if (screenContextRequested || (isMacOS && !settingsStore.voiceAgentScreenContext)) {
+      applyScreenContext();
+    }
+  }, [
+    agentAllowed,
+    applyScreenContext,
+    isMacOS,
+    screenContextAllowed,
+    screenContextRequested,
+    screenRecordingGranted,
+    settingsStore.voiceAgentScreenContext,
+  ]);
 
   const requiredModels = useRequiredLocalModels();
   // Latched for the session once the step is entered (or resumed at), so a

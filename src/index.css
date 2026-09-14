@@ -1843,3 +1843,25 @@ a:hover {
 .dark .rich-text-editor-content p.is-editor-empty:first-child::before {
   color: oklch(0.7 0 0 / 0.2);
 }
+
+/* Colour emoji fonts per platform. Keep in sync with EMOJI_FONT_FAMILY in
+   src/lib/emojiData.ts, which probes emoji support with the same stack. */
+.font-emoji {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+
+/* Styling the scrollbar makes Chromium draw a fixed-width classic bar on every
+   platform, so the emoji grid keeps one width whether or not the OS uses overlay
+   scrollbars. */
+.emoji-picker-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.emoji-picker-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.emoji-picker-scroll::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  background-color: var(--color-border);
+}

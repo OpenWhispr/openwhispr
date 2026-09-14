@@ -1,14 +1,16 @@
 import type { InferenceProvider } from "./types";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl } from "../../../config/constants";
-import { getOpenAiApiConfig } from "../../../models/ModelRegistry";
+import { getCloudModel, getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
 import {
   applyChatCompletionsParams,
+  emptyResponseError,
   fetchWithParamFallback,
   isTruncatedFinishReason,
+  truncatedOutputError,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
@@ -18,6 +20,10 @@ import { openCodeSessionHeaders } from "../openCodeSession";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const PROBE_TIMEOUT_MS = 2_000;
+// OpenAI counts a reasoning model's hidden reasoning against the output cap and
+// recommends reserving at least 25k tokens for reasoning plus output. A cap,
+// not a spend: an unused allowance costs nothing.
+const REASONING_MODEL_MIN_OUTPUT_TOKENS = 25_000;
 
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
 const probedBases = new Set<string>();
@@ -224,7 +230,7 @@ export const openaiProvider: InferenceProvider = {
         const timeoutSeconds = getLlmRequestTimeoutSeconds();
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
         try {
-          const maxTokens =
+          const requestedMaxTokens =
             config.maxTokens ||
             Math.max(
               4096,
@@ -235,6 +241,14 @@ export const openaiProvider: InferenceProvider = {
                 TOKEN_LIMITS.TOKEN_MULTIPLIER
               )
             );
+          // A known endpoint host knows its own request shape better than the model id does.
+          const apiConfig = dialect ?? getOpenAiApiConfig(model, resolvedProvider);
+          // Only registry-known OpenAI reasoning models on OpenAI's own host: an
+          // unknown id (fine-tune, proxy) may reject a cap above its output limit.
+          const maxTokens =
+            !isCustomEndpoint && getCloudModel(model)?.supportsTemperature === false
+              ? Math.max(requestedMaxTokens, REASONING_MODEL_MIN_OUTPUT_TOKENS)
+              : requestedMaxTokens;
 
           const requestBody: Record<string, unknown> = { model };
 
@@ -242,8 +256,6 @@ export const openaiProvider: InferenceProvider = {
             requestBody.input = buildMessages(type);
             requestBody.store = false;
             requestBody.max_output_tokens = maxTokens;
-            // A known endpoint host knows its own request shape better than the model id does.
-            const apiConfig = dialect ?? getOpenAiApiConfig(model, resolvedProvider);
             if (apiConfig.supportsTemperature) {
               requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
             }
@@ -326,14 +338,12 @@ export const openaiProvider: InferenceProvider = {
     const isResponsesApi = Array.isArray(response?.output);
     const isChatCompletions = Array.isArray(response?.choices);
 
-    if (config.requireCompleteOutput) {
-      const responseIncomplete =
-        response?.status === "incomplete" ||
-        !!response?.incomplete_details ||
-        response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
-      if (responseIncomplete) {
-        throw new Error("Model output was truncated before the selection edit completed");
-      }
+    const responseIncomplete =
+      response?.status === "incomplete" ||
+      !!response?.incomplete_details ||
+      response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
+    if (config.requireCompleteOutput && responseIncomplete) {
+      throw truncatedOutputError();
     }
 
     logger.logReasoning("OPENAI_RAW_RESPONSE", {
@@ -350,6 +360,7 @@ export const openaiProvider: InferenceProvider = {
     });
 
     let responseText = "";
+    let refusal = "";
 
     if (isResponsesApi) {
       for (const item of response.output) {
@@ -358,6 +369,9 @@ export const openaiProvider: InferenceProvider = {
             if (content.type === "output_text" && content.text) {
               responseText = content.text.trim();
               break;
+            }
+            if (content.type === "refusal" && content.refusal) {
+              refusal = content.refusal;
             }
           }
           if (responseText) break;
@@ -413,9 +427,11 @@ export const openaiProvider: InferenceProvider = {
       throw new Error("Invalid response structure from S1-mini API");
     }
     if (!responseText && !config.s1MiniCleanup) {
-      if (config.requireCompleteOutput) {
-        throw new Error("Model returned an empty selection edit");
+      if (refusal) {
+        throw new Error(`Model declined the request: ${refusal}`);
       }
+      const error = emptyResponseError("OpenAI", config, !!responseIncomplete);
+      if (error) throw error;
       logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,

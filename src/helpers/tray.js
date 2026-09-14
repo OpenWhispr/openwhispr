@@ -253,8 +253,29 @@ class TrayManager {
 
   buildContextMenuTemplate() {
     const dictationVisible = this.windowManager?.isDictationPanelVisible?.() ?? false;
+    const dictating = this.windowManager?.isDictating?.() ?? false;
 
     return [
+      {
+        label: dictating
+          ? i18nMain.t("app.commandMenu.stopListening")
+          : i18nMain.t("app.commandMenu.startListening"),
+        click: () =>
+          dictating
+            ? this.windowManager?.sendStopDictation()
+            : this.windowManager?.sendStartDictation(),
+      },
+      {
+        label: i18nMain.t("app.commandMenu.askAssistant"),
+        click: () => this.windowManager?.sendOpenAssistantPanel(),
+      },
+      {
+        // Starts in the main process, like the meeting hotkey: the recording it
+        // opens is policy-gated where it actually begins, in the control panel.
+        label: i18nMain.t("app.commandMenu.startMeetingRecording"),
+        click: () => this.windowManager?.startManualMeeting(),
+      },
+      { type: "separator" },
       {
         label: dictationVisible
           ? i18nMain.t("tray.toggleDictation.hide")

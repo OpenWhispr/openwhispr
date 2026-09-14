@@ -81,10 +81,7 @@ interface AssistantPanelProps {
   onSelectionContextChange: (context: AgentSelectionContext | null) => void;
 }
 
-// Updating the selection indicator must not rerender react-markdown: its
-// component map is recreated on render, which remounts the text nodes and
-// collapses the browser's live selection. Streaming content still rerenders
-// normally because the content prop changes.
+// Avoid reparsing Markdown when only the selection indicator changes.
 const StableAssistantMarkdown = memo(MarkdownRenderer);
 
 export function AssistantPanel({

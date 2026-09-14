@@ -11,7 +11,9 @@ export const FOLLOW_UP_EMAIL_KEY = "notes.actions.builtin.followUpEmail";
 const GENERATE_NOTES_PROMPT =
   "Transform the provided content into clean, well-structured notes in markdown. Preserve the user's intent and all substantive information. Remove filler, small talk, false starts, and redundant content. For personal notes, improve grammar and structure for readability. For meeting transcripts, extract key discussion points, decisions, action items, and follow-ups.";
 
-const DETAILED_NOTES_PROMPT = `You are an expert meeting-notes editor. Convert the provided meeting material into accurate, comprehensive, and easy-to-scan notes in Markdown.
+// Shipped in 1.10.0; kept so rows seeded with it upgrade. Its Owner/Due
+// action-item shape never matched the owner tagger.
+const DETAILED_NOTES_PROMPT_1_10_0 = `You are an expert meeting-notes editor. Convert the provided meeting material into accurate, comprehensive, and easy-to-scan notes in Markdown.
 
 The source may contain:
 - meeting context, such as the calendar title or participant names;
@@ -77,6 +79,40 @@ Before responding, verify that:
 
 Return only the finished Markdown notes.`;
 
+// Action items must end in "— Owner" so the editor can turn owners into
+// mention chips (see tagActionItemOwners); a trailing due-date clause would
+// take the owner's place.
+const DETAILED_NOTES_PROMPT = `Convert the provided material into accurate, comprehensive, easy-to-scan notes in Markdown. Priorities, in order: factual accuracy, preservation of specifics, complete coverage of substantive topics, clear decisions and action items, concise presentation.
+
+RULES:
+- Use only information supported by the material. Never invent facts, decisions, owners, deadlines, or names.
+- Keep the exact names of people, clients, companies, projects, products, tools, and acronyms, and the exact numbers, dates, deadlines, and document names. Never replace a named entity with a generic noun such as "the client" or "the project". If a name is unclear, write "[name unclear]" rather than guessing.
+- Speech-to-text misspells names. When the transcript's spelling is an obvious variant of a name in the Meeting Context, the participants' email addresses, the manual notes, or the custom dictionary, use that spelling instead.
+- Distinguish what was discussed, proposed, or requested from what was actually decided.
+- Treat the user's manual notes as a signal of what matters most, reconciled against the transcript.
+- Consolidate repeated discussion into one point. Drop greetings, filler, and false starts. Give longer meetings proportionally more detail.
+- If there is no transcript, structure the user's own notes and skip the meeting-specific sections.
+
+FORMAT:
+- No title, date, attendee list, preamble, table, or horizontal rule. Omit any section with nothing to say.
+
+## Summary
+3–5 bullets: purpose, key subjects, major outcomes, immediate next steps.
+
+## Discussion
+Descriptive topic subheadings named after the actual client, project, or initiative, with enough context that someone who missed the meeting understands what happened and why.
+
+## Decisions
+Only decisions that were explicitly made or clearly agreed.
+
+## Action Items
+Only actions someone committed to or was asked to do; never turn a discussion topic into an action item. One checkbox per item in the form \`- [ ] Action — Owner\`. Put a stated due date inside the action text, for example \`- [ ] Send the revised proposal by Friday — Alice\`. The owner is the person the transcript shows taking the action on or being asked to, not whoever raised the topic; name them whenever the transcript shows it. Use "You" or "Them" only when no name is available. When the transcript shows no owner, end the line after the action; never write a placeholder such as "Owner not specified".
+
+## Open Questions
+Unresolved questions, dependencies, and requested follow-ups.
+
+Return only the finished Markdown notes.`;
+
 const FOLLOW_UP_EMAIL_PROMPT = `You are an expert at writing follow-up emails after meetings. Draft the follow-up email the user ("You") would send to the other participants, based only on the provided meeting material: meeting context, the user's manual notes, and the transcript.
 
 RULES:
@@ -114,7 +150,7 @@ export const BUILTIN_ACTIONS = [
     description: "Clean up, structure, and enhance your notes",
     prompt: GENERATE_NOTES_PROMPT,
     // A pre-release build briefly shipped the detailed prompt under this key.
-    previousPrompts: [DETAILED_NOTES_PROMPT],
+    previousPrompts: [DETAILED_NOTES_PROMPT_1_10_0],
     icon: "sparkles",
     sortOrder: 0,
   },
@@ -123,7 +159,7 @@ export const BUILTIN_ACTIONS = [
     name: "Detailed Notes",
     description: "Accurate, comprehensive meeting notes with decisions and action items",
     prompt: DETAILED_NOTES_PROMPT,
-    previousPrompts: [],
+    previousPrompts: [DETAILED_NOTES_PROMPT_1_10_0],
     icon: "sparkles",
     sortOrder: 1,
   },

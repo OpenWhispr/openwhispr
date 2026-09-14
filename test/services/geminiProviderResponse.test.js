@@ -32,21 +32,29 @@ function createGeminiResponse(parts, finishReason = "STOP") {
   };
 }
 
-async function callGemini(t, response, config = {}) {
+// Pass `requests` to read what the provider actually sent, not what the config asked for.
+async function callGemini(
+  t,
+  response,
+  config = {},
+  { model = "gemini-2.5-flash", requests = [] } = {}
+) {
   const originalFetch = globalThis.fetch;
   t.after(() => {
     globalThis.fetch = originalFetch;
   });
-  globalThis.fetch = async () =>
-    new Response(JSON.stringify(response), {
+  globalThis.fetch = async (_input, init = {}) => {
+    requests.push(JSON.parse(init.body));
+    return new Response(JSON.stringify(response), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
+  };
 
   const { geminiProvider } = await load();
   return geminiProvider.call({
     text: "raw transcript",
-    model: "gemini-2.5-flash",
+    model,
     agentName: null,
     config: { systemPrompt: "Clean the transcript", ...config },
     ctx: providerContext,
@@ -85,36 +93,37 @@ test("Gemini provider preserves complete-output truncation errors before extract
 
   await assert.rejects(
     callGemini(t, response, { requireCompleteOutput: true }),
-    /Model output was truncated before the selection edit completed/
+    /Model output was truncated/
   );
 });
 
-test("a caller's output budget cannot shrink the one Gemini would have computed", async (t) => {
-  // Note formatting pins maxTokens so the local path can price it against the
-  // context window. On Gemini that short-circuited a computed allowance of up
-  // to 8192 and halved long summaries — on the provider with the most room.
-  const originalFetch = globalThis.fetch;
-  t.after(() => {
-    globalThis.fetch = originalFetch;
-  });
+// Gemini bills thinking against maxOutputTokens, so a cap sized for the cleaned text
+// was spent on thinking and the reply arrived cut off or empty (#2091). The model's
+// own limit bounds the reply instead.
+test("Gemini requests carry no output cap, so thinking cannot starve the reply", async (t) => {
+  const requests = [];
 
-  let requestBody = null;
-  globalThis.fetch = async (_url, init) => {
-    requestBody = JSON.parse(init.body);
-    return new Response(JSON.stringify(createGeminiResponse([{ text: "ok" }])), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  };
+  await callGemini(
+    t,
+    createGeminiResponse([{ text: "Cleaned." }]),
+    {},
+    { model: "gemini-3-flash-preview", requests }
+  );
 
-  const { geminiProvider } = await load();
-  await geminiProvider.call({
-    text: "a long meeting transcript",
-    model: "gemini-2.5-flash",
-    agentName: null,
-    config: { systemPrompt: "Write meeting notes.", maxTokens: 4096 },
-    ctx: { ...providerContext, calculateMaxTokens: () => 8192 },
-  });
+  assert.equal(requests[0].generationConfig.maxOutputTokens, undefined);
+});
 
-  assert.equal(requestBody.generationConfig.maxOutputTokens, 8192);
+test("a caller's pinned budget does not reintroduce a cap", async (t) => {
+  // Note formatting pins maxTokens for the local path; letting it cap Gemini halved
+  // long summaries (#2142).
+  const requests = [];
+
+  await callGemini(
+    t,
+    createGeminiResponse([{ text: "Cleaned." }]),
+    { maxTokens: 1000 },
+    { requests }
+  );
+
+  assert.equal(requests[0].generationConfig.maxOutputTokens, undefined);
 });
