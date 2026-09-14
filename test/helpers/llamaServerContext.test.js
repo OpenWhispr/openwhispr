@@ -280,6 +280,48 @@ test("countPromptTokens returns null when the server cannot measure", async () =
   );
 });
 
+// --- reading the reply ---------------------------------------------------
+//
+// With thinking on, a reasoning model can spend its whole budget thinking and
+// come back with an empty `content` and everything in `reasoning_content`.
+// Returning that field pasted "Thinking Process: …" into the user's app (#2187).
+
+const MESSAGES = [{ role: "user", content: "hi" }];
+
+function withReply(message, finishReason = "stop") {
+  return withStubServer({
+    "/v1/chat/completions": () => ({
+      payload: { choices: [{ message, finish_reason: finishReason }] },
+    }),
+  });
+}
+
+test("reasoning never stands in for the answer when thinking was requested", async () => {
+  const reasoningOnly = withReply(
+    { content: "", reasoning_content: "Thinking Process:\n\n1. Analyze" },
+    "length"
+  );
+  await reasoningOnly(async (manager) => {
+    assert.equal(await manager.inference(MESSAGES, { disableThinking: false }), "");
+  });
+});
+
+test("an answer routed into reasoning_content with thinking suppressed is still returned", async () => {
+  // Some llama-server builds do this despite enable_thinking: false (#809).
+  const misrouted = withReply({ content: "", reasoning_content: "Cleaned text." });
+  await misrouted(async (manager) => {
+    assert.equal(await manager.inference(MESSAGES, { disableThinking: true }), "Cleaned text.");
+  });
+});
+
+test("content is returned over reasoning_content whether or not thinking was on", async () => {
+  const both = withReply({ content: "Cleaned text.", reasoning_content: "Thinking Process:" });
+  await both(async (manager) => {
+    assert.equal(await manager.inference(MESSAGES, { disableThinking: false }), "Cleaned text.");
+    assert.equal(await manager.inference(MESSAGES, {}), "Cleaned text.");
+  });
+});
+
 // --- Vulkan context step-down --------------------------------------------
 //
 // Sizing the context to the request is bounded by SYSTEM RAM, but a discrete

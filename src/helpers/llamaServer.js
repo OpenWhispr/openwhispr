@@ -722,7 +722,8 @@ class LlamaServerManager {
 
     // Without this, Qwen chat templates leave `message.content` empty and
     // route output into `reasoning_content`. Non-Qwen templates ignore it.
-    if (options.disableThinking !== false) {
+    const suppressThinking = options.disableThinking !== false;
+    if (suppressThinking) {
       requestBody.chat_template_kwargs = { enable_thinking: false };
     }
 
@@ -772,7 +773,11 @@ class LlamaServerManager {
                 return;
               }
               const message = response.choices?.[0]?.message;
-              const text = message?.content || message?.reasoning_content || "";
+              // Some builds still route a suppressed-thinking answer into
+              // `reasoning_content` (#809). With thinking on, that field is the
+              // reasoning itself, which must never stand in for the answer (#2187).
+              const text =
+                message?.content || (suppressThinking && message?.reasoning_content) || "";
               resolve(text.trim());
             } catch (e) {
               reject(new Error(`Failed to parse llama-server response: ${e.message}`));
