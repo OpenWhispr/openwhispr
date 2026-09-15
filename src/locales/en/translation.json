@@ -701,6 +701,11 @@
       "title": "Required models missing",
       "description": "Your organization requires these models on this device: {{models}}.",
       "download": "Download"
+    },
+    "cloudNudge": {
+      "title": "You're signed in",
+      "description": "Dictation still runs on your own setup. You can switch to OpenWhispr Cloud anytime.",
+      "action": "Open Settings"
     }
   },
   "reasoning": {

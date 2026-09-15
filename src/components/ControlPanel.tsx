@@ -6,6 +6,7 @@ import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedTex
 import { Download, RefreshCw, Loader2, AlertTriangle, Zap } from "./icons";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
+import SignInPrompt from "./SignInPrompt";
 import { RequiredModelsBanner } from "./RequiredModelsBanner";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
@@ -896,6 +897,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           <ReferralModal open={showReferrals} onOpenChange={setShowReferrals} />
         </Suspense>
       )}
+
+      <SignInPrompt
+        isSignedIn={isSignedIn}
+        onOpenTranscriptionSettings={() => {
+          setSettingsSection("transcription");
+          setShowSettings(true);
+        }}
+      />
 
       <AcceptInvitationModal
         token={invitationToken}

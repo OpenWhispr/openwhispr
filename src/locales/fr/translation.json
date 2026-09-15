@@ -701,6 +701,11 @@
       "title": "Modèles requis manquants",
       "description": "Votre organisation exige ces modèles sur cet appareil : {{models}}.",
       "download": "Télécharger"
+    },
+    "cloudNudge": {
+      "title": "Vous êtes connecté",
+      "description": "La dictée utilise toujours votre propre configuration. Vous pouvez passer à OpenWhispr Cloud à tout moment.",
+      "action": "Ouvrir les Réglages"
     }
   },
   "reasoning": {

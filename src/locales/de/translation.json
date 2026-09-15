@@ -701,6 +701,11 @@
       "title": "Erforderliche Modelle fehlen",
       "description": "Ihre Organisation erfordert diese Modelle auf diesem Gerät: {{models}}.",
       "download": "Herunterladen"
+    },
+    "cloudNudge": {
+      "title": "Du bist angemeldet",
+      "description": "Das Diktieren läuft weiter über deine eigene Einrichtung. Du kannst jederzeit zu OpenWhispr Cloud wechseln.",
+      "action": "Einstellungen öffnen"
     }
   },
   "reasoning": {

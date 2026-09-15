@@ -35,7 +35,7 @@ import {
 import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
-import { useStartOnboarding } from "../../hooks/useStartOnboarding";
+import { requestSignIn } from "../../stores/signInPromptStore";
 import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
@@ -934,8 +934,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
   };
 
-  const handleCreateAccount = useStartOnboarding();
-
   const switchToCloud = () => {
     setUploadTranscriptionMode("openwhispr");
     setUploadCloudTranscriptionMode("openwhispr");
@@ -1154,7 +1152,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               requiresAccount={requiresAccount}
               isProUser={!!isProUser}
               onUpgrade={() => usage?.openCheckout()}
-              onCreateAccount={handleCreateAccount}
+              onCreateAccount={requestSignIn}
               onSwitchToCloud={switchToCloud}
               onOpenSettings={onOpenSettings}
             />

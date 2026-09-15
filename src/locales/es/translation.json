@@ -701,6 +701,11 @@
       "title": "Faltan modelos requeridos",
       "description": "Tu organización requiere estos modelos en este dispositivo: {{models}}.",
       "download": "Descargar"
+    },
+    "cloudNudge": {
+      "title": "Has iniciado sesión",
+      "description": "El dictado sigue usando tu propia configuración. Puedes cambiar a OpenWhispr Cloud cuando quieras.",
+      "action": "Abrir Ajustes"
     }
   },
   "reasoning": {

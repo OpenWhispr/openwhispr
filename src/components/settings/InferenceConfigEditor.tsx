@@ -26,10 +26,10 @@ import {
   enterpriseProviderName,
 } from "../../models/ModelRegistry";
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
+import { requestSignIn } from "../../stores/signInPromptStore";
 import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
-import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",
@@ -53,7 +53,6 @@ export default function InferenceConfigEditor({
   allowedModes,
 }: InferenceConfigEditorProps) {
   const { t } = useTranslation();
-  const startOnboarding = useStartOnboarding();
   const policyState = usePolicySnapshot();
   const config = useSettingsStore(
     useShallow((settings) =>
@@ -124,7 +123,7 @@ export default function InferenceConfigEditor({
     (mode: InferenceMode) => {
       if (!isModeAllowed(mode)) return;
       if (mode === "openwhispr" && !isSignedIn) {
-        startOnboarding();
+        requestSignIn();
         return;
       }
       if (mode === effectiveMode) return;
@@ -145,15 +144,7 @@ export default function InferenceConfigEditor({
 
       onModeChange?.(mode);
     },
-    [
-      scope,
-      config.provider,
-      effectiveMode,
-      isSignedIn,
-      onModeChange,
-      isModeAllowed,
-      startOnboarding,
-    ]
+    [scope, config.provider, effectiveMode, isSignedIn, onModeChange, isModeAllowed]
   );
 
   const setMode = setField("mode");
