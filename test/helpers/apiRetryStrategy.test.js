@@ -104,3 +104,20 @@ test("withRetry keeps retrying a 5xx up to maxRetries", async () => {
   );
   assert.equal(attempts, 3, "initial attempt plus two retries");
 });
+
+test("withRetry makes exactly one attempt for a client-side deadline", async () => {
+  const { withRetry, createApiRetryStrategy } = await load();
+  const { llmRequestTimeoutError } = await import("../../src/helpers/llmRequestTimeout.js");
+
+  let attempts = 0;
+  const expire = async () => {
+    attempts += 1;
+    throw llmRequestTimeoutError(600);
+  };
+
+  await assert.rejects(
+    () => withRetry(expire, { ...createApiRetryStrategy(), initialDelay: 1 }),
+    /Request timed out after 600s/
+  );
+  assert.equal(attempts, 1, "each retry of an expired deadline is another billed request");
+});

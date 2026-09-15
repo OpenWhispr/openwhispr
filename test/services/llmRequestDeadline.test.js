@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 // Generate AI Summary on a bring-your-own-key provider sends a whole transcript
 // to a model that may reason for a minute or more before writing. The 30-second
@@ -147,4 +148,93 @@ test("dictation cleanup keeps its 30-second deadline", async (t) => {
   await request;
 
   assert.match(outcome?.error?.message ?? "", /Request timed out after 30s/);
+});
+
+// The provider tests above prove each client honours the scope. This one
+// proves the scope arrives: the note store's overrides go through the real
+// ReasoningService dispatch (managed-scope resolution, provider selection,
+// retry) to the OpenAI client, and the request still outlives the dictation
+// deadline and is sent once.
+test("a note request through the real ReasoningService survives the dictation deadline and is sent once", async (t) => {
+  installBrowserGlobals(t, {
+    window: { electronAPI: { getOpenAIKey: async () => "test-key" } },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-note-deadline-test-" });
+  const reasoningService = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({ status: "unmanaged", appVersion: "1.10.1", policy: null });
+  const { buildNoteFormattingOverrides } = await vite.ssrLoadModule(
+    "/helpers/noteFormattingOverrides.js"
+  );
+  t.after(() => reasoningService.destroy());
+
+  try {
+    await runDeadlineScenario(t, () =>
+      reasoningService.processText(
+        "## Meeting Transcript\n" + "Alice: we agreed to ship on Friday.\n".repeat(200),
+        "gpt-5.6-terra",
+        null,
+        {
+          systemPrompt: "Summarize the meeting.",
+          maxTokens: 4096,
+          temperature: 0.3,
+          ...buildNoteFormattingOverrides({ mode: "providers", provider: "openai" }, false),
+        }
+      )
+    );
+  } finally {
+    // Hand real timers back before the harness tears the Vite server down.
+    t.mock.timers.reset();
+  }
+});
+
+// Tinfoil goes through the OpenAI SDK, which reports an expired deadline as a
+// connection error; without the mapping, withRetry would re-send it.
+test("Tinfoil note formatting passes the long deadline to the SDK and does not retry its timeout", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-tinfoil-deadline-test-",
+    mockModules: {
+      "/tinfoilClient": `
+        export const getTinfoilChatClient = async () => ({
+          chat: {
+            completions: {
+              create: async (_body, options) => {
+                globalThis.__tinfoilCreateCalls.push(options);
+                throw Object.assign(new Error("Request timed out."), {
+                  name: "APIConnectionTimeoutError",
+                });
+              },
+            },
+          },
+        });
+      `,
+    },
+  });
+  globalThis.__tinfoilCreateCalls = [];
+  t.after(() => {
+    delete globalThis.__tinfoilCreateCalls;
+  });
+  const { tinfoilProvider } = await vite.ssrLoadModule(
+    "/services/ai/inferenceProviders/tinfoil.ts"
+  );
+
+  await assert.rejects(
+    tinfoilProvider.call({
+      text: "Alice: we agreed to ship on Friday.",
+      model: "glm-5-3",
+      agentName: null,
+      config: NOTE_CONFIG,
+      ctx: CTX,
+    }),
+    /Request timed out after 600s/
+  );
+
+  assert.equal(
+    globalThis.__tinfoilCreateCalls.length,
+    1,
+    "an expired deadline must not be re-sent"
+  );
+  assert.equal(globalThis.__tinfoilCreateCalls[0].timeout, 600_000);
+  assert.equal(globalThis.__tinfoilCreateCalls[0].maxRetries, 0);
 });

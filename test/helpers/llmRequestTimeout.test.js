@@ -34,3 +34,44 @@ test("a deadline error carries the timeout code and the seconds it waited", asyn
   assert.equal(error.message, "Request timed out after 30s");
   assert.equal(error.code, LLM_REQUEST_TIMEOUT_CODE);
 });
+
+// Every scope has to say whether someone is sitting there waiting for the
+// answer. The 1.10.1 note timeout came from a background task silently
+// inheriting the deadline of the one interactive task the constant was written
+// for; a scope added here without a verdict fails the test.
+const DEADLINE_CLASS_BY_SCOPE = {
+  dictationCleanup: "interactive", // user is waiting to paste
+  dictationAgent: "interactive",
+  dictationAgentVision: "interactive",
+  dictationTranslation: "interactive",
+  chatIntelligence: "interactive", // typed chat; streaming carries its own idle deadline
+  noteFormatting: "background", // whole transcript, runs off-screen with a cancel button
+};
+const INTERACTIVE_MAX_SECONDS = 60;
+const BACKGROUND_MIN_SECONDS = 300;
+
+test("every inference scope is classified as interactive or background, and its deadline matches", async () => {
+  const { INFERENCE_SCOPES } = await import("../../src/config/inferenceScopes.ts");
+  const { getLlmRequestTimeoutSeconds } = await load();
+
+  assert.deepEqual(
+    Object.keys(INFERENCE_SCOPES).sort(),
+    Object.keys(DEADLINE_CLASS_BY_SCOPE).sort(),
+    "a new inference scope must be classified in DEADLINE_CLASS_BY_SCOPE: does a user wait on it?"
+  );
+
+  for (const [scope, kind] of Object.entries(DEADLINE_CLASS_BY_SCOPE)) {
+    const seconds = getLlmRequestTimeoutSeconds({ scope });
+    if (kind === "interactive") {
+      assert.ok(
+        seconds <= INTERACTIVE_MAX_SECONDS,
+        `${scope}: someone is waiting, so its deadline must be at most ${INTERACTIVE_MAX_SECONDS}s (got ${seconds}s)`
+      );
+    } else {
+      assert.ok(
+        seconds >= BACKGROUND_MIN_SECONDS,
+        `${scope}: a whole document goes through the model, so its deadline must be at least ${BACKGROUND_MIN_SECONDS}s (got ${seconds}s)`
+      );
+    }
+  }
+});
