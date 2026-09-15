@@ -58,7 +58,7 @@ export const tinfoilProvider: InferenceProvider = {
       } catch (error) {
         // The SDK reports an expired deadline as a connection error, which
         // withRetry would otherwise treat as a network drop and re-send.
-        if ((error as Error)?.name === "APIConnectionTimeoutError") {
+        if ((error as Error).name === "APIConnectionTimeoutError") {
           throw llmRequestTimeoutError(timeoutSeconds);
         }
         throw error;
