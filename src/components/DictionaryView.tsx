@@ -1,18 +1,52 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpen, CornerDownLeft, Download, Pencil, Plus, Sparkles, Upload, X } from "./icons";
+import {
+  BookOpen,
+  ChevronDown,
+  CornerDownLeft,
+  Download,
+  FileText,
+  Pencil,
+  Plus,
+  Sparkles,
+  Upload,
+  X,
+} from "./icons";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useToast } from "./ui/useToast";
 import SnippetsView from "./SnippetsView";
 import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
 import { parseDictionaryImportText } from "../helpers/dictionaryImport";
+import { planDragonImport } from "../helpers/dragonImport";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { WHISPER_DECODER_PROMPT_CHARS } from "../utils/dictionaryPromptCap";
+
+interface DragonPreview {
+  fileName: string;
+  total: number;
+  add: string[];
+  skippedExisting: number;
+  unreadableLines: number;
+  propertiesIgnored: boolean;
+}
+
+// Main-process codes → copy. Anything else falls through to "generic".
+const DRAGON_ERROR_KEYS: Record<string, string> = {
+  EMPTY_FILE: "dictionary.dragonImport.error.emptyFile",
+  UNSUPPORTED_XML: "dictionary.dragonImport.error.unsupportedXml",
+  FILE_TOO_LARGE: "dictionary.dragonImport.error.fileTooLarge",
+};
 
 export default function DictionaryView() {
   const { t } = useTranslation();
@@ -27,6 +61,10 @@ export default function DictionaryView() {
   const [editValue, setEditValue] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const addInputRef = useRef<HTMLInputElement>(null);
+  const [dragonPreview, setDragonPreview] = useState<DragonPreview | null>(null);
+  // Guards double-clicks: the handler reads stale closure state, so state
+  // alone can't stop a second picker opening in the same frame.
+  const dragonPickInFlight = useRef(false);
 
   const pendingImportCount = useMemo(() => parseDictionaryImportText(bulkText).length, [bulkText]);
 
@@ -113,6 +151,63 @@ export default function DictionaryView() {
     }
   }, [customDictionary, toast, t]);
 
+  const handleDragonImport = useCallback(async () => {
+    if (dragonPickInFlight.current) return;
+    dragonPickInFlight.current = true;
+    try {
+      const result = await window.electronAPI?.dragonImportPickAndParse?.();
+      if (!result || result.canceled) return;
+      if (!result.success) {
+        toast({
+          title: t("dictionary.dragonImport.failedTitle"),
+          description: t(
+            DRAGON_ERROR_KEYS[result.error ?? ""] ?? "dictionary.dragonImport.error.generic"
+          ),
+          variant: "destructive",
+        });
+        return;
+      }
+      const words = result.words ?? [];
+      const { add, skippedExisting } = planDragonImport(words, customDictionary);
+      setDragonPreview({
+        fileName: result.fileName ?? "",
+        total: words.length,
+        add,
+        skippedExisting,
+        unreadableLines: result.unreadableLines ?? 0,
+        propertiesIgnored: result.propertiesIgnored ?? false,
+      });
+    } catch {
+      toast({
+        title: t("dictionary.dragonImport.failedTitle"),
+        description: t("dictionary.dragonImport.error.generic"),
+        variant: "destructive",
+      });
+    } finally {
+      dragonPickInFlight.current = false;
+    }
+  }, [customDictionary, toast, t]);
+
+  const confirmDragonImport = useCallback(() => {
+    if (!dragonPreview || dragonPreview.add.length === 0) return;
+    updateCustomDictionary({ add: dragonPreview.add });
+    toast({ title: t("dictionary.dragonImport.done", { count: dragonPreview.add.length }) });
+  }, [dragonPreview, updateCustomDictionary, toast, t]);
+
+  const dragonDescription = useMemo(() => {
+    if (!dragonPreview) return "";
+    const found = t("dictionary.dragonImport.found", {
+      count: dragonPreview.total,
+      fileName: dragonPreview.fileName,
+    });
+    if (dragonPreview.skippedExisting === 0) return found;
+    const skipped =
+      dragonPreview.add.length === 0
+        ? t("dictionary.dragonImport.nothingNew")
+        : t("dictionary.dragonImport.alreadyPresent", { count: dragonPreview.skippedExisting });
+    return `${found} ${skipped}`;
+  }, [dragonPreview, t]);
+
   const emptyState = (
     <div className="flex flex-col items-center text-center py-8">
       <div className="w-10 h-10 rounded-[10px] bg-gradient-to-b from-primary/8 to-primary/4 dark:from-primary/12 dark:to-primary/6 border border-primary/10 dark:border-primary/15 flex items-center justify-center mb-3.5">
@@ -147,6 +242,29 @@ export default function DictionaryView() {
         variant="destructive"
       />
 
+      <ConfirmDialog
+        open={dragonPreview !== null}
+        onOpenChange={(open) => {
+          if (!open) setDragonPreview(null);
+        }}
+        title={t("dictionary.dragonImport.title")}
+        description={dragonDescription}
+        confirmText={t("dictionary.dragonImport.confirm", {
+          count: dragonPreview?.add.length ?? 0,
+        })}
+        confirmDisabled={!dragonPreview || dragonPreview.add.length === 0}
+        onConfirm={confirmDragonImport}
+      >
+        {dragonPreview && (dragonPreview.unreadableLines > 0 || dragonPreview.propertiesIgnored) ? (
+          <p className="text-xs text-foreground/45">
+            {dragonPreview.unreadableLines > 0 &&
+              t("dictionary.dragonImport.unreadable", { count: dragonPreview.unreadableLines })}
+            {dragonPreview.unreadableLines > 0 && dragonPreview.propertiesIgnored && " "}
+            {dragonPreview.propertiesIgnored && t("dictionary.dragonImport.propertiesIgnored")}
+          </p>
+        ) : null}
+      </ConfirmDialog>
+
       <div className="px-5 pt-4">
         <TabsList className="h-7 p-0.5 rounded-[7px]">
           <TabsTrigger value="dictionary" className="h-6 px-2.5 text-xs rounded-[5px]">
@@ -172,7 +290,7 @@ export default function DictionaryView() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleAdd();
                 }}
-                className="w-full h-8 text-xs pe-24 placeholder:text-foreground/45"
+                className="w-full h-8 text-xs pe-40 placeholder:text-foreground/45"
               />
               <div className="absolute end-2.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
                 <button
@@ -185,13 +303,25 @@ export default function DictionaryView() {
                   <CornerDownLeft size={10} />
                 </button>
                 <div className="w-px h-3.5 bg-foreground/10 dark:bg-white/8" />
-                <button
-                  onClick={() => setShowBulkImport(true)}
-                  aria-label={t("dictionary.importWords")}
-                  className="text-foreground/45 hover:text-foreground/60 transition-colors"
-                >
-                  <Upload size={11} />
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-1 text-xs text-foreground/45 hover:text-foreground/60 data-[state=open]:text-primary transition-colors">
+                      <Upload size={11} />
+                      {t("dictionary.importMenu")}
+                      <ChevronDown size={10} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem className="gap-2.5" onSelect={() => setShowBulkImport(true)}>
+                      <Upload size={14} className="shrink-0 opacity-70" />
+                      {t("dictionary.importList")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="gap-2.5" onSelect={handleDragonImport}>
+                      <FileText size={14} className="shrink-0 opacity-70" />
+                      {t("dictionary.importFromDragon")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </div>

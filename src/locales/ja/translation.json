@@ -3230,6 +3230,28 @@
     "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",
     "addFirstWord": "最初の単語を追加",
     "importList": "リストをインポート",
+    "importMenu": "インポート",
+    "importFromDragon": "Dragon からインポート",
+    "dragonImport": {
+      "title": "Dragon からインポート",
+      "found_one": "{{fileName}} に {{count}} 個の単語が見つかりました。",
+      "found_other": "{{fileName}} に {{count}} 個の単語が見つかりました。",
+      "alreadyPresent": "すでに辞書にあるためスキップ: {{count}} 個。",
+      "nothingNew": "このファイルの単語はすべてすでに辞書にあります。",
+      "unreadable": "読み取れなかったためスキップした行: {{count}} 行。",
+      "propertiesIgnored": "Dragon の書式プロパティはインポートされません。",
+      "confirm_one": "{{count}} 個の単語をインポート",
+      "confirm_other": "{{count}} 個の単語をインポート",
+      "done_one": "Dragon から {{count}} 個の単語をインポートしました",
+      "done_other": "Dragon から {{count}} 個の単語をインポートしました",
+      "failedTitle": "インポートに失敗しました",
+      "error": {
+        "emptyFile": "そのファイルに単語が見つかりませんでした。",
+        "unsupportedXml": "Windows 版 Dragon のエクスポートではないようです。Dragon で「Vocabulary → Export custom word and phrase list」を選び、TXT 形式で保存してください。",
+        "fileTooLarge": "そのファイルは Dragon の単語リストとしては大きすぎます。",
+        "generic": "そのファイルを読み取れませんでした。"
+      }
+    },
     "agentDefault": "デフォルトで追加済み"
   },
   "referral": {
