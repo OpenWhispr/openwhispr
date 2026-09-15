@@ -487,13 +487,11 @@ export function getCloudModel(
     const model = provider.models.find((m) => m.id === modelId);
     if (model) return model;
   }
-
-  if (providerId === "openrouter") {
-    // OpenRouter model IDs include a vendor prefix, e.g. google/gemini-3.5-flash-lite.
-    const normalizedId = modelId.replace(/^[^/]+\//, "");
-    if (normalizedId !== modelId) return getCloudModel(normalizedId);
+  // OpenRouter ids carry a vendor prefix (google/gemini-3.5-flash-lite) that the
+  // registry stores without, so retry on the upstream id.
+  if (providerId === "openrouter" && modelId.includes("/")) {
+    return getCloudModel(modelId.slice(modelId.lastIndexOf("/") + 1));
   }
-
   return undefined;
 }
 
@@ -522,7 +520,7 @@ export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiAp
   // registry knows rejects temperature (Claude Opus 4.7+, #1417) must keep it
   // omitted here too — OpenRouter forwards the 400 rather than stripping it.
   if (provider === "openrouter" && modelId.includes("/")) {
-    const upstream = getCloudModel(modelId.slice(modelId.lastIndexOf("/") + 1));
+    const upstream = getCloudModel(modelId, provider);
     return { tokenParam: "max_tokens", supportsTemperature: upstream?.supportsTemperature ?? true };
   }
 
