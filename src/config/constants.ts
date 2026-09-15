@@ -120,6 +120,7 @@ export const API_ENDPOINTS = {
   ANTHROPIC: "https://api.anthropic.com/v1/messages",
   GEMINI: "https://generativelanguage.googleapis.com/v1beta",
   GROQ_BASE: "https://api.groq.com/openai/v1",
+  ATLASCLOUD_BASE: "https://api.atlascloud.ai/v1",
   CORTI_MODELS_BASE: "https://ai.eu.corti.app/v1",
   OPENROUTER_BASE: "https://openrouter.ai/api/v1",
   TRANSCRIPTION_BASE: DEFAULT_TRANSCRIPTION_BASE,
