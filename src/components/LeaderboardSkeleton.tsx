@@ -16,8 +16,10 @@ const ROW_WIDTHS = [
 export function LeaderboardBoardSkeleton() {
   const { t } = useTranslation();
   return (
-    <div role="status">
-      <span className="sr-only">{t("controlPanel.loading")}</span>
+    <>
+      <span role="status" className="sr-only">
+        {t("controlPanel.loading")}
+      </span>
       <LeaderboardPodiumSkeleton title={t("insights.leaderboard.topPerformers")} />
 
       <div className="overflow-x-auto">
@@ -62,7 +64,7 @@ export function LeaderboardBoardSkeleton() {
           </tbody>
         </table>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -75,9 +77,9 @@ export default function LeaderboardSkeleton() {
         <div className="flex min-w-0 items-center gap-3">
           <Skeleton className="size-9 shrink-0 rounded-lg" />
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold">
+            <p className="text-sm font-semibold">
               <Skeleton className="inline-block h-3.5 w-36 align-middle" />
-            </h2>
+            </p>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
               <Skeleton className="h-2.5 w-18" />
               <span aria-hidden="true" className="size-0.5 rounded-full bg-muted-foreground/50" />
