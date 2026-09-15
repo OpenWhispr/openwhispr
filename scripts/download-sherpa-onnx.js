@@ -441,8 +441,9 @@ async function main() {
 
   if (args.isCurrent) {
     if (!BINARIES[args.platformArch]) {
-      console.error(`Unsupported platform/arch: ${args.platformArch}`);
-      process.exitCode = 1;
+      console.log(
+        `[sherpa-onnx] No upstream build for ${args.platformArch}, skipping (Parakeet unavailable, whisper.cpp unaffected)`
+      );
       return;
     }
 
