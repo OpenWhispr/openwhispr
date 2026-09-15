@@ -25,10 +25,10 @@ import { applyChatCompletionsParams } from "../src/services/ai/chatRequestBody.t
 import { openaiProvider } from "../src/services/ai/inferenceProviders/openai.ts";
 import { geminiProvider } from "../src/services/ai/inferenceProviders/gemini.ts";
 import { getLlmRequestTimeoutSeconds } from "../src/helpers/llmRequestTimeout.js";
+import { NOTE_OUTPUT_MAX_TOKENS } from "../src/helpers/builtinActions.js";
 import logger from "../src/utils/logger.ts";
 import registryData from "../src/models/modelRegistryData.json" with { type: "json" };
 import {
-  NOTE_PROBE_MAX_TOKENS,
   buildNoteProbeSystemPrompt,
   buildNoteProbeTranscript,
   countWords,
@@ -143,9 +143,9 @@ async function probe(entry, model, apiKey) {
   return { ok: true };
 }
 
-// One reasoning-capable model per provider whose note path applies the app's
-// client deadline (Anthropic, local and OpenWhispr Cloud go through the main
-// process with none). Registry ids only, for the same reason as PROVIDERS.
+// One reasoning-capable model per keyed provider whose note request the
+// renderer sends itself under the app's client deadline. Registry ids only,
+// for the same reason as PROVIDERS.
 const NOTE_PROBES = [
   {
     id: "openai",
@@ -176,7 +176,7 @@ async function probeNoteFormatting(entry, apiKey) {
     ...entry.config,
     inferenceScope: "noteFormatting",
     systemPrompt: buildNoteProbeSystemPrompt(),
-    maxTokens: NOTE_PROBE_MAX_TOKENS,
+    maxTokens: NOTE_OUTPUT_MAX_TOKENS,
     temperature: 0.3,
   };
   const ctx = {
@@ -188,7 +188,7 @@ async function probeNoteFormatting(entry, apiKey) {
     callChatCompletionsApi: async () => {
       throw new Error("note probe does not delegate to chat completions");
     },
-    calculateMaxTokens: () => NOTE_PROBE_MAX_TOKENS,
+    calculateMaxTokens: () => NOTE_OUTPUT_MAX_TOKENS,
   };
 
   // The providers only log token usage; lift it out of the debug log for the report.

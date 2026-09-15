@@ -1,10 +1,5 @@
 /**
- * Fixture for the live note-formatting probe in scripts/llm-canary.mjs.
- *
- * Generate AI Summary sends a whole transcript through a model that may reason
- * for a minute or more before it writes. A 1-token health check cannot see
- * that class of failure: the request shape is fine, the model just takes
- * longer than the app's deadline (#2177 follow-up, 1.10.1). This builds a
+ * Fixture for the live note-formatting probe in scripts/llm-canary.mjs: a
  * meeting-sized transcript and the exact system prompt the note action store
  * sends for Detailed Notes, so the probe measures the request users make.
  */
@@ -16,9 +11,6 @@ import {
 
 /** A real 45-minute meeting lands around here; the 1.10.1 report was 2,170 words. */
 export const NOTE_PROBE_MIN_WORDS = 2000;
-
-/** Mirrors NOTE_OUTPUT_MAX_TOKENS in actionProcessingStore.ts (pinned by a test). */
-export const NOTE_PROBE_MAX_TOKENS = 4096;
 
 const SPEAKERS = ["You", "Priya", "Marcus"];
 

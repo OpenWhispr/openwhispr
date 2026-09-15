@@ -2,11 +2,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-// Generate AI Summary on a bring-your-own-key provider sends a whole transcript
-// to a model that may reason for a minute or more before writing. The 30-second
-// dictation deadline aborted every such request, and because a timeout counted
-// as a network fault, the request was retried three more times: about 1.5
-// minutes of spinner, four billed requests, and no note.
+// Generate AI Summary sends a whole transcript to a model that may reason for a
+// minute or more before writing. Under the 30-second dictation deadline every
+// such request was aborted and, counted as a network fault, retried three more
+// times: four billed requests and no note (1.10.1).
 
 const NOTE_CONFIG = {
   systemPrompt: "Summarize the meeting.",
@@ -186,6 +185,51 @@ test("a note request through the real ReasoningService survives the dictation de
     // Hand real timers back before the harness tears the Vite server down.
     t.mock.timers.reset();
   }
+});
+
+// Enterprise requests run in the main process, whose handler applies its own
+// 60-second default unless the renderer sends the deadline along.
+test("enterprise note formatting sends the long deadline to the main process", async (t) => {
+  const ipcConfigs = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        processEnterpriseReasoning: async (_text, _model, _agentName, config) => {
+          ipcConfigs.push(config);
+          return { success: true, text: "# Notes" };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-enterprise-deadline-test-",
+    mockModules: {
+      "/models/ModelRegistry": `
+        export const getOpenAiApiConfig = () => ({ supportsTemperature: true });
+        export const isEnterpriseProvider = (provider) => provider === "bedrock";
+      `,
+      "/stores/settingsStore": "export const getSettings = () => ({ cleanupProvider: 'bedrock' });",
+      "/services/ai/enterpriseSettings": "export const getEnterpriseCallSettings = () => ({});",
+      "/utils/logger": "export default { logReasoning() {} };",
+    },
+  });
+  const { enterpriseProvider } = await vite.ssrLoadModule(
+    "/services/ai/inferenceProviders/enterprise.ts"
+  );
+  const call = (config) =>
+    enterpriseProvider.call({
+      text: "Alice: we agreed to ship on Friday.",
+      model: "anthropic.claude-sonnet",
+      agentName: null,
+      config: { provider: "bedrock", ...config },
+      ctx: CTX,
+    });
+
+  await call(NOTE_CONFIG);
+  await call({});
+
+  assert.equal(ipcConfigs[0].timeoutMs, 600_000);
+  assert.equal(ipcConfigs[1].timeoutMs, 30_000, "dictation cleanup keeps the short deadline");
 });
 
 // Tinfoil goes through the OpenAI SDK, which reports an expired deadline as a

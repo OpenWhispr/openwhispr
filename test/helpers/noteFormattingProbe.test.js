@@ -1,10 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 // The live canary's note probe is only worth its weekly tokens if it sends the
 // request the app sends: a meeting-sized transcript in the editor's layout and
-// the exact Detailed Notes system prompt, under the note-formatting deadline.
+// the exact Detailed Notes system prompt.
 
 const load = () => import("../../scripts/lib/note-formatting-probe.mjs");
 
@@ -32,19 +31,4 @@ test("the probe sends the Detailed Notes prompt exactly as the note store assemb
   const detailed = BUILTIN_ACTIONS.find((action) => action.translationKey === DETAILED_NOTES_KEY);
 
   assert.equal(buildNoteProbeSystemPrompt(), MEETING_INPUT_PREAMBLE + detailed.prompt);
-});
-
-test("the probe's output budget matches the note store's", async (t) => {
-  const { NOTE_PROBE_MAX_TOKENS } = await load();
-  installBrowserGlobals(t);
-  const vite = await createRendererServer(t, {
-    cachePrefix: "openwhispr-note-probe-budget-test-",
-    mockModules: {
-      "/services/ReasoningService": "export default { processText: async () => '' };",
-      "/utils/generateTitle": "export const generateNoteTitle = async () => undefined;",
-    },
-  });
-  const { NOTE_OUTPUT_MAX_TOKENS } = await vite.ssrLoadModule("/stores/actionProcessingStore.ts");
-
-  assert.equal(NOTE_PROBE_MAX_TOKENS, NOTE_OUTPUT_MAX_TOKENS);
 });

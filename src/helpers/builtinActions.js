@@ -187,6 +187,20 @@ export const NOTE_INPUT_PREAMBLE = `The material is the user's own notes, possib
 
 `;
 
+/**
+ * Output budget for a formatted note.
+ *
+ * Without an explicit value this inherited the generic 2048-token default from
+ * calculateMaxTokens — roughly 1,500 words — so summaries of long meetings were
+ * cut off and saved anyway, with nothing to say they were incomplete (#2142).
+ *
+ * Deliberately not paired with requireCompleteOutput: unlike a selection edit,
+ * where a partial replacement corrupts the user's own text, a clipped summary
+ * is still worth keeping. The context preflight counts this reservation, so
+ * asking for more output room can grow the window rather than squeeze it.
+ */
+export const NOTE_OUTPUT_MAX_TOKENS = 4096;
+
 export const BUILTIN_ACTIONS = [
   {
     translationKey: GENERATE_NOTES_KEY,

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Notes
 
-- **Generate AI Summary with your own OpenAI, Gemini or Tinfoil key no longer times out on a real transcript.** Every bring-your-own-key request shared the 30-second deadline meant for dictation cleanup, and a timeout was treated like a dropped connection and retried three more times. A 2,000-word transcript through a reasoning model such as GPT-5.6 Terra needs longer than that to think before it writes, so the summary spun for about a minute and a half, four requests were billed, and it ended with a timeout error and no note. Note formatting now waits up to ten minutes, matching OpenAI's own client default, and a request that does hit its deadline fails once instead of being re-sent. Dictation cleanup keeps its 30-second deadline.
+- **Generate AI Summary with your own API key or an enterprise provider no longer times out on a real transcript.** Every bring-your-own-key request shared the 30-second deadline meant for dictation cleanup (enterprise providers had 60 seconds), and a timeout was treated like a dropped connection and retried three more times. A 2,000-word transcript through a reasoning model such as GPT-5.6 Terra needs longer than that to think before it writes, so the summary spun for about a minute and a half, four requests were billed, and it ended with a timeout error and no note. Note formatting now waits up to ten minutes, matching OpenAI's own client default, and a request that does hit its deadline fails once instead of being re-sent. Dictation cleanup keeps its 30-second deadline on every provider.
 
 ## [1.10.1] - 2026-09-14
 
