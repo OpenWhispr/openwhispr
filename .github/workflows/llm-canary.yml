@@ -1,7 +1,9 @@
 # Weekly live check that every LLM provider still accepts the exact request
 # shapes the app sends (reasoning params, token-limit param, temperature), plus
-# a model-catalog drift diff. Deliberately NOT part of PR CI: it exercises
-# external APIs and their failures are provider news, not code regressions.
+# a model-catalog drift diff and one meeting-sized Generate AI Summary request
+# per provider timed against the app's note-formatting deadline. Deliberately
+# NOT part of PR CI: it exercises external APIs and their failures are provider
+# news, not code regressions.
 name: llm-canary
 
 on:

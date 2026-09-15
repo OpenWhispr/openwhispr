@@ -137,8 +137,12 @@ test("localized sentences isolate technical interpolations without changing word
       /<BidiInterpolatedText[\s\S]*?updates\.whatsNew[\s\S]*?value=\{updateInfo\.version\}/,
     ],
     [
-      "src/components/TeamRosterSection.tsx",
+      "src/components/MemberRoster.tsx",
       /<BidiInterpolatedText[\s\S]*?members\.inviteFooter[\s\S]*?value=\{addSearch\.trim\(\)\}/,
+    ],
+    [
+      "src/components/notes/SpaceMembersPanel.tsx",
+      /<BidiInterpolatedText[\s\S]*?members\.invited[\s\S]*?value=\{invitedEmail\}/,
     ],
     [
       "src/components/IntegrationsView.tsx",
@@ -198,8 +202,8 @@ test("user-authored names and previews detect direction at their display boundar
     ["src/components/notes/CreateSpaceDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{item\.name\}/],
     ["src/components/notes/CreateSpaceDialog.tsx", /<p\s+dir="auto"[^>]*>\s*\{workspace\.name\}/],
     ["src/components/notes/CreateSpaceDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
-    ["src/components/notes/SpaceMembersDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{teamRef\.name\}/],
-    ["src/components/notes/SpaceMembersDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
+    ["src/components/notes/SpaceGroupsSection.tsx", /<span\s+dir="auto"[^>]*>\s*\{teamRef\.name\}/],
+    ["src/components/notes/SpaceGroupsSection.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
     [
       "src/components/settings/WorkspaceSection.tsx",
       /<h2\s+dir="auto"[^>]*>\s*\{workspace\.name\}/,

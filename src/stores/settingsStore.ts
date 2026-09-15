@@ -186,6 +186,15 @@ function readLocalProvider(key: string): LocalTranscriptionProvider {
   return stored === "nvidia" || stored === "cohere" ? stored : "whisper";
 }
 
+// Meeting/upload keys defaulted to "whisper" even when never stored, so a
+// fresh Parakeet/Cohere install resolved uploads against Whisper `base`.
+function readScopedLocalProvider(scopeKey: string): LocalTranscriptionProvider {
+  if (isBrowser && localStorage.getItem(scopeKey) === null) {
+    return readLocalProvider("localTranscriptionProvider");
+  }
+  return readLocalProvider(scopeKey);
+}
+
 function readBoolean(key: string, fallback: boolean): boolean {
   if (!isBrowser) return fallback;
   const stored = localStorage.getItem(key);
@@ -1689,7 +1698,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   meetingUseLocalWhisper: readBoolean("meetingUseLocalWhisper", false),
   meetingWhisperModel: readString("meetingWhisperModel", ""),
-  meetingLocalTranscriptionProvider: readLocalProvider("meetingLocalTranscriptionProvider"),
+  meetingLocalTranscriptionProvider: readScopedLocalProvider("meetingLocalTranscriptionProvider"),
   meetingParakeetModel: readString("meetingParakeetModel", ""),
   meetingCohereModel: readString("meetingCohereModel", ""),
   meetingCloudTranscriptionProvider: readString("meetingCloudTranscriptionProvider", ""),
@@ -1709,7 +1718,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   uploadUseLocalWhisper: readBoolean("uploadUseLocalWhisper", false),
   uploadWhisperModel: readString("uploadWhisperModel", ""),
-  uploadLocalTranscriptionProvider: readLocalProvider("uploadLocalTranscriptionProvider"),
+  uploadLocalTranscriptionProvider: readScopedLocalProvider("uploadLocalTranscriptionProvider"),
   uploadParakeetModel: readString("uploadParakeetModel", ""),
   uploadCohereModel: readString("uploadCohereModel", ""),
   uploadCloudTranscriptionProvider: readString("uploadCloudTranscriptionProvider", ""),
@@ -2555,6 +2564,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     s.updateTranscriptionSettings(settings);
     const {
       useLocalWhisper,
+      localTranscriptionProvider,
       cloudTranscriptionMode,
       cloudTranscriptionProvider,
       cloudTranscriptionModel,
@@ -2571,10 +2581,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     s.setMeetingTranscriptionMode(mode);
     s.setUploadTranscriptionMode(mode);
     s.setMeetingUseLocalWhisper(useLocalWhisper);
+    s.setMeetingLocalTranscriptionProvider(localTranscriptionProvider);
     s.setMeetingCloudTranscriptionMode(cloudTranscriptionMode);
     s.setMeetingCloudTranscriptionProvider(cloudTranscriptionProvider);
     s.setMeetingCloudTranscriptionModel(cloudTranscriptionModel);
     s.setUploadUseLocalWhisper(useLocalWhisper);
+    s.setUploadLocalTranscriptionProvider(localTranscriptionProvider);
     s.setUploadCloudTranscriptionMode(cloudTranscriptionMode);
     s.setUploadCloudTranscriptionProvider(cloudTranscriptionProvider);
     s.setUploadCloudTranscriptionModel(cloudTranscriptionModel);
@@ -3018,7 +3030,10 @@ export function selectPolicyEffectiveSettings(
   ) as Record<InferenceScope, ResolvedLLMConfig>;
 
   for (const scope of Object.keys(INFERENCE_SCOPES) as InferenceScope[]) {
-    const definition = INFERENCE_SCOPES[scope];
+    const definition: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
+    // An optional override with no model of its own is not a choice to clamp.
+    const rawModel = state[definition.storeKeys.model] as string | undefined;
+    if (definition.optional && !rawModel?.trim()) continue;
     const config = resolvedConfigs[scope];
     const selection = resolveEffectivePolicySelection(
       policyState,
@@ -3027,6 +3042,12 @@ export function selectPolicyEffectiveSettings(
       LLM_POLICY_CATALOG
     );
     if (!selection) continue;
+
+    if (definition.optional && selection.mode !== config.mode) {
+      // A forbidden override goes inert; Cloud would count as chosen even without a model.
+      writable[definition.storeKeys.model] = "";
+      continue;
+    }
 
     writable[definition.storeKeys.mode] = selection.mode;
     if (definition.storeKeys.cloudMode) {
@@ -3057,10 +3078,15 @@ export function selectPolicyEffectiveSettings(
       selection.mode === "local"
     ) {
       const providerChanged = selection.mode !== config.mode || provider !== config.provider;
-      writable[definition.storeKeys.model] =
-        !providerChanged && config.model
-          ? config.model
-          : defaultLlmModel(selection.mode, provider, state.bedrockRegion);
+      if (providerChanged && definition.optional) {
+        // A repointed override is no longer the user's choice: inert until they pick again.
+        writable[definition.storeKeys.model] = "";
+      } else {
+        writable[definition.storeKeys.model] =
+          !providerChanged && config.model
+            ? config.model
+            : defaultLlmModel(selection.mode, provider, state.bedrockRegion);
+      }
     }
   }
 

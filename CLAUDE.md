@@ -105,10 +105,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - `wasLaunchedAtLoginHidden()` decides whether this launch should go straight to the tray
   - `syncAutoStartEntry()` runs from `initializeCoreManagers()` and repairs entries written by older builds
   - Decision logic lives in `autoStartPolicy.js` (pure, unit-tested in `test/helpers/autoStartPolicy.test.js`)
-- **autoStartPolicy.js**: Electron-free launch-at-login decisions
+- **autoStartPolicy.js**: Electron-free launch-at-login and relaunch decisions
   - `HIDDEN_LAUNCH_FLAG` (`--hidden`) is how a login launch tells the app to start in the tray. Windows has no native equivalent (`openAsHidden` is macOS-only and a no-op on macOS 13+), so the flag rides on the login item's `args`; Linux puts it on the autostart entry's `Exec`; macOS uses `wasOpenedAtLogin` instead
   - On Windows, read the state from `executableWillLaunchAtLogin`, never from `openAtLogin`: `openAtLogin` only compares the `Run` value against the current executable and args and ignores the `StartupApproved` key that Task Manager and Settings write when a user disables a startup app
   - Reads and writes must pass identical `args`, or `openAtLogin` always reports false
+  - `getRelaunchOptions()` and `getRelaunchWaiter()` shape the `relaunch-app` IPC that follows `cleanup-app` (Reset app data; Delete account with device erase): the relaunch drops `--hidden` and any cold-start deep link, and an AppImage or Windows portable build is started again from its on-disk file (`$APPIMAGE`, `$PORTABLE_EXECUTABLE_FILE`) by a detached waiter, since both run from a directory that disappears when the app exits. The handler in `ipcHandlers.js` only quits under `npm run dev` and, on macOS with an update Squirrel already holds, hands the restart to the updater
 - **linuxAutostart.js**: Launch-at-login on Linux via an XDG autostart entry
   - `app.setLoginItemSettings()` is a no-op on Linux, so the entry is written directly to `$XDG_CONFIG_HOME/autostart/open-whispr.desktop`, matching the executable name electron-builder packages under
   - `Exec` resolves from `$APPIMAGE` first: `process.execPath` is the ephemeral AppImage FUSE mount
@@ -307,6 +308,8 @@ FFmpeg is bundled with the app and doesn't require system installation:
 6. Main process writes to temporary file
 7. whisper.cpp processes file → Result sent back
 8. Temporary file deleted
+
+For offline local engines (whisper.cpp, Parakeet/Orukeet, Cohere) the renderer also keeps a 16 kHz mono PCM copy of the same stream from the moment the mic opens (`pcmTap.js`, pre-roll included, capped at 4 minutes) and sends that WAV instead of the WebM, so no FFmpeg decode runs after stop; the WebM still goes to history and remains the fallback for cloud providers and long recordings.
 
 ### 3. Local Whisper Models (GGML format)
 

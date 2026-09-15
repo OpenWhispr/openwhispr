@@ -63,3 +63,58 @@ test("legacy microphone preferences retain their behavior", async () => {
   );
   assert.equal(getMicrophoneSelectionMode({ preferBuiltInMic: false }), "system");
 });
+
+test("system mode ignores Chromium's Windows 'communications' alias when matching the native default", async () => {
+  const { isCacheableMicrophoneResolution, resolveMicrophoneSelection } =
+    await import("../../src/helpers/microphoneSelection.js");
+  const expected = mic("9f2c1e5a7b3d", "Microphone (Realtek(R) Audio)");
+  const result = resolveMicrophoneSelection(
+    [
+      mic("default", "Default - Microphone (Realtek(R) Audio)"),
+      mic("communications", "Communications - Microphone (Realtek(R) Audio)"),
+      expected,
+    ],
+    { microphoneSelectionMode: "system" },
+    { name: "Microphone (Realtek(R) Audio)" }
+  );
+
+  assert.equal(result.device, expected);
+  assert.equal(result.status, "native-exact");
+  assert.equal(isCacheableMicrophoneResolution(result), true);
+});
+
+test("system mode ignores the alias when the native name is only contained in the Chromium label", async () => {
+  const { isCacheableMicrophoneResolution, resolveMicrophoneSelection } =
+    await import("../../src/helpers/microphoneSelection.js");
+  const expected = mic("9f2c1e5a7b3d", "Microphone (Realtek(R) Audio)");
+  const result = resolveMicrophoneSelection(
+    [
+      mic("default", "Default - Microphone (Realtek(R) Audio)"),
+      mic("communications", "Communications - Microphone (Realtek(R) Audio)"),
+      expected,
+    ],
+    { microphoneSelectionMode: "system" },
+    { name: "Realtek(R) Audio" }
+  );
+
+  assert.equal(result.device, expected);
+  assert.equal(result.status, "native-compatible");
+  assert.equal(isCacheableMicrophoneResolution(result), true);
+});
+
+test("built-in mode pins the physical built-in device, not Chromium's Windows aliases", async () => {
+  const { resolveMicrophoneSelection } = await import("../../src/helpers/microphoneSelection.js");
+  const expected = mic("9f2c1e5a7b3d", "Microphone Array (Realtek(R) Audio)");
+  const result = resolveMicrophoneSelection(
+    [
+      mic("default", "Default - Microphone Array (Realtek(R) Audio)"),
+      mic("communications", "Communications - Microphone Array (Realtek(R) Audio)"),
+      expected,
+      mic("7a1b", "Jabra Evolve2 65"),
+    ],
+    { microphoneSelectionMode: "built-in" }
+  );
+
+  assert.equal(result.device, expected);
+  assert.equal(result.status, "built-in");
+});

@@ -5,17 +5,10 @@ import {
   getActiveRecordingSessionId,
   getMicAnalyser,
   primeMeetingWorklet,
-  startRecording,
   stopRecording,
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
-import {
-  createMeetingAutoEndRestartContext,
-  requestMeetingRecordingAutoEnd,
-  runMeetingAutoEndRestart,
-  type MeetingAutoEndRestartContext,
-} from "../helpers/meetingRecordingSession";
-import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
+import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
 import { serializeTranscriptSegments } from "../utils/transcriptSpeakerState";
 import logger from "../utils/logger";
 
@@ -47,24 +40,6 @@ export default function MeetingRecordingMount(): null {
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
   const wasMicUnavailable = useRef(false);
   const wasSystemAudioSilent = useRef(false);
-  const pendingAutoEndRestart = useRef<MeetingAutoEndRestartContext | null>(null);
-  // The auto-end listeners are registered once, so they cannot close over `t`
-  // or `toast` directly without pinning the language they mounted with.
-  const notifyAutoEnded = useRef<() => void>(() => {});
-  const notifyRestartFailed = useRef<() => void>(() => {});
-
-  useEffect(() => {
-    notifyAutoEnded.current = () => {
-      toast({ title: t("notes.meeting.title"), description: t("notes.meeting.autoEnded") });
-    };
-    notifyRestartFailed.current = () => {
-      toast({
-        title: t("notes.meeting.title"),
-        description: t("notes.meeting.restartFailed"),
-        variant: "destructive",
-      });
-    };
-  }, [toast, t]);
 
   useEffect(() => {
     primeMeetingWorklet();
@@ -72,97 +47,19 @@ export default function MeetingRecordingMount(): null {
 
   useEffect(() => {
     const unsubscribeStop = window.electronAPI?.onMeetingAutoEndRequested?.((request) => {
-      const restartContext = createMeetingAutoEndRestartContext(
-        request.sessionId,
-        getActiveRecordingSessionId(),
-        useMeetingRecordingStore.getState()
-      );
-      if (!restartContext) return;
-
-      requestMeetingRecordingAutoEnd(
-        request,
-        stopRecording,
-        (sessionId, stopped) => {
-          // Every path that ends the recording without offering a restart card
-          // has to say so, or the recording just disappears.
-          const abandonRestart = () => {
-            if (pendingAutoEndRestart.current?.sessionId === sessionId) {
-              pendingAutoEndRestart.current = null;
-            }
-            notifyAutoEnded.current();
-          };
-
-          const completion = window.electronAPI?.meetingAutoEndCompleted;
-          if (!stopped || !completion) {
-            abandonRestart();
-            return;
-          }
-
-          pendingAutoEndRestart.current = restartContext;
-          void completion(sessionId)
-            .then((result) => {
-              if (!result.success) abandonRestart();
-            })
-            .catch((error) => {
-              abandonRestart();
-              logger.error(
-                "Meeting auto-end completion acknowledgment failed",
-                { error: error instanceof Error ? error.message : String(error), sessionId },
-                "meeting"
-              );
-            });
-        },
-        (error, sessionId) => {
-          logger.error(
-            "Meeting auto-end stop failed; recording is still running",
-            { error: error instanceof Error ? error.message : String(error), sessionId },
-            "meeting"
-          );
-        }
-      );
-    });
-
-    const unsubscribeRestart = window.electronAPI?.onMeetingAutoEndRestartRequested?.((request) => {
-      const context = pendingAutoEndRestart.current;
-      pendingAutoEndRestart.current = null;
-
-      void runMeetingAutoEndRestart(request, context, {
-        getActiveSessionId: getActiveRecordingSessionId,
-        getLatestSegments: () => useMeetingRecordingStore.getState().segments,
-        getNote: (noteId) => window.electronAPI?.getNote?.(noteId) ?? Promise.resolve(null),
-        parseSegments: parseTranscriptSegments,
-        startRecording,
-      })
-        .then((outcome) => {
-          // Main already closed the card and reported success, so an abort the
-          // user is not told about looks exactly like a restart that worked.
-          if (outcome.status === "started") return;
-          logger.error(
-            "Meeting recording restart aborted",
-            { reason: outcome.reason, sessionId: request.sessionId },
-            "meeting"
-          );
-          notifyRestartFailed.current();
-        })
-        .catch((error) => {
-          logger.error(
-            "Meeting recording restart failed",
-            { error: error instanceof Error ? error.message : String(error) },
-            "meeting"
-          );
-          notifyRestartFailed.current();
-        });
+      requestMeetingRecordingAutoEnd(request, stopRecording, (error, sessionId) => {
+        logger.error(
+          "Meeting auto-end stop failed; recording is still running",
+          { error: error instanceof Error ? error.message : String(error), sessionId },
+          "meeting"
+        );
+      });
     });
 
     return () => {
       unsubscribeStop?.();
-      unsubscribeRestart?.();
     };
   }, []);
-
-  useEffect(() => {
-    if (isRecording) pendingAutoEndRestart.current = null;
-  }, [isRecording]);
 
   // Crash-safety net moved out of the notes view: it must keep running when
   // the user switches views mid-recording.

@@ -6,10 +6,12 @@ interface PillCommandMenuProps {
   buttonRef: React.RefObject<HTMLDivElement | null>;
   isRecording: boolean;
   agentAllowed: boolean;
+  meetingAllowed: boolean;
   isHovered: boolean;
   setWindowInteractivity: (capture: boolean) => void;
   onToggleListening: () => void;
   onAskAssistant: () => void;
+  onStartMeeting: () => void;
   onHide: () => void;
   onClose: () => void;
 }
@@ -22,10 +24,12 @@ export function PillCommandMenu({
   buttonRef,
   isRecording,
   agentAllowed,
+  meetingAllowed,
   isHovered,
   setWindowInteractivity,
   onToggleListening,
   onAskAssistant,
+  onStartMeeting,
   onHide,
   onClose,
 }: PillCommandMenuProps): React.JSX.Element {
@@ -80,6 +84,17 @@ export function PillCommandMenu({
             onClick={onAskAssistant}
           >
             {t("app.commandMenu.askAssistant")}
+          </button>
+        </>
+      )}
+      {meetingAllowed && !isRecording && (
+        <>
+          <div className="h-px bg-border" />
+          <button
+            className="w-full px-3 py-2 text-start text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+            onClick={onStartMeeting}
+          >
+            {t("app.commandMenu.startMeetingRecording")}
           </button>
         </>
       )}

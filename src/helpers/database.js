@@ -1091,6 +1091,13 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      try {
+        // Direct space_members grant ('admin' | 'member'), distinct from the
+        // effective my_role: it decides whether the user can leave the space.
+        this.db.exec("ALTER TABLE spaces ADD COLUMN my_direct_role TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_cloud_space_id ON spaces(cloud_space_id) WHERE cloud_space_id IS NOT NULL"
       );
@@ -3688,7 +3695,8 @@ class DatabaseManager {
         this.db
           .prepare(
             `UPDATE spaces SET cloud_space_id = ?, workspace_id = ?, name = ?, emoji = ?, my_role = ?,
-               member_count = ?, teams = ?, deleted_at = NULL, updated_at = ? WHERE id = ?`
+               my_direct_role = ?, member_count = ?, teams = ?, deleted_at = NULL, updated_at = ?
+             WHERE id = ?`
           )
           .run(
             space.id,
@@ -3696,6 +3704,7 @@ class DatabaseManager {
             space.name,
             space.emoji ?? null,
             space.my_role ?? null,
+            space.my_direct_role ?? null,
             space.member_count ?? null,
             teamsJson,
             updatedAt,
@@ -3715,8 +3724,9 @@ class DatabaseManager {
       const result = this.db
         .prepare(
           `INSERT INTO spaces (client_space_id, cloud_space_id, workspace_id, kind, name, emoji,
-             sort_order, my_role, member_count, teams, sync_status, created_at, updated_at)
-           VALUES (?, ?, ?, 'team', ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
+             sort_order, my_role, my_direct_role, member_count, teams, sync_status, created_at,
+             updated_at)
+           VALUES (?, ?, ?, 'team', ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
         )
         .run(
           randomUUID(),
@@ -3726,6 +3736,7 @@ class DatabaseManager {
           space.emoji ?? null,
           (maxOrder?.max_order ?? 0) + 1,
           space.my_role ?? null,
+          space.my_direct_role ?? null,
           space.member_count ?? null,
           teamsJson,
           space.created_at || updatedAt,

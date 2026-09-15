@@ -144,6 +144,31 @@ test("with automatic updates off, an available update waits for the user", () =>
   manager.cleanup();
 });
 
+test("deferInstallOnQuit clears the flag the NSIS and AppImage quit handlers read", () => {
+  const autoUpdater = makeAutoUpdater();
+  const manager = createUpdateManager(autoUpdater);
+  assert.equal(autoUpdater.autoInstallOnAppQuit, true);
+
+  manager.deferInstallOnQuit();
+  assert.equal(autoUpdater.autoInstallOnAppQuit, false);
+
+  manager.cleanup();
+});
+
+test("only a macOS update that Squirrel already holds counts as staged", () => {
+  const autoUpdater = makeAutoUpdater();
+  const manager = createUpdateManager(autoUpdater);
+  assert.equal(manager.hasStagedUpdate(), false);
+
+  autoUpdater.squirrelDownloadedUpdate = true;
+  assert.equal(manager.hasStagedUpdate(), true);
+
+  setPlatform("win32");
+  assert.equal(manager.hasStagedUpdate(), false);
+
+  manager.cleanup();
+});
+
 test("enabling automatic updates after the startup check found one starts the download", () => {
   const autoUpdater = makeAutoUpdater();
   const manager = createUpdateManager(autoUpdater);

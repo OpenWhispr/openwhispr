@@ -7,6 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const modelRegistryData = require("../../src/models/modelRegistryData.json");
+const { buildGguf, LLAMA_3_2_3B_ENTRIES } = require("./harness/ggufFixtures");
 
 // Drives the primary local LLM path end to end — the IPC bridge
 // (localReasoningBridge) → modelManagerBridge.runInference →
@@ -52,7 +53,11 @@ function loadChain() {
   }
 }
 
-const OVER_MIN_FILE_SIZE = Buffer.alloc(1_000_001, 1);
+// A real GGUF header padded past the minimum-size check, so the context
+// ceiling is computed from the model's own architecture rather than falling
+// back to the baseline the moment a caller asks for a bigger window.
+const MODEL_FILE = Buffer.concat([buildGguf(LLAMA_3_2_3B_ENTRIES), Buffer.alloc(1_000_001, 1)]);
+const ROOMY_MACHINE_BYTES = 48 * 1024 * 1024 * 1024;
 
 // Stands up the stub server plus a bridge whose model manager already
 // believes llama-server is running that model on the stub's port.
@@ -78,7 +83,8 @@ async function setupChain(t, respond) {
   const model = modelRegistryData.localProviders[0].models[0];
   modelManager.ensureInitialized();
   await fs.mkdir(modelManager.modelsDir, { recursive: true });
-  await fs.writeFile(path.join(modelManager.modelsDir, model.fileName), OVER_MIN_FILE_SIZE);
+  await fs.writeFile(path.join(modelManager.modelsDir, model.fileName), MODEL_FILE);
+  modelManager._systemMemoryBytes = () => ROOMY_MACHINE_BYTES;
 
   const serverManager = modelManager.serverManager;
   serverManager.cachedServerBinaryPaths = { default: "/stub/llama-server" };
@@ -88,7 +94,7 @@ async function setupChain(t, respond) {
   modelManager.currentServerModelId = model.id;
   t.after(() => serverManager.clearIdleTimer());
 
-  return { bridge, modelId: model.id, requests };
+  return { bridge, modelId: model.id, requests, serverManager };
 }
 
 const completion = (finishReason, content) => ({
@@ -117,4 +123,31 @@ test("an explicit temperature of 0 reaches llama-server instead of the 0.7 defau
 
   assert.equal(requests.length, 1);
   assert.equal(requests[0].temperature, 0);
+});
+
+test("a caller's contextSize reaches the server start (regression: it was dropped)", async (t) => {
+  // ReasoningConfig.contextSize was declared, written by selection editing,
+  // and then rebuilt away in this bridge, so it never reached anything. The
+  // field only means something now that the server can grow, so the wiring
+  // needs a guard that fails if anyone rebuilds the config object again.
+  // It raises the floor only as far as the machine's ceiling allows, which is
+  // why this harness has to present a machine and a model that can afford it.
+  const { bridge, modelId, serverManager } = await setupChain(t, () => completion("stop", "ok"));
+
+  const started = [];
+  serverManager._doStart = async (modelPath, options = {}) => {
+    started.push(options.contextSize);
+    serverManager.ready = true;
+    serverManager.process = {};
+  };
+  serverManager.stop = async () => {
+    serverManager.ready = false;
+    serverManager.process = null;
+    serverManager.contextSize = null;
+  };
+  serverManager.contextSize = 16384;
+
+  await bridge.processText("short text", modelId, { contextSize: 32768 });
+
+  assert.deepEqual(started, [32768]);
 });

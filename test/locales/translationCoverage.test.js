@@ -10,6 +10,9 @@ const LOCALES = path.join(SRC, "locales");
 const NAMESPACES = ["translation", "prompts"];
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
 const T_CALL = /\bt\(\s*(['"`])([A-Za-z0-9_.-]+)\1/g;
+// messageKey values are passed to t() as a variable, so the T_CALL scan
+// cannot see them and a typo would render as the raw key string.
+const MESSAGE_KEY = /\bmessageKey\s*[:=]\s*(['"`])([A-Za-z0-9_.-]+)\1/g;
 const INTERPOLATION = /\{\{\s*([\w.]+)/g;
 const ARABIC_PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"];
 const ARABIC_PLURAL_BASES = [
@@ -28,7 +31,6 @@ const ARABIC_PLURAL_BASES = [
   "workspaces.join.memberCount",
   "notes.spaces.noteCount",
   "notes.spaces.invitedTo",
-  "notes.spaces.teamsMembers.affectsOtherSpaces",
   "notes.addToFolder.addCount",
   "notes.overview.meta.folders",
   "notes.overview.meta.members",
@@ -46,12 +48,6 @@ const ARABIC_NUMBER_NEUTRAL_TEMPLATES = {
     "عدد الأجزاء الصوتية التي تعذر تفريغها: {{failed}} من أصل {{total}}.",
   "settingsPage.account.planDescriptions.trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
   "emailVerification.resendIn": "إعادة الإرسال بعد {{seconds}} ث",
-  "meetingNotification.autoEnd.body.micReleased":
-    "لا يستخدم أي تطبيق آخر ميكروفونك، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
-  "meetingNotification.autoEnd.body.silence":
-    "لم يُكتشف أي صوت، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
-  "meetingNotification.autoEnd.body.processExit":
-    "أُغلق تطبيق الاجتماع، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
   "insights.wpmCoverage": "استنادًا إلى نسبة {{count}}% من الكلمات المقاسة",
   "dictionary.promptLimitNotice":
     "عدد أحرف قاموسك: {{chars}}. لا تقرأ نماذج Groq وWhisper سوى بضع مئات من الأحرف الأخيرة منه، لذا تعمل القوائم الأقصر بشكل أفضل معها. أما النماذج الأخرى فتحصل على القائمة كاملة.",
@@ -179,6 +175,23 @@ test("interpolation variables match en in every language", () => {
       }
     }
   }
+});
+
+test("every messageKey literal resolves in en", () => {
+  const keys = new Set();
+  for (const namespace of NAMESPACES) {
+    for (const key of flatten(load("en", namespace)).keys()) keys.add(key);
+  }
+
+  const missing = [];
+  for (const file of sourceFiles(SRC)) {
+    const source = fs.readFileSync(file, "utf8");
+    for (const [, , key] of source.matchAll(MESSAGE_KEY)) {
+      if (!keys.has(stripPlural(key))) missing.push(`${key} (${path.relative(SRC, file)})`);
+    }
+  }
+
+  assert.deepEqual(missing, [], `unresolved messageKey values:\n${missing.join("\n")}`);
 });
 
 test("Arabic defines every CLDR plural category for each counted message", () => {

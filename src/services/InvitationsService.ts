@@ -13,7 +13,8 @@ async function list(workspaceId: string): Promise<WorkspaceInvitation[]> {
 
 async function send(
   workspaceId: string,
-  input: { email: string; role?: "admin" | "member"; team_ids?: string[] }
+  // space_ids become member grants applied when the invitation is accepted.
+  input: { email: string; role?: "admin" | "member"; team_ids?: string[]; space_ids?: string[] }
 ): Promise<InvitationSendResult> {
   const res = await cloudPost<DataWrap<InvitationSendResult>>(
     `/api/workspaces/${workspaceId}/invitations`,
@@ -40,15 +41,20 @@ async function preview(token: string): Promise<InvitationPreview> {
   return res.data;
 }
 
-// team_ids is the authoritative post-accept team list (the invitation may
-// have been edited since it was previewed); optional only because older API
-// responses predate it.
-async function accept(
-  token: string
-): Promise<{ workspace_id: string; role: string; team_ids?: string[] }> {
-  const res = await cloudPost<
-    DataWrap<{ workspace_id: string; role: string; team_ids?: string[] }>
-  >(`/api/invitations/${encodeURIComponent(token)}/accept`);
+// team_ids and space_ids are the authoritative post-accept grants (the
+// invitation may have been edited since it was previewed); optional only
+// because older API responses predate them.
+type InvitationAcceptResult = {
+  workspace_id: string;
+  role: string;
+  team_ids?: string[];
+  space_ids?: string[];
+};
+
+async function accept(token: string): Promise<InvitationAcceptResult> {
+  const res = await cloudPost<DataWrap<InvitationAcceptResult>>(
+    `/api/invitations/${encodeURIComponent(token)}/accept`
+  );
   return res.data;
 }
 
