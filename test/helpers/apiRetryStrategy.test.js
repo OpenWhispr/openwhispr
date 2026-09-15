@@ -11,7 +11,14 @@ test("errors without a status retry, since they mean the request never got an an
   const { shouldRetry } = createApiRetryStrategy();
 
   assert.equal(shouldRetry(new Error("fetch failed")), true);
-  assert.equal(shouldRetry(new Error("Request timed out after 30s")), true);
+});
+
+test("a client-side deadline does not retry, since the same request expires again and every attempt is billed", async () => {
+  const { createApiRetryStrategy } = await load();
+  const { llmRequestTimeoutError } = await import("../../src/helpers/llmRequestTimeout.js");
+  const { shouldRetry } = createApiRetryStrategy();
+
+  assert.equal(shouldRetry(llmRequestTimeoutError(30)), false);
 });
 
 test("4xx rejections do not retry, because the same request will be refused again", async () => {

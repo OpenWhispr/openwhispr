@@ -1,4 +1,5 @@
 import { RETRY_CONFIG } from "../config/constants.ts";
+import { LLM_REQUEST_TIMEOUT_CODE } from "../helpers/llmRequestTimeout.js";
 
 export interface RetryOptions {
   maxRetries?: number;
@@ -48,7 +49,11 @@ export function httpError(message: string, status: number): Error & { status: nu
 export function createApiRetryStrategy() {
   return {
     shouldRetry: (error: any) => {
-      // No HTTP status means the request never got an answer (network drop, timeout).
+      // A client-side deadline is not a transient fault: the same request under
+      // the same deadline expires again, and the provider bills every attempt.
+      if (error?.code === LLM_REQUEST_TIMEOUT_CODE) return false;
+
+      // No HTTP status means the request never got an answer (network drop).
       const status = error?.status ?? error?.response?.status;
       if (typeof status !== "number") return true;
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Notes
+
+- **Generate AI Summary with your own OpenAI, Gemini or Tinfoil key no longer times out on a real transcript.** Every bring-your-own-key request shared the 30-second deadline meant for dictation cleanup, and a timeout was treated like a dropped connection and retried three more times. A 2,000-word transcript through a reasoning model such as GPT-5.6 Terra needs longer than that to think before it writes, so the summary spun for about a minute and a half, four requests were billed, and it ended with a timeout error and no note. Note formatting now waits up to ten minutes, matching OpenAI's own client default, and a request that does hit its deadline fails once instead of being re-sent. Dictation cleanup keeps its 30-second deadline.
+
 ## [1.10.1] - 2026-09-14
 
 A follow-up to 1.10.0 built from everything that landed since. Notes open straight onto their AI Summary when one exists and the raw tab becomes **Your notes**; the "Enhanced" label is gone in favour of **AI Summary** everywhere, a meeting that ends on its own still offers the summary, and the post-meeting notification is retired. Team spaces get one **Settings** dialog with a built-in emoji picker and a single flat member roster, Teams are called **Groups** in workspace copy, the sidebar gains **Invite your team**, and the tray and dictation pill pick up quick actions. Uploads accept video and nearly every audio container, Windows finds the right microphone again and starts listening sooner, local dictation skips a decode step, and bring-your-own-key Deepgram and AssemblyAI work again. Cleanup no longer pastes a reply the model cut short, whisper.cpp stops dropping words at window boundaries, local models size their context to the request, assistant answers finally render tables, and Reset app data restarts the app so history keeps working.
