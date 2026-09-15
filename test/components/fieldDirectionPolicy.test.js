@@ -92,6 +92,7 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/ReferralDashboard.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["inherit"],
   "src/components/chat/ChatInput.tsx": ["auto"],
+  "src/components/chat/EmailDraftCard.tsx": ["auto", "auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto"],
   "src/components/notes/AddNotesToFolderDialog.tsx": ["auto"],
   "src/components/notes/MeetingTranscriptChat.tsx": ["ltr", "auto"],

@@ -10,6 +10,7 @@ import { calendarTool } from "./calendarTool";
 import { calendarAvailabilityTool } from "./calendarAvailabilityTool";
 import { createSnippetTool, createUpdateSnippetsTool, type SnippetActions } from "./snippetTool";
 import { createUpdateDictionaryTool, type DictionaryActions } from "./dictionaryTool";
+import { createDraftEmailTool } from "./draftEmailTool";
 import type { ContainerScope } from "../../types/chat";
 
 export { ToolRegistry } from "./ToolRegistry";
@@ -24,6 +25,8 @@ interface ToolRegistrySettings {
   webSearchEnabled: boolean;
   /** Live dictionary and snippet access; enables the vocabulary tools. */
   vocabulary?: DictionaryActions & SnippetActions;
+  /** Connected Gmail address; empty/absent disables draft_email. */
+  gmailEmail?: string;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -51,6 +54,10 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   if (settings.calendarConnected) {
     registry.register(calendarTool);
     registry.register(calendarAvailabilityTool);
+  }
+
+  if (settings.gmailEmail) {
+    registry.register(createDraftEmailTool(settings.gmailEmail));
   }
 
   return registry;
