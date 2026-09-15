@@ -18,7 +18,7 @@ const {
 } = require("./lib/download-utils");
 
 const REPO = "OpenWhispr/openwhispr";
-const TAG_PREFIX = "meeting-aec-helper-v";
+const PINNED_TAG = "meeting-aec-helper-v1.0.0";
 const VERSION_OVERRIDE = process.env.MEETING_AEC_HELPER_VERSION || null;
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 
@@ -105,7 +105,7 @@ async function main() {
     console.log("\n[meeting-aec-helper] Fetching latest release...");
   }
   const release = await fetchLatestRelease(REPO, {
-    tagPrefix: VERSION_OVERRIDE || TAG_PREFIX,
+    tag: VERSION_OVERRIDE || PINNED_TAG,
   });
 
   if (!release) {
