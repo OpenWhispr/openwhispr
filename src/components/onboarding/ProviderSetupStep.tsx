@@ -45,6 +45,7 @@ import {
   rememberPendingLocalModel,
 } from "./pendingLocalModels";
 import { isLocalStageDownloadActive } from "./localDownloadState";
+import { isBlankByokDraft, resolveSavedByokConfig } from "./savedByokConfig";
 
 export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
   const { t } = useTranslation();
@@ -321,30 +322,43 @@ export function ByokProviderStep({
       ),
     [assistant, policy, scope]
   );
-  const initialProvider =
-    providers.find((provider) => provider.id === resumeState?.selectedProvider)?.id ?? "";
-  const initialProviderModels =
-    providers.find((provider) => provider.id === initialProvider)?.models ?? [];
-  const initialModel = initialProviderModels.some(
-    (model) => model.id === resumeState?.selectedModel
+  // The session's draft wins; without one (onboarding was restarted, or an older build
+  // left it blank) the step reopens on what the user already saved, the same order
+  // LocalModelSetupStep uses. Key-less comes from saved settings either way: the draft
+  // never records keys, and a remount reopens from the draft the first mount wrote.
+  const [seed] = useState(() => {
+    const saved = resolveSavedByokConfig(stepId, store);
+    return {
+      draft: resumeState && !isBlankByokDraft(resumeState) ? resumeState : saved?.draft,
+      keyless: saved?.keyless ?? false,
+    };
+  });
+  const initialProviderData = providers.find(
+    (provider) => provider.id === seed.draft?.selectedProvider
+  );
+  const initialProvider = initialProviderData?.id ?? "";
+  const initialModel = initialProviderData?.models?.some(
+    (model) => model.id === seed.draft?.selectedModel
   )
-    ? (resumeState?.selectedModel ?? "")
-    : (initialProviderModels[0]?.id ?? "");
+    ? (seed.draft?.selectedModel ?? "")
+    : pickDefaultModelId(initialProviderData);
   const initiallySelfHosted = selfHostedRequested && selfHostedAllowed;
+  // Hosted and self-hosted share the key field, so each mode shows its own saved key.
+  // The Settings self-hosted server has none; a leftover custom key shown there would
+  // move the save onto the keyed route.
+  const credentialFor = (selfHostedMode: boolean, providerId: string) => {
+    if (!selfHostedMode) return providerCredential(providerId, store).value;
+    if (assistant) return store.chatAgentCustomApiKey;
+    return seed.keyless ? "" : store.customTranscriptionApiKey;
+  };
   const [selfHosted, setSelfHosted] = useState(initiallySelfHosted);
-  const [selectedProvider, setSelectedProvider] = useState(
-    initiallySelfHosted ? "" : initialProvider
-  );
-  const [selectedModel, setSelectedModel] = useState(initiallySelfHosted ? "" : initialModel);
+  const [selectedProvider, setSelectedProvider] = useState(initialProvider);
+  const [selectedModel, setSelectedModel] = useState(initialModel);
   const [draftApiKey, setDraftApiKey] = useState(() =>
-    initiallySelfHosted
-      ? assistant
-        ? store.chatAgentCustomApiKey
-        : store.customTranscriptionApiKey
-      : providerCredential(initialProvider, store).value
+    credentialFor(initiallySelfHosted, initialProvider)
   );
-  const [draftBaseUrl, setDraftBaseUrl] = useState(resumeState?.baseUrl ?? "");
-  const [draftCustomModel, setDraftCustomModel] = useState(resumeState?.customModel ?? "");
+  const [draftBaseUrl, setDraftBaseUrl] = useState(seed.draft?.baseUrl ?? "");
+  const [draftCustomModel, setDraftCustomModel] = useState(seed.draft?.customModel ?? "");
   const [draftCortiClientId, setDraftCortiClientId] = useState(
     initialProvider === "corti" ? store.cortiClientId : ""
   );
@@ -378,32 +392,40 @@ export function ByokProviderStep({
 
   useEffect(() => flushByokDraft, [flushByokDraft]);
 
-  // A live policy update can remove self-hosting while this card is open.
+  // A live policy update can remove self-hosting while this card is open. The hosted
+  // half of the form is kept, so it only needs its provider's key.
   useEffect(() => {
     if (!selfHosted || selfHostedAllowed) return;
     setSelfHosted(false);
     onSelfHostedChange(false);
-    setDraftApiKey("");
-    setDraftBaseUrl("");
-    setDraftCustomModel("");
+    setDraftApiKey(providerCredential(selectedProvider, useSettingsStore.getState()).value);
     setConnected(false);
     onConnectionChange(false);
-  }, [onConnectionChange, onSelfHostedChange, selfHosted, selfHostedAllowed]);
+  }, [onConnectionChange, onSelfHostedChange, selectedProvider, selfHosted, selfHostedAllowed]);
+
+  // Saved keys load asynchronously (initializeSettings), so an empty field takes its key
+  // when it arrives; anything already in the field is kept.
+  const savedKey = credentialFor(selfHosted, selectedProvider);
+  const savedCortiClientId = selectedProvider === "corti" ? store.cortiClientId : "";
+  const savedCortiClientSecret = selectedProvider === "corti" ? store.cortiClientSecret : "";
+  useEffect(() => {
+    if (savedKey) setDraftApiKey((current) => current || savedKey);
+    if (savedCortiClientId) setDraftCortiClientId((current) => current || savedCortiClientId);
+    if (savedCortiClientSecret) {
+      setDraftCortiClientSecret((current) => current || savedCortiClientSecret);
+    }
+  }, [savedCortiClientId, savedCortiClientSecret, savedKey]);
 
   const currentProvider = providers.find((provider) => provider.id === selectedProvider);
   const models = currentProvider?.models ?? [];
   const knownCredential = providerCredential(selectedProvider, store);
+  // Both halves of the form survive a mode switch, so switching back shows the saved or
+  // typed values again; only the shared key field follows the mode.
   const toggleSelfHosted = () => {
     const next = !selfHosted;
     setSelfHosted(next);
     onSelfHostedChange(next);
-    setSelectedProvider("");
-    setSelectedModel("");
-    setDraftApiKey("");
-    setDraftBaseUrl("");
-    setDraftCustomModel("");
-    setDraftCortiClientId("");
-    setDraftCortiClientSecret("");
+    setDraftApiKey(credentialFor(next, selectedProvider));
     setConnected(false);
     onConnectionChange(false);
   };
@@ -437,11 +459,18 @@ export function ByokProviderStep({
   const testingKey = draftApiKey;
   const testingBaseUrl = selfHosted ? draftBaseUrl : undefined;
   const isCortiTranscription = !assistant && !selfHosted && selectedProvider === "corti";
+  // A provider counts only while policy still lists it: a policy that loads after mount
+  // can remove the one this card opened on.
   const fieldsReady = selfHosted
     ? Boolean(draftBaseUrl.trim() && draftCustomModel.trim())
     : isCortiTranscription
-      ? Boolean(draftCortiClientId.trim() && draftCortiClientSecret.trim() && selectedModel)
-      : Boolean(selectedProvider && selectedModel && testingKey.trim());
+      ? Boolean(
+          currentProvider &&
+          draftCortiClientId.trim() &&
+          draftCortiClientSecret.trim() &&
+          selectedModel
+        )
+      : Boolean(currentProvider && selectedModel && testingKey.trim());
 
   const commitAndProceed = () => {
     if (selfHosted) {
@@ -457,11 +486,23 @@ export function ByokProviderStep({
         store.setChatAgentModel(draftCustomModel);
         store.setChatAgentMode("self-hosted");
         store.setChatAgentProvider("custom");
-      } else {
+      } else if (draftApiKey.trim()) {
+        // Only the Custom route sends the key; a Settings server left in place would win.
         store.setCloudTranscriptionBaseUrl(committedBaseUrl);
         store.setCustomTranscriptionApiKey(draftApiKey);
-        store.setCloudTranscriptionModel(draftCustomModel);
+        // Switch before setting the model: a switch files the current model under the
+        // outgoing provider and loads the incoming one's, replacing what was typed here.
         store.switchCloudTranscriptionProvider("dictation", "custom");
+        store.setCloudTranscriptionModel(draftCustomModel);
+        store.setRemoteTranscriptionUrl("");
+        store.setCloudTranscriptionMode("byok");
+      } else {
+        // Saved as the Settings self-hosted server, so the Custom URL, key and model are
+        // kept. Custom is still the provider: byok + custom derives the self-hosted mode.
+        store.switchCloudTranscriptionProvider("dictation", "custom");
+        store.setRemoteTranscriptionUrl(committedBaseUrl);
+        store.setRemoteTranscriptionModel(draftCustomModel);
+        store.setRemoteTranscriptionType("openai-compatible");
         store.setCloudTranscriptionMode("byok");
       }
     } else if (assistant) {

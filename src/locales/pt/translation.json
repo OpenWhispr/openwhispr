@@ -681,6 +681,11 @@
       "title": "Modelos exigidos ausentes",
       "description": "Sua organização exige estes modelos neste dispositivo: {{models}}.",
       "download": "Baixar"
+    },
+    "cloudNudge": {
+      "title": "Você entrou",
+      "description": "O ditado continua usando sua própria configuração. Você pode mudar para o OpenWhispr Cloud a qualquer momento.",
+      "action": "Abrir Configurações"
     }
   },
   "reasoning": {
