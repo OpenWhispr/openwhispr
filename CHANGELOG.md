@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-09-15
+
+A hotfix for 1.10.1. Generate AI Summary with your own API key or an enterprise provider no longer times out on a real transcript, a recording with nothing substantive in it gets a one-line summary instead of a blank page and an error, and OpenRouter models can read screenshots again.
+
 ### Notes
 
-- **Generate AI Summary with your own API key or an enterprise provider no longer times out on a real transcript.** Every bring-your-own-key request shared the 30-second deadline meant for dictation cleanup (enterprise providers had 60 seconds), and a timeout was treated like a dropped connection and retried three more times. A 2,000-word transcript through a reasoning model such as GPT-5.6 Terra needs longer than that to think before it writes, so the summary spun for about a minute and a half, four requests were billed, and it ended with a timeout error and no note. Note formatting now waits up to ten minutes, matching OpenAI's own client default, and a request that does hit its deadline fails once instead of being re-sent. Dictation cleanup keeps its 30-second deadline on every provider.
+- **Generate AI Summary with your own API key or an enterprise provider no longer times out on a real transcript.** Every bring-your-own-key request shared the 30-second deadline meant for dictation cleanup (enterprise providers had 60 seconds), and a timeout was treated like a dropped connection and retried three more times. A 2,000-word transcript through a reasoning model such as GPT-5.6 Terra needs longer than that to think before it writes, so the summary spun for about a minute and a half, four requests were billed, and it ended with a timeout error and no note. Note formatting now waits up to ten minutes, matching OpenAI's own client default, and a request that does hit its deadline fails once instead of being re-sent. Dictation cleanup keeps its 30-second deadline on every provider. (#2204)
+- **A recording with nothing in it gets a one-line summary instead of an error.** Recordings that held only greetings, filler or a sound check could end Generate AI Summary with an enhancement error: Detailed Notes strips content that carries nothing, so the model omitted every section and returned a blank reply, which the blank-response safeguard from 1.10.1 correctly refused to save. Generate Notes and Detailed Notes now answer with one factual sentence, in the requested output language, saying the transcript and notes contained nothing substantive, and that instruction overrides the section and bullet-count rules. Untouched default prompts move to the new text automatically; an edited prompt is left alone, and the blank-response safeguard stays on. (#2201, thanks @Chadpiha)
+
+### Assistant
+
+- **OpenRouter models can read screenshots again.** OpenRouter returns model IDs with a vendor prefix, such as `google/gemini-3.5-flash-lite`, while the cloud model registry stores the upstream ID `gemini-3.5-flash-lite`, so the vision-capability lookup found no model and screenshot commands were rejected as unsupported. The lookup now knows which provider it is asking for and, for OpenRouter only, retries without the vendor prefix when the exact ID misses; every other provider is unchanged. (#2203, thanks @fthozdemir)
 
 ## [1.10.1] - 2026-09-14
 
