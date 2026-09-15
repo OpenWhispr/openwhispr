@@ -505,8 +505,13 @@ export const useAudioRecording = (toast, options = {}) => {
           setTranscript(result.text);
           if (result.assistantConversation) {
             window.electronAPI?.hideDictationPreview?.();
-            const { screenContext, transcript, selectedContext, deliverySessionId } =
-              result.assistantConversation;
+            const {
+              screenContext,
+              transcript,
+              selectedContext,
+              deliverySessionId,
+              deliveryAcceptsMarkdown,
+            } = result.assistantConversation;
             const command = {
               text: expandSnippets(transcript, getSettings().snippets),
               attachment: screenContext
@@ -530,6 +535,7 @@ export const useAudioRecording = (toast, options = {}) => {
                 delivery: createAssistantResponseDelivery({
                   autoPasteEnabled,
                   deliverySessionId,
+                  acceptsMarkdown: deliveryAcceptsMarkdown === true,
                   restoreClipboard: !keepTranscriptionInClipboard,
                   allowClipboardFallback: isAccessibilitySkipped(),
                 }),

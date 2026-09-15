@@ -843,6 +843,7 @@ test("a caret-delivered command returns the hidden Assistant to the idle pill", 
         sessionId: "caret-session",
         restoreClipboard: true,
         allowClipboardFallback: false,
+        plainText: true,
       },
     });
   });
@@ -887,17 +888,28 @@ test("a follow-up into an open panel strips caret delivery and stays panel-first
     sessionId: "caret-session",
     restoreClipboard: true,
     allowClipboardFallback: false,
+    plainText: true,
   };
 
   assistant.openRef.current = true;
   await React.act(async () => {
-    assistant.handleCommand({ text: "draft a reply", attachment: null, selectedContext: null, delivery });
+    assistant.handleCommand({
+      text: "draft a reply",
+      attachment: null,
+      selectedContext: null,
+      delivery,
+    });
   });
   assert.equal(assistant.pendingCommand.delivery, null);
 
   assistant.openRef.current = false;
   await React.act(async () => {
-    assistant.handleCommand({ text: "draft a reply", attachment: null, selectedContext: null, delivery });
+    assistant.handleCommand({
+      text: "draft a reply",
+      attachment: null,
+      selectedContext: null,
+      delivery,
+    });
   });
   assert.deepEqual(assistant.pendingCommand.delivery, delivery);
 });

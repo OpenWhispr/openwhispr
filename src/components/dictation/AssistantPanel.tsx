@@ -197,6 +197,10 @@ export function AssistantPanel({
     const commandId = pendingCommand.id;
     const delivery = pendingCommand.delivery;
     const targetsCapturedInput = delivery?.mode === "paste";
+    // Suppressing the panel content and asking for prose are different
+    // decisions: a caret in Obsidian still keeps the compact pill, but the
+    // model writes markdown for it.
+    const plainTextResponse = delivery?.mode === "paste" && delivery.plainText;
     let responseDelivered = false;
     if (pendingCommand.selectedContext) {
       setSelectedContext(null);
@@ -206,6 +210,7 @@ export function AssistantPanel({
       attachment: pendingCommand.attachment ?? undefined,
       selectedContext: pendingCommand.selectedContext ?? undefined,
       suppressResponseContent: targetsCapturedInput,
+      plainTextResponse,
       onComplete: delivery
         ? async ({ content }) => {
             const result = await deliverAssistantResponse(delivery, content);

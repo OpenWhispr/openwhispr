@@ -1115,6 +1115,8 @@ declare global {
         | {
             status: "editable";
             sessionId: string;
+            /** True when the captured app keeps markdown (spec Appendix A); false means plain text. */
+            acceptsMarkdown: boolean;
           }
         | {
             status: "none" | "unavailable" | "target_changed" | "too_large";
