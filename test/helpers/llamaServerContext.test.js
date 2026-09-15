@@ -298,13 +298,18 @@ function withReply(message, finishReason = "stop") {
   return { run, requests };
 }
 
+const TRUNCATED = { code: "OUTPUT_TRUNCATED" };
+
 test("reasoning never stands in for the answer when thinking was requested", async () => {
   const reasoningOnly = { content: "", reasoning_content: "Thinking Process:\n\n1. Analyze" };
 
-  // Cut off mid-reasoning: reaches callers without requireCompleteOutput.
+  // Cut off mid-reasoning: there is no answer to return, so every caller gets
+  // the truncation error rather than an empty string it would have to explain.
   const truncated = withReply(reasoningOnly, "length");
   await truncated.run(async (manager) => {
-    assert.equal(await manager.inference(MESSAGES, { disableThinking: false }), "");
+    await assert.rejects(manager.inference(MESSAGES, { disableThinking: false }), TRUNCATED);
+    const strict = { disableThinking: false, requireCompleteOutput: true };
+    await assert.rejects(manager.inference(MESSAGES, strict), TRUNCATED);
   });
   assert.equal(truncated.requests[0].chat_template_kwargs, undefined);
 
@@ -313,6 +318,24 @@ test("reasoning never stands in for the answer when thinking was requested", asy
   await finished.run(async (manager) => {
     const options = { disableThinking: false, requireCompleteOutput: true };
     assert.equal(await manager.inference(MESSAGES, options), "");
+  });
+});
+
+test("a cut-off reply with no content is truncated even when thinking was suppressed", async () => {
+  // gpt-oss ignores enable_thinking and reasons into reasoning_content anyway;
+  // a budget spent entirely there is a cut-off reply, not a misrouted answer.
+  const analysisOnly = withReply({ content: "", reasoning_content: "analysis..." }, "length");
+  await analysisOnly.run(async (manager) => {
+    await assert.rejects(manager.inference(MESSAGES, { disableThinking: true }), TRUNCATED);
+  });
+});
+
+test("a cut-off reply that has content is still returned to lenient callers", async () => {
+  // Only requireCompleteOutput callers reject a partial answer (#2130).
+  const partial = withReply({ content: "Cleaned te", reasoning_content: "" }, "length");
+  await partial.run(async (manager) => {
+    assert.equal(await manager.inference(MESSAGES, { disableThinking: true }), "Cleaned te");
+    await assert.rejects(manager.inference(MESSAGES, { requireCompleteOutput: true }), TRUNCATED);
   });
 });
 
