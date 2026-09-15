@@ -210,5 +210,5 @@ test("the loading board shows its fixed copy, with placeholders only for the dat
   assert.ok(markup.includes("border-amber-400/25 bg-amber-400/5"));
   assert.ok(markup.includes("border-slate-400/30 bg-slate-400/5"));
   assert.ok(markup.includes("border-orange-500/25 bg-orange-500/5"));
-  assert.match(markup, /role="status"/);
+  assert.match(markup, /role="status"[^>]*>Loading\.\.\.</, "only the message is announced");
 });
