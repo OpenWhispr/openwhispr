@@ -189,6 +189,7 @@ const MAIN_WINDOW_CONFIG = {
     // The hotkey shows this window from hidden right as the entrance animation
     // and resize mask run; a throttled renderer stutters them for seconds.
     backgroundThrottling: false,
+    webSecurity: false,
   },
   frame: false,
   alwaysOnTop: true,
