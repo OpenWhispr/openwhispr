@@ -3119,6 +3119,7 @@
       "runAction": "Запустить {{name}}",
       "selectAction": "Выбрать действие",
       "done": "Готово",
+      "chunkProgress": "Часть {{step}} из {{total}}",
       "builtin": {
         "generateNotes": {
           "name": "Сгенерировать заметки",

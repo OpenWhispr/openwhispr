@@ -2880,6 +2880,7 @@
       "runAction": "{{name}} を実行",
       "selectAction": "アクションを選択",
       "done": "完了",
+      "chunkProgress": "パート {{step}} / {{total}}",
       "builtin": {
         "generateNotes": {
           "name": "ノートを生成",

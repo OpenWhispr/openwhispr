@@ -3441,6 +3441,7 @@
     },
     "actions": {
       "done": "Done",
+      "chunkProgress": "Part {{step}} of {{total}}",
       "manage": "Manage Actions...",
       "manageTitle": "Custom Actions",
       "addAction": "New Action",

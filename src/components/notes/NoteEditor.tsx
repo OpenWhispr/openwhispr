@@ -61,6 +61,7 @@ import {
 } from "../ui/splitButton";
 import type { NoteItem, FolderItem } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
+import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
 import NoteRecordControl, { RecordingWave } from "./NoteRecordControl";
@@ -196,6 +197,7 @@ interface NoteEditorProps {
   onGenerateSummary?: () => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
+  actionProgress?: NoteActionProgress | null;
   diarizationSessionId?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
   sessionDiarizationEnabled?: boolean;
@@ -229,6 +231,7 @@ export default function NoteEditor({
   onGenerateSummary,
   actionProcessingState,
   actionName,
+  actionProgress,
   diarizationSessionId,
   onLiveSpeakerLock,
   sessionDiarizationEnabled,
@@ -1219,6 +1222,7 @@ export default function NoteEditor({
           <ActionProcessingOverlay
             state={actionProcessingState ?? "idle"}
             actionName={actionName ?? null}
+            progress={actionProgress ?? null}
           />
           <div
             className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none"

@@ -94,7 +94,7 @@ async function setupChain(t, respond) {
   modelManager.currentServerModelId = model.id;
   t.after(() => serverManager.clearIdleTimer());
 
-  return { bridge, modelId: model.id, requests, serverManager };
+  return { bridge, modelManager, modelId: model.id, requests, serverManager };
 }
 
 const completion = (finishReason, content) => ({
@@ -106,7 +106,11 @@ test("requireCompleteOutput rejects a truncated reply through the whole local ch
 
   await assert.rejects(
     () => bridge.processText("edit this", modelId, { requireCompleteOutput: true }),
-    /truncated/
+    (error) => {
+      assert.equal(error.code, "OUTPUT_TRUNCATED");
+      assert.match(error.message, /truncated/);
+      return true;
+    }
   );
 });
 
@@ -150,4 +154,19 @@ test("a caller's contextSize reaches the server start (regression: it was droppe
   await bridge.processText("short text", modelId, { contextSize: 32768 });
 
   assert.deepEqual(started, [32768]);
+});
+
+test("refuseClippedByWindow reaches runInference (the bridge rebuilds the config)", async (t) => {
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "ok"));
+  const forwarded = [];
+  const runInference = modelManager.runInference.bind(modelManager);
+  modelManager.runInference = (id, text, options) => {
+    forwarded.push(options);
+    return runInference(id, text, options);
+  };
+
+  await bridge.processText("summarise this", modelId, { refuseClippedByWindow: true });
+
+  assert.equal(forwarded.length, 1);
+  assert.equal(forwarded[0].refuseClippedByWindow, true);
 });

@@ -3099,6 +3099,7 @@
       "runAction": "Executar {{name}}",
       "selectAction": "Selecionar ação",
       "done": "Concluído",
+      "chunkProgress": "Parte {{step}} de {{total}}",
       "builtin": {
         "generateNotes": {
           "name": "Gerar notas",

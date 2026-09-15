@@ -3441,6 +3441,7 @@
     },
     "actions": {
       "done": "Terminé",
+      "chunkProgress": "Partie {{step}} sur {{total}}",
       "manage": "Gérer les actions...",
       "manageTitle": "Actions personnalisées",
       "addAction": "Nouvelle action",
