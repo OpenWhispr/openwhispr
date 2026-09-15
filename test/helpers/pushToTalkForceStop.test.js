@@ -86,7 +86,7 @@ function makeManager() {
 
 function startPush(t) {
   const harness = makeManager();
-  harness.manager.startWindowsPushToTalk("Control+Space");
+  harness.manager.startNativePushToTalk("Control+Space");
   t.mock.timers.tick(150); // MIN_HOLD_DURATION_MS — recording actually begins
   assert.deepEqual(harness.channels(), ["prepare-dictation", "start-dictation"]);
   return harness;
@@ -97,9 +97,16 @@ test("a physical release stops dictation without reporting a forced stop", (t) =
   t.after(() => t.mock.timers.reset());
 
   const { manager, channels } = startPush(t);
-  manager.handleWindowsPushKeyUp("Control+Space");
+  manager.handleNativePushKeyUp("Control+Space");
 
-  assert.deepEqual(channels(), ["prepare-dictation", "start-dictation", "stop-dictation"]);
+  // The hold-ended report follows a release, and only a release: it feeds the
+  // hands-free tip, which a ceiling or a reset must never trigger.
+  assert.deepEqual(channels(), [
+    "prepare-dictation",
+    "start-dictation",
+    "stop-dictation",
+    "hold-dictation-ended",
+  ]);
 });
 
 // The safety ceiling ends the push while the trigger keys are still physically
@@ -185,7 +192,7 @@ test("a settings-driven reset reports a forced stop, not a release", (t) => {
   t.after(() => t.mock.timers.reset());
 
   const { manager, sent, channels } = startPush(t);
-  manager.resetWindowsPushState();
+  manager.resetNativePushState();
 
   assert.deepEqual(channels(), [
     "prepare-dictation",
@@ -194,4 +201,24 @@ test("a settings-driven reset reports a forced stop, not a release", (t) => {
     "stop-dictation",
   ]);
   assert.deepEqual(sent.at(-2).payload, { reason: "reset" });
+});
+
+// A release before recording began keeps the preparation warm through the
+// double-press window; a forced stop has no second press coming, so it cancels
+// on the spot instead of leaving a timer to do it later.
+test("a forced stop before recording began cancels the preparation immediately", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.after(() => t.mock.timers.reset());
+
+  const { manager, channels, hides } = makeManager();
+  manager.startNativePushToTalk("Control+Space");
+  t.mock.timers.tick(100); // still inside MIN_HOLD_DURATION_MS
+  manager.resetNativePushState();
+
+  assert.deepEqual(channels(), [
+    "prepare-dictation",
+    "dictation-force-stopped",
+    "cancel-dictation-preparation",
+  ]);
+  assert.deepEqual(hides, [true]);
 });

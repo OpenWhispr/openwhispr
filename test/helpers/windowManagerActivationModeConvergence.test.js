@@ -1,0 +1,202 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const Module = require("node:module");
+
+// The windows BrowserWindow.getAllWindows() reports; a case fills this before
+// asserting who a broadcast reached.
+const openWindows = [];
+
+// Same stub set as windowManagerHandsFree.test.js: WindowManager pulls in
+// electron + sibling managers at require time.
+const originalLoad = Module._load;
+Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
+  if (request === "electron") {
+    return {
+      app: { on: () => undefined },
+      screen: {
+        getPrimaryDisplay: () => ({}),
+        getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } }),
+        getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } }),
+        on: () => undefined,
+      },
+      BrowserWindow: class FakeBrowserWindow {
+        constructor() {
+          this.webContents = { on: () => undefined, send: () => undefined };
+        }
+        static getAllWindows() {
+          return openWindows;
+        }
+        on() {}
+        isDestroyed() {
+          return false;
+        }
+      },
+      shell: {},
+      dialog: {},
+    };
+  }
+  if (request === "./debugLogger")
+    return { warn: () => undefined, debug: () => undefined, log: () => undefined };
+  if (request === "./hotkeyManager") {
+    const FakeHotkeyManager = class {
+      unregisterAll() {}
+      isInListeningMode() {
+        return false;
+      }
+    };
+    FakeHotkeyManager.isGlobeLikeHotkey = () => false;
+    return FakeHotkeyManager;
+  }
+  if (request === "./dragManager")
+    return class {
+      cleanup() {}
+    };
+  if (request === "./menuManager") return {};
+  if (request === "./devServerManager")
+    return {
+      DEV_SERVER_PORT: 5173,
+      DEV_SERVER_URL: "http://localhost:5173",
+      getAppFilePath: () => ({ path: "/app/index.html", query: {} }),
+      waitForDevServer: async () => undefined,
+    };
+  if (request === "./dockManager") return {};
+  if (request === "./i18nMain") return { i18nMain: { t: (key) => key } };
+  if (request === "./windowConfig") {
+    return {
+      MAIN_WINDOW_CONFIG: {},
+      CONTROL_PANEL_CONFIG: {},
+      NOTIFICATION_WINDOW_CONFIG: {},
+      AUTO_END_NOTIFICATION_WINDOW_SIZE: { width: 620, height: 116 },
+      getMeetingNotificationWindowSize: () => ({ width: 392, height: 92 }),
+      WINDOW_SIZES: { BASE: { width: 96, height: 96 } },
+      ONBOARDING_WINDOW_SIZES: {
+        COMPACT: { width: 480, height: 624 },
+        EXPANDED: { width: 1000, height: 740 },
+      },
+      WindowPositionUtil: {
+        setupAlwaysOnTop: () => undefined,
+        clampToWorkArea: (bounds) => bounds,
+        getMainWindowPosition: (_display, size) => ({ x: 0, y: 0, ...size }),
+        getNotificationPosition: () => ({ x: 0, y: 0 }),
+      },
+      fitAssistantWindowToWorkArea: (size) => size,
+      fitAssistantContentWindowToWorkArea: (height) => ({ width: 466, height }),
+      fitDictationErrorWindowToWorkArea: (size) => size,
+      fitDictationErrorContentWindowToWorkArea: (height) => ({ width: 466, height }),
+      resolveHorizontalWindowDirection: () => "right",
+    };
+  }
+  return originalLoad.call(this, request, parent, isMain);
+};
+const WindowManager = require("../../src/helpers/windowManager");
+Module._load = originalLoad;
+
+function managerWithHotkeyResult(result) {
+  const manager = new WindowManager();
+  manager.mainWindow = null;
+  manager.hotkeyManager = {
+    updateHotkey: async () => result,
+    isInListeningMode: () => false,
+    getNativeListenerKeys: () => [],
+    isUsingNativeShortcut: () => false,
+  };
+  manager.createHotkeyCallback = () => () => undefined;
+  // A converging case must re-arm the native listeners, not just move the
+  // cache: on macOS that re-arm is what makes a plain-key promotion actually
+  // functional. Record the calls instead of no-opping them so a case that
+  // moves _cachedActivationMode without re-arming still fails.
+  manager.nativeCalls = [];
+  manager.resetNativePushState = () => manager.nativeCalls.push("reset");
+  manager.reconcileNativeKeyListeners = () => manager.nativeCalls.push("reconcile");
+  return manager;
+}
+
+test("updateHotkey follows a converged mode in both directions", async () => {
+  const demoted = managerWithHotkeyResult({ success: true, activationMode: "tap" });
+  demoted._cachedActivationMode = "push";
+  await demoted.updateHotkey("F13");
+  assert.equal(demoted.getActivationMode(), "tap");
+  assert.deepEqual(demoted.nativeCalls, ["reset", "reconcile"]);
+
+  const promoted = managerWithHotkeyResult({ success: true, activationMode: "push" });
+  promoted._cachedActivationMode = "tap";
+  await promoted.updateHotkey("Command+Period");
+  assert.equal(promoted.getActivationMode(), "push");
+  assert.deepEqual(promoted.nativeCalls, ["reset", "reconcile"]);
+
+  const untouched = managerWithHotkeyResult({ success: true });
+  untouched._cachedActivationMode = "tap";
+  await untouched.updateHotkey("Command+Period");
+  assert.equal(untouched.getActivationMode(), "tap");
+  // Nothing converged, so the native listeners must not be touched.
+  assert.deepEqual(untouched.nativeCalls, []);
+});
+
+// A verdict settled after startup — the DE-native backend judging the hotkey
+// it is about to bind, or the macOS demotion — has to reach the renderers
+// too. Each one copies the stored mode into its store once, early, so the
+// broadcast is the only thing that moves the pill window off "push"; without
+// it the Hold migration card teaches a gesture the backend cannot deliver.
+
+function makeOpenWindow({ destroyed = false } = {}) {
+  const sent = [];
+  return {
+    sent,
+    isDestroyed: () => destroyed,
+    webContents: { send: (channel, payload) => sent.push([channel, payload]) },
+  };
+}
+
+function managerWithActivationMode(initialMode, { accept = true } = {}) {
+  const manager = new WindowManager();
+  manager.mainWindow = null;
+  manager._cachedActivationMode = initialMode;
+  manager.setCalls = [];
+  manager.hotkeyManager = {
+    setActivationMode: async (mode) => {
+      manager.setCalls.push(mode);
+      return accept;
+    },
+    isInListeningMode: () => false,
+    getNativeListenerKeys: () => [],
+    isUsingNativeShortcut: () => false,
+  };
+  manager.nativeCalls = [];
+  manager.resetNativePushState = () => manager.nativeCalls.push("reset");
+  manager.reconcileNativeKeyListeners = () => manager.nativeCalls.push("reconcile");
+  return manager;
+}
+
+test("a settled dictation verdict reaches the cache, every live window, and the caller", async () => {
+  const alive = makeOpenWindow();
+  const closing = makeOpenWindow({ destroyed: true });
+  openWindows.length = 0;
+  openWindows.push(alive, closing);
+
+  const manager = managerWithActivationMode("push");
+  const effective = await manager.applyDictationActivationMode("tap");
+
+  assert.equal(effective, "tap");
+  assert.equal(manager.getActivationMode(), "tap");
+  assert.deepEqual(manager.setCalls, ["tap"]);
+  assert.deepEqual(alive.sent, [["setting-updated", { key: "activationMode", value: "tap" }]]);
+  assert.deepEqual(closing.sent, []);
+  assert.deepEqual(manager.nativeCalls, ["reset", "reconcile"]);
+});
+
+test("a refused cache write publishes the read-back, never the attempted mode", async () => {
+  const alive = makeOpenWindow();
+  openWindows.length = 0;
+  openWindows.push(alive);
+
+  const manager = managerWithActivationMode("push", { accept: false });
+  const effective = await manager.applyDictationActivationMode("tap");
+
+  // The attempt was for "tap" ...
+  assert.deepEqual(manager.setCalls, ["tap"]);
+  // ... the manager refused it, so "push" is what is still in force — and
+  // "push" is what the caller persists and every window is told.
+  assert.equal(effective, "push");
+  assert.equal(manager.getActivationMode(), "push");
+  assert.deepEqual(alive.sent, [["setting-updated", { key: "activationMode", value: "push" }]]);
+});

@@ -1,6 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
 const { createRoot } = require("react-dom/client");
 const {
   createRendererServer,
@@ -296,3 +299,38 @@ for (const platform of ["darwin", "win32"]) {
     assert.equal(mounted.measurements(), 0);
   });
 }
+
+// Execute App's actual input-policy arguments, then feed them into the real
+// hook. This catches a missing overlay at the call site without mocking the
+// app's unrelated recording, assistant, audio and window lifecycles.
+function appInputOptions(state = {}) {
+  const app = fs.readFileSync(path.join(__dirname, "../../src/App.jsx"), "utf8");
+  const argument = app.match(/useLinuxPillInteractivity\((\{[\s\S]*?\})\);/)[1];
+  return vm.runInNewContext(`(${argument})`, {
+    pillPresenceRef: { current: null },
+    isCommandMenuOpen: false,
+    toastCount: 0,
+    anyPanelMounted: false,
+    isDragging: false,
+    pillIsInteractive: true,
+    pillVisuallySuppressed: false,
+    tipCardPlacementActive: false,
+    ...state,
+  });
+}
+
+test("App keeps Linux tip-card controls clickable through their exit, then restores pill input", async (t) => {
+  const mounted = await mountPill(t);
+  const renderAppState = async (state) => {
+    const { pillRef: _pillRef, ...options } = appInputOptions(state);
+    await mounted.render(options);
+  };
+  // Both the hands-free tip and the Hold migration card use this placement
+  // signal. The migration card retains it until its exit animation finishes.
+  await renderAppState({ tipCardPlacementActive: true });
+  assert.equal(mounted.regions.at(-1), null, "card controls need input outside the pill");
+  await mounted.tick();
+  assert.equal(mounted.regions.at(-1), null, "polling must not narrow input during the exit");
+  await renderAppState({ tipCardPlacementActive: false });
+  assert.deepEqual(mounted.regions.at(-1), { ...PILL_RECT, ...VIEWPORT });
+});

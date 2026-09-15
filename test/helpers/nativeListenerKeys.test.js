@@ -64,6 +64,24 @@ test("push mode watches every dictation hotkey, including regular keys", () => {
   assert.deepEqual(mgr.getNativeListenerKeys("push").sort(), ["Control+Shift+R", "F8"]);
 });
 
+test("a voiceAgent slot set to Hold watches its regular-key hotkeys", () => {
+  const mgr = makeManager({ dictation: "F8", voiceAgent: "F9" });
+  assert.deepEqual(mgr.getNativeListenerKeys("tap", { voiceAgent: "push" }), ["F9"]);
+});
+
+test("a translation slot set to Hold watches every translation hotkey", () => {
+  const mgr = makeManager({ translation: ["F7", "Control+Shift+T"] });
+  assert.deepEqual(mgr.getNativeListenerKeys("tap", { translation: "push" }).sort(), [
+    "Control+Shift+T",
+    "F7",
+  ]);
+});
+
+test("meeting and unknown slots are never push-enabled by slot modes", () => {
+  const mgr = makeManager({ meeting: "F6", cancel: "F5" });
+  assert.deepEqual(mgr.getNativeListenerKeys("tap", { meeting: "push", cancel: "push" }), []);
+});
+
 test("membership and lookup helpers work across multi-hotkey slots", () => {
   const mgr = makeManager({
     dictation: ["GLOBE", "Control+Shift+R"],
@@ -98,6 +116,7 @@ test("Fn is treated as Globe, including as a secondary hotkey", () => {
   assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS), {
     mouseButtons: [],
     suppressGlobeAction: true,
+    watchKeys: [],
   });
 });
 
@@ -118,6 +137,7 @@ test("slots outside the requested list are ignored", () => {
   assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS), {
     mouseButtons: [],
     suppressGlobeAction: false,
+    watchKeys: [],
   });
 });
 
@@ -126,7 +146,38 @@ test("no native macOS hotkeys means nothing to configure", () => {
   assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS), {
     mouseButtons: [],
     suppressGlobeAction: false,
+    watchKeys: [],
   });
+});
+
+// A plain key has no release source through globalShortcut on macOS (a Carbon
+// hot key hides both edges from every monitor), so a Hold slot's plain keys are
+// handed to the listener's event tap instead.
+test("a plain key on a Hold slot is watched by the macOS listener; Tap, combos and native keys are not", (t) => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+  t.after(() => Object.defineProperty(process, "platform", originalPlatform));
+  const mgr = makeManager({
+    dictation: ["F9", "Control+Shift+R"],
+    voiceAgent: "F13",
+    translation: "RightOption",
+    meeting: "F7",
+  });
+  assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS).watchKeys, []);
+
+  mgr.activationMode = "push";
+  mgr.slotActivationModes.voiceAgent = "push";
+  mgr.slotActivationModes.translation = "push";
+  assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS).watchKeys, ["F13", "F9"]);
+
+  // Hotkey capture must see every key: nothing is watched in listening mode.
+  mgr.setListeningMode(true);
+  assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS).watchKeys, []);
+  mgr.setListeningMode(false);
+
+  // Back on Tap, the Carbon hot key owns the key again.
+  mgr.activationMode = "tap";
+  assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS).watchKeys, ["F13"]);
 });
 
 test("_findSlotConflict detects a hotkey already bound to another slot's list", () => {

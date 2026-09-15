@@ -121,11 +121,17 @@
       "mouseButtonOnlyMac": "Maustasten-Hotkeys werden derzeit nur auf macOS unterstützt.",
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
-      "holdNeedsReleaseKey": "Halten zum Sprechen braucht eine Taste, deren Loslassen macOS erkennt: Globe, eine rechte Taste wie Rechte Option oder ein Kürzel mit Modifikator. Tippen funktioniert mit jeder Taste.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" enthält keine normale Taste, daher kann Ihre Desktop-Umgebung das Loslassen nicht erkennen. Versuchen Sie {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Ihre Desktop-Umgebung kann das Loslassen einer Taste nicht melden. Halten zum Sprechen benötigt GNOME 48 oder neuer, KDE Plasma oder eine X11-Sitzung.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
       "updateFailedCheckFormat": "Hotkey konnte nicht auf \"{{hotkey}}\" aktualisiert werden. Prüfen Sie, ob das Format gültig ist.",
       "trySuggestions": "Versuchen Sie: {{suggestions}}",
-      "slotConflict": "Diese Tastenkombination wird bereits für {{slot}} verwendet."
+      "slotConflict": "Diese Tastenkombination wird bereits für {{slot}} verwendet.",
+      "holdUnsupportedOnHyprland": "Unter Hyprland ist Halten nur für den Diktat-Hotkey verfügbar."
+    },
+    "portal": {
+      "voiceAgentHold": "Gedrückt halten, um mit dem Assistenten zu sprechen",
+      "translationHold": "Gedrückt halten, um für die Übersetzung zu diktieren"
     }
   },
   "systemSettings": {
@@ -957,7 +963,8 @@
         "failedToRegister": "Hotkey konnte nicht registriert werden. Bitte versuchen Sie es erneut."
       },
       "messages": {
-        "nowUsing": "{{hotkey}} wird jetzt für das Diktat verwendet"
+        "nowUsing": "{{hotkey}} wird jetzt für das Diktat verwendet",
+        "holdSwitchedToTap": "Halten ist für {{hotkey}} auf diesem Gerät nicht verfügbar, daher wurde die Aktivierung auf Tippen umgestellt."
       }
     },
     "modelDownload": {
@@ -2184,7 +2191,15 @@
         "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls ab und wieder an.",
         "hyprlandConfigWriteWarningTitle": "Hyprland-Tastenkombinationen werden nicht dauerhaft gespeichert",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr kann nicht in {{path}} schreiben. Deshalb bleiben Tastenkombinationen nach einem Neuladen der Hyprland-Konfiguration nicht erhalten. Stellen Sie sicher, dass die Datei existiert und beschreibbar ist.",
-        "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Belegung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert."
+        "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Belegung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert.",
+        "gestures": {
+          "holdTitle": "Halten zum Sprechen",
+          "holdDetail": "Loslassen zum Beenden",
+          "handsFreeTitle": "Freihandmodus",
+          "handsFreeDetail": "Erneut tippen zum Beenden",
+          "doublePress": "Zweimal tippen",
+          "tapOnlyTitle": "Tippen zum Starten, erneut zum Beenden"
+        }
       },
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",
@@ -3732,6 +3747,17 @@
       "askAssistant": "Assistent fragen",
       "busyRecording": "Beende zuerst die laufende Aufnahme",
       "startMeetingRecording": "Meeting-Aufnahme starten"
+    },
+    "handsFreeTip": {
+      "badge": "Tipp",
+      "title": "Zum Freihandmodus wechseln",
+      "description": "Tippe {{hotkey}} zweimal, um den Freihandmodus zu starten."
+    },
+    "holdMigrationCard": {
+      "badge": "Neu in diesem Update",
+      "title": "Halten zum Sprechen, Loslassen zum Beenden",
+      "description": "Dein Hotkey funktioniert jetzt anders: Halte {{hotkey}} gedrückt, während du sprichst.",
+      "gesture": "Tippe ihn zweimal für den Freihandmodus, tippe erneut zum Beenden."
     }
   },
   "dictationAgent": {

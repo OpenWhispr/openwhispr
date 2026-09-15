@@ -91,7 +91,8 @@
         "failedToRegister": "فشل تسجيل الاختصار. يرجى المحاولة مرة أخرى."
       },
       "messages": {
-        "nowUsing": "يتم الآن استخدام {{hotkey}} للإملاء"
+        "nowUsing": "يتم الآن استخدام {{hotkey}} للإملاء",
+        "holdSwitchedToTap": "وضع «استمرار الضغط» غير متاح لـ {{hotkey}} على هذا الجهاز، لذا تم تبديل التنشيط إلى «نقر»."
       }
     },
     "modelDownload": {
@@ -1360,6 +1361,17 @@
       "askAssistant": "اسأل المساعد",
       "busyRecording": "أنهِ التسجيل الحالي أولاً",
       "startMeetingRecording": "بدء تسجيل الاجتماع"
+    },
+    "handsFreeTip": {
+      "badge": "نصيحة",
+      "title": "التبديل إلى وضع بدون استخدام اليدين",
+      "description": "اضغط ضغطة مزدوجة على {{hotkey}} لبدء الوضع بدون استخدام اليدين."
+    },
+    "holdMigrationCard": {
+      "badge": "جديد في هذا التحديث",
+      "title": "اضغط مع الاستمرار للتحدث، وأفلت المفتاح للإنهاء",
+      "description": "غيّرنا طريقة عمل الاختصار لديك: اضغط مع الاستمرار على {{hotkey}} أثناء التحدث.",
+      "gesture": "اضغط عليه ضغطة مزدوجة لبدء الوضع بدون استخدام اليدين، واضغط مرة أخرى للإيقاف."
     }
   },
   "calendar": {
@@ -2951,7 +2963,15 @@
         "linuxPttSetupNote": "بعد تشغيل الأمر، قم بتسجيل الخروج وتسجيل الدخول مرة أخرى.",
         "hyprlandConfigWriteWarningTitle": "لن يتم حفظ اختصارات Hyprland بشكل دائم",
         "hyprlandConfigWriteWarningDescription": "لا يمكن لـ OpenWhispr الكتابة إلى {{path}}، لذلك لن تبقى الاختصارات بعد إعادة تحميل تكوين Hyprland. تأكد من وجود الملف وقابليته للكتابة.",
-        "hyprlandUnbindDescription": "في Hyprland، يستحوذ OpenWhispr على الاختصار المحدد. سيتم فك أي ارتباط Hyprland موجود يستخدم مجموعة المفاتيح نفسها عندما يسجل OpenWhispr اختصاره."
+        "hyprlandUnbindDescription": "في Hyprland، يستحوذ OpenWhispr على الاختصار المحدد. سيتم فك أي ارتباط Hyprland موجود يستخدم مجموعة المفاتيح نفسها عندما يسجل OpenWhispr اختصاره.",
+        "gestures": {
+          "holdTitle": "اضغط مع الاستمرار للتحدث",
+          "holdDetail": "أفلت المفتاح للإنهاء",
+          "handsFreeTitle": "بدون استخدام اليدين",
+          "handsFreeDetail": "اضغط مرة أخرى للإيقاف",
+          "doublePress": "ضغطة مزدوجة",
+          "tapOnlyTitle": "اضغط للبدء، واضغط مرة أخرى للإيقاف"
+        }
       },
       "meetingHotkey": {
         "title": "مفتاح اختصار وضع الاجتماع",
@@ -3523,11 +3543,17 @@
       "mouseButtonOnlyMac": "اختصارات أزرار الماوس مدعومة حاليًا على نظام macOS فقط.",
       "alreadyRegistered": "\"{{hotkey}}\" مسجل بالفعل بواسطة تطبيق آخر.",
       "osReserved": "قد يكون \"{{hotkey}}\" محجوزًا بواسطة بيئة سطح المكتب لديك.",
-      "holdNeedsReleaseKey": "يحتاج الضغط المستمر للتحدث إلى مفتاح يمكن لـ macOS أن يرصد تحريره: Globe، أو مفتاح جانبي أيمن مثل Option الأيمن، أو اختصار مع مفتاح تعديل. أما النقر فيعمل مع أي مفتاح.",
       "registrationFailed": "تعذر تسجيل \"{{hotkey}}\". قد يكون قيد الاستخدام بواسطة تطبيق آخر.",
       "updateFailedCheckFormat": "فشل تحديث الاختصار إلى \"{{hotkey}}\". تأكد من أن التنسيق صالح.",
       "trySuggestions": "جرّب: {{suggestions}}",
-      "slotConflict": "هذا الاختصار مستخدم بالفعل لـ {{slot}}."
+      "slotConflict": "هذا الاختصار مستخدم بالفعل لـ {{slot}}.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" لا يحتوي على مفتاح عادي، لذا لا يمكن لسطح المكتب لديك معرفة وقت إفلاته. جرّب {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "لا يمكن لسطح المكتب لديك الإبلاغ عن إفلات المفاتيح. يتطلب وضع «اضغط مع الاستمرار للتحدث» GNOME 48 أو أحدث، أو KDE Plasma، أو جلسة X11.",
+      "holdUnsupportedOnHyprland": "في Hyprland، يتوفر وضع «استمرار الضغط» لاختصار الإملاء فقط."
+    },
+    "portal": {
+      "voiceAgentHold": "اضغط مع الاستمرار للتحدث إلى المساعد",
+      "translationHold": "اضغط مع الاستمرار للإملاء بغرض الترجمة"
     }
   },
   "systemSettings": {

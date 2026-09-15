@@ -121,11 +121,17 @@
       "mouseButtonOnlyMac": "Los atajos con botones del ratón solo son compatibles con macOS por ahora.",
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
-      "holdNeedsReleaseKey": "Mantener para hablar necesita una tecla cuya liberación macOS pueda detectar: Globo, una tecla derecha como Opción derecha o un atajo con modificador. Pulsar funciona con cualquier tecla.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" no incluye una tecla normal, así que tu escritorio no puede detectar cuándo la sueltas. Prueba {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Tu escritorio no puede informar cuándo se suelta una tecla. Mantener para hablar necesita GNOME 48 o posterior, KDE Plasma o una sesión X11.",
       "registrationFailed": "No se pudo registrar \"{{hotkey}}\". Puede estar en uso por otra aplicación.",
       "updateFailedCheckFormat": "No se pudo actualizar el atajo a \"{{hotkey}}\". Comprueba que el formato sea válido.",
       "trySuggestions": "Prueba: {{suggestions}}",
-      "slotConflict": "Este atajo ya está asignado a {{slot}}."
+      "slotConflict": "Este atajo ya está asignado a {{slot}}.",
+      "holdUnsupportedOnHyprland": "En Hyprland, Mantener solo está disponible para el atajo de dictado."
+    },
+    "portal": {
+      "voiceAgentHold": "Mantén pulsado para hablar con el asistente",
+      "translationHold": "Mantén pulsado para dictar y traducir"
     }
   },
   "systemSettings": {
@@ -957,7 +963,8 @@
         "failedToRegister": "No se pudo registrar el atajo. Inténtalo de nuevo."
       },
       "messages": {
-        "nowUsing": "Ahora se usa {{hotkey}} para dictado"
+        "nowUsing": "Ahora se usa {{hotkey}} para dictado",
+        "holdSwitchedToTap": "Mantener no está disponible para {{hotkey}} en este dispositivo, así que la activación cambió a Pulsar."
       }
     },
     "modelDownload": {
@@ -1944,7 +1951,15 @@
         "linuxPttSetupNote": "Después de ejecutar el comando, cierra sesión y vuelve a iniciarla.",
         "hyprlandConfigWriteWarningTitle": "Los atajos de Hyprland no se conservarán",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr no puede escribir en {{path}}, así que los atajos no sobrevivirán a una recarga de la configuración de Hyprland. Asegúrate de que el archivo exista y se pueda escribir.",
-        "hyprlandUnbindDescription": "En Hyprland, OpenWhispr reserva el atajo seleccionado. Cualquier atajo existente de Hyprland que use la misma combinación de teclas se desvinculará cuando OpenWhispr registre su atajo."
+        "hyprlandUnbindDescription": "En Hyprland, OpenWhispr reserva el atajo seleccionado. Cualquier atajo existente de Hyprland que use la misma combinación de teclas se desvinculará cuando OpenWhispr registre su atajo.",
+        "gestures": {
+          "holdTitle": "Mantén pulsado para hablar",
+          "holdDetail": "Suelta para terminar",
+          "handsFreeTitle": "Manos libres",
+          "handsFreeDetail": "Pulsa otra vez para detener",
+          "doublePress": "Pulsar dos veces",
+          "tapOnlyTitle": "Pulsa para iniciar y otra vez para detener"
+        }
       },
       "meetingHotkey": {
         "title": "Atajo modo reunión",
@@ -3616,6 +3631,17 @@
       "askAssistant": "Preguntar al asistente",
       "busyRecording": "Primero termina la grabación actual",
       "startMeetingRecording": "Iniciar grabación de reunión"
+    },
+    "handsFreeTip": {
+      "badge": "Consejo",
+      "title": "Cambia al modo manos libres",
+      "description": "Pulsa {{hotkey}} dos veces para iniciar el modo manos libres."
+    },
+    "holdMigrationCard": {
+      "badge": "Novedad de esta actualización",
+      "title": "Mantén pulsado para hablar, suelta para terminar",
+      "description": "Hemos cambiado cómo funciona tu atajo: mantén pulsado {{hotkey}} mientras hablas.",
+      "gesture": "Púlsalo dos veces para el modo manos libres y pulsa otra vez para detener."
     }
   },
   "dictationAgent": {

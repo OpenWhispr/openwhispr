@@ -272,24 +272,30 @@ class GnomeShortcutManager {
     return this.globalShortcutsPortal.isAvailable();
   }
 
-  async registerPushToTalk(hotkey, callback) {
+  // Bind a slot's hotkey through the GlobalShortcuts portal, which reports
+  // press and release. The slot's gsettings toggle binding stands down first:
+  // GNOME would otherwise route the key to it instead of the portal session.
+  async registerPushToTalk(hotkey, callback, slotName = "dictation") {
     const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
     if (!preferredTrigger) return false;
 
-    await this.unregisterKeybinding("dictation");
+    await this.unregisterKeybinding(slotName);
     const registered = await this.globalShortcutsPortal.registerKeybinding(
       preferredTrigger,
-      callback
+      callback,
+      slotName
     );
-    if (!registered) {
+    // Dictation must never be left unbound; the other slots report the
+    // failure to their caller, which restores their Tap binding.
+    if (!registered && slotName === "dictation") {
       const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
       await this.registerKeybinding(tapShortcut, "dictation");
     }
     return registered;
   }
 
-  async unregisterPushToTalk() {
-    await this.globalShortcutsPortal.unregisterKeybinding();
+  async unregisterPushToTalk(slotName = "dictation") {
+    await this.globalShortcutsPortal.unregisterKeybinding(slotName);
   }
 
   static isValidShortcut(shortcut) {
