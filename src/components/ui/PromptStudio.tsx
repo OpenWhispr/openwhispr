@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { isS1MiniModel, S1_MINI_OPTIONS, type S1MiniOptions } from "../../config/s1Mini";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./button";
 import { Textarea } from "./textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 import { Eye, Edit3, Play, Save, RotateCcw, Copy, TestTube, AlertTriangle, Check } from "../icons";
 import { AlertDialog } from "./dialog";
 import { useDialogs } from "../../hooks/useDialogs";
@@ -76,6 +78,8 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   const isCloudMode = selectIsCloudCleanupMode(effectiveSettings);
   const useCleanupModel = effectiveSettings.useCleanupModel;
   const cleanupModel = effectiveSettings.cleanupModel;
+  const isS1Mini = kind === "cleanup" && !isCloudMode && isS1MiniModel(cleanupModel);
+  const setS1MiniOptions = useSettingsStore((s) => s.setS1MiniOptions);
 
   const isCloudDictationAgent = selectIsCloudDictationAgentMode(effectiveSettings);
   const useDictationAgent = effectiveSettings.useDictationAgent;
@@ -267,7 +271,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
       const modelToUse = isCloudMode ? cleanupModel || "auto" : cleanupModel;
 
       const previous = customPrompt;
-      setCustomPrompt(kind, editedPrompt);
+      if (!isS1Mini) setCustomPrompt(kind, editedPrompt);
       try {
         const result = await ReasoningService.processText(testText, modelToUse, agentName, {
           inferenceScope: "dictationCleanup",
@@ -275,7 +279,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         });
         setTestResult(result);
       } finally {
-        setCustomPrompt(kind, previous);
+        if (!isS1Mini) setCustomPrompt(kind, previous);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -292,11 +296,16 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   };
 
   const isAgentAddressed = testText.toLowerCase().includes(agentName.toLowerCase());
-  const isCustomPrompt = customPrompt.length > 0;
+  const isCustomPrompt = !isS1Mini && customPrompt.length > 0;
   const currentPrompt = customPrompt || defaultPrompt;
+  const visibleTab = isS1Mini && activeTab === "edit" ? "current" : activeTab;
 
   const tabs = [
-    { id: "current" as const, label: t("promptStudio.tabs.view"), icon: Eye },
+    {
+      id: "current" as const,
+      label: t(isS1Mini ? "s1Mini.options" : "promptStudio.tabs.view"),
+      icon: Eye,
+    },
     { id: "edit" as const, label: t("promptStudio.tabs.customize"), icon: Edit3 },
     { id: "test" as const, label: t("promptStudio.tabs.test"), icon: TestTube },
   ];
@@ -314,28 +323,72 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
       {/* Tab Navigation + Content in a single panel */}
       <div className="rounded-xl border border-border/70 dark:border-border-subtle bg-card dark:bg-surface-2 overflow-hidden">
         <div className="flex border-b border-border/70 dark:border-border-subtle">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-medium transition-colors duration-150 border-b-2 ${
-                  isActive
-                    ? "border-primary text-foreground bg-primary/5 dark:bg-primary/3"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-black/2 dark:hover:bg-white/2"
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {tab.label}
-              </button>
-            );
-          })}
+          {tabs
+            .filter((tab) => !isS1Mini || tab.id !== "edit")
+            .map((tab) => {
+              const Icon = tab.icon;
+              const isActive = visibleTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-medium transition-colors duration-150 border-b-2 ${
+                    isActive
+                      ? "border-primary text-foreground bg-primary/5 dark:bg-primary/3"
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:bg-black/2 dark:hover:bg-white/2"
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                </button>
+              );
+            })}
         </div>
 
         {/* ── View Tab ── */}
-        {activeTab === "current" && (
+        {isS1Mini && (
+          <div className="px-5 py-4 space-y-3 border-b border-border/70">
+            <p className="text-xs text-muted-foreground">{t("s1Mini.description")}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {(Object.keys(S1_MINI_OPTIONS) as (keyof S1MiniOptions)[]).map((axis) => (
+                <div key={axis} className="space-y-2">
+                  <label
+                    htmlFor={`s1-mini-${axis}`}
+                    className="block text-xs font-medium capitalize"
+                  >
+                    {t(`s1Mini.${axis}`)}
+                  </label>
+                  <Select
+                    value={effectiveSettings.s1MiniOptions[axis]}
+                    onValueChange={(value) => setS1MiniOptions({ [axis]: value })}
+                  >
+                    <SelectTrigger
+                      id={`s1-mini-${axis}`}
+                      aria-describedby={`s1-mini-${axis}-help`}
+                      className="h-9 text-xs"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {S1_MINI_OPTIONS[axis].map((value) => (
+                        <SelectItem key={value} value={value} className="text-xs">
+                          {t(`s1Mini.values.${value}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p
+                    id={`s1-mini-${axis}-help`}
+                    className="text-xs leading-relaxed text-muted-foreground"
+                  >
+                    {t(`s1Mini.help.${axis}`)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {visibleTab === "current" && !isS1Mini && (
           <div className="divide-y divide-border/60 dark:divide-border-subtle">
             <div className="px-5 py-4">
               <div className="flex items-center justify-between mb-3">
@@ -382,7 +435,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         )}
 
         {/* ── Edit Tab ── */}
-        {activeTab === "edit" && (
+        {visibleTab === "edit" && (
           <div className="divide-y divide-border/60 dark:divide-border-subtle">
             <div className="px-5 py-4">
               <p className="text-xs text-muted-foreground leading-relaxed">
@@ -430,7 +483,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         )}
 
         {/* ── Test Tab ── */}
-        {activeTab === "test" &&
+        {visibleTab === "test" &&
           (() => {
             // Each kind reports the scope that actually runs it.
             const testIsCloud = isTranslate

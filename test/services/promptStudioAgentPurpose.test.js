@@ -44,6 +44,7 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
             "zustand/react/shallow": "zustand-shallow",
             "./button": "button",
             "./textarea": "textarea",
+            "./select": "select",
             "../icons": "icons",
             "./dialog": "dialog",
           };
@@ -93,6 +94,9 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
           }
           if (id === "\0prompt-studio-button") return "export function Button() {}";
           if (id === "\0prompt-studio-textarea") return "export function Textarea() {}";
+          if (id === "\0prompt-studio-select") {
+            return "export const Select = () => null, SelectContent = Select, SelectItem = Select, SelectTrigger = Select, SelectValue = Select;";
+          }
           if (id === "\0prompt-studio-icons") {
             return `
               export const Eye = () => null;
