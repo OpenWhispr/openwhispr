@@ -3093,8 +3093,13 @@ class IPCHandlers {
       // Promise cannot cross Electron's IPC boundary, though, and renderer
       // callers need to know whether text was pasted, but not the delayed
       // clipboard restoration promise. Successful platform paths predate the
-      // explicit `pasted` outcome; only the clipboard-only fallback sets false.
-      return { success: true, pasted };
+      // explicit `pasted` outcome; only the clipboard-only fallback and a paste
+      // held back for still-held modifiers (which carries a `reason`) set false.
+      return {
+        success: true,
+        pasted,
+        ...(pasteResult?.reason ? { reason: pasteResult.reason } : {}),
+      };
     });
 
     ipcMain.handle("check-accessibility-permission", async (_event, silent = false) => {

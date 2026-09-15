@@ -43,6 +43,11 @@ test("builds a structured prompt that keeps instruction and selection separate",
     getSelectionCaptureDisposition({ status: "unavailable", code: "accessibility_unavailable" }),
     "standalone"
   );
+  // Keys held past the modifier wait (#2113) block the copy the same way.
+  assert.equal(
+    getSelectionCaptureDisposition({ status: "unavailable", code: "modifiers_held" }),
+    "standalone"
+  );
   assert.equal(getSelectionCaptureDisposition({ status: "target_changed" }), "changed");
   assert.equal(
     getSelectionCaptureDisposition({ status: "unavailable", code: "copy_failed" }),

@@ -63,7 +63,10 @@ const clipboardModulePath = require.resolve("../../src/helpers/clipboard");
 
 const originalLoad = Module._load;
 
-function loadClipboardManager({ spawn } = {}) {
+// The held-modifier wait spawns the fast-paste binary ahead of every Linux paste.
+// Tests that pin the paste chain's spawn sequence see it as already released;
+// the wait itself is covered by tests that load with `realModifierWait`.
+function loadClipboardManager({ spawn, realModifierWait = false } = {}) {
   delete require.cache[clipboardModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
@@ -82,7 +85,11 @@ function loadClipboardManager({ spawn } = {}) {
   };
 
   try {
-    return require("../../src/helpers/clipboard");
+    const LoadedClipboardManager = require("../../src/helpers/clipboard");
+    if (!realModifierWait) {
+      LoadedClipboardManager.prototype._awaitModifierRelease = async () => "released";
+    }
+    return LoadedClipboardManager;
   } finally {
     Module._load = originalLoad;
   }
@@ -728,6 +735,206 @@ test("XWayland fallback remains reachable after native Wayland failure", async (
   assert.deepEqual(
     spawnCalls.map((call) => call.args),
     [["--uinput", "--shift-insert"], ["--shift-insert"]]
+  );
+});
+
+const MODIFIER_WAIT_CALL = {
+  command: "/tmp/linux-fast-paste",
+  args: ["--capabilities", "--await-modifier-release", "1500"],
+};
+
+// A chord injected into still-held modifiers reaches the target as a different
+// shortcut (#2113), so every paste tool — not only the fast-paste binary — waits.
+for (const [desktop, commandExists, injector] of [
+  ["Sway", (command) => command === "wtype", "wtype"],
+  ["GNOME", () => false, "/tmp/linux-fast-paste"],
+]) {
+  test(`${desktop} waits for held modifiers before ${injector} injects the paste`, async () => {
+    const spawnCalls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSpawn(spawnCalls, [0, 0], { stdout: ["MODIFIERS released 120\n"] }),
+      realModifierWait: true,
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = commandExists;
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+    manager._readPortalToken = () => null;
+
+    const result = await withWaylandEnvironment(desktop, () => manager.pasteLinux(null));
+
+    assert.deepEqual(spawnCalls[0], MODIFIER_WAIT_CALL);
+    assert.deepEqual(
+      spawnCalls.slice(1).map((call) => call.command),
+      [injector]
+    );
+    assert.notEqual(result.pasted, false);
+  });
+}
+
+test("modifiers still held leave the text on the clipboard without injecting", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0], { stdout: ["MODIFIERS held 1500\n"] }),
+    realModifierWait: true,
+  });
+  const manager = new TestClipboardManager();
+  let restoreScheduled = false;
+  manager.commandExists = (command) => command === "wtype";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._restoreClipboardAfterDelay = async () => {
+    restoreScheduled = true;
+  };
+
+  const result = await withWaylandEnvironment("Sway", () =>
+    manager.pasteLinux({ type: "text", data: "previous clipboard" })
+  );
+
+  assert.deepEqual(spawnCalls, [MODIFIER_WAIT_CALL]);
+  assert.equal(result.pasted, false);
+  assert.equal(result.reason, "modifiers-held");
+  assert.equal(restoreScheduled, false, "the transcript stays on the clipboard");
+});
+
+// "unknown" (a Wayland session without /dev/input access) and the capabilities
+// line an older binary prints for the unknown flag both mean the state can't be
+// read, which must paste exactly as before.
+for (const [label, output] of [
+  ["an unreadable key state", "MODIFIERS unknown 0\n"],
+  ["an older binary", "paste-v1 selection-copy-v1 target-window-v1\n"],
+]) {
+  test(`${label} still pastes`, async () => {
+    const spawnCalls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSpawn(spawnCalls, [0, 0], { stdout: [output] }),
+      realModifierWait: true,
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => command === "wtype";
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+    await withWaylandEnvironment("Sway", () => manager.pasteLinux(null));
+
+    assert.deepEqual(
+      spawnCalls.map((call) => call.command),
+      ["/tmp/linux-fast-paste", "wtype"]
+    );
+  });
+}
+
+// The helper can only hang if the X server or an evdev read stalls, but a hung
+// wait must never hang the paste: the watchdog kills it and pastes as before.
+test("a hung modifier wait is killed after the watchdog budget, reads as unknown, and ignores its late answer", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const info = t.mock.method(debugLogger, "info");
+  const kills = [];
+  let hungProcess;
+  const TestClipboardManager = loadClipboardManager({
+    spawn: () => {
+      hungProcess = new EventEmitter();
+      hungProcess.stdout = new EventEmitter();
+      hungProcess.stderr = new EventEmitter();
+      hungProcess.exitCode = null;
+      hungProcess.kill = (signal) => kills.push(signal);
+      return hungProcess;
+    },
+    realModifierWait: true,
+  });
+  const manager = new TestClipboardManager();
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+  let state = null;
+  const wait = manager._awaitModifierRelease().then((resolved) => {
+    state = resolved;
+  });
+  t.mock.timers.tick(2499);
+  await Promise.resolve();
+  assert.equal(state, null, "the wait budget plus a second of slack is honored");
+  assert.deepEqual(kills, []);
+
+  t.mock.timers.tick(1);
+  await wait;
+  assert.equal(state, "unknown");
+  assert.deepEqual(kills, ["SIGKILL"]);
+
+  hungProcess.stdout.emit("data", "MODIFIERS held 1500\n");
+  hungProcess.emit("close", null);
+  assert.equal(
+    info.mock.calls.filter((call) => call.arguments[0] === "Waited for held modifier keys").length,
+    0,
+    "a killed helper's late output is not logged as a wait"
+  );
+});
+
+// Without /dev/input access on Wayland the helper answers "unknown" and the fix
+// is inert; the log must say so once, or support cannot tell that from "released".
+test("an unreadable modifier state is logged once per session", async (t) => {
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const info = t.mock.method(debugLogger, "info");
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn([], [0, 0, 0, 0], {
+      stdout: ["MODIFIERS unknown 0\n", "", "MODIFIERS unknown 0\n", ""],
+    }),
+    realModifierWait: true,
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "wtype";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+  await withWaylandEnvironment("Sway", async () => {
+    await manager.pasteLinux(null);
+    await manager.pasteLinux(null);
+  });
+
+  const unreadable = info.mock.calls.filter(
+    (call) => call.arguments[0] === "Modifier key state unreadable, pasting without waiting"
+  );
+  assert.equal(unreadable.length, 1);
+  assert.deepEqual(unreadable[0].arguments[1], {
+    isWayland: true,
+    helperOutput: "MODIFIERS unknown 0",
+  });
+  assert.equal(unreadable[0].arguments[2], "clipboard");
+});
+
+test(
+  "a modifier wait whose helper fails to spawn reads as unknown",
+  { timeout: 5000 },
+  async (t) => {
+    // Frozen timers: only the spawn error itself may settle the wait, not the watchdog.
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const TestClipboardManager = loadClipboardManager({
+      spawn: () => {
+        const failedProcess = new EventEmitter();
+        failedProcess.stdout = new EventEmitter();
+        failedProcess.stderr = new EventEmitter();
+        process.nextTick(() => failedProcess.emit("error", new Error("ENOENT")));
+        return failedProcess;
+      },
+      realModifierWait: true,
+    });
+    const manager = new TestClipboardManager();
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+    assert.equal(await manager._awaitModifierRelease(), "unknown");
+  }
+);
+
+test("without the fast-paste binary the paste chain is unchanged", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+    realModifierWait: true,
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "wtype";
+  manager.resolveLinuxFastPasteBinary = () => null;
+
+  await withWaylandEnvironment("Sway", () => manager.pasteLinux(null));
+
+  assert.deepEqual(
+    spawnCalls.map((call) => call.command),
+    ["wtype"]
   );
 });
 

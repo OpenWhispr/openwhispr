@@ -40,6 +40,10 @@ export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  // The audio manager settles processing before the transcript is pasted; the
+  // hook keeps the pill in processing until the paste attempt has settled (a
+  // Linux paste can wait up to 1.5 s for held modifier keys).
+  const [isPasting, setIsPasting] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isAssistantVoice, setIsAssistantVoice] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
@@ -54,6 +58,8 @@ export const useAudioRecording = (toast, options = {}) => {
   const stopLockRef = useRef(false);
   const preparationGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
+  const isProcessingRef = useRef(false);
+  const pastePendingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
   const demoKindRef = useRef("dictation");
   const onDemoEventRef = useRef(options.onDemoEvent);
@@ -329,7 +335,9 @@ export const useAudioRecording = (toast, options = {}) => {
         audioManagerRef.current?.streamingPartialText
       ).trim() || fallback.trim();
 
-    const showDictationError = ({ title, description, transcript = "", duration }) => {
+    // `onRetry` replaces the default Retry (a new recording) for a pill whose
+    // transcript is already kept and only needs delivering again.
+    const showDictationError = ({ title, description, transcript = "", duration, onRetry }) => {
       const recoverAssistant = Boolean(audioManagerRef.current?.voiceAgentRequested);
       onDictationError?.({ recoverAssistant });
       const recoverableTranscript = getRecoverableTranscript(transcript);
@@ -338,7 +346,7 @@ export const useAudioRecording = (toast, options = {}) => {
           label: t("common.retry"),
           icon: "retry",
           dismissOnClick: false,
-          onClick: () => performStartRecording(lastStartOptionsRef.current),
+          onClick: onRetry ?? (() => performStartRecording(lastStartOptionsRef.current)),
         },
       ];
 
@@ -364,7 +372,14 @@ export const useAudioRecording = (toast, options = {}) => {
 
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
-        reportLifecycle(isRecording ? "recording" : isProcessing ? "processing" : "idle");
+        isProcessingRef.current = isProcessing;
+        reportLifecycle(
+          isRecording
+            ? "recording"
+            : isProcessing || pastePendingRef.current
+              ? "processing"
+              : "idle"
+        );
         if (isRecording) {
           onDemoEventRef.current?.({ kind: demoKindRef.current, status: "listening" });
         } else if (isProcessing) {
@@ -611,37 +626,96 @@ export const useAudioRecording = (toast, options = {}) => {
             }
           };
 
+          const pasteOptions = {
+            restoreClipboard: !keepTranscriptionInClipboard,
+            allowClipboardFallback: isAccessibilitySkipped(),
+          };
+
+          const whilePasting = async (attempt) => {
+            pastePendingRef.current = true;
+            setIsPasting(true);
+            reportLifecycle("processing");
+            try {
+              return await attempt();
+            } finally {
+              pastePendingRef.current = false;
+              setIsPasting(false);
+              if (!wasRecordingRef.current && !isProcessingRef.current) reportLifecycle("idle");
+            }
+          };
+
+          // A paste held back because keys were still down keeps the transcript
+          // and says why it did not land. Its Retry pastes the kept text again
+          // rather than starting another recording.
+          const reportHeldBackPaste = async (
+            delivery,
+            { title, description, descriptionClipboardFailed }
+          ) => {
+            const keptInClipboard = await keepInClipboard(delivery);
+            window.electronAPI?.hideDictationPreview?.();
+            showDictationError({
+              title,
+              // Never promise a clipboard that rejected the write; the transcript
+              // action on this pill is the recovery path either way.
+              description: keptInClipboard ? description : descriptionClipboardFailed,
+              transcript: result.rawText ?? result.text,
+              onRetry: async () => {
+                if (await pasteTranscript()) dismissDictationError?.();
+              },
+            });
+          };
+
+          const pasteTranscript = async () => {
+            const pasteOutcome = await whilePasting(() =>
+              audioManagerRef.current.safePaste(result.text, {
+                ...(isStreaming ? { fromStreaming: true } : {}),
+                ...pasteOptions,
+              })
+            );
+            if (pasteOutcome.reason === "modifiers-held") {
+              await reportHeldBackPaste("modifiers-held", {
+                title: t("hooks.audioRecording.modifiersHeld.title"),
+                description: t("hooks.audioRecording.modifiersHeld.description"),
+                descriptionClipboardFailed: t(
+                  "hooks.audioRecording.modifiersHeld.descriptionClipboardFailed"
+                ),
+              });
+            }
+            return pasteOutcome.pasted;
+          };
+
           if (pushForceStoppedRef.current && autoPasteEnabled && !result.assistantConversation) {
             // The push hit its safety ceiling while the trigger keys were still
             // down. Injecting the paste shortcut into those held modifiers is
             // what silently loses the transcript, so keep it instead.
-            const keptInClipboard = await keepInClipboard("push-force-stopped");
-            window.electronAPI?.hideDictationPreview?.();
-            showDictationError({
+            await reportHeldBackPaste("push-force-stopped", {
               title: t("hooks.audioRecording.pushForceStopped.title"),
-              // Never promise a clipboard that rejected the write; the transcript
-              // action on this pill is the recovery path either way.
-              description: t(
-                keptInClipboard
-                  ? "hooks.audioRecording.pushForceStopped.description"
-                  : "hooks.audioRecording.pushForceStopped.descriptionClipboardFailed"
+              description: t("hooks.audioRecording.pushForceStopped.description"),
+              descriptionClipboardFailed: t(
+                "hooks.audioRecording.pushForceStopped.descriptionClipboardFailed"
               ),
-              transcript: result.rawText ?? result.text,
             });
           } else if (autoPasteEnabled && !result.assistantConversation) {
             const pasteStart = performance.now();
             let pasteSucceeded = true;
             if (result.selectionEdit?.sessionId) {
-              const replacement = await window.electronAPI?.replaceSelectedText?.(
-                result.selectionEdit.sessionId,
-                result.text,
-                {
-                  restoreClipboard: !keepTranscriptionInClipboard,
-                  allowClipboardFallback: isAccessibilitySkipped(),
-                }
+              const replacement = await whilePasting(() =>
+                window.electronAPI?.replaceSelectedText?.(
+                  result.selectionEdit.sessionId,
+                  result.text,
+                  pasteOptions
+                )
               );
               pasteSucceeded = replacement?.success === true;
-              if (!pasteSucceeded) {
+              if (replacement?.code === "modifiers_held") {
+                await reportHeldBackPaste("selection-edit-modifiers-held", {
+                  title: t("hooks.audioRecording.selectionEditing.notAppliedTitle"),
+                  description: t("hooks.audioRecording.selectionEditing.modifiersHeld"),
+                  descriptionClipboardFailed: t(
+                    "hooks.audioRecording.selectionEditing.modifiersHeldClipboardFailed"
+                  ),
+                });
+              } else if (!pasteSucceeded) {
                 window.electronAPI?.hideDictationPreview?.();
                 if (keepTranscriptionInClipboard) {
                   await keepInClipboard("selection-edit-fallback");
@@ -655,11 +729,7 @@ export const useAudioRecording = (toast, options = {}) => {
                 });
               }
             } else {
-              pasteSucceeded = await audioManagerRef.current.safePaste(result.text, {
-                ...(isStreaming ? { fromStreaming: true } : {}),
-                restoreClipboard: !keepTranscriptionInClipboard,
-                allowClipboardFallback: isAccessibilitySkipped(),
-              });
+              pasteSucceeded = await pasteTranscript();
             }
             logger.info(
               "Paste timing",
@@ -908,7 +978,7 @@ export const useAudioRecording = (toast, options = {}) => {
     voiceAgentRequested = false,
     translationRequested = false,
   } = {}) => {
-    if (!isRecording && !isProcessing) {
+    if (!isRecording && !isProcessing && !isPasting) {
       await performStartRecording({ voiceAgentRequested, translationRequested });
     } else if (isRecording) {
       await performStopRecording();
@@ -917,7 +987,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
   return {
     isRecording,
-    isProcessing,
+    isProcessing: isProcessing || isPasting,
     isStreaming,
     isAssistantVoice,
     isPreparing,

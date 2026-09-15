@@ -21,6 +21,12 @@ const PASTE_DELAYS = {
   linux: 50,
 };
 
+// How long a Linux paste or copy waits for the user to let go of held modifiers
+// before giving up and leaving the text on the clipboard. Covers someone still
+// resting on the rest of a push-to-talk chord; a key held on purpose past this
+// surfaces as an unpasted transcript instead of an indefinite wait.
+const MODIFIER_RELEASE_WAIT_MS = 1500;
+
 const RESTORE_DELAYS = {
   darwin: 450,
   win32_nircmd: 500,
@@ -681,6 +687,64 @@ class ClipboardManager {
       debugLogger.warn("hyprctl window detection failed", { error: err?.message }, "clipboard");
       return null;
     }
+  }
+
+  // A paste or copy chord injected while the user still holds a modifier reaches
+  // the target as a different shortcut (Super+Ctrl+V), and the text is lost.
+  // Resolves "released" (possibly after waiting), "held" once the wait runs out,
+  // or "unknown" when the key state can't be read, in which case the caller
+  // proceeds as it always has.
+  _awaitModifierRelease() {
+    const binary = this.resolveLinuxFastPasteBinary();
+    if (!binary) return Promise.resolve("unknown");
+
+    return new Promise((resolve) => {
+      // --capabilities comes first so an older binary that doesn't know the wait
+      // flag prints its capabilities and exits instead of falling through to a paste.
+      const proc = spawn(binary, [
+        "--capabilities",
+        "--await-modifier-release",
+        String(MODIFIER_RELEASE_WAIT_MS),
+      ]);
+      let stdout = "";
+      let timedOut = false;
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        killProcess(proc, "SIGKILL");
+        resolve("unknown");
+      }, MODIFIER_RELEASE_WAIT_MS + 1000);
+
+      proc.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      proc.on("close", () => {
+        if (timedOut) return;
+        clearTimeout(timeoutId);
+        const [, state = "unknown", waitedMs = "0"] =
+          stdout.match(/^MODIFIERS (released|held|unknown) (\d+)$/m) || [];
+        if (state === "held" || Number(waitedMs) > 0) {
+          debugLogger.info("Waited for held modifier keys", { state, waitedMs }, "clipboard");
+        }
+        // "unknown" (no /dev/input access on Wayland, or a helper too old for the
+        // flag) means the wait is inert; say so once so support can tell it apart
+        // from a genuine "released".
+        if (state === "unknown" && !this._modifierStateUnreadableLogged) {
+          this._modifierStateUnreadableLogged = true;
+          debugLogger.info(
+            "Modifier key state unreadable, pasting without waiting",
+            { isWayland: getLinuxSessionInfo().isWayland, helperOutput: stdout.trim() },
+            "clipboard"
+          );
+        }
+        resolve(state);
+      });
+
+      proc.on("error", () => {
+        clearTimeout(timeoutId);
+        resolve("unknown");
+      });
+    });
   }
 
   _runLinuxPasteCommand(command, args, label, { expectedOutput } = {}) {
@@ -1597,6 +1661,14 @@ class ClipboardManager {
       if (useShiftInsert) args.push("--shift-insert");
       else if (isTerminalTarget) args.push("--terminal");
     };
+
+    // Every tool below injects a chord, so wait here once for held modifiers. The
+    // text is already on the clipboard; returning before a restore is scheduled
+    // keeps it there for a manual paste.
+    if ((await this._awaitModifierRelease()) === "held") {
+      this.safeLog("⌨️ Modifier keys still held, leaving the text on the clipboard");
+      return { pasted: false, reason: "modifiers-held", restoreComplete: Promise.resolve() };
+    }
 
     if (isWayland && isWlroots && wtypeExists) {
       try {

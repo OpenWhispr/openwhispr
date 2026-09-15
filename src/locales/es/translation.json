@@ -927,11 +927,18 @@
         "description": "El dictado se detuvo mientras la tecla seguía pulsada, así que el texto no se pegó. Tu transcripción está en el portapapeles.",
         "descriptionClipboardFailed": "El dictado se detuvo mientras la tecla seguía pulsada, así que el texto no se pegó y tampoco se pudo copiar al portapapeles."
       },
+      "modifiersHeld": {
+        "title": "Transcripción no pegada",
+        "description": "Una tecla modificadora (como Ctrl o Mayús) seguía pulsada, así que el texto no se pegó. Tu transcripción está en el portapapeles.",
+        "descriptionClipboardFailed": "Una tecla modificadora (como Ctrl o Mayús) seguía pulsada, así que el texto no se pegó y tampoco se pudo copiar al portapapeles."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Edición de selección no aplicada",
         "changed": "El texto seleccionado o la aplicación de destino cambió durante el procesamiento. No se reemplazó nada.",
         "expired": "La edición caducó. Selecciona el texto e inténtalo de nuevo.",
         "pasteFailed": "OpenWhispr generó la edición, pero no pudo reemplazar el texto seleccionado.",
+        "modifiersHeld": "OpenWhispr generó la edición, pero una tecla modificadora (como Ctrl o Mayús) seguía pulsada, así que no se aplicó. La edición está en el portapapeles.",
+        "modifiersHeldClipboardFailed": "OpenWhispr generó la edición, pero una tecla modificadora (como Ctrl o Mayús) seguía pulsada, así que no se aplicó, y tampoco se pudo copiar al portapapeles.",
         "unavailable": "OpenWhispr no pudo leer de forma segura el texto seleccionado. Revisa los permisos de accesibilidad o automatización.",
         "tooLarge": "La selección es demasiado grande. Selecciona 6.000 caracteres o menos.",
         "reasoningFailed": "La IA no pudo completar la edición. El texto original no se modificó."
