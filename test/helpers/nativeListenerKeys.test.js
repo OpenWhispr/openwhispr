@@ -16,6 +16,16 @@ const makeManager = (slots) => {
   return mgr;
 };
 
+const withPlatform = (platform, run) => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+  try {
+    run();
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+};
+
 test("tap mode watches modifier-only hotkeys for every slot", () => {
   const mgr = makeManager({
     dictation: "Control+Super",
@@ -51,6 +61,33 @@ test("right-side modifiers use the native listener; globe/empty slots do not", (
     agent: "",
   });
   assert.deepEqual(mgr.getNativeListenerKeys("tap"), ["RightControl"]);
+});
+
+test("mouse buttons are watched on Windows and Linux in every mode and slot", () => {
+  for (const platform of ["win32", "linux"]) {
+    withPlatform(platform, () => {
+      const mgr = makeManager({
+        dictation: ["MouseButton4", "F8"],
+        voiceAgent: "MouseButton5",
+      });
+      assert.deepEqual(mgr.getNativeListenerKeys("tap").sort(), [
+        "MouseButton4",
+        "MouseButton5",
+      ]);
+      assert.deepEqual(mgr.getNativeListenerKeys("push").sort(), [
+        "F8",
+        "MouseButton4",
+        "MouseButton5",
+      ]);
+    });
+  }
+});
+
+test("mouse buttons stay off the macOS listener key list — globeKeyManager owns them", () => {
+  withPlatform("darwin", () => {
+    const mgr = makeManager({ dictation: "MouseButton4", voiceAgent: "Control+Alt" });
+    assert.deepEqual(mgr.getNativeListenerKeys("tap"), ["Control+Alt"]);
+  });
 });
 
 test("a multi-hotkey slot watches each native hotkey but leaves regular keys to globalShortcut", () => {

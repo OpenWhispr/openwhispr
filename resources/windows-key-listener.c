@@ -5,6 +5,10 @@
  * Accepts a virtual key code as command line argument.
  * Outputs "KEY_DOWN" and "KEY_UP" to stdout.
  *
+ * Mouse side buttons ("MouseButton4"/"MouseButton5", i.e. XBUTTON1/XBUTTON2)
+ * are watched with a Low-Level Mouse Hook instead; the output protocol is the
+ * same so the manager cannot tell the difference.
+ *
  * Compile with: cl /O2 windows-key-listener.c /Fe:windows-key-listener.exe user32.lib
  * Or with MinGW: gcc -O2 windows-key-listener.c -o windows-key-listener.exe -luser32
  */
@@ -18,6 +22,10 @@
 static HHOOK g_hook = NULL;
 static DWORD g_targetVk = 0;
 static BOOL g_isKeyDown = FALSE;
+
+// Mouse side-button target (XBUTTON1/XBUTTON2); 0 when the hotkey is a key.
+// Mutated by ParseKeyCode, which has no other way to report a non-VK target.
+static DWORD g_targetXButton = 0;
 
 // Modifier key requirements
 static BOOL g_requireCtrl = FALSE;
@@ -107,6 +115,16 @@ static BOOL AreRequiredModifiersPressed(void) {
 
 // Map key name to virtual key code
 DWORD ParseKeyCode(const char* keyName) {
+    // Mouse side buttons - handled by the low-level mouse hook, not a VK
+    if (_stricmp(keyName, "MouseButton4") == 0) {
+        g_targetXButton = XBUTTON1;
+        return 0;
+    }
+    if (_stricmp(keyName, "MouseButton5") == 0) {
+        g_targetXButton = XBUTTON2;
+        return 0;
+    }
+
     // Function keys (F1-F12)
     if (_stricmp(keyName, "F1") == 0) return VK_F1;
     if (_stricmp(keyName, "F2") == 0) return VK_F2;
@@ -257,6 +275,33 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(g_hook, nCode, wParam, lParam);
 }
 
+LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode == HC_ACTION && g_targetXButton != 0) {
+        MSLLHOOKSTRUCT* mouse = (MSLLHOOKSTRUCT*)lParam;
+
+        // Ignore synthetic input (macro tools, remote-desktop clients) so only
+        // physical button presses trigger the hotkey.
+        if (!(mouse->flags & LLMHF_INJECTED)) {
+            DWORD xButton = HIWORD(mouse->mouseData);
+            if (xButton == g_targetXButton) {
+                if (wParam == WM_XBUTTONDOWN && !g_isKeyDown) {
+                    g_isKeyDown = TRUE;
+                    printf("KEY_DOWN\n");
+                    fflush(stdout);
+                } else if (wParam == WM_XBUTTONUP && g_isKeyDown) {
+                    g_isKeyDown = FALSE;
+                    printf("KEY_UP\n");
+                    fflush(stdout);
+                }
+                // Swallow the event (like the macOS event tap does) so the
+                // bound button stops acting as Browser Back / Forward.
+                return 1;
+            }
+        }
+    }
+    return CallNextHookEx(g_hook, nCode, wParam, lParam);
+}
+
 BOOL WINAPI ConsoleHandler(DWORD signal) {
     if (signal == CTRL_C_EVENT || signal == CTRL_BREAK_EVENT || signal == CTRL_CLOSE_EVENT) {
         if (g_hook) {
@@ -329,31 +374,50 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "  %s F13                      (extended function key F13-F24)\n", argv[0]);
         fprintf(stderr, "  %s CommandOrControl+F11     (with modifier)\n", argv[0]);
         fprintf(stderr, "  %s Ctrl+Shift+Space         (multiple modifiers)\n", argv[0]);
+        fprintf(stderr, "  %s MouseButton4             (mouse side button)\n", argv[0]);
         return 1;
     }
 
     g_targetVk = ParseCompoundHotkey(argv[1]);
-    if (g_targetVk == 0 && (g_requireCtrl || g_requireAlt || g_requireShift || g_requireWin)) {
+    if (g_targetXButton != 0) {
+        // Mouse hotkeys are always standalone (no modifier chords).
+        g_requireCtrl = g_requireAlt = g_requireShift = g_requireWin = FALSE;
+    } else if (g_targetVk == 0 && (g_requireCtrl || g_requireAlt || g_requireShift || g_requireWin)) {
         g_useModifiersOnly = TRUE;
     }
 
-    if (g_targetVk == 0 && !g_useModifiersOnly) {
+    if (g_targetVk == 0 && !g_useModifiersOnly && g_targetXButton == 0) {
         fprintf(stderr, "Error: Invalid key '%s'\n", argv[1]);
         return 1;
     }
 
     // Log what we're listening for
-    fprintf(stderr, "Listening for: %s (VK=0x%02X, Ctrl=%d, Alt=%d, Shift=%d, Win=%d, ModOnly=%d)\n",
-            argv[1], g_targetVk, g_requireCtrl, g_requireAlt, g_requireShift, g_requireWin, g_useModifiersOnly);
+    if (g_targetXButton != 0) {
+        fprintf(stderr, "Listening for: %s (XBUTTON%lu)\n", argv[1],
+                (unsigned long)g_targetXButton);
+    } else {
+        fprintf(stderr,
+                "Listening for: %s (VK=0x%02X, Ctrl=%d, Alt=%d, Shift=%d, Win=%d, ModOnly=%d)\n",
+                argv[1], g_targetVk, g_requireCtrl, g_requireAlt, g_requireShift, g_requireWin,
+                g_useModifiersOnly);
+    }
 
     // Set up console handler for clean shutdown
     SetConsoleCtrlHandler(ConsoleHandler, TRUE);
 
-    // Install the low-level keyboard hook
-    g_hook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, NULL, 0);
-    if (!g_hook) {
-        fprintf(stderr, "Error: Failed to install keyboard hook (error %lu)\n", GetLastError());
-        return 1;
+    // Install the low-level hook for the hotkey type
+    if (g_targetXButton != 0) {
+        g_hook = SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, NULL, 0);
+        if (!g_hook) {
+            fprintf(stderr, "Error: Failed to install mouse hook (error %lu)\n", GetLastError());
+            return 1;
+        }
+    } else {
+        g_hook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, NULL, 0);
+        if (!g_hook) {
+            fprintf(stderr, "Error: Failed to install keyboard hook (error %lu)\n", GetLastError());
+            return 1;
+        }
     }
 
     // Signal that we're ready

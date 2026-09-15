@@ -118,7 +118,6 @@
       "callbackRequired": "Se requiere una función callback para configurar el atajo",
       "globeOnlyMac": "La tecla Globe solo está disponible en macOS.",
       "fnCombinationUnsupported": "La tecla Globe/Fn solo se puede usar por sí sola.",
-      "mouseButtonOnlyMac": "Los atajos con botones del ratón solo son compatibles con macOS por ahora.",
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
       "holdNeedsReleaseKey": "Mantener para hablar necesita una tecla cuya liberación macOS pueda detectar: Globo, una tecla derecha como Opción derecha o un atajo con modificador. Pulsar funciona con cualquier tecla.",

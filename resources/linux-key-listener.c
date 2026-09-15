@@ -1,8 +1,9 @@
 /**
  * Linux Key Listener for Push-to-Talk
  *
- * Uses the evdev subsystem to detect key up/down events across all keyboards.
- * Accepts a hotkey string as command line argument (same format as Windows variant).
+ * Uses the evdev subsystem to detect key up/down events across all keyboards
+ * and mice with side buttons. Accepts a hotkey string as command line argument
+ * (same format as Windows variant).
  * Outputs "KEY_DOWN" and "KEY_UP" to stdout.
  */
 
@@ -34,6 +35,9 @@ static int require_shift = 0;
 static int require_super = 0;
 static int use_modifiers_only = 0;
 static int target_key = 0;
+// Some mice emit BTN_BACK/BTN_FORWARD instead of BTN_SIDE/BTN_EXTRA for their
+// side buttons (libinput treats them as aliases), so match either code.
+static int target_key_alt = -1;
 
 static unsigned char held_keys[KEY_BITS_SIZE];
 
@@ -160,6 +164,10 @@ static int map_key_name(const char *name) {
         strcasecmp(name, "RightMeta") == 0 || strcasecmp(name, "RightCommand") == 0 ||
         strcasecmp(name, "RightCmd") == 0) return KEY_RIGHTMETA;
 
+    // Mouse side buttons ("Back"/"Forward" on typical mice)
+    if (strcasecmp(name, "MouseButton4") == 0) return BTN_SIDE;
+    if (strcasecmp(name, "MouseButton5") == 0) return BTN_EXTRA;
+
     if (strlen(name) == 1) {
         char c = name[0];
         if (c >= 'a' && c <= 'z') c = c - 'a' + 'A';
@@ -199,6 +207,7 @@ static void parse_hotkey(const char *hotkey) {
     require_super = 0;
     use_modifiers_only = 0;
     target_key = 0;
+    target_key_alt = -1;
 
     char *token = strtok(buf, "+");
     while (token) {
@@ -233,6 +242,15 @@ static void parse_hotkey(const char *hotkey) {
 
     if (target_key == 0 && (require_ctrl || require_alt || require_shift || require_super))
         use_modifiers_only = 1;
+
+    if (target_key == BTN_SIDE)
+        target_key_alt = BTN_BACK;
+    else if (target_key == BTN_EXTRA)
+        target_key_alt = BTN_FORWARD;
+}
+
+static int has_key_bit(const unsigned char *key_bits, int code) {
+    return (key_bits[code / 8] >> (code % 8)) & 1;
 }
 
 static int is_keyboard_device(int fd) {
@@ -247,7 +265,11 @@ static int is_keyboard_device(int fd) {
     if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits)), key_bits) < 0)
         return 0;
 
-    return (key_bits[KEY_A / 8] >> (KEY_A % 8)) & 1;
+    // Keyboards advertise KEY_A; mice with side buttons advertise BTN_SIDE /
+    // BTN_EXTRA (or their BTN_BACK/BTN_FORWARD aliases) instead of letters.
+    return has_key_bit(key_bits, KEY_A) || has_key_bit(key_bits, BTN_SIDE) ||
+           has_key_bit(key_bits, BTN_EXTRA) || has_key_bit(key_bits, BTN_FORWARD) ||
+           has_key_bit(key_bits, BTN_BACK);
 }
 
 static int add_device(const char *path) {
@@ -358,7 +380,7 @@ static void handle_key_event(int code, int value) {
         return;
     }
 
-    if (code == target_key) {
+    if (code == target_key || (target_key_alt >= 0 && code == target_key_alt)) {
         if (pressed && !hotkey_active && modifiers_satisfied())
             emit_key_down();
         else if (!pressed && hotkey_active)
@@ -375,6 +397,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "  %s CommandOrControl+F11     (with modifier)\n", argv[0]);
         fprintf(stderr, "  %s Ctrl+Shift+Space         (multiple modifiers)\n", argv[0]);
         fprintf(stderr, "  %s Control+Super             (modifier-only combo)\n", argv[0]);
+        fprintf(stderr, "  %s MouseButton4              (mouse side button)\n", argv[0]);
         return 1;
     }
 

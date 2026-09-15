@@ -100,6 +100,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       }
     };
     FakeHotkeyManager.isGlobeLikeHotkey = () => false;
+    FakeHotkeyManager.isMouseButtonHotkey = (hotkey) => /^MouseButton[45]$/i.test(hotkey || "");
     return FakeHotkeyManager;
   }
   if (request === "./dragManager")

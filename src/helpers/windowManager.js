@@ -4,7 +4,7 @@ const { createLinuxWindowInputRegion } = require("./linuxWindowInputRegion");
 // Aliased: this class has an openExternalUrl method wrapping the helper.
 const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
 const HotkeyManager = require("./hotkeyManager");
-const { isGlobeLikeHotkey } = HotkeyManager;
+const { isGlobeLikeHotkey, isMouseButtonHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
 const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
 const MenuManager = require("./menuManager");
@@ -1125,11 +1125,20 @@ class WindowManager {
     // Native desktop shortcuts replace the low-level listener in tap mode. In
     // push mode, keep the dictation listener as a release-event fallback; the
     // push state machine makes duplicate backend and low-level phases harmless.
-    const keys = this.hotkeyManager.isUsingNativeShortcut()
-      ? activationMode === "push"
-        ? nativeListenerKeys.filter((key) => this.hotkeyManager.slotHasHotkey("dictation", key))
-        : []
-      : nativeListenerKeys;
+    // Mouse buttons always need the listener — DE shortcuts cannot represent
+    // them and globalShortcut is keyboard-only.
+    let keys;
+    if (this.hotkeyManager.isUsingNativeShortcut()) {
+      keys =
+        activationMode === "push"
+          ? nativeListenerKeys.filter(
+              (key) =>
+                this.hotkeyManager.slotHasHotkey("dictation", key) || isMouseButtonHotkey(key)
+            )
+          : nativeListenerKeys.filter((key) => isMouseButtonHotkey(key));
+    } else {
+      keys = nativeListenerKeys;
+    }
     if (process.platform === "win32" && this.windowsKeyManager) {
       this.windowsKeyManager.setKeys(keys);
     } else if (process.platform === "linux" && this.linuxKeyManager) {

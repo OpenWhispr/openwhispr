@@ -219,8 +219,26 @@ class HotkeyManager extends EventEmitter {
       );
     }
 
-    // On GNOME (X11 or Wayland), route named slots through native gsettings
-    if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
+    // On GNOME (X11 or Wayland), route named slots through native gsettings.
+    // Mouse buttons cannot be expressed as GNOME/KDE accelerators — when the
+    // primary hotkey is one, drop any existing DE binding for the slot and let
+    // the native low-level listener own it (setupShortcuts below).
+    const primaryIsMouseButton = isMouseButtonHotkey(hotkey);
+    if (primaryIsMouseButton) {
+      if (
+        (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) ||
+        (this.useKDE && this.kdeManager && slotName !== "cancel")
+      ) {
+        this.unregisterSlot(slotName);
+      }
+    }
+
+    if (
+      this.useGnome &&
+      this.gnomeManager &&
+      !primaryIsMouseButton &&
+      GNOME_NATIVE_SLOTS.has(slotName)
+    ) {
       const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
       if (!gnomeHotkey) {
         debugLogger.log(
@@ -268,7 +286,7 @@ class HotkeyManager extends EventEmitter {
     // On KDE (X11 or Wayland), route persistent slots through KGlobalAccel D-Bus.
     // Temporary slots like "cancel" stay on globalShortcut to avoid stale
     // KGlobalAccel registrations after crash (Escape would stop working system-wide).
-    if (this.useKDE && this.kdeManager && slotName !== "cancel") {
+    if (this.useKDE && this.kdeManager && slotName !== "cancel" && !primaryIsMouseButton) {
       this.unregisterSlot(slotName);
 
       const result = await this.kdeManager.registerKeybinding(
@@ -379,16 +397,23 @@ class HotkeyManager extends EventEmitter {
   /**
    * Hotkeys that must be watched by a native low-level listener (Windows/Linux)
    * instead of globalShortcut. Modifier-only and right-side-modifier combos never
-   * register through globalShortcut, and in push-to-talk mode dictation also needs
-   * raw key-down/key-up events. Only the dictation slot supports push-to-talk;
-   * every other slot is tap-to-toggle. Globe/mouse hotkeys are macOS-only.
+   * register through globalShortcut, mouse buttons never can (globalShortcut is
+   * keyboard-only), and in push-to-talk mode dictation also needs raw
+   * key-down/key-up events. Only the dictation slot supports push-to-talk; every
+   * other slot is tap-to-toggle. Globe hotkeys are macOS-only (globeKeyManager).
    * Each slot may bind several hotkeys, so we evaluate every one.
    */
   getNativeListenerKeys(activationMode) {
     const keys = [];
     for (const [slotName, slot] of this.slots) {
       for (const hotkey of slot.hotkeys ?? []) {
-        if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
+        if (!hotkey || isGlobeLikeHotkey(hotkey)) continue;
+        if (isMouseButtonHotkey(hotkey)) {
+          // macOS routes mouse buttons through globeKeyManager; Windows/Linux
+          // watch them with the same low-level listener process as keys.
+          if (process.platform !== "darwin") keys.push(hotkey);
+          continue;
+        }
         const pushToTalk = slotName === "dictation" && activationMode === "push";
         if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
           keys.push(hotkey);
@@ -512,12 +537,17 @@ class HotkeyManager extends EventEmitter {
   _registerSingleHotkey(hotkey, callback) {
     try {
       if (isMouseButtonHotkey(hotkey)) {
-        if (process.platform !== "darwin") {
-          return { success: false, hotkey, error: i18nMain.t("hotkey.errors.mouseButtonOnlyMac") };
+        if (process.platform === "darwin") {
+          debugLogger.log(
+            `[HotkeyManager] Mouse button "${hotkey}" set - using macOS native listener`
+          );
+        } else {
+          debugLogger.log(
+            `[HotkeyManager] Mouse button "${hotkey}" set - using ${
+              process.platform === "win32" ? "Windows" : "Linux"
+            } native listener`
+          );
         }
-        debugLogger.log(
-          `[HotkeyManager] Mouse button "${hotkey}" set - using macOS native listener`
-        );
         return { success: true, hotkey, accelerator: null };
       }
 
@@ -875,6 +905,12 @@ class HotkeyManager extends EventEmitter {
           try {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            // Mouse buttons can't be expressed as gsettings accelerators; the
+            // low-level listener owns them (setupShortcuts path).
+            if (isMouseButtonHotkey(hotkey)) {
+              this.loadSavedHotkeyOrDefault(mainWindow, callback);
+              return;
+            }
             const success = await this.registerGnomeDictationHotkey(hotkey, callback);
             if (success) {
               this.currentHotkey = hotkey;
@@ -918,6 +954,12 @@ class HotkeyManager extends EventEmitter {
           try {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            // Mouse buttons can't be expressed as hyprctl binds; the low-level
+            // listener owns them (setupShortcuts path).
+            if (isMouseButtonHotkey(hotkey)) {
+              this.loadSavedHotkeyOrDefault(mainWindow, callback);
+              return;
+            }
 
             const success = await this.hyprlandManager.registerKeybinding(
               hotkey,
@@ -964,6 +1006,12 @@ class HotkeyManager extends EventEmitter {
           try {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            // Mouse buttons can't be expressed as KGlobalAccel shortcuts; the
+            // low-level listener owns them (setupShortcuts path).
+            if (isMouseButtonHotkey(hotkey)) {
+              this.loadSavedHotkeyOrDefault(mainWindow, callback);
+              return;
+            }
             const result = await this.kdeManager.registerKeybinding(
               hotkey,
               "dictation",
@@ -1305,7 +1353,19 @@ class HotkeyManager extends EventEmitter {
         }
       }
 
-      if (this.useGnome && this.gnomeManager) {
+      // DE backends cannot bind mouse buttons; clear any DE binding for
+      // dictation and let the native low-level listener own it instead.
+      if (isMouseButtonHotkey(primary) && this.isUsingNativeShortcut()) {
+        if (this.useGnome && this.gnomeManager) {
+          await this.gnomeManager.unregisterKeybinding("dictation");
+        } else if (this.useKDE && this.kdeManager) {
+          await this.kdeManager.unregisterKeybinding("dictation");
+        } else if (this.useHyprland && this.hyprlandManager) {
+          await this.hyprlandManager.unregisterKeybinding();
+        }
+      }
+
+      if (this.useGnome && this.gnomeManager && !isMouseButtonHotkey(primary)) {
         debugLogger.log(`[HotkeyManager] Updating GNOME hotkey to "${primary}"`);
         const success = await this.registerGnomeDictationHotkey(primary, callback);
         if (!success) {
@@ -1328,7 +1388,7 @@ class HotkeyManager extends EventEmitter {
         };
       }
 
-      if (this.useHyprland && this.hyprlandManager) {
+      if (this.useHyprland && this.hyprlandManager && !isMouseButtonHotkey(primary)) {
         debugLogger.log(`[HotkeyManager] Updating Hyprland hotkey to "${primary}"`);
         const success = await this.hyprlandManager.updateKeybinding(
           primary,
@@ -1354,7 +1414,7 @@ class HotkeyManager extends EventEmitter {
         };
       }
 
-      if (this.useKDE && this.kdeManager) {
+      if (this.useKDE && this.kdeManager && !isMouseButtonHotkey(primary)) {
         debugLogger.log(`[HotkeyManager] Updating KDE hotkey to "${primary}"`);
         const previousHotkey = this.currentHotkey;
         await this.kdeManager.unregisterKeybinding("dictation");

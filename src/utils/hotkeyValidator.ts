@@ -591,12 +591,8 @@ export function validateHotkey(
   }
 
   if (isMouseButtonHotkey(hotkey)) {
-    if (platform !== "darwin") {
-      return {
-        valid: false,
-        error: "Mouse button hotkeys are currently supported on macOS only.",
-      };
-    }
+    // Every platform can bind a standalone mouse button: macOS through the
+    // Globe listener, Windows/Linux through their low-level listeners.
     return { valid: true };
   }
 

@@ -24,12 +24,15 @@ test("GLOBE/Fn is macOS-only — accepting it elsewhere would register a key the
   assert.equal(win.errorCode, "INVALID_GLOBE");
 });
 
-test("mouse button hotkeys are macOS-only and cannot combine with keyboard keys", async () => {
+test("mouse button hotkeys are valid on every platform but cannot combine with keyboard keys", async () => {
   const { validateHotkey } = await load();
 
   assert.equal(validateHotkey("MouseButton4", "darwin").valid, true);
-  assert.equal(validateHotkey("MouseButton5", "win32").valid, false);
+  assert.equal(validateHotkey("MouseButton4", "win32").valid, true);
+  assert.equal(validateHotkey("MouseButton5", "linux").valid, true);
   assert.equal(validateHotkey("Control+MouseButton4", "darwin").valid, false);
+  assert.equal(validateHotkey("Control+MouseButton4", "win32").valid, false);
+  assert.equal(validateHotkey("Control+MouseButton4", "linux").valid, false);
 });
 
 test("shortcuts with more than three keys are rejected", async () => {

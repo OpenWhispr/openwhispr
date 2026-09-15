@@ -75,6 +75,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **hotkeyManager.js**: Global hotkey registration and management
   - Named hotkey slots: `dictation`, `voiceAgent` (voice assistant — dictation routed to the assistant panel), `translation`, `meeting`
   - Handles platform-specific defaults (GLOBE on macOS, Control+Super on Windows/Linux)
+  - Mouse side buttons (`MouseButton4`/`MouseButton5`) are valid triggers on every platform: macOS via the Globe listener, Windows/Linux via the native key listeners (`WH_MOUSE_LL` / evdev `BTN_SIDE`/`BTN_EXTRA`), which swallow the bound button so it stops acting as Browser Back/Forward. GNOME/KDE/Hyprland bindings are bypassed for mouse hotkeys (DE accelerators can't represent them)
   - Auto-fallback to F8/F9 if default hotkey is unavailable
   - Notifies renderer via IPC when hotkey registration fails
   - Integrates with GnomeShortcutManager for GNOME Wayland support
