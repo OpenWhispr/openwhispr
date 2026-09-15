@@ -475,7 +475,10 @@ export function getWhisperModelInfo(modelId: string): WhisperModelInfo | undefin
 
 export const WHISPER_MODEL_INFO = modelData.whisperModels;
 
-export function getCloudModel(modelId: string): CloudModelDefinition | undefined {
+export function getCloudModel(
+  modelId: string,
+  providerId?: string
+): CloudModelDefinition | undefined {
   for (const provider of modelData.cloudProviders) {
     const model = provider.models.find((m) => m.id === modelId);
     if (model) return model;
@@ -484,6 +487,13 @@ export function getCloudModel(modelId: string): CloudModelDefinition | undefined
     const model = provider.models.find((m) => m.id === modelId);
     if (model) return model;
   }
+
+  if (providerId === "openrouter") {
+    // OpenRouter model IDs include a vendor prefix, e.g. google/gemini-3.5-flash-lite.
+    const normalizedId = modelId.replace(/^[^/]+\//, "");
+    if (normalizedId !== modelId) return getCloudModel(normalizedId);
+  }
+
   return undefined;
 }
 

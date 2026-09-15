@@ -288,7 +288,7 @@ function resolveReasoningRoute(
       visionProviderImageWired: providerSupportsImages(vision.config.provider),
       baseProviderImageWired: providerSupportsImages(agent.config.provider),
       isCloudAgent: isCloudDictationAgentMode(),
-      baseModelSupportsVision: !!getCloudModel(agent.model)?.supportsVision,
+      baseModelSupportsVision: !!getCloudModel(agent.model, agent.config.provider)?.supportsVision,
     });
     const target = useVisionOverride ? vision : agent;
     logger.logReasoning("AGENT_IMAGE_TARGET", {
