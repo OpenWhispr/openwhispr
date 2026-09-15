@@ -8,6 +8,7 @@ import OnboardingShell, { OnboardingStepHeader } from "./onboarding/OnboardingSh
 import CompactPermissionsStep from "./onboarding/CompactPermissionsStep";
 import LanguageSelectionStep from "./onboarding/LanguageSelectionStep";
 import ShortcutSetupStep from "./onboarding/ShortcutSetupStep";
+import OnboardingHotkeyGestureCard from "./onboarding/OnboardingHotkeyGestureCard";
 import AssistantHotkeyPreview from "./onboarding/AssistantHotkeyPreview";
 import DemoStep from "./onboarding/DemoStep";
 import CalendarConnectionsStep from "./onboarding/CalendarConnectionsStep";
@@ -33,7 +34,9 @@ import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils
 import {
   formatHotkeyInstruction,
   getDefaultAssistantOnboardingHotkey,
+  getOnboardingDemoDescriptionKeys,
   getRecommendedDictationHotkeys,
+  resolveOnboardingActivationMode,
   resolveOnboardingAssistantHotkey,
   resolveOnboardingDictationHotkey,
 } from "./onboarding/hotkeyPresentation";
@@ -66,8 +69,6 @@ import {
 import { useOnboardingSession } from "./onboarding/useOnboardingSession";
 import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
 import { resolveAssistantDemoScenario } from "./onboarding/assistantDemoScenario";
-import { ActivationModeSelector } from "./ui/ActivationModeSelector";
-import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
@@ -205,11 +206,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     request: requestScreenRecordingAccess,
   } = useScreenRecordingPermission();
   const {
-    supportsPushToTalk,
-    pushToTalkUnavailableReason,
-    loaded: hotkeyModeLoaded,
-  } = useHotkeyModeInfo("onboarding", dictationHotkey);
-  const { activationMode, setActivationMode } = settings;
+    supportsPushToTalk: dictationSupportsPushToTalk,
+    pushToTalkUnavailableReason: dictationPushToTalkUnavailableReason,
+    loaded: dictationHotkeyModeLoaded,
+  } = useHotkeyModeInfo("onboarding-dictation", dictationHotkey, "dictation");
+  const {
+    supportsPushToTalk: assistantSupportsPushToTalk,
+    pushToTalkUnavailableReason: assistantPushToTalkUnavailableReason,
+    loaded: assistantHotkeyModeLoaded,
+  } = useHotkeyModeInfo("onboarding-assistant", assistantHotkey, "voiceAgent");
+  const {
+    activationMode,
+    setActivationMode,
+    voiceAgentActivationMode,
+    setVoiceAgentActivationMode,
+  } = settings;
   // This hook also starts the membership fetch for already-authenticated users;
   // relying on the login transition alone would leave resumed onboarding stuck
   // waiting for workspace resolution after an app restart.
@@ -379,11 +390,38 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // (the store's "tap" is a fallback) and once main has confirmed this desktop
   // supports it — the hook's placeholder says yes on every platform.
   useEffect(() => {
-    if (currentStepId !== "dictation-hotkey" || !hotkeyModeLoaded) return;
-    if (supportsPushToTalk && localStorage.getItem("activationMode") === null) {
-      setActivationMode("push");
-    }
-  }, [currentStepId, hotkeyModeLoaded, setActivationMode, supportsPushToTalk]);
+    if (currentStepId !== "dictation-hotkey" || !dictationHotkeyModeLoaded) return;
+    const nextMode = resolveOnboardingActivationMode({
+      currentMode: activationMode,
+      storedMode: localStorage.getItem("activationMode") as "tap" | "push" | null,
+      loaded: dictationHotkeyModeLoaded,
+      supportsPushToTalk: dictationSupportsPushToTalk,
+    });
+    if (nextMode !== activationMode) setActivationMode(nextMode);
+  }, [
+    activationMode,
+    currentStepId,
+    dictationHotkeyModeLoaded,
+    dictationSupportsPushToTalk,
+    setActivationMode,
+  ]);
+
+  useEffect(() => {
+    if (currentStepId !== "assistant-hotkey" || !assistantHotkeyModeLoaded) return;
+    const nextMode = resolveOnboardingActivationMode({
+      currentMode: voiceAgentActivationMode,
+      storedMode: localStorage.getItem("voiceAgentActivationMode") as "tap" | "push" | null,
+      loaded: assistantHotkeyModeLoaded,
+      supportsPushToTalk: assistantSupportsPushToTalk,
+    });
+    if (nextMode !== voiceAgentActivationMode) setVoiceAgentActivationMode(nextMode);
+  }, [
+    assistantHotkeyModeLoaded,
+    assistantSupportsPushToTalk,
+    currentStepId,
+    setVoiceAgentActivationMode,
+    voiceAgentActivationMode,
+  ]);
 
   // The auth step lands on "permissions" before the policy and disk checks
   // settle (AppRouter's policy gate remounts this component mid-transition),
@@ -511,12 +549,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const confirmAssistantHotkey = useCallback(
     async (value: string) => {
+      if (voiceAgentActivationMode === "push") {
+        const info = await window.electronAPI?.getHotkeyModeInfo?.(value, "voiceAgent");
+        if (info && !info.supportsPushToTalk) setVoiceAgentActivationMode("tap");
+      }
       const registered = await settings.setVoiceAgentKey(
         serializeHotkeyList([value, ...parseHotkeyList(settings.voiceAgentKey).slice(1)])
       );
       return registered ? null : t("onboarding.rehaul.hotkey.inUse");
     },
-    [settings, t]
+    [setVoiceAgentActivationMode, settings, t, voiceAgentActivationMode]
   );
 
   const syncUseCases = useCallback(() => {
@@ -985,37 +1027,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               onConfirm={assistant ? confirmAssistantHotkey : confirmDictationHotkey}
               dense={assistant}
             />
-            {!assistant && (
-              <div className="mx-auto mt-8 w-full max-w-md rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-3">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0 text-start">
-                    <p className="text-sm font-medium leading-5 text-[var(--onboarding-text-primary)]">
-                      {t("onboarding.rehaul.dictationHotkey.activation")}
-                    </p>
-                    <p className="text-sm leading-5 text-[var(--onboarding-text-secondary)]">
-                      {t(
-                        activationMode === "push"
-                          ? "onboarding.activation.holdDescription"
-                          : "onboarding.activation.tapDescription"
-                      )}
-                    </p>
-                  </div>
-                  <ActivationModeSelector
-                    variant="onboarding"
-                    value={activationMode}
-                    onChange={setActivationMode}
-                    pushDisabledReason={
-                      !supportsPushToTalk
-                        ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                        : undefined
-                    }
-                  />
-                </div>
-                {platform === "linux" && activationMode === "push" && (
-                  <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
-                )}
-              </div>
-            )}
+            <OnboardingHotkeyGestureCard
+              confirmed={assistant ? assistantHotkeyConfirmed : dictationHotkeyConfirmed}
+              slot={assistant ? "voiceAgent" : "dictation"}
+              hotkey={assistant ? assistantHotkey : dictationHotkey}
+              mode={assistant ? voiceAgentActivationMode : activationMode}
+              platform={platform}
+              supportsPushToTalk={
+                assistant ? assistantSupportsPushToTalk : dictationSupportsPushToTalk
+              }
+              pushToTalkUnavailableReason={
+                assistant
+                  ? assistantPushToTalkUnavailableReason
+                  : dictationPushToTalkUnavailableReason
+              }
+            />
           </div>
         );
       }
@@ -1030,16 +1056,22 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         const hotkeyInstruction = formatHotkeyInstruction(
           assistant ? assistantHotkey : dictationHotkey
         );
-        const description = t(
-          assistant
-            ? `onboarding.rehaul.assistantDemo.scenarios.${scenario}.description`
-            : activationMode === "push"
-              ? "onboarding.activation.holdHotkey"
-              : "onboarding.rehaul.dictationDemo.description",
-          // Formatted for reading: the raw accelerator would show internal
-          // syntax like "GLOBE" or "CommandOrControl+Shift+Space".
-          { hotkey: hotkeyInstruction }
-        );
+        const mode = assistant ? voiceAgentActivationMode : activationMode;
+        const tapDescriptionKey = assistant
+          ? `onboarding.rehaul.assistantDemo.scenarios.${scenario}.description`
+          : "onboarding.rehaul.dictationDemo.description";
+        const description = getOnboardingDemoDescriptionKeys({
+          mode,
+          tapDescriptionKey,
+        })
+          .map((key) =>
+            t(key, {
+              // Formatted for reading: the raw accelerator would show internal
+              // syntax like "GLOBE" or "CommandOrControl+Shift+Space".
+              hotkey: hotkeyInstruction,
+            })
+          )
+          .join(" ");
         return (
           <div className="h-full w-full pt-2">
             <OnboardingStepHeader

@@ -500,7 +500,7 @@
       "holdDescription": "按住時說話",
       "test": "測試",
       "hotkeyToStartStop": "{{hotkey}} 開始/停止",
-      "holdHotkey": "按住 {{hotkey}}",
+      "holdHotkey": "說話時按住 {{hotkey}}。",
       "textareaPlaceholder": "點擊這裡，然後使用快捷鍵開始語音輸入..."
     },
     "connectivity": {
@@ -1903,7 +1903,7 @@
           "holdTitle": "按住說話",
           "holdDetail": "放開即結束",
           "handsFreeTitle": "免持模式",
-          "handsFreeDetail": "再按一次停止",
+          "handsFreeDetail": "按一次即可停止",
           "doublePress": "連按兩次",
           "tapOnlyTitle": "按一下開始，再按一次停止"
         }
@@ -3588,7 +3588,7 @@
       "badge": "本次更新的新功能",
       "title": "按住說話，放開即結束",
       "description": "我們調整了快捷鍵的運作方式：說話時請按住 {{hotkey}} 不放。",
-      "gesture": "連按兩次即可開始免持模式，再按一次停止。"
+      "gesture": "連按兩次可免持啟動，按一次即可停止。"
     }
   },
   "dictationAgent": {

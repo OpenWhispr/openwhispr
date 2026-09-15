@@ -272,6 +272,7 @@
 
   /* Onboarding entries keep their cue, minus the 8px travel. */
   .onboarding-step-enter,
+  .onboarding-gesture-reveal,
   .onboarding-stagger > * {
     animation: reduced-motion-fade-in 200ms ease both !important;
   }
@@ -467,6 +468,20 @@ body.dark:has(.onboarding-canvas) {
 
 .onboarding-step-enter {
   animation: onboarding-step-in 320ms var(--onboarding-ease-out) both;
+}
+
+/* The gesture card arrives only after the shortcut has been accepted. Its short
+   upward settle connects it visually to the confirmed key without delaying the
+   newly revealed instructions. */
+@keyframes onboarding-gesture-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+}
+
+.onboarding-gesture-reveal {
+  animation: onboarding-gesture-reveal 260ms var(--onboarding-ease-out) both;
 }
 
 /* Staggered children, for the step bodies that are a row or column of peers (the

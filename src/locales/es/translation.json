@@ -500,7 +500,7 @@
       "holdDescription": "Mantén pulsado mientras hablas",
       "test": "Prueba",
       "hotkeyToStartStop": "{{hotkey}} para iniciar/detener",
-      "holdHotkey": "Mantener {{hotkey}}",
+      "holdHotkey": "Mantén pulsado {{hotkey}} mientras hablas.",
       "textareaPlaceholder": "Haz clic aquí y usa tu atajo para dictar..."
     },
     "connectivity": {
@@ -1956,8 +1956,8 @@
           "holdTitle": "Mantén pulsado para hablar",
           "holdDetail": "Suelta para terminar",
           "handsFreeTitle": "Manos libres",
-          "handsFreeDetail": "Pulsa otra vez para detener",
-          "doublePress": "Pulsar dos veces",
+          "handsFreeDetail": "Pulsa una vez para detener",
+          "doublePress": "Pulsa dos veces",
           "tapOnlyTitle": "Pulsa para iniciar y otra vez para detener"
         }
       },
@@ -3641,7 +3641,7 @@
       "badge": "Novedad de esta actualización",
       "title": "Mantén pulsado para hablar, suelta para terminar",
       "description": "Hemos cambiado cómo funciona tu atajo: mantén pulsado {{hotkey}} mientras hablas.",
-      "gesture": "Púlsalo dos veces para el modo manos libres y pulsa otra vez para detener."
+      "gesture": "Pulsa dos veces para usar el modo manos libres y una vez para detener."
     }
   },
   "dictationAgent": {

@@ -500,7 +500,7 @@
       "holdDescription": "Gedrückt halten beim Sprechen",
       "test": "Test",
       "hotkeyToStartStop": "{{hotkey}} zum Starten/Stoppen",
-      "holdHotkey": "{{hotkey}} gedrückt halten",
+      "holdHotkey": "Halten Sie {{hotkey}} gedrückt, während Sie sprechen.",
       "textareaPlaceholder": "Hier klicken und Hotkey zum Diktieren verwenden..."
     },
     "connectivity": {
@@ -2196,7 +2196,7 @@
           "holdTitle": "Halten zum Sprechen",
           "holdDetail": "Loslassen zum Beenden",
           "handsFreeTitle": "Freihandmodus",
-          "handsFreeDetail": "Erneut tippen zum Beenden",
+          "handsFreeDetail": "Zum Beenden einmal drücken",
           "doublePress": "Zweimal tippen",
           "tapOnlyTitle": "Tippen zum Starten, erneut zum Beenden"
         }
@@ -3757,7 +3757,7 @@
       "badge": "Neu in diesem Update",
       "title": "Halten zum Sprechen, Loslassen zum Beenden",
       "description": "Dein Hotkey funktioniert jetzt anders: Halte {{hotkey}} gedrückt, während du sprichst.",
-      "gesture": "Tippe ihn zweimal für den Freihandmodus, tippe erneut zum Beenden."
+      "gesture": "Für den Freihandmodus zweimal tippen, zum Beenden einmal drücken."
     }
   },
   "dictationAgent": {

@@ -14,6 +14,12 @@ interface HotkeyGestureRowsProps {
   mode: "tap" | "push";
 }
 
+interface HotkeyGestureRowsContentProps {
+  hotkey: string;
+  mode: "tap" | "push";
+  pushToTalkUnavailableReason?: string | null;
+}
+
 function GestureRow({
   title,
   detail,
@@ -62,9 +68,12 @@ function VerbChip({
  * activation model; a slot shows the press-to-toggle row only when its hotkey
  * or backend cannot deliver a release, and then says why.
  */
-export function HotkeyGestureRows({ slot, hotkey, mode }: HotkeyGestureRowsProps) {
+export function HotkeyGestureRowsContent({
+  hotkey,
+  mode,
+  pushToTalkUnavailableReason,
+}: HotkeyGestureRowsContentProps) {
   const { t } = useTranslation();
-  const { pushToTalkUnavailableReason } = useHotkeyModeInfo("settings", hotkey, slot);
   const [primary] = parseHotkeyList(hotkey);
   if (!primary) return null;
 
@@ -125,5 +134,17 @@ export function HotkeyGestureRows({ slot, hotkey, mode }: HotkeyGestureRowsProps
         }
       />
     </div>
+  );
+}
+
+export function HotkeyGestureRows({ slot, hotkey, mode }: HotkeyGestureRowsProps) {
+  const { pushToTalkUnavailableReason } = useHotkeyModeInfo("settings", hotkey, slot);
+
+  return (
+    <HotkeyGestureRowsContent
+      hotkey={hotkey}
+      mode={mode}
+      pushToTalkUnavailableReason={pushToTalkUnavailableReason}
+    />
   );
 }

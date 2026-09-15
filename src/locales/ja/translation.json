@@ -500,7 +500,7 @@
       "holdDescription": "押しながら話す",
       "test": "テスト",
       "hotkeyToStartStop": "{{hotkey}} で開始/停止",
-      "holdHotkey": "{{hotkey}} を押し続ける",
+      "holdHotkey": "話している間は {{hotkey}} を押し続けます。",
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
     },
     "connectivity": {
@@ -1903,7 +1903,7 @@
           "holdTitle": "押しながら話す",
           "holdDetail": "離すと終了",
           "handsFreeTitle": "ハンズフリー",
-          "handsFreeDetail": "もう一度押すと停止",
+          "handsFreeDetail": "1回押すと停止",
           "doublePress": "2回押す",
           "tapOnlyTitle": "押して開始、もう一度押して停止"
         }
@@ -3588,7 +3588,7 @@
       "badge": "このアップデートの新機能",
       "title": "押しながら話し、離すと終了",
       "description": "ホットキーの動作が変わりました。話している間は {{hotkey}} を押したままにしてください。",
-      "gesture": "2回押すとハンズフリーモードになり、もう一度押すと停止します。"
+      "gesture": "2回押すとハンズフリーで開始し、1回押すと停止します。"
     }
   },
   "dictationAgent": {

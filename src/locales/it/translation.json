@@ -500,7 +500,7 @@
       "holdDescription": "Tieni premuto mentre parli",
       "test": "Test",
       "hotkeyToStartStop": "{{hotkey}} per avviare/fermare",
-      "holdHotkey": "Tieni premuto {{hotkey}}",
+      "holdHotkey": "Tieni premuto {{hotkey}} mentre parli.",
       "textareaPlaceholder": "Clicca qui e usa la scorciatoia per dettare..."
     },
     "connectivity": {
@@ -1903,7 +1903,7 @@
           "holdTitle": "Tieni premuto per parlare",
           "holdDetail": "Rilascia per terminare",
           "handsFreeTitle": "Mani libere",
-          "handsFreeDetail": "Premi di nuovo per fermare",
+          "handsFreeDetail": "Premi una volta per fermare",
           "doublePress": "Premi due volte",
           "tapOnlyTitle": "Premi per avviare, premi di nuovo per fermare"
         }
@@ -3588,7 +3588,7 @@
       "badge": "Novità di questo aggiornamento",
       "title": "Tieni premuto per parlare, rilascia per terminare",
       "description": "Abbiamo cambiato il modo in cui funziona la tua scorciatoia: tieni premuto {{hotkey}} mentre parli.",
-      "gesture": "Premila due volte per la modalità a mani libere, premi di nuovo per fermare."
+      "gesture": "Premi due volte per la modalità a mani libere e una volta per fermare."
     }
   },
   "dictationAgent": {

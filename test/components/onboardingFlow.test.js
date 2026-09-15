@@ -56,6 +56,30 @@ test("onboarding permission checks use the resolved macOS feature gate", () => {
   );
 });
 
+test("both shortcut steps reveal the shared gesture card instead of an activation selector", () => {
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+
+  assert.match(source, /OnboardingHotkeyGestureCard/);
+  assert.match(source, /slot=\{assistant \? "voiceAgent" : "dictation"\}/);
+  assert.match(
+    source,
+    /confirmed=\{assistant \? assistantHotkeyConfirmed : dictationHotkeyConfirmed\}/
+  );
+  assert.doesNotMatch(source, /ActivationModeSelector/);
+});
+
+test("onboarding owns separate Hold capability and mode state for both shortcut slots", () => {
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+
+  assert.match(source, /useHotkeyModeInfo\("onboarding-dictation", dictationHotkey, "dictation"\)/);
+  assert.match(
+    source,
+    /useHotkeyModeInfo\("onboarding-assistant", assistantHotkey, "voiceAgent"\)/
+  );
+  assert.match(source, /voiceAgentActivationMode/);
+  assert.match(source, /setVoiceAgentActivationMode/);
+});
+
 test("guest flow keeps permissions and the hotkey before setup choice", async () => {
   const { getOnboardingRoute } = await load();
   // finalizeOnboarding registers the dictation hotkey on every path, so guests

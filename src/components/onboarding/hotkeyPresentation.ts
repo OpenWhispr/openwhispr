@@ -173,3 +173,38 @@ export const getRecommendedDictationHotkeys = (
   if (platform === "win32") return ["RightControl", effectiveDefault];
   return [effectiveDefault];
 };
+
+/**
+ * Resolves the mode an onboarding shortcut may teach. A new slot becomes Hold
+ * only after main confirms release events are available; an existing choice is
+ * preserved unless this machine cannot deliver Hold at all.
+ */
+export const resolveOnboardingActivationMode = ({
+  currentMode,
+  storedMode,
+  loaded,
+  supportsPushToTalk,
+}: {
+  currentMode: "tap" | "push";
+  storedMode: "tap" | "push" | null;
+  loaded: boolean;
+  supportsPushToTalk: boolean;
+}): "tap" | "push" => {
+  if (!loaded) return currentMode;
+  if (!supportsPushToTalk) return "tap";
+  if (storedMode === null) return "push";
+  return currentMode;
+};
+
+/** Copy keys for a practice step. Hold-capable dictation and Voice Agent slots
+ * share one gesture lesson; Tap-only fallbacks retain their existing wording. */
+export const getOnboardingDemoDescriptionKeys = ({
+  mode,
+  tapDescriptionKey,
+}: {
+  mode: "tap" | "push";
+  tapDescriptionKey: string;
+}): string[] =>
+  mode === "push"
+    ? ["onboarding.activation.holdHotkey", "app.holdMigrationCard.gesture"]
+    : [tapDescriptionKey];
