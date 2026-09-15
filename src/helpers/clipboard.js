@@ -116,49 +116,40 @@ class ClipboardManager {
   _writeClipboardWayland(text, webContents) {
     const { isKde } = getLinuxSessionInfo();
 
-    // On KDE with XWayland, write to X11 clipboard directly because
-    // wl-copy targets the Wayland clipboard which is desynced from X11
-    if (isKde) {
-      if (this.commandExists("xclip")) {
-        try {
-          const result = spawnSync("xclip", ["-selection", "clipboard"], {
-            input: text,
-            timeout: 200,
-          });
-          if (result.status === 0) {
-            clipboard.writeText(text);
-            return;
-          }
-        } catch {}
-      }
-      if (this.commandExists("xsel")) {
-        try {
-          const result = spawnSync("xsel", ["--clipboard", "--input"], {
-            input: text,
-            timeout: 200,
-          });
-          if (result.status === 0) {
-            clipboard.writeText(text);
-            return;
-          }
-        } catch {}
-      }
-      // Last resort: Electron's clipboard.writeText should work on XWayland
-      clipboard.writeText(text);
-      return;
-    }
-
+    let wlCopySucceeded = false;
     if (this.commandExists("wl-copy")) {
       try {
-        const result = spawnSync("wl-copy", ["--", text], { timeout: 50 });
+        const result = spawnSync("wl-copy", ["--", text], { timeout: 200 });
         if (result.status === 0) {
-          clipboard.writeText(text);
-          return;
+          wlCopySucceeded = true;
         }
       } catch {}
     }
 
-    if (webContents && !webContents.isDestroyed()) {
+    // On KDE with XWayland, write to X11 clipboard as well because
+    // wl-copy targets the Wayland clipboard which can be desynced from X11.
+    // Writing to both ensures native Wayland apps (e.g. Chromium, Firefox,
+    // Kate, Konsole) and XWayland apps both receive the text.
+    if (isKde) {
+      if (this.commandExists("xclip")) {
+        try {
+          spawnSync("xclip", ["-selection", "clipboard"], {
+            input: text,
+            timeout: 200,
+          });
+        } catch {}
+      }
+      if (this.commandExists("xsel")) {
+        try {
+          spawnSync("xsel", ["--clipboard", "--input"], {
+            input: text,
+            timeout: 200,
+          });
+        } catch {}
+      }
+    }
+
+    if (!wlCopySucceeded && webContents && !webContents.isDestroyed()) {
       writeClipboardInRenderer(webContents, text).catch(() => {});
     }
 
@@ -171,14 +162,17 @@ class ClipboardManager {
   // terminal uses. Falls through wl-copy → xclip → xsel → Electron's selection
   // target so we cover Wayland, X11, and XWayland setups.
   _writePrimarySelection(text) {
-    if (process.platform !== "linux") return;
+    const { isWayland, isKde } = getLinuxSessionInfo();
+    if (process.platform !== "linux" && !isWayland) return;
 
-    const { isWayland } = getLinuxSessionInfo();
-
+    let wlCopySucceeded = false;
     if (isWayland && this.commandExists("wl-copy")) {
       try {
-        const result = spawnSync("wl-copy", ["--primary", "--", text], { timeout: 50 });
-        if (result.status === 0) return;
+        const result = spawnSync("wl-copy", ["--primary", "--", text], { timeout: 200 });
+        if (result.status === 0) {
+          wlCopySucceeded = true;
+          if (!isKde) return;
+        }
       } catch {}
     }
 
@@ -188,7 +182,7 @@ class ClipboardManager {
           input: text,
           timeout: 200,
         });
-        if (result.status === 0) return;
+        if (result.status === 0 && !isKde) return;
       } catch {}
     }
 
@@ -198,7 +192,7 @@ class ClipboardManager {
           input: text,
           timeout: 200,
         });
-        if (result.status === 0) return;
+        if (result.status === 0 && !isKde) return;
       } catch {}
     }
 
