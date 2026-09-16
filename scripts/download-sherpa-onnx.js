@@ -32,15 +32,15 @@ const WINDOWS_ONNXRUNTIME_UPSTREAM_NAME = "onnxruntime.dll";
 const WINDOWS_ONNXRUNTIME_PRIVATE_NAME = "ow-onnxrt.dll";
 
 // sherpa-onnx's macOS archives bundle a universal2 libonnxruntime whose arm64
-// slice runs INT8 models ~3x slower than the arm64-only build of the same
-// version from the same maintainer (the zip sherpa-onnx's own
-// cmake/onnxruntime-osx-arm64.cmake pins). On macOS hosts we swap that slice
-// in and keep the x86_64 slice, so the file stays universal2.
+// slice runs INT8 models ~3x slower than an arm64-only build of the same
+// version. On macOS hosts we swap that slice in and keep the x86_64 slice, so
+// the file stays universal2. The slice is hoid-ai/onnxruntime: upstream 1.27.0
+// plus MLAS kernel/scheduling changes for the Parakeet encoder on Apple silicon.
 const MACOS_ARM64_ONNXRUNTIME = {
-  url: "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/onnxruntime-osx-arm64-1.27.0.zip",
-  sha256: "5f05b2653eb0af852dab46c85778f0e012c514ed2e71a6dbb9c9550434b0a514",
+  url: "https://github.com/hoid-ai/onnxruntime/releases/download/hoid-v1.27.0-1/onnxruntime-osx-arm64-1.27.0-hoid-v1.27.0-1.zip",
+  sha256: "8d0151ea22fff1ffe985bdd7d72b0c300a597e460f365c65894510fece3fa65d",
   libraryName: "libonnxruntime.1.27.0.dylib",
-  marker: "arm64-1.27.0", // recorded in the install marker so older installs re-extract
+  marker: "arm64-1.27.0-hoid.1", // recorded in the install marker so older installs re-extract
 };
 
 // Binary configurations for each platform
