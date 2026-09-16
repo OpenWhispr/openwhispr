@@ -13,6 +13,7 @@ import {
 } from "../icons";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "../ui/button";
+import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { cn } from "../lib/utils";
 import {
   Select,
@@ -960,12 +961,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   return (
-    <div className="flex flex-col items-center h-full overflow-y-auto px-6">
+    <div className="flex flex-col items-center h-full overflow-y-auto">
       <div
-        className="w-full max-w-md shrink-0 my-auto"
+        className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 shrink-0 my-auto")}
         style={{ animation: "float-up 0.4s ease-out" }}
       >
-        <div className="max-w-[320px] mx-auto">
+        <div>
           {state === "idle" && providerReady === false && (
             <NoProviderView t={t} onOpenSettings={() => onOpenSettings?.("uploadTranscription")} />
           )}
@@ -1258,7 +1259,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         </div>
 
         {(state === "idle" || state === "selected") && (
-          <div className="max-w-[320px] mx-auto mt-4">
+          <div className="mt-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-foreground/45 font-medium">
