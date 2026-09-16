@@ -1988,9 +1988,8 @@ async function startApp() {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"
         );
-        // The only subscriber is SettingsPage, which mounts in the control
-        // panel window — sending to the dictation overlay alone dropped the
-        // event and left every slot's Hold mode un-reverted.
+        // Settings and onboarding both refresh their guidance from this event.
+        // Send to every window, not only the dictation overlay.
         for (const browserWindow of BrowserWindow.getAllWindows()) {
           if (!browserWindow.isDestroyed()) {
             browserWindow.webContents.send("linux-ptt-permission-denied");

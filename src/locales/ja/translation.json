@@ -500,7 +500,7 @@
       "holdDescription": "押しながら話す",
       "test": "テスト",
       "hotkeyToStartStop": "{{hotkey}} で開始/停止",
-      "holdHotkey": "{{hotkey}} を押し続ける",
+      "holdHotkey": "話している間は {{hotkey}} を押し続けます。",
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
     },
     "connectivity": {
@@ -1899,11 +1899,19 @@
         "hyprlandConfigWriteWarningTitle": "Hyprland のキーバインドは永続化されません",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr は {{path}} に書き込めないため、Hyprland の設定を再読み込みするとキーバインドは維持されません。ファイルが存在し、書き込み可能であることを確認してください。",
         "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。",
+        "guide": {
+          "title": "2つの話し方",
+          "scope": "{{shortcuts}}で使用できます。",
+          "handsFreeStart": "ハンズフリーで開始",
+          "dictation": "音声入力",
+          "voiceAgent": "アシスタント",
+          "translation": "翻訳"
+        },
         "gestures": {
           "holdTitle": "押しながら話す",
           "holdDetail": "離すと終了",
           "handsFreeTitle": "ハンズフリー",
-          "handsFreeDetail": "もう一度押すと停止",
+          "handsFreeDetail": "1回押すと停止",
           "doublePress": "2回押す",
           "tapOnlyTitle": "押して開始、もう一度押して停止"
         }
@@ -3588,7 +3596,7 @@
       "badge": "このアップデートの新機能",
       "title": "押しながら話し、離すと終了",
       "description": "ホットキーの動作が変わりました。話している間は {{hotkey}} を押したままにしてください。",
-      "gesture": "2回押すとハンズフリーモードになり、もう一度押すと停止します。"
+      "gesture": "2回押すとハンズフリーで開始し、1回押すと停止します。"
     }
   },
   "dictationAgent": {

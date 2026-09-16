@@ -10,7 +10,7 @@ interface HotkeyKeycapsProps {
 export function HotkeyKeycaps({ hotkey, className }: HotkeyKeycapsProps) {
   const parts = formatHotkeyLabel(hotkey).split("+");
   return (
-    <span className={cn("whitespace-nowrap", className)}>
+    <span dir="ltr" className={cn("whitespace-nowrap", className)}>
       {parts.map((part, index) => (
         <span key={`${part}-${index}`}>
           {index > 0 && " + "}

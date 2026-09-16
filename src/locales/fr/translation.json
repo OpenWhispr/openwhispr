@@ -500,7 +500,7 @@
       "holdDescription": "Maintenir pendant que vous parlez",
       "test": "Test",
       "hotkeyToStartStop": "{{hotkey}} pour démarrer/arrêter",
-      "holdHotkey": "Maintenir {{hotkey}}",
+      "holdHotkey": "Maintenez {{hotkey}} pendant que vous parlez.",
       "textareaPlaceholder": "Cliquez ici puis utilisez votre raccourci pour dicter..."
     },
     "connectivity": {
@@ -2192,12 +2192,20 @@
         "hyprlandConfigWriteWarningTitle": "Les raccourcis Hyprland ne seront pas conservés",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr ne peut pas écrire dans {{path}} ; les raccourcis ne survivront donc pas à un rechargement de la configuration Hyprland. Vérifiez que le fichier existe et qu'il est accessible en écriture.",
         "hyprlandUnbindDescription": "Sous Hyprland, OpenWhispr réserve le raccourci sélectionné. Tout raccourci Hyprland existant utilisant la même combinaison de touches sera supprimé quand OpenWhispr enregistrera son raccourci.",
+        "guide": {
+          "title": "Deux façons de parler",
+          "scope": "Pour {{shortcuts}}.",
+          "handsFreeStart": "Démarrer en mains libres",
+          "dictation": "Dictée",
+          "voiceAgent": "Assistant",
+          "translation": "Traduction"
+        },
         "gestures": {
           "holdTitle": "Maintenir pour parler",
           "holdDetail": "Relâcher pour terminer",
           "handsFreeTitle": "Mains libres",
-          "handsFreeDetail": "Appuyer à nouveau pour arrêter",
-          "doublePress": "Double appui",
+          "handsFreeDetail": "Appuyer une fois pour arrêter",
+          "doublePress": "Appuyer deux fois",
           "tapOnlyTitle": "Appuyer pour démarrer, appuyer à nouveau pour arrêter"
         }
       },
@@ -3757,7 +3765,7 @@
       "badge": "Nouveau dans cette mise à jour",
       "title": "Maintenir pour parler, relâcher pour terminer",
       "description": "Nous avons modifié le fonctionnement de votre raccourci : maintenez {{hotkey}} pendant que vous parlez.",
-      "gesture": "Appuyez deux fois dessus pour le mode mains libres, appuyez à nouveau pour arrêter."
+      "gesture": "Appuyez deux fois pour le mode mains libres, puis une fois pour arrêter."
     }
   },
   "dictationAgent": {

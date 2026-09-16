@@ -66,7 +66,11 @@ test("a Tap slot with no reason from main shows the row and asserts no cause", a
 });
 
 test("a Tap slot shows the reason main gave, when it gave one", async (t) => {
-  const markup = await render(t, { mode: "tap" }, { reason: "Control+Super is reserved by the OS" });
+  const markup = await render(
+    t,
+    { mode: "tap" },
+    { reason: "Control+Super is reserved by the OS" }
+  );
 
   assert.match(markup, /settingsPage\.general\.hotkey\.gestures\.tapOnlyTitle/);
   assert.match(markup, /Control\+Super is reserved by the OS/);

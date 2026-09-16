@@ -557,20 +557,25 @@ class HotkeyManager extends EventEmitter {
   // so keep them apart: a hotkey they can fix themselves, versus a desktop that
   // cannot report a key release at all (GNOME before 48 has no GlobalShortcuts
   // portal, and no hotkey helps there).
-  getPushToTalkUnavailableReason(hotkey = this.currentHotkey, slotName = "dictation") {
+  getPushToTalkUnavailableReason(
+    hotkey = this.currentHotkey,
+    slotName = "dictation",
+    language = i18nMain.language
+  ) {
+    const t = i18nMain.getFixedT(language);
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
-      return i18nMain.t("hotkey.errors.holdNeedsRegularKey", {
+      return t("hotkey.errors.holdNeedsRegularKey", {
         hotkey,
         suggestion: DEFAULT_HOTKEY,
       });
     }
     if (slotName !== "dictation" && this.useHyprland) {
-      return i18nMain.t("hotkey.errors.holdUnsupportedOnHyprland");
+      return t("hotkey.errors.holdUnsupportedOnHyprland");
     }
     if (this.useGnome && !this.gnomeManager?.supportsPushToTalk?.()) {
-      return i18nMain.t("hotkey.errors.holdUnsupportedOnDesktop");
+      return t("hotkey.errors.holdUnsupportedOnDesktop");
     }
-    return i18nMain.t("windows.pttUnavailable");
+    return t("windows.pttUnavailable");
   }
 
   async setActivationMode(mode) {

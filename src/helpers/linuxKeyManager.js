@@ -16,6 +16,7 @@ class LinuxKeyManager extends EventEmitter {
     this.isSupported = process.platform === "linux";
     this.hasReportedError = false;
     this.hasReportedUnavailable = false;
+    this.permissionDenied = false;
     this.listeners = new Map(); // key string -> { child }
   }
 
@@ -125,6 +126,8 @@ class LinuxKeyManager extends EventEmitter {
     }
 
     if (line === "NO_PERMISSION") {
+      // READY is emitted even after denial; retain the diagnosis until app restart.
+      this.permissionDenied = true;
       debugLogger.warn("[LinuxKeyManager] No permission to access input devices");
       this.emit("permission-denied");
       return;

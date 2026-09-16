@@ -22,8 +22,11 @@ function createControlledStream() {
         next = Promise.withResolvers();
         if (error) throw error;
         if (done) return;
-        yield chunk;
-        consumed.resolve();
+        try {
+          yield chunk;
+        } finally {
+          consumed.resolve();
+        }
       }
     },
     async emit(chunk) {
@@ -174,6 +177,8 @@ async function renderChatStreaming(
     getMessages: () => messages,
     getCommittedMessages: () => committedMessages,
     getAgentState: () => captured.agentState,
+    getActiveToolName: () => captured.activeToolName,
+    reasoningService,
     getResponseContentCalls: () => responseContentCalls,
     getContentWrites: () => contentWrites,
     getDispatches: () => dispatches,
@@ -442,4 +447,166 @@ for (const withContent of [true, false]) {
     assert.equal(harness.getResponseContentCalls(), 1);
     await assertNoLateWrites(harness);
   });
+}
+
+for (const tail of ["completion", "error", "chunk"]) {
+  test(`old ${tail} and queued flush cannot reset a newer tool stream`, async (t) => {
+    const old = createControlledStream();
+    const current = createControlledStream();
+    const harness = await renderChatStreaming(t, { live: true });
+    let streams = [old, current];
+    t.mock.method(harness.reasoningService, "processTextStreamingAI", () => streams.shift().read());
+    const cancel = t.mock.method(harness.reasoningService, "cancelActiveStream", () => {});
+    const errors = [];
+    const delivered = [];
+    let first, second;
+    await React.act(async () => {
+      first = harness.captured.sendToAI("old", [], {
+        onError: (error) => errors.push(error),
+        onComplete: (result) => delivered.push(result),
+      });
+    });
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+    await React.act(async () => old.emit({ type: "content", text: "Stale partial" }));
+    await React.act(async () => {
+      harness.captured.cancelStream();
+      second = harness.captured.sendToAI("current", []);
+    });
+    await React.act(async () =>
+      current.emit({
+        type: "tool_calls",
+        calls: [{ id: "new-tool", name: "search_notes", arguments: "{}" }],
+      })
+    );
+    const dispatches = harness.getDispatches();
+    await React.act(async () => t.mock.timers.tick(100));
+    assert.equal(
+      harness.getDispatches(),
+      dispatches,
+      "old scheduled flush cannot write after replacement"
+    );
+    await React.act(async () => {
+      if (tail === "chunk")
+        await old.emit({
+          type: "tool_calls",
+          calls: [{ id: "old-tool", name: "stale_tool", arguments: "{}" }],
+        });
+      else old.end(tail === "error" ? new Error("old failure") : undefined);
+      await first;
+    });
+    assert.equal(harness.getAgentState(), "tool-executing");
+    assert.equal(harness.getActiveToolName(), "search_notes");
+    assert.equal(cancel.mock.callCount(), 1, "old work must not cancel the new shared stream");
+    assert.equal(harness.getDispatches(), dispatches);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(delivered, []);
+    await React.act(async () => {
+      current.end();
+      await second;
+    });
+    assert.equal(harness.getAgentState(), "idle");
+  });
+}
+
+test("an old awaited delivery cannot clear the next request's tool activity", async (t) => {
+  const old = createControlledStream();
+  const current = createControlledStream();
+  const delivered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const harness = await renderChatStreaming(t, { live: true });
+  const streams = [old, current];
+  t.mock.method(harness.reasoningService, "processTextStreamingAI", () => streams.shift().read());
+  t.mock.method(harness.reasoningService, "cancelActiveStream", () => {});
+  let first, second;
+  await React.act(async () => {
+    first = harness.captured.sendToAI("old", [], {
+      onComplete: () => {
+        delivered.resolve();
+        return release.promise;
+      },
+    });
+  });
+  await React.act(async () => old.emit({ type: "content", text: "Old completed reply" }));
+  await React.act(async () => {
+    old.end();
+    await delivered.promise;
+  });
+  await React.act(async () => {
+    second = harness.captured.sendToAI("current", []);
+  });
+  await React.act(async () =>
+    current.emit({
+      type: "tool_calls",
+      calls: [{ id: "current-tool", name: "search_notes", arguments: "{}" }],
+    })
+  );
+  await React.act(async () => {
+    release.resolve();
+    await first;
+  });
+  assert.equal(harness.getAgentState(), "tool-executing");
+  assert.equal(harness.getActiveToolName(), "search_notes");
+  await React.act(async () => {
+    current.end();
+    await second;
+  });
+});
+
+for (const content of ["Old partial", ""]) {
+  for (const stop of [true, false]) {
+    test(`${stop ? "Stop then replace" : "replace"} settles an ${content ? "unfinished" : "empty"} Chat bubble before old transport unwinds`, async (t) => {
+      const old = createControlledStream();
+      const current = createControlledStream();
+      const persisted = [];
+      const delivered = [];
+      const harness = await renderChatStreaming(t, {
+        live: true,
+        onStreamComplete: (_id, text) => persisted.push(text),
+      });
+      const streams = [old, current];
+      t.mock.method(harness.reasoningService, "processTextStreamingAI", () =>
+        streams.shift().read()
+      );
+      t.mock.method(harness.reasoningService, "cancelActiveStream", () => {});
+      let first, second;
+      await React.act(async () => {
+        first = harness.captured.sendToAI("old", [], {
+          onComplete: (reply) => delivered.push(reply.content),
+        });
+      });
+      if (content) await React.act(async () => old.emit({ type: "content", text: content }));
+      await React.act(async () => {
+        if (stop) harness.captured.cancelStream();
+        second = harness.captured.sendToAI("new", []);
+      });
+      const [previous, active] = harness.getCommittedMessages();
+      assert.equal(previous.content, content);
+      assert.equal(
+        previous.isStreaming,
+        false,
+        "settle immediately even if the old provider ignores cancellation"
+      );
+      assert.equal(active.isStreaming, true);
+      await React.act(async () => {
+        old.end();
+        await first;
+      });
+      await React.act(async () => current.emit({ type: "content", text: "New answer" }));
+      await React.act(async () => {
+        current.end();
+        await second;
+      });
+      assert.deepEqual(
+        harness
+          .getCommittedMessages()
+          .map(({ content, isStreaming }) => ({ content, isStreaming })),
+        [
+          { content, isStreaming: false },
+          { content: "New answer", isStreaming: false },
+        ]
+      );
+      assert.deepEqual(persisted, ["New answer"]);
+      assert.deepEqual(delivered, []);
+    });
+  }
 }

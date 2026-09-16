@@ -22,6 +22,7 @@ import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { Message, AgentState, ChatImageAttachment, ToolCallInfo } from "./types";
+import type { PolicyFailureMetadata } from "../../types/electron";
 import type { ContainerScope } from "../../types/chat";
 import {
   buildAgentRequestText,
@@ -94,6 +95,7 @@ export interface SendToAIOptions {
   selectedContext?: AgentSelectionContext;
   /** Keeps a caret-destined voice response in the compact pill while it streams. */
   suppressResponseContent?: boolean;
+  onError?: (error: { message: string; code?: string }) => void;
   /** Per-request completion hook used to deliver a finished voice response. */
   onComplete?: (result: {
     assistantId: string;
@@ -196,6 +198,8 @@ export function useChatStreaming({
   }, [messages]);
 
   const sendGenerationRef = useRef(0);
+  const activeStreamGenerationRef = useRef<number | null>(null);
+  const settleCancelledRef = useRef<(() => void) | null>(null);
   // Generation stamped by the most recent cancel issued while still mounted
   // (Esc, a Stop button). The unmount cleanup below flips mountedRef off
   // before routing through cancelStream, so it never stamps this — which is
@@ -206,8 +210,12 @@ export function useChatStreaming({
     if (mountedRef.current) {
       explicitCancelGenerationRef.current = sendGenerationRef.current;
     }
-    ReasoningService.cancelActiveStream();
-    setAgentState("idle");
+    settleCancelledRef.current?.();
+    if (activeStreamGenerationRef.current !== null) {
+      activeStreamGenerationRef.current = null;
+      ReasoningService.cancelActiveStream();
+    }
+    if (mountedRef.current) setAgentState("idle");
     clearToolActivity();
   }, [clearToolActivity]);
 
@@ -228,11 +236,12 @@ export function useChatStreaming({
   const sendToAI = useCallback(
     async (userText: string, allMessages: Message[], options?: SendToAIOptions) => {
       const sendGeneration = ++sendGenerationRef.current;
+      settleCancelledRef.current?.();
       const cancelled = () => sendGeneration !== sendGenerationRef.current;
       clearToolActivity();
       let responseAnnounced = false;
       const announceResponse = () => {
-        if (responseAnnounced) return;
+        if (responseAnnounced || cancelled() || !mountedRef.current) return;
         responseAnnounced = true;
         if (!options?.suppressResponseContent) onResponseContent?.();
       };
@@ -260,10 +269,19 @@ export function useChatStreaming({
           ? t("common.policyAgentRestricted")
           : t("common.policyAiProcessingRestricted");
         announceResponse();
-        setMessages((prev) => [
-          ...prev,
-          { id: crypto.randomUUID(), role: "assistant", content: restriction, isStreaming: false },
-        ]);
+        setMessages((prev) =>
+          cancelled()
+            ? prev
+            : [
+                ...prev,
+                {
+                  id: crypto.randomUUID(),
+                  role: "assistant",
+                  content: restriction,
+                  isStreaming: false,
+                },
+              ]
+        );
         return;
       }
 
@@ -376,10 +394,11 @@ export function useChatStreaming({
       const llmMessages = [{ role: "system", content: systemPrompt }, ...history];
 
       const assistantId = crypto.randomUUID();
-      setMessages((prev) => [
-        ...prev,
-        { id: assistantId, role: "assistant", content: "", isStreaming: true },
-      ]);
+      setMessages((prev) =>
+        cancelled()
+          ? prev
+          : [...prev, { id: assistantId, role: "assistant", content: "", isStreaming: true }]
+      );
       setAgentState("streaming");
 
       // Chat re-parses the whole answer through react-markdown on every
@@ -394,16 +413,40 @@ export function useChatStreaming({
       };
       const flushContentNow = () => {
         cancelContentFlush();
+        if (cancelled() || !mountedRef.current) return;
         setMessages((prev) =>
-          prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
+          cancelled()
+            ? prev
+            : prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
         );
+      };
+      let cancellationSettled = false;
+      const settleCancelled = () => {
+        cancelContentFlush();
+        if (cancellationSettled) return;
+        cancellationSettled = true;
+        if (settleCancelledRef.current === settleCancelled) settleCancelledRef.current = null;
+        // Finalize the received text now, before a replacement can start. Late
+        // transport callbacks must neither revive this bubble nor touch the next one.
+        const content = fullContent;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, content, isStreaming: false } : m))
+        );
+        // Navigation keeps the received partial history; explicit Stop does not persist it.
+        const explicitlyCancelled = explicitCancelGenerationRef.current > sendGeneration;
+        if (!mountedRef.current && !explicitlyCancelled && fullContent.trim().length > 0) {
+          const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
+          onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
+        }
       };
       const scheduleContentFlush = () => {
         if (contentFlushTimer !== null) return;
         contentFlushTimer = setTimeout(flushContentNow, STREAM_FLUSH_INTERVAL_MS);
       };
+      settleCancelledRef.current = settleCancelled;
 
       try {
+        activeStreamGenerationRef.current = sendGeneration;
         let stream: AsyncGenerator<AgentStreamChunk>;
 
         if (isCloudAgent) {
@@ -472,10 +515,7 @@ export function useChatStreaming({
         }
 
         for await (const chunk of stream) {
-          if (!mountedRef.current) {
-            ReasoningService.cancelActiveStream();
-            break;
-          }
+          if (cancelled() || !mountedRef.current) break;
           if (chunk.type === "content") {
             if (chunk.text) announceResponse();
             fullContent += chunk.text;
@@ -492,43 +532,47 @@ export function useChatStreaming({
                 t(`agentMode.tools.${call.name}Status`, { defaultValue: `Using ${call.name}...` })
               );
               setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? {
-                        ...m,
-                        toolCalls: [
-                          ...(m.toolCalls || []),
-                          {
-                            id: call.id,
-                            name: call.name,
-                            arguments: call.arguments,
-                            status: "executing" as const,
-                          },
-                        ],
-                      }
-                    : m
-                )
+                cancelled()
+                  ? prev
+                  : prev.map((m) =>
+                      m.id === assistantId
+                        ? {
+                            ...m,
+                            toolCalls: [
+                              ...(m.toolCalls || []),
+                              {
+                                id: call.id,
+                                name: call.name,
+                                arguments: call.arguments,
+                                status: "executing" as const,
+                              },
+                            ],
+                          }
+                        : m
+                    )
               );
             }
           } else if (chunk.type === "tool_result") {
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId && m.toolCalls
-                  ? {
-                      ...m,
-                      toolCalls: m.toolCalls.map((tc) =>
-                        tc.id === chunk.callId
-                          ? {
-                              ...tc,
-                              status: "completed" as const,
-                              result: chunk.displayText,
-                              ...(chunk.metadata ? { metadata: chunk.metadata } : {}),
-                            }
-                          : tc
-                      ),
-                    }
-                  : m
-              )
+              cancelled()
+                ? prev
+                : prev.map((m) =>
+                    m.id === assistantId && m.toolCalls
+                      ? {
+                          ...m,
+                          toolCalls: m.toolCalls.map((tc) =>
+                            tc.id === chunk.callId
+                              ? {
+                                  ...tc,
+                                  status: "completed" as const,
+                                  result: chunk.displayText,
+                                  ...(chunk.metadata ? { metadata: chunk.metadata } : {}),
+                                }
+                              : tc
+                          ),
+                        }
+                      : m
+                  )
             );
             setAgentState("streaming");
             completeToolActivity();
@@ -536,25 +580,14 @@ export function useChatStreaming({
         }
 
         if (cancelled() || !mountedRef.current) {
-          flushContentNow();
-          setMessages((prev) =>
-            prev.map((message) =>
-              message.id === assistantId ? { ...message, isStreaming: false } : message
-            )
-          );
-          // An unmount mid-stream (page navigation) keeps the partial reply in
-          // history so the saved conversation matches what the user last saw;
-          // an explicit cancel drops it. The unmount cleanup cancels too, so
-          // cancelled() alone cannot tell the two apart. Neither path may run
-          // the per-request delivery hook.
-          const explicitlyCancelled = explicitCancelGenerationRef.current > sendGeneration;
-          if (!explicitlyCancelled && fullContent.trim().length > 0) {
-            const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
-            onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
-          }
+          settleCancelled();
           return;
         }
 
+        if (activeStreamGenerationRef.current === sendGeneration) {
+          activeStreamGenerationRef.current = null;
+        }
+        if (settleCancelledRef.current === settleCancelled) settleCancelledRef.current = null;
         flushContentNow();
         const hasDeliverableContent = fullContent.trim().length > 0;
         if (!responseAnnounced && !cancelled()) {
@@ -565,17 +598,23 @@ export function useChatStreaming({
           fullContent = t("agentMode.chat.emptyResponse");
           announceResponse();
           setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
+            cancelled()
+              ? prev
+              : prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
           );
         }
 
         setMessages((prev) =>
-          prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
+          cancelled()
+            ? prev
+            : prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
         );
 
         const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
-        onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
-        if (hasDeliverableContent) {
+        if (!cancelled() && mountedRef.current) {
+          onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
+        }
+        if (hasDeliverableContent && !cancelled() && mountedRef.current) {
           await options?.onComplete?.({
             assistantId,
             content: fullContent,
@@ -583,13 +622,8 @@ export function useChatStreaming({
           });
         }
       } catch (error) {
-        if (cancelled()) {
-          flushContentNow();
-          setMessages((prev) =>
-            prev.map((message) =>
-              message.id === assistantId ? { ...message, isStreaming: false } : message
-            )
-          );
+        if (cancelled() || !mountedRef.current) {
+          settleCancelled();
         } else {
           cancelContentFlush();
           logger.error(
@@ -604,23 +638,33 @@ export function useChatStreaming({
             },
             "reasoning"
           );
+          const failure = error as Error & PolicyFailureMetadata;
+          options?.onError?.({ message: failure.message, code: failure.code });
           announceResponse();
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? {
-                    ...m,
-                    content: `${t("agentMode.chat.errorPrefix")}: ${(error as Error).message}`,
-                    isStreaming: false,
-                  }
-                : m
-            )
+            cancelled()
+              ? prev
+              : prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        content: `${t("agentMode.chat.errorPrefix")}: ${failure.message}`,
+                        isStreaming: false,
+                      }
+                    : m
+                )
           );
         }
       }
 
-      setAgentState("idle");
-      completeToolActivity();
+      if (activeStreamGenerationRef.current === sendGeneration) {
+        activeStreamGenerationRef.current = null;
+      }
+      if (settleCancelledRef.current === settleCancelled) settleCancelledRef.current = null;
+      if (!cancelled() && mountedRef.current) {
+        setAgentState("idle");
+        completeToolActivity();
+      }
     },
     [
       inferenceScope,

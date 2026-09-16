@@ -83,7 +83,7 @@ const autoStart = require("./autoStart");
 const { getRelaunchOptions, getRelaunchWaiter } = require("./autoStartPolicy");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
-const { i18nMain, changeLanguage } = require("./i18nMain");
+const { i18nMain, changeLanguage, normalizeUiLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
 const { GeminiLiveStreaming, GEMINI_LIVE_MODEL } = require("./geminiLiveStreaming");
 const CortiStreaming = require("./cortiStreaming");
@@ -1363,7 +1363,15 @@ class IPCHandlers {
     // renderer crash mid-demo would leave the session set and broadcast every
     // later dictation's transcripts on onboarding-demo-event forever.
     this.windowManager.onOnboardingDemoTeardown = () => {
+      const session = this._onboardingDemoSession;
       this._onboardingDemoSession = null;
+      if (session) {
+        broadcastToWindows("onboarding-demo-event", {
+          demoId: session.id,
+          kind: session.kind,
+          status: "cancelled",
+        });
+      }
     };
 
     ipcMain.handle("onboarding-set-active", (_event, active) => {
@@ -1380,12 +1388,18 @@ class IPCHandlers {
       ) {
         return false;
       }
+      if (this._onboardingDemoSession) this.windowManager.endOnboardingDemo();
       this._onboardingDemoSession = {
         id: session.id,
         kind: session.kind,
         startedAt: Date.now(),
       };
       return this.windowManager.beginOnboardingDemo(session.kind);
+    });
+
+    ipcMain.handle("onboarding-demo-session", () => {
+      const session = this._onboardingDemoSession;
+      return session ? { id: session.id, kind: session.kind } : null;
     });
 
     ipcMain.handle("onboarding-demo-end", (_event, id) => {
@@ -1404,9 +1418,11 @@ class IPCHandlers {
     ipcMain.handle("onboarding-demo-publish", (_event, event) => {
       const session = this._onboardingDemoSession;
       if (!session || !event || event.kind !== session.kind) return false;
+      if (event.demoId !== undefined && event.demoId !== session.id) return false;
       if (!ONBOARDING_DEMO_STATUSES.has(event.status)) return false;
       const text = typeof event.text === "string" ? event.text.slice(0, 20000) : undefined;
       const message = typeof event.message === "string" ? event.message.slice(0, 500) : undefined;
+      const code = typeof event.code === "string" ? event.code.slice(0, 64) : undefined;
       const tool = typeof event.tool === "string" ? event.tool.slice(0, 64) : undefined;
       const level = Number.isFinite(event.level)
         ? Math.min(1, Math.max(0, event.level))
@@ -1417,6 +1433,7 @@ class IPCHandlers {
         status: event.status,
         text,
         message,
+        code,
         tool,
         level,
       });
@@ -4306,33 +4323,48 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("get-hotkey-mode-info", async (_event, requestedHotkey, requestedSlot) => {
-      const hotkeyManager = this.windowManager.hotkeyManager;
-      const slotName =
-        typeof requestedSlot === "string" && requestedSlot ? requestedSlot : "dictation";
-      const hotkey =
-        typeof requestedHotkey === "string" && requestedHotkey.trim()
-          ? requestedHotkey.split(",")[0].trim()
-          : hotkeyManager.getCurrentHotkey();
-      const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
-      const supportsPushToTalk =
-        process.platform === "linux"
-          ? isUsingNativeShortcut
-            ? hotkeyManager.supportsPushToTalk(hotkey, slotName)
-            : this.linuxKeyManager?.isAvailable?.() === true
-          : hotkeyManager.supportsPushToTalk(hotkey, slotName);
+    ipcMain.handle(
+      "get-hotkey-mode-info",
+      async (_event, requestedHotkey, requestedSlot, requestedLanguage) => {
+        const hotkeyManager = this.windowManager.hotkeyManager;
+        const slotName =
+          typeof requestedSlot === "string" && requestedSlot ? requestedSlot : "dictation";
+        const language =
+          typeof requestedLanguage === "string"
+            ? normalizeUiLanguage(requestedLanguage)
+            : undefined;
+        // An explicitly empty optional shortcut asks about that slot's backend,
+        // not the current dictation key (which may itself be unable to Hold).
+        const hotkey =
+          typeof requestedHotkey === "string" &&
+          (requestedHotkey.trim() || slotName !== "dictation")
+            ? requestedHotkey.split(",")[0].trim()
+            : hotkeyManager.getCurrentHotkey();
+        const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
+        const supportsPushToTalk =
+          process.platform === "linux"
+            ? isUsingNativeShortcut
+              ? hotkeyManager.supportsPushToTalk(hotkey, slotName)
+              : this.linuxKeyManager?.isAvailable?.() === true
+            : hotkeyManager.supportsPushToTalk(hotkey, slotName);
 
-      return {
-        isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
-        isUsingHyprland: this.windowManager.isUsingHyprlandHotkeys(),
-        isUsingKDE: this.windowManager.isUsingKDEHotkeys(),
-        isUsingNativeShortcut,
-        supportsPushToTalk,
-        pushToTalkUnavailableReason: supportsPushToTalk
-          ? null
-          : hotkeyManager.getPushToTalkUnavailableReason(hotkey),
-      };
-    });
+        return {
+          isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
+          isUsingHyprland: this.windowManager.isUsingHyprlandHotkeys(),
+          isUsingKDE: this.windowManager.isUsingKDEHotkeys(),
+          isUsingNativeShortcut,
+          supportsPushToTalk,
+          linuxPttPermissionDenied:
+            process.platform === "linux" &&
+            !isUsingNativeShortcut &&
+            supportsPushToTalk &&
+            this.linuxKeyManager?.permissionDenied === true,
+          pushToTalkUnavailableReason: supportsPushToTalk
+            ? null
+            : hotkeyManager.getPushToTalkUnavailableReason(hotkey, slotName, language),
+        };
+      }
+    );
 
     ipcMain.handle("get-hyprland-config-status", async () => {
       if (!this.windowManager.isUsingHyprlandHotkeys()) return null;
@@ -9383,7 +9415,9 @@ class IPCHandlers {
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
         const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
+        if (!Object.keys(authHeader).length) {
+          throw Object.assign(new Error("Not authenticated"), { code: "AUTH_REQUIRED" });
+        }
 
         const response = await proxyFetch(`${apiUrl}/api/agent/stream`, {
           method: "POST",

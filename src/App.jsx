@@ -179,11 +179,23 @@ export default function App() {
     if (localStorage.getItem("onboardingCompleted") === "true") return;
     window.electronAPI?.publishOnboardingDemoEvent?.(event);
   }, []);
-  const runOnboardingAssistantDemo = useOnboardingAssistantDemo(
-    useCallback(
-      (event) => publishOnboardingDemoEvent({ ...event, kind: "assistant" }),
-      [publishOnboardingDemoEvent]
-    )
+  const { run: runOnboardingAssistantDemo, cancel: cancelOnboardingAssistantDemo } =
+    useOnboardingAssistantDemo(
+      useCallback(
+        (event) => publishOnboardingDemoEvent({ ...event, kind: "assistant" }),
+        [publishOnboardingDemoEvent]
+      )
+    );
+
+  const handleRecordingDemoEvent = useCallback(
+    (event) => {
+      if (localStorage.getItem("onboardingCompleted") === "true") return;
+      if (event.kind === "assistant" && event.status === "preparing") {
+        cancelOnboardingAssistantDemo();
+      }
+      publishOnboardingDemoEvent(event);
+    },
+    [cancelOnboardingAssistantDemo, publishOnboardingDemoEvent]
   );
 
   const assistant = useAssistantPanel({
@@ -233,7 +245,7 @@ export default function App() {
   } = useAudioRecording(toast, {
     onToggle: handleDictationToggle,
     suppressNoAudioErrorRef: holdMigrationCardVisibleRef,
-    onDemoEvent: publishOnboardingDemoEvent,
+    onDemoEvent: handleRecordingDemoEvent,
     onAssistantCommand: assistant.handleCommand,
     onOnboardingAssistantCommand: runOnboardingAssistantDemo,
     dismissDictationError,

@@ -1,5 +1,6 @@
 const ONBOARDING_DEMO_KINDS = new Set(["dictation", "assistant"]);
 const ONBOARDING_DEMO_STATUSES = new Set([
+  "preparing",
   "listening",
   "level",
   "processing",
@@ -7,6 +8,7 @@ const ONBOARDING_DEMO_STATUSES = new Set([
   "replying",
   "success",
   "error",
+  "cancelled",
 ]);
 
 function isOnboardingInputAllowed(onboardingActive, demoKind, inputKind) {

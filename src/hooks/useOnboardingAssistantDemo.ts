@@ -10,7 +10,7 @@ export interface OnboardingAssistantCommand {
   attachment: ChatImageAttachment | null;
 }
 
-type DemoEventInput = Omit<OnboardingDemoEvent, "demoId" | "kind">;
+type DemoEventInput = Omit<OnboardingDemoEvent, "kind">;
 
 /**
  * Answers the onboarding assistant demo headlessly from the dictation window,
@@ -21,8 +21,12 @@ type DemoEventInput = Omit<OnboardingDemoEvent, "demoId" | "kind">;
 export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => void) {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
-  const repliedRef = useRef(false);
-  const { agentState, activeToolName, sendToAI } = useChatStreaming({
+  const terminalPublishedRef = useRef(false);
+  const sessionIdRef = useRef<string | null>(null);
+  const requestGenerationRef = useRef(0);
+  const activeStreamRef = useRef(false);
+  const requestMessageIdRef = useRef<string | null>(null);
+  const { agentState, activeToolName, sendToAI, cancelStream } = useChatStreaming({
     messages,
     setMessages,
     inferenceScope: "dictationAgent",
@@ -31,18 +35,64 @@ export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => v
   const reply = messages.find((message) => message.role === "assistant");
   const settled = agentState === "idle" && reply !== undefined && !reply.isStreaming;
 
-  useEffect(() => {
-    if (!reply) return;
-    if (!settled) {
-      publish({ status: "replying", text: reply.content, tool: activeToolName || undefined });
-    } else if (!repliedRef.current) {
-      publish({ status: "error", message: reply.content });
+  const cancel = useCallback(() => {
+    requestGenerationRef.current += 1;
+    sessionIdRef.current = null;
+    requestMessageIdRef.current = null;
+    terminalPublishedRef.current = false;
+    if (activeStreamRef.current) {
+      activeStreamRef.current = false;
+      cancelStream();
     }
-  }, [activeToolName, publish, reply, settled]);
+    setMessages([]);
+  }, [cancelStream]);
 
-  return useCallback(
-    (command: OnboardingAssistantCommand) => {
-      repliedRef.current = false;
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onOnboardingDemoEvent?.((event) => {
+      if (
+        event.kind !== "assistant" ||
+        !["preparing", "listening", "cancelled"].includes(event.status)
+      )
+        return;
+      if (sessionIdRef.current && event.demoId !== sessionIdRef.current) return;
+      cancel();
+    });
+    return () => {
+      unsubscribe?.();
+      cancel();
+    };
+  }, [cancel]);
+
+  useEffect(() => {
+    const demoId = sessionIdRef.current;
+    if (
+      !reply ||
+      !demoId ||
+      messages[0]?.id !== requestMessageIdRef.current ||
+      terminalPublishedRef.current
+    )
+      return;
+    if (!settled) {
+      publish({
+        demoId,
+        status: "replying",
+        text: reply.content,
+        tool: activeToolName || undefined,
+      });
+    } else {
+      terminalPublishedRef.current = true;
+      publish({ demoId, status: "error", message: reply.content });
+    }
+  }, [activeToolName, messages, publish, reply, settled]);
+
+  const run = useCallback(
+    async (command: OnboardingAssistantCommand) => {
+      cancel();
+      const generation = requestGenerationRef.current;
+      const session = await window.electronAPI?.getOnboardingDemoSession?.();
+      if (generation !== requestGenerationRef.current || session?.kind !== "assistant") return;
+      sessionIdRef.current = session.id;
+      terminalPublishedRef.current = false;
       const request = buildAssistantDemoRequest(command.text, {
         senderName: t("onboarding.rehaul.assistantDemo.email.senderName"),
         subject: t("onboarding.rehaul.assistantDemo.email.subject"),
@@ -54,16 +104,28 @@ export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => v
         content: request,
         isStreaming: false,
       };
+      requestMessageIdRef.current = userMessage.id;
       setMessages([userMessage]);
+      activeStreamRef.current = true;
       void sendToAI(request, [userMessage], {
         attachment: command.attachment ?? undefined,
         suppressResponseContent: true,
-        onComplete: ({ content }) => {
-          repliedRef.current = true;
-          publish({ status: "success", text: content });
+        onError: ({ message, code }) => {
+          if (generation !== requestGenerationRef.current) return;
+          terminalPublishedRef.current = true;
+          publish({ demoId: session.id, status: "error", message, code });
         },
+        onComplete: ({ content }) => {
+          if (generation !== requestGenerationRef.current) return;
+          terminalPublishedRef.current = true;
+          publish({ demoId: session.id, status: "success", text: content });
+        },
+      }).finally(() => {
+        if (generation === requestGenerationRef.current) activeStreamRef.current = false;
       });
     },
-    [publish, sendToAI, t]
+    [cancel, publish, sendToAI, t]
   );
+
+  return { run, cancel };
 }

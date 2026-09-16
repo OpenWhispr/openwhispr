@@ -1,45 +1,41 @@
-import React, { useState } from "react";
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
-import AuthenticationStep from "./AuthenticationStep";
-import EmailVerificationStep from "./EmailVerificationStep";
-import { signOut } from "../lib/auth";
+import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
+import type { OnboardingAuthDraft } from "./onboarding/flow";
 
 interface SignInDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onAuthComplete?: () => void;
+  resumeState?: OnboardingAuthDraft;
+  onResumeStateChange?: (state: Partial<OnboardingAuthDraft>) => void;
 }
 
-export default function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
+export default function SignInDialog({
+  open,
+  onOpenChange,
+  onAuthComplete,
+  resumeState,
+  onResumeStateChange,
+}: SignInDialogProps) {
   const { t } = useTranslation();
-  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
 
-  const handleOpenChange = (next: boolean) => {
-    if (!next) setPendingVerificationEmail(null);
-    onOpenChange(next);
+  const complete = () => {
+    onOpenChange(false);
+    onAuthComplete?.();
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogTitle className="sr-only">{t("auth.welcomeTitle")}</DialogTitle>
         <DialogDescription className="sr-only">{t("auth.welcomeSubtitle")}</DialogDescription>
-        {pendingVerificationEmail ? (
-          <EmailVerificationStep
-            email={pendingVerificationEmail}
-            onVerified={() => handleOpenChange(false)}
-            onBack={() => {
-              // Abandoning verification leaves a live session for the wrong
-              // email; end it first or the remounted auth step auto-completes
-              // with that account (signOut never rejects).
-              void signOut().then(() => setPendingVerificationEmail(null));
-            }}
-            embedded
-          />
-        ) : (
-          <AuthenticationStep
-            onAuthComplete={() => handleOpenChange(false)}
-            onNeedsVerification={setPendingVerificationEmail}
+        {open && (
+          <CompactAuthenticationFlow
+            onAuthComplete={complete}
+            resumeState={resumeState}
+            onResumeStateChange={onResumeStateChange}
             embedded
           />
         )}

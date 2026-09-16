@@ -500,7 +500,7 @@
       "holdDescription": "Hold while speaking",
       "test": "Test",
       "hotkeyToStartStop": "{{hotkey}} to start/stop",
-      "holdHotkey": "Hold {{hotkey}}",
+      "holdHotkey": "Hold {{hotkey}} while you speak.",
       "textareaPlaceholder": "Click here and use your hotkey to dictate..."
     },
     "connectivity": {
@@ -2192,12 +2192,20 @@
         "hyprlandConfigWriteWarningTitle": "Hyprland keybinds will not persist",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr cannot write to {{path}}, so keybinds will not survive a Hyprland config reload. Make sure the file exists and is writable.",
         "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut.",
+        "guide": {
+          "title": "Two ways to speak",
+          "scope": "For {{shortcuts}}.",
+          "handsFreeStart": "Start hands-free",
+          "dictation": "Dictation",
+          "voiceAgent": "Assistant",
+          "translation": "Translation"
+        },
         "gestures": {
           "holdTitle": "Hold to speak",
           "holdDetail": "Release to finish",
           "handsFreeTitle": "Hands-free",
-          "handsFreeDetail": "Press again to stop",
-          "doublePress": "Double press",
+          "handsFreeDetail": "Press once to stop",
+          "doublePress": "Double tap",
           "tapOnlyTitle": "Press to start, press again to stop"
         }
       },
@@ -3757,7 +3765,7 @@
       "badge": "New in this update",
       "title": "Hold to speak, release to finish",
       "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
-      "gesture": "Double press it for hands‑free, press again to stop."
+      "gesture": "Double tap it for hands-free, press once to stop."
     }
   },
   "dictationAgent": {

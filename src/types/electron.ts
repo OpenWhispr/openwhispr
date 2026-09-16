@@ -1048,18 +1048,28 @@ export interface ConversationCreateAckResult {
 
 export type OnboardingDemoKind = "dictation" | "assistant";
 /**
+ * "preparing" accepts a new attempt before the microphone is listening.
  * "partial" streams the transcript, "processing" carries the final transcript,
  * "replying" streams the assistant demo's reply, and "level" mirrors the
  * microphone level while listening.
  */
 export type OnboardingDemoStatus =
-  "listening" | "level" | "processing" | "partial" | "replying" | "success" | "error";
+  | "preparing"
+  | "listening"
+  | "level"
+  | "processing"
+  | "partial"
+  | "replying"
+  | "success"
+  | "error"
+  | "cancelled";
 export interface OnboardingDemoEvent {
   demoId: string;
   kind: OnboardingDemoKind;
   status: OnboardingDemoStatus;
   text?: string;
   message?: string;
+  code?: string;
   /** Tool the assistant is running while it replies (a tool registry name). */
   tool?: string;
   /** Microphone input level, 0..1, on "level" events. */
@@ -1082,9 +1092,12 @@ declare global {
       setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
       setOnboardingActive?: (active: boolean) => Promise<boolean>;
       beginOnboardingDemo?: (session: { id: string; kind: OnboardingDemoKind }) => Promise<boolean>;
+      getOnboardingDemoSession?: () => Promise<{ id: string; kind: OnboardingDemoKind } | null>;
       endOnboardingDemo?: (id: string) => Promise<boolean>;
       stopOnboardingDemo?: (id: string) => Promise<boolean>;
-      publishOnboardingDemoEvent?: (event: Omit<OnboardingDemoEvent, "demoId">) => Promise<boolean>;
+      publishOnboardingDemoEvent?: (
+        event: Omit<OnboardingDemoEvent, "demoId"> & { demoId?: string }
+      ) => Promise<boolean>;
       onOnboardingDemoEvent?: (callback: (event: OnboardingDemoEvent) => void) => () => void;
       testProviderConnection?: (config: {
         scope: "transcription" | "reasoning";
@@ -2015,13 +2028,15 @@ declare global {
       setHotkeyListeningMode?: (enabled: boolean) => Promise<{ success: boolean }>;
       getHotkeyModeInfo?: (
         hotkey?: string,
-        slot?: "dictation" | "voiceAgent" | "translation"
+        slot?: "dictation" | "voiceAgent" | "translation",
+        language?: string
       ) => Promise<{
         isUsingGnome: boolean;
         isUsingHyprland: boolean;
         isUsingKDE: boolean;
         isUsingNativeShortcut: boolean;
         supportsPushToTalk: boolean;
+        linuxPttPermissionDenied: boolean;
         pushToTalkUnavailableReason: string | null;
       }>;
       getHyprlandConfigStatus?: () => Promise<{ canWrite: boolean; path: string } | null>;

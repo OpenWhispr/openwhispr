@@ -1,3 +1,4 @@
+import type { PolicyFailureMetadata } from "../types/electron";
 import {
   resolveInferenceProvider,
   getCloudModel,
@@ -1020,7 +1021,9 @@ class ReasoningService extends BaseReasoningService {
       arguments?: string;
       finishReason?: string;
     };
-    const queue: Array<StreamEvent | { type: "__error"; error: string } | { type: "__end" }> = [];
+    const queue: Array<
+      StreamEvent | { type: "__error"; error: Error & PolicyFailureMetadata } | { type: "__end" }
+    > = [];
     let resolve: (() => void) | null = null;
     let cancelled = false;
     let closed = false;
@@ -1036,7 +1039,8 @@ class ReasoningService extends BaseReasoningService {
     });
     const cleanupError = electronAPI?.onAgentStreamError?.((payload) => {
       if (payload.requestId !== requestId || closed || cancelled) return;
-      queue.push({ type: "__error", error: payload.error });
+      const { requestId: _requestId, error, ...metadata } = payload;
+      queue.push({ type: "__error", error: Object.assign(new Error(error), metadata) });
       resolve?.();
     });
     const cleanupEnd = electronAPI?.onAgentStreamEnd?.((payload) => {
@@ -1079,7 +1083,8 @@ class ReasoningService extends BaseReasoningService {
           while (queue.length > 0) {
             const item = queue.shift()!;
             if (item.type === "__end") return;
-            if (item.type === "__error") throw new Error((item as { error: string }).error);
+            if (item.type === "__error")
+              throw (item as { error: Error & PolicyFailureMetadata }).error;
             yield item as StreamEvent;
           }
         }

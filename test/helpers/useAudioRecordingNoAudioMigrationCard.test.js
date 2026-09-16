@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
+const en = require("../../src/locales/en/translation.json");
 const { createRoot } = require("react-dom/client");
 const {
   createRendererServer,
@@ -30,7 +31,7 @@ export default class FakeAudioManager {
 }
 `;
 
-async function renderHook(t, suppressRef) {
+async function renderHook(t, suppressRef, onDemoEvent = () => {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -61,7 +62,7 @@ async function renderHook(t, suppressRef) {
   const toasts = [];
   function Harness() {
     useAudioRecording((props) => toasts.push(props), {
-      onDemoEvent: () => {},
+      onDemoEvent,
       suppressNoAudioErrorRef: suppressRef,
     });
     return null;
@@ -96,4 +97,35 @@ test("the very next run is loud again — the card suppresses one press, not a m
   suppressRef.current = false; // the card dismissed
   await React.act(async () => globalThis.__owAudioCallbacks.onNoAudio());
   assert.equal(noAudioToasts(toasts).length, 1);
+});
+
+test("an empty transcription ends the onboarding demo's processing state", async (t) => {
+  const events = [];
+  await renderHook(t, { current: false }, (event) => events.push(event));
+  await React.act(async () => {
+    globalThis.__owAudioCallbacks.onStateChange({ isRecording: false, isProcessing: true });
+    globalThis.__owAudioCallbacks.onStateChange({ isRecording: false, isProcessing: false });
+    await globalThis.__owAudioCallbacks.onTranscriptionComplete({ success: true, text: "" });
+  });
+  assert.deepEqual(
+    events.map((event) => event.status),
+    ["processing", "error"]
+  );
+  assert.equal(events.at(-1).message, en.hooks.audioRecording.noAudio.title);
+});
+
+test("onboarding errors preserve the code needed for in-flow sign-in recovery", async (t) => {
+  const events = [];
+  await renderHook(t, { current: false }, (event) => events.push(event));
+  await React.act(async () =>
+    globalThis.__owAudioCallbacks.onError({
+      title: "Transcription Error",
+      description: "Transcription failed: sign-in required",
+      code: "AUTH_REQUIRED",
+      messageKey: "hooks.audioRecording.errorDescriptions.sessionExpired",
+    })
+  );
+  assert.equal(events.at(-1).status, "error");
+  assert.equal(events.at(-1).code, "AUTH_REQUIRED");
+  assert.equal(events.at(-1).message, en.hooks.audioRecording.errorDescriptions.sessionExpired);
 });
