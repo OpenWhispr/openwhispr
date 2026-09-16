@@ -1251,6 +1251,8 @@ export default function SettingsPage({
     setFloatingIconAutoHide,
     startMinimized,
     setStartMinimized,
+    trayIconStyle,
+    setTrayIconStyle,
     panelStartPosition,
     setPanelStartPosition,
     cloudBackupEnabled,
@@ -3092,6 +3094,49 @@ export default function SettingsPage({
                     </div>
                   </SettingsRow>
                 </SettingsPanelRow>
+                {platform !== "darwin" && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.general.appearance.trayIconStyle")}
+                      description={t("settingsPage.general.appearance.trayIconStyleDescription")}
+                    >
+                      <div className="inline-flex items-center gap-px p-0.5 bg-muted/60 dark:bg-surface-2 rounded-md">
+                        {(
+                          [
+                            {
+                              value: "default",
+                              label: t("settingsPage.general.appearance.trayIconDefault"),
+                            },
+                            {
+                              value: "monochrome",
+                              label: t("settingsPage.general.appearance.trayIconMonochrome"),
+                            },
+                          ] as const
+                        ).map((option) => {
+                          const { value } = option;
+                          const isSelected = trayIconStyle === value;
+                          return (
+                            <button
+                              key={value}
+                              onClick={() => setTrayIconStyle(value)}
+                              className={`
+                                px-2.5 py-1 rounded-[5px] text-xs font-medium
+                                transition-colors duration-100
+                                ${
+                                  isSelected
+                                    ? "bg-background dark:bg-surface-raised text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground"
+                                }
+                              `}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 

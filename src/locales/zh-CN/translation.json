@@ -1866,6 +1866,10 @@
         "light": "浅色",
         "theme": "主题",
         "themeDescription": "选择浅色、深色或跟随系统",
+        "trayIconDefault": "默认",
+        "trayIconMonochrome": "单色",
+        "trayIconStyle": "托盘图标",
+        "trayIconStyleDescription": "选择图标在桌面面板中的显示方式",
         "title": "外观"
       },
       "floatingIcon": {

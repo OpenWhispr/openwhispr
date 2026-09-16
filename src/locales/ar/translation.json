@@ -2926,6 +2926,10 @@
         "light": "فاتح",
         "theme": "السمة",
         "themeDescription": "اختر المظهر الفاتح أو الداكن أو مطابقة إعدادات النظام",
+        "trayIconDefault": "افتراضي",
+        "trayIconMonochrome": "أحادي اللون",
+        "trayIconStyle": "أيقونة علبة النظام",
+        "trayIconStyleDescription": "اختر كيفية ظهور الأيقونة في لوحة سطح المكتب",
         "title": "المظهر"
       },
       "floatingIcon": {

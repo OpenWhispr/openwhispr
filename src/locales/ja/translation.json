@@ -1866,6 +1866,10 @@
         "light": "ライト",
         "theme": "テーマ",
         "themeDescription": "ライト、ダーク、またはシステムに合わせる",
+        "trayIconDefault": "デフォルト",
+        "trayIconMonochrome": "モノクロ",
+        "trayIconStyle": "トレイアイコン",
+        "trayIconStyleDescription": "デスクトップパネルでのアイコン表示を選択します",
         "title": "外観"
       },
       "floatingIcon": {

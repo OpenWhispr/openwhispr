@@ -2159,6 +2159,10 @@
         "light": "Hell",
         "theme": "Design",
         "themeDescription": "Wählen Sie zwischen Hell, Dunkel oder Systemstandard",
+        "trayIconDefault": "Standard",
+        "trayIconMonochrome": "Einfarbig",
+        "trayIconStyle": "Taskleistensymbol",
+        "trayIconStyleDescription": "Wählen Sie, wie das Symbol in Ihrer Desktop-Leiste angezeigt wird",
         "title": "Darstellung"
       },
       "floatingIcon": {
