@@ -1057,7 +1057,6 @@ async function startApp() {
     const { style: normalizedStyle } = environmentManager.saveTrayIconStyle(style);
     void trayManager?.setIconStyle(normalizedStyle);
   });
-  ipcMain.handle("get-tray-icon-style", () => environmentManager.getTrayIconStyle());
 
   ipcMain.on("panel-start-position-changed", (_event, position) => {
     windowManager.setPanelStartPosition(position);

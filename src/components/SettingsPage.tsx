@@ -3100,40 +3100,24 @@ export default function SettingsPage({
                       label={t("settingsPage.general.appearance.trayIconStyle")}
                       description={t("settingsPage.general.appearance.trayIconStyleDescription")}
                     >
-                      <div className="inline-flex items-center gap-px p-0.5 bg-muted/60 dark:bg-surface-2 rounded-md">
-                        {(
-                          [
-                            {
-                              value: "default",
-                              label: t("settingsPage.general.appearance.trayIconDefault"),
-                            },
-                            {
-                              value: "monochrome",
-                              label: t("settingsPage.general.appearance.trayIconMonochrome"),
-                            },
-                          ] as const
-                        ).map((option) => {
-                          const { value } = option;
-                          const isSelected = trayIconStyle === value;
-                          return (
-                            <button
-                              key={value}
-                              onClick={() => setTrayIconStyle(value)}
-                              className={`
-                                px-2.5 py-1 rounded-[5px] text-xs font-medium
-                                transition-colors duration-100
-                                ${
-                                  isSelected
-                                    ? "bg-background dark:bg-surface-raised text-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground"
-                                }
-                              `}
-                            >
-                              {option.label}
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <Select
+                        value={trayIconStyle}
+                        onValueChange={(value) =>
+                          setTrayIconStyle(value as "default" | "monochrome")
+                        }
+                      >
+                        <SelectTrigger className="h-7 w-36 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">
+                            {t("settingsPage.general.appearance.trayIconDefault")}
+                          </SelectItem>
+                          <SelectItem value="monochrome">
+                            {t("settingsPage.general.appearance.trayIconMonochrome")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                     </SettingsRow>
                   </SettingsPanelRow>
                 )}

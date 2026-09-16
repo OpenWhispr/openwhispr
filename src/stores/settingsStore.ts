@@ -3435,20 +3435,6 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    try {
-      const trayIconStyle = await window.electronAPI.getTrayIconStyle?.();
-      if (trayIconStyle && trayIconStyle !== state.trayIconStyle) {
-        if (isBrowser) localStorage.setItem("trayIconStyle", trayIconStyle);
-        useSettingsStore.setState({ trayIconStyle });
-      }
-    } catch (err) {
-      logger.warn(
-        "Failed to sync tray icon style on startup",
-        { error: (err as Error).message },
-        "settings"
-      );
-    }
-
     // Sync UI language from main process
     try {
       const envLanguage = await window.electronAPI.getUiLanguage?.();

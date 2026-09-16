@@ -1053,7 +1053,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   notifyStartMinimizedChanged: (enabled) => ipcRenderer.send("start-minimized-changed", enabled),
 
   // Tray icon
-  getTrayIconStyle: () => ipcRenderer.invoke("get-tray-icon-style"),
   notifyTrayIconStyleChanged: (style) => ipcRenderer.send("tray-icon-style-changed", style),
 
   // Auto-start management
