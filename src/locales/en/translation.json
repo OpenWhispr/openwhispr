@@ -3645,6 +3645,28 @@
     "emptyDescription": "Add words for {{agentName}} to always get right: names, tools, acronyms.",
     "addFirstWord": "Add your first word",
     "importList": "Import a list",
+    "importMenu": "Import",
+    "importFromDragon": "Import from Dragon",
+    "dragonImport": {
+      "title": "Import from Dragon",
+      "found_one": "Found {{count}} word in {{fileName}}.",
+      "found_other": "Found {{count}} words in {{fileName}}.",
+      "alreadyPresent": "Already in your dictionary, so skipped: {{count}}.",
+      "nothingNew": "Every word in this file is already in your dictionary.",
+      "unreadable": "Lines that could not be read, so skipped: {{count}}.",
+      "propertiesIgnored": "Dragon's formatting properties are not imported.",
+      "confirm_one": "Import {{count}} word",
+      "confirm_other": "Import {{count}} words",
+      "done_one": "Imported {{count}} word from Dragon",
+      "done_other": "Imported {{count}} words from Dragon",
+      "failedTitle": "Import failed",
+      "error": {
+        "emptyFile": "No words were found in that file.",
+        "unsupportedXml": "This doesn't look like a Dragon for Windows export. In Dragon, choose Vocabulary → Export custom word and phrase list and save as TXT.",
+        "fileTooLarge": "That file is too large to be a Dragon word list.",
+        "generic": "Couldn't read that file."
+      }
+    },
     "agentDefault": "Added by default"
   },
   "support": {

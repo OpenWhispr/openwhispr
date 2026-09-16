@@ -3302,6 +3302,28 @@
     "emptyDescription": "添加希望{{agentName}}始终识别正确的词：名字、工具、缩写。",
     "addFirstWord": "添加第一个词",
     "importList": "导入列表",
+    "importMenu": "导入",
+    "importFromDragon": "从 Dragon 导入",
+    "dragonImport": {
+      "title": "从 Dragon 导入",
+      "found_one": "在 {{fileName}} 中找到 {{count}} 个词语。",
+      "found_other": "在 {{fileName}} 中找到 {{count}} 个词语。",
+      "alreadyPresent": "已在你的词典中，因此跳过：{{count}} 个。",
+      "nothingNew": "此文件中的所有词语都已在你的词典中。",
+      "unreadable": "无法读取因此跳过的行：{{count}} 行。",
+      "propertiesIgnored": "不会导入 Dragon 的格式属性。",
+      "confirm_one": "导入 {{count}} 个词语",
+      "confirm_other": "导入 {{count}} 个词语",
+      "done_one": "已从 Dragon 导入 {{count}} 个词语",
+      "done_other": "已从 Dragon 导入 {{count}} 个词语",
+      "failedTitle": "导入失败",
+      "error": {
+        "emptyFile": "在该文件中未找到词语。",
+        "unsupportedXml": "这看起来不像是 Windows 版 Dragon 的导出文件。请在 Dragon 中选择“Vocabulary → Export custom word and phrase list”，并保存为 TXT。",
+        "fileTooLarge": "该文件太大，不像是 Dragon 词语列表。",
+        "generic": "无法读取该文件。"
+      }
+    },
     "agentDefault": "默认添加"
   },
   "insights": {

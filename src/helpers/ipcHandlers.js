@@ -11782,6 +11782,52 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("dragon-import-pick-and-parse", async (event) => {
+      try {
+        const { dialog } = require("electron");
+        // Parent the dialog so it opens as a sheet on the panel window —
+        // a parentless panel can land invisible on another display/Space.
+        const parentWindow = BrowserWindow.fromWebContents(event.sender);
+        const dialogOptions = {
+          properties: ["openFile"],
+          filters: [{ name: "Dragon word list", extensions: ["txt", "xml"] }],
+        };
+        const result = parentWindow
+          ? await dialog.showOpenDialog(parentWindow, dialogOptions)
+          : await dialog.showOpenDialog(dialogOptions);
+        if (result.canceled || !result.filePaths.length) {
+          return { canceled: true };
+        }
+        const [filePath] = result.filePaths;
+        // A twenty-year Dragon vocabulary is well under 1 MB; anything near
+        // this bound is not a word list.
+        const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+        if (fs.statSync(filePath).size > MAX_IMPORT_BYTES) {
+          return { canceled: false, success: false, error: "FILE_TOO_LARGE" };
+        }
+        const { decodeDragonExport, parseDragonWordList } = await import("./dragonImport.js");
+        const parsed = parseDragonWordList(decodeDragonExport(fs.readFileSync(filePath)).text);
+        if (!parsed.ok) {
+          return { canceled: false, success: false, error: parsed.error.code };
+        }
+        // The renderer applies the words through the store's existing
+        // dictionary path; nothing is written here and no state is kept.
+        return {
+          canceled: false,
+          success: true,
+          fileName: path.basename(filePath),
+          format: parsed.format,
+          words: parsed.words,
+          totalEntries: parsed.totalEntries,
+          unreadableLines: parsed.warnings.filter((w) => w.code === "AMBIGUOUS_BACKSLASH").length,
+          propertiesIgnored: parsed.warnings.some((w) => w.code === "XML_PROPERTIES_IGNORED"),
+        };
+      } catch (error) {
+        debugLogger.error("Dragon import failed", { error: error.message }, "dragon-import");
+        return { canceled: false, success: false, error: "READ_FAILED" };
+      }
+    });
+
     ipcMain.handle("get-speaker-mappings", async (_event, noteId) => {
       return this.databaseManager.getSpeakerMappings(noteId);
     });
