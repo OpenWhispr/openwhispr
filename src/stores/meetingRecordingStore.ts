@@ -1441,6 +1441,10 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
                 { error: takeover.error?.message },
                 "meeting"
               );
+              // The one-shot silence notice is suppressed once a call has been
+              // audible, so a late takeover failure would otherwise drop the
+              // other participants without telling anyone.
+              reportMeetingError("System audio capture failed. Continuing with microphone only.");
               return;
             }
             if (activeRecordingSessionId !== sessionId || !isRecordingFlag || systemStream) {

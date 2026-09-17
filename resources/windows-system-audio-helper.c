@@ -452,6 +452,7 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
     /* Disarmed for good once the warning has been emitted (main tears the
      * helper down) or when no meter is available to compare against. */
     BOOL silenceDetectionArmed = TRUE;
+    /* Any audible sample since the last one-second check, which clears it. */
     BOOL capturedAudibleThisTick = FALSE;
     int endpointAudibleTicks = 0;
     const char *errorCode = NULL;

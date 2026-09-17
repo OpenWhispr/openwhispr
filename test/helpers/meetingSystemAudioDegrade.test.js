@@ -13,9 +13,16 @@ const source = fs.readFileSync(ipcPath, "utf8");
 function harness({ systemAudioHeard }) {
   const sent = [];
   const stopped = [];
+  const detached = [];
   const context = {
     meetingSystemAudioDegraded: false,
+    // Inert since #1265, and that is the point: the closure must not read it.
     meetingSystemAudioHeard: systemAudioHeard,
+    meetingSystemAudioWatchdog: {
+      detachCapture: () => {
+        detached.push(true);
+      },
+    },
     debugLogger: { warn() {}, debug() {}, error() {}, info() {} },
     windowsLoopbackAudioManager: {
       stop: async () => {
@@ -38,20 +45,23 @@ function harness({ systemAudioHeard }) {
     globalThis.degrade = () => degradeMeetingSystemAudioToLoopback({ sender: {} });`,
     context
   );
-  return { context, sent, stopped, degrade: context.degrade };
+  return { context, sent, stopped, detached, degrade: context.degrade };
 }
 
 test("a silent capture hands over even after the helper delivered audible chunks", async () => {
   // Windows hides some applications' streams from process loopback while
   // passing others through, so a captured notification sound says nothing
   // about whether the call itself is being recorded (#1265).
-  const { context, sent, stopped, degrade } = harness({ systemAudioHeard: true });
+  const { context, sent, stopped, detached, degrade } = harness({ systemAudioHeard: true });
 
   await degrade();
 
   assert.deepEqual(sent, ["meeting-system-audio-degraded"]);
   assert.equal(stopped.length, 1);
   assert.equal(context.meetingSystemAudioDegraded, true);
+  // The renderer owns capture now, so the watchdog must not hold a restart
+  // hook for the helper that was just stopped.
+  assert.equal(detached.length, 1);
 });
 
 test("the handover runs once per session", async () => {
