@@ -210,11 +210,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
-      - name: Download windows-key-listener.exe
-        run: node scripts/download-windows-key-listener.js
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
-
       - name: Compile windows-mic-listener.exe
         shell: cmd
         run: |
