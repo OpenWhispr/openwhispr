@@ -364,6 +364,26 @@ test("a saved hosted assistant provider reopens with its model and key", async (
   assert.equal(step.value(PLACEHOLDER.hostedKey), "sk-ant-saved-key");
 });
 
+test("a self-hosted assistant setup ignores a leftover agent key", async (t) => {
+  const step = await mountByokStep(t, {
+    stepId: "byok-assistant",
+    selfHostedRequested: true,
+    // Saved as a hosted provider, so the abandoned self-hosted key is not this
+    // endpoint's: offering it would send it to the server the user is about to type.
+    settings: {
+      chatAgentMode: "providers",
+      chatAgentProvider: "anthropic",
+      chatAgentModel: "claude-sonnet-5",
+    },
+    secrets: { chatAgentCustomApiKey: "sk-abandoned-agent-key" },
+  });
+  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
+
+  // Secrets hydrate over IPC, so a key arriving after mount must stay out too.
+  await step.setStore({ chatAgentCustomApiKey: "sk-late-agent-key" });
+  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
+});
+
 test("an in-progress draft wins over saved settings, and a blank one falls back to them", async (t) => {
   await t.test("draft", async (t) => {
     const step = await mountByokStep(t, {

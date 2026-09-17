@@ -22,6 +22,20 @@ const GUEST_ON_OWN_SETUP = {
   cloudTranscriptionProvider: "groq",
 };
 
+const managedPolicy = (allowedModes, allowedByokProviders) => ({
+  version: 1,
+  transcription: { allowedModes, allowedByokProviders, allowedEnterpriseProviders: [] },
+  llm: { allowedModes: [], allowedByokProviders: [], allowedEnterpriseProviders: [] },
+  features: { agentEnabled: false, webSearchEnabled: false },
+  sharing: { externalLinkSharing: "disabled" },
+  dataRetention: {
+    audioRetentionMaxDays: null,
+    localHistoryMode: "user_choice",
+    cloudBackupAllowed: false,
+  },
+  minAppVersion: null,
+});
+
 async function mountNudge(t, { settings = {}, prompted = true } = {}) {
   let unmount = async () => {};
   t.after(() => unmount());
@@ -154,23 +168,18 @@ test("dictation already on Cloud, or a policy that forbids it, gets no nudge", a
   await t.test("policy forbids Cloud", async (t) => {
     const nudge = await mountNudge(t);
     await nudge.signIn();
-    await nudge.settlePolicy("managed", {
-      version: 1,
-      transcription: {
-        allowedModes: ["providers"],
-        allowedByokProviders: ["groq"],
-        allowedEnterpriseProviders: [],
-      },
-      llm: { allowedModes: [], allowedByokProviders: [], allowedEnterpriseProviders: [] },
-      features: { agentEnabled: false, webSearchEnabled: false },
-      sharing: { externalLinkSharing: "disabled" },
-      dataRetention: {
-        audioRetentionMaxDays: null,
-        localHistoryMode: "user_choice",
-        cloudBackupAllowed: false,
-      },
-      minAppVersion: null,
-    });
+    await nudge.settlePolicy("managed", managedPolicy(["providers"], ["groq"]));
+
+    assert.deepEqual(nudge.toasts, []);
+    assert.equal(nudge.storage.getItem(PROMPTED_AT_KEY), null);
+  });
+
+  // The stored preference still reads "providers", but the policy clamps dictation onto
+  // Cloud, which is where the settings pane shows it — so there is nothing to switch.
+  await t.test("policy already puts dictation on Cloud", async (t) => {
+    const nudge = await mountNudge(t);
+    await nudge.signIn();
+    await nudge.settlePolicy("managed", managedPolicy(["openwhispr"], []));
 
     assert.deepEqual(nudge.toasts, []);
     assert.equal(nudge.storage.getItem(PROMPTED_AT_KEY), null);

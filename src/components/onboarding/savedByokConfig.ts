@@ -22,9 +22,9 @@ export type SavedByokSnapshot = Pick<
 export interface SavedByokConfig {
   draft: OnboardingByokDraft;
   /**
-   * The saved endpoint authenticates with the stored custom API key. False for the
-   * Settings self-hosted server, which sends none, and for a hosted provider, whose
-   * key belongs to the provider rather than to the endpoint field.
+   * The saved endpoint authenticates with the step's stored custom API key. False for
+   * the Settings self-hosted transcription server, which sends none, and for a hosted
+   * provider, whose key belongs to the provider rather than to the endpoint field.
    */
   usesCustomKey: boolean;
 }
@@ -67,8 +67,10 @@ function resolveSavedDictation(s: SavedByokSnapshot): SavedByokConfig | null {
 // self-hosted endpoint, which would move it to a different URL setting.
 function resolveSavedAssistant(s: SavedByokSnapshot): SavedByokConfig | null {
   if (s.chatAgentMode === "self-hosted") {
+    // The assistant has one self-hosted route and it carries chatAgentCustomApiKey,
+    // so unlike dictation there is no key-less endpoint to tell apart.
     const baseUrl = s.chatAgentRemoteUrl.trim();
-    return baseUrl ? endpointConfig(baseUrl, s.chatAgentModel) : null;
+    return baseUrl ? endpointConfig(baseUrl, s.chatAgentModel, true) : null;
   }
   if (s.chatAgentMode === "providers" && s.chatAgentProvider && s.chatAgentProvider !== "custom") {
     return hostedConfig(s.chatAgentProvider, s.chatAgentModel);

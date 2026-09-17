@@ -177,7 +177,8 @@ test("the assistant reopens its self-hosted endpoint or hosted provider", async 
         baseUrl: "http://127.0.0.1:1234/v1",
         customModel: "llm-proxy-test",
       },
-      usesCustomKey: false,
+      // The assistant's only self-hosted route sends chatAgentCustomApiKey.
+      usesCustomKey: true,
     }
   );
   assert.deepEqual(

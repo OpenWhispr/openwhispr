@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../components/ui/useToast";
-import { useSettingsStore } from "../stores/settingsStore";
+import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
 import { SIGN_IN_PROMPTED_AT_KEY } from "../utils/requestSignIn";
 import { decideSignInCloudNudge } from "../utils/signInCloudNudge";
 import { usePolicySnapshot } from "./usePolicy";
@@ -18,7 +18,11 @@ export function useSignInCloudNudge(
   const { t } = useTranslation();
   const { toast, dismiss } = useToast();
   const policy = usePolicySnapshot();
-  const transcriptionMode = useSettingsStore((state) => state.transcriptionMode);
+  // Policy-effective, because a managed user the policy already clamps onto Cloud is
+  // there whatever their own preference still says.
+  const transcriptionMode = useSettingsStore(
+    (settings) => selectPolicyEffectiveSettings(settings, policy).transcriptionMode
+  );
 
   useEffect(() => {
     const promptedAt = localStorage.getItem(SIGN_IN_PROMPTED_AT_KEY);

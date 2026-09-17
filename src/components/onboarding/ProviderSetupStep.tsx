@@ -344,13 +344,13 @@ export function ByokProviderStep({
     : pickDefaultModelId(initialProviderData);
   const initiallySelfHosted = selfHostedRequested && selfHostedAllowed;
   // Hosted and self-hosted share the key field, so each mode shows its own saved key.
-  // The stored custom key belongs to a saved keyed Custom endpoint only: offering it for
-  // a key-less server, a hosted provider or a first setup would send a key the user never
+  // The stored custom key belongs to a saved keyed endpoint only: offering it for a
+  // key-less server, a hosted provider or a first setup would send a key the user never
   // typed to the endpoint they just typed, and move the save onto the keyed route.
   const credentialFor = (selfHostedMode: boolean, providerId: string) => {
     if (!selfHostedMode) return providerCredential(providerId, store).value;
-    if (assistant) return store.chatAgentCustomApiKey;
-    return seed.usesCustomKey ? store.customTranscriptionApiKey : "";
+    if (!seed.usesCustomKey) return "";
+    return assistant ? store.chatAgentCustomApiKey : store.customTranscriptionApiKey;
   };
   const [selfHosted, setSelfHosted] = useState(initiallySelfHosted);
   const [selectedProvider, setSelectedProvider] = useState(initialProvider);
