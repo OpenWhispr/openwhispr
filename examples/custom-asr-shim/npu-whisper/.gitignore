@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+
+# Audio files  
+*.webm
+*.wav
+*.ogg
+*.mp3
+
+# NPU cache
+npu_cache/
+
+# Diagnostic dumps
+f32_dumps/
+*.f32
+
+# IDE
+.vscode/
+.idea/
