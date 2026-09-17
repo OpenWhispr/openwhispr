@@ -1435,6 +1435,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             const takeover = await requestSystemAudioDisplayStream(
               getDisplayCaptureModeForStrategy("loopback")
             );
+            // The session can end, or be replaced, while the capture request is
+            // pending. Everything below writes state shared with the next
+            // recording, so both outcomes are gated here.
+            if (activeRecordingSessionId !== sessionId || !isRecordingFlag || systemStream) {
+              stopMediaStream(takeover.stream);
+              return;
+            }
             if (!takeover.stream) {
               logger.warn(
                 "Renderer loopback takeover failed after native system audio went silent",
@@ -1452,14 +1459,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
                 recovering: false,
               });
               sessionSystemAudioActive = false;
-              void window.electronAPI?.meetingTranscriptionSetSystemAudioAvailable?.(
-                sessionId,
-                false
-              );
-              return;
-            }
-            if (activeRecordingSessionId !== sessionId || !isRecordingFlag || systemStream) {
-              stopMediaStream(takeover.stream);
+              void window.electronAPI
+                ?.meetingTranscriptionSetSystemAudioAvailable?.(sessionId, false)
+                .catch(() => undefined);
               return;
             }
             await attachRendererSystemAudio(takeover.stream);
