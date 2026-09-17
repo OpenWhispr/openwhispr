@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
-import { Plus, Sparkles } from "lucide-react";
+import { Plus, Sparkles } from "../icons";
 import { useToast } from "../ui/useToast";
 import NoteEditor from "./NoteEditor";
 import SpacesTree from "./SpacesTree";
@@ -12,7 +12,9 @@ import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
-import type { NoteItem } from "../../types/electron";
+import type { ActionItem, NoteItem } from "../../types/electron";
+import { useActions } from "../../stores/actionStore";
+import { DETAILED_NOTES_KEY } from "../../helpers/builtinActions";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
@@ -60,11 +62,12 @@ import {
   setSessionExpectedCount,
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
+import { startRecordingForNote, useCreateNote } from "../../hooks/useCreateNote";
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import NotesOnboarding from "./NotesOnboarding";
-import { notesEmptyTitleKey } from "./shared";
+import { defaultFolderDisplayName, notesEmptyTitleKey } from "./shared";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
@@ -121,7 +124,7 @@ interface PersonalNotesViewProps {
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
-  invitationEntry?: { workspaceId: string; teamIds: string[] } | null;
+  invitationEntry?: { workspaceId: string; teamIds: string[]; spaceIds: string[] } | null;
   onInvitationEntryHandled?: () => void;
 }
 
@@ -244,6 +247,7 @@ export default function PersonalNotesView({
   const sessionExpectedCount = useMeetingRecordingStore((s) => s.sessionExpectedCount);
   const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
   const meetingRecordingAllowed = useTranscriptionContextAllowed("meeting");
+  const actions = useActions();
 
   const spaces = useSpaces();
   const folders = useFolders();
@@ -292,21 +296,25 @@ export default function PersonalNotesView({
   }, [invitationEntry, isSidePanelLayout]);
 
   // The acceptance modal starts a sync before navigating here. Once the first
-  // space an invited team can access appears in the local mirror, take the
-  // user to it instead of leaving the newly shared content hidden behind
-  // Personal.
+  // space the invitation granted (directly or via a team) appears in the local
+  // mirror, take the user to it instead of leaving the newly shared content
+  // hidden behind Personal.
   useEffect(() => {
     if (!invitationEntry) return;
     const invitedTeamIds = new Set(invitationEntry.teamIds);
+    const invitedSpaceIds = new Set(invitationEntry.spaceIds);
+    // Workspace owners/admins receive implicit access, so their invitation
+    // may enumerate no grants at all. In that case, open the first accessible
+    // team space belonging to the accepted workspace.
+    const anyGrant = invitedTeamIds.size === 0 && invitedSpaceIds.size === 0;
     const invitedSpace = spaces.find(
       (space) =>
         space.kind === "team" &&
         space.workspace_id === invitationEntry.workspaceId &&
         space.cloud_space_id != null &&
-        // Workspace owners/admins receive implicit access, so their invitation
-        // may not enumerate team ids. In that case, open the first accessible
-        // team space belonging to the accepted workspace.
-        (invitedTeamIds.size === 0 || space.teams.some((team) => invitedTeamIds.has(team.id)))
+        (anyGrant ||
+          invitedSpaceIds.has(space.cloud_space_id) ||
+          space.teams.some((team) => invitedTeamIds.has(team.id)))
     );
     if (!invitedSpace) return;
 
@@ -329,8 +337,9 @@ export default function PersonalNotesView({
   // Derive folder name and calendar event name for the metadata chips
   const activeFolderName = useMemo(() => {
     if (!activeNote?.folder_id) return null;
-    return folders.find((f) => f.id === activeNote.folder_id)?.name ?? null;
-  }, [activeNote?.folder_id, folders]);
+    const folder = folders.find((f) => f.id === activeNote.folder_id);
+    return folder ? defaultFolderDisplayName(folder, t) : null;
+  }, [activeNote?.folder_id, folders, t]);
 
   // The editor's move-to-folder chip only offers folders in the note's own
   // space; cross-space moves change the audience and need an explicit confirm.
@@ -350,21 +359,7 @@ export default function PersonalNotesView({
     });
   }, [activeNote?.calendar_event_id]);
 
-  const startRecording = useCallback(async () => {
-    const note = activeNote ?? null;
-    const noteId = note?.id ?? null;
-    const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
-    await storeStartRecording({
-      noteId,
-      noteTitle: note?.title ?? null,
-      folderId: note?.folder_id ?? null,
-      seedSegments,
-      diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: resolveExpectedSpeakerCount(note),
-      expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
-      autoEndEligible: isMeetingAutoEndEligible(note),
-    });
-  }, [activeNote]);
+  const startRecording = useCallback(() => startRecordingForNote(activeNote ?? null), [activeNote]);
 
   const stopRecording = useCallback(async () => {
     await storeStopRecording();
@@ -500,40 +495,12 @@ export default function PersonalNotesView({
     return () => flushPendingSaves("unmount");
   }, [flushPendingSaves]);
 
-  const handleNewNoteIn = useCallback(
-    async (spaceId: number, folderId: number | null) => {
-      const result = await window.electronAPI.saveNote(
-        t("notes.list.untitledNote"),
-        "",
-        "personal",
-        null,
-        null,
-        folderId,
-        spaceId
-      );
-      if (result.success && result.note) {
-        setActiveContext(result.note.space_id, result.note.folder_id);
-        revealContainer(result.note.space_id, result.note.folder_id);
-        setActiveNoteId(result.note.id);
-      }
-    },
-    [t]
-  );
+  const { createNote, createNoteIn } = useCreateNote();
 
   const privateSpaceId = useMemo(
     () => spaces.find((s) => s.kind === "private")?.id ?? null,
     [spaces]
   );
-
-  const handleNewNoteInPrivate = useCallback(() => {
-    if (privateSpaceId == null) return;
-    handleNewNoteIn(privateSpaceId, null);
-  }, [privateSpaceId, handleNewNoteIn]);
-
-  const handleNewNote = useCallback(() => {
-    if (activeContext) handleNewNoteIn(activeContext.spaceId, activeContext.folderId);
-    else handleNewNoteInPrivate();
-  }, [activeContext, handleNewNoteIn, handleNewNoteInPrivate]);
 
   const handleNotesAdded = useCallback(async () => {
     if (activeFolderId) {
@@ -680,6 +647,68 @@ export default function PersonalNotesView({
   // the store — this view can be unmounted when an auto-end stop fires.
   const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
 
+  const runNoteAction = async (action: ActionItem) => {
+    if (!editorNote) return;
+    const { recordingNoteId: liveNoteId, transcript: liveTranscript } =
+      useMeetingRecordingStore.getState();
+    const rawTranscript =
+      (liveNoteId === activeNote?.id ? liveTranscript : "") || activeNoteRawTranscript;
+    const noteContent = editorNote.content;
+    const hasNotes = !!noteContent.trim();
+    if (!hasNotes && !rawTranscript) return;
+
+    let formattedTranscript = "";
+    let meetingContext = "";
+    let isMeetingNote = false;
+    let knownPeople: MentionPerson[] = [];
+    if (rawTranscript) {
+      const segments = parseTranscriptSegments(rawTranscript);
+      if (segments.length > 0) {
+        isMeetingNote = true;
+        const mappingRows =
+          (await window.electronAPI?.getSpeakerMappings?.(editorNote.id).catch(() => [])) || [];
+        const speakerMappings: Record<string, string> = {};
+        for (const m of mappingRows) speakerMappings[m.speaker_id] = m.display_name;
+
+        const identity: MeetingIdentity = {
+          selfName: user?.name?.trim() || null,
+          selfEmail: user?.email?.trim() || null,
+          participants: parseNoteParticipants(editorNote.participants),
+        };
+        const selfLabel = identity.selfName || t("notes.speaker.you");
+        meetingContext = buildMeetingContext(identity, selfLabel);
+        formattedTranscript = buildLlmTranscript(segments, speakerMappings, selfLabel, t);
+        knownPeople = collectKnownPeople(identity, speakerMappings, segments);
+      }
+      if (!formattedTranscript) {
+        formattedTranscript = rawTranscript;
+      }
+    }
+
+    const parts = [
+      hasNotes ? noteContent : "",
+      meetingContext,
+      formattedTranscript ? `## Meeting Transcript\n${formattedTranscript}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    runAction(action, parts, makeContentHash(`${noteContent}\n${rawTranscript}`), {
+      isCloudMode,
+      modelId: effectiveModelId,
+      isMeetingNote,
+      knownPeople,
+      allowTitleGeneration: isRegenerableNoteTitle(
+        editorNote.title,
+        [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],
+        calendarEventName
+      ),
+    });
+  };
+  const generateSummary = () => {
+    const action = actions.find((a) => a.translation_key === DETAILED_NOTES_KEY);
+    if (action) void runNoteAction(action);
+  };
+
   if (!isOnboardingComplete) {
     return (
       <>
@@ -698,13 +727,13 @@ export default function PersonalNotesView({
         className="shrink-0 overflow-hidden transition-[width] duration-300 ease-out"
         style={{ width: isSidePanelLayout ? 0 : "13rem" }}
       >
-        <div className="w-52 shrink-0 border-r border-border/15 dark:border-white/4 flex flex-col h-full">
+        <div className="w-52 shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full">
           <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
             <button
               onClick={() => setShowActionManager(true)}
               className={cn(
                 "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
-                "text-muted-foreground/80 hover:text-foreground hover:bg-foreground/5",
+                "text-foreground/85 hover:text-foreground hover:bg-foreground/5",
                 "transition-colors duration-150",
                 "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               )}
@@ -718,7 +747,7 @@ export default function PersonalNotesView({
             onDeleteNote={handleDelete}
             onMoveNote={handleMoveNote}
             onCreateFolderAndMove={handleCreateFolderAndMove}
-            onNewNote={handleNewNoteIn}
+            onNewNote={createNoteIn}
             onShowStructureIntro={() => setShowStructureIntro(true)}
           />
         </div>
@@ -764,77 +793,10 @@ export default function PersonalNotesView({
               onCancelPendingSaves={cancelPendingSaves}
               actionProcessingState={actionProcessingState}
               actionName={actionName}
+              onGenerateSummary={generateSummary}
               actionPicker={
                 <ActionPicker
-                  onRunAction={async (action) => {
-                    if (!editorNote) return;
-                    const { recordingNoteId: liveNoteId, transcript: liveTranscript } =
-                      useMeetingRecordingStore.getState();
-                    const rawTranscript =
-                      (liveNoteId === activeNote?.id ? liveTranscript : "") ||
-                      activeNoteRawTranscript;
-                    const noteContent = editorNote.content;
-                    const hasNotes = !!noteContent.trim();
-                    if (!hasNotes && !rawTranscript) return;
-
-                    let formattedTranscript = "";
-                    let meetingContext = "";
-                    let isMeetingNote = false;
-                    let knownPeople: MentionPerson[] = [];
-                    if (rawTranscript) {
-                      const segments = parseTranscriptSegments(rawTranscript);
-                      if (segments.length > 0) {
-                        isMeetingNote = true;
-                        const mappingRows =
-                          (await window.electronAPI
-                            ?.getSpeakerMappings?.(editorNote.id)
-                            .catch(() => [])) || [];
-                        const speakerMappings: Record<string, string> = {};
-                        for (const m of mappingRows) speakerMappings[m.speaker_id] = m.display_name;
-
-                        const identity: MeetingIdentity = {
-                          selfName: user?.name?.trim() || null,
-                          selfEmail: user?.email?.trim() || null,
-                          participants: parseNoteParticipants(editorNote.participants),
-                        };
-                        const selfLabel = identity.selfName || t("notes.speaker.you");
-                        meetingContext = buildMeetingContext(identity, selfLabel);
-                        formattedTranscript = buildLlmTranscript(
-                          segments,
-                          speakerMappings,
-                          selfLabel,
-                          t
-                        );
-                        knownPeople = collectKnownPeople(identity, speakerMappings, segments);
-                      }
-                      if (!formattedTranscript) {
-                        formattedTranscript = rawTranscript;
-                      }
-                    }
-
-                    const parts = [
-                      hasNotes ? noteContent : "",
-                      meetingContext,
-                      formattedTranscript ? `## Meeting Transcript\n${formattedTranscript}` : "",
-                    ]
-                      .filter(Boolean)
-                      .join("\n\n");
-                    runAction(action, parts, makeContentHash(`${noteContent}\n${rawTranscript}`), {
-                      isCloudMode,
-                      modelId: effectiveModelId,
-                      isMeetingNote,
-                      knownPeople,
-                      allowTitleGeneration: isRegenerableNoteTitle(
-                        editorNote.title,
-                        [
-                          t("notes.list.untitledNote"),
-                          t("notes.list.newNote"),
-                          t("notes.sidebar.newNote"),
-                        ],
-                        calendarEventName
-                      ),
-                    });
-                  }}
+                  onRunAction={runNoteAction}
                   onManageActions={() => setShowActionManager(true)}
                   disabled={
                     (!editorNote?.content?.trim() &&
@@ -857,7 +819,7 @@ export default function PersonalNotesView({
             space={overviewSpace}
             folder={overviewFolder}
             onOpenNote={setActiveNoteId}
-            onNewNote={handleNewNote}
+            onNewNote={createNote}
             onAddExisting={activeFolderId != null ? () => setShowAddNotesDialog(true) : undefined}
           />
         ) : (
@@ -963,12 +925,12 @@ export default function PersonalNotesView({
                 <h3 className="text-xs font-semibold text-foreground/60 mb-1">
                   {t(notesEmptyTitleKey(activeFolderId != null))}
                 </h3>
-                <p className="text-xs text-foreground/50 dark:text-foreground/25 text-center max-w-55 mb-4">
+                <p className="text-xs text-foreground/50 dark:text-foreground/45 text-center max-w-55 mb-4">
                   {t("notes.empty.description")}
                 </p>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleNewNote}
+                    onClick={createNote}
                     className="flex items-center gap-1.5 px-4 h-7 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
                   >
                     <Plus size={11} />
@@ -979,7 +941,7 @@ export default function PersonalNotesView({
                   {activeFolderId != null && (
                     <button
                       onClick={() => setShowAddNotesDialog(true)}
-                      className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/8 text-xs text-foreground/40 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
+                      className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/10 text-xs text-foreground/45 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
                     >
                       {t("notes.addToFolder.addExisting")}
                     </button>
@@ -991,7 +953,7 @@ export default function PersonalNotesView({
                 <h3 className="text-xs font-semibold text-foreground/60 mb-1">
                   {t("notes.empty.selectTitle")}
                 </h3>
-                <p className="text-xs text-foreground/50 dark:text-foreground/25 text-center max-w-50">
+                <p className="text-xs text-foreground/50 dark:text-foreground/45 text-center max-w-50">
                   {t("notes.empty.selectDescription")}
                 </p>
               </>

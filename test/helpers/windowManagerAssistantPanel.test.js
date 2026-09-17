@@ -4,6 +4,7 @@ const Module = require("node:module");
 const requestedMainWindowPositions = [];
 const createdBrowserWindows = [];
 const screenListeners = [];
+const builtMenus = [];
 
 // Same stub set as windowManagerMeetingNotification.test.js: WindowManager
 // pulls in electron + sibling managers at require time.
@@ -35,33 +36,90 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
           };
           createdBrowserWindows.push(this);
         }
-        on(event, listener) { this.windowListeners.set(event, listener); }
-        setContentProtection(value) { this.protectionCalls.push(value); }
+        on(event, listener) {
+          this.windowListeners.set(event, listener);
+        }
+        setContentProtection(value) {
+          this.protectionCalls.push(value);
+        }
         setIgnoreMouseEvents() {}
-        loadFile() { return Promise.resolve(); }
-        loadURL() { return Promise.resolve(); }
-        isDestroyed() { return false; }
-        close() { this.closeCalls += 1; this.windowListeners.get("closed")?.(); }
-        getBounds() { return this.bounds; }
-        setBounds(nextBounds) { this.bounds = nextBounds; this.setBoundsCalls += 1; }
-        isVisible() { return this.visible; }
-        showInactive() { this.visible = true; }
-        hide() { this.visible = false; }
+        loadFile() {
+          return Promise.resolve();
+        }
+        loadURL() {
+          return Promise.resolve();
+        }
+        isDestroyed() {
+          return false;
+        }
+        close() {
+          this.closeCalls += 1;
+          this.windowListeners.get("closed")?.();
+        }
+        getBounds() {
+          return this.bounds;
+        }
+        setBounds(nextBounds) {
+          this.bounds = nextBounds;
+          this.setBoundsCalls += 1;
+        }
+        isVisible() {
+          return this.visible;
+        }
+        showInactive() {
+          this.visible = true;
+        }
+        hide() {
+          this.visible = false;
+        }
         moveTop() {}
+      },
+      Menu: {
+        buildFromTemplate: (template) => {
+          const menu = {
+            popupCalls: [],
+            popup(options) {
+              this.popupCalls.push(options);
+            },
+          };
+          builtMenus.push({ template, menu });
+          return menu;
+        },
       },
       shell: {},
       dialog: {},
     };
   }
-  if (request === "./debugLogger") return { warn: () => undefined, debug: () => undefined, log: () => undefined };
+  if (request === "./debugLogger")
+    return { warn: () => undefined, debug: () => undefined, log: () => undefined };
   if (request === "./hotkeyManager") {
-    const FakeHotkeyManager = class { unregisterAll() {} isInListeningMode() { return false; } };
+    const FakeHotkeyManager = class {
+      unregisterAll() {}
+      isInListeningMode() {
+        return false;
+      }
+    };
     FakeHotkeyManager.isGlobeLikeHotkey = () => false;
     return FakeHotkeyManager;
   }
-  if (request === "./dragManager") return class { cleanup() {} async startWindowDrag() { return { success: true }; } async stopWindowDrag() { return { success: true }; } };
+  if (request === "./dragManager")
+    return class {
+      cleanup() {}
+      async startWindowDrag() {
+        return { success: true };
+      }
+      async stopWindowDrag() {
+        return { success: true };
+      }
+    };
   if (request === "./menuManager") return {};
-  if (request === "./devServerManager") return { DEV_SERVER_PORT: 5173, DEV_SERVER_URL: "http://localhost:5173", getAppFilePath: () => ({ path: "/app/index.html", query: {} }), waitForDevServer: async () => undefined };
+  if (request === "./devServerManager")
+    return {
+      DEV_SERVER_PORT: 5173,
+      DEV_SERVER_URL: "http://localhost:5173",
+      getAppFilePath: () => ({ path: "/app/index.html", query: {} }),
+      waitForDevServer: async () => undefined,
+    };
   if (request === "./dockManager") return {};
   if (request === "./i18nMain") return { i18nMain: { t: (key) => key } };
   if (request === "./windowConfig") {
@@ -69,8 +127,6 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       MAIN_WINDOW_CONFIG: {},
       CONTROL_PANEL_CONFIG: {},
       NOTIFICATION_WINDOW_CONFIG: {},
-      AUTO_END_NOTIFICATION_WINDOW_SIZE: { width: 620, height: 116 },
-      getMeetingNotificationWindowSize: () => ({ width: 392, height: 92 }),
       WINDOW_SIZES: { BASE: { width: 96, height: 96 } },
       ONBOARDING_WINDOW_SIZES: {
         COMPACT: { width: 480, height: 624 },
@@ -106,9 +162,18 @@ function fakeWindow({ visible }) {
       isDestroyed: () => false,
       isVisible: () => isVisible,
       isMinimized: () => false,
-      showInactive: () => { isVisible = true; calls.push("showInactive"); },
-      show: () => { isVisible = true; calls.push("show"); },
-      hide: () => { isVisible = false; calls.push("hide"); },
+      showInactive: () => {
+        isVisible = true;
+        calls.push("showInactive");
+      },
+      show: () => {
+        isVisible = true;
+        calls.push("show");
+      },
+      hide: () => {
+        isVisible = false;
+        calls.push("hide");
+      },
       focus: () => calls.push("focus"),
       blur: () => calls.push("blur"),
       setFocusable: (value) => calls.push(`focusable:${value}`),
@@ -129,6 +194,30 @@ function makeManager(windowState) {
   manager.hideAgentDictationPill = () => undefined;
   return { manager, calls: fake.calls };
 }
+
+test("the Assistant response context menu exposes native Copy only for selected text", () => {
+  builtMenus.length = 0;
+  const manager = new WindowManager();
+  const listeners = new Map();
+  manager.mainWindow = {
+    webContents: { on: (event, listener) => listeners.set(event, listener) },
+  };
+  manager._assistantPanelOpen = true;
+  manager.registerAssistantSelectionContextMenu();
+
+  const onContextMenu = listeners.get("context-menu");
+  assert.ok(onContextMenu);
+  onContextMenu(null, { selectionText: "selected answer" });
+  onContextMenu(null, { selectionText: "   " });
+
+  assert.equal(builtMenus.length, 1);
+  assert.deepEqual(builtMenus[0].template, [{ role: "copy" }]);
+  assert.deepEqual(builtMenus[0].menu.popupCalls, [{ window: manager.mainWindow }]);
+
+  manager._assistantPanelOpen = false;
+  onContextMenu(null, { selectionText: "outside Assistant" });
+  assert.equal(builtMenus.length, 1);
+});
 
 test("the Agent companion follows the edge opposite the panel", () => {
   requestedMainWindowPositions.length = 0;
@@ -286,6 +375,7 @@ test("live transcript events are mirrored to the companion only for plain dictat
   manager._agentDictationPillReady = true;
   manager.mainWindow = {
     isDestroyed: () => false,
+    isVisible: () => true,
     showInactive: () => undefined,
     webContents: { send: (channel, payload) => mainMessages.push({ channel, payload }) },
   };
@@ -309,10 +399,89 @@ test("live transcript events are mirrored to the companion only for plain dictat
   assert.deepEqual(companionMessages, [{ channel: "preview-text", payload: "plain" }]);
 });
 
-test("opening the assistant panel surfaces a hidden pill window before focusing it", () => {
-  const { manager, calls } = makeManager({ visible: false });
-  manager.setAssistantPanelOpen(true);
-  assert.deepEqual(calls, ["showInactive", "focusable:true", "focus"]);
+test("live transcript updates do not restack an already visible dictation window", async () => {
+  const manager = new WindowManager();
+  const calls = [];
+  manager.setOnboardingActive(false);
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    showInactive: () => calls.push("showInactive"),
+    webContents: { send: () => undefined },
+  };
+  manager.enforceMainWindowOnTop = () => calls.push("onTop");
+
+  await manager.showTranscriptionPreview("one");
+  await manager.showTranscriptionPreview("two");
+
+  assert.deepEqual(calls, []);
+});
+
+test("the first live transcript update still surfaces a hidden dictation window", async () => {
+  const manager = new WindowManager();
+  const calls = [];
+  manager.setOnboardingActive(false);
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    isVisible: () => false,
+    showInactive: () => calls.push("showInactive"),
+    webContents: { send: () => undefined },
+  };
+  manager.enforceMainWindowOnTop = () => calls.push("onTop");
+
+  await manager.showTranscriptionPreview("hello");
+
+  assert.deepEqual(calls, ["showInactive", "onTop"]);
+});
+
+// Both platform paths run on every runner: branching the expectation on the
+// host's own process.platform would leave whichever path CI is not running
+// unverified — and darwin is the one that carries the contract.
+function withPlatform(platform, run) {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+  try {
+    run();
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+}
+
+test("opening the assistant panel surfaces a hidden pill window without activating on macOS", () => {
+  withPlatform("darwin", () => {
+    const { manager, calls } = makeManager({ visible: false });
+    manager.setAssistantPanelOpen(true);
+    // focus() answers a user-granted activation with a whole-desktop Space
+    // slide when another OpenWhispr window lives on a different Space. The
+    // non-activating panel becomes key on click instead.
+    assert.deepEqual(calls, ["showInactive", "focusable:true"]);
+  });
+});
+
+test("opening the assistant panel focuses the pill window on Windows/Linux", () => {
+  for (const platform of ["win32", "linux"]) {
+    withPlatform(platform, () => {
+      const { manager, calls } = makeManager({ visible: false });
+      manager.setAssistantPanelOpen(true);
+      assert.deepEqual(calls, ["showInactive", "focusable:true", "focus"], platform);
+    });
+  }
+});
+
+test("closing the assistant panel blurs only where opening focused", () => {
+  withPlatform("darwin", () => {
+    const { manager, calls } = makeManager({ visible: true });
+    manager.setAssistantPanelOpen(false);
+    // Nothing was activated, so blur() would only churn key-window state.
+    assert.ok(!calls.includes("blur"), "macOS must not blur the overlay");
+  });
+  for (const platform of ["win32", "linux"]) {
+    withPlatform(platform, () => {
+      const { manager, calls } = makeManager({ visible: true });
+      manager.setAssistantPanelOpen(false);
+      assert.ok(calls.includes("blur"), `${platform} hands the foreground back`);
+    });
+  }
 });
 
 test("showDictationPanel still surfaces a hidden window while the panel is open", () => {
@@ -597,15 +766,18 @@ test("display changes reposition the companion pill", () => {
   pill.webContentsListeners.get("did-finish-load")();
   const boundsCallsBefore = pill.setBoundsCalls;
 
-  const metricsListener = screenListeners.find((entry) => entry.event === "display-metrics-changed");
+  const metricsListener = screenListeners.find(
+    (entry) => entry.event === "display-metrics-changed"
+  );
   assert.ok(metricsListener, "display-metrics-changed listener registered");
   metricsListener.listener();
 
   assert.equal(pill.setBoundsCalls, boundsCallsBefore + 1);
-  assert.deepEqual(
-    screenListeners.map((entry) => entry.event).sort(),
-    ["display-added", "display-metrics-changed", "display-removed"]
-  );
+  assert.deepEqual(screenListeners.map((entry) => entry.event).sort(), [
+    "display-added",
+    "display-metrics-changed",
+    "display-removed",
+  ]);
 });
 
 test("onboarding suppresses the companion pill like every popup surface", () => {

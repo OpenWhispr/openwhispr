@@ -1,5 +1,6 @@
 export const SUPPORTED_UI_LANGUAGES = [
   "en",
+  "ar",
   "es",
   "fr",
   "de",
@@ -23,6 +24,7 @@ type UiLanguageMetadata = Omit<UiLanguageOption, "value">;
 
 const UI_LANGUAGE_METADATA = {
   en: { label: "English", flag: "🇺🇸" },
+  ar: { label: "العربية", flag: "🇦🇪" },
   es: { label: "Español", flag: "🇪🇸" },
   fr: { label: "Français", flag: "🇫🇷" },
   de: { label: "Deutsch", flag: "🇩🇪" },

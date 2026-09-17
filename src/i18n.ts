@@ -42,6 +42,10 @@ const resources = {
     translation: TRANSLATIONS_BY_LOCALE.en,
     prompts: PROMPTS_BY_LOCALE.en,
   },
+  ar: {
+    translation: TRANSLATIONS_BY_LOCALE.ar,
+    prompts: PROMPTS_BY_LOCALE.ar,
+  },
   es: {
     translation: TRANSLATIONS_BY_LOCALE.es,
     prompts: PROMPTS_BY_LOCALE.es,

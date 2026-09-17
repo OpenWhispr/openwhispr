@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { Check } from "lucide-react";
+import { Check } from "../icons";
 import { UI_LANGUAGE_OPTIONS, type UiLanguage } from "../../config/uiLanguages";
 import OnboardingList from "./OnboardingList";
 

@@ -193,8 +193,7 @@ test("a Linux AT-SPI terminal pid never becomes a caret delivery target", async 
   const editor = { kind: "atspi-pid", id: "8765" };
 
   assert.equal(
-    (await manager._markEditableCaret({ status: "none", target: terminal }, terminal, true))
-      .status,
+    (await manager._markEditableCaret({ status: "none", target: terminal }, terminal, true)).status,
     "none"
   );
   assert.equal(probes.length, 0, "a terminal pid must be refused without probing");
@@ -458,9 +457,9 @@ test("a superseded probe never overwrites the newer probe's target", async () =>
 });
 
 // The Windows paste path restores the window captured at record start (#859).
-// getWinTargetHwnd hands the paste that HWND exactly as --detect-only printed
+// getWinTarget hands the paste that HWND exactly as --detect-only printed
 // it ("TARGET %p", hex) so the binary's base-16 --restore-window parse round-trips.
-test("getWinTargetHwnd returns the hex HWND a win32 probe captured (#859)", async () => {
+test("getWinTarget returns the hex HWND a win32 probe captured (#859)", async () => {
   const spawnCalls = [];
   const SpawningSelectionManager = loadSelectionManager({
     spawn: (command, args) => {
@@ -490,12 +489,12 @@ test("getWinTargetHwnd returns the hex HWND a win32 probe captured (#859)", asyn
   assert.deepEqual(spawnCalls, [
     { command: "/tmp/windows-fast-paste.exe", args: ["--detect-only"] },
   ]);
-  assert.equal(await manager.getWinTargetHwnd(), "00001A2B");
+  assert.equal((await manager.getWinTarget())?.id, "00001A2B");
 });
 
 // captureTarget() nulls lastTarget while its probe runs; a paste racing the
 // stop-press probe must wait for the answer instead of restoring nothing.
-test("getWinTargetHwnd waits for an in-flight probe before answering", async () => {
+test("getWinTarget waits for an in-flight probe before answering", async () => {
   const manager = new SelectionManager({
     clipboardManager: {},
     textEditMonitor: {},
@@ -506,24 +505,24 @@ test("getWinTargetHwnd waits for an in-flight probe before answering", async () 
   manager._probeTarget = () => new Promise((resolve) => (resolveProbe = resolve));
 
   const probe = manager.captureTarget();
-  const pending = manager.getWinTargetHwnd();
+  const pending = manager.getWinTarget();
   resolveProbe({ kind: "win-hwnd", id: "0000F00D" });
   await probe;
 
-  assert.equal(await pending, "0000F00D");
+  assert.equal((await pending)?.id, "0000F00D");
 });
 
-test("getWinTargetHwnd is null without a capture or with a non-Windows target", async () => {
+test("getWinTarget is null without a capture or with a non-Windows target", async () => {
   const manager = new SelectionManager({
     clipboardManager: {},
     textEditMonitor: {},
     platform: "linux",
     now: () => 1000,
   });
-  assert.equal(await manager.getWinTargetHwnd(), null);
+  assert.equal(await manager.getWinTarget(), null);
 
   manager.lastTarget = { kind: "x11-window", id: "7" };
-  assert.equal(await manager.getWinTargetHwnd(), null);
+  assert.equal(await manager.getWinTarget(), null);
 });
 
 test("caret delivery pins the captured Windows HWND into the paste helper", async () => {

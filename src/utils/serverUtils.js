@@ -1,5 +1,6 @@
 const fs = require("fs");
 const net = require("net");
+const os = require("os");
 const path = require("path");
 const { killProcessGroup } = require("./process");
 
@@ -75,9 +76,17 @@ async function gracefulStopProcess(proc) {
   });
 }
 
+// Logical CPUs this process may use: unlike os.cpus().length this honours
+// affinity masks and container limits, so inference thread counts fit the
+// cores the sidecar will actually get.
+function getAvailableParallelism() {
+  return os.availableParallelism();
+}
+
 module.exports = {
   findAvailablePort,
   isPortAvailable,
   resolveBinaryPath,
   gracefulStopProcess,
+  getAvailableParallelism,
 };

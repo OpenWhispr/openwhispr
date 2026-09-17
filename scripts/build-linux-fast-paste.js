@@ -164,7 +164,7 @@ function attemptCompile(command, args) {
   });
 }
 
-const compileArgs = ["-O2", cSource, "-o", outputBinary, "-lX11", "-lXtst"];
+const compileArgs = ["-O2", cSource, "-o", outputBinary, "-lX11", "-lXtst", "-lXext", "-lm"];
 
 if (uinputAvailable) {
   log("uinput headers found, enabling uinput support");

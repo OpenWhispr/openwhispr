@@ -31,5 +31,6 @@ test("provider migrations classify every registry local provider as local", asyn
 
     assert.equal(state.cleanupMode, "local", `${providerId}: cleanupMode`);
     assert.equal(state.chatAgentMode, "local", `${providerId}: chatAgentMode`);
+    assert.equal(state.noteFormattingMode, "local", `${providerId}: noteFormattingMode`);
   }
 });
