@@ -68,19 +68,23 @@ test("a silent Windows capture hands the live session to renderer loopback", () 
     degradeStart,
     source.indexOf("const startManagedMeetingSystemAudio")
   );
-  // One-shot, and never fires once the helper has proven it can hear audio.
-  assert.match(
-    degradeSection,
-    /if \(meetingSystemAudioDegraded \|\| meetingSystemAudioHeard\) return;/
-  );
+  // One-shot per session, but audio heard earlier must not gate it: Windows
+  // hides some applications' streams from process loopback while passing
+  // others through, so a captured notification sound would otherwise pin the
+  // fallback off for a call nobody can hear (#1265).
+  assert.match(degradeSection, /if \(meetingSystemAudioDegraded\) return;/);
+  assert.doesNotMatch(degradeSection, /meetingSystemAudioHeard/);
   assert.match(degradeSection, /windowsLoopbackAudioManager\?\.stop\(\)/);
   assert.match(degradeSection, /send\("meeting-system-audio-degraded"\)/);
 
   // Leaking the latch across sessions would pin the fallback off for the rest
   // of the app's life, so it resets everywhere the heard-audio latch does.
   assert.equal(
-    (source.match(/meetingSystemAudioHeard = false;\s*\n\s*meetingSystemAudioDegraded = false;/g) ?? [])
-      .length,
+    (
+      source.match(
+        /meetingSystemAudioHeard = false;\s*\n\s*meetingSystemAudioDegraded = false;/g
+      ) ?? []
+    ).length,
     2
   );
 });
@@ -108,7 +112,10 @@ test("the system-audio watchdog is armed beside the silence timer and torn down 
   // that reported stalls it could not recover from.
   const armStart = source.indexOf("const startMeetingSystemAudioWatchdog");
   assert.ok(armStart >= 0);
-  const armSection = source.slice(armStart, source.indexOf("const rollbackMeetingTranscriptionStart"));
+  const armSection = source.slice(
+    armStart,
+    source.indexOf("const rollbackMeetingTranscriptionStart")
+  );
   assert.match(armSection, /clearMeetingSystemAudioTicker\(\);/);
   assert.doesNotMatch(armSection, /stopMeetingSystemAudioWatchdog\(\);/);
   assert.doesNotMatch(armSection, /detachCapture\(\)/);
@@ -116,11 +123,7 @@ test("the system-audio watchdog is armed beside the silence timer and torn down 
   // Every path that clears the one-shot timer also stops the watchdog, plus the
   // mic-only fallback, which strands the restart hook on a dead manager.
   for (const [label, from, to] of [
-    [
-      "rollback",
-      "const rollbackMeetingTranscriptionStart",
-      "const setupDictationCallbacks",
-    ],
+    ["rollback", "const rollbackMeetingTranscriptionStart", "const setupDictationCallbacks"],
     ["stop", "const stopMeetingTranscription", "const meetingTranscriptionLifecycle"],
     ["mic-only fallback", "const fallBackToMicOnly", "const startMeetingSystemAudio = async"],
   ]) {

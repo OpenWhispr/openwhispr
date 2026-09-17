@@ -8725,8 +8725,13 @@ class IPCHandlers {
     // while a render endpoint is playing: activation succeeded but no audio
     // will ever arrive, so hand the live session to Chromium's renderer
     // loopback. The silence watchdog stays armed in case that fails too.
+    //
+    // Audio heard earlier in the call does not disqualify the handover:
+    // Windows hides some applications' streams from process loopback while
+    // passing others through, so a notification sound can be captured from a
+    // call whose participants never are (openwhispr#1265).
     const degradeMeetingSystemAudioToLoopback = async (event) => {
-      if (meetingSystemAudioDegraded || meetingSystemAudioHeard) return;
+      if (meetingSystemAudioDegraded) return;
       meetingSystemAudioDegraded = true;
       debugLogger.warn(
         "Windows system audio helper captured only silence, switching to renderer loopback",

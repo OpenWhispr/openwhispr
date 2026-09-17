@@ -1,0 +1,65 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+// Executes the real degrade closure, the way meetingAudioTimeline.test.js runs
+// the dispatch closures, because the handover decision lives inside the
+// IPCHandlers registration closure.
+const ipcPath = path.join(__dirname, "../../src/helpers/ipcHandlers.js");
+const source = fs.readFileSync(ipcPath, "utf8");
+
+function harness({ systemAudioHeard }) {
+  const sent = [];
+  const stopped = [];
+  const context = {
+    meetingSystemAudioDegraded: false,
+    meetingSystemAudioHeard: systemAudioHeard,
+    debugLogger: { warn() {}, debug() {}, error() {}, info() {} },
+    windowsLoopbackAudioManager: {
+      stop: async () => {
+        stopped.push(true);
+      },
+    },
+    BrowserWindow: {
+      fromWebContents: () => ({
+        isDestroyed: () => false,
+        webContents: { send: (channel) => sent.push(channel) },
+      }),
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(
+    `${source.slice(
+      source.indexOf("const degradeMeetingSystemAudioToLoopback ="),
+      source.indexOf("const startManagedMeetingSystemAudio =")
+    )}
+    globalThis.degrade = () => degradeMeetingSystemAudioToLoopback({ sender: {} });`,
+    context
+  );
+  return { context, sent, stopped, degrade: context.degrade };
+}
+
+test("a silent capture hands over even after the helper delivered audible chunks", async () => {
+  // Windows hides some applications' streams from process loopback while
+  // passing others through, so a captured notification sound says nothing
+  // about whether the call itself is being recorded (#1265).
+  const { context, sent, stopped, degrade } = harness({ systemAudioHeard: true });
+
+  await degrade();
+
+  assert.deepEqual(sent, ["meeting-system-audio-degraded"]);
+  assert.equal(stopped.length, 1);
+  assert.equal(context.meetingSystemAudioDegraded, true);
+});
+
+test("the handover runs once per session", async () => {
+  const { sent, stopped, degrade } = harness({ systemAudioHeard: false });
+
+  await degrade();
+  await degrade();
+
+  assert.deepEqual(sent, ["meeting-system-audio-degraded"]);
+  assert.equal(stopped.length, 1);
+});
