@@ -60,7 +60,7 @@ export function RequiredModelsBanner() {
     : null;
 
   return (
-    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-4 mb-3")}>
+    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
       <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
         <div className="flex items-start gap-3">
           <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">

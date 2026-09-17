@@ -1148,78 +1148,84 @@ export default function NoteEditor({
 
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">
-            <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "h-full")}>
-              {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
-                isRecording ? (
-                  <LiveMeetingTranscriptChat
-                    speakerMappings={speakerMappings}
-                    speakerProfiles={speakerProfiles}
-                    participants={parsedParticipants}
-                    isDiarizing={isDiarizing}
-                    sessionDiarizationEnabled={sessionDiarizationEnabled}
-                    sessionExpectedCount={sessionExpectedCount}
-                    userTouchedStepper={userTouchedStepper}
-                    onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
-                    onSetSessionExpectedCount={onSetSessionExpectedCount}
-                    onMapSpeaker={handleMapSpeaker}
-                    onConfirmSuggestion={handleConfirmSuggestion}
-                    onDismissSuggestion={handleDismissSuggestion}
-                    onAttachSpeakerEmail={handleAttachSpeakerEmail}
-                  />
-                ) : (
-                  <MeetingTranscriptChat
-                    segments={displaySegments}
-                    speakerMappings={speakerMappings}
-                    speakerProfiles={knownSpeakers}
-                    participants={parsedParticipants}
-                    isDiarizing={isDiarizing}
-                    sessionDiarizationEnabled={sessionDiarizationEnabled}
-                    sessionExpectedCount={sessionExpectedCount}
-                    userTouchedStepper={userTouchedStepper}
-                    onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
-                    onSetSessionExpectedCount={onSetSessionExpectedCount}
-                    onMapSpeaker={handleMapSpeaker}
-                    onConfirmSuggestion={handleConfirmSuggestion}
-                    onDismissSuggestion={handleDismissSuggestion}
-                    onAttachSpeakerEmail={handleAttachSpeakerEmail}
-                    selectedSegmentIds={selectedSegmentIds}
-                    onToggleSelect={handleToggleSelect}
-                  />
-                )
-              ) : viewMode === "transcript" && hasMeetingTranscript ? (
-                <RichTextEditor value={note.transcript || ""} disabled />
-              ) : viewMode === "transcript" ? (
-                <EmptyStateCard
-                  icon={Mic}
-                  title={t("notes.editor.transcriptEmptyTitle")}
-                  description={t("notes.editor.transcriptEmptyDescription")}
-                  className="mt-2"
-                >
-                  {canEditNote && recordingAllowed && (
-                    <Button size="sm" onClick={onStartRecording} disabled={isProcessing}>
-                      <Mic size={13} />
-                      {t("notes.editor.startRecording")}
-                    </Button>
-                  )}
-                </EmptyStateCard>
-              ) : viewMode === "enhanced" && enhancement ? (
-                <RichTextEditor
-                  value={enhancement.content}
-                  onChange={handleEnhancedChange}
-                  disabled={!canEditNote}
-                  mentionPeople={mentionPeople}
+            {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
+              isRecording ? (
+                <LiveMeetingTranscriptChat
+                  contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                  speakerMappings={speakerMappings}
+                  speakerProfiles={speakerProfiles}
+                  participants={parsedParticipants}
+                  isDiarizing={isDiarizing}
+                  sessionDiarizationEnabled={sessionDiarizationEnabled}
+                  sessionExpectedCount={sessionExpectedCount}
+                  userTouchedStepper={userTouchedStepper}
+                  onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
+                  onSetSessionExpectedCount={onSetSessionExpectedCount}
+                  onMapSpeaker={handleMapSpeaker}
+                  onConfirmSuggestion={handleConfirmSuggestion}
+                  onDismissSuggestion={handleDismissSuggestion}
+                  onAttachSpeakerEmail={handleAttachSpeakerEmail}
                 />
               ) : (
-                <RichTextEditor
-                  value={note.content}
-                  onChange={handleContentChange}
-                  editorRef={editorRef}
-                  placeholder={t("notes.editor.startWriting")}
-                  disabled={!canEditNote || actionProcessingState === "processing"}
-                  mentionPeople={mentionPeople}
+                <MeetingTranscriptChat
+                  contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                  segments={displaySegments}
+                  speakerMappings={speakerMappings}
+                  speakerProfiles={knownSpeakers}
+                  participants={parsedParticipants}
+                  isDiarizing={isDiarizing}
+                  sessionDiarizationEnabled={sessionDiarizationEnabled}
+                  sessionExpectedCount={sessionExpectedCount}
+                  userTouchedStepper={userTouchedStepper}
+                  onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
+                  onSetSessionExpectedCount={onSetSessionExpectedCount}
+                  onMapSpeaker={handleMapSpeaker}
+                  onConfirmSuggestion={handleConfirmSuggestion}
+                  onDismissSuggestion={handleDismissSuggestion}
+                  onAttachSpeakerEmail={handleAttachSpeakerEmail}
+                  selectedSegmentIds={selectedSegmentIds}
+                  onToggleSelect={handleToggleSelect}
                 />
-              )}
-            </div>
+              )
+            ) : viewMode === "transcript" && hasMeetingTranscript ? (
+              <RichTextEditor
+                value={note.transcript || ""}
+                contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                disabled
+              />
+            ) : viewMode === "transcript" ? (
+              <EmptyStateCard
+                icon={Mic}
+                title={t("notes.editor.transcriptEmptyTitle")}
+                description={t("notes.editor.transcriptEmptyDescription")}
+                className={cn(PAGE_CONTENT_WIDTH_CLASS, "mt-2")}
+              >
+                {canEditNote && recordingAllowed && (
+                  <Button size="sm" onClick={onStartRecording} disabled={isProcessing}>
+                    <Mic size={13} />
+                    {t("notes.editor.startRecording")}
+                  </Button>
+                )}
+              </EmptyStateCard>
+            ) : viewMode === "enhanced" && enhancement ? (
+              <RichTextEditor
+                value={enhancement.content}
+                contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                onChange={handleEnhancedChange}
+                disabled={!canEditNote}
+                mentionPeople={mentionPeople}
+              />
+            ) : (
+              <RichTextEditor
+                value={note.content}
+                contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                onChange={handleContentChange}
+                editorRef={editorRef}
+                placeholder={t("notes.editor.startWriting")}
+                disabled={!canEditNote || actionProcessingState === "processing"}
+                mentionPeople={mentionPeople}
+              />
+            )}
           </div>
           <ActionProcessingOverlay
             state={actionProcessingState ?? "idle"}

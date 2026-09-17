@@ -1065,7 +1065,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             />
             <div className="scrollbar-hidden flex-1 overflow-y-auto">
               {updateRequiredByOrg && (
-                <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-4 mb-3")}>
+                <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
                   <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
@@ -1090,7 +1090,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               )}
               <RequiredModelsBanner />
               {usage?.isPastDue && activeView === "home" && (
-                <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-4 mb-3")}>
+                <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
                   <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
@@ -1124,7 +1124,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               {(gpuAccelAvailable.transcription || gpuAccelAvailable.intelligence) &&
                 activeView === "home" &&
                 !gpuBannerDismissed && (
-                  <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-4 mb-3")}>
+                  <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
                     <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
                       <div className="flex items-start gap-3">
                         <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">

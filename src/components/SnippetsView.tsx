@@ -167,7 +167,7 @@ export default function SnippetsView() {
   const canCreate = !!trimmedTrigger && !!expansion.trim() && !duplicate;
 
   return (
-    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-5 py-4 flex flex-col gap-3")}>
+    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-4 flex flex-col gap-3")}>
       <EditSnippetDialog
         snippet={editing}
         onOpenChange={(open) => {

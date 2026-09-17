@@ -96,7 +96,7 @@ export default function HistoryView({
   );
 
   return (
-    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-4 pt-4 pb-6")}>
+    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 pt-4 pb-6")}>
       {!useCleanupModel && !aiCTADismissed && (
         <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
           <button
@@ -192,7 +192,7 @@ export default function HistoryView({
             <div className="group">
               {groupedHistory.map((group, index) => (
                 <div key={group.label} className={index > 0 ? "mt-6" : ""}>
-                  <div className="sticky -top-1 z-10 -mx-4 px-4 pt-2 pb-2.5 bg-background flex items-center justify-between">
+                  <div className="sticky -top-1 z-10 -mx-6 px-6 pt-2 pb-2.5 bg-background flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">{group.label}</span>
                     {index === 0 && (
                       <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">

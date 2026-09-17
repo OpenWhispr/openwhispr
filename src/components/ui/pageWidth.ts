@@ -1,2 +1,3 @@
-/** Content column shared by every control panel page (matches Home). */
+// Content column shared by the control panel pages. Apply it inside a scroll
+// container, never around one, so the wheel and scrollbar keep the full pane.
 export const PAGE_CONTENT_WIDTH_CLASS = "mx-auto w-full max-w-5xl";

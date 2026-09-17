@@ -149,7 +149,7 @@ export default function DictionaryView() {
         variant="destructive"
       />
 
-      <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-5 pt-4")}>
+      <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 pt-4")}>
         <TabsList className="h-7 p-0.5 rounded-[7px]">
           <TabsTrigger value="dictionary" className="h-6 px-2.5 text-xs rounded-[5px]">
             {t("dictionary.tabDictionary")}
@@ -161,7 +161,7 @@ export default function DictionaryView() {
       </div>
 
       <TabsContent value="dictionary" className="flex-1 min-h-0 mt-0 overflow-y-auto">
-        <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-5 py-4 flex flex-col gap-3")}>
+        <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-4 flex flex-col gap-3")}>
           {/* ─── Add word ─── */}
           <div>
             <div className="relative">
