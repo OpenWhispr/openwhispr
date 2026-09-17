@@ -164,3 +164,19 @@ test("early finalization cannot discard queued startup audio", async (t) => {
   await assert.rejects(adapter.finalize(), /not ready/);
   assert.equal(adapter.pendingBytes, 640);
 });
+
+test("oversized capacity backoff cannot overflow the timer into a retry loop", async (t) => {
+  let commits = 0;
+  const { adapter, options } = await fixture(t, (socket, event) => {
+    if (event.type === "commit") {
+      commits++;
+      socket.send(
+        JSON.stringify({ type: "error", code: "capacity", retry_after_ms: Number.MAX_SAFE_INTEGER })
+      );
+    }
+  });
+  await adapter.connect(options);
+  adapter.sendAudio(Buffer.alloc(640));
+  await assert.rejects(adapter.finalize(), /timed out/);
+  assert.equal(commits, 1);
+});

@@ -146,7 +146,12 @@ class OrukeetStreaming {
           () => {
             if (this.finalResolve) this.sendControl({ type: "commit" });
           },
-          Math.max(20, Number.isFinite(message.retry_after_ms) ? message.retry_after_ms : 100)
+          // Node overflows delays above 2^31-1 to 1 ms. Bound untrusted
+          // backoff to the production final deadline, never a tight retry loop.
+          Math.min(
+            30000,
+            Math.max(20, Number.isFinite(message.retry_after_ms) ? message.retry_after_ms : 100)
+          )
         );
       } else {
         this.fail(new Error(message.message || `Orukeet transcription failed: ${message.code}`));
