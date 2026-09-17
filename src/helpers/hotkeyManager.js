@@ -111,6 +111,7 @@ class HotkeyManager extends EventEmitter {
     this.hyprlandRegistrationReady = Promise.resolve();
     this.kdeManager = null;
     this.useKDE = false;
+    this.windowsKeyManager = null;
   }
 
   // Ensure a slot exists and return it (slots always use the list shape).
@@ -194,7 +195,10 @@ class HotkeyManager extends EventEmitter {
       suggestions = ["Control+Super", "Control+Shift+K", "Super+Shift+R"];
     }
 
-    return suggestions.filter((s) => s !== failedHotkey).slice(0, 3);
+    return suggestions
+      .filter((s) => s !== failedHotkey)
+      .filter((s) => !isModifierOnlyHotkey(s) || !this._isWindowsKeyListenerMissing())
+      .slice(0, 3);
   }
 
   async registerSlot(slotName, hotkeyInput, callback, options) {
@@ -444,8 +448,17 @@ class HotkeyManager extends EventEmitter {
     return keys;
   }
 
+  // Windows builds can ship without windows-key-listener.exe (#2005), and only it
+  // sees key releases and modifier-only or right-side-modifier hotkeys.
+  _isWindowsKeyListenerMissing() {
+    return process.platform === "win32" && this.windowsKeyManager?.isAvailable() === false;
+  }
+
   supportsPushToTalk(hotkey = this.currentHotkey) {
     if (process.platform === "darwin" && hotkey && lacksMacReleaseSignal(hotkey)) {
+      return false;
+    }
+    if (this._isWindowsKeyListenerMissing()) {
       return false;
     }
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
@@ -587,6 +600,18 @@ class HotkeyManager extends EventEmitter {
             defaultValue: "The Globe/Fn key can only be used by itself.",
           }),
           reason: "fn_combination_unsupported",
+        };
+      }
+
+      if (
+        (isRightSideModifier(hotkey) || isModifierOnlyHotkey(hotkey)) &&
+        this._isWindowsKeyListenerMissing()
+      ) {
+        debugLogger.warn(`[HotkeyManager] "${hotkey}" rejected - Windows key listener not found`);
+        return {
+          success: false,
+          hotkey,
+          error: i18nMain.t("hotkey.errors.windowsKeyListenerMissing", { hotkey }),
         };
       }
 
@@ -1251,11 +1276,13 @@ class HotkeyManager extends EventEmitter {
 
   /**
    * Returns the effective default hotkey for the current platform.
-   * On platforms where Control+Super doesn't work (X11 modifier-only,
-   * GNOME gsettings requires a regular key), returns the first fallback (F8).
+   * Where Control+Super doesn't work (X11 modifier-only, GNOME gsettings
+   * requires a regular key, Windows without its key listener), returns the
+   * first fallback (F8).
    */
   getEffectiveDefaultHotkey() {
     if (process.platform === "darwin") return "GLOBE";
+    if (this._isWindowsKeyListenerMissing()) return FALLBACK_HOTKEYS[0];
     if (process.platform !== "linux") return DEFAULT_HOTKEY;
 
     const isX11 = !GnomeShortcutManager.isWayland();
