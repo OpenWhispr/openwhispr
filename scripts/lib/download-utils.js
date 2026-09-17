@@ -75,22 +75,21 @@ function fetchJsonResponse(url, redirectCount = 0) {
   });
 }
 
-function fetchJson(url, redirectCount = 0) {
-  return fetchJsonResponse(url, redirectCount).then((response) => response.json);
+function fetchJson(url) {
+  return fetchJsonResponse(url).then((response) => response.json);
 }
 
 /**
  * Return the next URL from a GitHub `Link` header, or null when this is the last page.
- * @param {string | string[] | undefined} linkHeader
+ * @param {string | undefined} linkHeader
  * @returns {string | null}
  */
 function parseGithubNextLink(linkHeader) {
-  const raw = Array.isArray(linkHeader) ? linkHeader.join(",") : linkHeader;
-  if (!raw) {
+  if (!linkHeader) {
     return null;
   }
 
-  for (const part of raw.split(",")) {
+  for (const part of linkHeader.split(",")) {
     if (!/rel=["']?next["']?/i.test(part)) {
       continue;
     }
@@ -117,7 +116,7 @@ function matchReleaseByPrefix(releases, tagPrefix, includePrerelease) {
   }
 
   for (const release of releases) {
-    if (!release || release.draft) continue;
+    if (release.draft) continue;
     if (!includePrerelease && release.prerelease) continue;
     if (release.tag_name && release.tag_name.startsWith(tagPrefix)) {
       return release;
@@ -137,7 +136,7 @@ function matchReleaseByPrefix(releases, tagPrefix, includePrerelease) {
  * @returns {Promise<{tag: string, assets: Array<{name: string, url: string}>, url: string} | null>}
  */
 async function fetchLatestRelease(repo, options = {}) {
-  const { tag, tagPrefix, includePrerelease = false, fetchPage } = options;
+  const { tag, tagPrefix, includePrerelease = false } = options;
 
   try {
     if (tag) {
@@ -152,22 +151,15 @@ async function fetchLatestRelease(repo, options = {}) {
       return formatRelease(release);
     }
 
-    const loadPage =
-      fetchPage ||
-      (async (url) => {
-        const { json, headers } = await fetchJsonResponse(url);
-        return { json, link: headers.link || headers.Link };
-      });
-
     let pageUrl = `https://api.github.com/repos/${repo}/releases?per_page=${RELEASE_PAGE_SIZE}`;
 
     for (let page = 0; page < MAX_RELEASE_PAGES && pageUrl; page++) {
-      const { json, link } = await loadPage(pageUrl);
+      const { json, headers } = await fetchJsonResponse(pageUrl);
       const match = matchReleaseByPrefix(json, tagPrefix, includePrerelease);
       if (match) {
         return formatRelease(match);
       }
-      pageUrl = parseGithubNextLink(link);
+      pageUrl = parseGithubNextLink(headers.link);
     }
 
     return null;
@@ -451,8 +443,4 @@ module.exports = {
   parseArgs,
   setExecutable,
   cleanupFiles,
-  matchReleaseByPrefix,
-  parseGithubNextLink,
-  RELEASE_PAGE_SIZE,
-  MAX_RELEASE_PAGES,
 };
