@@ -384,6 +384,84 @@ test("a self-hosted assistant setup ignores a leftover agent key", async (t) => 
   assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
 });
 
+test("the prefilled key follows the endpoint it was saved under", async (t) => {
+  const mountSavedEndpoint = (t) =>
+    mountByokStep(t, {
+      selfHostedRequested: true,
+      settings: CUSTOM_ENDPOINT,
+      secrets: { customTranscriptionApiKey: "sk-custom-key" },
+    });
+
+  await t.test("retyping the endpoint takes the prefilled key back out", async (t) => {
+    const step = await mountSavedEndpoint(t);
+    assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-custom-key");
+
+    await step.type(PLACEHOLDER.endpoint, "https://rented.example.com/v1");
+    assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
+
+    // The same server written another way is still that server.
+    await step.type(PLACEHOLDER.endpoint, "stt.example.com/v1/");
+    assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-custom-key");
+  });
+
+  await t.test("a key the user typed survives the endpoint change", async (t) => {
+    const step = await mountSavedEndpoint(t);
+    await step.type(PLACEHOLDER.selfHostedKey, "sk-typed-key");
+    await step.type(PLACEHOLDER.endpoint, "https://rented.example.com/v1");
+    assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-typed-key");
+  });
+
+  await t.test("re-typing the saved key for the saved endpoint keeps it", async (t) => {
+    const step = await mountSavedEndpoint(t);
+    await step.type(PLACEHOLDER.selfHostedKey, "");
+    await step.type(PLACEHOLDER.selfHostedKey, "sk-custom-key");
+    await step.setStore({ cortiTenant: "unrelated-change" });
+    assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-custom-key");
+  });
+});
+
+test("a draft that names another server reopens key-less and saves it key-less", async (t) => {
+  const step = await mountByokStep(t, {
+    selfHostedRequested: true,
+    settings: CUSTOM_ENDPOINT,
+    secrets: { customTranscriptionApiKey: "sk-custom-key" },
+    // Edited earlier this session and never committed, so the stored key still belongs to
+    // the saved server, not to the one the card now shows.
+    resumeState: {
+      selectedProvider: "",
+      selectedModel: "",
+      baseUrl: "https://draft.example.com/v1",
+      customModel: "draft-model",
+    },
+  });
+  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
+
+  await step.passConnectionTest();
+  await step.proceed();
+
+  assert.equal(step.state().customTranscriptionApiKey, "sk-custom-key", "the stored key is unused");
+  const route = await routeAfterOnboardingSave(step);
+  assert.equal(route.endpoint, "https://draft.example.com/v1/audio/transcriptions");
+  assert.deepEqual(route.auth, { scheme: "none", keyRef: null });
+});
+
+test("an assistant endpoint the user retyped never takes the saved agent key", async (t) => {
+  const step = await mountByokStep(t, {
+    stepId: "byok-assistant",
+    selfHostedRequested: true,
+    settings: {
+      chatAgentMode: "self-hosted",
+      chatAgentRemoteUrl: "http://127.0.0.1:1234/v1",
+      chatAgentModel: "llm-proxy-test",
+    },
+  });
+
+  await step.type(PLACEHOLDER.endpoint, "https://rented.example.com/v1");
+  // Secrets hydrate over IPC, so the saved key can land after the endpoint was retyped.
+  await step.setStore({ chatAgentCustomApiKey: "sk-agent-key" });
+  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
+});
+
 test("an in-progress draft wins over saved settings, and a blank one falls back to them", async (t) => {
   await t.test("draft", async (t) => {
     const step = await mountByokStep(t, {

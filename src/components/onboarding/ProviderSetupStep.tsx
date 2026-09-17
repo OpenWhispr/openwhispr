@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { useModelDownload } from "../../hooks/useModelDownload";
 import type { ParakeetCheckResult } from "../../types/electron";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { normalizeBaseUrl } from "../../config/constants";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
   filterByokProviderOptionsByPolicy,
@@ -228,6 +229,22 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
 }
 
 /**
+ * The connection test parses scheme-less input as https (providerConnectionTest.js), so
+ * the commit stores the same URL it validated — the runtime's isSecureHttpEndpoint gate
+ * rejects a bare host.
+ */
+function withEndpointScheme(baseUrl: string): string {
+  const trimmed = baseUrl.trim();
+  return !trimmed || trimmed.includes("://") ? trimmed : `https://${trimmed}`;
+}
+
+/** One server's variants — missing scheme, trailing slash, pasted API path — compare equal. */
+function isSameEndpoint(baseUrl: string, savedBaseUrl: string): boolean {
+  const saved = normalizeBaseUrl(withEndpointScheme(savedBaseUrl));
+  return Boolean(saved) && normalizeBaseUrl(withEndpointScheme(baseUrl)) === saved;
+}
+
+/**
  * The provider/model a local step opens on: the draft this step last wrote, then
  * a selection whose download is still pending, then whatever the store already
  * holds. Reads localStorage, so it belongs in a state initializer, not a render.
@@ -324,13 +341,14 @@ export function ByokProviderStep({
   );
   // The session's draft wins; without one (onboarding was restarted, or an older build
   // left it blank) the step reopens on what the user already saved, the same order
-  // LocalModelSetupStep uses. The key flag comes from saved settings either way: the
-  // draft never records keys, and a remount reopens from the draft the first mount wrote.
+  // LocalModelSetupStep uses. The draft never records keys, so the stored custom key is
+  // tracked by the endpoint it was saved under — the draft, and anything typed after it,
+  // can name a different server than the saved settings do.
   const [seed] = useState(() => {
     const saved = resolveSavedByokConfig(stepId, store);
     return {
       draft: resumeState && !isBlankByokDraft(resumeState) ? resumeState : saved?.draft,
-      usesCustomKey: saved?.usesCustomKey ?? false,
+      keyedBaseUrl: saved?.usesCustomKey ? saved.draft.baseUrl : "",
     };
   });
   const initialProviderData = providers.find(
@@ -343,22 +361,24 @@ export function ByokProviderStep({
     ? (seed.draft?.selectedModel ?? "")
     : pickDefaultModelId(initialProviderData);
   const initiallySelfHosted = selfHostedRequested && selfHostedAllowed;
+  const initialBaseUrl = seed.draft?.baseUrl ?? "";
   // Hosted and self-hosted share the key field, so each mode shows its own saved key.
-  // The stored custom key belongs to a saved keyed endpoint only: offering it for a
-  // key-less server, a hosted provider or a first setup would send a key the user never
-  // typed to the endpoint they just typed, and move the save onto the keyed route.
-  const credentialFor = (selfHostedMode: boolean, providerId: string) => {
+  // The stored custom key belongs to the one endpoint it was saved under: offering it for
+  // a key-less server, a hosted provider, a first setup, or an endpoint the user has since
+  // typed would send a key they never typed to that server, and move the save onto the
+  // keyed route.
+  const credentialFor = (selfHostedMode: boolean, providerId: string, baseUrl: string) => {
     if (!selfHostedMode) return providerCredential(providerId, store).value;
-    if (!seed.usesCustomKey) return "";
+    if (!isSameEndpoint(baseUrl, seed.keyedBaseUrl)) return "";
     return assistant ? store.chatAgentCustomApiKey : store.customTranscriptionApiKey;
   };
   const [selfHosted, setSelfHosted] = useState(initiallySelfHosted);
   const [selectedProvider, setSelectedProvider] = useState(initialProvider);
   const [selectedModel, setSelectedModel] = useState(initialModel);
   const [draftApiKey, setDraftApiKey] = useState(() =>
-    credentialFor(initiallySelfHosted, initialProvider)
+    credentialFor(initiallySelfHosted, initialProvider, initialBaseUrl)
   );
-  const [draftBaseUrl, setDraftBaseUrl] = useState(seed.draft?.baseUrl ?? "");
+  const [draftBaseUrl, setDraftBaseUrl] = useState(initialBaseUrl);
   const [draftCustomModel, setDraftCustomModel] = useState(seed.draft?.customModel ?? "");
   const [draftCortiClientId, setDraftCortiClientId] = useState(
     initialProvider === "corti" ? store.cortiClientId : ""
@@ -406,16 +426,26 @@ export function ByokProviderStep({
 
   // Saved keys load asynchronously (initializeSettings), so an empty field takes its key
   // when it arrives; anything already in the field is kept.
-  const savedKey = credentialFor(selfHosted, selectedProvider);
+  const savedKey = credentialFor(selfHosted, selectedProvider, draftBaseUrl);
+  // Retyping the endpoint strands the copy of the stored key this card prefilled, so it is
+  // taken back out. Only a byte-identical copy goes — never a key the user typed, and
+  // never while the field still names the endpoint the key was saved under.
+  const strandedKey =
+    selfHosted && !savedKey
+      ? assistant
+        ? store.chatAgentCustomApiKey
+        : store.customTranscriptionApiKey
+      : "";
   const savedCortiClientId = selectedProvider === "corti" ? store.cortiClientId : "";
   const savedCortiClientSecret = selectedProvider === "corti" ? store.cortiClientSecret : "";
   useEffect(() => {
     if (savedKey) setDraftApiKey((current) => current || savedKey);
+    else if (strandedKey) setDraftApiKey((current) => (current === strandedKey ? "" : current));
     if (savedCortiClientId) setDraftCortiClientId((current) => current || savedCortiClientId);
     if (savedCortiClientSecret) {
       setDraftCortiClientSecret((current) => current || savedCortiClientSecret);
     }
-  }, [savedCortiClientId, savedCortiClientSecret, savedKey]);
+  }, [savedCortiClientId, savedCortiClientSecret, savedKey, strandedKey]);
 
   const currentProvider = providers.find((provider) => provider.id === selectedProvider);
   const models = currentProvider?.models ?? [];
@@ -426,7 +456,7 @@ export function ByokProviderStep({
     const next = !selfHosted;
     setSelfHosted(next);
     onSelfHostedChange(next);
-    setDraftApiKey(credentialFor(next, selectedProvider));
+    setDraftApiKey(credentialFor(next, selectedProvider, draftBaseUrl));
     setConnected(false);
     onConnectionChange(false);
   };
@@ -475,12 +505,7 @@ export function ByokProviderStep({
 
   const commitAndProceed = () => {
     if (selfHosted) {
-      // The connection test parses scheme-less input as https
-      // (providerConnectionTest.js), so commit the same URL it validated —
-      // the runtime's isSecureHttpEndpoint gate rejects a bare host.
-      const committedBaseUrl = draftBaseUrl.includes("://")
-        ? draftBaseUrl.trim()
-        : `https://${draftBaseUrl.trim()}`;
+      const committedBaseUrl = withEndpointScheme(draftBaseUrl);
       if (assistant) {
         store.setChatAgentRemoteUrl(committedBaseUrl);
         store.setChatAgentCustomApiKey(draftApiKey);
