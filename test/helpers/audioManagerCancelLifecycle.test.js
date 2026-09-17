@@ -47,6 +47,7 @@ function createManager(AudioManager, transcription) {
 
 function createBatchFinalizationManager(AudioManager, merge) {
   let processAudioCalls = 0;
+  let processAudioMetadata = null;
   const mergedBlob = new Blob([new Uint8Array(512)], { type: "audio/webm" });
   const manager = Object.assign(Object.create(AudioManager.prototype), {
     isRecording: true,
@@ -68,16 +69,42 @@ function createBatchFinalizationManager(AudioManager, merge) {
     shouldShowPreviewCleanupState: () => false,
     mergeRecordedSegments: () => merge.promise,
     getLargestRecordedSegment: () => null,
-    processAudio: async () => {
+    processAudio: async (_audioBlob, metadata) => {
       processAudioCalls += 1;
+      processAudioMetadata = metadata;
     },
     onStateChange() {},
   });
   manager._requestStreamingCancellation = () => {
     manager._streamingCancellationGeneration += 1;
   };
-  return { manager, mergedBlob, getProcessAudioCalls: () => processAudioCalls };
+  return {
+    manager,
+    mergedBlob,
+    getProcessAudioCalls: () => processAudioCalls,
+    getProcessAudioMetadata: () => processAudioMetadata,
+  };
 }
+
+test("batch finalization keeps the recording occurrence time", async (t) => {
+  const { AudioManager } = await loadManagerClass(t);
+  const merge = deferred();
+  const recordingStartedAt = Date.parse("2026-09-02T14:00:00.000Z");
+  const { manager, mergedBlob, getProcessAudioMetadata } = createBatchFinalizationManager(
+    AudioManager,
+    merge
+  );
+  manager.recordingStartTime = recordingStartedAt;
+
+  const finalization = manager.finalizeBatchRecording(mergedBlob);
+  merge.resolve(mergedBlob);
+  await finalization;
+
+  assert.equal(
+    getProcessAudioMetadata().analyticsOccurredAt,
+    new Date(recordingStartedAt).toISOString()
+  );
+});
 
 test("cancelling while batch segments merge never starts transcription", async (t) => {
   const { AudioManager } = await loadManagerClass(t);
@@ -125,6 +152,23 @@ test("a cancelled older pipeline cannot publish or clear a newer pipeline", asyn
 
   assert.equal(manager.isProcessing, false);
   assert.deepEqual(completed, ["new"]);
+});
+
+test("batch processing carries its occurrence time into completion", async (t) => {
+  const { AudioManager } = await loadManagerClass(t);
+  const transcription = deferred();
+  const { manager } = createManager(AudioManager, transcription);
+  const analyticsOccurredAt = "2026-09-02T14:00:00.000Z";
+  let completion;
+  manager.onTranscriptionComplete = (result) => {
+    completion = result;
+  };
+
+  const processing = manager.processAudio(new Blob(["audio"]), { analyticsOccurredAt });
+  transcription.resolve({ success: true, text: "same event", source: "local", timings: {} });
+  await processing;
+
+  assert.equal(completion.analyticsOccurredAt, analyticsOccurredAt);
 });
 
 test("a cancelled current pipeline clears busy when its pending work settles", async (t) => {

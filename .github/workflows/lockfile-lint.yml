@@ -2,6 +2,14 @@ name: Lockfile Lint
 
 on:
   pull_request:
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/lockfile-lint.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lockfile-lint:

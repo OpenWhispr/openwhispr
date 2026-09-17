@@ -110,10 +110,15 @@ function isWavFormat(buffer) {
   );
 }
 
-function convertToWav(inputPath, outputPath, options = {}) {
-  const { sampleRate = 16000, channels = 1 } = options;
-
+// Shared spawn/abort/exit handling for the one-shot conversions below. Resolves
+// once ffmpeg exits cleanly and has written a non-empty output file.
+function runFFmpegConversion(args, outputPath, { signal } = {}) {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
+
     const ffmpegPath = getFFmpegPath();
     if (!ffmpegPath) {
       reject(
@@ -124,42 +129,36 @@ function convertToWav(inputPath, outputPath, options = {}) {
       return;
     }
 
-    const args = [
-      "-i",
-      inputPath,
-      "-ar",
-      String(sampleRate),
-      "-ac",
-      String(channels),
-      "-c:a",
-      "pcm_s16le",
-      "-y", // Overwrite output file
-      outputPath,
-    ];
-
-    debugLogger.debug("Converting audio with FFmpeg", {
-      input: inputPath,
-      output: outputPath,
-      sampleRate,
-      channels,
-    });
-
-    const proc = spawn(ffmpegPath, args, {
+    const proc = spawn(ffmpegPath, [...args, "-y", outputPath], {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
 
     let stderr = "";
 
+    const onAbort = () => {
+      try {
+        proc.kill("SIGKILL");
+      } catch {
+        // an uncaught throw here would escape the abort dispatch
+      }
+      reject(createAbortError());
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+
     proc.stderr.on("data", (data) => {
       stderr += data.toString();
     });
 
     proc.on("error", (error) => {
+      signal?.removeEventListener("abort", onAbort);
+      if (signal?.aborted) return;
       reject(new Error(`FFmpeg process error: ${error.message}`));
     });
 
     proc.on("close", (code) => {
+      signal?.removeEventListener("abort", onAbort);
+      if (signal?.aborted) return;
       if (code !== 0) {
         const stderrPreview = stderr.slice(-500).trim();
         debugLogger.debug("FFmpeg conversion failed", { code, stderr: stderrPreview });
@@ -186,6 +185,53 @@ function convertToWav(inputPath, outputPath, options = {}) {
   });
 }
 
+function convertToWav(inputPath, outputPath, options = {}) {
+  const { sampleRate = 16000, channels = 1, signal } = options;
+
+  debugLogger.debug("Converting audio with FFmpeg", {
+    input: inputPath,
+    output: outputPath,
+    sampleRate,
+    channels,
+  });
+
+  return runFFmpegConversion(
+    ["-i", inputPath, "-ar", String(sampleRate), "-ac", String(channels), "-c:a", "pcm_s16le"],
+    outputPath,
+    { signal }
+  );
+}
+
+// Mono 16 kHz MP3 with any video stream dropped: the same shape as the cloud
+// chunks, accepted by every provider, and small enough for their upload caps.
+function convertToMp3(inputPath, outputPath, options = {}) {
+  const { audioBitrate = "64k", signal } = options;
+
+  debugLogger.debug("Re-encoding audio to MP3 with FFmpeg", {
+    input: inputPath,
+    output: outputPath,
+    audioBitrate,
+  });
+
+  return runFFmpegConversion(
+    [
+      "-i",
+      inputPath,
+      "-vn",
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      audioBitrate,
+      "-ar",
+      "16000",
+      "-ac",
+      "1",
+    ],
+    outputPath,
+    { signal }
+  );
+}
+
 function parseWavFormat(wavBuffer) {
   if (!isWavFormat(wavBuffer)) return null;
 
@@ -207,6 +253,17 @@ function parseWavFormat(wavBuffer) {
   }
 
   return null;
+}
+
+// Local engines take 16 kHz mono PCM16 WAV as-is; anything else goes through FFmpeg.
+function isPcm16Mono16kWav(buffer) {
+  const format = parseWavFormat(buffer);
+  return (
+    format?.audioFormat === 1 &&
+    format.channels === 1 &&
+    format.sampleRate === 16000 &&
+    format.bitsPerSample === 16
+  );
 }
 
 function wavToFloat32Samples(wavBuffer) {
@@ -458,7 +515,9 @@ module.exports = {
   getFFmpegPath,
   isWavFormat,
   parseWavFormat,
+  isPcm16Mono16kWav,
   convertToWav,
+  convertToMp3,
   splitAudioFile,
   parseFfmpegDuration,
   wavToFloat32Samples,

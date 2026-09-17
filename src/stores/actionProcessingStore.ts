@@ -1,4 +1,12 @@
 import { create } from "zustand";
+import {
+  BASE_SYSTEM_PROMPT,
+  MEETING_INPUT_PREAMBLE,
+  MEETING_SYSTEM_PROMPT,
+  NOTE_INPUT_PREAMBLE,
+  NOTE_OUTPUT_MAX_TOKENS,
+  STANDALONE_PROMPT_KEYS,
+} from "../helpers/builtinActions";
 import reasoningService from "../services/ReasoningService";
 import { getSettings, selectResolvedNoteFormatting } from "./settingsStore";
 import { appendDictionarySuffix } from "../config/prompts";
@@ -17,6 +25,9 @@ export interface NoteActionState {
 export interface ActionErrorEvent {
   noteId: number;
   message: string;
+  /** Set when the failure has a translatable form; the toast prefers it. */
+  messageKey?: string;
+  messageParams?: Record<string, string | number>;
 }
 
 interface ActionProcessingStoreState {
@@ -54,38 +65,6 @@ export const useActionProcessingStore = create<ActionProcessingStoreState>()(() 
   noteStates: {},
   errorEvents: [],
 }));
-
-const BASE_SYSTEM_PROMPT = `You are a note enhancement assistant. The user will provide raw notes — possibly voice-transcribed, rough, or unstructured. Your job is to clean them up according to the instructions below while preserving all original meaning and information. Output clean markdown.
-
-FORMAT RULES (strict):
-- Do NOT include any preamble: no title, no date/time/location, no attendee list, no topic header. Start directly with the content.
-- Do NOT use tables, horizontal rules, or block quotes.
-- Do NOT list or guess participant names/roles.
-- Keep the tone professional and concise. Bias toward brevity.
-
-Instructions: `;
-
-const MEETING_SYSTEM_PROMPT = `You are a professional meeting notes assistant. You will receive a meeting transcript where each line is prefixed with the speaker's label — a real name when known, otherwise "You" (the note owner), "Them", or "Speaker N". A "## Meeting Context" block may identify the note owner and the invited participants. Manual notes the user took may be included as well.
-
-Your job is to produce clean, actionable meeting notes in markdown. Follow these rules:
-
-FORMAT RULES (strict):
-- Do NOT include any preamble: no title, no "# Meeting Notes", no date/time/location, no attendee list, no topic header. Start directly with the summary.
-- Do NOT reproduce the Meeting Context block in the output.
-- Do NOT use tables, horizontal rules, or block quotes.
-- Refer to people only by the speaker labels used in the transcript. NEVER guess or invent an identity: the note owner is who the Meeting Context says they are — never a name mentioned in conversation. Keep unnamed speakers as "Them" or "Speaker N".
-- Start with a concise 1–2 sentence summary of what the meeting was about.
-- Use clear section headings: ## Key Discussion Points, ## Decisions Made, ## Action Items, ## Follow-ups (omit any section that has no content).
-- Under Action Items, use checkboxes in the format \`- [ ] Action — Owner\`, attributing each item to its owner by speaker label where clear.
-
-CONTENT RULES:
-- Preserve important quotes or specific commitments verbatim when they carry meaning.
-- Remove filler, small talk, false starts, and repeated/redundant content.
-- Where speakers refer to the same topic across multiple turns, consolidate into a coherent point rather than listing every utterance.
-- If the user included manual notes alongside the transcript, integrate them — they represent the user's emphasis on what matters most.
-- Keep the tone professional and concise. Bias toward brevity.
-
-Instructions: `;
 
 export interface RunActionOptions {
   isCloudMode: boolean;
@@ -137,7 +116,15 @@ export function runBackgroundAction(
 
   (async () => {
     try {
-      const basePrompt = options.isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
+      const standalone =
+        !!action.translation_key && STANDALONE_PROMPT_KEYS.has(action.translation_key);
+      const basePrompt = standalone
+        ? options.isMeetingNote
+          ? MEETING_INPUT_PREAMBLE
+          : NOTE_INPUT_PREAMBLE
+        : options.isMeetingNote
+          ? MEETING_SYSTEM_PROMPT
+          : BASE_SYSTEM_PROMPT;
       const providerOverrides = buildNoteFormattingOverrides(noteFormatting, options.isCloudMode);
       const systemPrompt = appendDictionarySuffix(
         basePrompt + action.prompt,
@@ -146,10 +133,17 @@ export function runBackgroundAction(
       );
       const enhanced = await reasoningService.processText(noteContent, modelId, null, {
         systemPrompt,
+        maxTokens: NOTE_OUTPUT_MAX_TOKENS,
         temperature: 0.3,
         disableThinking: settings.noteFormattingDisableThinking,
         ...providerOverrides,
       });
+
+      // IPC-bridged providers relay whatever the model returned; a blank
+      // result must not be saved as the enhanced note.
+      if (!enhanced.trim()) {
+        throw new Error("Model returned no text");
+      }
 
       if (cancelledFlags.get(noteId)) return;
 
@@ -184,7 +178,11 @@ export function runBackgroundAction(
       processingFlags.set(noteId, false);
       clearNoteState(noteId);
       const message = err instanceof Error ? err.message : labels.actionFailed;
-      pushErrorEvent({ noteId, message });
+      const { messageKey, messageParams } = (err ?? {}) as {
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
+      };
+      pushErrorEvent({ noteId, message, messageKey, messageParams });
     } finally {
       cancelledFlags.delete(noteId);
     }

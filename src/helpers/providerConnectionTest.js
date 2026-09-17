@@ -8,7 +8,14 @@ const ENDPOINTS = {
   openrouter: "https://openrouter.ai/api/v1/models",
   corti: "https://ai.eu.corti.app/v1/models",
   tinfoil: "https://inference.tinfoil.sh/v1/models",
+  deepgram: "https://api.deepgram.com/v1/models",
+  // AssemblyAI exposes no model list; listing transcripts is its 200-vs-401 probe.
+  assemblyai: "https://api.assemblyai.com/v2/transcript?limit=1",
 };
+
+// Neither response is OpenAI-shaped — Deepgram's /v1/models is {stt,tts}-keyed
+// and AssemblyAI returns transcripts — so a 200 is the whole credential signal.
+const MODEL_LIST_UNVERIFIABLE = new Set(["deepgram", "assemblyai"]);
 
 // Renderers translate errorCode via onboarding.rehaul.provider.errors.*; the
 // English `error` string stays for logs and older callers.
@@ -196,6 +203,10 @@ function resolveProviderRequest(config) {
       headers["anthropic-version"] = "2023-06-01";
     } else if (provider === "gemini") {
       headers["x-goog-api-key"] = apiKey;
+    } else if (provider === "deepgram") {
+      headers.Authorization = `Token ${apiKey}`;
+    } else if (provider === "assemblyai") {
+      headers.Authorization = apiKey;
     } else {
       headers.Authorization = `Bearer ${apiKey}`;
     }
@@ -293,6 +304,7 @@ async function testProviderConnection(config, fetchImpl = fetch) {
         signal: controller.signal,
       });
       if (response.ok) {
+        if (MODEL_LIST_UNVERIFIABLE.has(provider)) return { success: true };
         if (await responseOffersModel(response, model)) return { success: true };
         failure = pickFailure(failure, {
           errorCode: "modelNotFound",

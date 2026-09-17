@@ -1,5 +1,6 @@
+import type { JSX } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Check, X, Loader2, Clock, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, X, Loader2, Clock, Trash2 } from "../icons";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 import type { QueueItem } from "../../stores/batchQueueStore";
@@ -24,10 +25,34 @@ function StatusIcon({ status }: { status: QueueItem["status"] }) {
     case "error":
       return <X size={12} className="text-destructive/70" />;
     case "queued":
-      return <Clock size={12} className="text-foreground/20" />;
+      return <Clock size={12} className="text-foreground/45" />;
     default:
       return <Loader2 size={12} className="text-primary/60 animate-spin" />;
   }
+}
+
+interface BatchWarningIndicatorProps {
+  transcriptionWarning: boolean;
+  diarizationWarning: boolean;
+  t: (key: string) => string;
+}
+
+export function BatchWarningIndicator({
+  transcriptionWarning,
+  diarizationWarning,
+  t,
+}: BatchWarningIndicatorProps): JSX.Element | null {
+  const messages: string[] = [];
+  if (transcriptionWarning) messages.push(t("notes.upload.partialWarning"));
+  if (diarizationWarning) messages.push(t("notes.upload.diarizationWarning"));
+  if (messages.length === 0) return null;
+
+  const label = messages.join(" ");
+  return (
+    <span className="flex shrink-0" role="img" title={label} aria-label={label}>
+      <AlertTriangle size={11} className="text-warning" />
+    </span>
+  );
 }
 
 export default function BatchQueueView({
@@ -70,7 +95,7 @@ export default function BatchQueueView({
               variant="ghost"
               size="sm"
               onClick={onClearQueue}
-              className="h-6 text-[10px] text-foreground/30"
+              className="h-6 text-[10px] text-foreground/45"
             >
               {t("notes.upload.clearQueue")}
             </Button>
@@ -90,7 +115,7 @@ export default function BatchQueueView({
             key={item.id}
             className={cn(
               "flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs",
-              "bg-surface-1/30 dark:bg-white/[0.02] border border-foreground/4 dark:border-white/4",
+              "bg-surface-1/30 dark:bg-white/[0.02] border border-foreground/4 dark:border-white/10",
               item.status === "error" && "border-destructive/15"
             )}
           >
@@ -110,10 +135,12 @@ export default function BatchQueueView({
               </div>
             )}
 
-            {item.status === "done" && item.warning && (
-              <span className="flex shrink-0" title={t("notes.upload.partialWarning")}>
-                <AlertTriangle size={11} className="text-amber-500/60" />
-              </span>
+            {item.status === "done" && (
+              <BatchWarningIndicator
+                transcriptionWarning={!!item.warning}
+                diarizationWarning={!!item.diarizationWarning}
+                t={t}
+              />
             )}
 
             {item.status === "done" && item.noteId && onOpenNote && (
@@ -144,7 +171,7 @@ export default function BatchQueueView({
             {item.status === "queued" && (
               <button
                 onClick={() => onRemoveItem(item.id)}
-                className="text-foreground/15 hover:text-foreground/40 transition-colors"
+                className="text-foreground/45 transition-colors"
                 aria-label={t("notes.upload.removeFromQueue")}
               >
                 <Trash2 size={10} />
@@ -160,7 +187,7 @@ export default function BatchQueueView({
             variant="ghost"
             size="sm"
             onClick={onCancelAll}
-            className="h-7 text-xs text-foreground/30"
+            className="h-7 text-xs text-foreground/45"
           >
             {t("notes.upload.cancelAll")}
           </Button>

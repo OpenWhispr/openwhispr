@@ -86,6 +86,80 @@ async function loadAudioManager(t) {
         processWithReasoningModel: async () => "cleanup output",
         finalizeChineseScript: async (text) => text,
       }),
+    createBankingManager: () =>
+      Object.assign(Object.create(AudioManager.prototype), {
+        voiceAgentRequested: false,
+        translationRequested: false,
+        isProcessing: true,
+        pendingAssistantConversation: null,
+        pendingSelectionEdit: null,
+        pendingCleanupFailure: null,
+        selectionCapturePromise: null,
+        isDictionaryEcho: () => false,
+        getWhisperPrompt: () => null,
+        assertAgentAllowedByPolicy: () => {},
+        consumeAssistantSelectionContext: () => null,
+        consumeSelectionCapture: async () => null,
+        processWithReasoningModel: async () => "cleanup output",
+        finalizeChineseScript: async (text) => text,
+      }),
+    createStreamingManager: (onTranscriptionComplete, transcript = "يا Max، لخّص هذه الملاحظة") =>
+      Object.assign(Object.create(AudioManager.prototype), {
+        voiceAgentRequested: false,
+        translationRequested: false,
+        isRecording: true,
+        isProcessing: false,
+        isStreaming: true,
+        streamingStartInProgress: false,
+        _streamingStartSettlementWaiters: [],
+        stopRequestedDuringStreamingStart: false,
+        recordingStartTime: Date.now(),
+        _streamingStopPromise: null,
+        _streamingStopMode: null,
+        _streamingCancellationGeneration: 0,
+        _activeTranscriptionAbortController: null,
+        _streamingSessionGeneration: 1,
+        _activeStreamingSessionId: 1,
+        _streamingMicSwapPromise: null,
+        streamingFinalText: transcript,
+        streamingPartialText: "",
+        streamingTextBump: null,
+        streamingTextDebounce: null,
+        streamingCleanupFns: [],
+        streamingProcessor: null,
+        streamingSource: null,
+        streamingAnalyser: null,
+        streamingAudioContext: null,
+        streamingStream: null,
+        streamingFallbackRecorder: null,
+        streamingFallbackChunks: [],
+        _streamingFallbackSegments: [],
+        pendingAssistantConversation: null,
+        pendingSelectionEdit: null,
+        pendingCleanupFailure: null,
+        assistantSelectionContext: null,
+        selectionCapturePromise: null,
+        micRecovery: { stop() {} },
+        finishStreamingFallbackSegment: async () => null,
+        mergeRecordedSegments: async () => null,
+        getLargestRecordedSegment: () => null,
+        awaitStreamingTextSettled: async () => {},
+        getStreamingProvider: () => ({
+          awaitsFinalTranscript: true,
+          finalize() {},
+          stop: async () => ({ success: true, model: "test-stream" }),
+        }),
+        getEffectiveSttLanguage: () => "auto",
+        getStreamingProviderName: () => "test",
+        shouldUseStreaming: () => false,
+        assertAgentAllowedByPolicy: () => {},
+        consumeAssistantSelectionContext: () => null,
+        consumeSelectionCapture: async () => null,
+        processWithReasoningModel: async () => "cleanup output",
+        finalizeChineseScript: async (text) => text,
+        onStateChange() {},
+        onTranscriptionComplete,
+      }),
   };
 }
 
@@ -122,4 +196,229 @@ test("cloud auto-language routing uses detected speech before the UI language", 
   });
   const italianResult = await createManager().processWithOpenWhisprCloud(audioBlob);
   assert.equal(italianResult.text, "agent output");
+});
+
+test("cloud transcription returns the occurrence time sent with analytics", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t);
+  const analyticsOccurredAt = "2026-09-02T14:00:00.000Z";
+  const audioBlob = {
+    type: "audio/webm",
+    size: 1024,
+    arrayBuffer: async () => new ArrayBuffer(8),
+  };
+  let requestOptions;
+
+  setSettings({
+    preferredLanguage: "auto",
+    useCleanupModel: false,
+    customDictionary: [],
+    snippets: [],
+    isSignedIn: true,
+    insightsSyncEnabled: true,
+    dataRetentionEnabled: true,
+  });
+  window.electronAPI.cloudTranscribe = async (_audio, options) => {
+    requestOptions = options;
+    return {
+      success: true,
+      text: "same event",
+      clientTranscriptionId: "event-1",
+    };
+  };
+
+  const result = await createManager().processWithOpenWhisprCloud(audioBlob, {
+    analyticsOccurredAt,
+  });
+
+  assert.equal(requestOptions.analyticsOccurredAt, analyticsOccurredAt);
+  assert.equal(result.analyticsOccurredAt, analyticsOccurredAt);
+});
+
+test("local analytics save uses the propagated occurrence time", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t);
+  const analyticsOccurredAt = "2026-09-02T14:00:00.000Z";
+  let recordedEvent;
+
+  setSettings({
+    dataRetentionEnabled: true,
+    audioRetentionDays: 0,
+    customDictionary: [],
+    snippets: [],
+  });
+  window.electronAPI.recordAnalyticsEvent = async (event) => {
+    recordedEvent = event;
+  };
+  window.electronAPI.saveTranscription = async () => ({});
+
+  await createManager().saveTranscription("same event", "same event", {
+    clientTranscriptionId: "event-1",
+    analyticsOccurredAt,
+  });
+
+  assert.equal(recordedEvent.occurredAt, analyticsOccurredAt);
+});
+
+test("cloud auto-language stripping uses the same detected Arabic as routing", async (t) => {
+  const { window, setSettings, createBankingManager } = await loadAudioManager(t);
+  const audioBlob = {
+    type: "audio/webm",
+    size: 1024,
+    arrayBuffer: async () => new ArrayBuffer(8),
+  };
+  setSettings({
+    preferredLanguage: "auto",
+    uiLanguage: "en",
+    useCleanupModel: true,
+    cleanupCloudMode: "byok",
+    cleanupDisableThinking: false,
+    customDictionary: [],
+    snippets: [],
+  });
+  localStorage.setItem("agentName", "Max");
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "يا Max، لخّص هذه الملاحظة",
+    sttLanguage: "ar",
+  });
+
+  const manager = createBankingManager();
+  await manager.processWithOpenWhisprCloud(audioBlob);
+
+  assert.equal(manager.pendingAssistantConversation?.transcript, "لخّص هذه الملاحظة");
+});
+
+test("generic auto-language routing infers Arabic before an English UI fallback", async (t) => {
+  const { setSettings, createBankingManager } = await loadAudioManager(t);
+  setSettings({
+    preferredLanguage: "auto",
+    uiLanguage: "en",
+    useCleanupModel: true,
+    cleanupCloudMode: "byok",
+    cleanupDisableThinking: false,
+    customDictionary: [],
+    snippets: [],
+  });
+  localStorage.setItem("agentName", "Max");
+
+  const manager = createBankingManager();
+  manager.isReasoningAvailable = async () => true;
+  await manager.processTranscriptionCore("يا Max، لخّص هذه الملاحظة", "local");
+
+  assert.equal(manager.pendingAssistantConversation?.transcript, "لخّص هذه الملاحظة");
+});
+
+test("streaming auto-language routing detects and strips Arabic with an English UI", async (t) => {
+  const { window, setSettings, createStreamingManager } = await loadAudioManager(t);
+  setSettings({
+    preferredLanguage: "auto",
+    uiLanguage: "en",
+    useCleanupModel: true,
+    cleanupCloudMode: "byok",
+    cleanupDisableThinking: false,
+    customDictionary: [],
+    snippets: [],
+  });
+  localStorage.removeItem("agentName");
+  window.electronAPI.cloudStreamingUsage = async () => ({ success: true });
+  window.dispatchEvent = () => true;
+  const completions = [];
+
+  const manager = createStreamingManager(
+    (result) => completions.push(result),
+    "يا OpenWhispr، لخّص هذه الملاحظة"
+  );
+  await manager.stopStreamingRecording();
+
+  assert.equal(completions[0]?.assistantConversation?.transcript, "لخّص هذه الملاحظة");
+});
+
+// Snippet triggers are phrases the user reserves for expansion, and they are
+// free to start one with the agent's own name ("jarvis review"). Routing runs
+// on the raw transcript — expansion happens later, in the renderer — so without
+// trigger-aware detection the wake-word scan reads the leading name as an
+// address and sends an ordinary dictation to the agent.
+const snippetSettings = {
+  preferredLanguage: "en",
+  useCleanupModel: true,
+  cleanupCloudMode: "byok",
+  cleanupDisableThinking: false,
+  customDictionary: [],
+  snippets: [{ trigger: "jarvis review", replacement: "Review the PR below." }],
+};
+
+const snippetAudioBlob = {
+  type: "audio/webm",
+  size: 1024,
+  arrayBuffer: async () => new ArrayBuffer(8),
+};
+
+test("a name inside a snippet trigger does not route to the agent", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t);
+
+  setSettings(snippetSettings);
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "jarvis review this PR",
+    sttLanguage: "en",
+  });
+
+  const result = await createManager().processWithOpenWhisprCloud(snippetAudioBlob);
+
+  assert.equal(result.text, "cleanup output");
+});
+
+test("a real address still routes to the agent when a trigger is also spoken", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t);
+
+  setSettings(snippetSettings);
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "Hey Jarvis, run jarvis review on PR 5",
+    sttLanguage: "en",
+  });
+
+  const result = await createManager().processWithOpenWhisprCloud(snippetAudioBlob);
+
+  assert.equal(result.text, "agent output");
+});
+
+test("the banked agent command drops the address, not the snippet trigger", async (t) => {
+  const { window, setSettings, createBankingManager } = await loadAudioManager(t);
+
+  setSettings(snippetSettings);
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "jarvis review. Jarvis summarize it",
+    sttLanguage: "en",
+  });
+
+  const manager = createBankingManager();
+  await manager.processWithOpenWhisprCloud(snippetAudioBlob);
+
+  assert.equal(manager.pendingAssistantConversation?.transcript, "jarvis review. summarize it");
+});
+
+// Routing and stripping are separated by the selection-capture await. Re-reading
+// the store there lets a snippet edit — a Control Panel save, the assistant's
+// update_snippets tool, the startup SQLite sync — land between them, so the
+// address is spliced out of a different reading of the transcript than the one
+// that chose the route.
+test("a snippets edit between routing and stripping cannot desync them", async (t) => {
+  const { window, setSettings, createBankingManager } = await loadAudioManager(t);
+
+  setSettings(snippetSettings);
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "jarvis review. Jarvis summarize it",
+    sttLanguage: "en",
+  });
+
+  const manager = createBankingManager();
+  manager.consumeSelectionCapture = async () => {
+    setSettings({ ...snippetSettings, snippets: [] });
+    return null;
+  };
+  await manager.processWithOpenWhisprCloud(snippetAudioBlob);
+
+  assert.equal(manager.pendingAssistantConversation?.transcript, "jarvis review. summarize it");
 });

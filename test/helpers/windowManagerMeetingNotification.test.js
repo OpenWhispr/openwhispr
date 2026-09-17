@@ -86,7 +86,14 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       dialog: {},
     };
   }
-  if (request === "./debugLogger") return { warn: () => undefined };
+  if (request === "./debugLogger") {
+    return {
+      info: () => undefined,
+      warn: () => undefined,
+      debug: () => undefined,
+      error: () => undefined,
+    };
+  }
   if (request === "./hotkeyManager") return FakeHotkeyManager;
   if (request === "./dragManager") return FakeDragManager;
   if (request === "./menuManager") return {};
@@ -101,20 +108,16 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   if (request === "./dockManager") return {};
   if (request === "./i18nMain") return { i18nMain: { t: (key) => key } };
   if (request === "./windowConfig") {
-    const detectionSize = { width: 392, height: 92 };
-    const autoEndSize = { width: 620, height: 116 };
+    const notificationSize = { width: 392, height: 92 };
     return {
       MAIN_WINDOW_CONFIG: {},
       CONTROL_PANEL_CONFIG: {},
-      NOTIFICATION_WINDOW_CONFIG: { ...detectionSize, acceptFirstMouse: true },
-      AUTO_END_NOTIFICATION_WINDOW_SIZE: autoEndSize,
-      getMeetingNotificationWindowSize: (data) =>
-        data?.kind === "auto-end" ? autoEndSize : detectionSize,
+      NOTIFICATION_WINDOW_CONFIG: { ...notificationSize, acceptFirstMouse: true },
       WINDOW_SIZES: {},
       WindowPositionUtil: {
-        getNotificationPosition: (_display, size = detectionSize) => ({
-          ...size,
-          x: 1000 - size.width,
+        getNotificationPosition: () => ({
+          ...notificationSize,
+          x: 1000 - notificationSize.width,
           y: 16,
         }),
         setupAlwaysOnTop: () => undefined,
@@ -124,6 +127,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 const WindowManager = require("../../src/helpers/windowManager");
+const { getNotificationTimeoutMs } = require("../../src/helpers/notificationTimer");
 Module._load = originalLoad;
 
 const notificationWindowFor = (index) => createdWindows[index];
@@ -343,25 +347,19 @@ test("push-to-talk dictation follows the companion pill's availability", () => {
 
 test("window manager starts fail-closed and suppresses normal-app popup surfaces", async () => {
   const manager = new WindowManager();
-  const update = { version: "2.0.0", releaseDate: "2026-08-20" };
 
   assert.equal(manager.isMeetingInputAllowed(), false);
   assert.equal(await manager.showMeetingNotification({ detectionId: "onboarding" }), false);
   assert.equal(await manager.showTranscriptionPreview("partial transcript"), undefined);
-  assert.equal(await manager.showUpdateNotification(update), false);
-  assert.deepEqual(manager._deferredUpdateNotificationInfo, update);
   assert.deepEqual(createdWindows, []);
 });
 
-test("window creation uses the auto-end dimensions and variant-aware position", async () => {
+test("window creation uses the notification dimensions and position", async () => {
   const manager = createNormalWindowManager();
+  const notification = { detectionId: "calendar:next", source: "calendar" };
 
   try {
-    const showPromise = manager.showMeetingAutoEndNotification({
-      sessionId: "meeting-1",
-      expiresAt: 70_000,
-      reason: "silence",
-    });
+    const showPromise = manager.showMeetingNotification(notification, { autoDismiss: false });
     const notificationWindow = createdWindows[0];
 
     assert.deepEqual(
@@ -372,136 +370,15 @@ test("window creation uses the auto-end dimensions and variant-aware position", 
         x: notificationWindow.options.x,
         y: notificationWindow.options.y,
       },
-      { acceptFirstMouse: true, width: 620, height: 116, x: 380, y: 16 }
+      { acceptFirstMouse: true, width: 392, height: 92, x: 608, y: 16 }
     );
-    // The reason rides along in the pending payload the overlay will fetch.
-    assert.deepEqual(manager._pendingNotificationData, {
-      kind: "auto-end",
-      sessionId: "meeting-1",
-      expiresAt: 70_000,
-      reason: "silence",
-    });
+    // The payload the overlay fetches is stored verbatim.
+    assert.deepEqual(manager._pendingNotificationData, notification);
 
     notificationWindow.loadDeferred.resolve();
     await showPromise;
   } finally {
     manager.dismissMeetingNotification();
-  }
-});
-
-test("unexpected auto-end window closure invalidates that restart offer", async () => {
-  const manager = createNormalWindowManager();
-  const closedSessions = [];
-  manager.meetingDetectionEngine = {
-    handleAutoEndNotificationClosed: (sessionId) => closedSessions.push(sessionId),
-  };
-
-  const showPromise = manager.showMeetingAutoEndNotification({
-    sessionId: "meeting-1",
-    expiresAt: 70_000,
-    reason: "silence",
-  });
-  const notificationWindow = createdWindows[0];
-  notificationWindow.loadDeferred.resolve();
-  await showPromise;
-
-  notificationWindow.close();
-
-  assert.deepEqual(closedSessions, ["meeting-1"]);
-});
-
-test("replacing an auto-end notification invalidates its restart offer", async () => {
-  const manager = createNormalWindowManager();
-  const closedSessions = [];
-  manager.meetingDetectionEngine = {
-    handleAutoEndNotificationClosed: (sessionId) => closedSessions.push(sessionId),
-  };
-
-  const autoEndPromise = manager.showMeetingAutoEndNotification({
-    sessionId: "meeting-1",
-    expiresAt: Date.now() + 30_000,
-    reason: "silence",
-  });
-  createdWindows[0].loadDeferred.resolve();
-  await autoEndPromise;
-
-  const replacementPromise = manager.showMeetingNotification(
-    { kind: "detection", detectionId: "calendar:next", source: "calendar" },
-    { autoDismiss: false }
-  );
-
-  try {
-    assert.deepEqual(closedSessions, ["meeting-1"]);
-  } finally {
-    createdWindows[1].loadDeferred.resolve();
-    await replacementPromise;
-    manager.dismissMeetingNotification();
-  }
-});
-
-test("auto-end notification loading has a fail-safe timeout", async () => {
-  const timers = installFakeTimers();
-  const manager = createNormalWindowManager();
-  const showPromise = manager.showMeetingAutoEndNotification({
-    sessionId: "meeting-1",
-    expiresAt: 70_000,
-    reason: "silence",
-  });
-  const notificationWindow = createdWindows[0];
-
-  try {
-    assert.equal(timers.pendingCount(), 1);
-    timers.runAll();
-
-    await assert.rejects(showPromise, /timed out/i);
-    assert.equal(notificationWindow.isDestroyed(), true);
-    assert.equal(manager.notificationWindow, null);
-  } finally {
-    manager.dismissMeetingNotification();
-    notificationWindow.loadDeferred.resolve();
-    await showPromise.catch(() => undefined);
-    timers.restore();
-  }
-});
-
-test("auto-end recovery subtracts load time from its expiry and hover cannot extend it", async () => {
-  const timers = installFakeTimers();
-  const manager = createNormalWindowManager();
-  const originalDateNow = Date.now;
-  const timedOutNotifications = [];
-  let now = 40_000;
-  Date.now = () => now;
-  manager.meetingDetectionEngine = {
-    handleNotificationTimeout: (notification) => timedOutNotifications.push(notification),
-    handleAutoEndNotificationClosed: () => undefined,
-  };
-
-  const notification = {
-    kind: "auto-end",
-    sessionId: "meeting-1",
-    expiresAt: 70_000,
-    reason: "silence",
-  };
-  const showPromise = manager.showMeetingAutoEndNotification(notification);
-  const notificationWindow = createdWindows[0];
-
-  try {
-    now = 45_000;
-    notificationWindow.loadDeferred.resolve();
-    await showPromise;
-    assert.equal(timers.pendingDelays().includes(25_000), true);
-
-    manager.setNotificationInteractivity(notificationWindow.webContents, true);
-    manager.setNotificationInteractivity(notificationWindow.webContents, false);
-    assert.equal(timers.pendingDelays().includes(25_000), true);
-
-    timers.runDelay(25_000);
-    assert.deepEqual(timedOutNotifications, [notification]);
-    assert.equal(notificationWindow.isDestroyed(), true);
-  } finally {
-    Date.now = originalDateNow;
-    manager.dismissMeetingNotification();
-    timers.restore();
   }
 });
 
@@ -622,66 +499,32 @@ test("a stale ready callback cannot show the replacement notification window", a
   }
 });
 
-test("an auto-end notification dismissed while loading reports that it was not shown", async () => {
-  const manager = createNormalWindowManager();
-
-  const showPromise = manager.showMeetingAutoEndNotification({
-    sessionId: "meeting-1",
-    expiresAt: Date.now() + 30_000,
-    reason: "silence",
-  });
-  manager.dismissMeetingNotification();
-  createdWindows[0].loadDeferred.resolve();
-
-  assert.equal(await showPromise, false);
-});
-
-test("an auto-end notification whose load fails after dismissal reports that it was not shown", async () => {
-  const manager = createNormalWindowManager();
-
-  const showPromise = manager.showMeetingAutoEndNotification({
-    sessionId: "meeting-1",
-    expiresAt: Date.now() + 30_000,
-    reason: "silence",
-  });
-  manager.dismissMeetingNotification();
-  createdWindows[0].loadDeferred.reject(new Error("load failed"));
-
-  assert.equal(await showPromise, false);
-});
-
-// The engine flushes its queued detections when an expiring restart offer
-// releases them, so a prompt raised from the timeout handler must outlive the
-// dismissal that closes the expired card.
+// The engine may raise the next queued prompt from its timeout handler, so that
+// prompt must outlive the dismissal that closes the expired card.
 test("a notification raised from the timeout handler survives the dismissal that follows", async () => {
   const timers = installFakeTimers();
   const manager = createNormalWindowManager();
-  const originalDateNow = Date.now;
-  let now = 40_000;
-  Date.now = () => now;
   let replacementPromise = null;
   manager.meetingDetectionEngine = {
     handleNotificationTimeout: () => {
       replacementPromise = manager.showMeetingNotification(
-        { kind: "detection", detectionId: "calendar:next", source: "calendar" },
+        { detectionId: "calendar:next", source: "calendar" },
         { autoDismiss: false }
       );
     },
-    handleAutoEndNotificationClosed: () => undefined,
+    handleDetectionNotificationClosed: () => undefined,
   };
 
-  const showPromise = manager.showMeetingAutoEndNotification({
-    kind: "auto-end",
-    sessionId: "meeting-1",
-    expiresAt: 70_000,
-    reason: "silence",
+  const showPromise = manager.showMeetingNotification({
+    detectionId: "calendar:first",
+    source: "calendar",
   });
 
   try {
     notificationWindowFor(0).loadDeferred.resolve();
     await showPromise;
 
-    timers.runDelay(30_000);
+    timers.runDelay(getNotificationTimeoutMs("calendar"));
     notificationWindowFor(1).loadDeferred.resolve();
     await replacementPromise;
 
@@ -689,7 +532,6 @@ test("a notification raised from the timeout handler survives the dismissal that
     assert.equal(notificationWindowFor(1).isDestroyed(), false);
     assert.equal(manager.notificationWindow, notificationWindowFor(1));
   } finally {
-    Date.now = originalDateNow;
     manager.dismissMeetingNotification();
     timers.restore();
   }
@@ -703,7 +545,6 @@ test("unexpected detection card closure releases that detection", async () => {
   };
 
   const showPromise = manager.showMeetingNotification({
-    kind: "detection",
     detectionId: "audio:sustained-audio",
     source: "audio",
   });
@@ -730,7 +571,6 @@ test("an expired detection reports the timeout once, not also as a close", async
   };
 
   const showPromise = manager.showMeetingNotification({
-    kind: "detection",
     detectionId: "audio:sustained-audio",
     source: "audio",
   });
@@ -755,7 +595,6 @@ test("a detection card whose load fails releases that detection", async () => {
   };
 
   const showPromise = manager.showMeetingNotification({
-    kind: "detection",
     detectionId: "audio:sustained-audio",
     source: "audio",
   });
@@ -765,4 +604,59 @@ test("a detection card whose load fails releases that detection", async () => {
   // would ever settle this detection.
   await assert.rejects(showPromise, /load failed/);
   assert.deepEqual(closedDetections, ["audio:sustained-audio"]);
+});
+
+test("manual meeting starts fail closed like the meeting hotkey", async () => {
+  let starts = 0;
+  const engine = { startManualMeeting: async () => (starts += 1) };
+
+  const onboarding = new WindowManager();
+  onboarding.meetingDetectionEngine = engine;
+  await onboarding.startManualMeeting();
+  assert.equal(starts, 0);
+
+  const manager = createNormalWindowManager();
+  manager.meetingDetectionEngine = engine;
+  manager.hotkeyManager.isInListeningMode = () => true;
+  await manager.startManualMeeting();
+  assert.equal(starts, 0);
+
+  manager.hotkeyManager.isInListeningMode = () => false;
+  await manager.startManualMeeting();
+  assert.equal(starts, 1);
+});
+
+// Only the renderer can open the assistant panel, and it owns the policy and
+// recording state the pill menu gates the item on, so nothing may be shown,
+// focused, or created before it accepts.
+test("the tray's Ask assistant asks the renderer without showing or focusing the pill", () => {
+  const fakeMainWindow = (events) => ({
+    isDestroyed: () => false,
+    isMinimized: () => false,
+    isVisible: () => true,
+    focus: () => events.push("focus"),
+    show: () => events.push("show"),
+    showInactive: () => events.push("show"),
+    webContents: { send: (channel) => events.push(channel) },
+  });
+
+  const onboardingEvents = [];
+  const onboarding = new WindowManager();
+  onboarding.mainWindow = fakeMainWindow(onboardingEvents);
+  onboarding.sendOpenAssistantPanel();
+  assert.deepEqual(onboardingEvents, []);
+
+  const events = [];
+  const manager = createNormalWindowManager();
+  manager.mainWindow = fakeMainWindow(events);
+  manager.sendOpenAssistantPanel();
+  assert.deepEqual(events, ["open-assistant-panel"]);
+
+  // Capturing a hotkey swallows it, like every other input path.
+  const capturingEvents = [];
+  const capturing = createNormalWindowManager();
+  capturing.mainWindow = fakeMainWindow(capturingEvents);
+  capturing.hotkeyManager.isInListeningMode = () => true;
+  capturing.sendOpenAssistantPanel();
+  assert.deepEqual(capturingEvents, []);
 });

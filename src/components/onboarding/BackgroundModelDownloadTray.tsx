@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { BrandMark } from "./OnboardingShell";
@@ -7,6 +7,7 @@ import {
   getWhisperModelInfo,
   modelRegistry,
 } from "../../models/ModelRegistry";
+import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
   consumePendingLocalModel,
@@ -22,8 +23,9 @@ import type {
   ParakeetDownloadProgressData,
   WhisperDownloadProgressData,
 } from "../../types/electron";
-import { mergeHydratedDownloads } from "./localDownloadState";
+import { ellipsisFrame, isTrayInstalling, mergeHydratedDownloads } from "./localDownloadState";
 import { ONBOARDING_SESSION_KEY, isRequiredModelsOnboardingStepActive } from "./flow";
+import { getPlatform } from "../../utils/platform";
 
 type DownloadKind = "whisper" | "parakeet" | "llm";
 
@@ -53,7 +55,10 @@ function downloadDisplay(download: ActiveDownload) {
     return { name: getWhisperModelInfo(download.id)?.name ?? download.id, provider: "openai" };
   }
   if (download.kind === "parakeet") {
-    return { name: getParakeetModelInfo(download.id)?.name ?? download.id, provider: "nvidia" };
+    return {
+      name: getParakeetModelInfo(download.id)?.name ?? download.id,
+      provider: getASRModelOrganization(download.id),
+    };
   }
   const localModel = modelRegistry.getModel(download.id);
   return {
@@ -92,9 +97,9 @@ function activatePendingLocalModel(kind: PendingLocalModelKind, modelId: string)
   });
 }
 
-// The X on each row (Figma "Frame 25"), inlined rather than drawn with lucide so
+// The X on each row (Figma "Frame 25"), inlined rather than drawn with the icon set so
 // the 8px glyph inside the 24px circle and the 1.333 stroke come out exactly as
-// exported instead of needing to be back-scaled out of lucide's 24 viewBox.
+// exported instead of needing to be back-scaled out of the 24 viewBox.
 // Colours come from the app theme tokens (see the note on the <aside> below), so
 // the glyph tracks light/dark on the control panel instead of Figma's literals.
 function CancelGlyph() {
@@ -119,7 +124,29 @@ function CancelGlyph() {
   );
 }
 
-export default function BackgroundModelDownloadTray() {
+// One frame every 400ms, so a full stop-to-three-dots cycle takes 1.6s.
+const ELLIPSIS_FRAME_MS = 400;
+
+// Installation reports no byte progress, so without this the header sits on a
+// full bar and reads as a stalled download. aria-hidden because the tray is an
+// aria-live region: an announced dot would re-read the whole strip every frame.
+function AnimatedEllipsis() {
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = setInterval(() => setTick((current) => current + 1), ELLIPSIS_FRAME_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  return <span aria-hidden="true">{ellipsisFrame(tick)}</span>;
+}
+
+export default function BackgroundModelDownloadTray({
+  placement = "control-panel",
+}: {
+  placement?: "onboarding" | "control-panel";
+}) {
   const { t } = useTranslation();
   const [downloads, setDownloads] = useState<Record<string, ActiveDownload>>({});
   const [hydrated, setHydrated] = useState(false);
@@ -364,6 +391,12 @@ export default function BackgroundModelDownloadTray() {
   }, []);
 
   const activeDownloads = useMemo(() => Object.values(downloads), [downloads]);
+  const positionClass =
+    placement === "onboarding"
+      ? getPlatform() === "darwin"
+        ? "end-5 top-5"
+        : "end-5 top-14"
+      : "end-7 bottom-5";
 
   useEffect(() => {
     if (hydrated && activeDownloads.length === 0 && !hasPendingLocalModels()) {
@@ -372,6 +405,8 @@ export default function BackgroundModelDownloadTray() {
   }, [activeDownloads.length, hydrated]);
 
   if (activeDownloads.length === 0) return null;
+
+  const installing = isTrayInstalling(activeDownloads);
 
   return (
     // Figma "Onboarding / Frame 2147259036": 341 wide, radius 12, #E3E3E3
@@ -383,14 +418,24 @@ export default function BackgroundModelDownloadTray() {
     // both contexts and match the Figma light values within a couple of hex
     // steps.
     <aside
-      className="fixed right-7 bottom-5 z-50 w-[341px] overflow-hidden rounded-[12px] border border-border bg-card text-card-foreground"
+      className={`fixed z-[60] w-[341px] overflow-hidden rounded-[12px] border border-border bg-card text-card-foreground ${positionClass}`}
+      style={
+        placement === "onboarding" ? ({ WebkitAppRegion: "no-drag" } as CSSProperties) : undefined
+      }
       aria-label={t("onboarding.rehaul.local.downloads")}
       aria-live="polite"
     >
       {/* Frame 2147259037: #F7F7F7 strip, 7/8 padding, gap 5, 12/140% label. */}
       <div className="flex items-center gap-[5px] bg-muted px-2 py-[7px] text-xs leading-[1.4] text-muted-foreground">
         <BrandMark className="size-[11.2px] shrink-0 text-primary" />
-        {t("onboarding.rehaul.local.downloadInProgress")}
+        {installing ? (
+          <span>
+            {t("onboarding.rehaul.local.installing")}
+            <AnimatedEllipsis />
+          </span>
+        ) : (
+          <span>{t("onboarding.rehaul.local.downloadInProgress")}</span>
+        )}
       </div>
       {activeDownloads.map((download, index) => (
         // Frame 2147258983: a row of 8/10 padding and gap 10, holding the growing
@@ -415,8 +460,14 @@ export default function BackgroundModelDownloadTray() {
                   {downloadDisplay(download).name}
                 </span>
               </span>
-              <span className="shrink-0 font-medium text-muted-foreground">
-                {Math.round(download.percentage)}%
+              {/* Extraction pins the percentage at 100, so the number stops
+                  carrying information exactly when the bar stops moving. Naming
+                  the phase per row — as the setup step and the settings picker
+                  already do — keeps that readable whatever the other rows do. */}
+              <span className="shrink-0 font-medium tabular-nums text-muted-foreground">
+                {download.installing
+                  ? t("onboarding.rehaul.local.installing")
+                  : `${Math.round(download.percentage)}%`}
               </span>
             </div>
             {download.error ? (

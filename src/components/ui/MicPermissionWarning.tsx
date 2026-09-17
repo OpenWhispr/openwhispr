@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./button";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle } from "../icons";
 import { cn } from "../lib/utils";
 
 interface MicPermissionWarningProps {
