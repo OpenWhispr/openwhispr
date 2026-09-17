@@ -188,6 +188,7 @@ function getYdotoolStatus() {
   const hasYdotool = commandExists("ydotool");
   const hasYdotoold = commandExists("ydotoold");
   const hasWtype = commandExists("wtype");
+  const hasWlCopy = commandExists("wl-copy");
   const daemonRunning = isYdotooldRunning();
   const hasService = serviceFileExists();
   const hasUinput = isUinputAccessible();
@@ -203,6 +204,7 @@ function getYdotoolStatus() {
     hasYdotool,
     hasYdotoold,
     hasWtype,
+    hasWlCopy,
     daemonRunning,
     hasService,
     hasUinput,
