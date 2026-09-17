@@ -324,13 +324,13 @@ export function ByokProviderStep({
   );
   // The session's draft wins; without one (onboarding was restarted, or an older build
   // left it blank) the step reopens on what the user already saved, the same order
-  // LocalModelSetupStep uses. Key-less comes from saved settings either way: the draft
-  // never records keys, and a remount reopens from the draft the first mount wrote.
+  // LocalModelSetupStep uses. The key flag comes from saved settings either way: the
+  // draft never records keys, and a remount reopens from the draft the first mount wrote.
   const [seed] = useState(() => {
     const saved = resolveSavedByokConfig(stepId, store);
     return {
       draft: resumeState && !isBlankByokDraft(resumeState) ? resumeState : saved?.draft,
-      keyless: saved?.keyless ?? false,
+      usesCustomKey: saved?.usesCustomKey ?? false,
     };
   });
   const initialProviderData = providers.find(
@@ -344,12 +344,13 @@ export function ByokProviderStep({
     : pickDefaultModelId(initialProviderData);
   const initiallySelfHosted = selfHostedRequested && selfHostedAllowed;
   // Hosted and self-hosted share the key field, so each mode shows its own saved key.
-  // The Settings self-hosted server has none; a leftover custom key shown there would
-  // move the save onto the keyed route.
+  // The stored custom key belongs to a saved keyed Custom endpoint only: offering it for
+  // a key-less server, a hosted provider or a first setup would send a key the user never
+  // typed to the endpoint they just typed, and move the save onto the keyed route.
   const credentialFor = (selfHostedMode: boolean, providerId: string) => {
     if (!selfHostedMode) return providerCredential(providerId, store).value;
     if (assistant) return store.chatAgentCustomApiKey;
-    return seed.keyless ? "" : store.customTranscriptionApiKey;
+    return seed.usesCustomKey ? store.customTranscriptionApiKey : "";
   };
   const [selfHosted, setSelfHosted] = useState(initiallySelfHosted);
   const [selectedProvider, setSelectedProvider] = useState(initialProvider);

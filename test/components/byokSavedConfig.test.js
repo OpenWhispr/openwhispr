@@ -272,6 +272,31 @@ test("the Settings self-hosted server reopens without a leftover custom key", as
   assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
 });
 
+test("a first setup ignores a leftover custom key and saves a key-less server", async (t) => {
+  const step = await mountByokStep(t, {
+    // Local dictation: nothing to reopen on, but an abandoned Custom setup left its key
+    // behind. Offering it would send it to the endpoint the user is about to type.
+    settings: { useLocalWhisper: "true", transcriptionMode: "local" },
+    secrets: { customTranscriptionApiKey: "sk-abandoned-key" },
+    selfHostedRequested: true,
+  });
+  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
+
+  await step.type(PLACEHOLDER.endpoint, "https://typed.example.com/v1");
+  await step.type(PLACEHOLDER.modelId, "whisper-proxy-test");
+  await step.passConnectionTest();
+  await step.proceed();
+
+  const state = step.state();
+  assert.equal(state.remoteTranscriptionUrl, "https://typed.example.com/v1");
+  assert.equal(state.customTranscriptionApiKey, "sk-abandoned-key", "the stored key is unused");
+
+  const route = await routeAfterOnboardingSave(step);
+  assert.equal(route.provider, "self-hosted");
+  assert.equal(route.endpoint, "https://typed.example.com/v1/audio/transcriptions");
+  assert.deepEqual(route.auth, { scheme: "none", keyRef: null });
+});
+
 test("a remount from the saved draft keeps a Settings self-hosted server key-less", async (t) => {
   const mountSettingsServer = (t, resumeState) =>
     mountByokStep(t, {
@@ -371,7 +396,8 @@ test("switching modes keeps both halves of the form and swaps only the key", asy
     settings: HOSTED_GROQ,
     secrets: { groqApiKey: "gsk-saved-key", customTranscriptionApiKey: "sk-custom-key" },
   });
-  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-custom-key");
+  // What is saved is a hosted provider, so the stored custom key is not this endpoint's.
+  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
   await step.type(PLACEHOLDER.endpoint, "https://typed.example.com/v1");
 
   await step.toggleSelfHosted();
@@ -380,19 +406,22 @@ test("switching modes keeps both halves of the form and swaps only the key", asy
 
   await step.toggleSelfHosted();
   assert.equal(step.value(PLACEHOLDER.endpoint), "https://typed.example.com/v1");
-  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-custom-key");
+  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
 });
 
 test("a key that loads after mount fills an empty field but never replaces typed input", async (t) => {
+  const mountSavedEndpoint = (t) =>
+    mountByokStep(t, { selfHostedRequested: true, settings: CUSTOM_ENDPOINT });
+
   await t.test("empty field", async (t) => {
-    const step = await mountByokStep(t, { selfHostedRequested: true });
+    const step = await mountSavedEndpoint(t);
     assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
     await step.setStore({ customTranscriptionApiKey: "sk-late-key" });
     assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-late-key");
   });
 
   await t.test("typed field", async (t) => {
-    const step = await mountByokStep(t, { selfHostedRequested: true });
+    const step = await mountSavedEndpoint(t);
     await step.type(PLACEHOLDER.selfHostedKey, "sk-typed-key");
     await step.setStore({ customTranscriptionApiKey: "sk-late-key" });
     assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-typed-key");
@@ -405,7 +434,7 @@ test("policy removing self-hosting mid-step keeps the hosted half and loads its 
     settings: HOSTED_GROQ,
     secrets: { groqApiKey: "gsk-saved-key", customTranscriptionApiKey: "sk-custom-key" },
   });
-  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-custom-key");
+  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
 
   await applyTranscriptionPolicy(step, {
     allowedModes: ["providers"],

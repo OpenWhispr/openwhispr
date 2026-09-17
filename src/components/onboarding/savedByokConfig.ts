@@ -21,18 +21,26 @@ export type SavedByokSnapshot = Pick<
 
 export interface SavedByokConfig {
   draft: OnboardingByokDraft;
-  /** The Settings self-hosted server, which sends no API key. */
-  keyless: boolean;
+  /**
+   * The saved endpoint authenticates with the stored custom API key. False for the
+   * Settings self-hosted server, which sends none, and for a hosted provider, whose
+   * key belongs to the provider rather than to the endpoint field.
+   */
+  usesCustomKey: boolean;
 }
 
 const hostedConfig = (provider: string, model: string): SavedByokConfig => ({
   draft: { selectedProvider: provider, selectedModel: model, baseUrl: "", customModel: "" },
-  keyless: false,
+  usesCustomKey: false,
 });
 
-const endpointConfig = (baseUrl: string, model: string, keyless = false): SavedByokConfig => ({
+const endpointConfig = (
+  baseUrl: string,
+  model: string,
+  usesCustomKey = false
+): SavedByokConfig => ({
   draft: { selectedProvider: "", selectedModel: "", baseUrl, customModel: model },
-  keyless,
+  usesCustomKey,
 });
 
 // Same precedence as resolveTranscriptionRoute, so the step reopens on the endpoint
@@ -40,7 +48,7 @@ const endpointConfig = (baseUrl: string, model: string, keyless = false): SavedB
 // writes cloudTranscriptionMode "byok" for Local.
 function resolveSavedDictation(s: SavedByokSnapshot): SavedByokConfig | null {
   if (isSelfHostedTranscription(s)) {
-    return endpointConfig(s.remoteTranscriptionUrl.trim(), s.remoteTranscriptionModel, true);
+    return endpointConfig(s.remoteTranscriptionUrl.trim(), s.remoteTranscriptionModel);
   }
   if (s.useLocalWhisper) return null;
   if (s.transcriptionMode !== "providers" && s.transcriptionMode !== "self-hosted") return null;
@@ -48,7 +56,7 @@ function resolveSavedDictation(s: SavedByokSnapshot): SavedByokConfig | null {
     const baseUrl = (s.cloudTranscriptionBaseUrl || "").trim();
     // The untouched store default is not a configured endpoint, as in the custom route.
     if (!baseUrl || baseUrl === API_ENDPOINTS.TRANSCRIPTION_BASE) return null;
-    return endpointConfig(baseUrl, s.cloudTranscriptionModel);
+    return endpointConfig(baseUrl, s.cloudTranscriptionModel, true);
   }
   // Self-hosted mode without its own URL only routes for the custom provider.
   if (s.transcriptionMode === "self-hosted") return null;

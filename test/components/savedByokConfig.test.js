@@ -74,7 +74,7 @@ test("a hosted dictation provider reopens with its model", async () => {
       baseUrl: "",
       customModel: "",
     },
-    keyless: false,
+    usesCustomKey: false,
   });
 });
 
@@ -94,7 +94,7 @@ test("the Settings self-hosted server reopens as a key-less endpoint and wins ov
       baseUrl: "http://192.168.1.5:8178",
       customModel: "large-v3",
     },
-    keyless: true,
+    usesCustomKey: false,
   });
 });
 
@@ -108,7 +108,7 @@ test("the Settings self-hosted server wins over a stale local flag, as in the ro
     remoteTranscriptionModel: "large-v3",
   });
   assert.equal(saved?.draft.baseUrl, "http://192.168.1.5:8178");
-  assert.equal(saved?.keyless, true);
+  assert.equal(saved?.usesCustomKey, false);
 });
 
 test("a custom endpoint reopens under either mode it is filed under", async () => {
@@ -128,7 +128,7 @@ test("a custom endpoint reopens under either mode it is filed under", async () =
           baseUrl: "https://stt.example.com/v1",
           customModel: "parasail-whisper",
         },
-        keyless: false,
+        usesCustomKey: true,
       },
       transcriptionMode
     );
@@ -177,7 +177,7 @@ test("the assistant reopens its self-hosted endpoint or hosted provider", async 
         baseUrl: "http://127.0.0.1:1234/v1",
         customModel: "llm-proxy-test",
       },
-      keyless: false,
+      usesCustomKey: false,
     }
   );
   assert.deepEqual(
@@ -194,7 +194,7 @@ test("the assistant reopens its self-hosted endpoint or hosted provider", async 
         baseUrl: "",
         customModel: "",
       },
-      keyless: false,
+      usesCustomKey: false,
     }
   );
 });
