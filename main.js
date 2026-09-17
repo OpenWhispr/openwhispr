@@ -531,6 +531,9 @@ function initializeCoreManagers() {
   windowManager.selectionManager = selectionManager;
   windowManager.windowsKeyManager = windowsKeyManager;
   windowManager.linuxKeyManager = linuxKeyManager;
+  if (process.platform === "linux") {
+    windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
+  }
 
   // IPC handlers must be registered before window content loads
   ipcHandlers = new IPCHandlers({

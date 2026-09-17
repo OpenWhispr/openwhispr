@@ -31,7 +31,8 @@ const HotkeyManager = require("../../src/helpers/hotkeyManager.js");
 
 const noop = () => {};
 const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
-const setPlatform = (value) => Object.defineProperty(process, "platform", { value, configurable: true });
+const setPlatform = (value) =>
+  Object.defineProperty(process, "platform", { value, configurable: true });
 
 test.beforeEach(() => registered.clear());
 test.after(() => Object.defineProperty(process, "platform", originalPlatform));
@@ -59,4 +60,60 @@ test("a right-side single modifier also reaches the native listener on linux", a
   assert.equal(result.success, true);
   assert.equal(registered.size, 0);
   assert.deepEqual(mgr.getNativeListenerKeys("tap"), ["RightControl"]);
+});
+
+// The listener backing those hotkeys needs its binary and read access to
+// /dev/input. When it cannot run, registration must fail like a refused
+// globalShortcut.register so the startup fallback, the Settings error and the
+// slot rollback all still happen.
+const denyProbe = (reason) => () => ({ available: false, reason });
+
+for (const hotkey of ["Control+Super", "RightControl"]) {
+  test(`linux refuses "${hotkey}" when the listener has no input access`, async () => {
+    setPlatform("linux");
+    const mgr = new HotkeyManager();
+    mgr.nativeListenerProbe = denyProbe("input_access_denied");
+
+    const result = await mgr.registerSlot("dictation", hotkey, noop);
+
+    assert.equal(result.success, false);
+    assert.equal(registered.size, 0, "a refused hotkey must not fall back to globalShortcut");
+    assert.match(result.error, /usermod/, "the error must tell the user how to fix it");
+  });
+}
+
+test("a refused listener hotkey leaves the slot on its previous binding", async () => {
+  setPlatform("linux");
+  const mgr = new HotkeyManager();
+
+  await mgr.registerSlot("dictation", "F8", noop);
+  mgr.nativeListenerProbe = denyProbe("input_access_denied");
+  const result = await mgr.registerSlot("dictation", "Control+Super", noop);
+
+  assert.equal(result.success, false);
+  assert.deepEqual(mgr.getSlotHotkeys("dictation"), ["F8"]);
+  assert.equal(registered.has("F8"), true, "the previous accelerator must stay registered");
+});
+
+test("a missing listener binary reports the push-to-talk unavailable message", async () => {
+  setPlatform("linux");
+  const mgr = new HotkeyManager();
+  mgr.nativeListenerProbe = denyProbe("binary_missing");
+
+  const result = await mgr.registerSlot("dictation", "Control+Super", noop);
+
+  assert.equal(result.success, false);
+  // setupShortcuts appends "Try: <suggestions>" to whatever the failure carried.
+  assert.equal(result.error.startsWith("Push-to-Talk native listener not available"), true);
+});
+
+test("a failing probe is ignored off linux", async () => {
+  setPlatform("win32");
+  const mgr = new HotkeyManager();
+  mgr.nativeListenerProbe = denyProbe("input_access_denied");
+
+  const result = await mgr.registerSlot("dictation", "Control+Super", noop);
+
+  assert.equal(result.success, true);
+  assert.deepEqual(mgr.getSlotHotkeys("dictation"), ["Control+Super"]);
 });

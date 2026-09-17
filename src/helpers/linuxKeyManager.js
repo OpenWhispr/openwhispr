@@ -4,6 +4,8 @@ const EventEmitter = require("events");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
 
+const INPUT_DIR = "/dev/input";
+
 // Key state comes from an evdev reader (resources/linux-key-listener.c) that reads
 // /dev/input directly, so it observes KEY_UP regardless of which window has focus
 // and cannot miss a release. The ceiling for a genuinely stuck key is
@@ -151,6 +153,41 @@ class LinuxKeyManager extends EventEmitter {
 
   isAvailable() {
     return this.resolveListenerBinary() !== null;
+  }
+
+  /**
+   * Whether the listener could actually run right now: binary present and at
+   * least one readable /dev/input/event* node (the listener itself also filters
+   * for keyboards; any readable node already proves the user can read input
+   * devices). Mirrors the C listener's own rule — it prints NO_PERMISSION only
+   * when it opened zero devices AND at least one node returned EACCES, so a
+   * missing or event-less /dev/input is not a failure there (it waits for
+   * hotplug) and must not be one here.
+   * Callers ask at registration time, because a hotkey only this listener can
+   * serve must not report success when the listener cannot run.
+   * @returns {{available: true} | {available: false, reason: "binary_missing" | "input_access_denied"}}
+   */
+  checkAvailability() {
+    if (!this.resolveListenerBinary()) return { available: false, reason: "binary_missing" };
+
+    let devices;
+    try {
+      devices = fs.readdirSync(INPUT_DIR).filter((entry) => entry.startsWith("event"));
+    } catch {
+      return { available: true };
+    }
+    if (devices.length === 0) return { available: true };
+
+    for (const device of devices) {
+      try {
+        fs.accessSync(path.join(INPUT_DIR, device), fs.constants.R_OK);
+        return { available: true };
+      } catch {
+        continue;
+      }
+    }
+
+    return { available: false, reason: "input_access_denied" };
   }
 
   reportError(error) {
