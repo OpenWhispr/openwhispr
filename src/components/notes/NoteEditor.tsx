@@ -1188,11 +1188,7 @@ export default function NoteEditor({
                 />
               )
             ) : viewMode === "transcript" && hasMeetingTranscript ? (
-              <RichTextEditor
-                value={note.transcript || ""}
-                contentClassName={PAGE_CONTENT_WIDTH_CLASS}
-                disabled
-              />
+              <RichTextEditor value={note.transcript || ""} disabled />
             ) : viewMode === "transcript" ? (
               <EmptyStateCard
                 icon={Mic}
@@ -1210,7 +1206,6 @@ export default function NoteEditor({
             ) : viewMode === "enhanced" && enhancement ? (
               <RichTextEditor
                 value={enhancement.content}
-                contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                 onChange={handleEnhancedChange}
                 disabled={!canEditNote}
                 mentionPeople={mentionPeople}
@@ -1218,7 +1213,6 @@ export default function NoteEditor({
             ) : (
               <RichTextEditor
                 value={note.content}
-                contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                 onChange={handleContentChange}
                 editorRef={editorRef}
                 placeholder={t("notes.editor.startWriting")}

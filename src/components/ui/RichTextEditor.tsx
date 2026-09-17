@@ -14,7 +14,6 @@ interface RichTextEditorProps {
   onChange?: (value: string) => void;
   placeholder?: string;
   className?: string;
-  contentClassName?: string;
   disabled?: boolean;
   editorRef?: MutableRefObject<Editor | null>;
   /** Enables @mention tagging with these people as suggestions. */
@@ -26,7 +25,6 @@ export function RichTextEditor({
   onChange,
   placeholder,
   className,
-  contentClassName,
   disabled,
   editorRef,
   mentionPeople,
@@ -73,7 +71,7 @@ export function RichTextEditor({
     },
     editorProps: {
       attributes: {
-        class: cn("rich-text-editor-content", contentClassName),
+        class: "rich-text-editor-content",
         dir: "auto",
       },
     },
