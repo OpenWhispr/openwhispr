@@ -1,6 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { downsample24kTo16k, pcm16ToFloat32, computePcm16Rms } = require("../../src/utils/audioUtils");
+const {
+  downsample24kTo16k,
+  pcm16ToFloat32,
+  computePcm16Rms,
+} = require("../../src/utils/audioUtils");
 
 // A Buffer whose byteOffset is odd, as `someChunk.subarray(oddIndex)` produces.
 // A plain Int16Array view over it throws; the audio helpers must tolerate it,
@@ -32,10 +36,7 @@ test("pcm16ToFloat32 handles an unaligned buffer identically to an aligned one",
   const aligned = sinePcm(2400);
   const unaligned = unalignedCopy(aligned);
   assert.doesNotThrow(() => pcm16ToFloat32(unaligned));
-  assert.deepEqual(
-    Array.from(pcm16ToFloat32(aligned)),
-    Array.from(pcm16ToFloat32(unaligned))
-  );
+  assert.deepEqual(Array.from(pcm16ToFloat32(aligned)), Array.from(pcm16ToFloat32(unaligned)));
 });
 
 test("computePcm16Rms, downsample24kTo16k, pcm16ToFloat32 agree on unaligned input", () => {
