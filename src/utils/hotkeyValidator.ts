@@ -659,9 +659,9 @@ export function validateHotkey(
   const modifierCount = parts.filter((part) => normalizeModifier(part, platform) !== null).length;
   const hasBaseKey = parts.length > modifierCount;
 
-  // Only Windows routes a modifier-only chord to a native low-level hook. macOS
-  // has no equivalent — the Globe listener reports Fn, right-side modifiers and
-  // mouse buttons, nothing else — and Electron cannot register an accelerator
+  // Windows and Linux route a modifier-only chord to a native low-level listener;
+  // macOS has no equivalent — the Globe listener reports Fn, right-side modifiers
+  // and mouse buttons, nothing else — and Electron cannot register an accelerator
   // without a key, so the chord would be accepted here and then fail to bind.
   if (!hasBaseKey && modifierCount >= 2 && platform === "darwin") {
     return {
