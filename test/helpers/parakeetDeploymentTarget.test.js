@@ -8,13 +8,13 @@ const UNIVERSAL_VTOOL_OUTPUT = `
 Load command 10
       cmd LC_BUILD_VERSION
  platform MACOS
-    minos 15.5
+    minos 10.15
       sdk 15.5
 /tmp/libonnxruntime.dylib (architecture arm64):
 Load command 10
       cmd LC_BUILD_VERSION
  platform MACOS
-    minos 15.5
+    minos 11.0
       sdk 15.5
 `;
 
@@ -22,8 +22,8 @@ test("parses deployment targets for both ONNX Runtime architecture slices", () =
   const targets = sherpaDownloader.parseMacosDeploymentTargets?.(UNIVERSAL_VTOOL_OUTPUT);
 
   assert.deepEqual(targets, [
-    { architecture: "x86_64", minimumVersion: "15.5" },
-    { architecture: "arm64", minimumVersion: "15.5" },
+    { architecture: "x86_64", minimumVersion: "10.15" },
+    { architecture: "arm64", minimumVersion: "11.0" },
   ]);
 });
 

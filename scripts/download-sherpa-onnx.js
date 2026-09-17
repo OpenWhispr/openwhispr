@@ -176,7 +176,7 @@ function validateMacosDeploymentTargets(targets) {
   }
 
   for (const target of targets) {
-    if (compareVersions(target.minimumVersion, PARAKEET_MINIMUM_MACOS_VERSION) !== 0) {
+    if (compareVersions(target.minimumVersion, PARAKEET_MINIMUM_MACOS_VERSION) > 0) {
       throw new Error(
         `${target.architecture} requires macOS ${target.minimumVersion}, but the Parakeet capability gate is ${PARAKEET_MINIMUM_MACOS_VERSION}`
       );
@@ -342,8 +342,8 @@ async function downloadBinary(platformArch, config, isForce = false) {
     console.log(`  ${platformArch}: Already exists (use --force to re-download)`);
     return true;
   }
-  // A failed repair must not leave a previous marker certifying partially patched binaries.
-  if (fs.existsSync(installMarkerPath)) fs.unlinkSync(installMarkerPath);
+  // Retain cleanup ownership across retries without certifying a partially repaired install.
+  fs.writeFileSync(installMarkerPath, JSON.stringify({ libraries: previousLibraries }));
 
   const url = getDownloadUrl(config.archiveName);
   console.log(`  ${platformArch}: Downloading from ${url}`);
