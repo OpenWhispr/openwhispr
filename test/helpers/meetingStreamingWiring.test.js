@@ -68,14 +68,12 @@ test("a silent Windows capture hands the live session to renderer loopback", () 
     degradeStart,
     source.indexOf("const startManagedMeetingSystemAudio")
   );
-  // One-shot per session. Audio heard earlier must not gate it: Windows hides
-  // some applications' streams from process loopback while passing others
-  // through, so a captured notification sound would otherwise pin the fallback
-  // off for a call nobody can hear (#1265). meetingSystemAudioDegrade.test.js
-  // covers that behaviorally.
+  // One-shot per session, and audio heard earlier must not gate it: Windows
+  // hides some applications' streams from process loopback while passing
+  // others through, so a captured notification sound would otherwise pin the
+  // fallback off for a call nobody can hear (#1265). What the handover then
+  // does is covered behaviorally by meetingSystemAudioDegrade.test.js.
   assert.match(degradeSection, /if \(meetingSystemAudioDegraded\) return;/);
-  assert.match(degradeSection, /windowsLoopbackAudioManager\?\.stop\(\)/);
-  assert.match(degradeSection, /send\("meeting-system-audio-degraded"\)/);
 
   // Leaking the latch across sessions would pin the fallback off for the rest
   // of the app's life, so it resets everywhere the heard-audio latch does.

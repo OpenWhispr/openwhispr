@@ -8724,7 +8724,8 @@ class IPCHandlers {
     // The Windows helper reports capture_silent when its own stream is silent
     // while a render endpoint is playing: activation succeeded but no audio
     // will ever arrive, so hand the live session to Chromium's renderer
-    // loopback. The silence watchdog stays armed in case that fails too.
+    // loopback. The renderer reports a failed takeover itself, since the
+    // one-shot silence notice is suppressed once a call has been audible.
     //
     // Audio heard earlier in the call does not disqualify the handover:
     // Windows hides some applications' streams from process loopback while
@@ -8738,10 +8739,11 @@ class IPCHandlers {
         {},
         "meeting"
       );
-      await this.windowsLoopbackAudioManager?.stop().catch(() => {});
-      // The renderer owns capture from here, so drop the restart hook pointing
-      // at the helper we just stopped; the watchdog keeps reporting silence.
+      // Drop the restart hook before stopping, so a restart already in flight
+      // cannot start the helper back up behind the renderer's takeover. The
+      // watchdog session itself stays, and keeps reporting a quiet channel.
       meetingSystemAudioWatchdog.detachCapture();
+      await this.windowsLoopbackAudioManager?.stop().catch(() => {});
       const win = BrowserWindow.fromWebContents(event.sender);
       if (win && !win.isDestroyed()) {
         win.webContents.send("meeting-system-audio-degraded");

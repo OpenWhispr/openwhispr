@@ -36,12 +36,14 @@ function harness({ systemAudioHeard }) {
       }),
     },
   };
+  // `this.windowsLoopbackAudioManager` inside the closure resolves through the
+  // context's global object, which is why the manager is a plain context key.
+  const start = source.indexOf("const degradeMeetingSystemAudioToLoopback =");
+  const end = source.indexOf("const startManagedMeetingSystemAudio =");
+  assert.ok(start >= 0 && end > start, "degrade closure not found in ipcHandlers.js");
   vm.createContext(context);
   vm.runInContext(
-    `${source.slice(
-      source.indexOf("const degradeMeetingSystemAudioToLoopback ="),
-      source.indexOf("const startManagedMeetingSystemAudio =")
-    )}
+    `${source.slice(start, end)}
     globalThis.degrade = () => degradeMeetingSystemAudioToLoopback({ sender: {} });`,
     context
   );
@@ -59,8 +61,8 @@ test("a silent capture hands over even after the helper delivered audible chunks
   assert.deepEqual(sent, ["meeting-system-audio-degraded"]);
   assert.equal(stopped.length, 1);
   assert.equal(context.meetingSystemAudioDegraded, true);
-  // The renderer owns capture now, so the watchdog must not hold a restart
-  // hook for the helper that was just stopped.
+  // Structural: the watchdog must be told to drop its restart hook rather than
+  // be left pointing at the helper this just stopped.
   assert.equal(detached.length, 1);
 });
 

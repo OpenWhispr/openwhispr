@@ -1441,10 +1441,21 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
                 { error: takeover.error?.message },
                 "meeting"
               );
-              // The one-shot silence notice is suppressed once a call has been
-              // audible, so a late takeover failure would otherwise drop the
-              // other participants without telling anyone.
-              reportMeetingError("System audio capture failed. Continuing with microphone only.");
+              // Nothing is capturing the call now. The one-shot silence notice
+              // is suppressed once a call has been audible, so without this the
+              // only signal would be the watchdog's "gone quiet" three minutes
+              // later — and auto-end would still believe it has a system
+              // channel and could end the recording on a quiet mic.
+              publishSystemAudioInterruption({
+                systemAudioStrategy: "loopback",
+                reason: "loopback_takeover_failed",
+                recovering: false,
+              });
+              sessionSystemAudioActive = false;
+              void window.electronAPI?.meetingTranscriptionSetSystemAudioAvailable?.(
+                sessionId,
+                false
+              );
               return;
             }
             if (activeRecordingSessionId !== sessionId || !isRecordingFlag || systemStream) {
