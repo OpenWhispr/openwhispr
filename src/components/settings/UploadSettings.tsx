@@ -8,7 +8,7 @@ import {
 } from "../../stores/settingsStore";
 import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
 import { isEnterpriseTranscriptionOfferable } from "../../stores/policyRules";
-import { requestSignIn } from "../../stores/signInPromptStore";
+import { requestSignIn } from "../../utils/requestSignIn";
 import { InferenceModeSelector } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";

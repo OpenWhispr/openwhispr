@@ -31,7 +31,7 @@ import {
   enterpriseProviderName,
 } from "../../models/ModelRegistry";
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
-import { requestSignIn } from "../../stores/signInPromptStore";
+import { requestSignIn } from "../../utils/requestSignIn";
 import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";

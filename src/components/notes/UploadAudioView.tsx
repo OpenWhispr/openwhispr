@@ -35,7 +35,7 @@ import {
 import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
-import { requestSignIn } from "../../stores/signInPromptStore";
+import { requestSignIn } from "../../utils/requestSignIn";
 import {
   getAllReasoningModels,
   getBatchTranscriptionModel,

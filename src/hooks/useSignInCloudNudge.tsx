@@ -1,33 +1,26 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import SignInDialog from "./SignInDialog";
-import { useToast } from "./ui/useToast";
-import { usePolicySnapshot } from "../hooks/usePolicy";
+import { useToast } from "../components/ui/useToast";
 import { useSettingsStore } from "../stores/settingsStore";
-import {
-  SIGN_IN_PROMPTED_AT_KEY,
-  setSignInPromptOpen,
-  useSignInPromptStore,
-} from "../stores/signInPromptStore";
+import { SIGN_IN_PROMPTED_AT_KEY } from "../utils/requestSignIn";
 import { decideSignInCloudNudge } from "../utils/signInCloudNudge";
+import { usePolicySnapshot } from "./usePolicy";
 
-interface SignInPromptProps {
-  isSignedIn: boolean;
-  onOpenTranscriptionSettings: () => void;
-}
-
-export default function SignInPrompt({
-  isSignedIn,
-  onOpenTranscriptionSettings,
-}: SignInPromptProps) {
+/**
+ * Tells a user who just signed in that OpenWhispr Cloud is available, once, without
+ * switching anything: a post-sign-in cloud switch is what overrode Local for #2086.
+ * The marker requestSignIn left behind survives the reload that sign-in goes through.
+ */
+export function useSignInCloudNudge(
+  isSignedIn: boolean,
+  onOpenTranscriptionSettings: () => void
+): void {
   const { t } = useTranslation();
   const { toast, dismiss } = useToast();
-  const open = useSignInPromptStore((state) => state.open);
   const policy = usePolicySnapshot();
   const transcriptionMode = useSettingsStore((state) => state.transcriptionMode);
 
   useEffect(() => {
-    if (open) return;
     const promptedAt = localStorage.getItem(SIGN_IN_PROMPTED_AT_KEY);
     if (promptedAt === null) return;
     const decision = decideSignInCloudNudge({
@@ -57,7 +50,5 @@ export default function SignInPrompt({
         </button>
       ),
     });
-  }, [dismiss, isSignedIn, onOpenTranscriptionSettings, open, policy, t, toast, transcriptionMode]);
-
-  return <SignInDialog open={open} onOpenChange={setSignInPromptOpen} />;
+  }, [dismiss, isSignedIn, onOpenTranscriptionSettings, policy, t, toast, transcriptionMode]);
 }

@@ -6,7 +6,6 @@ import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedTex
 import { Download, RefreshCw, Loader2, AlertTriangle, Zap } from "./icons";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
-import SignInPrompt from "./SignInPrompt";
 import { RequiredModelsBanner } from "./RequiredModelsBanner";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
@@ -60,6 +59,7 @@ import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
 import { useCreateNote } from "../hooks/useCreateNote";
+import { useSignInCloudNudge } from "../hooks/useSignInCloudNudge";
 import {
   setActiveNoteId,
   setActiveFolderId,
@@ -196,6 +196,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     downloadUpdate,
     installUpdate,
   } = useUpdater();
+
+  const openTranscriptionSettings = useCallback(() => {
+    setSettingsSection("transcription");
+    setShowSettings(true);
+  }, []);
+  useSignInCloudNudge(isSignedIn, openTranscriptionSettings);
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
   const { createNote } = useCreateNote();
@@ -947,14 +953,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           />
         </Suspense>
       )}
-
-      <SignInPrompt
-        isSignedIn={isSignedIn}
-        onOpenTranscriptionSettings={() => {
-          setSettingsSection("transcription");
-          setShowSettings(true);
-        }}
-      />
 
       <AcceptInvitationModal
         token={invitationToken}
