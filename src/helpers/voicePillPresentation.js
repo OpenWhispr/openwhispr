@@ -8,18 +8,39 @@ export { LIVE_TRANSCRIPT_SURFACE_LIMITS };
 // and that window size may only change together.
 export const VOICE_PILL_FOOTPRINT = Object.freeze({
   idle: Object.freeze({ width: 40, height: 40 }),
-  recording: Object.freeze({ width: 92, height: 36 }),
+  // 98 = 6px edge inset + 22px icon + 6px gap + 52px waveform + 12px edge
+  // inset (the waveform side keeps extra air; insets include the 1px border).
+  recording: Object.freeze({ width: 98, height: 36 }),
 });
 
+// The hover cancel control that emerges beside the pill (px). Same contract:
+// WINDOW_SIZES.RECORDING must fit pill + gap + cancel inside its dock insets,
+// or the control clips at the native window bounds.
+export const VOICE_PILL_CANCEL = Object.freeze({ size: 28, gap: 8 });
+
 export const LISTENING_ENTRANCE_TIMING = Object.freeze({
-  // Give the Beam enough time to read as an intentional thinking state before
-  // the persistent control begins changing shape.
-  thinkingMs: 420,
+  // A short hold that reads as an acknowledged press before the control
+  // changes shape. It was 420ms when it also had to hide the native window
+  // grow; BASE and RECORDING now share one box (windowConfig.js), so the
+  // floating pill's hold is purely the design beat.
+  thinkingMs: 260,
+  // A recording that starts under the open assistant panel first hands the
+  // footer from final actions back to the pill (actions retreat + pill
+  // entrance — getAssistantFooterTransitionTimeline). The expansion must not
+  // start until that handoff settles, or both animate the same control.
+  assistantFooterThinkingMs: 420,
   expansionMs: 300,
   // Hold the finished footprint briefly so the waveform reveal cannot be
   // perceived as part of the width animation.
   waveformDelayMs: 100,
 });
+
+// The pill's morph between the two VOICE_PILL_FOOTPRINT boxes. The cancel
+// skin tweens its capsule geometry against the same duration and curve
+// (usePillFootprintTween), so a fused outline never drifts off the real pill —
+// one definition keeps them from diverging.
+export const VOICE_PILL_GROW_EASING = "cubic-bezier(0.2, 0, 0, 1)";
+export const VOICE_PILL_GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms ${VOICE_PILL_GROW_EASING}`;
 
 export const ASSISTANT_FOOTER_TRANSITION_TIMING = Object.freeze({
   pillRetreatMs: 180,
@@ -150,10 +171,16 @@ export function resolveVoicePillDock({
   return `bottom-${horizontalDirection}`;
 }
 
-export function getListeningEntranceTimeline(timing = LISTENING_ENTRANCE_TIMING) {
-  const settleAtMs = timing.thinkingMs + timing.expansionMs;
+export function getListeningEntranceTimeline({
+  afterAssistantFooterHandoff = false,
+  timing = LISTENING_ENTRANCE_TIMING,
+} = {}) {
+  const thinkingMs = afterAssistantFooterHandoff
+    ? timing.assistantFooterThinkingMs
+    : timing.thinkingMs;
+  const settleAtMs = thinkingMs + timing.expansionMs;
   return {
-    expandAtMs: timing.thinkingMs,
+    expandAtMs: thinkingMs,
     settleAtMs,
     waveformAtMs: settleAtMs + timing.waveformDelayMs,
   };
@@ -346,6 +373,28 @@ export function shouldSuppressPillForAssistantActions({
 }) {
   if (!assistantOpen || footerPillVisible) return false;
   return !(assistantClosing && hasLiveActivity);
+}
+
+/**
+ * Compose the persistent pill root's visibility from every owner that can hide
+ * it. `assistantClosing` folds the pill into the panel's exit — but never while
+ * the pill owns live activity: ownership returns to it at close INTENT (see
+ * voicePillOwnsActivity in App.jsx) and beginClose hides the companion on that
+ * same tick, so suppressing here would leave a running recording with no
+ * visible owner for the whole close. The panel-return mask stays unconditional
+ * like the dictation-error handoff — it is bounded by the native shrink it
+ * covers, not by the panel's full exit choreography.
+ */
+export function resolvePillVisualSuppression({
+  dictationErrorSuppressed,
+  assistantActionsSuppressed,
+  assistantClosing,
+  panelReturnResizeActive,
+  hasLiveActivity,
+}) {
+  if (dictationErrorSuppressed || assistantActionsSuppressed) return true;
+  if (panelReturnResizeActive) return true;
+  return Boolean(assistantClosing) && !hasLiveActivity;
 }
 
 export function shouldActivateVoicePill({

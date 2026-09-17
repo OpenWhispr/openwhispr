@@ -3,17 +3,17 @@ const fs = require("fs");
 const path = require("path");
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
-const os = require("os");
 const {
   findAvailablePort,
   resolveBinaryPath,
   gracefulStopProcess,
+  getAvailableParallelism,
 } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { createAbortError } = require("./abortError");
 const sidecarPidFile = require("./sidecarPidFile");
 const { parseOfflineMessage, createOnlineAccumulator } = require("./parakeetWsResult");
-const { getModelType } = require("./parakeetModelInfo");
+const { getModelType, getSherpaModelType } = require("./parakeetModelInfo");
 const { pcm16ToFloat32 } = require("../utils/audioUtils");
 const {
   computeTranscriptionTimeoutMs,
@@ -33,6 +33,17 @@ const ONLINE_TIMEOUT_PER_AUDIO_SECOND_MS = 2000;
 const ONLINE_FINISH_IDLE_TIMEOUT_MS = 10000;
 // Must cover the model's 560ms chunk so the flush decodes the final words.
 const ONLINE_END_TAIL_PADDING_S = 0.6;
+const AVAILABLE_CPUS = getAvailableParallelism();
+// ONNX intra-op threads for one decode; the cap of four dates from #1131.
+const INTRA_OP_THREADS = Math.max(1, Math.min(4, Math.floor(AVAILABLE_CPUS * 0.75)));
+// sherpa-onnx's offline server decodes each connection on its own work thread.
+const OFFLINE_WORK_THREADS = 3;
+// How many segments the manager may hand the offline server at once: one per
+// work thread, but never so many that the intra-op pools oversubscribe the cores.
+const OFFLINE_DECODE_CONCURRENCY = Math.max(
+  1,
+  Math.min(OFFLINE_WORK_THREADS, Math.floor(AVAILABLE_CPUS / INTRA_OP_THREADS))
+);
 
 class ParakeetWsServer {
   constructor() {
@@ -110,7 +121,6 @@ class ParakeetWsServer {
     this.modelRuntime = runtime;
     this.language = language;
 
-    const threads = Math.max(1, Math.min(4, Math.floor(os.cpus().length * 0.75)));
     const modelArgs =
       getModelType(modelName) === "cohere-transcribe"
         ? [
@@ -123,15 +133,17 @@ class ParakeetWsServer {
             `--decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
             `--joiner=${path.join(modelDir, "joiner.int8.onnx")}`,
           ];
+    const sherpaModelType = getSherpaModelType(modelName);
     const args = [
       `--tokens=${path.join(modelDir, "tokens.txt")}`,
       ...modelArgs,
+      ...(runtime === "offline" && sherpaModelType ? [`--model-type=${sherpaModelType}`] : []),
       `--port=${this.port}`,
       ...(runtime === "online"
         ? [
             // --num-threads is ONNX intra-op parallelism for the single dictation
             // stream; --num-work-threads only spreads across concurrent streams.
-            `--num-threads=${threads}`,
+            `--num-threads=${INTRA_OP_THREADS}`,
             "--num-work-threads=2",
             // Default 10ms decode-loop tick adds idle time to faster-than-realtime decode.
             "--loop-interval-ms=2",
@@ -140,7 +152,7 @@ class ParakeetWsServer {
             // covers it app-side.
             "--warm-up=0",
           ]
-        : [`--num-threads=${threads}`]),
+        : [`--num-threads=${INTRA_OP_THREADS}`, `--num-work-threads=${OFFLINE_WORK_THREADS}`]),
     ];
 
     debugLogger.debug("Starting parakeet WS server", { port: this.port, modelName, runtime, args });
@@ -272,6 +284,11 @@ class ParakeetWsServer {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = null;
     }
+  }
+
+  // The online runtime is a single stream and takes segments in order.
+  get maxConcurrentDecodes() {
+    return this.modelRuntime === "online" ? 1 : OFFLINE_DECODE_CONCURRENCY;
   }
 
   // signal is optional; dictation and warm-up flows never pass one.

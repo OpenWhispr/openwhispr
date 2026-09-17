@@ -14,11 +14,11 @@ import {
   Pencil,
   Plus,
   Search,
+  Settings,
   Share2,
-  Smile,
   Trash2,
   Users,
-} from "lucide-react";
+} from "../icons";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -35,9 +35,10 @@ import { useDialogs } from "../../hooks/useDialogs";
 import { useToast } from "../ui/useToast";
 import { useNoteDragAndDrop, type NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
+import { useCanCreateTeamSpace } from "../../hooks/useCanCreateTeamSpace";
 import { useAuth } from "../../hooks/useAuth";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { EmojiPickerInput } from "./EmojiPickerInput";
+import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
   canChangeSpaceNoteScope,
   canDeleteSpaceNote,
@@ -53,13 +54,13 @@ import {
 } from "../../lib/notePermissions";
 import { groupTeamSpacesByWorkspace } from "../../lib/workspaceSelection";
 import { localMutationErrorKey } from "../../lib/localMutationError";
-import { deleteSpace, renameSpace } from "../../services/spaceActions";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
 import { getCachedPlatform } from "../../utils/platform";
 import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
-import SpaceMembersDialog from "./SpaceMembersDialog";
+import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
+import { defaultFolderDisplayName } from "./shared";
 import type { FolderItem, NoteItem, SpaceItem, WorkspaceRole } from "../../types/electron";
 import {
   folderContainerKey,
@@ -92,19 +93,20 @@ const FOLDER_INPUT_CLASS =
   "w-full h-6 bg-foreground/5 dark:bg-white/5 rounded px-2 text-xs text-foreground outline-none border border-primary/30 focus:border-primary/50";
 
 const ROW_BASE_CLASS =
-  "group relative flex items-center gap-1.5 rounded-md cursor-pointer select-none " +
+  "group relative flex items-center gap-2 rounded-md cursor-pointer select-none " +
   "transition-colors duration-150 outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
 
+// Button forces svg children to 16px; these 20px controls want the 12px icon they pass.
 const KEBAB_BUTTON_CLASS =
-  "h-5 w-5 rounded-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 " +
-  "transition-opacity text-muted-foreground/60 dark:text-muted-foreground/40 " +
+  "h-5 w-5 rounded-sm [&_svg]:size-3! opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 " +
+  "transition-opacity text-muted-foreground/70 dark:text-muted-foreground/70 " +
   "hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8";
 
-const KEBAB_TRIGGER_CLASS = cn(KEBAB_BUTTON_CLASS, "absolute right-1.5");
+const KEBAB_TRIGGER_CLASS = cn(KEBAB_BUTTON_CLASS, "absolute end-1.5");
 
 const HOVER_REVEAL_BUTTON_CLASS =
-  "h-5 w-5 rounded-sm opacity-0 focus-visible:opacity-100 transition-opacity " +
-  "text-muted-foreground/60 dark:text-muted-foreground/40 hover:text-foreground/60 " +
+  "h-5 w-5 rounded-sm [&_svg]:size-3! opacity-0 focus-visible:opacity-100 transition-opacity " +
+  "text-muted-foreground/70 dark:text-muted-foreground/70 hover:text-foreground/60 " +
   "hover:bg-foreground/5 active:bg-foreground/8";
 
 const MENU_ITEM_CLASS = "text-xs gap-2 rounded-md px-2 py-1";
@@ -192,15 +194,16 @@ function SectionHeader({
   isDragOver?: boolean;
   isDropSuccess?: boolean;
 }) {
+  // All-caps has no descenders, so its optical centre sits ~1px above the line box.
   const labelClassName =
-    "text-[10px] font-semibold uppercase tracking-wide text-foreground/50 select-none";
+    "translate-y-px text-[11px] font-medium uppercase tracking-[0.08em] text-foreground/55 select-none";
 
   return (
     <div
       role="none"
       {...dropHandlers}
       className={cn(
-        "group flex items-center justify-between h-6 px-2 mt-1 rounded-md",
+        "group flex items-center justify-between h-7 px-2 rounded-md",
         isDragOver && DROP_TARGET_CLASS,
         isDropSuccess && DROP_SUCCESS_CLASS,
         className
@@ -212,11 +215,11 @@ function SectionHeader({
           type="button"
           aria-expanded={expanded}
           onClick={onToggle}
-          className="flex h-full min-w-0 items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring/30"
+          className="flex h-full min-w-0 items-center gap-2 rounded-sm outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring/30"
         >
           <span
             aria-hidden="true"
-            className="relative h-3.5 w-3.5 flex items-center justify-center shrink-0"
+            className="relative h-4 w-4 flex items-center justify-center shrink-0"
           >
             {icon && (
               <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover:opacity-0">
@@ -224,10 +227,10 @@ function SectionHeader({
               </span>
             )}
             <ChevronRight
-              size={11}
+              size={12}
               className={cn(
-                "text-foreground/40 transition-all duration-150",
-                expanded && "rotate-90",
+                "text-foreground/60 transition-all duration-150",
+                expanded ? "rotate-90" : "rtl:rotate-180",
                 icon && "opacity-0 group-hover:opacity-100"
               )}
             />
@@ -292,7 +295,7 @@ function RowToggle({
         e.stopPropagation();
         onToggle();
       }}
-      className="relative h-4 w-4 flex items-center justify-center shrink-0 rounded-sm text-foreground/30 hover:text-foreground/60 transition-colors duration-150"
+      className="relative h-4 w-4 flex items-center justify-center shrink-0 rounded-sm text-foreground/50 hover:text-foreground/80 transition-colors duration-150"
     >
       {icon && (
         <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover:opacity-0">
@@ -303,7 +306,7 @@ function RowToggle({
         size={12}
         className={cn(
           "transition-all duration-150",
-          isExpanded && "rotate-90",
+          isExpanded ? "rotate-90" : "rtl:rotate-180",
           icon && "opacity-0 group-hover:opacity-100"
         )}
       />
@@ -351,15 +354,16 @@ function SearchableMoveSubmenu({
           <>
             <div className="relative px-1.5 py-0.5">
               <Search
-                size={9}
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-foreground/15 pointer-events-none"
+                size={12}
+                className="absolute start-3 top-1/2 -translate-y-1/2 text-foreground/45 pointer-events-none"
               />
               <input
+                dir="auto"
                 value={search}
                 onChange={(event) => onSearchChange(event.target.value)}
                 onKeyDown={(event) => event.stopPropagation()}
                 placeholder={searchPlaceholder}
-                className="input-inline w-full pl-4.5 pr-1 py-0.5 text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
+                className="input-inline w-full ps-8 pe-1 py-1 text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
               />
             </div>
             <DropdownMenuSeparator />
@@ -379,7 +383,7 @@ function SearchableMoveSubmenu({
 
 function SpaceMenuIcon({ space }: { space: SpaceItem }) {
   if (space.kind === "private") {
-    return <Lock size={11} className="text-muted-foreground/60 shrink-0" />;
+    return <Lock size={11} className="text-muted-foreground/70 shrink-0" />;
   }
   if (space.emoji) {
     return (
@@ -388,7 +392,7 @@ function SpaceMenuIcon({ space }: { space: SpaceItem }) {
       </span>
     );
   }
-  return <Users size={11} className="text-muted-foreground/60 shrink-0" />;
+  return <Users size={11} className="text-muted-foreground/70 shrink-0" />;
 }
 
 function SpaceRow({
@@ -400,13 +404,10 @@ function SpaceRow({
   isDragOver,
   isDropSuccess,
   dropHandlers,
-  canManage,
   onActivate,
   onToggle,
   onNewFolder,
-  onMembers,
-  onRename,
-  onDelete,
+  onSettings,
   a11y,
   t,
 }: {
@@ -418,13 +419,10 @@ function SpaceRow({
   isDragOver: boolean;
   isDropSuccess: boolean;
   dropHandlers: DropHandlers;
-  canManage: boolean;
   onActivate: () => void;
   onToggle: () => void;
   onNewFolder: () => void;
-  onMembers: () => void;
-  onRename: (focus: "name" | "emoji") => void;
-  onDelete: () => void;
+  onSettings: () => void;
   a11y: RowA11yProps;
   t: TFn;
 }) {
@@ -445,9 +443,10 @@ function SpaceRow({
       onClick={onActivate}
       title={isPrivate ? t("notes.spaces.privateTooltip") : displayName}
       {...dropHandlers}
+      style={treeRowActionClearanceStyle()}
       className={cn(
         ROW_BASE_CLASS,
-        "h-[30px] px-2",
+        "h-7 px-2",
         isActive
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4",
@@ -461,10 +460,10 @@ function SpaceRow({
         icon={
           isPrivate ? (
             <Lock
-              size={13}
+              size={14}
               className={cn(
                 "transition-colors duration-150",
-                isActive ? "text-primary" : "text-foreground/35 dark:text-foreground/20"
+                isActive ? "text-primary" : "text-foreground/55 dark:text-foreground/45"
               )}
             />
           ) : space.emoji ? (
@@ -473,27 +472,28 @@ function SpaceRow({
             </span>
           ) : (
             <Users
-              size={13}
+              size={14}
               className={cn(
                 "transition-colors duration-150",
                 isDragOver || isActive
                   ? "text-primary"
-                  : "text-foreground/35 dark:text-foreground/20"
+                  : "text-foreground/55 dark:text-foreground/45"
               )}
             />
           )
         }
       />
       <span
+        dir="auto"
         className={cn(
-          "text-xs truncate flex-1 transition-colors duration-150",
-          isDragOver || isActive ? "text-foreground font-medium" : "text-foreground/70"
+          "text-[13px] truncate flex-1 transition-colors duration-150",
+          isDragOver || isActive ? "text-foreground font-medium" : "text-foreground/85"
         )}
       >
         {displayName}
       </span>
       <DropSuccessCheck isDropSuccess={isDropSuccess} />
-      <span className="absolute right-1.5 flex items-center gap-px">
+      <span className="absolute end-1.5 flex items-center gap-px">
         <Button
           variant="ghost"
           size="icon"
@@ -520,60 +520,16 @@ function SpaceRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={4} className="min-w-36">
-              {space.cloud_space_id && (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onMembers();
-                  }}
-                  className={MENU_ITEM_CLASS}
-                >
-                  <Users size={11} className="text-muted-foreground/60" />
-                  {t("notes.spaces.teamsMembers.menu")}
-                </DropdownMenuItem>
-              )}
-              {canManage && (
-                <>
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRename("name");
-                    }}
-                    className={MENU_ITEM_CLASS}
-                  >
-                    <Pencil size={11} className="text-muted-foreground/60" />
-                    {t("notes.spaces.rename")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRename("emoji");
-                    }}
-                    className={MENU_ITEM_CLASS}
-                  >
-                    <Smile size={11} className="text-muted-foreground/60" />
-                    {t("notes.spaces.changeEmoji")}
-                  </DropdownMenuItem>
-                </>
-              )}
-              {canManage && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete();
-                    }}
-                    className={cn(
-                      MENU_ITEM_CLASS,
-                      "text-destructive focus:text-destructive focus:bg-destructive/10"
-                    )}
-                  >
-                    <Trash2 size={11} />
-                    {t("notes.spaces.deleteSpace")}
-                  </DropdownMenuItem>
-                </>
-              )}
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSettings();
+                }}
+                className={MENU_ITEM_CLASS}
+              >
+                <Settings size={11} className="text-muted-foreground/70" />
+                {t("notes.spaces.settings")}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -626,6 +582,7 @@ function FolderRow({
   t: TFn;
 }) {
   const [spaceSearch, setSpaceSearch] = useState("");
+  const displayName = defaultFolderDisplayName(folder, t);
   const canMoveToSpace = canManageDestructive && !folder.is_default && spaces.length > 1;
   const filteredSpaces = useMemo(
     () =>
@@ -644,19 +601,20 @@ function FolderRow({
       aria-expanded={isExpanded}
       aria-selected={isActive}
       aria-label={
-        count > 0 ? `${folder.name}, ${t("notes.spaces.noteCount", { count })}` : folder.name
+        count > 0 ? `${displayName}, ${t("notes.spaces.noteCount", { count })}` : displayName
       }
       tabIndex={a11y.tabIndex}
       ref={a11y.rowRef}
       onKeyDown={a11y.onKeyDown}
       onFocus={a11y.onFocus}
       onClick={onActivate}
-      title={folder.name}
+      title={displayName}
       {...dropHandlers}
+      style={treeRowActionClearanceStyle()}
       className={cn(
         ROW_BASE_CLASS,
-        "h-7 pr-2",
-        level === 1 ? "pl-2" : "pl-[14px]",
+        "h-7 pe-2",
+        level === 1 ? "ps-2" : "ps-[14px]",
         isActive
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4",
@@ -669,26 +627,27 @@ function FolderRow({
         onToggle={onToggle}
         icon={
           <Folder
-            size={13}
+            size={14}
             className={cn(
               "transition-colors duration-150",
-              isDragOver || isActive ? "text-primary" : "text-foreground/35 dark:text-foreground/20"
+              isDragOver || isActive ? "text-primary" : "text-foreground/55 dark:text-foreground/45"
             )}
           />
         }
       />
       <span
+        dir="auto"
         className={cn(
-          "text-xs truncate flex-1 transition-colors duration-150",
+          "text-[13px] truncate flex-1 transition-colors duration-150",
           isDragOver || isActive
             ? "text-foreground font-medium"
-            : "text-foreground/50 group-hover:text-foreground/70"
+            : "text-foreground/85 group-hover:text-foreground"
         )}
       >
-        {folder.name}
+        {displayName}
       </span>
       <DropSuccessCheck isDropSuccess={isDropSuccess} />
-      <span className="absolute right-1.5 flex items-center gap-px">
+      <span className="absolute end-1.5 flex items-center gap-px">
         <Button
           variant="ghost"
           size="icon"
@@ -723,7 +682,7 @@ function FolderRow({
                   }}
                   className={MENU_ITEM_CLASS}
                 >
-                  <ExternalLink size={11} className="text-muted-foreground/60" />
+                  <ExternalLink size={11} className="text-muted-foreground/70" />
                   {t("notes.context.showInFileManager", { manager: fileManagerName })}
                 </DropdownMenuItem>
               )}
@@ -737,12 +696,12 @@ function FolderRow({
                     }}
                     className={MENU_ITEM_CLASS}
                   >
-                    <Pencil size={11} className="text-muted-foreground/60" />
+                    <Pencil size={11} className="text-muted-foreground/70" />
                     {t("notes.context.rename")}
                   </DropdownMenuItem>
                   {canMoveToSpace && (
                     <SearchableMoveSubmenu
-                      icon={<Users size={11} className="text-muted-foreground/60" />}
+                      icon={<Users size={11} className="text-muted-foreground/70" />}
                       label={t("notes.spaces.moveToSpace")}
                       itemCount={spaces.length}
                       search={spaceSearch}
@@ -762,13 +721,15 @@ function FolderRow({
                             className={MENU_ITEM_CLASS}
                           >
                             <SpaceMenuIcon space={space} />
-                            <span className="truncate flex-1">{spaceDisplayName(space, t)}</span>
+                            <span dir="auto" className="truncate flex-1">
+                              {spaceDisplayName(space, t)}
+                            </span>
                             {isCurrent && <Check size={9} className="text-primary shrink-0" />}
                           </DropdownMenuItem>
                         );
                       })}
                       {spaceSearch && filteredSpaces.length === 0 && (
-                        <p className="text-xs text-foreground/20 text-center py-1.5">
+                        <p className="text-xs text-foreground/50 text-center py-1.5">
                           {t("notes.spaces.noSpacesFound")}
                         </p>
                       )}
@@ -874,7 +835,7 @@ function NoteLeaf({
       for (const folder of folders.filter((f) => f.space_id === space.id)) {
         options.push({
           key: folderContainerKey(folder.id),
-          label: folder.name,
+          label: defaultFolderDisplayName(folder, t),
           space,
           target: { spaceId: space.id, folderId: folder.id },
           isCurrent: note.folder_id === folder.id,
@@ -904,12 +865,15 @@ function NoteLeaf({
       }}
       className={MENU_ITEM_CLASS}
     >
-      <span className="truncate flex-1">{label}</span>
+      <span dir="auto" className="truncate flex-1">
+        {label}
+      </span>
       {option.isCurrent && <Check size={9} className="text-primary shrink-0" />}
     </DropdownMenuItem>
   );
 
   const title = note.title || t("notes.list.untitled");
+  const hasActions = noteFilesEnabled || canMove || canDelete;
 
   return (
     <div
@@ -923,10 +887,11 @@ function NoteLeaf({
       onClick={onOpen}
       title={title}
       {...(canMove ? dragHandlers : {})}
+      style={hasActions ? treeRowActionClearanceStyle(1) : undefined}
       className={cn(
         ROW_BASE_CLASS,
-        "h-7 pr-2",
-        indentClassName ?? (level === 3 ? "pl-10" : "pl-[14px]"),
+        "h-7 pe-2",
+        indentClassName ?? (level === 3 ? "ps-10" : "ps-[14px]"),
         isActive
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4",
@@ -934,20 +899,21 @@ function NoteLeaf({
       )}
     >
       <FileText
-        size={13}
+        size={14}
         className={cn(
           "shrink-0 transition-colors duration-150",
           isActive
             ? "text-primary"
-            : "text-foreground/30 dark:text-foreground/20 group-hover:text-foreground/45 dark:group-hover:text-foreground/30"
+            : "text-foreground/50 dark:text-foreground/45 group-hover:text-foreground/70 dark:group-hover:text-foreground/55"
         )}
       />
       <span
+        dir="auto"
         className={cn(
-          "text-xs truncate flex-1 transition-colors duration-150",
+          "text-[13px] truncate flex-1 transition-colors duration-150",
           isActive
             ? "text-foreground font-medium"
-            : "text-foreground/60 group-hover:text-foreground/80"
+            : "text-foreground/85 group-hover:text-foreground"
         )}
       >
         {title}
@@ -957,10 +923,10 @@ function NoteLeaf({
           size={11}
           role="img"
           aria-label={t("notes.list.shared")}
-          className="text-foreground/40 shrink-0 transition-opacity group-hover:opacity-0"
+          className="text-foreground/45 shrink-0 transition-opacity group-hover:opacity-0"
         />
       )}
-      {(noteFilesEnabled || canMove || canDelete) && (
+      {hasActions && (
         <DropdownMenu
           onOpenChange={(open) => {
             if (!open) {
@@ -991,7 +957,7 @@ function NoteLeaf({
                   }}
                   className={MENU_ITEM_CLASS}
                 >
-                  <ExternalLink size={11} className="text-muted-foreground/60" />
+                  <ExternalLink size={11} className="text-muted-foreground/70" />
                   {t("notes.context.showInFileManager", { manager: fileManagerName })}
                 </DropdownMenuItem>
                 {(canMove || canDelete) && <DropdownMenuSeparator />}
@@ -999,7 +965,7 @@ function NoteLeaf({
             )}
             {canMove && (
               <SearchableMoveSubmenu
-                icon={<FolderOpen size={11} className="text-muted-foreground/60" />}
+                icon={<FolderOpen size={11} className="text-muted-foreground/70" />}
                 label={multiSpace ? t("notes.spaces.moveTo") : t("notes.context.moveToFolder")}
                 itemCount={moveOptions.length}
                 search={moveSearch}
@@ -1009,6 +975,7 @@ function NoteLeaf({
                   isCreating ? (
                     <div className="px-1">
                       <input
+                        dir="auto"
                         autoFocus
                         value={newFolderName}
                         onChange={(e) => setNewFolderName(e.target.value)}
@@ -1025,7 +992,7 @@ function NoteLeaf({
                           }
                         }}
                         placeholder={t("notes.folders.folderName")}
-                        className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/20 outline-none border-none appearance-none"
+                        className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
                       />
                     </div>
                   ) : (
@@ -1034,7 +1001,7 @@ function NoteLeaf({
                         e.preventDefault();
                         setIsCreating(true);
                       }}
-                      className={cn(MENU_ITEM_CLASS, "text-foreground/40")}
+                      className={cn(MENU_ITEM_CLASS, "text-foreground/70")}
                     >
                       <Plus size={10} />
                       {t("notes.context.newFolder")}
@@ -1053,7 +1020,7 @@ function NoteLeaf({
                       )
                     )}
                     {filteredOptions.length === 0 && (
-                      <p className="text-xs text-foreground/20 text-center py-1.5">
+                      <p className="text-xs text-foreground/50 text-center py-1.5">
                         {t("notes.context.noResults")}
                       </p>
                     )}
@@ -1068,7 +1035,9 @@ function NoteLeaf({
                       <DropdownMenuSub key={space.id}>
                         <DropdownMenuSubTrigger className={SUB_TRIGGER_CLASS}>
                           <SpaceMenuIcon space={space} />
-                          <span className="truncate flex-1">{spaceDisplayName(space, t)}</span>
+                          <span dir="auto" className="truncate flex-1">
+                            {spaceDisplayName(space, t)}
+                          </span>
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent
                           sideOffset={4}
@@ -1120,7 +1089,7 @@ function SkeletonRows() {
   return (
     <div className="space-y-px" aria-hidden="true">
       {["w-3/5", "w-2/5", "w-1/2"].map((width) => (
-        <div key={width} className="flex items-center h-7 pl-[18px] pr-2">
+        <div key={width} className="flex items-center h-7 ps-[18px] pe-2">
           <div
             className={cn(
               "h-2.5 rounded-full bg-foreground/6 dark:bg-white/6 animate-pulse",
@@ -1140,7 +1109,7 @@ export default function SpacesTree({
   onNewNote,
   onShowStructureIntro,
 }: SpacesTreeProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast, dismiss } = useToast();
   const fileManagerName = getFileManagerName();
 
@@ -1155,6 +1124,7 @@ export default function SpacesTree({
   const isTreeLoading = useIsTreeLoading();
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
+  const canCreateTeamSpace = useCanCreateTeamSpace();
   const { workspaces, loaded: workspacesLoaded } = useWorkspace();
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const shareByCloudId = useShareCache();
@@ -1163,15 +1133,10 @@ export default function SpacesTree({
   const [newFolderName, setNewFolderName] = useState("");
   const [renamingFolderId, setRenamingFolderId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [renamingSpaceId, setRenamingSpaceId] = useState<number | null>(null);
-  const [renameSpaceName, setRenameSpaceName] = useState("");
-  const [renameSpaceEmoji, setRenameSpaceEmoji] = useState("");
-  const [spaceRenameFocus, setSpaceRenameFocus] = useState<"name" | "emoji">("name");
-  const emojiPickerOpenRef = useRef(false);
+  const [settingsSpaceId, setSettingsSpaceId] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [createSpaceWorkspaceId, setCreateSpaceWorkspaceId] = useState<string | null>(null);
-  const [membersSpaceId, setMembersSpaceId] = useState<number | null>(null);
-  const [membersOpen, setMembersOpen] = useState(false);
   const [deleteSpaceTarget, setDeleteSpaceTarget] = useState<SpaceItem | null>(null);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -1215,12 +1180,6 @@ export default function SpacesTree({
   // Signed-out users never load workspaces (mirrored team spaces render flat);
   // errors still flip `loaded`, so this can't skeleton forever.
   const workspacesPending = isSignedIn && !workspacesLoaded;
-
-  // The server 403s team creation for plain members; no-workspace users get the create funnel.
-  const canCreateTeamSpace =
-    isSignedIn &&
-    workspacesLoaded &&
-    (workspaces.length === 0 || workspaces.some((w) => canManageWorkspace(w.role)));
 
   const currentUserId = user?.id ?? null;
   const workspaceRoleFor = (space: SpaceItem | undefined): WorkspaceRole | null =>
@@ -1290,7 +1249,8 @@ export default function SpacesTree({
 
   const targetLabel = (target: NoteMoveTarget): string => {
     if (target.folderId != null) {
-      return folders.find((f) => f.id === target.folderId)?.name ?? "";
+      const folder = folders.find((f) => f.id === target.folderId);
+      return folder ? defaultFolderDisplayName(folder, t) : "";
     }
     const space = spaces.find((s) => s.id === target.spaceId);
     return space ? spaceDisplayName(space, t) : "";
@@ -1575,11 +1535,9 @@ export default function SpacesTree({
     setRenameValue(folder.name);
   };
 
-  const startRenameSpace = (space: SpaceItem, focus: "name" | "emoji") => {
-    setRenamingSpaceId(space.id);
-    setRenameSpaceName(space.name);
-    setRenameSpaceEmoji(space.emoji ?? "");
-    setSpaceRenameFocus(focus);
+  const openSpaceSettings = (space: SpaceItem) => {
+    setSettingsSpaceId(space.id);
+    setSettingsOpen(true);
   };
 
   const requestDeleteFolder = (folder: FolderItem) => {
@@ -1610,25 +1568,32 @@ export default function SpacesTree({
     setDeleteSpaceTarget(space);
   };
 
-  const performDeleteSpace = async (space: SpaceItem) => {
-    const result = await deleteSpace(space);
-    if (!result.success) {
-      toast({
-        title: t("notes.spaces.couldNotDelete"),
-        description: t(localMutationErrorKey(result.error)),
-        variant: "destructive",
-      });
-      return;
-    }
-    toast({ title: t("notes.spaces.deleted", { space: space.name }) });
-  };
-
   const handleRowKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, row: TreeRow) => {
     if (e.target !== e.currentTarget) return;
     const idx = visibleRows.findIndex((r) => r.key === row.key);
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") {
       e.preventDefault();
       if (activeContext) onNewNote(activeContext.spaceId, activeContext.folderId);
+      return;
+    }
+    const horizontalIntent = treeHorizontalIntent(e.key, i18n.dir());
+    if (horizontalIntent === "inward") {
+      e.preventDefault();
+      if (row.type === "note") return;
+      if (!expanded.has(row.key)) {
+        setContainerExpanded(row.key, true);
+      } else if (visibleRows[idx + 1]?.parentKey === row.key) {
+        focusRow(visibleRows[idx + 1]?.key);
+      }
+      return;
+    }
+    if (horizontalIntent === "outward") {
+      e.preventDefault();
+      if (row.type !== "note" && expanded.has(row.key)) {
+        setContainerExpanded(row.key, false);
+      } else if (row.parentKey) {
+        focusRow(row.parentKey);
+      }
       return;
     }
     switch (e.key) {
@@ -1640,23 +1605,6 @@ export default function SpacesTree({
         e.preventDefault();
         focusRow(visibleRows[idx - 1]?.key);
         break;
-      case "ArrowRight":
-        e.preventDefault();
-        if (row.type === "note") break;
-        if (!expanded.has(row.key)) {
-          setContainerExpanded(row.key, true);
-        } else if (visibleRows[idx + 1]?.parentKey === row.key) {
-          focusRow(visibleRows[idx + 1]?.key);
-        }
-        break;
-      case "ArrowLeft":
-        e.preventDefault();
-        if (row.type !== "note" && expanded.has(row.key)) {
-          setContainerExpanded(row.key, false);
-        } else if (row.parentKey) {
-          focusRow(row.parentKey);
-        }
-        break;
       case "F2":
         e.preventDefault();
         if (row.type === "folder" && !row.folder.is_default) {
@@ -1666,7 +1614,7 @@ export default function SpacesTree({
           row.space.kind === "team" &&
           canManageTeamSpace(row.space)
         ) {
-          startRenameSpace(row.space, "name");
+          openSpaceSettings(row.space);
         }
         break;
       case "Delete":
@@ -1752,27 +1700,6 @@ export default function SpacesTree({
     }
   };
 
-  const confirmSpaceRename = async () => {
-    const spaceId = renamingSpaceId;
-    if (spaceId == null) return;
-    const space = spaces.find((s) => s.id === spaceId);
-    const name = renameSpaceName.trim();
-    const emoji = renameSpaceEmoji.trim() || null;
-    setRenamingSpaceId(null);
-    if (!space || !name) return;
-    if (name === space.name && emoji === (space.emoji ?? null)) return;
-    const result = await renameSpace(space, { name, emoji });
-    if (!result.success) {
-      toast({
-        title: t("notes.spaces.couldNotRename"),
-        description: t(localMutationErrorKey(result.error)),
-        variant: "destructive",
-      });
-      return;
-    }
-    toast({ title: t("notes.spaces.renamed", { space: name }) });
-  };
-
   const renderNote = (
     note: NoteItem,
     level: 1 | 2 | 3,
@@ -1814,8 +1741,9 @@ export default function SpacesTree({
 
     if (isRenaming) {
       return (
-        <div key={folder.id} role="none" className={cn(level === 1 ? "pl-2" : "pl-[14px]", "pr-2")}>
+        <div key={folder.id} role="none" className={cn(level === 1 ? "ps-2" : "ps-[14px]", "pe-2")}>
           <input
+            dir="auto"
             autoFocus
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
@@ -1872,7 +1800,7 @@ export default function SpacesTree({
         <TreeChildren open={isExpanded}>
           <div className="space-y-px">
             {(notesByContainer[folderKey] ?? []).map((note) =>
-              level === 1 ? renderNote(note, 2, folderKey, "pl-8") : renderNote(note, 3, folderKey)
+              level === 1 ? renderNote(note, 2, folderKey, "ps-8") : renderNote(note, 3, folderKey)
             )}
           </div>
         </TreeChildren>
@@ -1898,8 +1826,9 @@ export default function SpacesTree({
           flattened ? renderFolder(folder, undefined, 1) : renderFolder(folder, spaceKey)
         )}
         {creatingFolderSpaceId === space.id && (
-          <div className={cn(flattened ? "pl-2" : "pl-[14px]", "pr-2")}>
+          <div className={cn(flattened ? "ps-2" : "ps-[14px]", "pe-2")}>
             <input
+              dir="auto"
               autoFocus
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
@@ -1916,17 +1845,17 @@ export default function SpacesTree({
               }}
               onBlur={confirmCreateFolder}
               placeholder={t("notes.folders.folderName")}
-              className={cn(FOLDER_INPUT_CLASS, "placeholder:text-foreground/20")}
+              className={cn(FOLDER_INPUT_CLASS, "placeholder:text-foreground/45")}
             />
           </div>
         )}
         {(rootNotes ?? []).map((note) =>
-          flattened ? renderNote(note, 1, undefined, "pl-[30px]") : renderNote(note, 2, spaceKey)
+          flattened ? renderNote(note, 1, undefined, "ps-[30px]") : renderNote(note, 2, spaceKey)
         )}
         {showSkeletons && <SkeletonRows />}
         {showEmptySpace && (
-          <div className="pl-[18px] pr-2 py-1">
-            <p className="text-xs text-foreground/40 leading-relaxed mb-1.5">
+          <div className="ps-[18px] pe-2 py-1">
+            <p className="text-xs text-foreground/60 leading-relaxed mb-1.5">
               {t("notes.spaces.emptySpace", { space: space.name })}
             </p>
             <Button
@@ -1956,91 +1885,38 @@ export default function SpacesTree({
       (spaceRootCounts[space.id] ?? 0);
     return (
       <div key={space.id} role="none">
-        {renamingSpaceId === space.id ? (
-          <div
-            role="none"
-            className="flex items-center gap-1 h-[30px] px-2"
-            onBlur={(e) => {
-              // The emoji grid is portaled: while it's open, focus sits outside
-              // this row and a blur-commit would unmount the picker mid-pick.
-              if (emojiPickerOpenRef.current) return;
-              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                confirmSpaceRename();
-              }
-            }}
-            onKeyDown={(e) => {
-              // Portal events bubble through the React tree — Enter/Escape
-              // inside the open picker must not commit or cancel the rename.
-              if (emojiPickerOpenRef.current) return;
-              if (e.key === "Enter") {
-                confirmSpaceRename();
-                focusRowSoon(spaceKey);
-              }
-              if (e.key === "Escape") {
-                setRenamingSpaceId(null);
-                focusRowSoon(spaceKey);
-              }
-            }}
-          >
-            <EmojiPickerInput
-              autoFocus={spaceRenameFocus === "emoji"}
-              value={renameSpaceEmoji}
-              onChange={setRenameSpaceEmoji}
-              ariaLabel={t("notes.spaces.changeEmoji")}
-              className={cn(FOLDER_INPUT_CLASS, "w-8 shrink-0 px-0 text-center")}
-              onPickerOpenChange={(open) => {
-                emojiPickerOpenRef.current = open;
-              }}
-            />
-            <input
-              autoFocus={spaceRenameFocus === "name"}
-              value={renameSpaceName}
-              onChange={(e) => setRenameSpaceName(e.target.value)}
-              onFocus={(e) => e.currentTarget.select()}
-              aria-label={t("notes.spaces.rename")}
-              className={FOLDER_INPUT_CLASS}
-            />
-          </div>
-        ) : (
-          <SpaceRow
-            space={space}
-            displayName={displayName}
-            isExpanded={isExpanded}
-            isActive={
-              activeNoteId == null &&
-              activeContext?.spaceId === space.id &&
-              activeContext.folderId == null
-            }
-            count={noteCount}
-            isDragOver={dragState.dragOverKey === spaceKey}
-            isDropSuccess={dragState.dropSuccessKey === spaceKey}
-            dropHandlers={dropTargetHandlers({ spaceId: space.id, folderId: null })}
-            canManage={canManageTeamSpace(space)}
-            onActivate={() => activateRow({ type: "space", key: spaceKey, space })}
-            onToggle={() => toggleContainerExpanded(spaceKey)}
-            onNewFolder={() => startCreateFolder(space)}
-            onMembers={() => {
-              setMembersSpaceId(space.id);
-              setMembersOpen(true);
-            }}
-            onRename={(focus) => startRenameSpace(space, focus)}
-            onDelete={() => requestDeleteSpace(space)}
-            a11y={a11yFor(spaceKey)}
-            t={t}
-          />
-        )}
+        <SpaceRow
+          space={space}
+          displayName={displayName}
+          isExpanded={isExpanded}
+          isActive={
+            activeNoteId == null &&
+            activeContext?.spaceId === space.id &&
+            activeContext.folderId == null
+          }
+          count={noteCount}
+          isDragOver={dragState.dragOverKey === spaceKey}
+          isDropSuccess={dragState.dropSuccessKey === spaceKey}
+          dropHandlers={dropTargetHandlers({ spaceId: space.id, folderId: null })}
+          onActivate={() => activateRow({ type: "space", key: spaceKey, space })}
+          onToggle={() => toggleContainerExpanded(spaceKey)}
+          onNewFolder={() => startCreateFolder(space)}
+          onSettings={() => openSpaceSettings(space)}
+          a11y={a11yFor(spaceKey)}
+          t={t}
+        />
         <TreeChildren open={isExpanded}>{renderSpaceContents(space)}</TreeChildren>
       </div>
     );
   };
 
-  const membersSpace =
-    membersSpaceId != null ? spaces.find((s) => s.id === membersSpaceId) : undefined;
+  const settingsSpace =
+    settingsSpaceId != null ? spaces.find((s) => s.id === settingsSpaceId) : undefined;
 
   if (isTreeLoading && spaces.length === 0) {
     return (
       <div className="flex-1 flex items-start justify-center py-8">
-        <Loader2 size={12} className="animate-spin text-foreground/15" />
+        <Loader2 size={12} className="animate-spin text-foreground/45" />
       </div>
     );
   }
@@ -2050,12 +1926,12 @@ export default function SpacesTree({
       <div
         role="tree"
         aria-label={t("notes.list.title")}
-        className="flex-1 overflow-y-auto px-1.5 pb-2 space-y-px"
+        className="scrollbar-hidden flex-1 overflow-y-auto px-1.5 pb-2 space-y-px"
       >
         <div role="none" className="group/section">
           <SectionHeader
             label={t("notes.spaces.privateSpaces")}
-            icon={<Lock size={11} className="text-foreground/40" />}
+            icon={<Lock size={12} className="text-foreground/55" />}
             expanded={privateSectionExpanded}
             onToggle={() => {
               if (privateSpace) toggleContainerExpanded(spaceContainerKey(privateSpace.id));
@@ -2101,7 +1977,7 @@ export default function SpacesTree({
                   ? t("workspaces.switcher.workspaces")
                   : t("notes.spaces.teamSpaces")
               }
-              className="mt-3"
+              className="mt-4"
               action={
                 <div className="flex items-center gap-px">
                   {onShowStructureIntro && (
@@ -2145,11 +2021,12 @@ export default function SpacesTree({
                       >
                         <div
                           role="none"
-                          className="flex items-center justify-between h-5 pl-4 pr-2"
+                          className="flex items-center justify-between h-5 ps-4 pe-2"
                         >
                           <span
+                            dir="auto"
                             title={workspace.name}
-                            className="min-w-0 text-[10px] font-medium text-foreground/40 truncate"
+                            className="min-w-0 text-[10px] font-medium text-foreground/60 truncate"
                           >
                             {workspace.name}
                           </span>
@@ -2179,7 +2056,7 @@ export default function SpacesTree({
                   (canCreateTeamSpace ? (
                     // Grouped view already offers a + on each manageable workspace row.
                     !showWorkspaceGroups && (
-                      <div className="pl-[18px] pr-2 py-1">
+                      <div className="ps-[18px] pe-2 py-1">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -2192,7 +2069,7 @@ export default function SpacesTree({
                       </div>
                     )
                   ) : (
-                    <p className="pl-[18px] pr-2 py-1 text-xs text-foreground/40 leading-relaxed">
+                    <p className="ps-[18px] pe-2 py-1 text-xs text-foreground/60 leading-relaxed">
                       {t("notes.spaces.emptyTeamHint")}
                     </p>
                   ))}
@@ -2211,15 +2088,20 @@ export default function SpacesTree({
         initialWorkspaceId={createSpaceWorkspaceId}
       />
 
-      {membersSpace && (
-        <SpaceMembersDialog space={membersSpace} open={membersOpen} onOpenChange={setMembersOpen} />
+      {settingsSpace && (
+        <SpaceSettingsDialog
+          space={settingsSpace}
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          onCloseAutoFocus={(event) => {
+            // No trigger element to return to: the row the settings belong to is the natural target.
+            event.preventDefault();
+            focusRow(spaceContainerKey(settingsSpace.id));
+          }}
+        />
       )}
 
-      <DeleteSpaceDialog
-        space={deleteSpaceTarget}
-        onClose={() => setDeleteSpaceTarget(null)}
-        onConfirm={(space) => void performDeleteSpace(space)}
-      />
+      <DeleteSpaceDialog space={deleteSpaceTarget} onClose={() => setDeleteSpaceTarget(null)} />
 
       <ConfirmDialog
         open={confirmDialog.open}

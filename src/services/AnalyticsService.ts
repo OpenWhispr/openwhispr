@@ -1,9 +1,37 @@
-import { cloudDelete, cloudGet, cloudPost, isAuthContextError } from "./cloudApi";
-import type { AnalyticsSummary, PendingAnalyticsEvent } from "../types/electron";
+import {
+  cloudDelete,
+  cloudDeleteForAuthGeneration,
+  cloudGet,
+  cloudPost,
+  cloudPostForAuthGeneration,
+  isAuthContextError,
+} from "./cloudApi";
+import type {
+  AnalyticsSummary,
+  AnalyticsSyncContext,
+  PendingAnalyticsEvent,
+} from "../types/electron";
+import { ANALYTICS_HISTORICAL_COUNTER_VERSION } from "../helpers/analytics";
 
 const BATCH_SIZE = 200;
+// A pass uploads at most this many batches. Insights waits on a pass before
+// it can read the account summary, so an unbounded drain would hold the view's
+// spinner — and hammer the batch endpoint — for the length of a whole history
+// backfill. What is left over stays pending and still counts as moved work,
+// which keeps the ambient pass cadence tight until the queue is empty.
+const MAX_BATCHES_PER_PASS = 5;
+// How long to leave reconstructed history alone after an API refuses the
+// version it is uploaded at. Short enough that a deploy is picked up within the
+// hour, long enough that a deployment which will never support it costs a
+// couple of dozen requests a day instead of one per pass. A capable answer
+// clears it early, but only a batch that is actually sent can carry one -- on a
+// queue of pure history there is nothing to ride along, so recovery there waits
+// out the window.
+const HISTORICAL_RETRY_COOLDOWN_MS = 60 * 60 * 1000;
+let historicalRetryBlockedUntil = 0;
 export const ANALYTICS_SUMMARY_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const ANALYTICS_REMOTE_REFRESH_DEBOUNCE_MS = 250;
+const requestedHistoryBackfillAccounts = new Set<string>();
 
 export function subscribeToAnalyticsRefresh(
   refresh: () => void | Promise<void>,
@@ -91,27 +119,53 @@ export function subscribeToAnalyticsRefresh(
   };
 }
 
-async function pushAnalyticsDeletes(): Promise<void> {
+async function deleteFromCloud(
+  path: string,
+  body: unknown,
+  context?: AnalyticsSyncContext
+): Promise<void> {
+  if (context) {
+    await cloudDeleteForAuthGeneration(path, body, context.authGeneration);
+    return;
+  }
+  await cloudDelete(path, body);
+}
+
+async function postToCloud<T>(
+  path: string,
+  body: unknown,
+  context?: AnalyticsSyncContext
+): Promise<T> {
+  return context
+    ? cloudPostForAuthGeneration<T>(path, body, context.authGeneration)
+    : cloudPost<T>(path, body);
+}
+
+async function pushAnalyticsDeletes(context?: AnalyticsSyncContext): Promise<void> {
   while (true) {
-    const pending = await window.electronAPI.getPendingAnalyticsDeletes(BATCH_SIZE);
+    const pending = await window.electronAPI.getPendingAnalyticsDeletes(BATCH_SIZE, context);
     if (pending.length === 0) return;
 
     const eventIds = pending.map((row) => row.event_id);
-    await cloudDelete("/api/analytics/events/delete", { eventIds });
-    await window.electronAPI.hardDeleteAnalyticsEvents(eventIds);
+    await deleteFromCloud("/api/analytics/events/delete", { eventIds }, context);
+    await window.electronAPI.hardDeleteAnalyticsEvents(eventIds, context);
     if (pending.length < BATCH_SIZE) return;
   }
 }
 
-async function pushAnalyticsClear(): Promise<void> {
-  const pending = await window.electronAPI.getPendingAnalyticsClear();
+async function pushAnalyticsClear(context?: AnalyticsSyncContext): Promise<void> {
+  const pending = await window.electronAPI.getPendingAnalyticsClear(context);
   if (!pending) return;
 
-  await cloudDelete("/api/analytics/events/delete", {
-    deleteAll: true,
-    clearedThrough: pending.cleared_through,
-  });
-  await window.electronAPI.completeAnalyticsClear(pending.cleared_through);
+  await deleteFromCloud(
+    "/api/analytics/events/delete",
+    {
+      deleteAll: true,
+      clearedThrough: pending.cleared_through,
+    },
+    context
+  );
+  await window.electronAPI.completeAnalyticsClear(pending.cleared_through, context);
 }
 
 // Erasures and uploads are independent work that happens to share a pass. A
@@ -135,7 +189,13 @@ async function runStage(name: string, stage: () => Promise<void>): Promise<void>
 // coalescing keeps a caller that may upload from joining one that may not.
 let passQueue: Promise<unknown> = Promise.resolve();
 
-export function syncPendingAnalytics(options: { uploadAllowed?: boolean } = {}): Promise<number> {
+type AnalyticsUploadGate = boolean | (() => boolean | Promise<boolean>);
+interface AnalyticsSyncOptions {
+  uploadAllowed?: AnalyticsUploadGate;
+  context?: AnalyticsSyncContext;
+}
+
+export function syncPendingAnalytics(options: AnalyticsSyncOptions = {}): Promise<number> {
   const pass = passQueue.then(
     () => runAnalyticsPass(options),
     () => runAnalyticsPass(options)
@@ -146,12 +206,18 @@ export function syncPendingAnalytics(options: { uploadAllowed?: boolean } = {}):
 
 async function runAnalyticsPass({
   uploadAllowed = true,
-}: { uploadAllowed?: boolean } = {}): Promise<number> {
+  context,
+}: AnalyticsSyncOptions = {}): Promise<number> {
   // Erasures still go first, so a clear cannot race an older batch and
   // recreate data the user asked us to erase.
-  await runStage("clear", pushAnalyticsClear);
-  await runStage("deletes", pushAnalyticsDeletes);
-  if (!uploadAllowed) return 0;
+  await runStage("clear", () => pushAnalyticsClear(context));
+  await runStage("deletes", () => pushAnalyticsDeletes(context));
+  // Resolve functions only after this pass reaches the head of passQueue.
+  // Consent can be revoked while an earlier pass is still running, so queuing
+  // an already-resolved `true` would let the delayed pass upload afterward.
+  const canUpload = async (): Promise<boolean> =>
+    typeof uploadAllowed === "function" ? uploadAllowed() : uploadAllowed;
+  if (!(await canUpload())) return 0;
 
   let synced = 0;
   // Ids this pass has already offered. The server deliberately withholds rows
@@ -160,30 +226,67 @@ async function runAnalyticsPass({
   // batch and one stuck row costs an extra POST per batch behind it.
   const offered = new Set<string>();
 
-  while (true) {
-    const events: PendingAnalyticsEvent[] =
-      await window.electronAPI.getPendingAnalyticsEvents(BATCH_SIZE);
+  for (let batch = 0; batch < MAX_BATCHES_PER_PASS; batch += 1) {
+    // Re-check between batches. Revoking consent while a >200-row drain is in
+    // flight cannot cancel the active request, but it must stop the next one.
+    if (!(await canUpload())) return synced;
+    const events: PendingAnalyticsEvent[] = await window.electronAPI.getPendingAnalyticsEvents(
+      BATCH_SIZE,
+      context
+    );
     const fresh = events.filter((event) => !offered.has(event.event_id));
     if (fresh.length === 0) return synced;
     for (const event of fresh) offered.add(event.event_id);
 
-    // `accepted` is an ack list, not a list of stored rows. The endpoint
-    // validates per event and deliberately echoes back the ids it refused as
-    // permanently invalid, so marking exactly `accepted` as synced is what
-    // retires them. Narrowing this to the ids that were actually stored -- or
-    // deriving it from the sibling `rejected` field -- would leave a row that
-    // can never validate at the head of the queue forever. A batch the server
-    // refuses outright throws and stays pending for the next pass.
-    const result = await cloudPost<{ accepted: string[] }>("/api/analytics/events/batch", {
-      events: fresh,
-    });
-    const accepted = Array.isArray(result?.accepted) ? result.accepted : [];
+    // An API that predates version zero refuses it identically every time, and
+    // only a deploy can change that answer -- so re-offering those rows on the
+    // ambient pass, on every window focus and after every dictation just repeats
+    // one refusal forever. Back off from history alone: it sorts last, so a
+    // batch that still holds live events is unaffected.
+    const uploadable =
+      Date.now() < historicalRetryBlockedUntil
+        ? fresh.filter((event) => event.counter_version !== ANALYTICS_HISTORICAL_COUNTER_VERSION)
+        : fresh;
+    if (uploadable.length === 0) return synced;
 
-    const { updated } = await window.electronAPI.markAnalyticsEventsSynced(accepted);
+    // `accepted` is an ack list, not a list of stored rows. Only a capable API
+    // can distinguish a permanently invalid version-zero row from an older
+    // deployment rejecting that version altogether. Keep those ids pending
+    // when the capability is absent so an API rollback cannot destroy history.
+    if (!(await canUpload())) return synced;
+    const result = await postToCloud<{
+      accepted?: string[];
+      rejected?: string[];
+      supportsHistoricalCounterVersion?: boolean;
+    }>("/api/analytics/events/batch", { events: uploadable }, context);
+    const accepted = Array.isArray(result?.accepted) ? result.accepted : [];
+    const rejected = new Set(Array.isArray(result?.rejected) ? result.rejected : []);
+    const historicalEventIds = new Set(
+      uploadable
+        .filter((event) => event.counter_version === ANALYTICS_HISTORICAL_COUNTER_VERSION)
+        .map((event) => event.event_id)
+    );
+    const acknowledged =
+      result?.supportsHistoricalCounterVersion === true
+        ? accepted
+        : accepted.filter((eventId) => !rejected.has(eventId) || !historicalEventIds.has(eventId));
+    // Any history this answer did not take arms the backoff, not just an
+    // explicit rejection: an older response shape simply omits the rows it
+    // refused. Clearing on the capable answer has to come first, so a capable
+    // API can still retire a genuinely invalid row without arming anything.
+    const acknowledgedIds = new Set(acknowledged);
+    if (result?.supportsHistoricalCounterVersion === true) {
+      historicalRetryBlockedUntil = 0;
+    } else if ([...historicalEventIds].some((eventId) => !acknowledgedIds.has(eventId))) {
+      historicalRetryBlockedUntil = Date.now() + HISTORICAL_RETRY_COOLDOWN_MS;
+    }
+
+    const { updated } = await window.electronAPI.markAnalyticsEventsSynced(acknowledged, context);
     synced += updated;
     // The whole queue fit in one read, so there is nothing behind this batch.
     if (events.length < BATCH_SIZE) return synced;
   }
+  return synced;
 }
 
 const REQUIRED_NONNEGATIVE_SUMMARY_FIELDS = [
@@ -227,25 +330,52 @@ function isAnalyticsSummary(value: unknown): value is AnalyticsSummary {
     value.averageWpm === null || isNonnegativeFiniteNumber(value.averageWpm);
   const coverageIsValid =
     isNonnegativeFiniteNumber(value.wpmCoveragePercent) && value.wpmCoveragePercent <= 100;
+  const retryHintIsValid =
+    value.historyBackfillRetryRequired === undefined ||
+    typeof value.historyBackfillRetryRequired === "boolean";
   return (
     totalsAreValid &&
     averageWpmIsValid &&
     coverageIsValid &&
+    retryHintIsValid &&
     Array.isArray(value.daily) &&
     value.daily.length <= 366 &&
     value.daily.every(isAnalyticsDailyBucket)
   );
 }
 
-export async function getAccountAnalyticsSummary(timeZone: string): Promise<AnalyticsSummary> {
-  const summary = await cloudGet<unknown>(
-    `/api/analytics/summary?timeZone=${encodeURIComponent(timeZone)}`
+export async function getAccountAnalyticsSummary(
+  accountId: string | null = null
+): Promise<AnalyticsSummary> {
+  const requestHistoryBackfill = Boolean(
+    accountId && !requestedHistoryBackfillAccounts.has(accountId)
   );
+  if (requestHistoryBackfill && accountId) requestedHistoryBackfillAccounts.add(accountId);
+  const params = new URLSearchParams({
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  });
+  if (requestHistoryBackfill) params.set("backfill", "true");
+
+  let summary: unknown;
+  try {
+    summary = await cloudGet<unknown>(`/api/analytics/summary?${params}`);
+  } catch (error) {
+    // A transient first request must not permanently suppress reconciliation.
+    // The Set is claimed before I/O so overlapping refreshes still collapse to
+    // one trigger for this account and renderer process.
+    if (requestHistoryBackfill && accountId) requestedHistoryBackfillAccounts.delete(accountId);
+    throw error;
+  }
   // The cloud is an untrusted JSON boundary. Invalid buckets crash Heatmap
   // during render, outside the caller's async fallback, so validate the whole
-  // shape before any part of it reaches component state.
+  // shape before any part of it reaches component state. A successful request
+  // already triggered history reconciliation; malformed presentation data
+  // must not start another continuation chain on the next refresh.
   if (!isAnalyticsSummary(summary)) {
     throw new Error("Malformed analytics summary from cloud");
+  }
+  if (requestHistoryBackfill && accountId && summary.historyBackfillRetryRequired === true) {
+    requestedHistoryBackfillAccounts.delete(accountId);
   }
   return summary;
 }

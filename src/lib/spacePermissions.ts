@@ -1,4 +1,4 @@
-import type { NoteItem, SpaceItem, TeamRole, WorkspaceRole } from "../types/electron";
+import type { NoteItem, SpaceItem, SpaceTeamRef, TeamRole, WorkspaceRole } from "../types/electron";
 
 export function canManageWorkspace(workspaceRole: WorkspaceRole | null | undefined): boolean {
   return workspaceRole === "owner" || workspaceRole === "admin";
@@ -12,6 +12,24 @@ export function canManageWorkspace(workspaceRole: WorkspaceRole | null | undefin
  */
 export function canManageSpace(space: SpaceItem, workspaceRole: WorkspaceRole | null): boolean {
   return space.my_role === "admin" || canManageWorkspace(workspaceRole);
+}
+
+/**
+ * Teams the current user can give up to leave a space: those they explicitly
+ * belong to. Workspace owners/admins may hold access with no team membership
+ * at all, in which case there is nothing to leave.
+ */
+export function teamsUserCanLeave(space: Pick<SpaceItem, "teams">): SpaceTeamRef[] {
+  return space.teams.filter((team) => team.my_role != null);
+}
+
+/**
+ * Whether the current user holds any grant they can give up: a direct
+ * membership or a team they belong to. Workspace owners/admins with implicit
+ * access alone have nothing to leave.
+ */
+export function canLeaveSpace(space: Pick<SpaceItem, "my_direct_role" | "teams">): boolean {
+  return space.my_direct_role != null || teamsUserCanLeave(space).length > 0;
 }
 
 /**

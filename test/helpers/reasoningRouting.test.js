@@ -48,6 +48,35 @@ test("fan-out routes provider, model and mode to all five scopes", async () => {
   }
 });
 
+// A self-hosted endpoint is only reachable from a scope that carries its url
+// and key; mirroring provider/model alone left four scopes pointing at a
+// "self-hosted" mode with no host behind it.
+test("fan-out mirrors the endpoint url and key alongside the routing", async () => {
+  const { buildReasoningScopePatches } = await load();
+  const { dictationCleanup, dictationAgent } = buildReasoningScopePatches(
+    {
+      cleanupProvider: "custom",
+      cleanupModel: "qwen3-8b",
+      cleanupCloudMode: "byok",
+      cleanupCloudBaseUrl: "",
+      cleanupRemoteUrl: "https://llm.lan:8080/v1",
+      cleanupCustomApiKey: "lan-key",
+    },
+    "self-hosted"
+  );
+
+  assert.equal(dictationCleanup.cleanupRemoteUrl, "https://llm.lan:8080/v1");
+  assert.deepEqual(dictationAgent, {
+    mode: "self-hosted",
+    provider: "custom",
+    model: "qwen3-8b",
+    cloudMode: "byok",
+    cloudBaseUrl: "",
+    remoteUrl: "https://llm.lan:8080/v1",
+    customApiKey: "lan-key",
+  });
+});
+
 test("fan-out with partial settings only mirrors the provided routing fields", async () => {
   const { buildReasoningScopePatches } = await load();
   const {
@@ -63,10 +92,7 @@ test("fan-out with partial settings only mirrors the provided routing fields", a
   assert.equal("cleanupProvider" in dictationCleanup, false);
 
   for (const scope of [noteFormatting, dictationAgent, chatIntelligence, dictationTranslation]) {
-    assert.equal(scope.mode, "openwhispr");
-    assert.equal("provider" in scope, false);
-    assert.equal("model" in scope, false);
-    assert.equal("cloudMode" in scope, false);
+    assert.deepEqual(scope, { mode: "openwhispr" });
   }
 });
 

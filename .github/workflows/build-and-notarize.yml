@@ -8,21 +8,39 @@ on:
       - "LICENSE"
       - ".github/ISSUE_TEMPLATE/**"
   pull_request:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "LICENSE"
-      - ".github/ISSUE_TEMPLATE/**"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   quality:
     runs-on: ubuntu-latest
+    outputs:
+      build: ${{ github.event_name != 'pull_request' || (github.base_ref == 'main' && steps.changes.outputs.build == 'true') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      # Quality checks cover every PR; packaging keeps its existing main/code-only scope.
+      - name: Check for desktop build changes
+        id: changes
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        shell: bash
+        run: |
+          # GitHub checks out the PR merge commit; its first parent is the target branch.
+          changed_files=$(git diff --no-renames --name-only HEAD^1 HEAD -- . \
+            ':(glob,exclude)**/*.md' \
+            ':(exclude)LICENSE' \
+            ':(exclude).github/ISSUE_TEMPLATE')
+          if [[ -n "$changed_files" ]]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: "npm"
       - name: Install dependencies
         run: npm ci --ignore-scripts
       - name: Run quality checks
@@ -30,7 +48,7 @@ jobs:
       - name: Check translations
         run: npm run i18n:check
       - name: Audit dependencies
-        run: npm audit
+        run: npm audit --audit-level=high
       - name: Build better-sqlite3 for the runner's node
         # --ignore-scripts skips the native build; DB-backed tests silently
         # skip without it. This job is the only test gate on push to main.
@@ -52,6 +70,7 @@ jobs:
 
   build-linux:
     needs: quality
+    if: needs.quality.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -130,11 +149,14 @@ jobs:
         run: npm run build:linux -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+          # Forks and Dependabot get no GH_TOKEN; github.token can't read the private font release.
+          BRAND_FONTS_REQUIRED: ${{ secrets.GH_TOKEN && '1' || '0' }}
           VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
 
       - name: Upload Artifacts
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
@@ -143,6 +165,7 @@ jobs:
 
   build-windows:
     needs: quality
+    if: needs.quality.outputs.build == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -251,6 +274,7 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
 
       - name: Upload Artifacts
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
@@ -259,6 +283,7 @@ jobs:
 
   build-macos:
     needs: quality
+    if: needs.quality.outputs.build == 'true'
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -293,6 +318,9 @@ jobs:
 
       - name: Compile macos-fast-paste binary
         run: npm run compile:fast-paste -- --arch ${{ matrix.arch }}
+
+      - name: Test macOS copy and paste keyboard layouts
+        run: node --test test/helpers/macosPasteLayout.test.js
 
       - name: Compile macos-media-remote binary
         run: npm run compile:media-remote -- --arch ${{ matrix.arch }}
@@ -371,6 +399,8 @@ jobs:
         env:
           TARGET_ARCH: ${{ matrix.arch }}
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+          # Forks and Dependabot get no GH_TOKEN; github.token can't read the private font release.
+          BRAND_FONTS_REQUIRED: ${{ secrets.GH_TOKEN && '1' || '0' }}
           VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
@@ -391,6 +421,7 @@ jobs:
           node scripts/verify-macos-parakeet.js "$APP_PATH"
 
       - name: Upload Artifacts
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}-build

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Trash2, MoreVertical, Mail, X, Loader2 } from "lucide-react";
+import { Trash2, MoreVertical, Mail, X, Loader2 } from "../icons";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { InvitationsService } from "../../services/InvitationsService";
@@ -245,7 +245,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
         </div>
         {canManage && (
           <Button size="sm" onClick={() => setInviteOpen(true)}>
-            <Mail className="mr-1.5 h-3.5 w-3.5" />
+            <Mail className="me-1.5 h-3.5 w-3.5" />
             {t("settingsPage.workspace.members.invite")}
           </Button>
         )}
@@ -254,7 +254,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
       {membersLoading && members.length === 0 ? (
         <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
       ) : membersError && members.length === 0 ? (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
             {t("settingsPage.workspace.members.loadError")}
           </p>
@@ -263,16 +263,18 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
           </Button>
         </div>
       ) : (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
           {members.map((member) => (
             <div key={member.user_id} className="flex items-center gap-3 px-4 h-14">
               <MemberAvatar name={member.name} email={member.email} image={member.image} />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-foreground truncate">
+                <p dir="auto" className="text-xs font-medium text-foreground truncate">
                   {member.name || member.email}
                 </p>
                 {member.name && (
-                  <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    <bdi dir="ltr">{member.email}</bdi>
+                  </p>
                 )}
               </div>
               <RoleBadge
@@ -307,7 +309,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                       className="text-destructive"
                       onSelect={() => confirmRemoveMember(member)}
                     >
-                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      <Trash2 className="me-1.5 h-3.5 w-3.5" />
                       {t("settingsPage.workspace.members.remove")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -324,7 +326,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
       )}
 
       {canManage && invitationsError && (
-        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-3 flex items-center justify-between gap-2">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-3 flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
             {t("settingsPage.workspace.invites.loadError")}
           </p>
@@ -339,7 +341,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
           <h4 className="text-xs font-semibold text-foreground mb-2">
             {t("settingsPage.workspace.joinRequests.title")}
           </h4>
-          <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+          <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
             {joinRequests.map((request) => (
               <div key={request.id} className="flex items-center gap-3 px-4 h-12">
                 <MemberAvatar
@@ -349,11 +351,13 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                   size="sm"
                 />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-foreground truncate">
+                  <p dir="auto" className="text-xs text-foreground truncate">
                     {request.name ?? request.email}
                   </p>
                   {request.name && (
-                    <p className="text-[11px] text-muted-foreground truncate">{request.email}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      <bdi dir="ltr">{request.email}</bdi>
+                    </p>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -371,7 +375,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                     disabled={decidingId !== null}
                   >
                     {decidingId === request.id && (
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
                     )}
                     {t("settingsPage.workspace.joinRequests.approve")}
                   </Button>
@@ -387,7 +391,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
           <h4 className="text-xs font-semibold text-foreground mb-2">
             {t("settingsPage.workspace.invites.title")}
           </h4>
-          <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+          <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
             {invitations.map((inv) => {
               const daysLeft = invitationDaysLeft(inv);
               const expired = daysLeft <= 0;
@@ -398,7 +402,9 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                 >
                   <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-foreground truncate">{inv.email}</p>
+                    <p className="text-xs text-foreground truncate">
+                      <bdi dir="ltr">{inv.email}</bdi>
+                    </p>
                     <p
                       className={cn(
                         "text-[11px]",
@@ -420,7 +426,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                     disabled={resendingId === inv.id}
                     className="h-7 px-2"
                   >
-                    {resendingId === inv.id && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                    {resendingId === inv.id && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
                     {resendingId === inv.id
                       ? t("settingsPage.workspace.invites.resending")
                       : t("settingsPage.workspace.invites.resend")}

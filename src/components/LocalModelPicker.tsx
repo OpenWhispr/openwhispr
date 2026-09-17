@@ -130,35 +130,37 @@ export default function LocalModelPicker({
   }, [loadDownloadedModels, onDownloadComplete]);
 
   const {
-    downloadingModel,
-    downloadProgress,
+    downloads,
     downloadModel,
     deleteModel,
     isDownloadingModel,
     cancelDownload,
-    isCancelling,
-    isInstalling,
+    isCancellingModel,
   } = useModelDownload({
     modelType,
     onDownloadComplete: handleDownloadComplete,
     onModelsCleared: loadDownloadedModels,
   });
 
+  const allModels = useMemo(() => providers.flatMap((provider) => provider.models), [providers]);
   const selectionStateRef = useRef({ selectedModel, downloadedModels, knownModelIds });
+
   useEffect(() => {
     selectionStateRef.current = { selectedModel, downloadedModels, knownModelIds };
   }, [selectedModel, downloadedModels, knownModelIds]);
 
   const handleDownload = useCallback(
     (modelId: string) => {
-      // Bootstrap auto-select, decided against current state when the download
-      // finishes so a model picked while it ran is never stolen.
+      const selectedWhenStarted = selectionStateRef.current.selectedModel;
+
       downloadModel(modelId, (downloadedId) => {
         const {
           selectedModel: current,
           downloadedModels: downloaded,
           knownModelIds: known,
         } = selectionStateRef.current;
+        if (current !== selectedWhenStarted) return;
+
         const selectionGone = known.has(current) && !downloaded.has(current);
         if (!current || selectionGone) {
           onModelSelect(downloadedId);
@@ -182,20 +184,7 @@ export default function LocalModelPicker({
 
   const currentProvider = providers.find((p) => p.id === selectedProvider);
   const models = useMemo(() => currentProvider?.models || [], [currentProvider?.models]);
-
-  const progressDisplay = useMemo(() => {
-    if (!downloadingModel) return null;
-
-    const modelName = models.find((m) => m.id === downloadingModel)?.name || downloadingModel;
-
-    return (
-      <DownloadProgressBar
-        modelName={modelName}
-        progress={downloadProgress}
-        isInstalling={isInstalling}
-      />
-    );
-  }, [downloadingModel, downloadProgress, isInstalling, models]);
+  const activeModels = allModels.filter((model) => downloads[model.id]);
 
   return (
     <div className={className}>
@@ -207,7 +196,25 @@ export default function LocalModelPicker({
         wrap
       />
 
-      {progressDisplay}
+      {activeModels.length > 0 && (
+        <div className="space-y-2">
+          {activeModels.map((model) => {
+            const status = downloads[model.id];
+            return (
+              <DownloadProgressBar
+                key={model.id}
+                modelName={model.name}
+                progress={{
+                  percentage: status.progress,
+                  downloadedBytes: status.downloadedBytes,
+                  totalBytes: status.totalBytes,
+                }}
+                isInstalling={status.phase === "installing"}
+              />
+            );
+          })}
+        </div>
+      )}
 
       <div className="mt-2">
         <h5 className={`${styles.header} mb-2`}>{t("common.availableModels")}</h5>
@@ -223,14 +230,13 @@ export default function LocalModelPicker({
             recommended: model.recommended,
             isDownloaded: downloadedModels.has(model.id) || model.isDownloaded || model.downloaded,
             isDownloading: isDownloadingModel(model.id),
+            isCancelling: isCancellingModel(model.id),
           }))}
           selectedModel={selectedModel}
           onModelSelect={onModelSelect}
           onDownload={handleDownload}
           onDelete={handleDelete}
           onCancelDownload={cancelDownload}
-          isCancelling={isCancelling}
-          isInstalling={isInstalling}
           colorScheme={colorScheme}
         />
       </div>

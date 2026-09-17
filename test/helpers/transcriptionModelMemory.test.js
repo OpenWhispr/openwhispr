@@ -74,7 +74,11 @@ test("per-provider transcription model memory", async (t) => {
     // A remembered batch-only model must not survive into the streaming-filtered
     // meeting scope; the streaming default wins instead.
     const restored = state().meetingCloudTranscriptionModel;
-    assert.notEqual(restored, "");
+    assert.equal(
+      restored,
+      "gpt-4o-mini-transcribe",
+      "the batch-only gpt-transcribe default must not leak into the streaming scope"
+    );
     state().setMeetingCloudTranscriptionModel("gpt-4o-mini-transcribe");
     state().switchCloudTranscriptionProvider("meeting", "groq");
     state().switchCloudTranscriptionProvider("meeting", "openai");
@@ -90,6 +94,11 @@ test("per-provider transcription model memory", async (t) => {
     assert.equal(state().meetingCloudTranscriptionProvider, "openai");
     state().switchCloudTranscriptionProvider("upload", "custom");
     assert.equal(state().uploadCloudTranscriptionProvider, "custom");
+  });
+
+  await t.test("a first switch to openai lands the registry's batch default", () => {
+    state().switchCloudTranscriptionProvider("dictation", "openai");
+    assert.equal(state().cloudTranscriptionModel, "gpt-transcribe");
   });
 
   await t.test("an unknown context is a no-op, not a crash", () => {
@@ -111,6 +120,46 @@ test("per-provider transcription model memory", async (t) => {
       assert.equal(memory[`${context}:corti`], "corti-transcribe");
     }
   });
+});
+
+test("unset upload/meeting local providers inherit dictation, and onboarding mirrors them", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _providerSettingsMigrated: "1",
+      uploadTranscriptionMigrated: "true",
+      localTranscriptionProvider: "nvidia",
+      parakeetModel: "parakeet-tdt-0.6b-v3",
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-upload-provider-inherit-test-",
+  });
+  const {
+    useSettingsStore,
+    selectResolvedUploadTranscription,
+    selectResolvedMeetingTranscription,
+  } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const state = () => useSettingsStore.getState();
+
+  await t.test("a missing scoped key inherits the dictation local provider", () => {
+    assert.equal(state().localTranscriptionProvider, "nvidia");
+    assert.equal(state().uploadLocalTranscriptionProvider, "nvidia");
+    assert.equal(state().meetingLocalTranscriptionProvider, "nvidia");
+    assert.equal(selectResolvedUploadTranscription(state()).localTranscriptionProvider, "nvidia");
+    assert.equal(selectResolvedMeetingTranscription(state()).localTranscriptionProvider, "nvidia");
+  });
+
+  await t.test(
+    "setCloudTranscriptionForAllScopes writes the dictation local provider into upload and meeting",
+    () => {
+      state().setLocalTranscriptionProvider("cohere");
+      state().setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
+      assert.equal(state().uploadLocalTranscriptionProvider, "cohere");
+      assert.equal(state().meetingLocalTranscriptionProvider, "cohere");
+      assert.equal(localStorage.getItem("uploadLocalTranscriptionProvider"), "cohere");
+      assert.equal(localStorage.getItem("meetingLocalTranscriptionProvider"), "cohere");
+    }
+  );
 });
 
 // The picker commits a cloud selection only on an explicit model click:
