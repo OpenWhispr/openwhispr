@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { CalendarDays, Code2, Info, Loader2, Mail, Plus, Unlink } from "lucide-react";
+import { CalendarDays, Code2, Info, Loader2, Mail, Plus, Unlink } from "./icons";
 import { Button } from "./ui/button";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Badge } from "./ui/badge";
 import { SettingsPanel, SettingsPanelRow, SettingsRow } from "./ui/SettingsSection";
 import { Toggle } from "./ui/toggle";
@@ -34,7 +35,7 @@ interface IntegrationsViewProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-2 pl-1">
+    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 mb-2 ps-1">
       {children}
     </div>
   );
@@ -53,7 +54,7 @@ function ProviderRow({ icon, i18nKey, connected, isConnecting, onConnect }: Prov
   return (
     <SettingsPanelRow>
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/5 flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/10 flex items-center justify-center shrink-0">
           <img src={icon} alt="" className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
@@ -112,9 +113,11 @@ function CalendarAccountRows({
     <>
       {accounts.map((account) => (
         <SettingsPanelRow key={account.email}>
-          <div className="group flex items-center gap-3 pl-12">
-            <Mail className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-            <span className="text-xs text-muted-foreground truncate flex-1">{account.email}</span>
+          <div className="group flex items-center gap-3 ps-12">
+            <Mail className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
+            <span className="text-xs text-muted-foreground truncate flex-1">
+              <bdi dir="ltr">{account.email}</bdi>
+            </span>
             <button
               onClick={() => onUnlink(account.email)}
               disabled={disconnectingEmail === account.email}
@@ -144,7 +147,7 @@ function CalendarAccountRows({
         <button
           onClick={onAddAnother}
           disabled={isConnecting}
-          className="flex items-center gap-2 pl-12 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 ps-12 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
         >
           {isConnecting ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -355,10 +358,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
 
   return (
     <div className="max-w-lg mx-auto w-full px-6 py-6 space-y-5">
-      <div>
-        <h2 className="text-base font-semibold text-foreground">{t("integrations.title")}</h2>
-        <p className="text-xs text-muted-foreground/70 mt-0.5">{t("integrations.description")}</p>
-      </div>
+      <p className="text-xs text-muted-foreground/70">{t("integrations.description")}</p>
 
       <div>
         <SectionLabel>{t("integrations.sections.calendar")}</SectionLabel>
@@ -411,8 +411,8 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
 
           {isMac && appleCalendarConnected && (
             <SettingsPanelRow>
-              <div className="group flex items-center gap-3 pl-12">
-                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+              <div className="group flex items-center gap-3 ps-12">
+                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
                 <span className="text-xs text-muted-foreground truncate flex-1">
                   {appleSourceNames.join(" · ")}
                 </span>
@@ -475,13 +475,13 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
       </div>
 
       {!hasAccounts && (
-        <div className="rounded-lg border border-border/40 dark:border-border-subtle/40 bg-muted/20 dark:bg-surface-2/30 p-4 flex items-start gap-3">
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/60 bg-muted/20 dark:bg-surface-2/30 p-4 flex items-start gap-3">
           <Info size={15} className="text-primary/60 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-foreground/80">
               {t("integrations.notABot.title")}
             </p>
-            <p className="text-xs text-muted-foreground/60 mt-0.5 leading-relaxed">
+            <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
               {t("integrations.notABot.description")}
             </p>
           </div>
@@ -495,7 +495,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
             <DialogDescription asChild>
               <span className="text-xs text-muted-foreground/80 leading-relaxed">
                 {t("apiKeysSection.description")}
-                <span className="mx-1.5 text-muted-foreground/30">·</span>
+                <span className="mx-1.5 text-muted-foreground/70">·</span>
                 <button
                   type="button"
                   className="inline-flex items-center gap-1 text-primary/80 hover:text-primary transition-colors"
@@ -515,9 +515,14 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
         onOpenChange={(open) => {
           if (!open) setConfirmDisconnectEmail(null);
         }}
-        title={t("integrations.googleCalendar.disconnectConfirm", {
-          email: confirmDisconnectEmail,
-        })}
+        title={
+          <BidiInterpolatedText
+            text={t("integrations.googleCalendar.disconnectConfirm", {
+              email: BIDI_VALUE_TOKEN,
+            })}
+            value={confirmDisconnectEmail}
+          />
+        }
         description={t("integrations.googleCalendar.disconnectDescription")}
         confirmText={t("integrations.googleCalendar.disconnect")}
         variant="destructive"
@@ -531,9 +536,14 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
         onOpenChange={(open) => {
           if (!open) setConfirmMsDisconnectEmail(null);
         }}
-        title={t("integrations.microsoftCalendar.disconnectConfirm", {
-          email: confirmMsDisconnectEmail,
-        })}
+        title={
+          <BidiInterpolatedText
+            text={t("integrations.microsoftCalendar.disconnectConfirm", {
+              email: BIDI_VALUE_TOKEN,
+            })}
+            value={confirmMsDisconnectEmail}
+          />
+        }
         description={t("integrations.microsoftCalendar.disconnectDescription")}
         confirmText={t("integrations.microsoftCalendar.disconnect")}
         variant="destructive"

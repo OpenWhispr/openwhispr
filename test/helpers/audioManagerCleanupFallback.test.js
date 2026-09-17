@@ -1,0 +1,256 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { loadAudioManager } = require("./harness/audioManager");
+
+test("cleanup failure details ride the raw result instead of notifying before paste", async (t) => {
+  globalThis.__cleanupFallbackImmediateNotifications = [];
+  t.after(() => delete globalThis.__cleanupFallbackImmediateNotifications);
+
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-audio-cleanup-fallback-",
+    settingsKey: "__audioCleanupFallbackSettings",
+    settings: {
+      useCleanupModel: true,
+      cleanupProvider: "bedrock",
+      cleanupMode: "enterprise",
+      cleanupDisableThinking: true,
+      useDictationAgent: false,
+      useDictationTranslation: false,
+      preferredLanguage: "en",
+      enterpriseSetupMode: "manual",
+    },
+    mockModules: {
+      "/stores/settingsStore": `
+        export const getSettings = () => globalThis.__audioCleanupFallbackSettings;
+        export const getEffectiveCleanupModel = () => "anthropic.claude-haiku";
+        export const selectResolvedLLMConfig = () => ({
+          mode: "enterprise",
+          provider: "bedrock",
+          model: "anthropic.claude-haiku"
+        });
+        export const isCloudCleanupMode = () => false;
+        export const isCloudDictationAgentMode = () => false;
+        export const isCloudTranslationMode = () => false;
+        export const useSettingsStore = { subscribe: () => () => {} };
+      `,
+      "/dictationAgentInference": `
+        export const resolveDictationAgentInference = () => ({
+          reachable: false, model: "", displayProvider: "none", config: {}
+        });
+        export const resolveDictationAgentVisionInference = () => ({
+          active: false, model: "", config: {}
+        });
+      `,
+      "/dictationTranslationInference": `
+        export const resolveDictationTranslationInference = () => ({
+          reachable: false, model: "", displayProvider: "none", config: {}
+        });
+      `,
+      "/stores/cleanupFailureStore": `
+        export const recordCleanupFailure = (failure) => {
+          globalThis.__cleanupFallbackImmediateNotifications.push(failure);
+        };
+      `,
+    },
+  });
+
+  const technicalDetails = {
+    status: 503,
+    exceptionType: "ServiceUnavailableException",
+    requestId: "request-503",
+    underlyingError: "AWS overloaded",
+  };
+  const failure = Object.assign(
+    new Error(
+      "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an OpenWhispr outage. Please try again in a few minutes."
+    ),
+    {
+      messageKey: "reasoning.enterprise.errors.bedrock.serviceUnavailable",
+      action: "Run the command below in your terminal to re-authenticate:",
+      actionKey: "reasoning.enterprise.errors.bedrock.actions.reauthenticate",
+      copyCommand: "aws sso login --profile company-sso",
+      technicalDetails,
+    }
+  );
+  const manager = createManager({
+    voiceAgentRequested: false,
+    translationRequested: false,
+    pendingCleanupFailure: null,
+    pendingAssistantConversation: null,
+    pendingSelectionEdit: null,
+    isReasoningAvailable: async () => true,
+    processWithReasoningModel: async () => {
+      throw failure;
+    },
+  });
+
+  const text = await manager.processTranscriptionCore("original dictation", "local");
+
+  assert.equal(text, "original dictation");
+  assert.deepEqual(globalThis.__cleanupFallbackImmediateNotifications, []);
+  assert.deepEqual(manager._takePendingResultExtras(), {
+    cleanupFailure: {
+      message: failure.message,
+      messageKey: failure.messageKey,
+      action: failure.action,
+      actionKey: failure.actionKey,
+      copyCommand: failure.copyCommand,
+      technicalDetails,
+    },
+  });
+  assert.deepEqual(manager._takePendingResultExtras(), {});
+});
+
+// The chain translates the raw transcript when cleanup fails, so the dropped cleanup
+// has to reach the same toast the plain cleanup route raises (#2091).
+test("a truncated cleanup inside the translation chain still reports the failure", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-audio-translation-cleanup-",
+    settingsKey: "__audioTranslationCleanupSettings",
+    settings: {
+      useCleanupModel: true,
+      cleanupProvider: "gemini",
+      cleanupMode: "providers",
+      cleanupDisableThinking: true,
+      useDictationAgent: false,
+      useDictationTranslation: true,
+      translationSourceLanguage: "en",
+      translationTargetLanguage: "es",
+      preferredLanguage: "en",
+    },
+    mockModules: {
+      "/stores/settingsStore": `
+        export const getSettings = () => globalThis.__audioTranslationCleanupSettings;
+        export const getEffectiveCleanupModel = () => "gemini-3-flash-preview";
+        export const selectResolvedLLMConfig = () => ({
+          mode: "providers",
+          provider: "gemini",
+          model: "gemini-3-flash-preview"
+        });
+        export const isCloudCleanupMode = () => false;
+        export const isCloudDictationAgentMode = () => false;
+        export const isCloudTranslationMode = () => false;
+        export const useSettingsStore = { subscribe: () => () => {} };
+      `,
+      "/dictationAgentInference": `
+        export const resolveDictationAgentInference = () => ({
+          reachable: false, model: "", displayProvider: "none", config: {}
+        });
+        export const resolveDictationAgentVisionInference = () => ({
+          active: false, model: "", config: {}
+        });
+      `,
+      "/dictationTranslationInference": `
+        export const resolveDictationTranslationInference = () => ({
+          reachable: true,
+          model: "gemini-3-flash-preview",
+          displayProvider: "gemini",
+          config: { provider: "gemini" }
+        });
+      `,
+      "/config/prompts": `
+        export const resolvePrompt = () => "translate prompt";
+        export const appendScreenContextSuffix = (prompt) => prompt;
+        export const wrapCleanupTranscript = (text) => text;
+        export const getCleanupSystemPrompt = () => "cleanup prompt";
+      `,
+    },
+  });
+
+  const truncated = Object.assign(new Error("Model output was truncated"), {
+    messageKey: "hooks.audioRecording.errorDescriptions.cleanupTruncated",
+  });
+  const manager = createManager({
+    voiceAgentRequested: false,
+    translationRequested: true,
+    pendingCleanupFailure: null,
+    pendingAssistantConversation: null,
+    pendingSelectionEdit: null,
+    isReasoningAvailable: async () => true,
+    notifyTranslationFallback: () => {},
+    // The cleanup step is the only call in the chain that requires complete output.
+    processWithReasoningModel: async (_text, _model, _agentName, config) => {
+      if (config?.requireCompleteOutput) throw truncated;
+      return "dictado traducido";
+    },
+  });
+
+  const text = await manager.processTranscriptionCore("original dictation", "local");
+
+  assert.equal(text, "dictado traducido");
+  assert.deepEqual(manager._takePendingResultExtras(), {
+    cleanupFailure: { message: truncated.message, messageKey: truncated.messageKey },
+  });
+});
+
+test("safePaste returns false when the preload reports that no text was pasted", async (t) => {
+  const { createManager, window } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-audio-cleanup-paste-outcome-",
+    settingsKey: "__audioCleanupPasteOutcomeSettings",
+  });
+  const manager = createManager({
+    onError: () => assert.fail("a resolved no-op is not a paste error"),
+  });
+  window.electronAPI.pasteText = async () => ({ success: true, pasted: false });
+
+  assert.equal(await manager.safePaste("onboarding transcript"), false);
+});
+
+test("safePaste returns true only when the preload reports a completed paste", async (t) => {
+  const { createManager, window } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-audio-cleanup-paste-success-",
+    settingsKey: "__audioCleanupPasteSuccessSettings",
+  });
+  const manager = createManager({
+    onError: () => assert.fail("a completed paste must not report an error"),
+  });
+  window.electronAPI.pasteText = async () => ({ success: true, pasted: true });
+
+  assert.equal(await manager.safePaste("completed transcript"), true);
+});
+
+test("translation cleanup failures survive successful and skipped translation for post-paste warnings", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-translation-cleanup-warning-",
+    settingsKey: "__translationCleanupWarningSettings",
+  });
+  const rawText = "Full first sentence. Full final sentence.";
+  const failure = new Error("Gemini returned incomplete output (MAX_TOKENS)");
+
+  for (const targetLanguage of ["en", "es"]) {
+    const manager = createManager({
+      pendingCleanupFailure: null,
+      processWithReasoningModel: async (text, model) => {
+        assert.equal(text, rawText);
+        if (model === "cleanup-model") throw failure;
+        assert.equal(model, "translation-model");
+        assert.equal(targetLanguage, "es");
+        return "Primera frase completa. Última frase completa.";
+      },
+      notifyTranslationFallback: () => assert.fail("translation did not fail"),
+    });
+
+    const result = await manager.runTranslationChain({
+      text: rawText,
+      settings: { translationSourceLanguage: "en", translationTargetLanguage: targetLanguage },
+      agentName: null,
+      route: {
+        model: "translation-model",
+        cleanupReachable: true,
+        cleanupConfig: {},
+        config: {},
+      },
+      cleanup: { mode: "model", model: "cleanup-model" },
+    });
+
+    assert.equal(
+      result.text,
+      targetLanguage === "en" ? rawText : "Primera frase completa. Última frase completa."
+    );
+    assert.equal(result.translated, targetLanguage === "es");
+    assert.deepEqual(manager._takePendingResultExtras(), {
+      cleanupFailure: { message: failure.message },
+    });
+    assert.deepEqual(manager._takePendingResultExtras(), {});
+  }
+});

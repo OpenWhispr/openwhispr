@@ -99,7 +99,7 @@ export function ProviderTabs({
             className={cn(
               "relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs whitespace-nowrap transition-colors duration-150",
               isDisabled
-                ? "text-muted-foreground/50 cursor-not-allowed ring-1 ring-border/40 dark:ring-white/5"
+                ? "text-muted-foreground/70 cursor-not-allowed ring-1 ring-border/40 dark:ring-white/5"
                 : isSelected
                   ? "text-foreground [&_svg]:text-primary"
                   : "text-muted-foreground ring-1 ring-border/60 dark:ring-white/10 hover:text-foreground hover:bg-foreground/4 dark:hover:bg-white/5"

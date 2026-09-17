@@ -1,13 +1,25 @@
 import { withSessionRefresh } from "../lib/auth";
-import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
+import {
+  resolveTranscriptionRoute,
+  type ManagedTranscriptionResolution,
+  type TranscriptionRoute,
+} from "../helpers/transcriptionRoute";
+import {
+  getManagedTranscriptionResolution,
+  isManagedTranscriptionActive,
+} from "./managedTranscription";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
+import type { LocalTranscriptionProvider } from "../types/electron";
 
 export interface FileTranscriptionResult {
   success: boolean;
   text?: string;
   error?: string;
   code?: string;
+  messageKey?: string;
   diarized?: boolean;
+  // The transcript succeeded, but requested speaker labels could not be applied.
+  diarizationWarning?: boolean;
   warning?: string;
   // Set alongside `warning` by the chunked cloud path: how much audio was lost.
   failedChunks?: number;
@@ -32,6 +44,7 @@ export interface FileTranscriptionConfig {
   localTranscriptionProvider: string;
   whisperModel: string;
   parakeetModel: string;
+  cohereModel: string;
   isOpenWhisprCloud: boolean;
   getApiKey: () => string;
   cloudTranscriptionProvider: string;
@@ -52,6 +65,8 @@ export interface TranscriptionApiKeys {
   mistralApiKey: string;
   geminiApiKey: string;
   tinfoilApiKey: string;
+  deepgramApiKey: string;
+  assemblyaiApiKey: string;
   customTranscriptionApiKey?: string;
 }
 
@@ -69,6 +84,10 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.geminiApiKey;
     case "tinfoil":
       return keys.tinfoilApiKey;
+    case "deepgram":
+      return keys.deepgramApiKey;
+    case "assemblyai":
+      return keys.assemblyaiApiKey;
     case "custom":
       return keys.customTranscriptionApiKey || "";
     default:
@@ -76,39 +95,15 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
   }
 }
 
-// Single provider dispatch shared by the single-file flow and the batch queue,
-// so BYOK providers receive identical options in both.
-export async function transcribeFile(
-  filePath: string,
+// Pre-flight through the shared resolver: code-carrying errors (incl. the
+// Tinfoil-URL and fail-closed custom guards) surface here without an IPC
+// round-trip; the main-process handler re-resolves the same fields as
+// defense in depth.
+export function resolveFileTranscriptionRoute(
   cfg: FileTranscriptionConfig,
-  diarize: boolean,
-  opts: { requestId?: string; timestamps?: boolean } = {}
-): Promise<FileTranscriptionResult> {
-  if (cfg.isOpenWhisprCloud) {
-    return withSessionRefresh(async () => {
-      const r = await window.electronAPI.transcribeAudioFileCloud!(filePath, opts);
-      if (!r.success && r.code) {
-        throw Object.assign(new Error(r.error || "Cloud transcription failed"), {
-          code: r.code,
-        });
-      }
-      return r;
-    });
-  }
-
-  if (cfg.useLocalWhisper) {
-    return window.electronAPI.transcribeAudioFile(filePath, {
-      provider: cfg.localTranscriptionProvider as "whisper" | "nvidia",
-      model: cfg.localTranscriptionProvider === "nvidia" ? cfg.parakeetModel : cfg.whisperModel,
-      requestId: opts.requestId,
-    });
-  }
-
-  // Pre-flight through the shared resolver: code-carrying errors (incl. the
-  // Tinfoil-URL and fail-closed custom guards) surface here without an IPC
-  // round-trip; the main-process handler re-resolves the same fields as
-  // defense in depth.
-  const route = resolveTranscriptionRoute({
+  managed: ManagedTranscriptionResolution | null = null
+): TranscriptionRoute {
+  return resolveTranscriptionRoute({
     settings: {
       transcriptionMode: cfg.transcriptionMode,
       remoteTranscriptionUrl: cfg.remoteTranscriptionUrl,
@@ -120,16 +115,75 @@ export async function transcribeFile(
       cortiTenant: cfg.cortiTenant,
     },
     providers: getTranscriptionProviders(),
+    managed,
     request: { effectiveLanguage: cfg.language || undefined },
   });
+}
+
+// Single provider dispatch shared by the single-file flow and the batch queue,
+// so BYOK providers receive identical options in both.
+export async function transcribeFile(
+  filePath: string,
+  cfg: FileTranscriptionConfig,
+  diarize: boolean,
+  opts: { requestId?: string; timestamps?: boolean } = {}
+): Promise<FileTranscriptionResult> {
+  // Managed enterprise STT outranks every personal lane, OpenWhispr Cloud and
+  // local included: under managed_required no audio may leave the tenant.
+  const managed = getManagedTranscriptionResolution();
+  if (managed?.kind === "error") {
+    return {
+      success: false,
+      error: managed.message,
+      code: managed.code,
+      messageKey: managed.messageKey,
+    };
+  }
+
+  if (!managed && cfg.isOpenWhisprCloud) {
+    return withSessionRefresh(async () => {
+      const r = await window.electronAPI.transcribeAudioFileCloud!(filePath, opts);
+      if (!r.success && r.code) {
+        throw Object.assign(new Error(r.error || "Cloud transcription failed"), {
+          code: r.code,
+        });
+      }
+      return r;
+    });
+  }
+
+  if (!managed && cfg.useLocalWhisper) {
+    const provider = cfg.localTranscriptionProvider as LocalTranscriptionProvider;
+    return window.electronAPI.transcribeAudioFile(filePath, {
+      provider,
+      model:
+        provider === "nvidia"
+          ? cfg.parakeetModel
+          : provider === "cohere"
+            ? cfg.cohereModel
+            : cfg.whisperModel,
+      // Only Cohere consumes it (no auto-detect); passing it to whisper would
+      // override its auto language detection.
+      ...(provider === "cohere" && cfg.language ? { language: cfg.language } : {}),
+      requestId: opts.requestId,
+    });
+  }
+
+  const route = resolveFileTranscriptionRoute(cfg, managed);
   if (route.transport === "error") {
-    return { success: false, error: route.message, code: route.code };
+    return {
+      success: false,
+      error: route.message,
+      code: route.code,
+      messageKey: route.messageKey,
+    };
   }
 
   // Self-hosted fields make the handler route to the configured server
   // (fail-closed on misconfiguration) instead of stale BYOK settings.
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
+    managed: managed?.kind === "managed" ? managed : undefined,
     apiKey: cfg.getApiKey(),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
@@ -152,6 +206,7 @@ export function shouldUseByokDiarize(
   cfg: FileTranscriptionConfig,
   diarizationEnabled: boolean
 ): boolean {
+  if (isManagedTranscriptionActive()) return false;
   return (
     diarizationEnabled &&
     !cfg.useLocalWhisper &&
@@ -159,6 +214,33 @@ export function shouldUseByokDiarize(
     cfg.transcriptionMode !== "self-hosted" &&
     (cfg.cloudTranscriptionProvider === "openai" || cfg.cloudTranscriptionProvider === "mistral")
   );
+}
+
+interface DiarizationSettingsRequest {
+  enabled: boolean;
+  modelsReady: boolean;
+  numSpeakers: number | null;
+  config: FileTranscriptionConfig;
+  ensureModels: () => Promise<boolean>;
+}
+
+// Speaker detection is opt-in but its local models download lazily, so a run
+// started before they land would report "couldn't be applied" without the
+// diarizer ever being invoked. Fetch them first; only the routes that diarize
+// server-side can skip the download.
+export async function resolveDiarizationSettings({
+  enabled,
+  modelsReady,
+  numSpeakers,
+  config,
+  ensureModels,
+}: DiarizationSettingsRequest): Promise<DiarizationSettings> {
+  const needsLocalModels = enabled && !modelsReady && !shouldUseByokDiarize(config, enabled);
+  return {
+    enabled,
+    localModelsReady: needsLocalModels ? await ensureModels() : modelsReady,
+    numSpeakers,
+  };
 }
 
 // Transcribe and diarize in parallel, then merge speaker labels into the text.
@@ -192,8 +274,10 @@ export async function transcribeFileWithSpeakers(
   const measuredDuration = durationSeconds || (diar?.success && diar.durationSeconds) || null;
   const result = { ...transcribed, durationSeconds: measuredDuration };
 
-  if (!result.success || !result.text || result.diarized) return result;
-  if (!diar?.success || !diar.segments?.length) return result;
+  if (!result.success || !result.text || !diarization.enabled || result.diarized) return result;
+  if (!diar?.success || !diar.segments?.length) {
+    return { ...result, diarizationWarning: true };
+  }
 
   try {
     const merged = await window.electronAPI.mergeSpeakerText?.(
@@ -205,5 +289,5 @@ export async function transcribeFileWithSpeakers(
   } catch {
     // Merge failure falls back to the plain transcript.
   }
-  return result;
+  return { ...result, diarizationWarning: true };
 }

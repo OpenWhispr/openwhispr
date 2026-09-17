@@ -71,6 +71,47 @@ export function isTruncatedFinishReason(reason: unknown): boolean {
 }
 
 /**
+ * Dictation cleanup renders these errors as the toast title, so they carry the key
+ * the renderer translates. Anthropic and enterprise attach the same key on the
+ * main-process side; local llama reports a code that localInferenceError.ts maps.
+ */
+export const TRUNCATED_OUTPUT_MESSAGE_KEY =
+  "hooks.audioRecording.errorDescriptions.cleanupTruncated";
+const EMPTY_OUTPUT_MESSAGE_KEY = "hooks.audioRecording.errorDescriptions.cleanupEmptyReply";
+
+/** Output cut off at the token cap; providers may pass their own wording for the logs. */
+export function truncatedOutputError(
+  message = "Model output was truncated"
+): Error & { messageKey: string } {
+  return Object.assign(new Error(message), { messageKey: TRUNCATED_OUTPUT_MESSAGE_KEY });
+}
+
+/** A reply with no text at all; providers pass their own wording for the logs. */
+export function emptyOutputError(
+  message = "Model returned an empty response"
+): Error & { messageKey: string } {
+  return Object.assign(new Error(message), { messageKey: EMPTY_OUTPUT_MESSAGE_KEY });
+}
+
+/**
+ * Error for a completion that produced no text, or null when the caller may
+ * echo its input instead. Only the default cleanup transform (no systemPrompt)
+ * may echo: a prompted task would take its raw material as the finished result.
+ */
+export function emptyResponseError(
+  providerName: string,
+  config: ReasoningConfig,
+  responseIncomplete: boolean
+): Error | null {
+  if (responseIncomplete) {
+    return truncatedOutputError("Model ran out of output tokens before producing a response");
+  }
+  if (config.requireCompleteOutput) return emptyOutputError();
+  if (config.systemPrompt) return new Error(`${providerName} returned empty response`);
+  return null;
+}
+
+/**
  * Shaped params a backend may reject by name with a 400/422. Only params this
  * module's shaping layer added are strippable — never messages or model — so a
  * retry degrades the request (model reasons when asked not to, default

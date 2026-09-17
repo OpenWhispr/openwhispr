@@ -3,6 +3,14 @@ const assert = require("node:assert/strict");
 
 const modelData = require("../../src/models/modelRegistryData.json");
 const { BINARIES } = require("../../scripts/download-sherpa-onnx");
+const {
+  getModelRuntime,
+  getModelType,
+  getSherpaModelType,
+  getRequiredModelFiles,
+  isSherpaLocalProvider,
+  resolveModelLanguage,
+} = require("../../src/helpers/parakeetModelInfo");
 
 test("Nemotron sherpa model uses the streaming runtime and bundled online server", () => {
   const model = modelData.parakeetModels["nemotron-speech-streaming-en-0.6b"];
@@ -41,4 +49,82 @@ test("Nemotron 3.5 multilingual sherpa model uses the streaming runtime", () => 
   assert.ok(model.supportedLanguages.length >= 15);
   assert.ok(model.supportedLanguages.includes("en"));
   assert.ok(model.supportedLanguages.includes("ja"));
+});
+
+test("Cohere Transcribe registry entry is an offline cohere-transcribe model", () => {
+  const model = modelData.parakeetModels["cohere-transcribe-03-2026"];
+
+  assert.equal(model.modelType, "cohere-transcribe");
+  assert.equal(model.runtime, undefined);
+  assert.equal(model.language, "multilingual");
+  assert.equal(model.supportedLanguages.length, 14);
+  assert.match(
+    model.downloadUrl,
+    /sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01\.tar\.bz2$/
+  );
+  assert.equal(model.extractDir, "sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01");
+});
+
+test("model info helpers distinguish cohere-transcribe from transducer models", () => {
+  assert.equal(getModelType("cohere-transcribe-03-2026"), "cohere-transcribe");
+  assert.equal(getModelType("parakeet-tdt-0.6b-v3"), "transducer");
+  assert.equal(getModelRuntime("cohere-transcribe-03-2026"), "offline");
+  assert.deepEqual(getRequiredModelFiles("cohere-transcribe-03-2026"), [
+    "encoder.int8.onnx",
+    "encoder.int8.onnx.data",
+    "decoder.int8.onnx",
+    "tokens.txt",
+  ]);
+  assert.deepEqual(getRequiredModelFiles("parakeet-tdt-0.6b-v3"), [
+    "encoder.int8.onnx",
+    "decoder.int8.onnx",
+    "joiner.int8.onnx",
+    "tokens.txt",
+  ]);
+});
+
+test("cohere language resolution maps app languages to supported codes", () => {
+  assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "pl"), "pl");
+  assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "zh-CN"), "zh");
+  assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "zh_CN"), "zh");
+  assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "pt_BR"), "pt");
+  assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "  es_ES  "), "es");
+  assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "auto"), "en");
+  assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", undefined), "en");
+  assert.equal(resolveModelLanguage("parakeet-tdt-0.6b-v3", "pl"), null);
+});
+
+test("only verified offline NeMo models skip sherpa metadata detection", () => {
+  assert.equal(getSherpaModelType("parakeet-tdt-0.6b-v3"), "nemo_transducer");
+  assert.equal(getSherpaModelType("orukeet-v0.1.0"), "nemo_transducer");
+  assert.equal(getSherpaModelType("parakeet-unified-en-0.6b"), null);
+  assert.equal(getSherpaModelType("cohere-transcribe-03-2026"), null);
+  assert.equal(getSherpaModelType("nemotron-speech-streaming-en-0.6b"), null);
+  assert.equal(getSherpaModelType("unknown-model"), null);
+});
+
+test("sherpa provider check covers nvidia and cohere only", () => {
+  assert.ok(isSherpaLocalProvider("nvidia"));
+  assert.ok(isSherpaLocalProvider("cohere"));
+  assert.ok(!isSherpaLocalProvider("whisper"));
+});
+
+test("Orukeet uses the existing Parakeet TDT v3 runtime and model layout", () => {
+  const id = "orukeet-v0.1.0";
+  const model = modelData.parakeetModels[id];
+  const stock = modelData.parakeetModels["parakeet-tdt-0.6b-v3"];
+  assert.equal(model.name, "Orukeet");
+  assert.equal(model.organization.id, "oruk");
+  assert.equal(model.recommended, true);
+  assert.equal(model.engine, undefined);
+  assert.equal(getModelRuntime(id), "offline");
+  assert.equal(getModelType(id), "transducer");
+  assert.deepEqual(getRequiredModelFiles(id), getRequiredModelFiles("parakeet-tdt-0.6b-v3"));
+  assert.deepEqual(model.supportedLanguages, stock.supportedLanguages);
+  assert.equal(resolveModelLanguage(id, "fr"), null);
+  assert.match(
+    model.downloadUrl,
+    /^https:\/\/huggingface\.co\/oruk\/orukeet\/resolve\/[a-f0-9]{40}\/.+\.tar\.bz2$/
+  );
+  assert.equal(model.extractDir, "sherpa-onnx-orukeet-v0.1.0-int8");
 });

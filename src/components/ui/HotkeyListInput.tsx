@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
+import { Plus } from "../icons";
 import { Button } from "./button";
 import { HotkeyInput } from "./HotkeyInput";
 import { parseHotkeyList, serializeHotkeyList } from "../../utils/hotkeys";

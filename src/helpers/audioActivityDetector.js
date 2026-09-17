@@ -15,15 +15,24 @@ const INACTIVE_RESET_MS = 60 * 1000;
 // PipeWire/PulseAudio emit 'change' subscribe events several times a second on
 // cork/volume churn, and every reconcile forks a pactl subprocess.
 const LINUX_RECONCILE_MIN_SPACING_MS = 1000;
+// macOS has no polling fallback, so a lost listener is respawned instead.
+const LISTENER_RESPAWN_BASE_MS = 5 * 1000;
+const LISTENER_RESPAWN_MAX_MS = 60 * 1000;
 const EXEC_OPTS = { timeout: 5000, encoding: "utf8" };
 
 class AudioActivityDetector extends EventEmitter {
   // `getExcludedProcessIds` lists every pid whose mic use is OpenWhispr's own:
   // the Electron process tree by default, plus any live capture helpers when
-  // main.js composes them in (see electronProcessIds.js).
-  constructor(getExcludedProcessIds = () => [...getOwnProcessPids()]) {
+  // main.js composes them in (see electronProcessIds.js). `isMeetingAppRunning`
+  // corroborates macOS device activity that cannot be attributed to a process;
+  // without it such activity never prompts.
+  constructor(
+    getExcludedProcessIds = () => [...getOwnProcessPids()],
+    isMeetingAppRunning = () => false
+  ) {
     super();
     this._getExcludedProcessIds = getExcludedProcessIds;
+    this._isMeetingAppRunning = isMeetingAppRunning;
     this.checkInterval = null;
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
@@ -41,7 +50,10 @@ class AudioActivityDetector extends EventEmitter {
     this._startGeneration = 0;
     this._micWarmHold = false;
     this._lastKnownMicState = false;
+    this._lastKnownMicAttributed = true;
     this._cooldownReevalTimer = null;
+    this._respawnTimer = null;
+    this._respawnAttempts = 0;
     this._linuxOwnershipRequest = 0;
     this._linuxReconcileQueued = false;
     this._linuxReconcileRunning = false;
@@ -52,6 +64,42 @@ class AudioActivityDetector extends EventEmitter {
     this._externalMicActive = false;
     this._lastEmittedExternalMicReliable = false;
     this._lastEmittedExternalMicActive = false;
+    this._externalCapturePids = new Set();
+    this._promptedCapturePids = new Set();
+    this._captureIdleSincePrompt = false;
+  }
+
+  _markPrompted() {
+    this.hasPrompted = true;
+    this._promptedCapturePids = new Set(this._externalCapturePids);
+    this._captureIdleSincePrompt = false;
+  }
+
+  // A later call re-arms the prompt, but only after the capture that was
+  // prompted for has actually gone quiet. A pid set that merely differs is not
+  // evidence the call ended: an app rebuilds its input unit when screen share
+  // starts, and a capture helper can die and respawn under a new pid inside a
+  // single reconcile window, so the swap is observed with no idle gap at all.
+  // Prompting again there would drop a card over a live call, which is exactly
+  // what hasPrompted exists to prevent.
+  _rearmPromptForSourceChange(active) {
+    if (!active) this._captureIdleSincePrompt = true;
+    if (!this.hasPrompted || !this._pidScopedCapability || !this._externalCapturePids.size) return;
+    if (!this._promptedCapturePids.size) {
+      this._promptedCapturePids = new Set(this._externalCapturePids);
+      return;
+    }
+    if (!this._captureIdleSincePrompt) return;
+
+    const previousSourceGone = [...this._promptedCapturePids].every(
+      (pid) => !this._externalCapturePids.has(pid)
+    );
+    if (!previousSourceGone) return;
+
+    this.hasPrompted = false;
+    this._promptedCapturePids.clear();
+    this._captureIdleSincePrompt = false;
+    debugLogger.info("Re-armed meeting prompt for a changed capture source", {}, "meeting");
   }
 
   getExternalMicState() {
@@ -90,9 +138,16 @@ class AudioActivityDetector extends EventEmitter {
     debugLogger.debug("Mic warm-hold state changed", { active }, "meeting");
   }
 
+  // Unattributed device activity is gated on a running meeting app, so an app
+  // launching after the device edge is one more gate lifting.
+  notifyMeetingAppsChanged() {
+    if (!this._lastKnownMicAttributed) this._reevaluateAfterGate();
+  }
+
   async start() {
     if (this._running) return;
     this._running = true;
+    this._respawnAttempts = 0;
     const generation = ++this._startGeneration;
 
     const started = await this._tryEventDriven(generation);
@@ -108,11 +163,6 @@ class AudioActivityDetector extends EventEmitter {
     } else {
       this._eventDriven = false;
       this._startPolling();
-      debugLogger.info(
-        "Audio activity detector started (polling)",
-        { intervalMs: CHECK_INTERVAL_MS, threshold: SUSTAINED_THRESHOLD_CHECKS },
-        "meeting"
-      );
     }
   }
 
@@ -120,6 +170,7 @@ class AudioActivityDetector extends EventEmitter {
     if (!this._running) return;
     this._running = false;
     this._killListenerProcess();
+    this._clearRespawnTimer();
     this._clearSustainedTimer();
     this._clearResetTimer();
     this._resetListenerState();
@@ -151,6 +202,8 @@ class AudioActivityDetector extends EventEmitter {
 
   resetPrompt() {
     this.hasPrompted = false;
+    this._promptedCapturePids.clear();
+    this._captureIdleSincePrompt = false;
     this._clearSustainedTimer();
     this.audioActiveStart = null;
     debugLogger.info("Audio detection prompt reset (no cooldown)", {}, "meeting");
@@ -160,6 +213,8 @@ class AudioActivityDetector extends EventEmitter {
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
     this.hasPrompted = false;
+    this._promptedCapturePids.clear();
+    this._captureIdleSincePrompt = false;
     this._clearResetTimer();
   }
 
@@ -172,6 +227,7 @@ class AudioActivityDetector extends EventEmitter {
     this._activeMicPids.clear();
     this._activeSources = 0;
     this._lastKnownMicState = false;
+    this._externalCapturePids.clear();
     this._clearCooldownReevalTimer();
     this._linuxOwnershipRequest++;
     this._linuxReconcileQueued = false;
@@ -195,6 +251,7 @@ class AudioActivityDetector extends EventEmitter {
     this._resetTimer = setTimeout(() => {
       this._resetTimer = null;
       this.hasPrompted = false;
+      this._promptedCapturePids.clear();
       debugLogger.debug("hasPrompted reset after sustained inactivity", {}, "meeting");
     }, INACTIVE_RESET_MS);
   }
@@ -262,7 +319,11 @@ class AudioActivityDetector extends EventEmitter {
         }
 
         this._listenerProcess = child;
-        this._readLines(child.stdout, onLine);
+        this._readLines(child.stdout, (line) => {
+          // stdout can still drain after exit or after a replacement listener starts.
+          if (this._listenerProcess !== child || this._isStale(generation)) return;
+          onLine(line);
+        });
         child.stderr.on("data", (data) => {
           debugLogger.debug(`${label} stderr`, { output: data.toString().trim() }, "meeting");
         });
@@ -305,6 +366,7 @@ class AudioActivityDetector extends EventEmitter {
       if (this._running && this._eventDriven) {
         this._eventDriven = false;
         this._startPolling();
+        if (process.platform === "darwin") this._scheduleListenerRespawn();
       }
     };
 
@@ -322,7 +384,7 @@ class AudioActivityDetector extends EventEmitter {
   _tryEventDrivenDarwin(generation) {
     const binaryPath = resolveBundledBinary("macos-mic-listener", "meeting");
     if (!binaryPath) {
-      debugLogger.warn("macos-mic-listener binary not found, will use polling", {}, "meeting");
+      debugLogger.warn("macos-mic-listener binary not found", {}, "meeting");
       return false;
     }
 
@@ -338,24 +400,66 @@ class AudioActivityDetector extends EventEmitter {
   _parseDarwinListenerLine(line) {
     if (!this._running) return;
 
-    if (line === "CAPABILITY PID") {
-      this._setPidScopedCapability(true);
-      return;
-    }
-    if (line === "CAPABILITY AGGREGATE") {
-      this._setPidScopedCapability(false);
-      return;
-    }
-    if (line === "MIC_ACTIVE") {
-      this._onMicStateChanged(true);
-      return;
-    }
-    if (line === "MIC_INACTIVE") {
-      this._onMicStateChanged(false);
+    if (line === "CAPABILITY PID" || line === "CAPABILITY AGGREGATE") {
+      const pidScoped = line === "CAPABILITY PID";
+      debugLogger.info(
+        "macOS microphone detection capability",
+        { capability: pidScoped ? "PID" : "AGGREGATE" },
+        "meeting"
+      );
+      // The lines that follow re-announce every live capture, so state derived
+      // from the previous mode is stale.
+      this._activeMicPids.clear();
+      this._setPidScopedCapability(pidScoped);
+      this._onMicStateChanged(false, pidScoped);
       return;
     }
 
+    // Device-wide activity includes playback on combined input/output devices,
+    // so it is recorded as unattributed and only prompts once a running meeting
+    // app corroborates it (see _evaluateMicState).
+    if (line === "MIC_ACTIVE" || line === "MIC_INACTIVE") {
+      this._onMicStateChanged(line === "MIC_ACTIVE", false);
+      return;
+    }
+
+    if (!this._pidScopedCapability) return;
     this._parsePidScopedListenerLine(line);
+  }
+
+  _scheduleListenerRespawn() {
+    this._clearRespawnTimer();
+    const delayMs = Math.min(
+      LISTENER_RESPAWN_BASE_MS * 2 ** this._respawnAttempts,
+      LISTENER_RESPAWN_MAX_MS
+    );
+    this._respawnAttempts++;
+    debugLogger.info("Retrying the macOS microphone listener", { delayMs }, "meeting");
+    this._respawnTimer = setTimeout(() => {
+      this._respawnTimer = null;
+      void this._respawnListener();
+    }, delayMs);
+  }
+
+  async _respawnListener() {
+    if (!this._running || this._listenerProcess) return;
+    const generation = this._startGeneration;
+    const started = await this._tryEventDriven(generation);
+    if (this._isStale(generation)) return;
+
+    if (started) {
+      this._eventDriven = true;
+      debugLogger.info("macOS microphone listener restored", {}, "meeting");
+    } else {
+      this._scheduleListenerRespawn();
+    }
+  }
+
+  _clearRespawnTimer() {
+    if (this._respawnTimer) {
+      clearTimeout(this._respawnTimer);
+      this._respawnTimer = null;
+    }
   }
 
   _tryEventDrivenWin32(generation) {
@@ -451,10 +555,8 @@ class AudioActivityDetector extends EventEmitter {
 
     if (/Event\s+'new'\s+on\s+source-output/i.test(line)) {
       this._activeSources++;
-      this._onMicStateChanged(true);
     } else if (/Event\s+'remove'\s+on\s+source-output/i.test(line)) {
       this._activeSources = Math.max(0, this._activeSources - 1);
-      this._onMicStateChanged(this._activeSources > 0);
     }
 
     this._queueLinuxReconcile();
@@ -533,12 +635,20 @@ class AudioActivityDetector extends EventEmitter {
       }
 
       this._activeMicPids = activeMicPids;
+      // Raw total, matching the subscribe-event counter: it is the only signal
+      // left if a later reconcile cannot parse pactl's JSON.
       this._activeSources = sourceOutputs.length;
       this._setPidScopedCapability(true);
-      this._onMicStateChanged(this._activeSources > 0);
+      // A live listener makes the snapshot reliable unless the excluded-pid
+      // provider itself failed. It is external and can, so keep the raw total as
+      // the fallback signal rather than reporting a silent mic.
+      this._onMicStateChanged(
+        this._externalMicReliable ? this._externalMicActive : this._activeSources > 0
+      );
     } catch (err) {
       if (this._isStale(generation) || request !== this._linuxOwnershipRequest) return;
       this._setPidScopedCapability(false);
+      this._onMicStateChanged(this._activeSources > 0);
       debugLogger.warn(
         "Failed to reconcile pactl source-output ownership",
         { error: err.message },
@@ -561,11 +671,22 @@ class AudioActivityDetector extends EventEmitter {
     this._updateExternalMicState();
   }
 
+  // Auto-end may only trust the ownership snapshot while a listener is pushing
+  // every transition into it. The poller cannot carry that guarantee: it samples
+  // at CHECK_INTERVAL_MS and stops outright while gated by a recording, a warm
+  // hold or a dismissal cooldown — so a snapshot taken before a meeting began
+  // would still read as "another app holds the mic" for the whole recording,
+  // and the controller's ownership mode would never release it.
+  _isOwnershipSnapshotLive() {
+    return this._listenerProcess !== null;
+  }
+
   _updateExternalMicState(emitChange = true) {
     let excludedProcessIds;
     try {
       excludedProcessIds = this._getExcludedProcessIdSet();
     } catch (err) {
+      this._externalCapturePids.clear();
       this._setExternalMicSnapshot(false, false, emitChange);
       debugLogger.warn(
         "Failed to resolve excluded microphone PIDs",
@@ -575,10 +696,12 @@ class AudioActivityDetector extends EventEmitter {
       return false;
     }
 
-    const externalMicActive = [...this._activeMicPids].some(
+    const externalPids = [...this._activeMicPids].filter(
       (processId) => !excludedProcessIds.has(processId)
     );
-    if (!this._pidScopedCapability) {
+    this._externalCapturePids = new Set(externalPids);
+    const externalMicActive = externalPids.length > 0;
+    if (!this._pidScopedCapability || !this._isOwnershipSnapshotLive()) {
       this._setExternalMicSnapshot(false, false, emitChange);
       return externalMicActive;
     }
@@ -609,9 +732,11 @@ class AudioActivityDetector extends EventEmitter {
   // The listeners are edge-triggered: they announce transitions, never steady
   // state. A gate may swallow the only edge a call will ever produce, so the
   // state is recorded unconditionally and re-evaluated when gates lift.
-  _onMicStateChanged(active) {
+  _onMicStateChanged(active, attributed = true) {
     if (!this._running) return;
     this._lastKnownMicState = active;
+    this._lastKnownMicAttributed = attributed;
+    this._rearmPromptForSourceChange(active);
     this._evaluateMicState(active);
   }
 
@@ -641,6 +766,10 @@ class AudioActivityDetector extends EventEmitter {
     }
   }
 
+  _isUnattributedActivityCorroborated() {
+    return this._lastKnownMicAttributed || this._isMeetingAppRunning();
+  }
+
   _evaluateMicState(active) {
     if (this._userRecording) {
       debugLogger.debug("Mic state changed but user recording, ignoring", { active }, "meeting");
@@ -664,6 +793,10 @@ class AudioActivityDetector extends EventEmitter {
       }
       return;
     }
+    if (active && !this._isUnattributedActivityCorroborated()) {
+      debugLogger.debug("Unattributed mic activity without a meeting app, waiting", {}, "meeting");
+      return;
+    }
 
     debugLogger.debug(
       "Mic state changed (event-driven)",
@@ -684,16 +817,18 @@ class AudioActivityDetector extends EventEmitter {
           this._sustainedTimer = null;
           if (this._userRecording || this._micWarmHold || this.hasPrompted) return;
           if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
+          if (!this._isUnattributedActivityCorroborated()) return;
 
-          this.hasPrompted = true;
+          this._markPrompted();
           const now = Date.now();
           const durationMs = now - this.audioActiveStart;
+          const attributed = this._lastKnownMicAttributed;
           debugLogger.info(
             "Sustained audio activity detected (event-driven)",
-            { durationMs },
+            { durationMs, attributed },
             "meeting"
           );
-          this.emit("sustained-audio-detected", { durationMs, detectedAt: now });
+          this.emit("sustained-audio-detected", { durationMs, detectedAt: now, attributed });
         }, SUSTAINED_EVENT_DRIVEN_MS);
       }
     } else {
@@ -708,8 +843,25 @@ class AudioActivityDetector extends EventEmitter {
   // ---------------------------------------------------------------------------
 
   _startPolling() {
+    if (process.platform === "darwin") {
+      this._clearSustainedTimer();
+      this.audioActiveStart = null;
+      this._lastKnownMicState = false;
+      debugLogger.info(
+        "macOS microphone listener unavailable; automatic audio prompts paused",
+        {},
+        "meeting"
+      );
+      return;
+    }
+
     this._check();
     this.checkInterval = setInterval(() => this._check(), CHECK_INTERVAL_MS);
+    debugLogger.info(
+      "Audio activity detector started (polling)",
+      { intervalMs: CHECK_INTERVAL_MS, threshold: SUSTAINED_THRESHOLD_CHECKS },
+      "meeting"
+    );
   }
 
   async _check() {
@@ -721,6 +873,7 @@ class AudioActivityDetector extends EventEmitter {
     this._checking = true;
     try {
       const active = await this._isMicActive();
+      this._rearmPromptForSourceChange(active);
       debugLogger.debug(
         "Mic check",
         { active, consecutiveChecks: this.consecutiveChecks },
@@ -733,7 +886,7 @@ class AudioActivityDetector extends EventEmitter {
         if (!this.audioActiveStart) this.audioActiveStart = Date.now();
 
         if (!this.hasPrompted && this.consecutiveChecks >= SUSTAINED_THRESHOLD_CHECKS) {
-          this.hasPrompted = true;
+          this._markPrompted();
           const now = Date.now();
           const durationMs = now - this.audioActiveStart;
           debugLogger.info(
@@ -741,7 +894,7 @@ class AudioActivityDetector extends EventEmitter {
             { consecutiveChecks: this.consecutiveChecks, durationMs },
             "meeting"
           );
-          this.emit("sustained-audio-detected", { durationMs, detectedAt: now });
+          this.emit("sustained-audio-detected", { durationMs, detectedAt: now, attributed: true });
         }
       } else {
         if (this.consecutiveChecks > 0) {
@@ -762,26 +915,12 @@ class AudioActivityDetector extends EventEmitter {
 
   async _isMicActive() {
     switch (process.platform) {
-      case "darwin":
-        return this._checkDarwin();
       case "win32":
         return this._checkWin32();
       case "linux":
         return this._checkLinux();
       default:
         return false;
-    }
-  }
-
-  async _checkDarwin() {
-    try {
-      const { stdout } = await execAsync(
-        "ioreg -l -w 0 | grep '\"IOAudioEngineState\" = 1'",
-        EXEC_OPTS
-      );
-      return stdout.trim().length > 0;
-    } catch {
-      return false;
     }
   }
 
@@ -800,6 +939,35 @@ class AudioActivityDetector extends EventEmitter {
   }
 
   async _checkLinux() {
+    try {
+      const { stdout } = await execAsync("pactl --format=json list source-outputs", EXEC_OPTS);
+      const sourceOutputs = JSON.parse(stdout);
+      if (!Array.isArray(sourceOutputs)) throw new Error("pactl returned a non-array response");
+
+      const capturePids = sourceOutputs
+        .map((sourceOutput) => Number(sourceOutput?.properties?.["application.process.id"]))
+        .filter((processId) => Number.isInteger(processId) && processId > 0);
+      // A stream without application.process.id carries no ownership
+      // information. When nothing in a non-empty listing is attributable, the
+      // unfiltered listings below still answer "is anything capturing" — far
+      // better than reporting silence and never detecting a meeting.
+      if (sourceOutputs.length > 0 && capturePids.length === 0) {
+        throw new Error("no source-output reported an application.process.id");
+      }
+
+      const excludedProcessIds = this._getExcludedProcessIdSet();
+      this._activeMicPids = new Set(capturePids);
+      this._setPidScopedCapability(true);
+      return capturePids.some((processId) => !excludedProcessIds.has(processId));
+    } catch (err) {
+      this._setPidScopedCapability(false);
+      debugLogger.debug(
+        "Linux mic check fell back to an unfiltered listing",
+        { error: err.message },
+        "meeting"
+      );
+    }
+
     try {
       const { stdout } = await execAsync("pactl list source-outputs short", EXEC_OPTS);
       return stdout.trim().length > 0;

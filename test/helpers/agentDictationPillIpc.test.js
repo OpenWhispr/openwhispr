@@ -170,6 +170,24 @@ test.before(() => {
   );
 });
 
+test("only the main renderer can change its window's input region", async () => {
+  const { stub, mainContents, pillContents } = makeWindowManagerStub();
+  const regions = [];
+  stub.setMainWindowInputRegion = async (region) => {
+    regions.push(region);
+    return true;
+  };
+  installWindowManager(stub);
+  const handler = handlers.get("set-main-window-input-region");
+  const region = { viewportWidth: 208, viewportHeight: 120, x: 156, y: 68, width: 40, height: 40 };
+  assert.equal(await handler({ sender: mainContents }, region), true);
+  assert.equal(handler({ sender: pillContents }, null), null);
+  assert.equal(handler({ sender: {} }, null), null);
+  stub.mainWindow = null;
+  assert.equal(handler({ sender: mainContents }, null), null);
+  assert.deepEqual(regions, [region]);
+});
+
 test.after(() => {
   Module._load = originalLoad;
 });

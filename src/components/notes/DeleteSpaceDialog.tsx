@@ -2,17 +2,20 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../ui/dialog";
 import { Input } from "../ui/input";
+import { useToast } from "../ui/useToast";
+import { localMutationErrorKey } from "../../lib/localMutationError";
+import { deleteSpace } from "../../services/spaceActions";
 import type { SpaceItem } from "../../types/electron";
 
 interface DeleteSpaceDialogProps {
   space: SpaceItem | null;
   onClose: () => void;
-  onConfirm: (space: SpaceItem) => void;
 }
 
-/** Type-the-name destructive confirm for deleting a (team) space. */
-export default function DeleteSpaceDialog({ space, onClose, onConfirm }: DeleteSpaceDialogProps) {
+/** Type-the-name destructive confirm that deletes a (team) space. */
+export default function DeleteSpaceDialog({ space, onClose }: DeleteSpaceDialogProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [nameInput, setNameInput] = useState("");
   const [forSpaceId, setForSpaceId] = useState<number | null>(null);
   if ((space?.id ?? null) !== forSpaceId) {
@@ -20,6 +23,20 @@ export default function DeleteSpaceDialog({ space, onClose, onConfirm }: DeleteS
     setNameInput("");
   }
   const confirmMatch = space != null && nameInput.trim() === space.name;
+
+  const confirmDelete = async (target: SpaceItem) => {
+    onClose();
+    const result = await deleteSpace(target);
+    if (!result.success) {
+      toast({
+        title: t("notes.spaces.couldNotDelete"),
+        description: t(localMutationErrorKey(result.error)),
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: t("notes.spaces.deleted", { space: target.name }) });
+  };
 
   return (
     <ConfirmDialog
@@ -40,7 +57,7 @@ export default function DeleteSpaceDialog({ space, onClose, onConfirm }: DeleteS
       variant="destructive"
       confirmDisabled={!confirmMatch}
       onConfirm={() => {
-        if (space) onConfirm(space);
+        if (space) void confirmDelete(space);
       }}
     >
       {space && (
@@ -49,16 +66,14 @@ export default function DeleteSpaceDialog({ space, onClose, onConfirm }: DeleteS
             {t("notes.spaces.deleteTypeName", { space: space.name })}
           </label>
           <Input
+            dir="auto"
             id="delete-space-name"
             autoFocus
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
             placeholder={space.name}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && confirmMatch) {
-                onConfirm(space);
-                onClose();
-              }
+              if (e.key === "Enter" && confirmMatch) void confirmDelete(space);
             }}
           />
         </div>

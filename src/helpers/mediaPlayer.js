@@ -1,24 +1,44 @@
-const { spawn, spawnSync } = require("child_process");
+const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
+const { killProcess } = require("../utils/process");
 
-// Runs `cmd args` asynchronously and resolves with { status, stdout, stderr }.
-// Times out after `timeout` ms; on timeout, kills the child and resolves with
-// status: null. Never rejects — callers branch on status === 0.
+// spawnSync capped a child's output at 1 MB and killed anything past it. Keep
+// that bound: these helpers emit a few KB, and an unbounded buffer would let a
+// runaway one grow main-process memory until its deadline.
+const MAX_OUTPUT_BYTES = 1024 * 1024;
+
+// Runs `cmd args` asynchronously and resolves with
+// { status, stdout, stderr, timedOut }. Times out after `timeout` ms; on
+// timeout it kills the child and resolves with the exit code the child already
+// reported, or status: null and timedOut: true when it never exited. A spawn
+// failure also resolves with status: null but timedOut: false. Output is
+// capped at MAX_OUTPUT_BYTES. Never rejects — callers branch on status === 0.
+//
+// Every media helper goes through here rather than spawnSync: a synchronous
+// spawn parks the Electron main thread in a nested libuv loop until the
+// child's stdio pipes close, which froze hotkeys, IPC and the dictation
+// window mid-recording (#2073).
 function spawnAsync(cmd, args, { timeout = 3000 } = {}) {
   return new Promise((resolve) => {
     let child;
     try {
       child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     } catch (err) {
-      resolve({ status: null, stdout: "", stderr: String(err?.message || err) });
+      resolve({ status: null, stdout: "", stderr: String(err?.message || err), timedOut: false });
       return;
     }
 
     const chunks = { stdout: [], stderr: [] };
+    let bufferedBytes = 0;
+    const collect = (stream, chunk) => {
+      if (bufferedBytes >= MAX_OUTPUT_BYTES) return;
+      bufferedBytes += chunk.length;
+      chunks[stream].push(chunk);
+    };
     let settled = false;
-    const settle = (status) => {
+    const settle = (status, timedOut = false) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -26,21 +46,40 @@ function spawnAsync(cmd, args, { timeout = 3000 } = {}) {
         status,
         stdout: Buffer.concat(chunks.stdout).toString("utf8"),
         stderr: Buffer.concat(chunks.stderr).toString("utf8"),
+        timedOut,
       });
     };
 
     const timer = setTimeout(() => {
+      // A helper can finish its work and exit while a descendant it spawned
+      // keeps the inherited pipes open, so the deadline can arrive with the
+      // outcome already known. Honour that exit code: discarding it sends the
+      // Windows pause into the media-key fallback, which toggles playback back
+      // on mid-dictation and then leaves it paused afterwards (#2073).
+      const exitCode = child.exitCode;
       try {
-        child.kill("SIGKILL");
+        // A no-op once the child has exited; dropping our own pipe ends is
+        // what lets the deadline resolve while a descendant lingers.
+        killProcess(child, "SIGKILL");
+        child.stdout.destroy();
+        child.stderr.destroy();
+        debugLogger.warn(
+          "Media helper timed out",
+          { cmd: path.basename(cmd), timeout, exitCode },
+          "media"
+        );
       } catch {
-        // ignored
+        // Teardown and logging are best effort; the deadline must still settle
+        // below, or the serialized queue stalls for the rest of the session.
       }
-      settle(null);
+      settle(exitCode, exitCode === null);
     }, timeout);
 
-    child.stdout.on("data", (d) => chunks.stdout.push(d));
-    child.stderr.on("data", (d) => chunks.stderr.push(d));
+    child.stdout.on("data", (d) => collect("stdout", d));
+    child.stderr.on("data", (d) => collect("stderr", d));
     child.on("error", (err) => {
+      // Pushed past the cap on purpose: this is the only diagnostic a failed
+      // spawn produces, and it must not be the thing the cap drops.
       chunks.stderr.push(Buffer.from(String(err?.message || err)));
       settle(null);
     });
@@ -62,6 +101,20 @@ class MediaPlayer {
     this._adapterChecked = false;
     this._adapterPaths = null; // { perl, script, framework } once resolved
     this._pausedViaAdapter = false; // macOS: whether we paused via the adapter
+    // Pause/resume/toggle run one at a time. macOS was already async and had
+    // the race this prevents: a quick tap could run the resume before the
+    // pause had recorded what it paused, stranding media until the next
+    // dictation ended. Windows and Linux inherited the risk by becoming async
+    // too (#2073).
+    this._queue = Promise.resolve();
+  }
+
+  // The queue holds a caught copy so a failed operation can't stall the ones
+  // behind it, while the caller still gets the raw run.
+  _serialize(operation) {
+    const run = this._queue.then(operation);
+    this._queue = run.catch(() => {});
+    return run;
   }
 
   _resolveLinuxFastPaste() {
@@ -184,62 +237,65 @@ class MediaPlayer {
     return this._adapterPaths;
   }
 
-  async pauseMedia() {
-    try {
-      if (process.platform === "linux") {
-        return this._pauseLinux();
-      } else if (process.platform === "darwin") {
-        return await this._pauseMacOS();
-      } else if (process.platform === "win32") {
-        return this._pauseWindows();
+  pauseMedia() {
+    return this._serialize(async () => {
+      try {
+        if (process.platform === "linux") {
+          return await this._pauseLinux();
+        } else if (process.platform === "darwin") {
+          return await this._pauseMacOS();
+        } else if (process.platform === "win32") {
+          return await this._pauseWindows();
+        }
+      } catch (err) {
+        debugLogger.warn("Media pause failed", { error: err.message }, "media");
       }
-    } catch (err) {
-      debugLogger.warn("Media pause failed", { error: err.message }, "media");
-    }
-    return false;
+      return false;
+    });
   }
 
-  async resumeMedia() {
-    try {
-      if (process.platform === "linux") {
-        return this._resumeLinux();
-      } else if (process.platform === "darwin") {
-        return await this._resumeMacOS();
-      } else if (process.platform === "win32") {
-        return this._resumeWindows();
+  resumeMedia() {
+    return this._serialize(async () => {
+      try {
+        if (process.platform === "linux") {
+          return await this._resumeLinux();
+        } else if (process.platform === "darwin") {
+          return await this._resumeMacOS();
+        } else if (process.platform === "win32") {
+          return await this._resumeWindows();
+        }
+      } catch (err) {
+        debugLogger.warn("Media resume failed", { error: err.message }, "media");
       }
-    } catch (err) {
-      debugLogger.warn("Media resume failed", { error: err.message }, "media");
-    }
-    return false;
+      return false;
+    });
   }
 
-  async toggleMedia() {
-    try {
-      if (process.platform === "linux") {
-        return this._toggleLinux();
-      } else if (process.platform === "darwin") {
-        return await this._toggleMacOS();
-      } else if (process.platform === "win32") {
-        return this._toggleWindows();
+  toggleMedia() {
+    return this._serialize(async () => {
+      try {
+        if (process.platform === "linux") {
+          return await this._toggleLinux();
+        } else if (process.platform === "darwin") {
+          return await this._toggleMacOS();
+        } else if (process.platform === "win32") {
+          return await this._toggleWindows();
+        }
+      } catch (err) {
+        debugLogger.warn("Media toggle failed", { error: err.message }, "media");
       }
-    } catch (err) {
-      debugLogger.warn("Media toggle failed", { error: err.message }, "media");
-    }
-    return false;
+      return false;
+    });
   }
 
   // --- Linux: MPRIS-aware pause/resume ---
 
-  _pauseLinux() {
+  async _pauseLinux() {
     this._pausedPlayers = [];
-    if (this._pauseMpris()) return true;
+    if (await this._pauseMpris()) return true;
 
     // Fallback: playerctl pause (not play-pause)
-    const result = spawnSync("playerctl", ["pause"], {
-      stdio: "pipe",
-      timeout: 3000,
-    });
+    const result = await spawnAsync("playerctl", ["pause"], { timeout: 3000 });
     if (result.status === 0) {
       debugLogger.debug("Media paused via playerctl", {}, "media");
       this._pausedPlayers = ["playerctl"];
@@ -249,16 +305,13 @@ class MediaPlayer {
     return false;
   }
 
-  _resumeLinux() {
+  async _resumeLinux() {
     if (this._pausedPlayers.length === 0) return false;
 
     // If we used playerctl fallback
     if (this._pausedPlayers.length === 1 && this._pausedPlayers[0] === "playerctl") {
       this._pausedPlayers = [];
-      const result = spawnSync("playerctl", ["play"], {
-        stdio: "pipe",
-        timeout: 3000,
-      });
+      const result = await spawnAsync("playerctl", ["play"], { timeout: 3000 });
       if (result.status === 0) {
         debugLogger.debug("Media resumed via playerctl", {}, "media");
         return true;
@@ -266,20 +319,20 @@ class MediaPlayer {
       return false;
     }
 
-    const resumed = this._resumeMpris();
+    const resumed = await this._resumeMpris();
     this._pausedPlayers = [];
     return resumed;
   }
 
-  _pauseMpris() {
-    const players = this._listMprisPlayers();
+  async _pauseMpris() {
+    const players = await this._listMprisPlayers();
     if (!players || players.length === 0) return false;
 
     for (const dest of players) {
-      const status = this._getMprisPlaybackStatus(dest);
+      const status = await this._getMprisPlaybackStatus(dest);
       if (status !== "Playing") continue;
 
-      const result = spawnSync(
+      const result = await spawnAsync(
         "dbus-send",
         [
           "--session",
@@ -288,7 +341,7 @@ class MediaPlayer {
           "/org/mpris/MediaPlayer2",
           "org.mpris.MediaPlayer2.Player.Pause",
         ],
-        { stdio: "pipe", timeout: 2000 }
+        { timeout: 2000 }
       );
 
       if (result.status === 0) {
@@ -299,11 +352,11 @@ class MediaPlayer {
     return this._pausedPlayers.length > 0;
   }
 
-  _resumeMpris() {
+  async _resumeMpris() {
     let resumed = false;
     for (const dest of this._pausedPlayers) {
       if (dest === "playerctl") continue;
-      const result = spawnSync(
+      const result = await spawnAsync(
         "dbus-send",
         [
           "--session",
@@ -312,7 +365,7 @@ class MediaPlayer {
           "/org/mpris/MediaPlayer2",
           "org.mpris.MediaPlayer2.Player.Play",
         ],
-        { stdio: "pipe", timeout: 2000 }
+        { timeout: 2000 }
       );
 
       if (result.status === 0) {
@@ -323,8 +376,8 @@ class MediaPlayer {
     return resumed;
   }
 
-  _getMprisPlaybackStatus(dest) {
-    const result = spawnSync(
+  async _getMprisPlaybackStatus(dest) {
+    const result = await spawnAsync(
       "dbus-send",
       [
         "--session",
@@ -335,18 +388,17 @@ class MediaPlayer {
         "string:org.mpris.MediaPlayer2.Player",
         "string:PlaybackStatus",
       ],
-      { stdio: "pipe", timeout: 2000 }
+      { timeout: 2000 }
     );
 
     if (result.status !== 0) return null;
 
-    const output = result.stdout?.toString() || "";
-    const match = output.match(/string "([A-Za-z]+)"/);
+    const match = result.stdout.match(/string "([A-Za-z]+)"/);
     return match ? match[1] : null;
   }
 
-  _listMprisPlayers() {
-    const listResult = spawnSync(
+  async _listMprisPlayers() {
+    const listResult = await spawnAsync(
       "dbus-send",
       [
         "--session",
@@ -356,13 +408,12 @@ class MediaPlayer {
         "/org/freedesktop/DBus",
         "org.freedesktop.DBus.ListNames",
       ],
-      { stdio: "pipe", timeout: 2000 }
+      { timeout: 2000 }
     );
 
     if (listResult.status !== 0) return [];
 
-    const output = listResult.stdout?.toString() || "";
-    const matches = output.match(/string "org\.mpris\.MediaPlayer2\.[A-Za-z0-9_.\-]+"/g);
+    const matches = listResult.stdout.match(/string "org\.mpris\.MediaPlayer2\.[A-Za-z0-9_.\-]+"/g);
     if (!matches || matches.length === 0) return [];
 
     return matches.map((m) => m.replace(/^string "/, "").replace(/"$/, ""));
@@ -370,25 +421,19 @@ class MediaPlayer {
 
   // --- Linux toggle (legacy, used by toggleMedia) ---
 
-  _toggleLinux() {
-    if (this._toggleMpris()) return true;
+  async _toggleLinux() {
+    if (await this._toggleMpris()) return true;
 
     const binary = this._resolveLinuxFastPaste();
     if (binary) {
-      const result = spawnSync(binary, ["--media-play-pause"], {
-        stdio: "pipe",
-        timeout: 3000,
-      });
+      const result = await spawnAsync(binary, ["--media-play-pause"], { timeout: 3000 });
       if (result.status === 0) {
         debugLogger.debug("Media toggled via linux-fast-paste", {}, "media");
         return true;
       }
     }
 
-    const result = spawnSync("playerctl", ["play-pause"], {
-      stdio: "pipe",
-      timeout: 3000,
-    });
+    const result = await spawnAsync("playerctl", ["play-pause"], { timeout: 3000 });
     if (result.status === 0) {
       debugLogger.debug("Media toggled via playerctl", {}, "media");
       return true;
@@ -398,13 +443,13 @@ class MediaPlayer {
     return false;
   }
 
-  _toggleMpris() {
-    const players = this._listMprisPlayers();
+  async _toggleMpris() {
+    const players = await this._listMprisPlayers();
     if (!players || players.length === 0) return false;
 
     let toggled = false;
     for (const dest of players) {
-      const result = spawnSync(
+      const result = await spawnAsync(
         "dbus-send",
         [
           "--session",
@@ -413,7 +458,7 @@ class MediaPlayer {
           "/org/mpris/MediaPlayer2",
           "org.mpris.MediaPlayer2.Player.PlayPause",
         ],
-        { stdio: "pipe", timeout: 2000 }
+        { timeout: 2000 }
       );
 
       if (result.status === 0) {
@@ -424,7 +469,7 @@ class MediaPlayer {
     return toggled;
   }
 
-  // --- macOS: MediaRemote-aware pause/resume (async) ---
+  // --- macOS: MediaRemote-aware pause/resume ---
 
   async _runAdapter(args, timeout = 3000) {
     const paths = this._resolveMediaRemoteAdapter();
@@ -617,18 +662,14 @@ try {
 }`.trim();
   }
 
-  _sendWindowsMediaKey() {
+  async _sendWindowsMediaKey() {
     const nircmd = this._resolveNircmd();
     if (nircmd) {
-      const result = spawnSync(nircmd, ["sendkeypress", "0xB3"], {
-        stdio: "pipe",
-        timeout: 3000,
-        windowsHide: true,
-      });
+      const result = await spawnAsync(nircmd, ["sendkeypress", "0xB3"], { timeout: 3000 });
       if (result.status === 0) return true;
     }
 
-    const result = spawnSync(
+    const result = await spawnAsync(
       "powershell.exe",
       [
         "-NoProfile",
@@ -636,28 +677,24 @@ try {
         "-Command",
         "Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class KB { [DllImport(\"user32.dll\")] public static extern void keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo); }'; [KB]::keybd_event(0xB3, 0, 1, 0); [KB]::keybd_event(0xB3, 0, 3, 0)",
       ],
-      {
-        stdio: "pipe",
-        timeout: 5000,
-        windowsHide: true,
-      }
+      { timeout: 5000 }
     );
     return result.status === 0;
   }
 
-  _pauseWindows() {
+  async _pauseWindows() {
     this._pausedWinApps = [];
     this._didPause = false;
 
-    // Use GSMTC (Windows 10 1809+) — state-aware, targets specific apps
-    const result = spawnSync(
+    // GSMTC (Windows 10 1809+) — state-aware, targets specific apps
+    const result = await spawnAsync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", this._gsmtcPauseScript()],
-      { stdio: "pipe", timeout: 5000, windowsHide: true }
+      { timeout: 5000 }
     );
 
     if (result.status === 0) {
-      const output = (result.stdout?.toString() || "").trim();
+      const output = result.stdout.trim();
       if (output === "GSMTC_FAIL") {
         debugLogger.debug("GSMTC unavailable, falling back to media key", {}, "media");
         return this._pauseWindowsFallback();
@@ -671,12 +708,12 @@ try {
       return false;
     }
 
-    const stderr = (result.stderr?.toString() || "").trim();
+    const stderr = result.stderr.trim();
     debugLogger.debug(
       "GSMTC PowerShell failed, falling back to media key",
       {
         status: result.status,
-        signal: result.signal,
+        timedOut: result.timedOut,
         stderr: stderr ? stderr.slice(0, 200) : undefined,
       },
       "media"
@@ -684,8 +721,8 @@ try {
     return this._pauseWindowsFallback();
   }
 
-  _pauseWindowsFallback() {
-    if (this._sendWindowsMediaKey()) {
+  async _pauseWindowsFallback() {
+    if (await this._sendWindowsMediaKey()) {
       this._didPause = true;
       debugLogger.debug("Media paused via media key fallback", {}, "media");
       return true;
@@ -693,16 +730,16 @@ try {
     return false;
   }
 
-  _resumeWindows() {
+  async _resumeWindows() {
     // Resume via GSMTC if we paused that way
     if (this._pausedWinApps && this._pausedWinApps.length > 0) {
       const apps = this._pausedWinApps;
       this._pausedWinApps = [];
 
-      const result = spawnSync(
+      const result = await spawnAsync(
         "powershell.exe",
         ["-NoProfile", "-NonInteractive", "-Command", this._gsmtcResumeScript(apps)],
-        { stdio: "pipe", timeout: 5000, windowsHide: true }
+        { timeout: 5000 }
       );
 
       if (result.status === 0) {
@@ -718,7 +755,7 @@ try {
     // Resume via media key toggle if we paused with the fallback
     if (this._didPause) {
       this._didPause = false;
-      if (this._sendWindowsMediaKey()) {
+      if (await this._sendWindowsMediaKey()) {
         debugLogger.debug("Media resumed via media key fallback", {}, "media");
         return true;
       }
@@ -727,8 +764,8 @@ try {
     return false;
   }
 
-  _toggleWindows() {
-    if (this._sendWindowsMediaKey()) {
+  async _toggleWindows() {
+    if (await this._sendWindowsMediaKey()) {
       debugLogger.debug("Media toggled via Windows media key", {}, "media");
       return true;
     }
