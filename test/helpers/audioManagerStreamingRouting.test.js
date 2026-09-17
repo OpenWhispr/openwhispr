@@ -156,3 +156,54 @@ test("managed OpenWhispr Cloud still respects its batch configuration", async (t
 
   assert.equal(manager.shouldUseStreaming(), false);
 });
+
+test("explicit Orukeet custom endpoint uses PCM streaming without cloud login", async (t) => {
+  const manager = await loadManager(t);
+  setSettings({
+    transcriptionMode: "self-hosted",
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionModel: "orukeet-v0.1.0",
+    cloudTranscriptionBaseUrl: "https://example.com/v1",
+    customTranscriptionApiKey: "test-key",
+    isSignedIn: false,
+  });
+  assert.equal(manager.shouldUseStreaming(), true);
+  assert.equal(manager.getStreamingProviderName(), "orukeet");
+  assert.equal(manager.getStreamingProvider().finalizeAcknowledged, true);
+  setSettings({
+    transcriptionMode: "self-hosted",
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionModel: "whisper-1",
+    remoteTranscriptionUrl: "https://example.com/v1",
+  });
+  assert.equal(manager.shouldUseStreaming(), false);
+});
+
+test("managed Orukeet rollout overrides stale personal provider and model without a key", async (t) => {
+  const manager = await loadManager(t);
+  manager.sttConfig = { dictation: { mode: "streaming" }, streamingProvider: "orukeet" };
+  setSettings({
+    cloudTranscriptionMode: "openwhispr",
+    cloudTranscriptionProvider: "gemini",
+    cloudTranscriptionModel: "gemini-3.5-transcribe",
+  });
+  assert.equal(manager.shouldUseStreaming(), true);
+  assert.equal(manager.getStreamingProviderName(), "orukeet");
+  const calls = [];
+  globalThis.window.electronAPI.dictationRealtimeWarmup = async (options) => {
+    calls.push(options);
+    return { success: true };
+  };
+  await manager.warmupStreamingConnection();
+  assert.equal(calls[0].mode, "openwhispr");
+  assert.equal(calls[0].provider, "orukeet");
+  assert.equal(calls[0].model, "orukeet-v0.1.0");
+  assert.equal(calls[0].baseUrl, undefined);
+  setSettings({ cloudTranscriptionMode: "openwhispr", isSignedIn: false });
+  assert.equal(manager.shouldUseStreaming(), false);
+  setSettings({ cloudTranscriptionMode: "openwhispr" });
+  manager.sttConfig.dictation.mode = "batch";
+  assert.equal(manager.shouldUseStreaming(), false);
+  setSettings({ cloudTranscriptionMode: "byok" });
+  assert.equal(manager.getStreamingProviderName(), "openai-realtime");
+});

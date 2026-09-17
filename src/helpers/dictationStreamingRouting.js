@@ -4,6 +4,7 @@
 // call sites is what broke default dictation in 1.8.2 (#1624: the
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
+import { isOrukeetStreaming } from "./selfHostedTranscription.js";
 import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
 
 export const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
@@ -18,6 +19,16 @@ export function defaultStreamingProviderName(context) {
 }
 
 export function resolveStreamingProviderName({ settings, context, sttConfig }) {
+  // The managed rollout must outrank a stale personal model selection. Notes
+  // keep their separate provider contract; this endpoint is for dictation.
+  if (
+    context === "dictation" &&
+    settings.cloudTranscriptionMode === "openwhispr" &&
+    sttConfig?.dictation?.mode === "streaming" &&
+    sttConfig?.streamingProvider === "orukeet"
+  )
+    return "orukeet";
+  if (isOrukeetStreaming(settings)) return "orukeet";
   if (settings.cloudTranscriptionProvider === "tinfoil") {
     return "tinfoil-realtime";
   }
@@ -70,6 +81,12 @@ export function buildStreamingSessionOptions({
   // assistant voice skips it because the Assistant panel owns that surface.
   if (providerName === "tinfoil-realtime" && !voiceAgentRequested) {
     options.preview = true;
+  }
+  if (providerName === "orukeet") {
+    options.model = "orukeet-v0.1.0";
+    if (options.mode === "byok") {
+      options.baseUrl = settings.remoteTranscriptionUrl || settings.cloudTranscriptionBaseUrl;
+    }
   }
   return options;
 }
