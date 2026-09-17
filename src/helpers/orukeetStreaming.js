@@ -2,6 +2,16 @@ const WebSocket = require("ws");
 
 const MAX_PENDING_BYTES = 2 * 1024 * 1024;
 
+function capacityRetryDelay(requestedMs) {
+  if (!Number.isFinite(requestedMs)) return 100;
+  // Select a fixed local delay, rounding the server's hint up. Large hints
+  // wait for the final deadline instead of overflowing Node's timer to 1 ms.
+  for (const delay of [20, 50, 100, 250, 500, 1000, 2000, 5000, 10000, 30000]) {
+    if (requestedMs <= delay) return delay;
+  }
+  return 30000;
+}
+
 function streamingUrl(baseUrl) {
   const url = new URL(baseUrl);
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
@@ -142,17 +152,9 @@ class OrukeetStreaming {
     } else if (message.type === "error") {
       if (message.code === "capacity" && this.finalResolve) {
         clearTimeout(this.retryTimer);
-        this.retryTimer = setTimeout(
-          () => {
-            if (this.finalResolve) this.sendControl({ type: "commit" });
-          },
-          // Node overflows delays above 2^31-1 to 1 ms. Bound untrusted
-          // backoff to the production final deadline, never a tight retry loop.
-          Math.min(
-            30000,
-            Math.max(20, Number.isFinite(message.retry_after_ms) ? message.retry_after_ms : 100)
-          )
-        );
+        this.retryTimer = setTimeout(() => {
+          if (this.finalResolve) this.sendControl({ type: "commit" });
+        }, capacityRetryDelay(message.retry_after_ms));
       } else {
         this.fail(new Error(message.message || `Orukeet transcription failed: ${message.code}`));
       }
