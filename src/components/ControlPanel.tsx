@@ -59,6 +59,7 @@ import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
 import { useCreateNote } from "../hooks/useCreateNote";
+import { useSignInCloudNudge } from "../hooks/useSignInCloudNudge";
 import {
   setActiveNoteId,
   setActiveFolderId,
@@ -195,6 +196,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     downloadUpdate,
     installUpdate,
   } = useUpdater();
+
+  const openTranscriptionSettings = useCallback(() => {
+    setSettingsSection("transcription");
+    setShowSettings(true);
+  }, []);
+  useSignInCloudNudge(isSignedIn, openTranscriptionSettings);
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
   const { createNote } = useCreateNote();

@@ -4,12 +4,12 @@ import { Cloud, Key, Cpu, Network } from "../icons";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
 import { isModeAllowedByPolicy } from "../../stores/policyRules";
+import { requestSignIn } from "../../utils/requestSignIn";
 import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import type { InferenceMode } from "../../types/electron";
-import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 import { getMeetingStreamingTranscriptionProviders } from "../../models/ModelRegistry";
 
 const MEETING_BYOK_PROVIDER_IDS = getMeetingStreamingTranscriptionProviders().map(
@@ -35,7 +35,6 @@ const noop = () => {};
 
 export function MeetingTranscriptionPanel() {
   const { t } = useTranslation();
-  const startOnboarding = useStartOnboarding();
   const policySnapshot = usePolicySnapshot();
 
   const {
@@ -102,7 +101,7 @@ export function MeetingTranscriptionPanel() {
     if (!isModeAllowed(mode)) return;
     if (mode === "self-hosted") return;
     if (mode === "openwhispr" && !isSignedIn) {
-      startOnboarding();
+      requestSignIn();
       return;
     }
     if (mode === effectiveTranscriptionMode) return;
