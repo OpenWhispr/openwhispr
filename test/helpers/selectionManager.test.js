@@ -435,7 +435,57 @@ test("captureSelectedText awaits an in-flight target probe before reading lastTa
   assert.equal(result.text, "picked");
 });
 
-test("a superseded probe never overwrites the newer probe's target", async () => {
+test("start target captures share in-flight and recent work", async () => {
+  let now = 1000;
+  let calls = 0;
+  const resolvers = [];
+  const manager = new SelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {},
+    platform: "linux",
+    now: () => now,
+  });
+  manager._probeTarget = () => {
+    calls += 1;
+    return new Promise((resolve) => resolvers.push(resolve));
+  };
+
+  const first = manager.captureTarget();
+  const joined = manager.captureTarget();
+  assert.equal(calls, 1);
+  resolvers[0]({ kind: "atspi-pid", id: "1" });
+  await Promise.all([first, joined]);
+
+  const reused = manager.captureTarget();
+  assert.equal(calls, 1);
+  await reused;
+
+  now += 250;
+  const refreshed = manager.captureTarget();
+  assert.equal(calls, 2);
+  resolvers[1]({ kind: "atspi-pid", id: "2" });
+  await refreshed;
+});
+
+test("a failed target probe is retried rather than reused", async () => {
+  let calls = 0;
+  const manager = new SelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {},
+    platform: "linux",
+    now: () => 1000,
+  });
+  manager._probeTarget = async () => {
+    calls += 1;
+    return null;
+  };
+
+  await manager.captureTarget();
+  await manager.captureTarget();
+  assert.equal(calls, 2);
+});
+
+test("a forced probe stays fresh and older work cannot overwrite it", async () => {
   const clipboardManager = { runClipboardOperation: (operation) => operation() };
   const manager = new SelectionManager({
     clipboardManager,
@@ -447,13 +497,149 @@ test("a superseded probe never overwrites the newer probe's target", async () =>
   manager._getLinuxTarget = () => new Promise((resolve) => resolvers.push(resolve));
 
   const first = manager.captureTarget();
-  const second = manager.captureTarget();
+  const second = manager.captureTarget({ force: true });
   resolvers[1]({ kind: "atspi-pid", id: "2" });
   await second;
   resolvers[0]({ kind: "atspi-pid", id: "1" });
   await first;
 
   assert.deepEqual(manager.lastTarget, { kind: "atspi-pid", id: "2" });
+});
+
+test("Wayland target lookup attempts AT-SPI once", async () => {
+  const spawnCalls = [];
+  const SpawningSelectionManager = loadSelectionManager({
+    spawn: (command, args) => {
+      spawnCalls.push({ command, args });
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = () => {};
+      process.nextTick(() => child.emit("close", 1));
+      return child;
+    },
+  });
+  const manager = new SpawningSelectionManager({
+    clipboardManager: {
+      _isWayland: () => true,
+      commandExists: () => false,
+      resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste",
+    },
+    platform: "linux",
+    now: () => 1000,
+  });
+
+  assert.equal(await manager._getLinuxTarget(), null);
+  assert.equal(await manager._getLinuxTarget(), null);
+  assert.deepEqual(spawnCalls, [
+    { command: "/tmp/linux-fast-paste", args: ["--atspi-target"] },
+    { command: "/tmp/linux-fast-paste", args: ["--atspi-target"] },
+  ]);
+});
+
+test("an AT-SPI timeout opens a cooldown and retries after it expires", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let now = 1000;
+  let spawns = 0;
+  let kills = 0;
+  const SpawningSelectionManager = loadSelectionManager({
+    spawn: () => {
+      spawns += 1;
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = () => {
+        kills += 1;
+      };
+      return child;
+    },
+  });
+  const manager = new SpawningSelectionManager({
+    clipboardManager: {
+      resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste",
+    },
+    platform: "linux",
+    now: () => now,
+  });
+
+  const first = manager._getLinuxAtspiTarget();
+  t.mock.timers.tick(2000);
+  assert.equal(await first, null);
+  assert.equal(spawns, 1);
+  assert.equal(kills, 1);
+
+  const cooledTarget = manager._getLinuxAtspiTarget();
+  assert.equal(spawns, 1, "a target probe must not spawn during the cooldown");
+  assert.equal(await cooledTarget, null);
+  const cooledSelection = manager._readLinuxAtspiSelection("/tmp/linux-fast-paste", {
+    kind: "atspi-pid",
+    id: "42",
+  });
+  assert.equal(spawns, 1, "a selection read must not spawn during the cooldown");
+  assert.equal((await cooledSelection).code, "accessibility_unavailable");
+
+  now += 2000;
+  const retry = manager._getLinuxAtspiTarget();
+  t.mock.timers.tick(2000);
+  assert.equal(await retry, null);
+  assert.equal(spawns, 2);
+  assert.equal(kills, 2);
+
+  now += 2000;
+  const selection = manager._readLinuxAtspiSelection("/tmp/linux-fast-paste", {
+    kind: "atspi-pid",
+    id: "42",
+  });
+  t.mock.timers.tick(1200);
+  assert.equal((await selection).status, "unavailable");
+  assert.equal(spawns, 3);
+  assert.equal(kills, 3);
+  const cooledBySelection = manager._getLinuxAtspiTarget();
+  assert.equal(spawns, 3, "a selection timeout must cool down target probes too");
+  assert.equal(await cooledBySelection, null);
+});
+
+test("older AT-SPI timeouts cannot cool down a newer successful probe", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let spawns = 0;
+  const SpawningSelectionManager = loadSelectionManager({
+    spawn: () => {
+      spawns += 1;
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = () => {};
+      if (spawns >= 3) {
+        process.nextTick(() => {
+          child.stdout.emit("data", "TARGET ATSPI 42\n");
+          child.emit("close", 0);
+        });
+      }
+      return child;
+    },
+  });
+  const manager = new SpawningSelectionManager({
+    clipboardManager: {
+      resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste",
+    },
+    platform: "linux",
+    now: () => 1000,
+  });
+
+  const olderTarget = manager._getLinuxAtspiTarget();
+  const olderSelection = manager._readLinuxAtspiSelection("/tmp/linux-fast-paste", {
+    kind: "atspi-pid",
+    id: "42",
+  });
+  const newer = manager._getLinuxAtspiTarget();
+  assert.deepEqual(await newer, { kind: "atspi-pid", id: "42" });
+  t.mock.timers.tick(2000);
+  assert.equal(await olderTarget, null);
+  assert.equal((await olderSelection).status, "unavailable");
+
+  const next = manager._getLinuxAtspiTarget();
+  assert.equal(spawns, 4, "neither older timeout may open a cooldown");
+  assert.deepEqual(await next, { kind: "atspi-pid", id: "42" });
 });
 
 // The Windows paste path restores the window captured at record start (#859).
