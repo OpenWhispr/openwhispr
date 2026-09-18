@@ -66,6 +66,14 @@ export function buildStreamingSessionOptions({
     environment: settings.cortiEnvironment,
     tenant: settings.cortiTenant,
   };
+  // Endpoint and credential must cross the IPC boundary together.
+  if (
+    providerName === "openai-realtime" &&
+    settings.cloudTranscriptionProvider === "custom" &&
+    settings.cloudTranscriptionMode === "byok"
+  ) {
+    options.baseUrl = settings.cloudTranscriptionBaseUrl;
+  }
   // Tinfoil realtime shows the live preview for normal dictation (#1120), but
   // assistant voice skips it because the Assistant panel owns that surface.
   if (providerName === "tinfoil-realtime" && !voiceAgentRequested) {
