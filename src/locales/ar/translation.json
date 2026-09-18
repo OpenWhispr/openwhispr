@@ -1628,7 +1628,17 @@
       "conversationWillAppear": "ستظهر المحادثة هنا...",
       "linkedEvent": "الحدث المرتبط",
       "noFolder": "بدون مجلد",
-      "participants": "المشاركون"
+      "participants": "المشاركون",
+      "table": {
+        "actions": "إجراءات الجدول",
+        "insertRowAbove": "إدراج صف أعلى",
+        "insertRowBelow": "إدراج صف أسفل",
+        "insertColumnLeft": "إدراج عمود إلى اليسار",
+        "insertColumnRight": "إدراج عمود إلى اليمين",
+        "deleteRow": "حذف الصف",
+        "deleteColumn": "حذف العمود",
+        "deleteTable": "حذف الجدول"
+      }
     },
     "participants": {
       "attendee": "حاضر",

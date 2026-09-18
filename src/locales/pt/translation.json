@@ -2948,7 +2948,17 @@
       "conversationWillAppear": "A conversa aparecerá aqui...",
       "linkedEvent": "Evento vinculado",
       "noFolder": "Sem pasta",
-      "participants": "Participantes"
+      "participants": "Participantes",
+      "table": {
+        "actions": "Ações da tabela",
+        "insertRowAbove": "Inserir linha acima",
+        "insertRowBelow": "Inserir linha abaixo",
+        "insertColumnLeft": "Inserir coluna à esquerda",
+        "insertColumnRight": "Inserir coluna à direita",
+        "deleteRow": "Excluir linha",
+        "deleteColumn": "Excluir coluna",
+        "deleteTable": "Excluir tabela"
+      }
     },
     "participants": {
       "attendee": "participante",

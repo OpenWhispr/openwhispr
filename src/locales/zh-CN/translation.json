@@ -2948,7 +2948,17 @@
       "conversationWillAppear": "对话将显示在这里...",
       "linkedEvent": "关联日程",
       "noFolder": "无文件夹",
-      "participants": "参与者"
+      "participants": "参与者",
+      "table": {
+        "actions": "表格操作",
+        "insertRowAbove": "在上方插入行",
+        "insertRowBelow": "在下方插入行",
+        "insertColumnLeft": "在左侧插入列",
+        "insertColumnRight": "在右侧插入列",
+        "deleteRow": "删除行",
+        "deleteColumn": "删除列",
+        "deleteTable": "删除表格"
+      }
     },
     "participants": {
       "attendee": "位参会者",

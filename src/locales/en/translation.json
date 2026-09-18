@@ -3291,7 +3291,17 @@
       "conversationWillAppear": "Conversation will appear here...",
       "linkedEvent": "Linked event",
       "noFolder": "No folder",
-      "participants": "Participants"
+      "participants": "Participants",
+      "table": {
+        "actions": "Table actions",
+        "insertRowAbove": "Insert row above",
+        "insertRowBelow": "Insert row below",
+        "insertColumnLeft": "Insert column left",
+        "insertColumnRight": "Insert column right",
+        "deleteRow": "Delete row",
+        "deleteColumn": "Delete column",
+        "deleteTable": "Delete table"
+      }
     },
     "participants": {
       "attendee": "attendee",
