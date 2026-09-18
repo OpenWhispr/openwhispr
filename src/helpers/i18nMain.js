@@ -1,4 +1,5 @@
 const i18next = require("i18next");
+const SUPPORTED_UI_LANGUAGES = Object.keys(require("../config/uiLanguageCodes.json"));
 
 const enTranslation = require("../locales/en/translation.json");
 const arTranslation = require("../locales/ar/translation.json");
@@ -24,33 +25,16 @@ const jaPrompts = require("../locales/ja/prompts.json");
 const zhCNPrompts = require("../locales/zh-CN/prompts.json");
 const zhTWPrompts = require("../locales/zh-TW/prompts.json");
 
-const SUPPORTED_UI_LANGUAGES = [
-  "en",
-  "ar",
-  "es",
-  "fr",
-  "de",
-  "pt",
-  "it",
-  "ru",
-  "ja",
-  "zh-CN",
-  "zh-TW",
-];
-
 function normalizeUiLanguage(language) {
   const candidate = (language || "").trim();
-
-  // Check full language-region code first (e.g. "zh-CN", "zh-TW")
   const normalized = candidate.replace(/_/g, "-");
   const fullMatch = SUPPORTED_UI_LANGUAGES.find(
-    (lang) => lang.toLowerCase() === normalized.toLowerCase()
+    (supported) => supported.toLowerCase() === normalized.toLowerCase()
   );
   if (fullMatch) return fullMatch;
 
-  // Chinese is the only UI language that is not the primary subtag. OS/browser
-  // tags are zh-Hans-CN, zh-Hant-TW, zh-HK, zh_Hant_TW, or bare zh — none of
-  // those equal zh-CN/zh-TW, and falling through to "zh" is not in the list.
+  // Chinese is the only UI language that is not represented by its primary
+  // subtag, so map common OS/browser script and region tags explicitly.
   const lower = normalized.toLowerCase();
   if (lower === "zh" || lower.startsWith("zh-")) {
     const parts = lower.split("-");
@@ -60,7 +44,6 @@ function normalizeUiLanguage(language) {
     return "zh-CN";
   }
 
-  // Fall back to base language code (e.g. "en" from "en-US")
   const base = lower.split("-")[0];
   return SUPPORTED_UI_LANGUAGES.includes(base) ? base : "en";
 }

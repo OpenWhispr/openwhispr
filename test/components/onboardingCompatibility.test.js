@@ -118,6 +118,7 @@ test("interface language step exposes one selected locale without transcription 
   const { default: InterfaceLanguageStep } = await vite.ssrLoadModule(
     "/components/onboarding/InterfaceLanguageStep.tsx"
   );
+  const { UI_LANGUAGE_OPTIONS } = await vite.ssrLoadModule("/config/uiLanguages.ts");
 
   const markup = renderToStaticMarkup(
     React.createElement(InterfaceLanguageStep, {
@@ -130,9 +131,11 @@ test("interface language step exposes one selected locale without transcription 
   assert.match(markup, /role="radiogroup" aria-label="Interface language"/);
   const radioInputs = markup.match(/<input[^>]*type="radio"[^>]*>/g) ?? [];
   const names = radioInputs.map((input) => input.match(/name="([^"]+)"/)?.[1]);
-  assert.equal(radioInputs.length, 11);
+  assert.equal(radioInputs.length, UI_LANGUAGE_OPTIONS.length);
   assert.equal(new Set(names).size, 1);
-  assert.equal(radioInputs.filter((input) => input.includes('checked=""')).length, 1);
+  const checked = radioInputs.filter((input) => input.includes('checked=""'));
+  assert.equal(checked.length, 1);
+  assert.match(checked[0], /value="zh-CN"/);
   assert.match(markup, /简体中文/);
   assert.doesNotMatch(markup, />Auto</);
 });

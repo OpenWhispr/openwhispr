@@ -4,7 +4,7 @@ import { UI_LANGUAGE_OPTIONS, type UiLanguage } from "../../config/uiLanguages";
 import OnboardingList from "./OnboardingList";
 
 interface InterfaceLanguageStepProps {
-  value: string;
+  value: UiLanguage;
   onChange: (language: UiLanguage) => void;
   label: string;
 }
@@ -22,7 +22,7 @@ export default function InterfaceLanguageStep({
         {UI_LANGUAGE_OPTIONS.map((language) => {
           const selected = language.value === value;
           return (
-            <label key={language.value} className="onboarding-list-row w-full text-left">
+            <label key={language.value} className="onboarding-list-row w-full text-start">
               <input
                 type="radio"
                 name={groupName}

@@ -1,18 +1,10 @@
-export const SUPPORTED_UI_LANGUAGES = [
-  "en",
-  "ar",
-  "es",
-  "fr",
-  "de",
-  "pt",
-  "it",
-  "ru",
-  "ja",
-  "zh-CN",
-  "zh-TW",
-] as const;
+import UI_LANGUAGE_CODES from "./uiLanguageCodes.json";
 
-export type UiLanguage = (typeof SUPPORTED_UI_LANGUAGES)[number];
+export type UiLanguage = keyof typeof UI_LANGUAGE_CODES;
+
+export const SUPPORTED_UI_LANGUAGES: readonly UiLanguage[] = Object.keys(
+  UI_LANGUAGE_CODES
+) as UiLanguage[];
 
 export interface UiLanguageOption {
   value: UiLanguage;

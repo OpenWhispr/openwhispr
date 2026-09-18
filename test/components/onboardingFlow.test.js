@@ -235,6 +235,20 @@ test("versioned sessions reject malformed or old data", async () => {
   );
 });
 
+test("an in-progress v2 session resumes without rewinding for a newly inserted step", async () => {
+  const { createOnboardingSession, parseOnboardingSession } = await load();
+  const session = {
+    ...createOnboardingSession(),
+    currentStepId: "languages",
+    history: ["auth", "permissions"],
+    authPath: "account",
+  };
+
+  const resumed = parseOnboardingSession(JSON.stringify(session));
+  assert.equal(resumed.currentStepId, "languages");
+  assert.deepEqual(resumed.history, ["auth", "permissions"]);
+});
+
 // The permissions step's Enable click must survive the quit-and-reopen macOS
 // asks for after granting Screen Recording, or the OS permission lands with
 // the Voice Assistant setting still off.
