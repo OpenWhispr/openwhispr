@@ -2443,6 +2443,22 @@ declare global {
       }>;
 
       // Authenticated cloud API proxy (`public: true` skips the auth requirement)
+      getAffiliateCandidate?: () => Promise<{
+        config: { domain: string } | null;
+        candidate: { link: string; clickId: string | null; saved: boolean } | null;
+        generation: number;
+      }>;
+      saveAffiliateCandidate?: (input: {
+        link: string;
+        clickId?: string | null;
+        saved?: boolean;
+        generation: number;
+      }) => Promise<void>;
+      resolveAffiliateLink?: (
+        link: string,
+        generation: number
+      ) => Promise<{ link: string; clickId: string }>;
+      onAffiliateLink?: (callback: () => void) => () => void;
       cloudApiRequest?: (opts: {
         method?: string;
         path: string;

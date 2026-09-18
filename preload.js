@@ -778,6 +778,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cloudSwitchPlan: (opts) => ipcRenderer.invoke("cloud-switch-plan", opts),
   cloudPreviewSwitch: (opts) => ipcRenderer.invoke("cloud-preview-switch", opts),
   cloudApiRequest: (opts) => ipcRenderer.invoke("cloud-api-request", opts),
+  getAffiliateCandidate: () => ipcRenderer.invoke("affiliate-get-candidate"),
+  saveAffiliateCandidate: (input) => ipcRenderer.invoke("affiliate-save-candidate", input),
+  resolveAffiliateLink: (link, generation) =>
+    ipcRenderer.invoke("affiliate-resolve-link", link, generation),
+  onAffiliateLink: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on("affiliate-link", handler);
+    return () => ipcRenderer.removeListener("affiliate-link", handler);
+  },
   getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
   getWorkspacePolicy: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("get-workspace-policy", accountId, expectedAuthGeneration),

@@ -1,3 +1,4 @@
+import { startAffiliateAttribution } from "../stores/affiliateStore";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { authClient, getGracePeriodRemainingMs, isWithinGracePeriod } from "../lib/auth";
 import {
@@ -70,6 +71,7 @@ async function refreshManagedEnterpriseIdentity(accountId: string, authGeneratio
 }
 
 export function useAuth() {
+  useEffect(startAffiliateAttribution, []);
   const useSession = authClient?.useSession ?? useStaticSession;
   const { data: ambientSession, isPending, error: sessionError, refetch } = useSession();
   const accountRevision = useSyncExternalStore(

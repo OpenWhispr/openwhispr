@@ -629,6 +629,7 @@ function initializeDeferredManagers() {
 app.on("open-url", (event, url) => {
   event.preventDefault();
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
+  if (handleAffiliateDeepLink(url)) return;
 
   if (url.includes("upgrade-success")) {
     handleUpgradeDeepLink();
@@ -653,6 +654,22 @@ app.on("open-url", (event, url) => {
     dockManager.setControlPanelVisible(true);
   }
 });
+
+function handleAffiliateDeepLink(url) {
+  try {
+    if (!require("./src/helpers/affiliateLinks").capture(url, OAUTH_PROTOCOL)) return false;
+    if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
+      windowManager.controlPanelWindow.show();
+      windowManager.controlPanelWindow.focus();
+      dockManager.setControlPanelVisible(true);
+      windowManager.controlPanelWindow.webContents.send("affiliate-link");
+    }
+    return true;
+  } catch {
+    debugLogger.error("Creator link could not be saved");
+    return false;
+  }
+}
 
 function isInvitationDeepLink(url) {
   return url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("invitations/");
@@ -1093,7 +1110,9 @@ async function startApp() {
   // Windows/Linux cold start delivers protocol URLs via argv (macOS uses
   // open-url); without this scan a deep link that launches the app is lost.
   const initialProtocolUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
-  if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
+  if (initialProtocolUrl && handleAffiliateDeepLink(initialProtocolUrl)) {
+    await flushPendingNoteDeepLink();
+  } else if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
     await handleNoteDeepLink(initialProtocolUrl);
   } else {
     if (initialProtocolUrl && process.platform !== "darwin") {
@@ -1853,6 +1872,7 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
+      if (handleAffiliateDeepLink(url)) return;
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
       } else if (isNoteDeepLink(url)) {

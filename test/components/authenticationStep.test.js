@@ -90,6 +90,7 @@ test("email authentication discovers accounts, restores drafts, and persists the
     cachePrefix: "openwhispr-authentication-step-",
     noExternal: ["react", "react-dom", "react-i18next"],
     mockModules: {
+      "/stores/affiliateStore": `export function useAffiliateStore() { return { enabled: false }; }`,
       // A minimal renderer rather than react-dom: it returns the element tree so
       // the assertions can read rendered output, and it collects effects so the
       // render helper can run them. Nothing here is keyed on hook call order.

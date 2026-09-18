@@ -14,6 +14,7 @@ const { resolveFailedGpuBackends } = require("./whisper");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
+const affiliateLinks = require("./affiliateLinks");
 const { createCloudApiRequestHandler } = require("./cloudApiRequest");
 const { decodeLeaderboardPngDataUrl, leaderboardImageFilename } = require("./leaderboardImage");
 const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
@@ -9751,6 +9752,17 @@ class IPCHandlers {
     });
 
     ipcMain.handle("cloud-api-request", (_event, opts) => handleCloudApiRequest(opts));
+    ipcMain.handle("affiliate-get-candidate", () => ({
+      config: affiliateLinks.configuration(),
+      candidate: affiliateLinks.candidateForCurrentAccount(),
+      generation: tokenStore.getState().generation,
+    }));
+    ipcMain.handle("affiliate-save-candidate", (_event, input) =>
+      affiliateLinks.saveCandidate(input)
+    );
+    ipcMain.handle("affiliate-resolve-link", (_event, link, generation) =>
+      affiliateLinks.resolveLink(link, generation)
+    );
 
     ipcMain.handle("get-stt-config", handleSttConfigRequest);
 
