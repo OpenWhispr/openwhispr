@@ -123,6 +123,7 @@
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
       "holdNeedsReleaseKey": "Halten zum Sprechen braucht eine Taste, deren Loslassen macOS erkennt: Globe, eine rechte Taste wie Rechte Option oder ein Kürzel mit Modifikator. Tippen funktioniert mit jeder Taste.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
+      "windowsKeyListenerMissing": "\"{{hotkey}}\" benötigt den Windows-Tasten-Listener, der in dieser Installation fehlt. Wählen Sie ein Tastenkürzel mit einer normalen Taste, z. B. F8.",
       "updateFailedCheckFormat": "Hotkey konnte nicht auf \"{{hotkey}}\" aktualisiert werden. Prüfen Sie, ob das Format gültig ist.",
       "trySuggestions": "Versuchen Sie: {{suggestions}}",
       "slotConflict": "Diese Tastenkombination wird bereits für {{slot}} verwendet."

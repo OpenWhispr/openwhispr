@@ -530,6 +530,7 @@ function initializeCoreManagers() {
   windowManager.textEditMonitor = textEditMonitor;
   windowManager.selectionManager = selectionManager;
   windowManager.windowsKeyManager = windowsKeyManager;
+  hotkeyManager.windowsKeyManager = windowsKeyManager;
   windowManager.linuxKeyManager = linuxKeyManager;
 
   // IPC handlers must be registered before window content loads
@@ -1073,9 +1074,10 @@ async function startApp() {
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
   await windowManager.createMainWindow();
   // The activation mode was cached before the hotkey was registered, so a saved
-  // Hold could not be checked against its key until now.
+  // Hold could not be checked against its key until now. Check the saved value:
+  // the cache already refuses Hold when the Windows key listener is missing.
   if (
-    windowManager.getActivationMode() === "push" &&
+    environmentManager.getActivationMode() === "push" &&
     !windowManager.hotkeyManager.supportsPushToTalk()
   ) {
     await windowManager.setActivationModeCache("tap");
