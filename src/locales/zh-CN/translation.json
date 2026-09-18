@@ -3099,6 +3099,7 @@
       "runAction": "运行 {{name}}",
       "selectAction": "选择操作",
       "done": "完成",
+      "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
       "builtin": {
         "generateNotes": {
           "name": "生成笔记",

@@ -3152,6 +3152,7 @@
       "runAction": "Ejecutar {{name}}",
       "selectAction": "Seleccionar acción",
       "done": "Listo",
+      "chunkProgress": "Parte {{step}} de {{total}}",
       "builtin": {
         "generateNotes": {
           "name": "Generar notas",

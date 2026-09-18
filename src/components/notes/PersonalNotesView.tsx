@@ -563,6 +563,7 @@ export default function PersonalNotesView({
   const {
     state: actionProcessingState,
     actionName,
+    progress: actionProgress,
     runAction,
   } = useActionProcessing(activeNoteId ?? null);
 
@@ -697,6 +698,13 @@ export default function PersonalNotesView({
       modelId: effectiveModelId,
       isMeetingNote,
       knownPeople,
+      // The pieces, so a recording too long for a local model can be split
+      // along the transcript rather than through the joined string.
+      material: {
+        notes: hasNotes ? noteContent : "",
+        meetingContext,
+        transcript: formattedTranscript,
+      },
       allowTitleGeneration: isRegenerableNoteTitle(
         editorNote.title,
         [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],
@@ -793,6 +801,7 @@ export default function PersonalNotesView({
               onCancelPendingSaves={cancelPendingSaves}
               actionProcessingState={actionProcessingState}
               actionName={actionName}
+              actionProgress={actionProgress}
               onGenerateSummary={generateSummary}
               actionPicker={
                 <ActionPicker

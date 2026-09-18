@@ -1842,6 +1842,13 @@ declare global {
         details?: Record<string, unknown>;
       }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
+      /** The largest context this machine can give a bundled model; drives chunked note generation. */
+      getLocalContextBudget: (modelId: string) => Promise<{
+        success: boolean;
+        maxContextTokens?: number;
+        modelName?: string;
+        error?: string;
+      }>;
 
       // Anthropic reasoning
       processAnthropicReasoning: (
