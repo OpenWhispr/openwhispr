@@ -17,7 +17,7 @@ function findRunButton(node) {
   return findRunButton(node.props?.children);
 }
 
-test("Prompt Studio labels dictation-agent runs for policy enforcement", async (t) => {
+test("Prompt Studio preserves agent purpose and shows model-specific cleanup controls", async (t) => {
   const calls = [];
   globalThis.__promptStudioReasoningCalls = calls;
 
@@ -43,6 +43,7 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
             "react-i18next": "i18n",
             "zustand/react/shallow": "zustand-shallow",
             "./button": "button",
+            "./SettingsSection": "section",
             "./textarea": "textarea",
             "./select": "select",
             "../icons": "icons",
@@ -93,6 +94,7 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
             return `export function useShallow(selector) { return selector; }`;
           }
           if (id === "\0prompt-studio-button") return "export function Button() {}";
+          if (id === "\0prompt-studio-section") return "export function SectionHeader() {}";
           if (id === "\0prompt-studio-textarea") return "export function Textarea() {}";
           if (id === "\0prompt-studio-select") {
             return "export const Select = () => null, SelectContent = Select, SelectItem = Select, SelectTrigger = Select, SelectValue = Select;";
@@ -160,6 +162,9 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
                 uiLanguage: "en",
                 useCleanupModel: true,
                 cleanupModel: "",
+                cleanupMode: "openwhispr",
+                s1MiniOptions: { styling: "semi-formal", structure: "prose", context: "general" },
+                setS1MiniOptions() {},
                 useDictationAgent: true,
                 dictationAgentMode: "openwhispr",
                 dictationAgentProvider: "openwhispr",
@@ -181,7 +186,7 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
               export function useSettingsStore(selector) { return selector(state); }
               useSettingsStore.getState = () => state;
               export function selectPolicyEffectiveSettings(settings) { return settings; }
-              export const selectIsCloudCleanupMode = () => true;
+              export const selectIsCloudCleanupMode = (settings) => settings.cleanupMode === "openwhispr";
               export const selectIsCloudDictationAgentMode = () => true;
               export const selectIsCloudTranslationMode = () => true;
             `;
@@ -238,4 +243,30 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0][3].requiresAgent, true);
+
+  const { useSettingsStore } = await vite.ssrLoadModule("\0prompt-studio-settings");
+  const settings = useSettingsStore.getState();
+  settings.cleanupMode = "local";
+  for (const model of ["s1-mini-q4_k_m", "mlx-community/S1-mini-MLX-4bit"]) {
+    settings.cleanupModel = model;
+    const cleanup = JSON.stringify(PromptStudio({}));
+    assert.ok(cleanup.includes("S1-mini by Superwhisper"));
+    for (const key of ["description", "styling", "structure", "context"]) {
+      assert.ok(cleanup.includes(`s1Mini.${key}`));
+    }
+    assert.ok(cleanup.includes("promptStudio.tabs.test"));
+    assert.ok(!cleanup.includes("settingsPage.prompts.title"));
+    assert.ok(!cleanup.includes("settingsPage.prompts.description"));
+    assert.ok(!cleanup.includes("promptStudio.tabs.customize"));
+    assert.ok(!cleanup.includes("default prompt"));
+  }
+  settings.cleanupModel = "qwen3.5-2b-q4_k_m";
+  const generic = JSON.stringify(PromptStudio({}));
+  assert.ok(generic.includes("settingsPage.prompts.title"));
+  assert.ok(generic.includes("promptStudio.tabs.customize"));
+  assert.ok(!generic.includes("s1Mini.description"));
+
+  settings.cleanupModel = "s1-mini-q4_k_m";
+  settings.cleanupMode = "openwhispr";
+  assert.ok(JSON.stringify(PromptStudio({})).includes("settingsPage.prompts.title"));
 });

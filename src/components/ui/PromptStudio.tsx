@@ -3,6 +3,7 @@ import { isS1MiniModel, S1_MINI_OPTIONS, type S1MiniOptions } from "../../config
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./button";
+import { SectionHeader } from "./SettingsSection";
 import { Textarea } from "./textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 import { Eye, Edit3, Play, Save, RotateCcw, Copy, TestTube, AlertTriangle, Check } from "../icons";
@@ -312,6 +313,12 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
   return (
     <div className={className}>
+      {kind === "cleanup" && (
+        <SectionHeader
+          title={isS1Mini ? "S1-mini by Superwhisper" : t("settingsPage.prompts.title")}
+          description={isS1Mini ? undefined : t("settingsPage.prompts.description")}
+        />
+      )}
       <AlertDialog
         open={alertDialog.open}
         onOpenChange={(open) => !open && hideAlertDialog()}
