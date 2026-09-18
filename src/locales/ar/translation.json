@@ -3754,6 +3754,7 @@
     "listening": "جاري الاستماع...",
     "pressAnyKey": "اضغط على أي مفتاح أو Ctrl+Shift+K",
     "pressAnyKeyMac": "اضغط على أي مفتاح أو ⌘⇧K",
+    "captureMac": "اضغط على المفتاح أو زر الماوس الذي تريد استخدامه",
     "recording": "جاري التسجيل",
     "tryShortcut": "جرّب Ctrl+Shift+K",
     "tryShortcutMac": "جرّب ⌘⇧K",

@@ -112,6 +112,23 @@ test("mouse buttons are collected across slots and de-duplicated", () => {
   assert.equal(config.suppressGlobeAction, false);
 });
 
+test("macOS mouse buttons cover middle through button 32 and canonicalize names", () => {
+  const mgr = makeManager({
+    dictation: ["mousebutton3", "MouseButton32", "MouseButton2"],
+    voiceAgent: "MouseButton33",
+    translation: "MouseButton31",
+  });
+
+  assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS), {
+    mouseButtons: ["MouseButton3", "MouseButton32", "MouseButton31"],
+    suppressGlobeAction: false,
+  });
+  assert.equal(mgr.slotHasHotkey("dictation", "MouseButton3"), true);
+  assert.equal(HotkeyManager.isMouseButtonHotkey("MouseButton2"), false);
+  assert.equal(HotkeyManager.isMouseButtonHotkey("MouseButton32"), true);
+  assert.equal(HotkeyManager.isMouseButtonHotkey("MouseButton33"), false);
+});
+
 test("slots outside the requested list are ignored", () => {
   // meeting is not wired to the macOS native listener.
   const mgr = makeManager({ dictation: "F8", meeting: "GLOBE" });

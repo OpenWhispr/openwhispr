@@ -39,8 +39,17 @@ export function serializeHotkeyList(list: string[]): string {
   return parseHotkeyList(list.join(",")).join(",");
 }
 
+const MOUSE_BUTTON_HOTKEY_PATTERN = /^MouseButton(?:[3-9]|[12][0-9]|3[0-2])$/i;
+
+/** True for the macOS mouse button tokens supported by the native listener. */
 export function isMouseButtonHotkey(hotkey: string): boolean {
-  return /^MouseButton[45]$/i.test(hotkey || "");
+  return MOUSE_BUTTON_HOTKEY_PATTERN.test(hotkey || "");
+}
+
+/** Return the numeric button for a supported mouse hotkey, or null otherwise. */
+export function getMouseButtonNumber(hotkey: string): number | null {
+  if (!isMouseButtonHotkey(hotkey)) return null;
+  return Number(hotkey.slice("MouseButton".length));
 }
 
 /**
@@ -144,8 +153,9 @@ export function formatHotkeyLabelForPlatform(hotkey: string, platform: Platform)
     return "Globe/Fn";
   }
 
-  if (isMouseButtonHotkey(hotkey)) {
-    return hotkey === "MouseButton4" ? "Mouse Button 4" : "Mouse Button 5";
+  const mouseButtonNumber = getMouseButtonNumber(hotkey);
+  if (mouseButtonNumber !== null) {
+    return mouseButtonNumber === 3 ? "Middle mouse button" : `Mouse Button ${mouseButtonNumber}`;
   }
 
   if (hotkey.includes("+")) {

@@ -1302,6 +1302,7 @@
     "listening": "入力待ち...",
     "pressAnyKey": "任意のキーまたは Ctrl+Shift+K を押してください",
     "pressAnyKeyMac": "任意のキーまたは ⌘⇧K を押してください",
+    "captureMac": "使用するキーまたはマウスボタンを押してください",
     "recording": "記録中",
     "tryShortcut": "Ctrl+Shift+K をお試しください",
     "tryShortcutMac": "⌘⇧K をお試しください",

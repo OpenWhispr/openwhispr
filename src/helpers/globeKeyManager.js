@@ -20,6 +20,18 @@ const RESTART_RESET_MS = 10000;
 const PREFERENCE_RECOVERY_TIMEOUT_MS = 2000;
 const PREFERENCE_RECOVERY_TERMINATION_TIMEOUT_MS = 1000;
 
+const MOUSE_BUTTON_NAME_PATTERN = /^MouseButton([3-9]|[12]\d|3[0-2])$/i;
+
+function canonicalizeMouseButtonName(value) {
+  if (typeof value !== "string") return null;
+  const match = MOUSE_BUTTON_NAME_PATTERN.exec(value.trim());
+  return match ? `MouseButton${Number(match[1])}` : null;
+}
+
+function compareMouseButtonNames(left, right) {
+  return Number(left.slice("MouseButton".length)) - Number(right.slice("MouseButton".length));
+}
+
 class GlobeKeyManager extends EventEmitter {
   constructor({ preferenceStatePath = null } = {}) {
     super();
@@ -38,8 +50,12 @@ class GlobeKeyManager extends EventEmitter {
   setConfiguration({ mouseButtons = [], suppressGlobeAction = false } = {}) {
     const next = {
       mouseButtons: [
-        ...new Set(mouseButtons.filter((button) => /^MouseButton[45]$/i.test(button))),
-      ].sort(),
+        ...new Set(
+          (Array.isArray(mouseButtons) ? mouseButtons : [])
+            .map(canonicalizeMouseButtonName)
+            .filter(Boolean)
+        ),
+      ].sort(compareMouseButtonNames),
       suppressGlobeAction: Boolean(suppressGlobeAction),
     };
 
@@ -290,12 +306,14 @@ class GlobeKeyManager extends EventEmitter {
               this.emit("modifier-up", modifier);
             }
           } else if (line.startsWith("MOUSE_BUTTON_DOWN:")) {
-            const button = line.replace("MOUSE_BUTTON_DOWN:", "").trim();
+            const button = canonicalizeMouseButtonName(
+              line.replace("MOUSE_BUTTON_DOWN:", "").trim()
+            );
             if (button) {
               this.emit("mouse-button-down", button);
             }
           } else if (line.startsWith("MOUSE_BUTTON_UP:")) {
-            const button = line.replace("MOUSE_BUTTON_UP:", "").trim();
+            const button = canonicalizeMouseButtonName(line.replace("MOUSE_BUTTON_UP:", "").trim());
             if (button) {
               this.emit("mouse-button-up", button);
             }
