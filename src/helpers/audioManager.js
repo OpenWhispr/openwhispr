@@ -77,6 +77,7 @@ import {
 import { getTranscriptionApiKey } from "../services/fileTranscription";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
+  isOrukeetStreaming,
   isSelfHostedTranscription,
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription";
@@ -392,6 +393,11 @@ const STREAMING_PROVIDERS = {
     onSessionEnd: (cb) => window.electronAPI.onAssemblyAiSessionEnd(cb),
   },
   "openai-realtime": makeDictationRealtimeProvider("openai-realtime"),
+  orukeet: {
+    ...makeDictationRealtimeProvider("orukeet"),
+    finalizeAcknowledged: true,
+    finalize: () => window.electronAPI.dictationRealtimeFinalize(),
+  },
   gemini: {
     // The final transcript lands ~500ms after audioStreamEnd (which finalize
     // sends), ~2s at the p95 tail, so the stop sequence waits for it under a
@@ -3660,7 +3666,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       formData.append("file", uploadAudio, `audio.${extension}`);
       formData.append("model", model);
 
-      if (language) {
+      if (language && model !== "orukeet-v0.1.0") {
         formData.append("language", language);
       }
 
@@ -3682,7 +3688,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         MAX_PROMPT_CHARS
       );
       const dictionaryPrompt = trimmedPrompt.prompt;
-      if (dictionaryPrompt) {
+      if (dictionaryPrompt && model !== "orukeet-v0.1.0") {
         if (trimmedPrompt.truncated) {
           logger.debug(
             "Custom dictionary prompt truncated",
@@ -4208,8 +4214,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // setups; an error resolution must fail closed on the batch path too.
     if (getManagedTranscriptionResolution()) return false;
 
+    if (isOrukeetStreaming(s)) return Boolean(s.customTranscriptionApiKey);
+
     // Self-hosted transcription is batch HTTP to the user's server, never cloud realtime WS.
     if (isSelfHostedTranscription(s)) return false;
+
+    if (
+      s.cloudTranscriptionMode === "openwhispr" &&
+      this.sttConfig?.streamingProvider === "orukeet"
+    ) {
+      return (
+        Boolean(isSignedInOverride ?? s.isSignedIn) &&
+        this.sttConfig.dictation?.mode === "streaming"
+      );
+    }
 
     // Corti (BYOK) streams over its own WSS — independent of OpenWhispr Cloud.
     if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
@@ -4541,7 +4559,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
         // on stop; the sentinel must not be sent as audio (realtime backends
         // reject the odd-length non-PCM bytes with "Invalid audio data").
-        if (!ownsSession() || !this.isStreaming || event.data === "flushed") return;
+        if (!ownsSession() || !this.isStreaming) return;
+        if (event.data === "flushed") {
+          this._streamingFlushResolve?.();
+          return;
+        }
         provider.send(event.data);
       };
 
@@ -4967,14 +4989,45 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const t0 = performance.now();
     let finalText = this.streamingFinalText || "";
 
-    // 1. Stop the processor — it flushes its remaining buffer on "stop".
-    //    Keep isStreaming TRUE so the port.onmessage handler forwards the flush to WebSocket.
-    if (this.streamingProcessor) {
+    const provider = this.getStreamingProvider();
+    let acknowledgedFinal = null;
+    let finalAcknowledged = false;
+    // The worklet emits PCM followed by "flushed" on the same message port.
+    // IPC sends and the finalize invoke preserve that order in the main process.
+    if (this.streamingProcessor && provider.finalizeAcknowledged) {
+      const processor = this.streamingProcessor;
+      let watchdog;
+      const flushed = new Promise((resolve, reject) => {
+        this._streamingFlushResolve = resolve;
+        watchdog = setTimeout(
+          () => reject(new Error("Audio worklet did not flush")),
+          PREVIEW_FLUSH_WATCHDOG_MS
+        );
+      });
+      processor.port.postMessage("stop");
+      try {
+        await flushed;
+      } catch (error) {
+        // Incomplete capture must use the retained recording, never commit a
+        // truncated stream. Keep cleanup running so the microphone is released.
+        acknowledgedFinal = Promise.resolve({ success: false, error: error.message });
+      } finally {
+        clearTimeout(watchdog);
+        this._streamingFlushResolve = null;
+        processor.disconnect();
+        this.streamingProcessor = null;
+      }
+      if (wasCancelled()) return abandonFinalization();
+      acknowledgedFinal ||= provider.finalize().catch((error) => ({
+        success: false,
+        error: error.message,
+      }));
+    } else if (this.streamingProcessor) {
       try {
         this.streamingProcessor.port.postMessage("stop");
         this.streamingProcessor.disconnect();
-      } catch (e) {
-        // Ignore
+      } catch {
+        /* Capture is already stopped. */
       }
       this.streamingProcessor = null;
     }
@@ -5020,18 +5073,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     // 2. Wait for flushed buffer to travel: port -> main thread -> IPC -> WebSocket -> server.
     //    Then mark streaming done so no further audio is forwarded.
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    if (!provider.finalizeAcknowledged) await new Promise((resolve) => setTimeout(resolve, 120));
     if (wasCancelled()) return abandonFinalization();
     this.isStreaming = false;
     const tFlush = performance.now();
 
     // 3. Finalize tells the provider to process any buffered audio and send final results.
     //    Wait for the transcript to settle before disconnecting.
-    const provider = this.getStreamingProvider();
-    provider.finalize?.();
-    if (provider.awaitsFinalTranscript) {
+    if (provider.finalizeAcknowledged) {
+      const result = await (acknowledgedFinal || provider.finalize());
+      finalAcknowledged = result?.success === true;
+      if (finalAcknowledged && typeof result.text === "string") {
+        this.streamingFinalText = result.text;
+      }
+      if (!result?.success) {
+        logger.warn("Streaming finalization failed", { error: result?.error }, "streaming");
+      }
+    } else if (provider.awaitsFinalTranscript) {
+      provider.finalize?.();
       await this.awaitStreamingTextSettled(provider.finalCeilingMs);
     } else {
+      provider.finalize?.();
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
     if (wasCancelled()) return abandonFinalization();
@@ -5247,7 +5309,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let usedBatchFallback = false;
     let batchWarning = null;
     let batchFallbackResult = null;
-    if (!finalText && durationSeconds > 2 && fallbackBlob?.size > 0) {
+    if (!finalText && !finalAcknowledged && durationSeconds > 2 && fallbackBlob?.size > 0) {
       const target = resolveStreamingFallbackTarget(getSettings());
       if (target === "skip") {
         logger.warn(
@@ -5454,6 +5516,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   cleanupStreamingAudio() {
+    this._streamingFlushResolve?.();
+    this._streamingFlushResolve = null;
     if (this.streamingFallbackRecorder?.state === "recording") {
       try {
         this.streamingFallbackRecorder.stop();

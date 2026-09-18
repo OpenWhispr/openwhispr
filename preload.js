@@ -953,6 +953,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   dictationRealtimeWarmup: (options) => ipcRenderer.invoke("dictation-realtime-warmup", options),
   dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
   dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
+  dictationRealtimeFinalize: () => ipcRenderer.invoke("dictation-realtime-finalize"),
   dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
   onDictationRealtimePartial: registerListener(
     "dictation-realtime-partial",

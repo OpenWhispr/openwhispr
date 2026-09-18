@@ -55,6 +55,7 @@ export interface NoteRecordingProvider {
 // renderers (#1624).
 export interface DictationRealtimeSessionOptions {
   provider: string;
+  baseUrl?: string;
   model?: string;
   mode?: "byok" | "openwhispr";
   language?: string;
@@ -3064,6 +3065,11 @@ declare global {
         options: DictationRealtimeSessionOptions
       ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
+      dictationRealtimeFinalize?: () => Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+      }>;
       dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;

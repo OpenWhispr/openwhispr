@@ -1,0 +1,1644 @@
+{
+  "measuredDate": "2026-09-16",
+  "endpoint": "orukeet.gizmovoice.ai",
+  "metric": "Streaming PCM commit/stop to final transcript, after uploading during recording",
+  "fixtureSeconds": 10,
+  "sourceSummarySha256": "452f509dbba8303e93044693972db4341c148b30709d98c7f569c895a1de1dc7",
+  "fixtureSha256": "bfc3e8cf9e2aa3f7a585a650511d7500cadac481ade9ab365048fd8e4578d4d9",
+  "regions": {
+    "us-west1": {
+      "cloudflare-latency": {
+        "runs": 3,
+        "completed": 15,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 15,
+          "p50": 37.39811500418,
+          "p95": 88.65351490385365,
+          "min": 34.35369899671059,
+          "max": 88.70478499738965
+        },
+        "capture_stop_to_final_ms": {
+          "n": 0
+        },
+        "inference_ms": {
+          "n": 15,
+          "p50": 15.276114994776435,
+          "p95": 15.773231702041812,
+          "min": 15.159067988861352,
+          "max": 16.10299400635995
+        },
+        "server_ms": {
+          "n": 15,
+          "p50": 16.950614997767843,
+          "p95": 17.570555403653998,
+          "min": 16.73667698923964,
+          "max": 17.92639199993573
+        },
+        "queue_ms": {
+          "n": 15,
+          "p50": 0.04797799920197576,
+          "p95": 0.08205189951695502,
+          "min": 0.044132000766694546,
+          "max": 0.08318800246343017
+        },
+        "connect_ready_ms": {
+          "n": 3,
+          "p50": 167.69088999717496,
+          "p95": 238.88416149566183,
+          "min": 146.82351199735422,
+          "max": 246.7945249954937
+        },
+        "throughput_per_run": [0.09939345511178033, 0.09827827554312317, 0.09939155972399391],
+        "throughput_median": 0.09939155972399391,
+        "total_capacity_retries": 0,
+        "max_capacity_retries_for_one_utterance": 0,
+        "served_regions": ["us-west1"],
+        "cloudflare_colos": ["PDX", "SEA"]
+      },
+      "cloudflare-capacity": {
+        "runs": 3,
+        "completed": 2400,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 2400,
+          "p50": 88.95987099822378,
+          "p95": 136.0882603410573,
+          "min": 35.92747500806581,
+          "max": 243.29013300302904
+        },
+        "capture_stop_to_final_ms": {
+          "n": 0
+        },
+        "inference_ms": {
+          "n": 2400,
+          "p50": 21.697413991205394,
+          "p95": 23.0595853048726,
+          "min": 13.906816995586269,
+          "max": 24.91190099681262
+        },
+        "server_ms": {
+          "n": 2400,
+          "p50": 49.52179400424939,
+          "p95": 70.86002785435994,
+          "min": 15.121917007490993,
+          "max": 77.73033299599774
+        },
+        "queue_ms": {
+          "n": 2400,
+          "p50": 25.396536497282796,
+          "p95": 46.58383109344868,
+          "min": 0.03370799822732806,
+          "max": 53.07964999519754
+        },
+        "connect_ready_ms": {
+          "n": 24,
+          "p50": 343.03431500302395,
+          "p95": 423.6987250522361,
+          "min": 307.0219020009972,
+          "max": 425.0976720068138
+        },
+        "throughput_per_run": [65.8849305674157, 62.777211413971074, 63.369972629500495],
+        "throughput_median": 63.369972629500495,
+        "total_capacity_retries": 0,
+        "max_capacity_retries_for_one_utterance": 0,
+        "served_regions": ["us-west1"],
+        "cloudflare_colos": ["PDX", "SEA"]
+      },
+      "cloudflare-steady-capacity": {
+        "runs": 3,
+        "completed": 5257,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 5257,
+          "p50": 139.06356900406536,
+          "p95": 370.829886404681,
+          "min": 39.171791009721346,
+          "max": 1398.2839069940383
+        },
+        "capture_stop_to_final_ms": {
+          "n": 0
+        },
+        "inference_ms": {
+          "n": 5257,
+          "p50": 22.2091400064528,
+          "p95": 23.858899003244005,
+          "min": 14.048659999389201,
+          "max": 26.547198998741806
+        },
+        "server_ms": {
+          "n": 5257,
+          "p50": 76.89273700816557,
+          "p95": 91.61225579446182,
+          "min": 16.33158398908563,
+          "max": 99.97175700846128
+        },
+        "queue_ms": {
+          "n": 5257,
+          "p50": 52.85092300618999,
+          "p95": 67.17252980452031,
+          "min": 0.03820299752987921,
+          "max": 74.49111799360253
+        },
+        "connect_ready_ms": {
+          "n": 48,
+          "p50": 597.4099515005946,
+          "p95": 826.7456596971897,
+          "min": 534.0082990005612,
+          "max": 1044.6568059996935
+        },
+        "throughput_per_run": [86.6, 86.8, 87.05],
+        "throughput_median": 86.8,
+        "total_capacity_retries": 2385,
+        "max_capacity_retries_for_one_utterance": 8,
+        "served_regions": ["us-west1"],
+        "cloudflare_colos": ["PDX", "SEA"]
+      },
+      "cloudflare-paced-load": {
+        "runs": 3,
+        "completed": 288,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 288,
+          "p50": 34.66434350411873,
+          "p95": 89.87392539274877,
+          "min": 30.439975002082065,
+          "max": 196.71407500572968
+        },
+        "capture_stop_to_final_ms": {
+          "n": 288,
+          "p50": 35.309218503243756,
+          "p95": 90.93446294791646,
+          "min": 30.890774985891767,
+          "max": 197.26837999769486
+        },
+        "inference_ms": {
+          "n": 288,
+          "p50": 15.490844001760706,
+          "p95": 16.29103334780666,
+          "min": 14.201917001628317,
+          "max": 16.78279199404642
+        },
+        "server_ms": {
+          "n": 288,
+          "p50": 17.233126003702637,
+          "p95": 18.30052670338773,
+          "min": 15.546914000879042,
+          "max": 34.70938799728174
+        },
+        "queue_ms": {
+          "n": 288,
+          "p50": 0.0480739981867373,
+          "p95": 0.08691265611560078,
+          "min": 0.03552999987732619,
+          "max": 16.626498007099144
+        },
+        "connect_ready_ms": {
+          "n": 96,
+          "p50": 1054.1702409973368,
+          "p95": 1149.532678504329,
+          "min": 1004.5032560010441,
+          "max": 1162.4567849939922
+        },
+        "throughput_per_run": [2.3735064769183123, 2.389934000276688, 2.391007786079151],
+        "throughput_median": 2.389934000276688,
+        "total_capacity_retries": 0,
+        "max_capacity_retries_for_one_utterance": 0,
+        "served_regions": ["us-west1"],
+        "cloudflare_colos": ["PDX", "SEA"]
+      }
+    },
+    "europe-west4": {
+      "cloudflare-latency": {
+        "runs": 3,
+        "completed": 15,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 15,
+          "p50": 28.496206003183033,
+          "p95": 31.198537995078368,
+          "min": 27.581046997511294,
+          "max": 31.566758996632416
+        },
+        "capture_stop_to_final_ms": {
+          "n": 0
+        },
+        "inference_ms": {
+          "n": 15,
+          "p50": 15.325889995438047,
+          "p95": 16.682437599956756,
+          "min": 15.190432000963483,
+          "max": 16.725307003071066
+        },
+        "server_ms": {
+          "n": 15,
+          "p50": 16.941488000156824,
+          "p95": 18.456098200840643,
+          "min": 16.784707993792836,
+          "max": 18.586314996355213
+        },
+        "queue_ms": {
+          "n": 15,
+          "p50": 0.04955600161338225,
+          "p95": 0.07745909751974978,
+          "min": 0.043467996874824166,
+          "max": 0.07942399679450318
+        },
+        "connect_ready_ms": {
+          "n": 3,
+          "p50": 116.39142499916488,
+          "p95": 135.09943970129825,
+          "min": 111.87697000423213,
+          "max": 137.1781080015353
+        },
+        "throughput_per_run": [0.09957181650715546, 0.09953240139457036, 0.09957360222439111],
+        "throughput_median": 0.09957181650715546,
+        "total_capacity_retries": 0,
+        "max_capacity_retries_for_one_utterance": 0,
+        "served_regions": ["europe-west4"],
+        "cloudflare_colos": ["AMS"]
+      },
+      "cloudflare-capacity": {
+        "runs": 3,
+        "completed": 2400,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 2400,
+          "p50": 84.96778600238031,
+          "p95": 88.11109775015211,
+          "min": 38.611387004493736,
+          "max": 124.72904899914283
+        },
+        "capture_stop_to_final_ms": {
+          "n": 0
+        },
+        "inference_ms": {
+          "n": 2400,
+          "p50": 20.854217502346728,
+          "p95": 21.774439456567052,
+          "min": 14.076924002438318,
+          "max": 22.612469001614954
+        },
+        "server_ms": {
+          "n": 2400,
+          "p50": 71.3542609992146,
+          "p95": 74.75498144885933,
+          "min": 21.572060002654325,
+          "max": 103.65517800528323
+        },
+        "queue_ms": {
+          "n": 2400,
+          "p50": 48.858554000617005,
+          "p95": 51.715754147517146,
+          "min": 0.0642140003037639,
+          "max": 79.793539000093
+        },
+        "connect_ready_ms": {
+          "n": 24,
+          "p50": 300.9320055025455,
+          "p95": 311.9738512526965,
+          "min": 275.61356599471765,
+          "max": 346.4899619939388
+        },
+        "throughput_per_run": [92.342972703996, 92.83519503637766, 92.4656425842433],
+        "throughput_median": 92.4656425842433,
+        "total_capacity_retries": 0,
+        "max_capacity_retries_for_one_utterance": 0,
+        "served_regions": ["europe-west4"],
+        "cloudflare_colos": ["AMS"]
+      },
+      "cloudflare-steady-capacity": {
+        "runs": 3,
+        "completed": 5517,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 5517,
+          "p50": 88.04546699684579,
+          "p95": 543.9681823976571,
+          "min": 38.48152199498145,
+          "max": 1905.5146149985376
+        },
+        "capture_stop_to_final_ms": {
+          "n": 0
+        },
+        "inference_ms": {
+          "n": 5517,
+          "p50": 21.360853002988733,
+          "p95": 22.574934201838914,
+          "min": 13.881232000130694,
+          "max": 23.74992799741449
+        },
+        "server_ms": {
+          "n": 5517,
+          "p50": 74.68627400521655,
+          "p95": 87.20658700331114,
+          "min": 15.404620004119352,
+          "max": 105.0813929978176
+        },
+        "queue_ms": {
+          "n": 5517,
+          "p50": 51.48413399729179,
+          "p95": 64.08300040056929,
+          "min": 0.03493000258458778,
+          "max": 81.7580029979581
+        },
+        "connect_ready_ms": {
+          "n": 48,
+          "p50": 541.8293780021486,
+          "p95": 555.8051784464624,
+          "min": 502.6445320036146,
+          "max": 575.3484009983367
+        },
+        "throughput_per_run": [91.15, 91.45, 90.85],
+        "throughput_median": 91.15,
+        "total_capacity_retries": 4118,
+        "max_capacity_retries_for_one_utterance": 16,
+        "served_regions": ["europe-west4"],
+        "cloudflare_colos": ["AMS"]
+      },
+      "cloudflare-paced-load": {
+        "runs": 3,
+        "completed": 288,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 288,
+          "p50": 28.54358299737214,
+          "p95": 30.39052444510162,
+          "min": 26.03060399997048,
+          "max": 49.49536200001603
+        },
+        "capture_stop_to_final_ms": {
+          "n": 288,
+          "p50": 29.156679000152508,
+          "p95": 31.24427459879371,
+          "min": 26.690724000218324,
+          "max": 49.61990300216712
+        },
+        "inference_ms": {
+          "n": 288,
+          "p50": 15.375995000795228,
+          "p95": 16.0796141019091,
+          "min": 14.279101000283845,
+          "max": 17.8862980028498
+        },
+        "server_ms": {
+          "n": 288,
+          "p50": 17.075132000172744,
+          "p95": 17.886656849077553,
+          "min": 15.547433999017812,
+          "max": 24.71397500630701
+        },
+        "queue_ms": {
+          "n": 288,
+          "p50": 0.047325000195996836,
+          "p95": 0.07856154988985509,
+          "min": 0.03450899384915829,
+          "max": 8.209888001147192
+        },
+        "connect_ready_ms": {
+          "n": 96,
+          "p50": 1040.475415000401,
+          "p95": 1057.383997251236,
+          "min": 1004.3532330018934,
+          "max": 1082.2008879986242
+        },
+        "throughput_per_run": [2.3928500498522447, 2.3925434322160215, 2.393655452198392],
+        "throughput_median": 2.3928500498522447,
+        "total_capacity_retries": 0,
+        "max_capacity_retries_for_one_utterance": 0,
+        "served_regions": ["europe-west4"],
+        "cloudflare_colos": ["AMS"]
+      }
+    },
+    "asia-southeast1": {
+      "cloudflare-latency": {
+        "runs": 3,
+        "completed": 15,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 15,
+          "p50": 23.199657000077423,
+          "p95": 26.792576604202623,
+          "min": 21.75484100007452,
+          "max": 27.253346001089085
+        },
+        "capture_stop_to_final_ms": {
+          "n": 0
+        },
+        "inference_ms": {
+          "n": 15,
+          "p50": 15.258936997270212,
+          "p95": 17.727760400885018,
+          "min": 15.154314998653717,
+          "max": 17.78070000000298
+        },
+        "server_ms": {
+          "n": 15,
+          "p50": 16.836927003168967,
+          "p95": 19.959851400199113,
+          "min": 16.719380997528788,
+          "max": 20.102684997254983
+        },
+        "queue_ms": {
+          "n": 15,
+          "p50": 0.04705500032287091,
+          "p95": 0.06893519821460359,
+          "min": 0.044911001168657094,
+          "max": 0.07168899901444092
+        },
+        "connect_ready_ms": {
+          "n": 3,
+          "p50": 100.40146100072889,
+          "p95": 111.56334110055468,
+          "min": 92.69537199725164,
+          "max": 112.80355000053532
+        },
+        "throughput_per_run": [0.0996728913184443, 0.09967344375757732, 0.09970702322407601],
+        "throughput_median": 0.09967344375757732,
+        "total_capacity_retries": 0,
+        "max_capacity_retries_for_one_utterance": 0,
+        "served_regions": ["asia-southeast1"],
+        "cloudflare_colos": ["SIN"]
+      },
+      "cloudflare-capacity": {
+        "runs": 3,
+        "completed": 2400,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 2400,
+          "p50": 85.42219300215947,
+          "p95": 88.93836389870557,
+          "min": 32.96060899447184,
+          "max": 115.7482480048202
+        },
+        "capture_stop_to_final_ms": {
+          "n": 0
+        },
+        "inference_ms": {
+          "n": 2400,
+          "p50": 20.940153000992723,
+          "p95": 22.177108003234025,
+          "min": 13.971345004392788,
+          "max": 23.369157999695744
+        },
+        "server_ms": {
+          "n": 2400,
+          "p50": 77.68924650008557,
+          "p95": 81.76296104575158,
+          "min": 23.07502799521899,
+          "max": 103.86272100004135
+        },
+        "queue_ms": {
+          "n": 2400,
+          "p50": 54.96105150086805,
+          "p95": 58.499097447202075,
+          "min": 0.06627300172112882,
+          "max": 80.69560099829687
+        },
+        "connect_ready_ms": {
+          "n": 24,
+          "p50": 281.89902649683063,
+          "p95": 293.7796431040624,
+          "min": 259.5967000015662,
+          "max": 300.89746299927356
+        },
+        "throughput_per_run": [91.44258943121791, 93.16471917095664, 93.09232229596887],
+        "throughput_median": 93.09232229596887,
+        "total_capacity_retries": 0,
+        "max_capacity_retries_for_one_utterance": 0,
+        "served_regions": ["asia-southeast1"],
+        "cloudflare_colos": ["SIN"]
+      },
+      "cloudflare-steady-capacity": {
+        "runs": 3,
+        "completed": 5463,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 5463,
+          "p50": 90.45207400049549,
+          "p95": 511.28158350111323,
+          "min": 32.823041001392994,
+          "max": 2579.0176219961722
+        },
+        "capture_stop_to_final_ms": {
+          "n": 0
+        },
+        "inference_ms": {
+          "n": 5463,
+          "p50": 21.573671001533512,
+          "p95": 22.9751570004737,
+          "min": 14.280791001510806,
+          "max": 25.305893999757245
+        },
+        "server_ms": {
+          "n": 5463,
+          "p50": 81.64321500225924,
+          "p95": 88.40585729994928,
+          "min": 15.725518002000172,
+          "max": 106.88002399547258
+        },
+        "queue_ms": {
+          "n": 5463,
+          "p50": 57.970540001406334,
+          "p95": 64.80719940082054,
+          "min": 0.03378799738129601,
+          "max": 80.8847340013017
+        },
+        "connect_ready_ms": {
+          "n": 48,
+          "p50": 520.995065497118,
+          "p95": 541.1208228983014,
+          "min": 500.1859850017354,
+          "max": 566.5393649978796
+        },
+        "throughput_per_run": [90.45, 89.45, 90.85],
+        "throughput_median": 90.45,
+        "total_capacity_retries": 4385,
+        "max_capacity_retries_for_one_utterance": 23,
+        "served_regions": ["asia-southeast1"],
+        "cloudflare_colos": ["SIN"]
+      },
+      "cloudflare-paced-load": {
+        "runs": 3,
+        "completed": 288,
+        "errors": [],
+        "transcript_mismatches": 0,
+        "commit_to_final_ms": {
+          "n": 288,
+          "p50": 22.862000503664603,
+          "p95": 24.95292150197201,
+          "min": 19.81763300136663,
+          "max": 30.674941001052503
+        },
+        "capture_stop_to_final_ms": {
+          "n": 288,
+          "p50": 23.525642998720286,
+          "p95": 25.68866324654664,
+          "min": 20.22723900154233,
+          "max": 31.292591003875714
+        },
+        "inference_ms": {
+          "n": 288,
+          "p50": 15.265287001966499,
+          "p95": 16.13629304811184,
+          "min": 14.108852999925148,
+          "max": 17.823153000790626
+        },
+        "server_ms": {
+          "n": 288,
+          "p50": 16.874447999725817,
+          "p95": 17.901847350003663,
+          "min": 15.351269001257606,
+          "max": 23.432488000253215
+        },
+        "queue_ms": {
+          "n": 288,
+          "p50": 0.04677800097852014,
+          "p95": 0.07071080035530028,
+          "min": 0.03563499922165647,
+          "max": 7.698952002101578
+        },
+        "connect_ready_ms": {
+          "n": 96,
+          "p50": 1006.4408890029881,
+          "p95": 1036.4956009998423,
+          "min": 997.3075759990024,
+          "max": 1039.4030210009078
+        },
+        "throughput_per_run": [2.395512830349654, 2.3955011918684406, 2.395576356787422],
+        "throughput_median": 2.395512830349654,
+        "total_capacity_retries": 0,
+        "max_capacity_retries_for_one_utterance": 0,
+        "served_regions": ["asia-southeast1"],
+        "cloudflare_colos": ["SIN"]
+      }
+    }
+  },
+  "mac": {
+    "runs": 1,
+    "completed": 15,
+    "errors": [],
+    "transcript_mismatches": 0,
+    "commit_to_final_ms": {
+      "n": 15,
+      "p50": 92.27562503656372,
+      "p95": 144.78671620017846,
+      "min": 70.19033399410546,
+      "max": 160.35862499848008
+    },
+    "capture_stop_to_final_ms": {
+      "n": 0
+    },
+    "inference_ms": {
+      "n": 15,
+      "p50": 15.320314007112756,
+      "p95": 15.579477700521238,
+      "min": 15.223711990984157,
+      "max": 15.748170000733808
+    },
+    "server_ms": {
+      "n": 15,
+      "p50": 17.036866003763862,
+      "p95": 17.359658896748442,
+      "min": 16.87808000133373,
+      "max": 17.569465009728447
+    },
+    "queue_ms": {
+      "n": 15,
+      "p50": 0.04826999793294817,
+      "p95": 0.0629658985417336,
+      "min": 0.04413900023791939,
+      "max": 0.0791729980846867
+    },
+    "connect_ready_ms": {
+      "n": 1,
+      "p50": 204.86245903884992,
+      "p95": 204.86245903884992,
+      "min": 204.86245903884992,
+      "max": 204.86245903884992
+    },
+    "throughput_per_run": [0.09810585801775057],
+    "throughput_median": 0.09810585801775057,
+    "total_capacity_retries": 0,
+    "max_capacity_retries_for_one_utterance": 0,
+    "served_regions": ["us-west1"],
+    "cloudflare_colos": ["SJC"]
+  },
+  "pacedPeakConnections": 96,
+  "pacedFinals": 864,
+  "totalNativeFinals": 24361,
+  "liveChecks": 189,
+  "nativeLatencySamples": [
+    {
+      "source": "cloudflare-latency-asia-southeast1-1.json",
+      "sourceSha256": "9b4c227036e8737c10355bea18a6b61981e19c3f8e544661a6d506a320021bd4",
+      "rows": [
+        {
+          "worker": 0,
+          "iteration": 0,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 27.253346001089085,
+          "ping_ms": 6.092019000789151,
+          "recording_to_final_ms": 10028.075598995201,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 19.898637001460884,
+          "inference_ms": 17.705072001263034,
+          "queue_ms": 0.07168899901444092,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 1,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 23.76402899972163,
+          "ping_ms": 5.990957994072232,
+          "recording_to_final_ms": 10024.518033998902,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.7647050038795,
+          "inference_ms": 15.227137999318074,
+          "queue_ms": 0.04557499778456986,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 2,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 23.023262001515832,
+          "ping_ms": 6.39027199940756,
+          "recording_to_final_ms": 10023.282890004339,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.795151997939683,
+          "inference_ms": 15.19696199829923,
+          "queue_ms": 0.048380999942310154,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 3,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 23.316201004490722,
+          "ping_ms": 5.96768400282599,
+          "recording_to_final_ms": 10023.585499002365,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.72972800588468,
+          "inference_ms": 15.184959003818221,
+          "queue_ms": 0.04646500019589439,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 4,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 23.46991700323997,
+          "ping_ms": 6.988883003941737,
+          "recording_to_final_ms": 10023.754161004035,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.763710998930037,
+          "inference_ms": 15.238045001751743,
+          "queue_ms": 0.04759400326292962,
+          "batch_size": 1
+        }
+      ]
+    },
+    {
+      "source": "cloudflare-latency-asia-southeast1-2.json",
+      "sourceSha256": "b934389a9ce263ee953531513e80b8e9a3804fd5466dda5f220d3ece723eca9e",
+      "rows": [
+        {
+          "worker": 0,
+          "iteration": 0,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 26.595104005536996,
+          "ping_ms": 8.50642199657159,
+          "recording_to_final_ms": 10027.424914005678,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 20.102684997254983,
+          "inference_ms": 17.78070000000298,
+          "queue_ms": 0.06775499787181616,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 1,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 23.18995499808807,
+          "ping_ms": 6.030534001183696,
+          "recording_to_final_ms": 10023.79671199742,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.90967600006843,
+          "inference_ms": 15.323642001021653,
+          "queue_ms": 0.04705500032287091,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 2,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 23.038530998746864,
+          "ping_ms": 5.709247998311184,
+          "recording_to_final_ms": 10024.083343996608,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.8264169988106,
+          "inference_ms": 15.251261000230443,
+          "queue_ms": 0.05604299803962931,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 3,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 23.22474300308386,
+          "ping_ms": 6.034694997651968,
+          "recording_to_final_ms": 10024.241322003945,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.88082899636356,
+          "inference_ms": 15.347312000812963,
+          "queue_ms": 0.045382003008853644,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 4,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 23.880839995399583,
+          "ping_ms": 6.318950996501371,
+          "recording_to_final_ms": 10024.491408999893,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.886153003724758,
+          "inference_ms": 15.306672001315746,
+          "queue_ms": 0.04785600322065875,
+          "batch_size": 1
+        }
+      ]
+    },
+    {
+      "source": "cloudflare-latency-asia-southeast1-3.json",
+      "sourceSha256": "fe84c2c8ed9a5f4e4f845bd70811995312c688f5df18d60f7319ca6b07982d5a",
+      "rows": [
+        {
+          "worker": 0,
+          "iteration": 0,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 23.199657000077423,
+          "ping_ms": 5.189557996345684,
+          "recording_to_final_ms": 10024.04533799563,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 18.022110998572316,
+          "inference_ms": 16.299977993185166,
+          "queue_ms": 0.055222000810317695,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 1,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 21.79774399701273,
+          "ping_ms": 5.880354001419619,
+          "recording_to_final_ms": 10022.770158997446,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.836927003168967,
+          "inference_ms": 15.243453002767637,
+          "queue_ms": 0.044911001168657094,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 2,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 22.403533999749925,
+          "ping_ms": 4.9448499994468875,
+          "recording_to_final_ms": 10023.553259998152,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.20164099970134,
+          "inference_ms": 15.623853003489785,
+          "queue_ms": 0.04665899905376136,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 3,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 21.833202001289465,
+          "ping_ms": 4.926456000248436,
+          "recording_to_final_ms": 10022.24751799804,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.834413996548392,
+          "inference_ms": 15.258936997270212,
+          "queue_ms": 0.04665600135922432,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 4,
+          "region": "asia-southeast1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 21.75484100007452,
+          "ping_ms": 4.771282001456711,
+          "recording_to_final_ms": 10022.313537003356,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.719380997528788,
+          "inference_ms": 15.154314998653717,
+          "queue_ms": 0.04535799962468445,
+          "batch_size": 1
+        }
+      ]
+    },
+    {
+      "source": "cloudflare-latency-california-mac.json",
+      "sourceSha256": "1a60711cbc3217407b939c1dff380bdc38090904d7ea2370520401b5bbdb7de9",
+      "rows": [
+        {
+          "worker": 0,
+          "iteration": 0,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 94.92104197852314,
+          "ping_ms": 71.70474994927645,
+          "recording_to_final_ms": 10097.105459019076,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.269741991185583,
+          "inference_ms": 15.507181000430137,
+          "queue_ms": 0.05370400322135538,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 1,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 76.27862499793991,
+          "ping_ms": 74.1206249804236,
+          "recording_to_final_ms": 10077.863916987553,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.956976003712043,
+          "inference_ms": 15.282127991667949,
+          "queue_ms": 0.04413900023791939,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 2,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 92.27562503656372,
+          "ping_ms": 70.99366700276732,
+          "recording_to_final_ms": 10092.783666041214,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.00557500589639,
+          "inference_ms": 15.320314007112756,
+          "queue_ms": 0.0505780044477433,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 3,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 72.9330830508843,
+          "ping_ms": 58.68908402044326,
+          "recording_to_final_ms": 10073.56329105096,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.105342005379498,
+          "inference_ms": 15.290235009160824,
+          "queue_ms": 0.04609499592334032,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 4,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 160.35862499848008,
+          "ping_ms": 111.0183330019936,
+          "recording_to_final_ms": 10162.710791977588,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.109348002122715,
+          "inference_ms": 15.436589004821144,
+          "queue_ms": 0.0791729980846867,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 5,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 121.19625002378598,
+          "ping_ms": 59.437666030135006,
+          "recording_to_final_ms": 10123.124917037785,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.172599997138605,
+          "inference_ms": 15.3971390100196,
+          "queue_ms": 0.050085989641956985,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 6,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 81.66754199191928,
+          "ping_ms": 62.63591698370874,
+          "recording_to_final_ms": 10083.943458972499,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.036866003763862,
+          "inference_ms": 15.329606991144828,
+          "queue_ms": 0.05060799594502896,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 7,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 109.28629100089893,
+          "ping_ms": 74.07466595759615,
+          "recording_to_final_ms": 10109.800082980655,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.569465009728447,
+          "inference_ms": 15.748170000733808,
+          "queue_ms": 0.046828004997223616,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 8,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 134.4482090207748,
+          "ping_ms": 187.83400004031137,
+          "recording_to_final_ms": 10134.886375046335,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.948355987551622,
+          "inference_ms": 15.286397989257239,
+          "queue_ms": 0.04434499714989215,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 9,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 98.99687499273568,
+          "ping_ms": 56.05279200244695,
+          "recording_to_final_ms": 10099.82287499588,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.187208010000177,
+          "inference_ms": 15.42712798982393,
+          "queue_ms": 0.04826999793294817,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 10,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 90.44200001517311,
+          "ping_ms": 129.39550000010058,
+          "recording_to_final_ms": 10092.567540996242,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.036752004059963,
+          "inference_ms": 15.378936994238757,
+          "queue_ms": 0.04948599962517619,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 11,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 138.11304100090638,
+          "ping_ms": 117.64437501551583,
+          "recording_to_final_ms": 10140.24000003701,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.87808000133373,
+          "inference_ms": 15.235496000968851,
+          "queue_ms": 0.05601999873761088,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 12,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 70.19033399410546,
+          "ping_ms": 110.18174997298047,
+          "recording_to_final_ms": 10072.624499967787,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.904934993362986,
+          "inference_ms": 15.223711990984157,
+          "queue_ms": 0.04723100573755801,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 13,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 74.4675419991836,
+          "ping_ms": 86.33462496800348,
+          "recording_to_final_ms": 10076.586917042732,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.209184996318072,
+          "inference_ms": 15.296803001547232,
+          "queue_ms": 0.04728799103759229,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 14,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 75.45204198686406,
+          "ping_ms": 54.048457997851074,
+          "recording_to_final_ms": 10077.806999965105,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.917667002417147,
+          "inference_ms": 15.277985003194772,
+          "queue_ms": 0.04732799425255507,
+          "batch_size": 1
+        }
+      ]
+    },
+    {
+      "source": "cloudflare-latency-europe-west4-1.json",
+      "sourceSha256": "d896fe33301351fa13cdc0f4150ffd0385a089a7032fbf37588a8137830b22f6",
+      "rows": [
+        {
+          "worker": 0,
+          "iteration": 0,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 29.565709999587853,
+          "ping_ms": 12.69584900001064,
+          "recording_to_final_ms": 10030.55203799886,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 18.40029100276297,
+          "inference_ms": 16.725307003071066,
+          "queue_ms": 0.05080499977339059,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 1,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 28.001408994896337,
+          "ping_ms": 10.607793999952264,
+          "recording_to_final_ms": 10028.474176993768,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.804154998681042,
+          "inference_ms": 15.252502998919226,
+          "queue_ms": 0.047537003410980105,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 2,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 27.602425005170517,
+          "ping_ms": 11.706391000188887,
+          "recording_to_final_ms": 10028.514790006739,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.904107993468642,
+          "inference_ms": 15.332292001403403,
+          "queue_ms": 0.04641900159185752,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 3,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 27.581046997511294,
+          "ping_ms": 13.470452999172267,
+          "recording_to_final_ms": 10027.91198399791,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.809549000754487,
+          "inference_ms": 15.220624001813121,
+          "queue_ms": 0.043467996874824166,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 4,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 27.830685998196714,
+          "ping_ms": 10.753574002592359,
+          "recording_to_final_ms": 10028.143080999143,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.062722996342927,
+          "inference_ms": 15.377879004518036,
+          "queue_ms": 0.06303199916146696,
+          "batch_size": 1
+        }
+      ]
+    },
+    {
+      "source": "cloudflare-latency-europe-west4-2.json",
+      "sourceSha256": "488bb845c3e40199e0a8956e1c71519dc905f43980f7fc00f17d6640f9369ab6",
+      "rows": [
+        {
+          "worker": 0,
+          "iteration": 0,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 31.040728994412348,
+          "ping_ms": 12.969109004188795,
+          "recording_to_final_ms": 10032.122630997037,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 18.218665005406365,
+          "inference_ms": 16.474787997140083,
+          "queue_ms": 0.053689997002948076,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 1,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 31.566758996632416,
+          "ping_ms": 12.786624000000302,
+          "recording_to_final_ms": 10032.434269000078,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 18.586314996355213,
+          "inference_ms": 16.664064998622052,
+          "queue_ms": 0.07942399679450318,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 2,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 30.149989004712552,
+          "ping_ms": 12.849557999288663,
+          "recording_to_final_ms": 10030.452582999715,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.1338639993337,
+          "inference_ms": 15.494698003749363,
+          "queue_ms": 0.048916997911874205,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 3,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 29.76721100276336,
+          "ping_ms": 12.950071999512147,
+          "recording_to_final_ms": 10030.026831998839,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.82267199794296,
+          "inference_ms": 15.230584998789709,
+          "queue_ms": 0.07661699783056974,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 4,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 30.11018999677617,
+          "ping_ms": 12.786345003405586,
+          "recording_to_final_ms": 10031.178857003397,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.957334999460727,
+          "inference_ms": 15.307401998143177,
+          "queue_ms": 0.04569500015350059,
+          "batch_size": 1
+        }
+      ]
+    },
+    {
+      "source": "cloudflare-latency-europe-west4-3.json",
+      "sourceSha256": "85ac5175a054bdaa4fbf8b70424e3e7c2c89da9f3d8fd474005ec3870625e8d2",
+      "rows": [
+        {
+          "worker": 0,
+          "iteration": 0,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 28.035914998326916,
+          "ping_ms": 11.416984001698438,
+          "recording_to_final_ms": 10028.472320002038,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.784707993792836,
+          "inference_ms": 15.190432000963483,
+          "queue_ms": 0.056361997849307954,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 1,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 28.132441999332514,
+          "ping_ms": 11.2176529946737,
+          "recording_to_final_ms": 10028.36213199771,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.85738300147932,
+          "inference_ms": 15.25849800236756,
+          "queue_ms": 0.045100998249836266,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 2,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 29.596079999464564,
+          "ping_ms": 11.441898001066875,
+          "recording_to_final_ms": 10030.207891999453,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 18.195270000433084,
+          "inference_ms": 16.47285600483883,
+          "queue_ms": 0.055686999985482544,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 3,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 28.48135700332932,
+          "ping_ms": 11.175854000612162,
+          "recording_to_final_ms": 10029.282038005476,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.941488000156824,
+          "inference_ms": 15.325889995438047,
+          "queue_ms": 0.04729699867311865,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 4,
+          "region": "europe-west4",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 28.496206003183033,
+          "ping_ms": 11.256179001065902,
+          "recording_to_final_ms": 10028.842519001046,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.936877997068223,
+          "inference_ms": 15.249358002620284,
+          "queue_ms": 0.04955600161338225,
+          "batch_size": 1
+        }
+      ]
+    },
+    {
+      "source": "cloudflare-latency-us-west1-1.json",
+      "sourceSha256": "aa0f08bb6da78502cd73e17ff076711e8628ba0b70a1335edc62fe74644c1275",
+      "rows": [
+        {
+          "worker": 0,
+          "iteration": 0,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 35.67308999481611,
+          "ping_ms": 17.020864004734904,
+          "recording_to_final_ms": 10036.774929001695,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.94970800599549,
+          "inference_ms": 15.276114994776435,
+          "queue_ms": 0.04797799920197576,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 1,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 37.22403799474705,
+          "ping_ms": 19.568098010495305,
+          "recording_to_final_ms": 10037.843964004423,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.114214002504013,
+          "inference_ms": 15.377778996480629,
+          "queue_ms": 0.08156499825417995,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 2,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 36.01301700109616,
+          "ping_ms": 18.96883400331717,
+          "recording_to_final_ms": 10036.790273006773,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.263378991628997,
+          "inference_ms": 15.506285999435931,
+          "queue_ms": 0.04845600051339716,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 3,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 37.39811500418,
+          "ping_ms": 24.32180699543096,
+          "recording_to_final_ms": 10038.443891011411,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.034493997925892,
+          "inference_ms": 15.306343004340306,
+          "queue_ms": 0.04723500751424581,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 4,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 34.35369899671059,
+          "ping_ms": 19.469557999400422,
+          "recording_to_final_ms": 10035.360191002837,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.950614997767843,
+          "inference_ms": 15.262152999639511,
+          "queue_ms": 0.046743007260374725,
+          "batch_size": 1
+        }
+      ]
+    },
+    {
+      "source": "cloudflare-latency-us-west1-2.json",
+      "sourceSha256": "12967a9fd7d2762fc39b4aee2dd3c40b5b391e2325f14e2331e9fdb87983bb6a",
+      "rows": [
+        {
+          "worker": 0,
+          "iteration": 0,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 88.63154200662393,
+          "ping_ms": 71.11922900367063,
+          "recording_to_final_ms": 10089.019717997871,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.41805400524754,
+          "inference_ms": 15.631905000191182,
+          "queue_ms": 0.08318800246343017,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 1,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 88.27429699886125,
+          "ping_ms": 71.70858100289479,
+          "recording_to_final_ms": 10089.1180250037,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.8539040023461,
+          "inference_ms": 15.23607800481841,
+          "queue_ms": 0.05424299160949886,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 2,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 88.12064499943517,
+          "ping_ms": 71.77554600639269,
+          "recording_to_final_ms": 10088.505585998064,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.033846001140773,
+          "inference_ms": 15.362391000962816,
+          "queue_ms": 0.048107001930475235,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 3,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 88.70478499738965,
+          "ping_ms": 70.97861199872568,
+          "recording_to_final_ms": 10089.671809997526,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.20411199494265,
+          "inference_ms": 15.606571003445424,
+          "queue_ms": 0.04623900167644024,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 4,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 88.32295599859208,
+          "ping_ms": 72.71947601111606,
+          "recording_to_final_ms": 10088.789008994354,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.882354990229942,
+          "inference_ms": 15.251788005116396,
+          "queue_ms": 0.04455100861378014,
+          "batch_size": 1
+        }
+      ]
+    },
+    {
+      "source": "cloudflare-latency-us-west1-3.json",
+      "sourceSha256": "89788692c1a7068e515f7baed83abcf1c5a6babed14344c952507536dea303eb",
+      "rows": [
+        {
+          "worker": 0,
+          "iteration": 0,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 39.1337610053597,
+          "ping_ms": 19.552116995328106,
+          "recording_to_final_ms": 10039.883937002742,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.850162006448954,
+          "inference_ms": 15.218393004033715,
+          "queue_ms": 0.047622001147828996,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 1,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 38.05169400584418,
+          "ping_ms": 18.13544999458827,
+          "recording_to_final_ms": 10038.456110996776,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 17.92639199993573,
+          "inference_ms": 16.10299400635995,
+          "queue_ms": 0.04956799966748804,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 2,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 36.56148300797213,
+          "ping_ms": 18.890585997723974,
+          "recording_to_final_ms": 10037.297722999938,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.928887998801656,
+          "inference_ms": 15.224422997562215,
+          "queue_ms": 0.044132000766694546,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 3,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 35.89429199928418,
+          "ping_ms": 21.263932998408563,
+          "recording_to_final_ms": 10036.60851198947,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.867825004737824,
+          "inference_ms": 15.26373700471595,
+          "queue_ms": 0.04599599924404174,
+          "batch_size": 1
+        },
+        {
+          "worker": 0,
+          "iteration": 4,
+          "region": "us-west1",
+          "audio_seconds": 10.0,
+          "end_to_final_ms": 34.555600010207854,
+          "ping_ms": 17.887713998788968,
+          "recording_to_final_ms": 10034.9461529986,
+          "capacity_retries": 0,
+          "matches_baseline": true,
+          "server_ms": 16.73667698923964,
+          "inference_ms": 15.159067988861352,
+          "queue_ms": 0.05857899668626487,
+          "batch_size": 1
+        }
+      ]
+    }
+  ]
+}
