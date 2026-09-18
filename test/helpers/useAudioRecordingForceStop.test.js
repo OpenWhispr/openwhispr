@@ -466,3 +466,55 @@ for (const [label, writeClipboard] of [
     );
   });
 }
+
+// Submit after paste: Enter sends what it pastes, so it only rides on a plain
+// dictation paste of an intact result.
+test("a dictation paste asks for Enter when submit after paste is on", async (t) => {
+  const harness = await mountHarness(t, { settings: { submitAfterPasteEnabled: true } });
+
+  await harness.complete();
+
+  assert.equal(harness.pastes.length, 1);
+  assert.equal(harness.pastes[0].options.submitKey, "enter");
+});
+
+test("a dictation paste asks for no Enter while submit after paste is off", async (t) => {
+  const harness = await mountHarness(t);
+
+  await harness.complete();
+
+  assert.equal(harness.pastes.length, 1);
+  assert.equal("submitKey" in harness.pastes[0].options, false);
+});
+
+for (const [label, degraded] of [
+  ["a failed cleanup", { cleanupFailure: "cleanup failed" }],
+  ["a partial transcript", { warning: "salvaged-recording" }],
+  ["an untranslated fallback", { translationFallback: "failed" }],
+]) {
+  test(`${label} is pasted for review without Enter`, async (t) => {
+    const harness = await mountHarness(t, { settings: { submitAfterPasteEnabled: true } });
+
+    await harness.complete(degraded);
+
+    assert.equal(harness.pastes.length, 1);
+    assert.equal("submitKey" in harness.pastes[0].options, false);
+  });
+}
+
+test("a Voice Assistant command is never pasted, so never submitted", async (t) => {
+  const harness = await mountHarness(t, { settings: { submitAfterPasteEnabled: true } });
+
+  await harness.complete({ assistantConversation: { transcript: "what's on today" } });
+
+  assert.deepEqual(harness.pastes, []);
+});
+
+test("a selection edit never asks for Enter", async (t) => {
+  const harness = await mountHarness(t, { settings: { submitAfterPasteEnabled: true } });
+
+  await harness.complete({ selectionEdit: { sessionId: "edit-1" } });
+
+  assert.deepEqual(harness.pastes, []);
+  assert.equal("submitKey" in harness.replacements[0].options, false);
+});

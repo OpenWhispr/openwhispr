@@ -1936,6 +1936,8 @@
         "title": "剪貼簿",
         "autoPaste": "自動貼上",
         "autoPasteDescription": "聽寫結束後自動將轉錄文字貼上到目前使用中的應用程式",
+        "submitAfterPaste": "貼上後按 Enter",
+        "submitAfterPasteDescription": "貼上聽寫文字後按下 Enter，讓訊息、提示詞和指令立即送出",
         "keepInClipboard": "將轉錄內容保留在剪貼簿",
         "keepInClipboardDescription": "將語音輸入的文字保留在剪貼簿中，以便在需要時手動貼上"
       },

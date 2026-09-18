@@ -3038,11 +3038,17 @@ class IPCHandlers {
         }
       }
 
+      // Submit after paste presses Enter once the text lands. "enter" is the only
+      // key the native helpers take, so anything else pastes without submitting.
+      const submitKey = options?.submitKey === "enter" ? "enter" : undefined;
+
       // Smart spacing (#856): append a trailing space so the next paste's leading
       // space self-corrects the gap. Reading the char before the cursor to space
       // the front instead would take a macOS Accessibility read costing hundreds
-      // of ms — too slow for the paste hot path.
-      const textToPaste = applySmartSpacing(text);
+      // of ms — too slow for the paste hot path. A submitted paste has no next
+      // paste to run into, so it goes out without one. This is decided before the
+      // paste, so a route that ends up not pressing Enter leaves no space either.
+      const textToPaste = submitKey ? text : applySmartSpacing(text);
 
       // Windows: restore the foreground window captured at record start so the
       // paste lands in the field the user was dictating into, not wherever focus
@@ -3066,6 +3072,7 @@ class IPCHandlers {
 
       const pasteResult = await this.clipboardManager.pasteText(textToPaste, {
         ...options,
+        submitKey,
         webContents: event.sender,
         targetWindow,
       });
@@ -3076,7 +3083,12 @@ class IPCHandlers {
         targetPid,
         pasted,
       });
-      if (pasted && this.textEditMonitor && this._autoLearnEnabled) {
+      if (pasteResult?.submitted === true) {
+        // Enter sent the text out of the field, so there is nothing left to learn
+        // from, and a monitor still watching this field for an earlier dictation
+        // would read the cleared field as the user's edit.
+        this.textEditMonitor?.stopMonitoring();
+      } else if (pasted && this.textEditMonitor && this._autoLearnEnabled) {
         setTimeout(() => {
           try {
             debugLogger.debug("[AutoLearn] Starting monitoring", {

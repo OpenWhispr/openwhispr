@@ -235,6 +235,23 @@ test("safePaste passes through why a paste was held back", async (t) => {
   });
 });
 
+// Submit after paste must not send an untranslated fallback, so the fallback
+// rides the next result the way a cleanup failure does, and only that one.
+test("a translation fallback rides the next result once", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-translation-fallback-extra-",
+    settingsKey: "__audioTranslationFallbackExtraSettings",
+  });
+  const notified = [];
+  const manager = createManager({ onTranslationFallback: (event) => notified.push(event) });
+
+  manager.notifyTranslationFallback("unreachable");
+
+  assert.deepEqual(notified, [{ reason: "unreachable" }]);
+  assert.equal(manager._takePendingResultExtras().translationFallback, "unreachable");
+  assert.equal(manager._takePendingResultExtras().translationFallback, undefined);
+});
+
 test("translation cleanup failures survive successful and skipped translation for post-paste warnings", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-translation-cleanup-warning-",

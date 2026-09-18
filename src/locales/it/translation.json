@@ -1936,6 +1936,8 @@
         "title": "Appunti",
         "autoPaste": "Incollaggio automatico",
         "autoPasteDescription": "Incolla automaticamente il testo trascritto nell'app attiva al termine della dettatura",
+        "submitAfterPaste": "Premere Invio dopo aver incollato",
+        "submitAfterPasteDescription": "Premere Invio dopo aver incollato il testo dettato, così messaggi, prompt e comandi vengono inviati subito",
         "keepInClipboard": "Mantieni la trascrizione negli appunti",
         "keepInClipboardDescription": "Mantieni il testo dettato negli appunti per poterlo incollare manualmente se necessario"
       },
