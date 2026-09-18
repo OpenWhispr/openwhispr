@@ -1870,6 +1870,10 @@
         "light": "Светлая",
         "theme": "Тема",
         "themeDescription": "Выберите светлую, тёмную тему или следуйте системным настройкам",
+        "trayIconDefault": "Обычный",
+        "trayIconMonochrome": "Монохромный",
+        "trayIconStyle": "Значок в трее",
+        "trayIconStyleDescription": "Выберите вид значка на панели рабочего стола",
         "title": "Внешний вид"
       },
       "floatingIcon": {

@@ -1919,6 +1919,10 @@
         "light": "Claro",
         "theme": "Tema",
         "themeDescription": "Elige claro, oscuro o según tu sistema",
+        "trayIconDefault": "Predeterminado",
+        "trayIconMonochrome": "Monocromo",
+        "trayIconStyle": "Icono de la bandeja",
+        "trayIconStyleDescription": "Elige cómo aparece el icono en el panel del escritorio",
         "title": "Apariencia"
       },
       "floatingIcon": {

@@ -2159,6 +2159,10 @@
         "light": "Clair",
         "theme": "Thème",
         "themeDescription": "Choisissez clair, sombre ou suivre le système",
+        "trayIconDefault": "Par défaut",
+        "trayIconMonochrome": "Monochrome",
+        "trayIconStyle": "Icône de la zone de notification",
+        "trayIconStyleDescription": "Choisissez l’apparence de l’icône dans le panneau du bureau",
         "title": "Apparence"
       },
       "floatingIcon": {

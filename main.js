@@ -587,7 +587,7 @@ function initializeDeferredManagers() {
   if (process.platform !== "darwin") {
     clipboardManager.preWarmAccessibility();
   }
-  trayManager = new TrayManager();
+  trayManager = new TrayManager(environmentManager.getTrayIconStyle());
   globeKeyManager = new GlobeKeyManager({
     // Lets the listener put the user's macOS Globe action back after a crash.
     preferenceStatePath: path.join(app.getPath("userData"), "globe-preference-state.json"),
@@ -1051,6 +1051,11 @@ async function startApp() {
   ipcMain.on("start-minimized-changed", (_event, enabled) => {
     if (debugLogger) debugLogger.info("Start minimized changed", { enabled });
     environmentManager.saveStartMinimized(enabled);
+  });
+
+  ipcMain.on("tray-icon-style-changed", (_event, style) => {
+    const { style: normalizedStyle } = environmentManager.saveTrayIconStyle(style);
+    void trayManager?.setIconStyle(normalizedStyle);
   });
 
   ipcMain.on("panel-start-position-changed", (_event, position) => {

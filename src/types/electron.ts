@@ -2280,6 +2280,7 @@ declare global {
       notifyFloatingIconAutoHideChanged?: (enabled: boolean) => void;
       onFloatingIconAutoHideChanged?: (callback: (enabled: boolean) => void) => () => void;
       notifyStartMinimizedChanged?: (enabled: boolean) => void;
+      notifyTrayIconStyleChanged?: (style: "default" | "monochrome") => void;
       notifyPanelStartPositionChanged?: (position: string) => void;
       getMainWindowHorizontalDirection?: () => Promise<"left" | "right">;
       onMainWindowHorizontalDirectionChanged?: (

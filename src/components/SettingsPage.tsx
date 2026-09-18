@@ -1251,6 +1251,8 @@ export default function SettingsPage({
     setFloatingIconAutoHide,
     startMinimized,
     setStartMinimized,
+    trayIconStyle,
+    setTrayIconStyle,
     panelStartPosition,
     setPanelStartPosition,
     cloudBackupEnabled,
@@ -3092,6 +3094,33 @@ export default function SettingsPage({
                     </div>
                   </SettingsRow>
                 </SettingsPanelRow>
+                {platform !== "darwin" && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.general.appearance.trayIconStyle")}
+                      description={t("settingsPage.general.appearance.trayIconStyleDescription")}
+                    >
+                      <Select
+                        value={trayIconStyle}
+                        onValueChange={(value) =>
+                          setTrayIconStyle(value as "default" | "monochrome")
+                        }
+                      >
+                        <SelectTrigger className="h-7 w-36 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">
+                            {t("settingsPage.general.appearance.trayIconDefault")}
+                          </SelectItem>
+                          <SelectItem value="monochrome">
+                            {t("settingsPage.general.appearance.trayIconMonochrome")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 
