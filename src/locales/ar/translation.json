@@ -1954,6 +1954,12 @@
         "enable": "تمكين",
         "enabled": "مُمكّن"
       },
+      "interfaceLanguage": {
+        "title": "اختر لغة الواجهة",
+        "titleLineOne": "اختر",
+        "titleLineTwo": "لغة الواجهة",
+        "description": "يتحكم هذا في قوائم OpenWhispr وخطوات الإعداد، وليس في لغة التفريغ. يمكنك تغييره لاحقًا في الإعدادات."
+      },
       "languages": {
         "title": "ما هي اللغات التي تتحدثها؟",
         "titleLineOne": "ما هي اللغات",

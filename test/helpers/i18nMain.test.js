@@ -1,7 +1,13 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 
-const { normalizeUiLanguage } = require("../../src/helpers/i18nMain");
+const i18nMain = require("../../src/helpers/i18nMain");
+const uiLanguageCodes = require("../../src/config/uiLanguageCodes.json");
+const { normalizeUiLanguage } = i18nMain;
+
+it("derives the main-process locale list from the shared language codes", () => {
+  assert.deepEqual(i18nMain.SUPPORTED_UI_LANGUAGES, Object.keys(uiLanguageCodes));
+});
 
 describe("normalizeUiLanguage", () => {
   it("keeps exact supported tags, including underscore zh_CN / zh_TW", () => {

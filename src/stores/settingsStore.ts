@@ -59,6 +59,7 @@ import type {
 import type { Snippet } from "../utils/snippets";
 import type { EnterpriseSetupMode } from "../types/enterpriseIdentity";
 import { getManagedScopeResolution } from "./enterpriseIdentityStore";
+import type { UiLanguage } from "../config/uiLanguages";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -1087,7 +1088,7 @@ export interface SettingsState
   setUseDictationAgent: (value: boolean) => void;
   setCleanupModel: (value: string) => void;
   setCleanupProvider: (value: string) => void;
-  setUiLanguage: (language: string) => void;
+  setUiLanguage: (language: UiLanguage) => void;
 
   setOpenaiApiKey: (key: string) => void;
   setAnthropicApiKey: (key: string) => void;
@@ -2122,7 +2123,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ snippets });
   },
 
-  setUiLanguage: (language: string) => {
+  setUiLanguage: (language: UiLanguage) => {
     const normalized = normalizeUiLanguage(language);
     if (isBrowser) localStorage.setItem("uiLanguage", normalized);
     set({ uiLanguage: normalized });
