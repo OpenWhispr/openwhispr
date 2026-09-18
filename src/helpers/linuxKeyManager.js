@@ -151,10 +151,6 @@ class LinuxKeyManager extends EventEmitter {
     for (const key of [...this.listeners.keys()]) this._stopKey(key);
   }
 
-  isAvailable() {
-    return this.resolveListenerBinary() !== null;
-  }
-
   /**
    * Whether the listener could actually run right now: binary present and at
    * least one readable /dev/input/event* node (the listener itself also filters

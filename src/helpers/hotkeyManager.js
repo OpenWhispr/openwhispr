@@ -447,11 +447,34 @@ class HotkeyManager extends EventEmitter {
     return keys;
   }
 
+  // What to tell the user when the Linux native listener cannot run.
+  _nativeListenerFailureMessage(reason) {
+    return reason === "input_access_denied"
+      ? `${i18nMain.t("settingsPage.general.hotkey.linuxPttSetupDescription")} ${i18nMain.t(
+          "settingsPage.general.hotkey.linuxPttPermissionDescription"
+        )}`
+      : i18nMain.t("windows.pttUnavailable");
+  }
+
+  // Without a desktop-native backend, Linux push-to-talk runs entirely through
+  // the bundled evdev listener, so a probe failure means Hold cannot work at
+  // all. Returns the reason to show the user, or null when nothing blocks it.
+  _pushToTalkListenerBlockReason() {
+    if (process.platform !== "linux" || this.isUsingNativeShortcut() || !this.nativeListenerProbe) {
+      return null;
+    }
+    const { available, reason } = this.nativeListenerProbe();
+    return available ? null : this._nativeListenerFailureMessage(reason);
+  }
+
   supportsPushToTalk(hotkey = this.currentHotkey) {
     if (process.platform === "darwin" && hotkey && lacksMacReleaseSignal(hotkey)) {
       return false;
     }
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
+      return false;
+    }
+    if (this._pushToTalkListenerBlockReason()) {
       return false;
     }
     if (this.useGnome && this.gnomeManager?.supportsPushToTalk) {
@@ -467,7 +490,7 @@ class HotkeyManager extends EventEmitter {
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
       return i18nMain.t("hotkey.errors.osReserved", { hotkey });
     }
-    return i18nMain.t("windows.pttUnavailable");
+    return this._pushToTalkListenerBlockReason() ?? i18nMain.t("windows.pttUnavailable");
   }
 
   async setActivationMode(mode) {
@@ -572,11 +595,7 @@ class HotkeyManager extends EventEmitter {
     return {
       success: false,
       hotkey,
-      error: deniedAccess
-        ? `${i18nMain.t("settingsPage.general.hotkey.linuxPttSetupDescription")} ${i18nMain.t(
-            "settingsPage.general.hotkey.linuxPttPermissionDescription"
-          )}`
-        : i18nMain.t("windows.pttUnavailable"),
+      error: this._nativeListenerFailureMessage(reason),
       reason: deniedAccess ? "input_access_denied" : "native_listener_unavailable",
       suggestions: this.getSuggestions(hotkey),
     };
