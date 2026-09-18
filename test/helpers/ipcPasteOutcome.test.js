@@ -167,3 +167,90 @@ test("paste-text does not schedule AutoLearn monitoring after a clipboard-only f
   assert.deepEqual(result, { success: true, pasted: false });
   assert.deepEqual(monitored, []);
 });
+
+// Submit after paste: "enter" is the only key the native helpers take, and a
+// submitted paste has no next paste for smart spacing's trailing space to meet.
+test("paste-text submits only an Enter request, without smart spacing", async () => {
+  const pastes = [];
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  target.clipboardManager = {
+    pasteText: async (text, options) => {
+      pastes.push({ text, submitKey: options.submitKey });
+    },
+  };
+
+  await handlers.get("paste-text")({ sender: { id: 1 } }, "send this", { submitKey: "enter" });
+  await handlers.get("paste-text")({ sender: { id: 1 } }, "keep this", { submitKey: "ctrl+enter" });
+
+  assert.deepEqual(pastes, [
+    { text: "send this", submitKey: "enter" },
+    { text: "keep this ", submitKey: undefined },
+  ]);
+});
+
+// Enter sends the text out of the field: there is nothing to learn from, and an
+// earlier monitor still watching the field would read it as the user's edit.
+test("a submitted paste skips AutoLearn and stops an earlier monitor", async (t) => {
+  const originalSetTimeout = global.setTimeout;
+  t.after(() => {
+    global.setTimeout = originalSetTimeout;
+    target._autoLearnEnabled = false;
+    target.textEditMonitor = null;
+  });
+  global.setTimeout = (callback) => {
+    callback();
+    return 1;
+  };
+  const monitored = [];
+  let stops = 0;
+  target._autoLearnEnabled = true;
+  target.textEditMonitor = {
+    lastTargetPid: 42,
+    activateTargetPid: async () => true,
+    startMonitoring: (...args) => monitored.push(args),
+    stopMonitoring: () => {
+      stops += 1;
+    },
+  };
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  target.clipboardManager = { pasteText: async () => ({ submitted: true }) };
+
+  const result = await handlers.get("paste-text")({ sender: { id: 1 } }, "send this", {
+    submitKey: "enter",
+  });
+
+  assert.deepEqual(result, { success: true, pasted: true });
+  assert.deepEqual(monitored, []);
+  assert.equal(stops, 1);
+});
+
+// A route that pasted without pressing Enter (old helper, held modifier, a
+// fallback) leaves the text in the field, so auto-learn still watches it.
+test("a paste whose Enter was skipped still starts AutoLearn", async (t) => {
+  const originalSetTimeout = global.setTimeout;
+  t.after(() => {
+    global.setTimeout = originalSetTimeout;
+    target._autoLearnEnabled = false;
+    target.textEditMonitor = null;
+  });
+  global.setTimeout = (callback) => {
+    callback();
+    return 1;
+  };
+  const monitored = [];
+  target._autoLearnEnabled = true;
+  target.textEditMonitor = {
+    lastTargetPid: 42,
+    activateTargetPid: async () => true,
+    startMonitoring: (text) => monitored.push(text),
+    stopMonitoring: () => assert.fail("nothing was sent out of the field"),
+  };
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  target.clipboardManager = {
+    pasteText: async () => ({ submitted: false, submitSkipReason: "helper-unsupported" }),
+  };
+
+  await handlers.get("paste-text")({ sender: { id: 1 } }, "keep this", { submitKey: "enter" });
+
+  assert.deepEqual(monitored, ["keep this"]);
+});

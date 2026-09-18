@@ -66,7 +66,7 @@ const originalLoad = Module._load;
 // The held-modifier wait spawns the fast-paste binary ahead of every Linux paste.
 // Tests that pin the paste chain's spawn sequence see it as already released;
 // the wait itself is covered by tests that load with `realModifierWait`.
-function loadClipboardManager({ spawn, realModifierWait = false } = {}) {
+function loadClipboardManager({ spawn, spawnSync, realModifierWait = false } = {}) {
   delete require.cache[clipboardModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
@@ -78,8 +78,8 @@ function loadClipboardManager({ spawn, realModifierWait = false } = {}) {
         },
       };
     }
-    if (request === "child_process" && spawn) {
-      return { ...childProcess, spawn };
+    if (request === "child_process" && (spawn || spawnSync)) {
+      return { ...childProcess, ...(spawn && { spawn }), ...(spawnSync && { spawnSync }) };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -619,8 +619,8 @@ test("portal exit zero succeeds with or without a restore token", async () => {
   manager._readPortalToken = () => restoreTokens.shift();
   manager._savePortalToken = (token) => saved.push(token);
 
-  assert.equal(await manager._runPortalPaste("/tmp/linux-fast-paste"), null);
-  assert.equal(await manager._runPortalPaste("/tmp/linux-fast-paste"), "rotated-token");
+  assert.equal(await manager._runPortalPaste("/tmp/linux-fast-paste"), "");
+  assert.equal(await manager._runPortalPaste("/tmp/linux-fast-paste"), "rotated-token\n");
   assert.deepEqual(
     calls.map((call) => call.args),
     [["--portal"], ["--portal", "--restore-token", "restore-token"]]
@@ -1020,4 +1020,442 @@ test("terminal detection matches window classes and macOS app names alike", () =
   assert.equal(manager.isLinuxTerminalWindowClass("konsole"), true);
   assert.equal(manager.isLinuxTerminalWindowClass("org.mozilla.firefox"), false);
   assert.equal(manager.isLinuxTerminalWindowClass(null), false);
+});
+
+// Submit after paste: Enter rides in the same helper call as the paste, so a helper
+// too old for the flag pastes once and never presses Enter instead of pasting twice.
+const SUBMIT_ARGS = ["--submit", "enter", "--submit-delay", "250"];
+
+async function withX11Environment(callback) {
+  const previous = {
+    XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE,
+    WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY,
+    DISPLAY: process.env.DISPLAY,
+  };
+  process.env.XDG_SESSION_TYPE = "x11";
+  process.env.DISPLAY = ":0";
+  delete process.env.WAYLAND_DISPLAY;
+  try {
+    return await callback();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+test("macOS asks the fast-paste helper to submit and reads its outcome", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0], { stdout: ["SUBMIT_OK\n"] }),
+  });
+  const manager = new TestClipboardManager();
+  manager.resolveFastPasteBinary = () => "/tmp/openwhispr-fast-paste";
+
+  const result = await manager.pasteMacOS(null, {
+    expectedClipboardText: "dictated text",
+    fromStreaming: true,
+    submitKey: "enter",
+  });
+
+  assert.deepEqual(spawnCalls, [{ command: "/tmp/openwhispr-fast-paste", args: SUBMIT_ARGS }]);
+  assert.equal(result.submitted, true);
+});
+
+test("a helper that predates --submit pastes once and reports no submit", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.resolveFastPasteBinary = () => "/tmp/openwhispr-fast-paste";
+
+  const result = await manager.pasteMacOS(null, {
+    expectedClipboardText: "dictated text",
+    fromStreaming: true,
+    submitKey: "enter",
+  });
+
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(result.submitted, false);
+  assert.equal(result.submitSkipReason, "helper-unsupported");
+});
+
+test("the macOS osascript fallback pastes without submitting", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.resolveFastPasteBinary = () => null;
+
+  const result = await manager.pasteMacOS(null, {
+    expectedClipboardText: "dictated text",
+    fromStreaming: true,
+    submitKey: "enter",
+  });
+
+  assert.deepEqual(
+    spawnCalls.map((call) => call.command),
+    ["osascript"]
+  );
+  assert.equal(result.submitted, undefined);
+});
+
+test("Windows fast paste submits after the restore and reports a skipped Enter", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0], {
+      // The Windows C runtime writes text-mode stdout, so lines end in CRLF.
+      stdout: ["PASTE_OK Chrome_WidgetWin_1 ctrl+v\r\nSUBMIT_SKIPPED focus-changed\r\n"],
+    }),
+  });
+  const manager = new TestClipboardManager();
+
+  const result = await manager.pasteWithFastPaste("/tmp/windows-fast-paste.exe", null, {
+    expectedClipboardText: "dictated text",
+    targetWindow: "1A2B3C",
+    submitKey: "enter",
+  });
+
+  assert.deepEqual(spawnCalls[0].args, ["--restore-window", "1A2B3C", ...SUBMIT_ARGS]);
+  assert.equal(result.submitted, false);
+  assert.equal(result.submitSkipReason, "focus-changed");
+});
+
+test("a failed Windows fast paste falls back to nircmd once and never submits", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [1, 0]),
+  });
+  const manager = new TestClipboardManager();
+  manager.getNircmdPath = () => "C:\\nircmd.exe";
+
+  const result = await manager.pasteWithFastPaste("/tmp/windows-fast-paste.exe", null, {
+    expectedClipboardText: "dictated text",
+    submitKey: "enter",
+  });
+
+  assert.deepEqual(spawnCalls.slice(1), [
+    { command: "C:\\nircmd.exe", args: ["sendkeypress", "ctrl+v"] },
+  ]);
+  assert.equal(result.submitted, undefined);
+});
+
+// The helper waits inside the paste call, so its timeout must cover the wait:
+// killing a helper that already pasted sends the caller to a fallback that
+// pastes a second time.
+test("a submitting Windows fast paste gets the longer timeout before its fallback", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const spawnCalls = [];
+  let helperKilled = false;
+  const TestClipboardManager = loadClipboardManager({
+    spawn(command, args = []) {
+      spawnCalls.push({ command, args });
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.exitCode = null;
+      child.kill = () => {
+        helperKilled = true;
+      };
+      // The fast-paste helper hangs; the nircmd fallback succeeds.
+      if (command !== "/tmp/windows-fast-paste.exe") {
+        process.nextTick(() => child.emit("close", 0));
+      }
+      return child;
+    },
+  });
+  const manager = new TestClipboardManager();
+  manager.getNircmdPath = () => "C:\\nircmd.exe";
+
+  const pasting = manager.pasteWithFastPaste("/tmp/windows-fast-paste.exe", null, {
+    expectedClipboardText: "dictated text",
+    submitKey: "enter",
+  });
+  t.mock.timers.tick(10);
+  t.mock.timers.tick(2499);
+  assert.equal(helperKilled, false, "2000 ms plus the submit budget has not run out");
+  t.mock.timers.tick(1);
+  assert.equal(helperKilled, true);
+  t.mock.timers.tick(30);
+  const result = await pasting;
+
+  assert.deepEqual(
+    spawnCalls.map((call) => call.command),
+    ["/tmp/windows-fast-paste.exe", "C:\\nircmd.exe"]
+  );
+  assert.equal(result.submitted, undefined);
+});
+
+test("wlroots presses Enter with wtype after the wtype paste", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "wtype";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+  const result = await withWaylandEnvironment("Sway", () =>
+    manager.pasteLinux(null, { submitKey: "enter" })
+  );
+
+  assert.deepEqual(spawnCalls, [
+    { command: "wtype", args: ["-M", "shift", "-k", "Insert", "-m", "shift"] },
+    { command: "wtype", args: ["-k", "Return"] },
+  ]);
+  assert.equal(result.submitted, true);
+});
+
+// The check before Enter must not wait: focus can move while a key is held
+// (Alt+Tab), and a tool route can't tell where Enter would land.
+test("a modifier held again after a tool paste skips the Enter without waiting", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  const modifierWaits = [];
+  const modifierStates = ["released", "held"];
+  manager._awaitModifierRelease = async (waitMs) => {
+    modifierWaits.push(waitMs);
+    return modifierStates.shift();
+  };
+  manager.commandExists = (command) => command === "wtype";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+  const result = await withWaylandEnvironment("Sway", () =>
+    manager.pasteLinux(null, { submitKey: "enter" })
+  );
+
+  assert.deepEqual(modifierWaits, [undefined, 0], "the paste gate waits; the Enter check doesn't");
+  assert.equal(spawnCalls.length, 1, "only the paste was injected");
+  assert.equal(result.submitted, false);
+  assert.equal(result.submitSkipReason, "modifiers-held");
+});
+
+test("a failed tool Enter is reported without pasting again", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0, 1]),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "wtype";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+  const result = await withWaylandEnvironment("Sway", () =>
+    manager.pasteLinux(null, { submitKey: "enter" })
+  );
+
+  assert.deepEqual(
+    spawnCalls.map((call) => call.args),
+    [
+      ["-M", "shift", "-k", "Insert", "-m", "shift"],
+      ["-k", "Return"],
+    ]
+  );
+  assert.equal(result.method, "wtype");
+  assert.equal(result.submitted, false);
+  assert.equal(result.submitSkipReason, "failed");
+});
+
+for (const [legacy, pasteArgs, enterArgs] of [
+  [false, ["key", "42:1", "110:1", "110:0", "42:0"], ["key", "28:1", "28:0"]],
+  [true, ["key", "shift+Insert"], ["key", "enter"]],
+]) {
+  test(`GNOME submits through ydotoold with ${legacy ? "legacy" : "current"} ydotool`, async () => {
+    const spawnCalls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSuccessfulSpawn(spawnCalls),
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => command === "ydotool";
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+    manager._readPortalToken = () => null;
+    manager._isYdotoolDaemonRunning = () => true;
+    manager._isYdotoolLegacy = () => legacy;
+
+    const result = await withWaylandEnvironment("GNOME", () =>
+      manager.pasteLinux(null, { submitKey: "enter" })
+    );
+
+    assert.deepEqual(spawnCalls, [
+      { command: "ydotool", args: pasteArgs },
+      { command: "ydotool", args: enterArgs },
+    ]);
+    assert.equal(result.submitted, true);
+  });
+}
+
+// A compositor can pick up the throwaway device late, dropping the paste yet
+// taking a later Enter from it (#956), which would send the previous draft.
+for (const desktop of ["GNOME", "Sway"]) {
+  test(`${desktop}'s throwaway uinput paste never submits`, async () => {
+    const spawnCalls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSpawn(spawnCalls, [0]),
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = () => false;
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+    manager._readPortalToken = () => null;
+
+    const result = await withWaylandEnvironment(desktop, () =>
+      manager.pasteLinux(null, { submitKey: "enter" })
+    );
+
+    assert.deepEqual(spawnCalls, [
+      { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+    ]);
+    assert.equal(result.submitted, undefined);
+  });
+}
+
+test("KDE submits inside the portal session and saves only the restore token", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0], { stdout: ["rotated-token\nSUBMIT_OK\n"] }),
+  });
+  const manager = new TestClipboardManager();
+  const savedTokens = [];
+  manager.commandExists = () => false;
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => "restore-token";
+  manager._savePortalToken = (token) => savedTokens.push(token);
+
+  const result = await withWaylandEnvironment("KDE", () =>
+    manager.pasteLinux(null, { submitKey: "enter" })
+  );
+
+  assert.deepEqual(spawnCalls[0].args, [
+    "--portal",
+    "--shift-insert",
+    "--restore-token",
+    "restore-token",
+    ...SUBMIT_ARGS,
+  ]);
+  assert.deepEqual(savedTokens, ["rotated-token"]);
+  assert.equal(result.submitted, true);
+});
+
+// A Start response without a restore token leaves the SUBMIT_* line as the only
+// output; saving it as the token would break the next pre-approved session.
+test("a portal run that prints only its submit outcome saves no restore token", async () => {
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn([], [0], { stdout: ["SUBMIT_OK\n"] }),
+  });
+  const manager = new TestClipboardManager();
+  const savedTokens = [];
+  manager._readPortalToken = () => "restore-token";
+  manager._savePortalToken = (token) => savedTokens.push(token);
+
+  await manager._runPortalPaste("/tmp/linux-fast-paste", { submitKey: "enter" });
+
+  assert.deepEqual(savedTokens, []);
+});
+
+test("Hyprland's sendshortcut paste never submits", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0], { stdout: ["ok\n"] }),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "hyprctl";
+  manager.resolveLinuxFastPasteBinary = () => null;
+  manager._detectHyprlandWindowClass = () => "kitty";
+
+  const result = await withWaylandEnvironment("Hyprland", () =>
+    manager.pasteLinux(null, { submitKey: "enter" })
+  );
+
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(result.method, "hyprland-sendshortcut");
+  assert.equal(result.submitted, undefined);
+});
+
+test("X11 submits inside the XTest paste call", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0], { stdout: ["SUBMIT_SKIPPED modifiers-held\n"] }),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = () => false;
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+  const result = await withX11Environment(() => manager.pasteLinux(null, { submitKey: "enter" }));
+
+  assert.deepEqual(spawnCalls, [{ command: "/tmp/linux-fast-paste", args: SUBMIT_ARGS }]);
+  assert.equal(result.method, "xtest");
+  assert.equal(result.submitted, false);
+  assert.equal(result.submitSkipReason, "modifiers-held");
+});
+
+// The paste's own window lookups run through spawnSync; "123" is the window
+// that is active when the paste starts.
+function xdotoolWindowSpawnSync(command, args = []) {
+  if (command === "xdotool" && args[0] === "getactivewindow") {
+    return { status: 0, stdout: Buffer.from("123\n") };
+  }
+  return { status: 1, stdout: Buffer.from("") };
+}
+
+for (const [label, lookupExit, activeAfterDelay, skipReason] of [
+  ["presses Enter with xdotool", 0, "123", null],
+  ["skips Enter when focus moved", 0, "456", "focus-changed"],
+  ["skips Enter when the active window can't be read", 1, "", "focus-unknown"],
+]) {
+  test(`X11 without the helper ${label}`, async () => {
+    const submitted = skipReason === null;
+    const spawnCalls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSpawn(spawnCalls, [0, lookupExit, 0], { stdout: ["", `${activeAfterDelay}\n`] }),
+      spawnSync: xdotoolWindowSpawnSync,
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => command === "xdotool";
+    manager.resolveLinuxFastPasteBinary = () => null;
+
+    const result = await withX11Environment(() => manager.pasteLinux(null, { submitKey: "enter" }));
+
+    assert.deepEqual(spawnCalls, [
+      { command: "xdotool", args: ["windowactivate", "--sync", "123", "key", "ctrl+v"] },
+      { command: "xdotool", args: ["getactivewindow"] },
+      ...(submitted ? [{ command: "xdotool", args: ["key", "Return"] }] : []),
+    ]);
+    assert.equal(result.method, "xdotool");
+    assert.equal(result.submitted, submitted);
+    if (!submitted) assert.equal(result.submitSkipReason, skipReason);
+  });
+}
+
+test("a Wayland clipboard write is unconfirmed only when wl-copy is there and fails", () => {
+  const TestClipboardManager = loadClipboardManager({ spawnSync: () => ({ status: 1 }) });
+  const manager = new TestClipboardManager();
+
+  manager.commandExists = (command) => command === "wl-copy";
+  assert.equal(manager._writeClipboardWayland("dictated text", null), false);
+  // Without wl-copy, Electron's clipboard is the only write the system has.
+  manager.commandExists = () => false;
+  assert.equal(manager._writeClipboardWayland("dictated text", null), true);
+});
+
+test("an unconfirmed Wayland clipboard write pastes without submitting", async (t) => {
+  const realPlatform = process.platform;
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  t.after(() => Object.defineProperty(process, "platform", { value: realPlatform }));
+  const manager = new ClipboardManager();
+  const pasteOptions = [];
+  manager._isWayland = () => true;
+  manager._writeClipboardWayland = () => false;
+  manager._writePrimarySelection = () => {};
+  manager.pasteLinux = async (_original, options) => {
+    pasteOptions.push(options);
+    return { method: "wtype", restoreComplete: Promise.resolve() };
+  };
+
+  await manager._pasteText("dictated text", { restoreClipboard: false, submitKey: "enter" });
+
+  assert.equal(pasteOptions[0].submitKey, undefined);
 });

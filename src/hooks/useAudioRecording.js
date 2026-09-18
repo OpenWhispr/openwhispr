@@ -568,7 +568,18 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           const isStreaming = result.source?.includes("streaming");
-          const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
+          const { autoPasteEnabled, keepTranscriptionInClipboard, submitAfterPasteEnabled } =
+            getSettings();
+          // Enter sends what it pastes, so a degraded result (cleanup failed, part
+          // of the transcript missing, or a translation that fell back to the
+          // original) stays in the field for the user to review first.
+          const submitKey =
+            submitAfterPasteEnabled &&
+            !result.cleanupFailure &&
+            !result.warning &&
+            !result.translationFallback
+              ? "enter"
+              : undefined;
 
           const persistencePromise = audioManagerRef.current
             .saveTranscription(result.text, result.rawText ?? result.text, {
@@ -670,6 +681,7 @@ export const useAudioRecording = (toast, options = {}) => {
               audioManagerRef.current.safePaste(result.text, {
                 ...(isStreaming ? { fromStreaming: true } : {}),
                 ...pasteOptions,
+                ...(submitKey ? { submitKey } : {}),
               })
             );
             if (pasteOutcome.reason === "modifiers-held") {

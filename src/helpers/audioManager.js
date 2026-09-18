@@ -611,6 +611,7 @@ class AudioManager {
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
+    this.pendingTranslationFallback = null;
     this._processingCancellationGeneration = 0;
     this._activeProcessingPipeline = null;
     this.assistantSelectionContext = null;
@@ -780,6 +781,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   // Fail-open: translation degraded/failed but raw text is still pasted. Surface why.
   notifyTranslationFallback(reason) {
+    this.pendingTranslationFallback = reason;
     this.onTranslationFallback?.({ reason });
   }
 
@@ -842,6 +844,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
+    this.pendingTranslationFallback = null;
     this.assistantSelectionContext = null;
     // No recording must ever see a stale capture (e.g. left over from a
     // cancelled voice-agent recording, even after the setting was turned
@@ -2684,10 +2687,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         : {}),
       ...(this.pendingSelectionEdit ? { selectionEdit: this.pendingSelectionEdit } : {}),
       ...(this.pendingCleanupFailure ? { cleanupFailure: this.pendingCleanupFailure } : {}),
+      ...(this.pendingTranslationFallback
+        ? { translationFallback: this.pendingTranslationFallback }
+        : {}),
     };
     this.pendingAssistantConversation = null;
     this.pendingSelectionEdit = null;
     this.pendingCleanupFailure = null;
+    this.pendingTranslationFallback = null;
     return extras;
   }
 
@@ -4811,6 +4818,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
+    this.pendingTranslationFallback = null;
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.selectionCapturePromise = null;

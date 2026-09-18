@@ -2996,6 +2996,8 @@
         "title": "الحافظة",
         "autoPaste": "لصق تلقائي",
         "autoPasteDescription": "لصق النص المفرَّغ تلقائيًا في التطبيق النشط عند انتهاء الإملاء",
+        "submitAfterPaste": "الضغط على Enter بعد اللصق",
+        "submitAfterPasteDescription": "الضغط على Enter بعد لصق النص المُملى، لإرسال الرسائل والتعليمات والأوامر فورًا",
         "keepInClipboard": "الاحتفاظ بالنص المفرَّغ في الحافظة",
         "keepInClipboardDescription": "احتفظ بالنص المُملى في الحافظة حتى تتمكن من لصقه يدويًا إذا لزم الأمر"
       },
