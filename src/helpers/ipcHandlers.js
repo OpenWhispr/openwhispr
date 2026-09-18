@@ -5770,14 +5770,25 @@ class IPCHandlers {
       return mediaPlayer.toggleMedia();
     });
 
-    ipcMain.handle("pause-media-playback", () => {
+    ipcMain.handle("pause-media-playback", (_event, sessionId) => {
+      if (typeof sessionId !== "string" || sessionId.length === 0 || sessionId.length > 128) {
+        return false;
+      }
       const mediaPlayer = require("./mediaPlayer");
-      return mediaPlayer.pauseMedia();
+      return mediaPlayer.pauseMedia(sessionId);
     });
 
-    ipcMain.handle("resume-media-playback", () => {
+    ipcMain.handle("resume-media-playback", (_event, sessionId, restore) => {
+      if (
+        typeof sessionId !== "string" ||
+        sessionId.length === 0 ||
+        sessionId.length > 128 ||
+        typeof restore !== "boolean"
+      ) {
+        return false;
+      }
       const mediaPlayer = require("./mediaPlayer");
-      return mediaPlayer.resumeMedia();
+      return mediaPlayer.resumeMedia(sessionId, restore);
     });
 
     ipcMain.handle("request-microphone-access", async () => {

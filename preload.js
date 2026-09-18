@@ -750,8 +750,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   captureScreenContext: () => ipcRenderer.invoke("capture-screen-context"),
   setScreenContextEnabled: (enabled) => ipcRenderer.invoke("screen-context-set-enabled", enabled),
   toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
-  pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
-  resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
+  pauseMediaPlayback: (sessionId) => ipcRenderer.invoke("pause-media-playback", sessionId),
+  resumeMediaPlayback: (sessionId, restore) =>
+    ipcRenderer.invoke("resume-media-playback", sessionId, restore),
   getModelCacheRoot: () => ipcRenderer.invoke("get-model-cache-root"),
   openWhisperModelsFolder: () => ipcRenderer.invoke("open-whisper-models-folder"),
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),

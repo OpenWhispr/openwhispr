@@ -2268,8 +2268,8 @@ declare global {
       captureScreenContext?: () => Promise<ScreenContextImage | null>;
       setScreenContextEnabled?: (enabled: boolean) => Promise<{ success: boolean }>;
       toggleMediaPlayback?: () => Promise<boolean>;
-      pauseMediaPlayback?: () => Promise<boolean>;
-      resumeMediaPlayback?: () => Promise<boolean>;
+      pauseMediaPlayback?: (sessionId: string) => Promise<boolean>;
+      resumeMediaPlayback?: (sessionId: string, restore: boolean) => Promise<boolean>;
       getModelCacheRoot?: () => Promise<string>;
       openWhisperModelsFolder?: () => Promise<{ success: boolean; error?: string }>;
 
