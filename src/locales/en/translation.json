@@ -927,11 +927,18 @@
         "description": "Dictation stopped while the hotkey was still held, so the text was not pasted. Your transcription is on the clipboard.",
         "descriptionClipboardFailed": "Dictation stopped while the hotkey was still held, so the text was not pasted, and it could not be copied to the clipboard either."
       },
+      "modifiersHeld": {
+        "title": "Transcription not pasted",
+        "description": "A modifier key (like Ctrl or Shift) was still held down, so the text was not pasted. Your transcription is on the clipboard.",
+        "descriptionClipboardFailed": "A modifier key (like Ctrl or Shift) was still held down, so the text was not pasted, and it could not be copied to the clipboard either."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Selection edit not applied",
         "changed": "The selected text or target app changed while OpenWhispr was processing. Nothing was replaced.",
         "expired": "The selection edit took too long and expired. Select the text and try again.",
         "pasteFailed": "OpenWhispr generated the edit but could not replace the selected text.",
+        "modifiersHeld": "OpenWhispr generated the edit, but a modifier key (like Ctrl or Shift) was still held down, so it was not applied. The edit is on the clipboard.",
+        "modifiersHeldClipboardFailed": "OpenWhispr generated the edit, but a modifier key (like Ctrl or Shift) was still held down, so it was not applied, and it could not be copied to the clipboard either.",
         "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
         "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
         "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."

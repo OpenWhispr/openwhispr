@@ -906,11 +906,18 @@
         "description": "O ditado parou enquanto a tecla ainda estava pressionada, por isso o texto não foi colado. Sua transcrição está na área de transferência.",
         "descriptionClipboardFailed": "O ditado parou enquanto a tecla ainda estava pressionada, por isso o texto não foi colado e também não foi possível copiá-lo para a área de transferência."
       },
+      "modifiersHeld": {
+        "title": "Transcrição não colada",
+        "description": "Uma tecla modificadora (como Ctrl ou Shift) ainda estava pressionada, por isso o texto não foi colado. Sua transcrição está na área de transferência.",
+        "descriptionClipboardFailed": "Uma tecla modificadora (como Ctrl ou Shift) ainda estava pressionada, por isso o texto não foi colado e também não foi possível copiá-lo para a área de transferência."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Edição da seleção não aplicada",
         "changed": "O texto selecionado ou o aplicativo de destino mudou durante o processamento. Nada foi substituído.",
         "expired": "A edição expirou. Selecione o texto novamente e tente de novo.",
         "pasteFailed": "O OpenWhispr gerou a edição, mas não conseguiu substituir o texto selecionado.",
+        "modifiersHeld": "O OpenWhispr gerou a edição, mas uma tecla modificadora (como Ctrl ou Shift) ainda estava pressionada, por isso ela não foi aplicada. A edição está na área de transferência.",
+        "modifiersHeldClipboardFailed": "O OpenWhispr gerou a edição, mas uma tecla modificadora (como Ctrl ou Shift) ainda estava pressionada, por isso ela não foi aplicada e também não foi possível copiá-la para a área de transferência.",
         "unavailable": "O OpenWhispr não conseguiu ler o texto selecionado com segurança. Verifique as permissões de acessibilidade ou automação.",
         "tooLarge": "A seleção é muito grande. Selecione no máximo 6.000 caracteres.",
         "reasoningFailed": "A IA não conseguiu concluir a edição. O texto original não foi alterado."

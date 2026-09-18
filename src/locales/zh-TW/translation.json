@@ -927,11 +927,18 @@
         "description": "聽寫停止時快捷鍵仍處於按住狀態，因此未貼上文字。轉錄內容已複製到剪貼簿。",
         "descriptionClipboardFailed": "聽寫停止時快捷鍵仍處於按住狀態，因此未貼上文字，也無法複製到剪貼簿。"
       },
+      "modifiersHeld": {
+        "title": "轉錄內容未貼上",
+        "description": "修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未貼上文字。轉錄內容已複製到剪貼簿。",
+        "descriptionClipboardFailed": "修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未貼上文字，也無法複製到剪貼簿。"
+      },
       "selectionEditing": {
         "notAppliedTitle": "未套用選取文字編輯",
         "changed": "處理期間，選取的文字或目標應用程式已變更。未取代任何內容。",
         "expired": "選取文字編輯已逾時。請重新選取文字後再試。",
         "pasteFailed": "OpenWhispr 已產生編輯結果，但無法取代選取的文字。",
+        "modifiersHeld": "OpenWhispr 已產生編輯結果，但修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未套用。編輯結果已複製到剪貼簿。",
+        "modifiersHeldClipboardFailed": "OpenWhispr 已產生編輯結果，但修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未套用，也無法複製到剪貼簿。",
         "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
         "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
         "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"

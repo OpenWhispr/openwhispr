@@ -183,7 +183,7 @@ test("a truncated cleanup inside the translation chain still reports the failure
   });
 });
 
-test("safePaste returns false when the preload reports that no text was pasted", async (t) => {
+test("safePaste reports not pasted when the preload reports that no text was pasted", async (t) => {
   const { createManager, window } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-audio-cleanup-paste-outcome-",
     settingsKey: "__audioCleanupPasteOutcomeSettings",
@@ -193,10 +193,12 @@ test("safePaste returns false when the preload reports that no text was pasted",
   });
   window.electronAPI.pasteText = async () => ({ success: true, pasted: false });
 
-  assert.equal(await manager.safePaste("onboarding transcript"), false);
+  assert.deepEqual(await manager.safePaste("onboarding transcript"), {
+    pasted: false,
+  });
 });
 
-test("safePaste returns true only when the preload reports a completed paste", async (t) => {
+test("safePaste reports pasted only when the preload reports a completed paste", async (t) => {
   const { createManager, window } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-audio-cleanup-paste-success-",
     settingsKey: "__audioCleanupPasteSuccessSettings",
@@ -206,7 +208,31 @@ test("safePaste returns true only when the preload reports a completed paste", a
   });
   window.electronAPI.pasteText = async () => ({ success: true, pasted: true });
 
-  assert.equal(await manager.safePaste("completed transcript"), true);
+  assert.deepEqual(await manager.safePaste("completed transcript"), {
+    pasted: true,
+  });
+});
+
+// The hook tells a paste held back for still-held modifiers apart from an
+// ordinary clipboard-only fallback by this reason, so it must survive safePaste.
+test("safePaste passes through why a paste was held back", async (t) => {
+  const { createManager, window } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-audio-cleanup-paste-held-",
+    settingsKey: "__audioCleanupPasteHeldSettings",
+  });
+  const manager = createManager({
+    onError: () => assert.fail("a held-back paste is not a paste error"),
+  });
+  window.electronAPI.pasteText = async () => ({
+    success: true,
+    pasted: false,
+    reason: "modifiers-held",
+  });
+
+  assert.deepEqual(await manager.safePaste("held transcript"), {
+    pasted: false,
+    reason: "modifiers-held",
+  });
 });
 
 test("translation cleanup failures survive successful and skipped translation for post-paste warnings", async (t) => {

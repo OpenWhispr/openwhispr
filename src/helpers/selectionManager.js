@@ -88,6 +88,12 @@ function runSpawn(command, args, options = {}) {
   });
 }
 
+// Keys still held past the modifier wait (#2113) get their own code, so the
+// renderer can say so instead of blaming permissions or a changed target.
+function heldBackCode(fallback, { code, reason } = {}) {
+  return code === "modifiers_held" || reason === "modifiers-held" ? "modifiers_held" : fallback;
+}
+
 class SelectionManager {
   constructor({
     clipboardManager,
@@ -228,7 +234,7 @@ class SelectionManager {
         return { success: false, code: "target_changed" };
       }
       if (current.status === "unavailable") {
-        return { success: false, code: "selection_unavailable" };
+        return { success: false, code: heldBackCode("selection_unavailable", current) };
       }
       if (current.status !== "selected" || current.text !== session.text) {
         return { success: false, code: "selection_changed" };
@@ -241,7 +247,7 @@ class SelectionManager {
         });
         await pasteResult?.restoreComplete;
         if (pasteResult?.pasted === false) {
-          return { success: false, code: "paste_failed" };
+          return { success: false, code: heldBackCode("paste_failed", pasteResult) };
         }
         return { success: true };
       } catch (error) {
@@ -270,7 +276,7 @@ class SelectionManager {
 
       const current = await this._readCurrentSelection(session.target, { probeEditable: true });
       if (current.status !== "editable") {
-        return { success: false, code: "target_changed" };
+        return { success: false, code: heldBackCode("target_changed", current) };
       }
 
       try {
@@ -281,7 +287,7 @@ class SelectionManager {
         });
         await pasteResult?.restoreComplete;
         if (pasteResult?.pasted === false) {
-          return { success: false, code: "paste_failed" };
+          return { success: false, code: heldBackCode("paste_failed", pasteResult) };
         }
         return { success: true };
       } catch (error) {
@@ -419,6 +425,12 @@ class SelectionManager {
         capture.target || expectedTarget || target,
         probeEditable
       );
+    }
+
+    // Capture runs right after the voice assistant hotkey press, so its keys are
+    // often still down; a Ctrl+C sent into them copies nothing.
+    if ((await this.clipboardManager._awaitModifierRelease()) === "held") {
+      return { status: "unavailable", code: "modifiers_held" };
     }
 
     const capture = await this._captureViaClipboard(async () => {
