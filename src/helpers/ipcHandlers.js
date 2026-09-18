@@ -4309,13 +4309,9 @@ class IPCHandlers {
           : hotkeyManager.getCurrentHotkey();
       const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
       const supportsPushToTalk =
-        process.platform === "linux"
-          ? isUsingNativeShortcut
-            ? hotkeyManager.supportsPushToTalk(hotkey)
-            : this.linuxKeyManager?.isAvailable?.() === true
-          : process.platform === "darwin"
-            ? hotkeyManager.supportsPushToTalk(hotkey)
-            : !isUsingNativeShortcut;
+        process.platform === "linux" || process.platform === "darwin"
+          ? hotkeyManager.supportsPushToTalk(hotkey)
+          : !isUsingNativeShortcut;
 
       return {
         isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
@@ -4326,6 +4322,11 @@ class IPCHandlers {
         pushToTalkUnavailableReason: supportsPushToTalk
           ? null
           : hotkeyManager.getPushToTalkUnavailableReason(hotkey),
+        // Lets the renderer show the setup box outside push mode, where the
+        // disabled-Hold tooltip is the only other place this surfaces.
+        linuxInputAccessDenied:
+          process.platform === "linux" &&
+          this.linuxKeyManager?.checkAvailability?.().reason === "input_access_denied",
       };
     });
 

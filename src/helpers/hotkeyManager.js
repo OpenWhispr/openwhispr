@@ -34,7 +34,7 @@ function isRightSideModifier(hotkey) {
 }
 
 // Modifier-only combos (e.g. "Control+Super") bypass globalShortcut on Windows
-// and use the native low-level keyboard hook instead.
+// and Linux, and use the native low-level keyboard listener instead.
 const MODIFIER_NAMES = new Set([
   "control",
   "ctrl",
@@ -111,6 +111,9 @@ class HotkeyManager extends EventEmitter {
     this.hyprlandRegistrationReady = Promise.resolve();
     this.kdeManager = null;
     this.useKDE = false;
+    // Injected by main.js on Linux: LinuxKeyManager.checkAvailability. Kept as a
+    // function so this module never requires the manager it asks about.
+    this.nativeListenerProbe = null;
   }
 
   // Ensure a slot exists and return it (slots always use the list shape).
@@ -444,11 +447,34 @@ class HotkeyManager extends EventEmitter {
     return keys;
   }
 
+  // What to tell the user when the Linux native listener cannot run.
+  _nativeListenerFailureMessage(reason) {
+    return reason === "input_access_denied"
+      ? `${i18nMain.t("settingsPage.general.hotkey.linuxPttSetupDescription")} ${i18nMain.t(
+          "settingsPage.general.hotkey.linuxPttPermissionDescription"
+        )}`
+      : i18nMain.t("windows.pttUnavailable");
+  }
+
+  // Without a desktop-native backend, Linux push-to-talk runs entirely through
+  // the bundled evdev listener, so a probe failure means Hold cannot work at
+  // all. Returns the reason to show the user, or null when nothing blocks it.
+  _pushToTalkListenerBlockReason() {
+    if (process.platform !== "linux" || this.isUsingNativeShortcut() || !this.nativeListenerProbe) {
+      return null;
+    }
+    const { available, reason } = this.nativeListenerProbe();
+    return available ? null : this._nativeListenerFailureMessage(reason);
+  }
+
   supportsPushToTalk(hotkey = this.currentHotkey) {
     if (process.platform === "darwin" && hotkey && lacksMacReleaseSignal(hotkey)) {
       return false;
     }
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
+      return false;
+    }
+    if (this._pushToTalkListenerBlockReason()) {
       return false;
     }
     if (this.useGnome && this.gnomeManager?.supportsPushToTalk) {
@@ -464,7 +490,7 @@ class HotkeyManager extends EventEmitter {
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
       return i18nMain.t("hotkey.errors.osReserved", { hotkey });
     }
-    return i18nMain.t("windows.pttUnavailable");
+    return this._pushToTalkListenerBlockReason() ?? i18nMain.t("windows.pttUnavailable");
   }
 
   async setActivationMode(mode) {
@@ -553,6 +579,28 @@ class HotkeyManager extends EventEmitter {
     return { mouseButtons: [...mouseButtons], suppressGlobeAction };
   }
 
+  // A hotkey only the Linux evdev listener can serve must fail registration when
+  // that listener cannot run (no binary, or no read access to /dev/input):
+  // everything that rescues the user — the FALLBACK_HOTKEYS loop plus its toast
+  // on startup, the inline error in Settings and onboarding, the slot rollback —
+  // hangs off a failed registration, so reporting success leaves dictation
+  // silently dead. Returns null when the hotkey can be served.
+  _nativeListenerUnavailable(hotkey) {
+    if (process.platform !== "linux" || !this.nativeListenerProbe) return null;
+
+    const { available, reason } = this.nativeListenerProbe();
+    if (available) return null;
+
+    const deniedAccess = reason === "input_access_denied";
+    return {
+      success: false,
+      hotkey,
+      error: this._nativeListenerFailureMessage(reason),
+      reason: deniedAccess ? "input_access_denied" : "native_listener_unavailable",
+      suggestions: this.getSuggestions(hotkey),
+    };
+  }
+
   // Register one hotkey without mutating any slot. `accelerator` is null for
   // hotkeys handled by native listeners.
   _registerSingleHotkey(hotkey, callback) {
@@ -591,16 +639,24 @@ class HotkeyManager extends EventEmitter {
       }
 
       if (isRightSideModifier(hotkey)) {
+        const unavailable = this._nativeListenerUnavailable(hotkey);
+        if (unavailable) return unavailable;
         debugLogger.log(
           `[HotkeyManager] Right-side modifier "${hotkey}" set - using native listener`
         );
         return { success: true, hotkey, accelerator: null };
       }
 
-      if (isModifierOnlyHotkey(hotkey) && process.platform === "win32") {
-        debugLogger.log(
-          `[HotkeyManager] Modifier-only "${hotkey}" set - using Windows native listener`
-        );
+      // Both Windows and Linux watch modifier-only chords with a low-level
+      // listener; Electron cannot build an accelerator without a regular key,
+      // so registering one would fail and reject an otherwise valid hotkey.
+      if (
+        isModifierOnlyHotkey(hotkey) &&
+        (process.platform === "win32" || process.platform === "linux")
+      ) {
+        const unavailable = this._nativeListenerUnavailable(hotkey);
+        if (unavailable) return unavailable;
+        debugLogger.log(`[HotkeyManager] Modifier-only "${hotkey}" set - using native listener`);
         return { success: true, hotkey, accelerator: null };
       }
 

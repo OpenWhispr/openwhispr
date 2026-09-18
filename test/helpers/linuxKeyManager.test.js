@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 const childProcess = require("node:child_process");
+const fs = require("node:fs");
 
 const managerModulePath = require.resolve("../../src/helpers/linuxKeyManager");
 const originalLoad = Module._load;
@@ -132,4 +133,100 @@ test("dropping a key kills its listener process and stops tracking it", () => {
 
   assert.equal(child.killed, true);
   assert.equal(manager.listeners.size, 0);
+});
+
+// checkAvailability mirrors the C listener's NO_PERMISSION rule, so these pin
+// the states it has to tell apart. loadManager's `fs` stub only carries
+// statSync, so these load the manager against the real fs and patch it per test.
+function loadManagerWithRealFs() {
+  delete require.cache[managerModulePath];
+  setPlatform("linux");
+
+  Module._load = function loadWithMocks(request, parent, isMain) {
+    if (request === "./debugLogger") {
+      return { info() {}, warn() {}, debug() {}, error() {} };
+    }
+    return originalLoad(request, parent, isMain);
+  };
+
+  try {
+    return require(managerModulePath);
+  } finally {
+    Module._load = originalLoad;
+  }
+}
+
+const enoent = () => Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+const eacces = () => Object.assign(new Error("EACCES"), { code: "EACCES" });
+
+// Patch only the paths under test; everything else keeps the real behaviour so
+// node:test's own fs use is untouched.
+function stubBinaryFound(t, found) {
+  const real = fs.statSync;
+  t.mock.method(fs, "statSync", (target, ...rest) => {
+    if (!String(target).includes("linux-key-listener")) return real.call(fs, target, ...rest);
+    if (!found) throw enoent();
+    return { isFile: () => true };
+  });
+}
+
+function stubInputDir(t, { entries, readable = [] }) {
+  const realReaddir = fs.readdirSync;
+  t.mock.method(fs, "readdirSync", (target, ...rest) => {
+    if (String(target) !== "/dev/input") return realReaddir.call(fs, target, ...rest);
+    if (!entries) throw enoent();
+    return entries;
+  });
+
+  const realAccess = fs.accessSync;
+  t.mock.method(fs, "accessSync", (target, ...rest) => {
+    if (!String(target).startsWith("/dev/input/")) return realAccess.call(fs, target, ...rest);
+    if (!readable.includes(String(target))) throw eacces();
+  });
+}
+
+test("checkAvailability reports a missing listener binary", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, false);
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), {
+    available: false,
+    reason: "binary_missing",
+  });
+});
+
+test("checkAvailability reports denied access when no event node is readable", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, { entries: ["event0", "event1", "mice"] });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), {
+    available: false,
+    reason: "input_access_denied",
+  });
+});
+
+test("checkAvailability is available when a single event node is readable", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, { entries: ["event0", "event1"], readable: ["/dev/input/event1"] });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
+});
+
+// The C listener treats both of these as "wait for hotplug", not as a failure.
+test("checkAvailability does not block when /dev/input holds no event nodes", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, { entries: ["mice"] });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
+});
+
+test("checkAvailability does not block when /dev/input cannot be read", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, { entries: null });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
 });
