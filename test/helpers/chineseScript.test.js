@@ -133,7 +133,8 @@ test("Whisper prompt bias and merge", async () => {
 
 test("mergeWhisperPrompt puts the bias first so prompt truncation keeps it", async () => {
   const { mergeWhisperPrompt, getChineseScriptPromptBias } = await load();
-  const { GROQ_PROMPT_CHARS } = await import("../../src/utils/dictionaryPromptCap.js");
+  const { GROQ_PROMPT_BYTES, trimGroqDictionaryPrompt } =
+    await import("../../src/utils/dictionaryPromptCap.js");
   const bias = getChineseScriptPromptBias("simplified");
   const dictionary = Array.from({ length: 400 }, (_, i) => `term${i}`).join(", ");
   const prompt = mergeWhisperPrompt(dictionary, "simplified");
@@ -142,8 +143,8 @@ test("mergeWhisperPrompt puts the bias first so prompt truncation keeps it", asy
   // audioManager truncates to the provider's budget then back to the last
   // comma; the bias sits ahead of every dictionary word, so it always survives.
   // Groq's is the tightest, so it is the one worth pinning here.
-  const MAX_PROMPT_CHARS = GROQ_PROMPT_CHARS;
-  assert.equal(prompt.length > MAX_PROMPT_CHARS, true);
-  const truncated = prompt.slice(0, MAX_PROMPT_CHARS);
-  assert.equal(truncated.slice(0, truncated.lastIndexOf(",")).startsWith(bias), true);
+  assert.equal(Buffer.byteLength(prompt) > GROQ_PROMPT_BYTES, true);
+  const { prompt: truncated } = trimGroqDictionaryPrompt(prompt);
+  assert.equal(truncated.startsWith(bias), true);
+  assert.ok(Buffer.byteLength(truncated) <= GROQ_PROMPT_BYTES);
 });
