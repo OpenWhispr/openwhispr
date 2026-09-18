@@ -204,7 +204,7 @@ test("missing byok keys throw configuration errors, not token errors", async () 
   }
 });
 
-test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+language+streams', async () => {
+test("wire bodies: dictation posts language+streams; meetings post model+language+streams", async () => {
   const { fetchRealtimeTokenForProvider } = await load();
   const wire = [];
   const cloudDeps = deps({
@@ -217,8 +217,16 @@ test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+l
     },
   });
 
-  // Dictation: ipcHandlers' connectDictationStreaming passes only { mode, provider }.
-  await fetchRealtimeTokenForProvider("openai-realtime", cloudDeps, { mode: "openwhispr" });
+  // Dictation: ipcHandlers' connectDictationStreaming passes { mode, provider, language }
+  // (base ISO-639-1, undefined for Auto) and never a model — the server owns it (#2050).
+  await fetchRealtimeTokenForProvider("openai-realtime", cloudDeps, {
+    mode: "openwhispr",
+    language: "de",
+  });
+  await fetchRealtimeTokenForProvider("openai-realtime", cloudDeps, {
+    mode: "openwhispr",
+    language: undefined,
+  });
   // Meeting with system audio.
   await fetchRealtimeTokenForProvider(
     "openai-realtime",
@@ -239,6 +247,7 @@ test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+l
   await fetchRealtimeTokenForProvider("gemini-realtime", cloudDeps, { mode: "openwhispr" });
 
   assert.deepEqual(wire, [
+    { path: "/api/openai-realtime-token", json: '{"language":"de","streams":1}' },
     { path: "/api/openai-realtime-token", json: '{"streams":1}' },
     {
       path: "/api/openai-realtime-token",

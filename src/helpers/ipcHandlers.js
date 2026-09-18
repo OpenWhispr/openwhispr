@@ -632,6 +632,7 @@ class IPCHandlers {
     this.geminiStreaming = null;
     this.cortiStreaming = null;
     this._dictationStreaming = null;
+    this._dictationConnectionOptions = null;
     this._dictationConnectPromise = null;
     this._dictationIdleTimer = null;
     this._dictationPreviewEnabled = false;
@@ -8336,6 +8337,16 @@ class IPCHandlers {
       };
     };
 
+    // A session being replaced must go quiet: a late final or socket error from
+    // it would land in the renderer as if it came from the live session.
+    const retireDictationStreaming = (streaming) => {
+      streaming.onPartialTranscript = null;
+      streaming.onFinalTranscript = null;
+      streaming.onError = null;
+      streaming.onSessionEnd = null;
+      streaming.disconnect({ commit: false }).catch(() => {});
+    };
+
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
     const clearDictationIdleTimer = () => {
@@ -8356,6 +8367,21 @@ class IPCHandlers {
       }, DICTATION_IDLE_TIMEOUT_MS);
     };
 
+    // A warm connection only serves a dictation whose session identity it was
+    // minted for: the language is pinned when the session is configured (BYOK
+    // session.update, or the cloud token request), so a change means a redial.
+    const matchesWarmDictationSession = (options) => {
+      const warm = this._dictationConnectionOptions;
+      return (
+        !!warm &&
+        warm.provider === (options.provider || "openai-realtime") &&
+        (warm.mode === "byok") === (options.mode === "byok") &&
+        (warm.model ?? null) === (options.model ?? null) &&
+        OpenAIRealtimeStreaming.normalizeLanguage(warm.language) ===
+          OpenAIRealtimeStreaming.normalizeLanguage(options.language)
+      );
+    };
+
     const connectDictationStreaming = async (event, options) => {
       // Older renderers did not label the OpenAI dictation adapter. Dictation
       // realtime was OpenAI-only before Tinfoil support, so preserve that
@@ -8372,8 +8398,12 @@ class IPCHandlers {
       clearDictationIdleTimer();
       this._dictationPreviewEnabled = !!options.preview;
 
+      // The renderer is already streaming frames when a start redials (it wires
+      // the worklet before calling start), so the old session is retired without
+      // a commit or a wait: a commit would only surface its head as a final from
+      // the wrong session, and every frame sent meanwhile belongs to the new one.
       if (this._dictationStreaming) {
-        await this._dictationStreaming.disconnect().catch(() => {});
+        retireDictationStreaming(this._dictationStreaming);
         this._dictationStreaming = null;
       }
 
@@ -8390,10 +8420,14 @@ class IPCHandlers {
         // of silently dropping the start of the recording.
         streaming.beginConnecting();
         this._dictationStreaming = streaming;
+        this._dictationConnectionOptions = options;
         try {
           const apiKey = await fetchRealtimeToken(event, {
             mode: options.mode,
             provider,
+            // Cloud sessions are configured server-side when the secret is minted;
+            // the server also owns the managed model, so only the language is sent.
+            language: OpenAIRealtimeStreaming.normalizeLanguage(options.language) ?? undefined,
           });
           if (provider === "tinfoil-realtime") {
             const model = options.model || TINFOIL_REALTIME_MODEL;
@@ -8408,6 +8442,7 @@ class IPCHandlers {
             await streaming.connect({
               apiKey,
               model: options.model || "gpt-4o-mini-transcribe",
+              language: options.language,
               // OpenAI rejects rates below 24kHz; the 16kHz capture is upsampled instead.
               captureRate: 16000,
               preconfigured: isCloud,
@@ -9069,7 +9104,9 @@ class IPCHandlers {
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
-        if (!this._dictationStreaming?.isConnected) await connectDictationStreaming(event, options);
+        if (!this._dictationStreaming?.isConnected || !matchesWarmDictationSession(options)) {
+          await connectDictationStreaming(event, options);
+        }
         return { success: true };
       } catch (err) {
         return streamingStartFailure(err);
