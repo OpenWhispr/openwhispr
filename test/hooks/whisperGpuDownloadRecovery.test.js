@@ -45,6 +45,10 @@ for (const backend of ["cuda", "vulkan"]) {
     const activeStatus = () => ({
       downloaded: phase === "complete",
       downloading: phase === "downloading",
+      progress:
+        phase === "downloading"
+          ? { downloadedBytes: 12, totalBytes: 100, percentage: 12 }
+          : null,
       ...(isCuda
         ? {
             path: phase === "complete" ? "C:\\gpu\\whisper.exe" : null,
@@ -101,6 +105,7 @@ for (const backend of ["cuda", "vulkan"]) {
     assert.equal(getState().gpuBackend, backend);
     assert.equal(getState().gpuDownloading, true);
     assert.equal(getState().gpuDownloaded, false);
+    assert.equal(getState().gpuProgress.percentage, 12);
     assert.equal(typeof progressListener, "function");
     assert.equal(typeof poll, "function");
 
@@ -126,9 +131,49 @@ for (const backend of ["cuda", "vulkan"]) {
   });
 }
 
+test("prefers the backend with an active download over the hardware default", async (t) => {
+  let vulkanProgressSubscribed = false;
+  const getState = await mountGpuDownloadHook(t, {
+    cachePrefix: "openwhispr-active-vulkan-download-recovery-test-",
+    window: {
+      setInterval() {
+        return 1;
+      },
+      clearInterval() {},
+      electronAPI: {
+        async getCudaWhisperStatus() {
+          return {
+            downloaded: false,
+            downloading: false,
+            path: null,
+            gpuInfo: { hasNvidiaGpu: true, cudaSupported: true },
+          };
+        },
+        async getVulkanWhisperStatus() {
+          return {
+            downloaded: false,
+            downloading: true,
+            vulkan: { available: true },
+            hasNvidiaGpu: true,
+          };
+        },
+        onVulkanWhisperDownloadProgress() {
+          vulkanProgressSubscribed = true;
+          return () => {};
+        },
+      },
+    },
+  });
+
+  assert.equal(getState().gpuBackend, "vulkan");
+  assert.equal(getState().gpuDownloading, true);
+  assert.equal(vulkanProgressSubscribed, true);
+});
+
 test("a download started by the mounted picker is not polled as a recovered download", async (t) => {
   let intervalCount = 0;
   let progressSubscribed = false;
+  let finishDownload;
   const getState = await mountGpuDownloadHook(t, {
     cachePrefix: "openwhispr-whisper-gpu-local-download-test-",
     window: {
@@ -158,15 +203,27 @@ test("a download started by the mounted picker is not polled as a recovered down
           progressSubscribed = true;
           return () => {};
         },
+        downloadCudaWhisperBinary() {
+          return new Promise((resolve) => {
+            finishDownload = resolve;
+          });
+        },
       },
     },
   });
 
+  let downloadPromise;
   await React.act(async () => {
-    getState().startGpuDownload();
+    downloadPromise = getState().downloadGpu();
+    await Promise.resolve();
   });
 
   assert.equal(getState().gpuDownloading, true);
   assert.equal(progressSubscribed, true);
   assert.equal(intervalCount, 0, "only downloads recovered from main should be polled");
+
+  await React.act(async () => {
+    finishDownload({ success: true, willRestart: false });
+    await downloadPromise;
+  });
 });

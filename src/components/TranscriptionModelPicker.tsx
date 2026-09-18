@@ -443,10 +443,11 @@ export default function TranscriptionModelPicker({
     gpuDownloading,
     gpuProgress,
     gpuFailed,
-    setGpuDownloaded,
-    setGpuFailed,
-    startGpuDownload,
-    finishGpuDownload,
+    downloadGpu,
+    cancelGpuDownload,
+    deleteGpu,
+    retryGpu,
+    markGpuFailed,
   } = useWhisperGpuDownload(
     effectiveLocal && internalLocalProvider === "whisper" && getCachedPlatform() !== "darwin"
   );
@@ -741,7 +742,7 @@ export default function TranscriptionModelPicker({
   // Main falls back to CPU (and remembers it) when a GPU server crashes
   useEffect(() => {
     const onFallback = () => {
-      setGpuFailed(true);
+      markGpuFailed();
       setGpuActivating(false);
       setGpuActive(false);
     };
@@ -751,50 +752,31 @@ export default function TranscriptionModelPicker({
       disposeCuda?.();
       disposeVulkan?.();
     };
-  }, [setGpuFailed]);
+  }, [markGpuFailed]);
 
   const handleGpuDownload = async () => {
-    startGpuDownload();
-    try {
-      const result =
-        gpuBackend === "cuda"
-          ? await window.electronAPI?.downloadCudaWhisperBinary?.()
-          : await window.electronAPI?.downloadVulkanWhisperBinary?.();
-      if (result?.success) {
-        setGpuDownloaded(true);
-        setGpuFailed(false);
-        // Main reloads the server with the new backend only when one is loaded;
-        // otherwise the pack simply engages on the next dictation.
-        setGpuActivating(!!result.willRestart);
-      }
-    } finally {
-      finishGpuDownload();
+    const result = await downloadGpu();
+    if (result.success) {
+      // Main reloads the server with the new backend only when one is loaded;
+      // otherwise the pack simply engages on the next dictation.
+      setGpuActivating(!!result.willRestart);
     }
   };
 
   const handleGpuRetry = async () => {
-    setGpuFailed(false);
-    const result = await window.electronAPI?.whisperGpuRetry?.();
-    setGpuActivating(!!result?.willRestart);
+    const result = await retryGpu();
+    if (result.success) setGpuActivating(!!result.willRestart);
   };
 
   const handleGpuDelete = async () => {
-    const result =
-      gpuBackend === "cuda"
-        ? await window.electronAPI?.deleteCudaWhisperBinary?.()
-        : await window.electronAPI?.deleteVulkanWhisperBinary?.();
-    if (result?.success) {
-      setGpuDownloaded(false);
-      setGpuFailed(false);
+    if (await deleteGpu()) {
       setGpuActivating(false);
       setGpuActive(false);
     }
   };
 
   const handleGpuCancel = async () => {
-    if (gpuBackend === "cuda") await window.electronAPI?.cancelCudaWhisperDownload?.();
-    else await window.electronAPI?.cancelVulkanWhisperDownload?.();
-    finishGpuDownload();
+    await cancelGpuDownload();
   };
 
   const {

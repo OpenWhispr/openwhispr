@@ -259,6 +259,27 @@ test("progress: raw (downloaded, total) callback passes straight through", async
   ]);
 });
 
+test("progress: current download progress is observable and clears at completion", async () => {
+  state.release = makeRelease("llama-b9763-bin-ubuntu-vulkan-x64.tar.gz");
+  state.extractedFiles = { "llama-server": "binary" };
+  const manager = new LlamaVulkanManager();
+  let observedProgress = null;
+  state.downloadImpl = async (_url, dest, opts) => {
+    opts.onProgress(50, 100);
+    observedProgress = manager.getDownloadProgress();
+    fs.writeFileSync(dest, state.archiveContent);
+  };
+
+  await manager.download();
+
+  assert.deepEqual(observedProgress, {
+    downloadedBytes: 50,
+    totalBytes: 100,
+    percentage: 50,
+  });
+  assert.equal(manager.getDownloadProgress(), null);
+});
+
 test("cancel semantics: CUDA throws, llama returns { cancelled: true }", async () => {
   const abortError = () => Object.assign(new Error("Download cancelled"), { isAbort: true });
   state.release = makeRelease("whisper-server-linux-x64-cuda.zip");

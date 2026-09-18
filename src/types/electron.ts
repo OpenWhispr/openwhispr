@@ -684,9 +684,16 @@ export interface GpuInfo {
   cudaSupported?: boolean;
 }
 
+export interface GpuDownloadProgress {
+  downloadedBytes: number;
+  totalBytes: number;
+  percentage: number;
+}
+
 export interface CudaWhisperStatus {
   downloaded: boolean;
   downloading: boolean;
+  progress?: GpuDownloadProgress | null;
   path: string | null;
   gpuInfo: GpuInfo;
   /** CUDA fell back to CPU on this machine and stays off until retried. */
@@ -696,6 +703,7 @@ export interface CudaWhisperStatus {
 export interface VulkanWhisperStatus {
   downloaded: boolean;
   downloading: boolean;
+  progress?: GpuDownloadProgress | null;
   vulkan: VulkanGpuResult;
   hasNvidiaGpu: boolean;
   /** Vulkan fell back to CPU on this machine and stays off until retried. */
