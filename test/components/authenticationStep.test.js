@@ -75,7 +75,7 @@ async function settleAsyncHandler() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test("authentication restores email drafts and exposes Apple sign-in off macOS", async (t) => {
+async function createAuthenticationRenderer(t) {
   installBrowserGlobals(t, { window: { electronAPI: {} } });
   // The compact Back control is portalled to body (it has to out-stack the
   // onboarding shell's drag band), so rendering reads document.body.
@@ -229,6 +229,12 @@ test("authentication restores email drafts and exposes Apple sign-in off macOS",
     await settleAsyncHandler();
     return render(harness, overrides);
   };
+
+  return { render, typeEmail, submitEmail };
+}
+
+test("email authentication discovers accounts, restores drafts, and persists them once per pause", async (t) => {
+  const { render, typeEmail, submitEmail } = await createAuthenticationRenderer(t);
 
   const existingAccount = createHarness();
   existingAccount.discoveryResult = { exists: true };
@@ -403,7 +409,10 @@ test("authentication restores email drafts and exposes Apple sign-in off macOS",
   assert.deepEqual(flushedWrites, [
     { authMode: null, email: "gone@example.com", fullName: "", ssoDiscovery: null },
   ]);
+});
 
+test("Apple sign-in renders and dispatches on Linux", async (t) => {
+  const { render } = await createAuthenticationRenderer(t);
   const linuxSocialSignIn = createHarness();
   const appleProvider = findElement(
     render(linuxSocialSignIn),
