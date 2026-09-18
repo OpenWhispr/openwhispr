@@ -1,7 +1,10 @@
 import type { InferenceProvider } from "./types";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import { API_ENDPOINTS } from "../../../config/constants";
-import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
+import {
+  getLlmRequestTimeoutSeconds,
+  llmRequestTimeoutError,
+} from "../../../helpers/llmRequestTimeout.js";
 import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { extractApiErrorMessage } from "../apiErrorMessage";
@@ -100,7 +103,7 @@ export const geminiProvider: InferenceProvider = {
       });
 
       const controller = new AbortController();
-      const timeoutSeconds = getLlmRequestTimeoutSeconds();
+      const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
       try {
         const res = await fetch(`${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`, {
@@ -143,7 +146,7 @@ export const geminiProvider: InferenceProvider = {
         return jsonResponse;
       } catch (error) {
         if ((error as Error).name === "AbortError") {
-          throw new Error(`Request timed out after ${timeoutSeconds}s`);
+          throw llmRequestTimeoutError(timeoutSeconds);
         }
         throw error;
       } finally {

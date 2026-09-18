@@ -116,3 +116,22 @@ test("a blank result is reported as an error and never saved as the enhanced not
   await waitFor(() => store.consumeErrorEvents().length > 0 || updates.length > 0, "an outcome");
   assert.equal(updates.length, 0);
 });
+
+test("note formatting requests carry the noteFormatting scope, which is what buys them the long deadline", async (t) => {
+  // The scope is the only thing that tells the providers this request may run
+  // for minutes. If the overrides stop being spread into the config, the note
+  // silently drops back to the 30-second dictation deadline (1.10.1).
+  const { store, calls, updates } = await loadStore(t);
+
+  store.runBackgroundAction(
+    10,
+    "## Meeting Transcript\nYou: ship on Friday.",
+    "hash",
+    ACTION,
+    { modelId: "gpt-5.6-terra", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+
+  await waitFor(() => updates.length > 0, "the note to be written");
+  assert.equal(calls[0].config.inferenceScope, "noteFormatting");
+});

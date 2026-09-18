@@ -1012,6 +1012,15 @@ class ClipboardManager {
             } else {
               resolve({ restoreComplete: Promise.resolve() });
             }
+          } else if (useFastPaste && code === 3) {
+            this.safeLog("CGEvent paste could not resolve the active keyboard layout", {
+              stderr: errorOutput.trim(),
+            });
+            reject(
+              new Error(
+                "Paste could not resolve the active keyboard layout. Text is copied to clipboard - please paste manually with Cmd+V."
+              )
+            );
           } else if (useFastPaste) {
             this.safeLog(
               code === 2
