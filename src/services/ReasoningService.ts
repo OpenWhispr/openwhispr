@@ -353,7 +353,8 @@ class ReasoningService extends BaseReasoningService {
               signal: controller.signal,
             }),
           requestBody,
-          logParamFallback(`${providerName.toUpperCase()}_PARAM_FALLBACK`)
+          logParamFallback(`${providerName.toUpperCase()}_PARAM_FALLBACK`),
+          config.s1MiniCleanup
         );
 
         if (!res.ok) {
@@ -675,7 +676,8 @@ class ReasoningService extends BaseReasoningService {
             signal: abortController.signal,
           }),
         requestBody,
-        logParamFallback("AGENT_STREAM_PARAM_FALLBACK")
+        logParamFallback("AGENT_STREAM_PARAM_FALLBACK"),
+        config.s1MiniCleanup
       );
     } catch (error) {
       clearTimeout(timeoutId);

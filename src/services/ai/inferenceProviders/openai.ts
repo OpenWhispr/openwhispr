@@ -283,7 +283,8 @@ export const openaiProvider: InferenceProvider = {
                 signal: controller.signal,
               }),
             requestBody,
-            (details) => logger.logReasoning("OPENAI_PARAM_FALLBACK", { endpoint, ...details })
+            (details) => logger.logReasoning("OPENAI_PARAM_FALLBACK", { endpoint, ...details }),
+            config.s1MiniCleanup
           );
 
           if (!res.ok) {

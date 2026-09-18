@@ -121,14 +121,15 @@ test("S1-mini cleanup uses its trained format on local and custom transports", a
 
   const { fetchWithParamFallback } = await vite.ssrLoadModule("/services/ai/chatRequestBody.ts");
   let attempts = 0;
-  const body = requests[0].body;
+  const body = { ...requests[0].body, messages: [] };
   const rejected = await fetchWithParamFallback(
     async () => {
       attempts++;
       return new Response("unsupported chat_template_kwargs", { status: 400 });
     },
     body,
-    () => assert.fail("Required S1-mini parameters must not be stripped")
+    () => assert.fail("Required S1-mini parameters must not be stripped"),
+    true
   );
   assert.equal(rejected.status, 400);
   assert.equal(attempts, 1);

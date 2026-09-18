@@ -1,5 +1,4 @@
 import type { ReasoningConfig } from "../BaseReasoningService";
-import { S1_MINI_SYSTEM_PROMPT } from "../../config/s1Mini";
 import { getOpenAiApiConfig } from "../../models/ModelRegistry";
 import { detectEndpointDialect } from "./thinkingSuppressionDialects";
 import { getModelFamilyConstraints } from "./modelFamilyConstraints";
@@ -143,18 +142,12 @@ const STRIPPABLE_SHAPED_PARAMS = [
 export async function fetchWithParamFallback(
   doFetch: () => Promise<Response>,
   requestBody: Record<string, unknown>,
-  logRejection: (details: { status: number; stripped: string[] }) => void
+  logRejection: (details: { status: number; stripped: string[] }) => void,
+  skipParamFallback = false
 ): Promise<Response> {
   let res = await doFetch();
   // S1-mini's template flag and greedy decoding are required, not optional hints.
-  if (
-    Array.isArray(requestBody.messages) &&
-    requestBody.messages.some(
-      (message: { role?: string; content?: unknown }) =>
-        message.role === "system" && message.content === S1_MINI_SYSTEM_PROMPT
-    )
-  )
-    return res;
+  if (skipParamFallback) return res;
   if (res.ok || (res.status !== 400 && res.status !== 422)) return res;
 
   if (requestBody.reasoning) {
