@@ -1,5 +1,6 @@
 import {
   formatHotkeyLabelForPlatform,
+  getMouseButtonNumber,
   isGlobeLikeHotkey,
   isMouseButtonHotkey,
   parseHotkeyList,
@@ -16,7 +17,8 @@ export type ValidationErrorCode =
   | "RESERVED"
   | "INVALID_GLOBE"
   | "FN_COMBINATION_UNSUPPORTED"
-  | "MODIFIER_ONLY_UNSUPPORTED";
+  | "MODIFIER_ONLY_UNSUPPORTED"
+  | "MOUSE_BUTTON_UNSUPPORTED";
 
 export interface ValidationResult {
   valid: boolean;
@@ -408,8 +410,8 @@ function normalizeKeyToken(part: string): string {
   if (lowered === "backspace") return "Backspace";
   if (lowered === "globe") return "GLOBE";
   if (lowered === "fn") return "Fn";
-  if (lowered === "mousebutton4") return "MouseButton4";
-  if (lowered === "mousebutton5") return "MouseButton5";
+  const mouseButtonNumber = getMouseButtonNumber(trimmed);
+  if (mouseButtonNumber !== null) return `MouseButton${mouseButtonNumber}`;
 
   const functionMatch = lowered.match(/^f(\d{1,2})$/);
   if (functionMatch) {
@@ -595,14 +597,16 @@ export function validateHotkey(
       return {
         valid: false,
         error: "Mouse button hotkeys are currently supported on macOS only.",
+        errorCode: "MOUSE_BUTTON_UNSUPPORTED",
       };
     }
     return { valid: true };
   }
 
   // Mouse buttons cannot be combined with keyboard modifiers — they're handled
-  // by a separate native event tap, not Electron's globalShortcut.
-  if (/mousebutton[45]/i.test(hotkey)) {
+  // by a separate native event tap, not Electron's globalShortcut. Keep the
+  // token check broad so an unsupported button cannot slip through as a key.
+  if (hotkey.split("+").some((part) => /^mousebutton\d+$/i.test(part.trim()))) {
     return {
       valid: false,
       error: "Mouse button hotkeys cannot be combined with other keys.",

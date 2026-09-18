@@ -38,6 +38,7 @@ const SYMBOLS: Record<string, string> = {
   // the symbol slot, which is sized for a single glyph.
   "Mouse Button 4": "⇱",
   "Mouse Button 5": "⇲",
+  "Middle mouse button": "●",
 };
 
 const LABELS: Record<string, string> = {
@@ -66,6 +67,7 @@ const LABELS: Record<string, string> = {
   Right: "right",
   "Mouse Button 4": "mouse 4",
   "Mouse Button 5": "mouse 5",
+  "Middle mouse button": "middle mouse button",
 };
 
 /**
@@ -84,6 +86,15 @@ function describeKeycap(part: string): Omit<HotkeyKeycapDescriptor, "id"> {
 
   if (part === "Globe/Fn" || part === "Fn") {
     return { label: "fn", symbol: "◎", icon: "globe" };
+  }
+
+  if (part === "Mouse Button 4" || part === "Mouse Button 5") {
+    return { label: LABELS[part], symbol: SYMBOLS[part] };
+  }
+
+  const mouseButton = /^Mouse Button (?:[3-9]|[12][0-9]|3[0-2])$/.test(part);
+  if (mouseButton) {
+    return { label: part.toLocaleLowerCase(), symbol: "●" };
   }
 
   return {

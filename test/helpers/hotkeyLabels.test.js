@@ -31,11 +31,16 @@ test("globe-like hotkeys display as Globe/Fn on every platform", async () => {
   assert.equal(formatHotkeyLabelForPlatform("Fn", "win32"), "Globe/Fn");
 });
 
-test("mouse button hotkeys display with spaces", async () => {
-  const { formatHotkeyLabelForPlatform } = await load();
+test("mouse button hotkeys display as middle or numbered buttons", async () => {
+  const { formatHotkeyLabelForPlatform, getMouseButtonNumber, isMouseButtonHotkey } = await load();
 
+  assert.equal(formatHotkeyLabelForPlatform("MouseButton3", "darwin"), "Middle mouse button");
   assert.equal(formatHotkeyLabelForPlatform("MouseButton4", "darwin"), "Mouse Button 4");
   assert.equal(formatHotkeyLabelForPlatform("MouseButton5", "darwin"), "Mouse Button 5");
+  assert.equal(formatHotkeyLabelForPlatform("MouseButton32", "darwin"), "Mouse Button 32");
+  assert.equal(isMouseButtonHotkey("MouseButton2"), false);
+  assert.equal(isMouseButtonHotkey("MouseButton33"), false);
+  assert.equal(getMouseButtonNumber("MouseButton32"), 32);
 });
 
 test("the same stored accelerator renders per platform: Cmd on macOS, Ctrl on Windows", async () => {

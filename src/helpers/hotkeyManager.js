@@ -74,8 +74,31 @@ function isGlobeLikeHotkey(hotkey) {
   return hotkey === "GLOBE" || hotkey === "Fn";
 }
 
+const MOUSE_BUTTON_NAME_PATTERN = /^MouseButton([3-9]|[12]\d|3[0-2])$/i;
+
+function canonicalizeMouseButtonHotkey(hotkey) {
+  if (typeof hotkey !== "string") return null;
+  const match = MOUSE_BUTTON_NAME_PATTERN.exec(hotkey.trim());
+  return match ? `MouseButton${Number(match[1])}` : null;
+}
+
 function isMouseButtonHotkey(hotkey) {
-  return /^MouseButton[45]$/i.test(hotkey || "");
+  return canonicalizeMouseButtonHotkey(hotkey) !== null;
+}
+
+function normalizeHotkeyList(value) {
+  return [
+    ...new Set(
+      parseHotkeyList(value).map((hotkey) => canonicalizeMouseButtonHotkey(hotkey) || hotkey)
+    ),
+  ];
+}
+
+function equivalentHotkey(left, right) {
+  return (
+    (canonicalizeMouseButtonHotkey(left) || left) ===
+    (canonicalizeMouseButtonHotkey(right) || right)
+  );
 }
 
 // macOS only reports a release for keys the native listener watches (Globe,
@@ -157,7 +180,8 @@ class HotkeyManager extends EventEmitter {
 
   set currentHotkey(value) {
     const slot = this._ensureSlot("dictation");
-    slot.hotkeys = value ? [value] : [];
+    const canonicalMouseButton = canonicalizeMouseButtonHotkey(value);
+    slot.hotkeys = value ? [canonicalMouseButton || value] : [];
     this.slots.set("dictation", slot);
   }
 
@@ -234,7 +258,7 @@ class HotkeyManager extends EventEmitter {
   }
 
   async registerSlot(slotName, hotkeyInput, callback, options) {
-    const hotkeys = parseHotkeyList(hotkeyInput);
+    const hotkeys = normalizeHotkeyList(hotkeyInput);
     if (hotkeys.length === 0) {
       return {
         success: false,
@@ -454,7 +478,9 @@ class HotkeyManager extends EventEmitter {
   // True if `key` is one of the hotkeys bound to `slotName`.
   slotHasHotkey(slotName, key) {
     if (!key) return false;
-    return (this.slots.get(slotName)?.hotkeys ?? []).includes(key);
+    return (this.slots.get(slotName)?.hotkeys ?? []).some((hotkey) =>
+      equivalentHotkey(hotkey, key)
+    );
   }
 
   // Debug-log line for a press or release of a bound hotkey: where it came from,
@@ -503,7 +529,7 @@ class HotkeyManager extends EventEmitter {
   findSlotByHotkey(key) {
     if (!key) return null;
     for (const [slotName, slot] of this.slots) {
-      if ((slot.hotkeys ?? []).includes(key)) return slotName;
+      if ((slot.hotkeys ?? []).some((hotkey) => equivalentHotkey(hotkey, key))) return slotName;
     }
     return null;
   }
@@ -686,8 +712,9 @@ class HotkeyManager extends EventEmitter {
 
     for (const slotName of slotNames) {
       for (const hotkey of this.getSlotHotkeys(slotName)) {
-        if (isMouseButtonHotkey(hotkey)) {
-          mouseButtons.add(hotkey);
+        const mouseButton = canonicalizeMouseButtonHotkey(hotkey);
+        if (mouseButton) {
+          mouseButtons.add(mouseButton);
         } else if (isGlobeLikeHotkey(hotkey)) {
           suppressGlobeAction = true;
         }
@@ -731,14 +758,15 @@ class HotkeyManager extends EventEmitter {
   // hotkeys handled by native listeners.
   _registerSingleHotkey(hotkey, callback) {
     try {
-      if (isMouseButtonHotkey(hotkey)) {
+      const mouseButton = canonicalizeMouseButtonHotkey(hotkey);
+      if (mouseButton) {
         if (process.platform !== "darwin") {
           return { success: false, hotkey, error: i18nMain.t("hotkey.errors.mouseButtonOnlyMac") };
         }
         debugLogger.log(
-          `[HotkeyManager] Mouse button "${hotkey}" set - using macOS native listener`
+          `[HotkeyManager] Mouse button "${mouseButton}" set - using macOS native listener`
         );
-        return { success: true, hotkey, accelerator: null };
+        return { success: true, hotkey: mouseButton, accelerator: null };
       }
 
       if (isGlobeLikeHotkey(hotkey)) {
@@ -833,7 +861,7 @@ class HotkeyManager extends EventEmitter {
     }
 
     const slot = this._ensureSlot(slotName);
-    const desired = parseHotkeyList(hotkeyInput);
+    const desired = normalizeHotkeyList(hotkeyInput);
 
     debugLogger.log(
       `[HotkeyManager] Setting up hotkeys: "${desired.join(", ")}" for slot "${slotName}"`
@@ -950,7 +978,7 @@ class HotkeyManager extends EventEmitter {
             HyprlandShortcutManager.getCanonicalBinding(otherHotkey) === hyprlandBinding
         );
       const match =
-        otherHotkeys.includes(hotkey) ||
+        otherHotkeys.some((otherHotkey) => equivalentHotkey(otherHotkey, hotkey)) ||
         (accelerator && otherAccelerators.includes(accelerator)) ||
         hasEquivalentHyprlandBinding;
       if (match) {

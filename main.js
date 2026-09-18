@@ -1554,6 +1554,7 @@ async function startApp() {
       windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         environmentManager.saveMeetingKey(hotkey);
+        ipcMain.emit("hotkey-changed", null, hotkey);
         return { success: true };
       }
       return { success: false, message: result.error };
@@ -1562,6 +1563,7 @@ async function startApp() {
       if (removed === false) return { success: false };
       environmentManager.saveMeetingKey("");
       windowManager.reconcileNativeKeyListeners();
+      ipcMain.emit("hotkey-changed", null, "");
       return { success: true };
     }
   });
@@ -1895,22 +1897,35 @@ async function startApp() {
       }
     });
 
-    const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "voiceAgent", "translation"];
+    const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "voiceAgent", "translation", "meeting"];
+    const capturedMouseButtons = new Set();
     const syncMacNativeHotkeyConfiguration = () => {
+      if (hotkeyManager.isInListeningMode()) {
+        globeKeyManager.setConfiguration({
+          mouseButtons: windowManager.controlPanelWindow?.isFocused()
+            ? Array.from({ length: 30 }, (_, index) => `MouseButton${index + 3}`)
+            : [],
+          suppressGlobeAction: true,
+        });
+        return;
+      }
       globeKeyManager.setConfiguration(
         hotkeyManager.getMacNativeListenerConfig(MAC_NATIVE_HOTKEY_SLOTS)
       );
     };
 
-    // Mouse Button 4/5 handling (e.g., Logitech MX Master side buttons)
+    // Middle and auxiliary mouse buttons share the existing native hotkey slots.
     let mouseButtonDownTime = 0;
     let mouseButtonIsRecording = false;
     let mouseButtonLastStopTime = 0;
     let mouseButtonActiveButton = null;
 
     globeKeyManager.on("mouse-button-down", async (button) => {
-      if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
+      if (hotkeyManager.isInListeningMode()) {
+        if (windowManager.controlPanelWindow?.isFocused()) capturedMouseButtons.add(button);
+        return;
+      }
       hotkeyManager.logHotkeyEvent("macos-native", "down", button);
 
       if (hotkeyManager.slotHasHotkey("voiceAgent", button)) {
@@ -1918,6 +1933,9 @@ async function startApp() {
       }
       if (hotkeyManager.slotHasHotkey("translation", button)) {
         windowManager.sendToggleTranslation();
+      }
+      if (hotkeyManager.slotHasHotkey("meeting", button)) {
+        meetingHotkeyCallback();
       }
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
@@ -1949,8 +1967,15 @@ async function startApp() {
     });
 
     globeKeyManager.on("mouse-button-up", async (button) => {
-      if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
+      if (hotkeyManager.isInListeningMode()) {
+        const wasPressed = capturedMouseButtons.delete(button);
+        const panel = windowManager.controlPanelWindow;
+        if (wasPressed && isLiveWindow(panel) && panel.isFocused()) {
+          panel.webContents.send("mouse-shortcut-captured", button);
+        }
+        return;
+      }
       hotkeyManager.logHotkeyEvent("macos-native", "up", button);
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
@@ -2009,15 +2034,29 @@ async function startApp() {
     hotkeyManager.on("hotkey-loaded", syncMacNativeHotkeyConfiguration);
 
     ipcMain.on("hotkey-listening-mode-changed", (_event, enabled) => {
+      capturedMouseButtons.clear();
       if (enabled) {
+        if (mouseButtonIsRecording) windowManager.sendStopDictation();
+        else if (mouseButtonDownTime) {
+          windowManager.sendCancelDictationPreparation();
+          windowManager.hideDictationPanel();
+        }
+        mouseButtonDownTime = 0;
+        mouseButtonIsRecording = false;
+        mouseButtonActiveButton = null;
         startMacAccessibilityFeatures();
-        // Let mouse buttons through so they can be captured, but keep macOS's
-        // Globe action down so choosing Globe cannot flash the emoji viewer.
-        globeKeyManager.setConfiguration({ mouseButtons: [], suppressGlobeAction: true });
-      } else {
-        syncMacNativeHotkeyConfiguration();
       }
+      syncMacNativeHotkeyConfiguration();
     });
+
+    // Never consume mouse navigation in other apps while a capture field is open.
+    for (const eventName of ["browser-window-blur", "browser-window-focus"]) {
+      app.on(eventName, (_event, win) => {
+        if (win !== windowManager.controlPanelWindow) return;
+        capturedMouseButtons.clear();
+        syncMacNativeHotkeyConfiguration();
+      });
+    }
 
     // Allow renderer to request an accessibility check (e.g. on sign-in).
     // Also sends accessibility-missing events if untrusted.
@@ -2040,6 +2079,8 @@ async function startApp() {
       mouseButtonDownTime = 0;
       mouseButtonIsRecording = false;
       mouseButtonLastStopTime = 0;
+      mouseButtonActiveButton = null;
+      capturedMouseButtons.clear();
       syncMacNativeHotkeyConfiguration();
     });
   }

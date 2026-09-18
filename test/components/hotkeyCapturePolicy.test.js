@@ -32,3 +32,17 @@ test("capture focus is restored only when no control owns page focus", async () 
   assert.equal(shouldRestoreCaptureFocus(body, body), true);
   assert.equal(shouldRestoreCaptureFocus(button, body), false);
 });
+
+test("DOM mouse capture maps middle and auxiliary buttons without offering left or right", async () => {
+  const { isCapturableDomMouseButton, mouseButtonHotkeyFromDomButton } = await load();
+
+  assert.equal(mouseButtonHotkeyFromDomButton(0), null);
+  assert.equal(mouseButtonHotkeyFromDomButton(1), "MouseButton3");
+  assert.equal(mouseButtonHotkeyFromDomButton(2), null);
+  assert.equal(mouseButtonHotkeyFromDomButton(3), "MouseButton4");
+  assert.equal(mouseButtonHotkeyFromDomButton(4), "MouseButton5");
+  assert.equal(mouseButtonHotkeyFromDomButton(31), "MouseButton32");
+  assert.equal(mouseButtonHotkeyFromDomButton(32), null);
+  assert.equal(isCapturableDomMouseButton(1), true);
+  assert.equal(isCapturableDomMouseButton(2), false);
+});

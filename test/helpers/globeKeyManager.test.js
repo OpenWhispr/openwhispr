@@ -245,6 +245,32 @@ test("spawn args include mouse buttons, a spaced state path, and the suppression
   ]);
 });
 
+test("configuration accepts MouseButton3 through MouseButton32 and canonicalizes the stream", () => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager();
+  const events = [];
+  manager.on("mouse-button-down", (button) => events.push(`down:${button}`));
+  manager.on("mouse-button-up", (button) => events.push(`up:${button}`));
+
+  manager.setConfiguration({
+    mouseButtons: ["mousebutton3", "MouseButton32", "MouseButton2", "MouseButton33"],
+  });
+  manager.start();
+
+  assert.deepEqual(spawnCalls[0].args, ["MouseButton3,MouseButton32"]);
+
+  spawnCalls[0].child.stdout.emit(
+    "data",
+    "MOUSE_BUTTON_DOWN:mousebutton3\n" +
+      "MOUSE_BUTTON_UP:MouseButton32\n" +
+      "MOUSE_BUTTON_DOWN:MouseButton2\n" +
+      "MOUSE_BUTTON_UP:MouseButton33\n"
+  );
+  assert.deepEqual(events, ["down:MouseButton3", "up:MouseButton32"]);
+
+  manager.stop();
+});
+
 test("a configuration change reconfigures the running listener instead of restarting it", () => {
   const { GlobeKeyManager, spawnCalls } = loadManager();
   const manager = new GlobeKeyManager({ preferenceStatePath: "/tmp/state.json" });
