@@ -4,12 +4,15 @@ import { AlertTriangle, Trash2 } from "../icons";
 import {
   formatHotkeyLabel,
   formatHotkeyLabelForPlatform,
+  getMouseButtonNumber,
   isGlobeLikeHotkey,
+  isMouseButtonHotkey,
   sidedModifierToken,
 } from "../../utils/hotkeys";
 import { getPlatform, type Platform } from "../../utils/platform";
 import {
   hasMetModifierOnlyHoldThreshold,
+  mouseButtonHotkeyFromDomButton,
   shouldAcceptModifierOnlyCapture,
   shouldRestoreCaptureFocus,
 } from "./hotkeyCapturePolicy";
@@ -269,6 +272,9 @@ export function HotkeyInput({
   const containerRef = useRef<HTMLDivElement>(null);
   const keyDownTimeRef = useRef<number>(0);
   const warningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isCapturingRef = useRef(false);
+  const pendingDomMouseButtonRef = useRef<number | null>(null);
+  const ignoredMouseHotkeyRef = useRef<string | null>(null);
   const fnHeldRef = useRef(false);
   const fnCapturedKeyRef = useRef(false);
   const heldModifiersRef = useRef<Record<ModifierKind, boolean>>({
@@ -280,6 +286,11 @@ export function HotkeyInput({
   const modifierCodesRef = useRef<Partial<Record<ModifierKind, string>>>({});
   const platform = getPlatform();
   const isMac = platform === "darwin";
+
+  const setCapturing = useCallback((capturing: boolean) => {
+    isCapturingRef.current = capturing;
+    setIsCapturing(capturing);
+  }, []);
 
   const resolveModifierOnlyCapture = useCallback(
     (
@@ -324,6 +335,26 @@ export function HotkeyInput({
     fnCapturedKeyRef.current = false;
   }, []);
 
+  const clearCaptureState = useCallback(() => {
+    heldModifiersRef.current = { ctrl: false, meta: false, alt: false, shift: false };
+    modifierCodesRef.current = {};
+    setActiveModifiers([]);
+    setIsFnHeld(false);
+    fnHeldRef.current = false;
+    fnCapturedKeyRef.current = false;
+    keyDownTimeRef.current = 0;
+    pendingDomMouseButtonRef.current = null;
+    ignoredMouseHotkeyRef.current = null;
+  }, []);
+
+  const cancelCapture = useCallback(() => {
+    setCapturing(false);
+    setValidationWarning(null);
+    clearCaptureState();
+    void window.electronAPI?.setHotkeyListeningMode?.(false);
+    containerRef.current?.blur();
+  }, [clearCaptureState, setCapturing]);
+
   const rejectCapture = useCallback(
     (message: string) => {
       if (warningTimeoutRef.current) {
@@ -332,17 +363,16 @@ export function HotkeyInput({
       setValidationWarning(message);
       onValidationError?.(message);
       warningTimeoutRef.current = setTimeout(() => setValidationWarning(null), 4000);
-      heldModifiersRef.current = { ctrl: false, meta: false, alt: false, shift: false };
-      modifierCodesRef.current = {};
-      setActiveModifiers([]);
-      keyDownTimeRef.current = 0;
+      clearCaptureState();
       clearFnHeld();
     },
-    [onValidationError, clearFnHeld]
+    [onValidationError, clearCaptureState, clearFnHeld]
   );
 
   const finalizeCapture = useCallback(
     (hotkey: string) => {
+      if (!isCapturingRef.current) return;
+
       if (warningTimeoutRef.current) {
         clearTimeout(warningTimeoutRef.current);
         warningTimeoutRef.current = null;
@@ -358,13 +388,15 @@ export function HotkeyInput({
 
       setValidationWarning(null);
       onValidationError?.(null);
+      setCapturing(false);
+      pendingDomMouseButtonRef.current = null;
+      ignoredMouseHotkeyRef.current = null;
       onChange(hotkey);
-      setIsCapturing(false);
       setActiveModifiers([]);
       clearFnHeld();
       containerRef.current?.blur();
     },
-    [validate, onValidationError, onChange, clearFnHeld, rejectCapture]
+    [validate, onValidationError, onChange, clearFnHeld, rejectCapture, setCapturing]
   );
 
   const handleKeyDown = useCallback(
@@ -376,6 +408,11 @@ export function HotkeyInput({
       // The user is attempting a new chord, so the previous rejection no longer
       // applies. This is where clearing belongs, not in handleFocus.
       onValidationError?.(null);
+
+      if (e.nativeEvent.code === "Escape" || e.key === "Escape") {
+        cancelCapture();
+        return;
+      }
 
       // Track held modifiers for modifier-only capture
       heldModifiersRef.current = {
@@ -431,7 +468,7 @@ export function HotkeyInput({
       }
       // If no base key, modifiers are held - don't finalize yet
     },
-    [disabled, isMac, platform, finalizeCapture, onValidationError]
+    [disabled, isMac, platform, finalizeCapture, onValidationError, cancelCapture]
   );
 
   const handleKeyUp = useCallback(
@@ -495,19 +532,68 @@ export function HotkeyInput({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (disabled) return;
-      if (!isCapturing) {
+
+      const mouseHotkey = mouseButtonHotkeyFromDomButton(e.button);
+      if (!isMac || !mouseHotkey) {
+        if (!isCapturingRef.current) {
+          // The focused hero surface replaces the element beneath the pointer
+          // while it enters capture mode. Preventing the initiating click keeps
+          // the browser from blurring that new surface during the same press.
+          if (e.button === 0) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          containerRef.current?.focus({ preventScroll: true });
+        }
+        return;
+      }
+
+      // The first mouse press only focuses the capture surface. Do not turn
+      // that initiating press into the shortcut the user is setting.
+      if (!isCapturingRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        ignoredMouseHotkeyRef.current = mouseHotkey;
         containerRef.current?.focus({ preventScroll: true });
         return;
       }
 
-      const mouseHotkey = e.button === 3 ? "MouseButton4" : e.button === 4 ? "MouseButton5" : null;
+      e.preventDefault();
+      e.stopPropagation();
+      pendingDomMouseButtonRef.current = e.button;
+    },
+    [disabled, isMac]
+  );
+
+  const handleMouseUp = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (disabled || !isMac) return;
+      const mouseHotkey = mouseButtonHotkeyFromDomButton(e.button);
       if (!mouseHotkey) return;
 
       e.preventDefault();
       e.stopPropagation();
+
+      if (ignoredMouseHotkeyRef.current === mouseHotkey) {
+        ignoredMouseHotkeyRef.current = null;
+        pendingDomMouseButtonRef.current = null;
+        return;
+      }
+
+      if (pendingDomMouseButtonRef.current !== e.button) return;
+      pendingDomMouseButtonRef.current = null;
       finalizeCapture(mouseHotkey);
     },
-    [disabled, isCapturing, finalizeCapture]
+    [disabled, isMac, finalizeCapture]
+  );
+
+  const preventMouseDefault = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!isMac || !mouseButtonHotkeyFromDomButton(e.button)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [isMac]
   );
 
   // Deliberately does not clear the parent's error (handleKeyDown does that on the
@@ -516,6 +602,7 @@ export function HotkeyInput({
   // after the parent set the message and the rejection was never readable.
   const handleFocus = useCallback(() => {
     if (!disabled) {
+      isCapturingRef.current = true;
       setIsCapturing(true);
       setValidationWarning(null);
       clearFnHeld();
@@ -524,13 +611,15 @@ export function HotkeyInput({
   }, [disabled, clearFnHeld]);
 
   const handleBlur = useCallback(() => {
+    isCapturingRef.current = false;
     setIsCapturing(false);
     setActiveModifiers([]);
     setValidationWarning(null);
     clearFnHeld();
+    clearCaptureState();
     window.electronAPI?.setHotkeyListeningMode?.(false);
     onBlur?.();
-  }, [onBlur, clearFnHeld]);
+  }, [onBlur, clearFnHeld, clearCaptureState]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -581,10 +670,80 @@ export function HotkeyInput({
 
   useEffect(() => {
     return () => {
+      isCapturingRef.current = false;
+      pendingDomMouseButtonRef.current = null;
+      ignoredMouseHotkeyRef.current = null;
       window.electronAPI?.setHotkeyListeningMode?.(false);
       if (warningTimeoutRef.current) clearTimeout(warningTimeoutRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isCapturing || !isMac) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const mouseHotkey = mouseButtonHotkeyFromDomButton(event.button);
+      if (!mouseHotkey || !isCapturingRef.current) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      pendingDomMouseButtonRef.current = event.button;
+    };
+
+    const handleMouseUp = (event: MouseEvent) => {
+      const mouseHotkey = mouseButtonHotkeyFromDomButton(event.button);
+      if (!mouseHotkey) return;
+
+      // Prevent middle-click tab opens and browser back/forward actions even
+      // when the native listener does the final capture.
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (ignoredMouseHotkeyRef.current === mouseHotkey) {
+        ignoredMouseHotkeyRef.current = null;
+        pendingDomMouseButtonRef.current = null;
+        return;
+      }
+
+      if (pendingDomMouseButtonRef.current !== event.button) return;
+      pendingDomMouseButtonRef.current = null;
+      finalizeCapture(mouseHotkey);
+    };
+
+    const preventMouseDefault = (event: MouseEvent) => {
+      if (!mouseButtonHotkeyFromDomButton(event.button)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    window.addEventListener("mousedown", handleMouseDown, true);
+    window.addEventListener("mouseup", handleMouseUp, true);
+    window.addEventListener("auxclick", preventMouseDefault, true);
+    window.addEventListener("click", preventMouseDefault, true);
+
+    const disposeNative = window.electronAPI?.onMouseShortcutCaptured?.((button) => {
+      const buttonNumber = getMouseButtonNumber(button);
+      if (buttonNumber === null || !isMouseButtonHotkey(button)) return;
+
+      const mouseHotkey = `MouseButton${buttonNumber}`;
+      if (ignoredMouseHotkeyRef.current === mouseHotkey) {
+        ignoredMouseHotkeyRef.current = null;
+        pendingDomMouseButtonRef.current = null;
+        return;
+      }
+
+      pendingDomMouseButtonRef.current = null;
+      finalizeCapture(mouseHotkey);
+    });
+
+    return () => {
+      window.removeEventListener("mousedown", handleMouseDown, true);
+      window.removeEventListener("mouseup", handleMouseUp, true);
+      window.removeEventListener("auxclick", preventMouseDefault, true);
+      window.removeEventListener("click", preventMouseDefault, true);
+      disposeNative?.();
+    };
+  }, [isCapturing, isMac, finalizeCapture]);
 
   useEffect(() => {
     if (!isCapturing || !isMac) return;
@@ -651,6 +810,8 @@ export function HotkeyInput({
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onAuxClick={preventMouseDefault}
         onFocus={handleFocus}
         onBlur={handleBlur}
         className="absolute inset-0 z-10 cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20"
@@ -675,6 +836,8 @@ export function HotkeyInput({
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onAuxClick={preventMouseDefault}
         onFocus={handleFocus}
         onBlur={handleBlur}
         className={`
@@ -718,7 +881,7 @@ export function HotkeyInput({
               </div>
             ) : (
               <span className="text-xs text-muted-foreground">
-                {isMac ? t("hotkeyInput.pressAnyKeyMac") : t("hotkeyInput.pressAnyKey")}
+                {isMac ? t("hotkeyInput.captureMac") : t("hotkeyInput.pressAnyKey")}
               </span>
             )}
             {validationWarning && (
@@ -787,6 +950,8 @@ export function HotkeyInput({
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
       onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onAuxClick={preventMouseDefault}
       onFocus={handleFocus}
       onBlur={handleBlur}
       className={`
@@ -833,7 +998,7 @@ export function HotkeyInput({
                 </div>
               ) : (
                 <span className="text-xs text-muted-foreground">
-                  {isMac ? t("hotkeyInput.tryShortcutMac") : t("hotkeyInput.tryShortcut")}
+                  {isMac ? t("hotkeyInput.captureMac") : t("hotkeyInput.tryShortcut")}
                 </span>
               )}
             </div>

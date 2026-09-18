@@ -66,6 +66,10 @@ npm run dev
 
 Requires Node.js 24+. See the [full documentation](https://docs.openwhispr.com/quickstart) for setup guides, platform-specific instructions, and build details.
 
+### Mouse shortcuts on macOS
+
+In onboarding or Settings, click a shortcut field and press your mouse's middle or auxiliary button. Buttons 3 through 32 use the same toggle and push-to-talk controls as keyboard shortcuts. Left and right clicks stay available for normal navigation. Accessibility permission is required. No mouse brand selection is needed; buttons must be exposed as mouse buttons by macOS. If your mouse software remaps a button to a keyboard key, record that key instead. Windows and Linux mouse shortcuts are not supported yet.
+
 ## Documentation
 
 Visit **[docs.openwhispr.com](https://docs.openwhispr.com)** for:

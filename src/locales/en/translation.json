@@ -1395,6 +1395,7 @@
     "listening": "Listening...",
     "pressAnyKey": "Press any key or Ctrl+Shift+K",
     "pressAnyKeyMac": "Press any key or ⌘⇧K",
+    "captureMac": "Press the key or mouse button you want to use",
     "recording": "Recording",
     "tryShortcut": "Try Ctrl+Shift+K",
     "tryShortcutMac": "Try ⌘⇧K",

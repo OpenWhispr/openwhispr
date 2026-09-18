@@ -978,7 +978,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? DEFAULT_ASSISTANT_ONBOARDING_HOTKEY
                   : getRecommendedDictationHotkeys(platform, recommendedDictationHotkey)
               }
-              captureLabel={t("onboarding.rehaul.hotkey.capture")}
+              captureLabel={t(
+                platform === "darwin"
+                  ? "hotkeyInput.captureMac"
+                  : "onboarding.rehaul.hotkey.capture"
+              )}
               recommendedLabel={t("common.recommended")}
               chooseAnotherLabel={t("onboarding.rehaul.hotkey.chooseAnother")}
               validate={assistant ? validateAssistantHotkey : validateDictationHotkey}

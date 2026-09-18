@@ -1302,6 +1302,7 @@
     "listening": "聆聽中...",
     "pressAnyKey": "按下任意按鍵或 Ctrl+Shift+K",
     "pressAnyKeyMac": "按下任意按鍵或 ⌘⇧K",
+    "captureMac": "按下要使用的鍵盤按鍵或滑鼠按鈕",
     "recording": "記錄中",
     "tryShortcut": "試試 Ctrl+Shift+K",
     "tryShortcutMac": "試試 ⌘⇧K",

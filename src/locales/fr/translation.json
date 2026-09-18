@@ -1395,6 +1395,7 @@
     "listening": "Écoute...",
     "pressAnyKey": "Appuyez sur une touche ou Ctrl+Shift+K",
     "pressAnyKeyMac": "Appuyez sur une touche ou ⌘⇧K",
+    "captureMac": "Appuyez sur la touche ou le bouton de souris à utiliser",
     "recording": "Enregistrement",
     "tryShortcut": "Essayez Ctrl+Shift+K",
     "tryShortcutMac": "Essayez ⌘⇧K",
