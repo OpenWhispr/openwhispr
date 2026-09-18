@@ -37,6 +37,33 @@ typedef enum {
     PASTE_MODE_SHIFT_INSERT  = 2,
 } paste_mode_t;
 
+/* --submit <key> presses the key that submits the text just pasted, once
+ * --submit-delay <ms> has given the target time to take the paste. The paste has
+ * already happened by then, so the outcome is only printed as a SUBMIT_* line: a
+ * failing exit code would send the caller to a fallback that pastes again. */
+static const char *submit_key = NULL;
+static int submit_delay_ms = 0;
+
+static int modifiers_held_now(void);
+
+/* Waits out the delay, then returns why Return must not be pressed, or NULL. */
+static const char *submit_skip_reason(void)
+{
+    if (strcmp(submit_key, "enter") != 0) return "unsupported-key";
+    usleep(submit_delay_ms * 1000);
+    /* Return pressed into a modifier the user still holds is another shortcut,
+     * and a virtual device can't release a key it never pressed (#2113). */
+    if (modifiers_held_now()) return "modifiers-held";
+    return NULL;
+}
+
+static void print_submit_outcome(const char *skip_reason, int pressed)
+{
+    if (skip_reason) printf("SUBMIT_SKIPPED %s\n", skip_reason);
+    else printf(pressed ? "SUBMIT_OK\n" : "SUBMIT_FAILED\n");
+    fflush(stdout);
+}
+
 #ifdef HAVE_GIO
 #include <gio/gio.h>
 
@@ -137,7 +164,18 @@ static void portal_send_paste(PortalData *app)
         ok &= portal_emit_keysym(app, XK_Control_L, 0, "Ctrl release");
     }
 
-    if (!ok) portal_exit_code = 6;
+    if (!ok) {
+        portal_exit_code = 6;
+    } else if (submit_key && !app->copy_mode) {
+        const char *skip_reason = submit_skip_reason();
+        int pressed = 0;
+        if (!skip_reason) {
+            pressed = portal_emit_keysym(app, XK_Return, 1, "Return press");
+            usleep(20000);
+            portal_emit_keysym(app, XK_Return, 0, "Return release");
+        }
+        print_submit_outcome(skip_reason, pressed);
+    }
     g_main_loop_quit(app->loop);
 }
 
@@ -969,6 +1007,12 @@ static modifier_state_t await_modifier_release(int timeout_ms, int *waited_ms) {
     return state;
 }
 
+static int modifiers_held_now(void)
+{
+    int waited_ms;
+    return await_modifier_release(0, &waited_ms) == MODIFIERS_HELD;
+}
+
 int main(int argc, char *argv[]) {
     int force_terminal = 0;
     int force_shift_insert = 0;
@@ -1009,6 +1053,10 @@ int main(int argc, char *argv[]) {
             restore_token = argv[++i];
         } else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
             target_window = (Window)strtoul(argv[++i], NULL, 0);
+        } else if (strcmp(argv[i], "--submit") == 0 && i + 1 < argc) {
+            submit_key = argv[++i];
+        } else if (strcmp(argv[i], "--submit-delay") == 0 && i + 1 < argc) {
+            submit_delay_ms = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--await-modifier-release") == 0 && i + 1 < argc) {
             modifier_wait_ms = atoi(argv[++i]);
         }
@@ -1027,7 +1075,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (capabilities_only) {
-        printf("paste-v1 selection-copy-v1 target-window-v1 modifier-wait-v1");
+        printf("paste-v1 selection-copy-v1 target-window-v1 modifier-wait-v1 submit-v1");
 #ifdef HAVE_GIO
         printf(" portal-keysym-v1");
 #endif
@@ -1092,6 +1140,7 @@ int main(int argc, char *argv[]) {
     }
 
     paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
+    Window pasted_window = target_window != None ? target_window : get_active_window(dpy);
 
     if (!copy_mode && mode == PASTE_MODE_SHIFT_INSERT) {
         KeyCode shift  = XKeysymToKeycode(dpy, XK_Shift_L);
@@ -1125,6 +1174,21 @@ int main(int argc, char *argv[]) {
 
     XFlush(dpy);
     usleep(20000);
+
+    if (submit_key && !copy_mode) {
+        const char *skip_reason = submit_skip_reason();
+        if (!skip_reason && get_active_window(dpy) != pasted_window) skip_reason = "focus-changed";
+        KeyCode enter = XKeysymToKeycode(dpy, XK_Return);
+        if (!skip_reason && enter) {
+            XTestFakeKeyEvent(dpy, enter, True, CurrentTime);
+            usleep(8000);
+            XTestFakeKeyEvent(dpy, enter, False, CurrentTime);
+            XFlush(dpy);
+            usleep(20000);
+        }
+        print_submit_outcome(skip_reason, enter != 0);
+    }
+
     XCloseDisplay(dpy);
     if (copy_mode) printf("COPY_OK\n");
     return 0;

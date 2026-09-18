@@ -17,6 +17,10 @@
  * was in, even when something stole the foreground during transcription. This
  * mirrors the macOS PID capture/activate path and the Linux --window path.
  *
+ * Submit after paste: --submit enter --submit-delay <ms> presses Enter once the
+ * delay has given the target time to take the paste, so a dictated message is
+ * sent. The outcome is printed as a SUBMIT_* line after PASTE_OK.
+ *
  * Compile with: cl /O2 windows-fast-paste.c /Fe:windows-fast-paste.exe user32.lib
  * Or with MinGW: gcc -O2 windows-fast-paste.c -o windows-fast-paste.exe -luser32
  */
@@ -192,6 +196,32 @@ static BOOL RestoreForegroundWindow(HWND target) {
     return ok && GetForegroundWindow() == target;
 }
 
+/* Pressing Enter into a modifier the user still holds sends a different shortcut
+   (Ctrl+Enter), and releasing the key again just for Enter can leave it stuck,
+   so a held modifier skips the submit instead. */
+static BOOL AnyModifierHeld(void) {
+    for (int i = 0; i < (int)NUM_MODIFIERS; i++) {
+        if (GetAsyncKeyState(MODIFIER_VKS[i]) & 0x8000) return TRUE;
+    }
+    return FALSE;
+}
+
+/* Presses the key that submits the text just pasted into `pasted`. The paste has
+   already happened, so the outcome is only reported: a failing exit code would
+   send the caller to a fallback that pastes a second time. */
+static const char* Submit(HWND pasted, const char* key, DWORD delayMs) {
+    if (strcmp(key, "enter") != 0) return "SUBMIT_SKIPPED unsupported-key";
+    Sleep(delayMs);
+    if (GetForegroundWindow() != pasted) return "SUBMIT_SKIPPED focus-changed";
+    if (AnyModifierHeld()) return "SUBMIT_SKIPPED modifiers-held";
+
+    INPUT inputs[2];
+    ZeroMemory(inputs, sizeof(inputs));
+    SetKey(&inputs[0], VK_RETURN, 0);
+    SetKey(&inputs[1], VK_RETURN, KEYEVENTF_KEYUP);
+    return SendInput(2, inputs, sizeof(INPUT)) == 2 ? "SUBMIT_OK" : "SUBMIT_FAILED";
+}
+
 static int SendPasteTerminal(void) {
     INPUT inputs[6];
     ZeroMemory(inputs, sizeof(inputs));
@@ -238,6 +268,8 @@ int main(int argc, char* argv[]) {
     BOOL copyMode = FALSE;
     BOOL capabilitiesOnly = FALSE;
     HWND restoreWindow = NULL;
+    const char* submitKey = NULL;
+    DWORD submitDelayMs = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--detect-only") == 0) {
@@ -250,11 +282,15 @@ int main(int argc, char* argv[]) {
             /* Base 16: the handle comes back exactly as --detect-only printed
                it with "TARGET %p" (hex, with or without an 0x prefix). */
             restoreWindow = (HWND)(uintptr_t)strtoull(argv[++i], NULL, 16);
+        } else if (strcmp(argv[i], "--submit") == 0 && i + 1 < argc) {
+            submitKey = argv[++i];
+        } else if (strcmp(argv[i], "--submit-delay") == 0 && i + 1 < argc) {
+            submitDelayMs = strtoul(argv[++i], NULL, 10);
         }
     }
 
     if (capabilitiesOnly) {
-        printf("paste-v1 selection-copy-v1 target-identity-v1 focus-restore-v1\n");
+        printf("paste-v1 selection-copy-v1 target-identity-v1 focus-restore-v1 submit-v1\n");
         return 0;
     }
 
@@ -335,6 +371,9 @@ int main(int argc, char* argv[]) {
                isTerminal ? "ctrl+shift+c" : "ctrl+c");
     } else {
         printf("PASTE_OK %s %s\n", className, isTerminal ? "ctrl+shift+v" : "ctrl+v");
+        if (submitKey) {
+            printf("%s\n", Submit(hwnd, submitKey, submitDelayMs));
+        }
     }
     fflush(stdout);
 
