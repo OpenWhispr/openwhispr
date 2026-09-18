@@ -3433,6 +3433,7 @@ class IPCHandlers {
       return {
         downloaded: this.whisperCudaManager.isDownloaded(),
         downloading: this.whisperCudaManager.isDownloading(),
+        progress: this.whisperCudaManager.getDownloadProgress(),
         path: this.whisperCudaManager.getCudaBinaryPath(),
         gpuInfo,
         gpuFailed: this._whisperGpuFailedBackends().includes("cuda"),
@@ -3495,6 +3496,7 @@ class IPCHandlers {
       return {
         downloaded: this.whisperVulkanManager?.isDownloaded() ?? false,
         downloading: this.whisperVulkanManager?.isDownloading() ?? false,
+        progress: this.whisperVulkanManager?.getDownloadProgress() ?? null,
         vulkan,
         hasNvidiaGpu: gpuInfo.hasNvidiaGpu,
         gpuFailed: this._whisperGpuFailedBackends().includes("vulkan"),
