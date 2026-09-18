@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Meetings
+
+- **Teams meetings that recorded only your own voice.** Windows hands our native capture the audio of every app except ours — but not Microsoft Teams call audio, which arrives as digital silence no matter which process we aim at or which format we ask for, while the same audio is plainly there on the output device. Since 1.9.2 a recording that hit this switched to the fallback capture a few seconds in, except that the switch was armed only until the first sound we could hear: one notification, or Teams' own join chime, disarmed it, and the rest of the call was recorded without the other participants, with no warning beyond a generic “audio has gone quiet” three minutes later. The check now runs for the whole meeting and compares what we capture against what your speakers are really playing, so a call that goes missing after an earlier sound still switches over. A meeting spent alongside continuously playing audio, such as music in a browser tab, can still mask it. (#1265, thanks @jaszczurovsky for the report, @TaiFeng and @jsholcomb for the workarounds, @wadamek65 and @KishenG for confirming, and @amarpreet2209 for finding in #1866 that the fallback capture hears Teams)
+
 ## [1.10.2] - 2026-09-15
 
 A hotfix for 1.10.1. Generate AI Summary with your own API key or an enterprise provider no longer times out on a real transcript, a recording with nothing substantive in it gets a one-line summary instead of a blank page and an error, and OpenRouter models can read screenshots again.

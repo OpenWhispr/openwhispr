@@ -773,7 +773,7 @@ export type SystemAudioStrategy =
 
 export interface MeetingSystemAudioInterruption {
   systemAudioStrategy: SystemAudioStrategy;
-  reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet";
+  reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet" | "loopback_takeover_failed";
   recovering: boolean;
 }
 
