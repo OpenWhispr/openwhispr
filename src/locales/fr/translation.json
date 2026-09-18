@@ -3291,7 +3291,17 @@
       "conversationWillAppear": "La conversation apparaîtra ici...",
       "linkedEvent": "Événement lié",
       "noFolder": "Aucun dossier",
-      "participants": "Participants"
+      "participants": "Participants",
+      "table": {
+        "actions": "Actions du tableau",
+        "insertRowAbove": "Insérer une ligne au-dessus",
+        "insertRowBelow": "Insérer une ligne en dessous",
+        "insertColumnLeft": "Insérer une colonne à gauche",
+        "insertColumnRight": "Insérer une colonne à droite",
+        "deleteRow": "Supprimer la ligne",
+        "deleteColumn": "Supprimer la colonne",
+        "deleteTable": "Supprimer le tableau"
+      }
     },
     "participants": {
       "attendee": "participant",

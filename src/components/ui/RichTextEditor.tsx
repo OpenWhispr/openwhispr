@@ -1,12 +1,9 @@
 import { useEffect, useRef, useCallback, type MutableRefObject } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import TaskList from "@tiptap/extension-task-list";
-import TaskItem from "@tiptap/extension-task-item";
-import Placeholder from "@tiptap/extension-placeholder";
-import { Markdown } from "tiptap-markdown";
 import { cn } from "../lib/utils";
 import { createMentionExtension } from "./RichTextEditorMention";
+import { createRichTextExtensions } from "./RichTextEditorExtensions";
+import { RichTextEditorTableMenu } from "./RichTextEditorTableMenu";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
 
 interface RichTextEditorProps {
@@ -43,22 +40,7 @@ export function RichTextEditor({
   const editor = useEditor({
     extensions: [
       ...(withMentions ? [createMentionExtension(() => mentionPeopleRef.current ?? [])] : []),
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-        bulletList: { keepMarks: true },
-        orderedList: { keepMarks: true },
-      }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Placeholder.configure({
-        placeholder: placeholder || "",
-        emptyEditorClass: "is-editor-empty",
-      }),
-      Markdown.configure({
-        html: false,
-        transformPastedText: true,
-        transformCopiedText: true,
-      }),
+      ...createRichTextExtensions(placeholder || ""),
     ],
     content: value,
     editable: !disabled,
@@ -122,12 +104,14 @@ export function RichTextEditor({
       <EditorContent
         editor={editor}
         className={cn(
-          "h-full overflow-y-auto",
+          // relative: the table menu positions against this scroller and scrolls with it.
+          "relative h-full overflow-y-auto",
           disabled && "pointer-events-none opacity-70",
           // Reserved by an ancestor via --floating-inset; 0 elsewhere.
           "pb-[var(--floating-inset,0px)]"
         )}
       />
+      {editor && <RichTextEditorTableMenu editor={editor} />}
     </div>
   );
 }

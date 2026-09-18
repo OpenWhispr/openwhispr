@@ -3291,7 +3291,17 @@
       "conversationWillAppear": "Gespräch wird hier angezeigt...",
       "linkedEvent": "Verknüpftes Ereignis",
       "noFolder": "Kein Ordner",
-      "participants": "Teilnehmer"
+      "participants": "Teilnehmer",
+      "table": {
+        "actions": "Tabellenaktionen",
+        "insertRowAbove": "Zeile oberhalb einfügen",
+        "insertRowBelow": "Zeile unterhalb einfügen",
+        "insertColumnLeft": "Spalte links einfügen",
+        "insertColumnRight": "Spalte rechts einfügen",
+        "deleteRow": "Zeile löschen",
+        "deleteColumn": "Spalte löschen",
+        "deleteTable": "Tabelle löschen"
+      }
     },
     "participants": {
       "attendee": "Teilnehmer",

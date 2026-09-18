@@ -2948,7 +2948,17 @@
       "conversationWillAppear": "對話將顯示在這裡...",
       "linkedEvent": "關聯行程",
       "noFolder": "無資料夾",
-      "participants": "參與者"
+      "participants": "參與者",
+      "table": {
+        "actions": "表格操作",
+        "insertRowAbove": "在上方插入列",
+        "insertRowBelow": "在下方插入列",
+        "insertColumnLeft": "在左側插入欄",
+        "insertColumnRight": "在右側插入欄",
+        "deleteRow": "刪除列",
+        "deleteColumn": "刪除欄",
+        "deleteTable": "刪除表格"
+      }
     },
     "participants": {
       "attendee": "位與會者",

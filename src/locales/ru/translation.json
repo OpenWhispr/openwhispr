@@ -2968,7 +2968,17 @@
       "conversationWillAppear": "Разговор появится здесь...",
       "linkedEvent": "Связанное событие",
       "noFolder": "Без папки",
-      "participants": "Участники"
+      "participants": "Участники",
+      "table": {
+        "actions": "Действия с таблицей",
+        "insertRowAbove": "Вставить строку выше",
+        "insertRowBelow": "Вставить строку ниже",
+        "insertColumnLeft": "Вставить столбец слева",
+        "insertColumnRight": "Вставить столбец справа",
+        "deleteRow": "Удалить строку",
+        "deleteColumn": "Удалить столбец",
+        "deleteTable": "Удалить таблицу"
+      }
     },
     "participants": {
       "attendee": "участник",

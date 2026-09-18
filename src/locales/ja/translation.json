@@ -2842,7 +2842,17 @@
       "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
       "startRecording": "録音を開始",
       "generateSummary": "AI要約を生成",
-      "startWriting": "書き始める..."
+      "startWriting": "書き始める...",
+      "table": {
+        "actions": "表の操作",
+        "insertRowAbove": "上に行を挿入",
+        "insertRowBelow": "下に行を挿入",
+        "insertColumnLeft": "左に列を挿入",
+        "insertColumnRight": "右に列を挿入",
+        "deleteRow": "行を削除",
+        "deleteColumn": "列を削除",
+        "deleteTable": "表を削除"
+      }
     },
     "participants": {
       "attendee": "名の参加者",
