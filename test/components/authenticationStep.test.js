@@ -16,6 +16,7 @@ function createHarness() {
     refCursor: 0,
     values: {},
     refs: {},
+    socialSignIns: [],
     effects: [],
     cleanups: [],
     debouncedCalls: 0,
@@ -74,7 +75,7 @@ async function settleAsyncHandler() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test("email authentication discovers accounts, restores drafts, and persists them once per pause", async (t) => {
+async function createAuthenticationRenderer(t) {
   installBrowserGlobals(t, { window: { electronAPI: {} } });
   // The compact Back control is portalled to body (it has to out-stack the
   // onboarding shell's drag band), so rendering reads document.body.
@@ -153,7 +154,10 @@ test("email authentication discovers accounts, restores drafts, and persists the
           },
           signIn: { async email() { return {}; } },
         };
-        export async function signInWithSocial() { return {}; }
+        export async function signInWithSocial(provider) {
+          globalThis.__authenticationStepHarness.socialSignIns.push(provider);
+          return {};
+        }
         export async function signInWithSSO(email) {
           const harness = globalThis.__authenticationStepHarness;
           harness.ssoCalls.push(email);
@@ -225,6 +229,12 @@ test("email authentication discovers accounts, restores drafts, and persists the
     await settleAsyncHandler();
     return render(harness, overrides);
   };
+
+  return { render, typeEmail, submitEmail };
+}
+
+test("email authentication discovers accounts, restores drafts, and persists them once per pause", async (t) => {
+  const { render, typeEmail, submitEmail } = await createAuthenticationRenderer(t);
 
   const existingAccount = createHarness();
   existingAccount.discoveryResult = { exists: true };
@@ -399,4 +409,16 @@ test("email authentication discovers accounts, restores drafts, and persists the
   assert.deepEqual(flushedWrites, [
     { authMode: null, email: "gone@example.com", fullName: "", ssoDiscovery: null },
   ]);
+});
+
+test("Apple sign-in renders and dispatches on Linux", async (t) => {
+  const { render } = await createAuthenticationRenderer(t);
+  const linuxSocialSignIn = createHarness();
+  const appleProvider = findElement(
+    render(linuxSocialSignIn),
+    (node) => node.props?.label === "Apple" && typeof node.props?.onClick === "function"
+  );
+  assert.ok(appleProvider, "Apple sign-in should render on Linux");
+  await appleProvider.props.onClick();
+  assert.deepEqual(linuxSocialSignIn.socialSignIns, ["apple"]);
 });
