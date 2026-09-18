@@ -771,6 +771,7 @@ export default function App() {
               agentAllowed={agentAllowed}
               meetingAllowed={meetingAllowed}
               isHovered={isHovered}
+              anchor={voicePillDock === "center" ? "center" : voiceHorizontalDirection}
               setWindowInteractivity={setWindowInteractivity}
               onToggleListening={() => {
                 toggleListening();
