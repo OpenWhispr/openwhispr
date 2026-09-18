@@ -267,6 +267,11 @@ test("Prompt Studio preserves agent purpose and shows model-specific cleanup con
   assert.ok(!generic.includes("s1Mini.description"));
 
   settings.cleanupModel = "s1-mini-q4_k_m";
+  settings.useCleanupModel = false;
+  assert.equal(PromptStudio({}), null, "disabled cleanup must hide the options and test panel");
+  assert.notEqual(PromptStudio({ kind: "dictationAgent" }), null);
+  settings.useCleanupModel = true;
+  assert.ok(JSON.stringify(PromptStudio({})).includes("s1Mini.styling"));
   settings.cleanupMode = "openwhispr";
   assert.ok(JSON.stringify(PromptStudio({})).includes("settingsPage.prompts.title"));
 });

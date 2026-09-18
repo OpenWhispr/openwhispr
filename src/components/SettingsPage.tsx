@@ -4998,9 +4998,7 @@ EOF`,
                   }}
                   toast={toast}
                 />
-                <div className="border-t border-border/70 pt-6">
-                  <PromptStudio />
-                </div>
+                <PromptStudio className="border-t border-border/70 pt-6" />
               </div>
             )}
             renderDictationAgent={() => <DictationAgentSettings />}

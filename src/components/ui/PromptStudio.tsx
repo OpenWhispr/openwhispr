@@ -311,6 +311,8 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
     { id: "test" as const, label: t("promptStudio.tabs.test"), icon: TestTube },
   ];
 
+  if (kind === "cleanup" && !useCleanupModel) return null;
+
   return (
     <div className={className}>
       {kind === "cleanup" && (
