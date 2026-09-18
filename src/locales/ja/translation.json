@@ -1,4 +1,30 @@
 {
+  "s1Mini": {
+    "options": "オプション",
+    "description": "SuperwhisperのS1-miniは英語の音声入力の整形にのみ対応しています。以下でオプションを選択してください。思考モードは常に無効です。",
+    "styling": "文体",
+    "structure": "構成",
+    "context": "用途",
+    "values": {
+      "casual": "カジュアル",
+      "semi-casual": "ややカジュアル",
+      "semi-formal": "ややフォーマル",
+      "formal": "フォーマル",
+      "prose": "段落",
+      "lists": "リストを許可",
+      "general": "一般",
+      "email": "メール"
+    },
+    "help": {
+      "styling": "大文字、句読点、短縮形を調整します。",
+      "structure": "段落を維持するか、箇条書きを許可します。",
+      "context": "一般的な文章、またはメールの挨拶と結びに対応します。"
+    },
+    "licenseSummary": "Apache 2.0 + 名称表記の要件",
+    "license": "ライセンス",
+    "notice": "通知",
+    "modelDescription": "英語のみ · 音声入力の整形（Q4_K_M）"
+  },
   "settings": {
     "language": {
       "sectionTitle": "言語",

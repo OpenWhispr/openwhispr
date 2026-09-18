@@ -1,0 +1,11 @@
+S1-mini-GGUF
+Copyright 2026 Superwhisper
+
+GGUF conversions of S1-mini, which is itself a derivative of Qwen3-0.6B,
+Copyright 2024 Alibaba Cloud, licensed under the Apache License, Version 2.0.
+
+Any use, distribution, or integration of this model, whether unmodified or
+as part of a derivative work or product, must continue to identify it by its
+original name, "S1-mini" by "Superwhisper", using that exact capitalization.
+This restates the ADDITIONAL TERM of the LICENSE file, which is the
+operative text.

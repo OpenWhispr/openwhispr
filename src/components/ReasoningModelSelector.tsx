@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { isS1MiniModel } from "../config/s1Mini";
 import { useTranslation } from "react-i18next";
 import type {
   LlamaServerStatus,
@@ -59,6 +60,7 @@ const CLOUD_PROVIDER_IDS = [
 ];
 
 interface ReasoningModelSelectorProps {
+  allowCleanupOnlyModels?: boolean;
   reasoningModel: string;
   setReasoningModel: (model: string) => void;
   localReasoningProvider: string;
@@ -333,6 +335,7 @@ function GpuStatusBadge() {
 }
 
 export default function ReasoningModelSelector({
+  allowCleanupOnlyModels = false,
   reasoningModel,
   setReasoningModel,
   localReasoningProvider,
@@ -408,21 +411,26 @@ export default function ReasoningModelSelector({
       : (modeTabs[0]?.id as "cloud" | "local" | undefined));
 
   const localProviders = useMemo<LocalProvider[]>(() => {
-    return modelRegistry.getAllProviders().map((provider) => ({
-      id: provider.id,
-      name: provider.name,
-      models: provider.models.map((model) => ({
-        id: model.id,
-        name: model.name,
-        size: model.size,
-        sizeBytes: model.sizeBytes,
-        description: model.description,
-        descriptionKey: model.descriptionKey,
-        specUrl: model.hfRepo ? `https://huggingface.co/${model.hfRepo}` : undefined,
-        recommended: model.recommended,
-      })),
-    }));
-  }, []);
+    return modelRegistry
+      .getAllProviders()
+      .map((provider) => ({
+        id: provider.id,
+        name: provider.name,
+        models: provider.models
+          .filter((model) => allowCleanupOnlyModels || !isS1MiniModel(model.id))
+          .map((model) => ({
+            id: model.id,
+            name: model.name,
+            size: model.size,
+            sizeBytes: model.sizeBytes,
+            description: model.description,
+            descriptionKey: model.descriptionKey,
+            specUrl: model.hfRepo ? `https://huggingface.co/${model.hfRepo}` : undefined,
+            recommended: model.recommended,
+          })),
+      }))
+      .filter((provider) => provider.models.length > 0);
+  }, [allowCleanupOnlyModels]);
 
   const openaiModelOptions = useMemo<CloudModelOption[]>(() => {
     const { icon, invertInDark } = getRemoteProviderIcon("openai");

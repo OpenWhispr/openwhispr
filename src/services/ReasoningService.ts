@@ -13,6 +13,7 @@ import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../con
 import logger from "../utils/logger";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
+import { isS1MiniModel, formatS1MiniTranscript, S1_MINI_SYSTEM_PROMPT } from "../config/s1Mini";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
 import {
   getLlmRequestTimeoutSeconds,
@@ -355,7 +356,8 @@ class ReasoningService extends BaseReasoningService {
               signal: controller.signal,
             }),
           requestBody,
-          logParamFallback(`${providerName.toUpperCase()}_PARAM_FALLBACK`)
+          logParamFallback(`${providerName.toUpperCase()}_PARAM_FALLBACK`),
+          config.s1MiniCleanup
         );
 
         if (!res.ok) {
@@ -419,6 +421,9 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const choice = response.choices[0];
+    if (config.s1MiniCleanup && typeof choice.message?.content !== "string") {
+      throw new Error(`Invalid response structure from ${providerName} API`);
+    }
     if (config.requireCompleteOutput && isTruncatedFinishReason(choice?.finish_reason)) {
       throw truncatedOutputError();
     }
@@ -428,7 +433,7 @@ class ReasoningService extends BaseReasoningService {
     const responseText =
       config.disableThinking !== false ? stripThinkingTags(rawContent) : rawContent;
 
-    if (!responseText) {
+    if (!responseText && !config.s1MiniCleanup) {
       logger.logReasoning(`${providerName.toUpperCase()}_EMPTY_RESPONSE`, {
         model,
         finishReason: choice.finish_reason,
@@ -457,6 +462,10 @@ class ReasoningService extends BaseReasoningService {
     agentName: string | null = null,
     config: ReasoningConfig = {}
   ): Promise<string> {
+    const isCleanupRequest =
+      !config.requiresAgent &&
+      (config.inferenceScope === "dictationCleanup" ||
+        (!config.inferenceScope && !config.systemPrompt));
     const managed = this.resolveManagedScope(model, config.provider, config, "dictationCleanup");
     ({ model, config } = managed);
     const trimmedModel = model?.trim?.() || "";
@@ -471,7 +480,7 @@ class ReasoningService extends BaseReasoningService {
           : settings.cleanupProvider || undefined;
     const isImplicitCustomCleanup =
       isImplicitCleanup && settings.cleanupMode === "providers" && implicitProvider === "custom";
-    const dispatchConfig: ReasoningConfig = isImplicitCleanup
+    let dispatchConfig: ReasoningConfig = isImplicitCleanup
       ? {
           ...config,
           provider: implicitProvider,
@@ -493,6 +502,17 @@ class ReasoningService extends BaseReasoningService {
 
     if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
       throw new Error("No reasoning model selected");
+    }
+
+    if (isS1MiniModel(trimmedModel) && providerId !== "openwhispr" && isCleanupRequest) {
+      text = formatS1MiniTranscript(text, settings.s1MiniOptions);
+      dispatchConfig = {
+        ...dispatchConfig,
+        systemPrompt: S1_MINI_SYSTEM_PROMPT,
+        temperature: 0,
+        disableThinking: true,
+        s1MiniCleanup: true,
+      };
     }
 
     logger.logReasoning("PROVIDER_SELECTION", {
@@ -659,7 +679,8 @@ class ReasoningService extends BaseReasoningService {
             signal: abortController.signal,
           }),
         requestBody,
-        logParamFallback("AGENT_STREAM_PARAM_FALLBACK")
+        logParamFallback("AGENT_STREAM_PARAM_FALLBACK"),
+        config.s1MiniCleanup
       );
     } catch (error) {
       clearTimeout(timeoutId);

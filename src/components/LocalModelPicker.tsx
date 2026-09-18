@@ -241,6 +241,30 @@ export default function LocalModelPicker({
         />
       </div>
 
+      {selectedProvider === "superwhisper" && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          <span className="mb-1 block">{t("s1Mini.modelDescription")}</span>
+          S1-mini by Superwhisper · {t("s1Mini.licenseSummary")} ·{" "}
+          <a
+            href="https://huggingface.co/superwhisper/s1-mini-GGUF/blob/main/LICENSE"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            {t("s1Mini.license")}
+          </a>{" "}
+          ·{" "}
+          <a
+            href="https://huggingface.co/superwhisper/s1-mini-GGUF/blob/main/NOTICE"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            {t("s1Mini.notice")}
+          </a>
+        </p>
+      )}
+
       <ConfirmDialog
         open={confirmDialog.open}
         onOpenChange={(open) => !open && hideConfirmDialog()}
