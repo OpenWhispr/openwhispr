@@ -1,5 +1,18 @@
+// s16le samples from a Buffer, tolerating the odd-length and unaligned buffers
+// helper stdout reads produce -- a plain Int16Array view throws on an odd
+// byteOffset. Same contract computePcm16Rms already documents below.
+function readInt16Samples(pcmBuffer) {
+  const sampleCount = pcmBuffer.length >> 1;
+  if ((pcmBuffer.byteOffset & 1) === 0) {
+    return new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, sampleCount);
+  }
+  const samples = new Int16Array(sampleCount);
+  for (let i = 0; i < sampleCount; i++) samples[i] = pcmBuffer.readInt16LE(i * 2);
+  return samples;
+}
+
 function downsample24kTo16k(pcmBuffer) {
-  const input = new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, pcmBuffer.length / 2);
+  const input = readInt16Samples(pcmBuffer);
   const ratio = 1.5;
   const outputLength = Math.floor(input.length / ratio);
   const output = new Int16Array(outputLength);
@@ -36,7 +49,7 @@ function pcm16ToWav(pcmBuffer, sampleRate = 16000, channels = 1) {
 }
 
 function pcm16ToFloat32(pcmBuffer) {
-  const input = new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, pcmBuffer.length / 2);
+  const input = readInt16Samples(pcmBuffer);
   const output = new Float32Array(input.length);
   for (let i = 0; i < input.length; i++) {
     output[i] = input[i] / 32768;
