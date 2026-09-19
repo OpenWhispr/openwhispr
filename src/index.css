@@ -1862,6 +1862,11 @@ a:hover {
   height: 0;
 }
 
+/* The empty-line format toolbar sits where the placeholder would show. */
+.rich-text-editor-content:has(~ .rich-text-editor-line-menu) p.is-editor-empty:first-child::before {
+  content: none;
+}
+
 /* Dark mode adjustments */
 .dark .rich-text-editor-content li::marker {
   color: oklch(0.7 0 0 / 0.4);

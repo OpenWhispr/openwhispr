@@ -4,7 +4,8 @@ const { createRendererServer } = require("../lib/rendererTestHarness");
 
 // Runs the note editor's real extension list in happy-dom. Tables have to leave
 // the editor as GFM pipe tables, and the editor must not show anything a pipe
-// table can't store.
+// table can't store. The last tests render the real RichTextEditor with its
+// table and formatting menus.
 
 const DOM_GLOBALS = [
   "document",
@@ -19,12 +20,13 @@ const DOM_GLOBALS = [
   "ClipboardEvent",
   "DataTransfer",
   "DragEvent",
-  // For the table menu (React + Radix).
+  // For the menus (React + Radix).
   "Event",
   "CustomEvent",
   "MouseEvent",
   "PointerEvent",
   "FocusEvent",
+  "HTMLInputElement",
   "ResizeObserver",
   "DOMRect",
 ];
@@ -37,6 +39,28 @@ let Editor;
 let CellSelection;
 let Selection;
 let createRichTextExtensions;
+let insertEmptyTable;
+let restoreRemoval;
+
+/**
+ * Chromium removes a focused element in two steps: it blurs it, firing focusout
+ * (where a handler can run and move it), then detaches it from the parent it had,
+ * throwing if a handler already moved it. happy-dom does neither. Its
+ * Element.remove() goes through removeChild, so patching that covers both.
+ */
+function emulateChromiumRemoval() {
+  let proto = happyWindow.document.body;
+  while (!Object.hasOwn(proto, "removeChild")) proto = Object.getPrototypeOf(proto);
+  const { removeChild } = proto;
+  proto.removeChild = function (child) {
+    const active = happyWindow.document.activeElement;
+    if (active && child.contains(active)) active.blur();
+    return removeChild.call(this, child);
+  };
+  return () => {
+    proto.removeChild = removeChild;
+  };
+}
 
 test.before(async () => {
   const { Window } = await import("happy-dom");
@@ -48,8 +72,10 @@ test.before(async () => {
   for (const name of ["requestAnimationFrame", "cancelAnimationFrame"]) {
     define(name, happyWindow[name].bind(happyWindow));
   }
+  restoreRemoval = emulateChromiumRemoval();
   ({ createRichTextExtensions } =
     await import("../../src/components/ui/RichTextEditorExtensions.ts"));
+  ({ insertEmptyTable } = await import("../../src/components/ui/RichTextEditorTable.ts"));
   // Same CommonJS builds the extensions load, so ProseMirror stays one instance.
   ({ Editor } = require("@tiptap/core"));
   ({ CellSelection } = require("@tiptap/pm/tables"));
@@ -57,6 +83,7 @@ test.before(async () => {
 });
 
 test.after(async () => {
+  restoreRemoval();
   await happyWindow.happyDOM.close();
 });
 
@@ -573,11 +600,39 @@ test("undo reverts a change together with the header fix it caused", () => {
   assert.equal(markdownOf(editor), TABLE);
 });
 
+const EMPTY_ROW = "|  |  |  |";
+const EMPTY_TABLE = `${EMPTY_ROW}\n| --- | --- | --- |\n${EMPTY_ROW}\n${EMPTY_ROW}`;
+
+test("Insert table replaces an empty line and puts the caret in the first header cell", () => {
+  const editor = createEditor("Intro");
+  editor.commands.setTextSelection(6);
+  pressKey(editor, "Enter");
+  insertEmptyTable(editor);
+  assert.equal(caretText(editor), "| in tableHeader");
+  assertSaves(editor, `Intro\n\n${EMPTY_TABLE}`);
+  editor.commands.undo();
+  assert.equal(editor.state.doc.childCount, 2, "undo keeps the empty line");
+});
+
+test("Insert table with text selected adds the table after that block", () => {
+  const editor = createEditor("- first\n- second\n\nAfter");
+  editor.commands.setTextSelection({ from: 3, to: 8 });
+  insertEmptyTable(editor);
+  assert.equal(markdownOf(editor), `- first\n- second\n\n${EMPTY_TABLE}\n\nAfter`);
+});
+
+test("Insert table over a selection spanning two lines adds the table after the last", () => {
+  const editor = createEditor("First line\n\nSecond line\n\nAfter");
+  editor.commands.setTextSelection({ from: 3, to: 16 });
+  insertEmptyTable(editor);
+  assert.equal(markdownOf(editor), `First line\n\nSecond line\n\n${EMPTY_TABLE}\n\nAfter`);
+});
+
 /**
- * Renders the real RichTextEditor, table menu included, the way NoteEditor uses
- * it: the note is state, and switching notes remounts the editor.
+ * Renders the real RichTextEditor, menus included, the way NoteEditor uses it:
+ * the note is state, and switching notes remounts the editor.
  */
-async function renderNotes(t, markdown = TABLE, caretCell = "Ana") {
+async function mountNotes(t, markdown = `Intro\n\n${TABLE}\n\nAfter`) {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const React = require("react");
   const { createRoot } = require("react-dom/client");
@@ -598,11 +653,15 @@ async function renderNotes(t, markdown = TABLE, caretCell = "Ana") {
   }
   const editorRef = { current: null };
   let showOtherNote;
+  let saved;
   function Note({ initial }) {
     const [value, setValue] = React.useState(initial);
     return React.createElement(RichTextEditor, {
       value,
-      onChange: setValue,
+      onChange: (markdown) => {
+        saved = markdown;
+        setValue(markdown);
+      },
       editorRef,
       mentionPeople: [],
     });
@@ -612,7 +671,7 @@ async function renderNotes(t, markdown = TABLE, caretCell = "Ana") {
     showOtherNote = () => setOther(true);
     return React.createElement(Note, {
       key: String(other),
-      initial: other ? "Other note" : `Intro\n\n${markdown}\n\nAfter`,
+      initial: other ? "Other note" : markdown,
     });
   }
   // happy-dom reports errors thrown in event listeners and timers on window,
@@ -627,58 +686,232 @@ async function renderNotes(t, markdown = TABLE, caretCell = "Ana") {
     host.remove();
     happyWindow.removeEventListener("error", onWindowError);
   });
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
-  // Waits inside act for timers the editor and menu set, then again after it:
-  // effects that React flushes when act ends (unmounts) set timers too.
-  const act = async (callback) => {
+  const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // Waits inside act for timers the editor and menus set, then again after it:
+  // effects that React flushes when act ends (unmounts) set timers too. The
+  // bubble menus wait 250 ms before showing for a text selection.
+  const act = async (callback, wait = 30) => {
     await React.act(async () => {
       await callback();
-      await settle();
+      await settle(wait);
     });
-    await settle();
+    await settle(30);
   };
   await act(() => root.render(React.createElement(Boundary, null, React.createElement(Notes))));
-  await act(() => {
-    editorRef.current.commands.focus();
-    caretInCell(editorRef.current, caretCell, 1);
-  });
-  // Without an i18next instance, t() returns the key.
-  const trigger = happyWindow.document.querySelector('[aria-label="notes.editor.table.actions"]');
-  await act(() =>
-    trigger.dispatchEvent(
-      new happyWindow.PointerEvent("pointerdown", {
-        bubbles: true,
-        button: 0,
-        pointerType: "mouse",
-      })
-    )
+  await act(() => editorRef.current.commands.focus());
+  return {
+    act,
+    editor: () => editorRef.current,
+    errors,
+    host,
+    /** The Markdown the note last saved through onChange. */
+    saved: () => saved,
+    showOtherNote: () => showOtherNote(),
+  };
+}
+
+const pointerDown = (element) =>
+  element.dispatchEvent(
+    new happyWindow.PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" })
   );
-  const menuItem = (key) =>
-    [...happyWindow.document.querySelectorAll('[role="menuitem"]')].find(
-      (item) => item.textContent === `notes.editor.table.${key}`
-    );
-  return { act, editorRef, errors, host, menuItem, showOtherNote: () => showOtherNote() };
+const clickButton = (element) => {
+  element.dispatchEvent(
+    new happyWindow.MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 })
+  );
+  element.click();
+};
+const addEmptyLastLine = (editor) => {
+  editor.commands.insertContentAt(editor.state.doc.content.size, { type: "paragraph" });
+  editor.commands.setTextSelection(editor.state.doc.content.size - 1);
+};
+
+// Without an i18next instance, t() returns the key.
+const byLabel = (label) => happyWindow.document.querySelector(`[aria-label="${label}"]`);
+// A boolean, never the element: a failing assert that prints a happy-dom element
+// runs the test process out of memory.
+const isShown = (label) => !!byLabel(label);
+const TOOLBAR = "notes.editor.format.toolbar";
+const toolbarCount = () =>
+  happyWindow.document.querySelectorAll(`[aria-label="${TOOLBAR}"]`).length;
+const menuItem = (key) =>
+  [...happyWindow.document.querySelectorAll('[role="menuitem"]')].find(
+    (item) => item.textContent === key
+  );
+
+async function openTableMenu(notes, caretCell = "Ana") {
+  await notes.act(() => caretInCell(notes.editor(), caretCell, 1));
+  await notes.act(() => pointerDown(byLabel("notes.editor.table.actions")));
 }
 
 test("Delete table from the menu works in a note that re-renders on every change", async (t) => {
-  const { act, editorRef, errors, menuItem } = await renderNotes(t);
-  await act(() => menuItem("deleteTable").click());
-  assert.deepEqual(errors, []);
-  assert.equal(markdownOf(editorRef.current), "Intro\n\nAfter");
+  const notes = await mountNotes(t);
+  await openTableMenu(notes);
+  await notes.act(() => menuItem("notes.editor.table.deleteTable").click());
+  assert.deepEqual(notes.errors, []);
+  assert.equal(markdownOf(notes.editor()), "Intro\n\nAfter");
+  assert.equal(notes.saved().trim(), "Intro\n\nAfter");
 });
 
-test("the menu disables actions that would break or empty the table", async (t) => {
-  const isDisabled = (item) => item.hasAttribute("data-disabled");
-  const header = await renderNotes(t, "| A | B |\n| --- | --- |", "A");
-  assert.equal(isDisabled(header.menuItem("insertRowAbove")), true);
-  assert.equal(isDisabled(header.menuItem("deleteRow")), true);
-  assert.equal(isDisabled(header.menuItem("deleteColumn")), false);
+test("the table menu disables actions that would break or empty the table", async (t) => {
+  const isDisabled = (key) => menuItem(`notes.editor.table.${key}`).hasAttribute("data-disabled");
+  const notes = await mountNotes(t, "Intro\n\n| A | B |\n| --- | --- |\n\nAfter");
+  await openTableMenu(notes, "A");
+  assert.equal(isDisabled("insertRowAbove"), true);
+  assert.equal(isDisabled("deleteRow"), true);
+  assert.equal(isDisabled("deleteColumn"), false);
 });
 
 test("switching notes while the table menu is open", async (t) => {
-  const { act, errors, host, menuItem, showOtherNote } = await renderNotes(t);
-  assert.ok(menuItem("deleteTable"), "menu is open");
-  await act(showOtherNote);
-  assert.deepEqual(errors, []);
-  assert.match(host.textContent, /Other note/);
+  const notes = await mountNotes(t);
+  await openTableMenu(notes);
+  assert.ok(menuItem("notes.editor.table.deleteTable"), "menu is open");
+  await notes.act(notes.showOtherNote);
+  assert.deepEqual(notes.errors, []);
+  assert.match(notes.host.textContent, /Other note/);
+});
+
+test("the formatting toolbar shows on selected text and empty lines only", async (t) => {
+  const notes = await mountNotes(t, `Intro text\n\n${TABLE}`);
+  await notes.act(() => notes.editor().commands.setTextSelection({ from: 1, to: 6 }), 300);
+  assert.ok(isShown(TOOLBAR), "on selected text");
+  assert.equal(toolbarCount(), 1);
+  await notes.act(() => notes.editor().commands.setTextSelection(3));
+  assert.equal(isShown(TOOLBAR), false, "mid-line");
+  await notes.act(() => {
+    caretInCell(notes.editor(), "Ana", 1);
+    const { from } = notes.editor().state.selection;
+    notes.editor().commands.setTextSelection({ from, to: from + 2 });
+  }, 300);
+  assert.equal(isShown(TOOLBAR), false, "over text in a table");
+  assert.ok(isShown("notes.editor.table.actions"), "the table menu instead");
+  await notes.act(() => addEmptyLastLine(notes.editor()));
+  assert.ok(isShown(TOOLBAR), "on an empty line");
+  assert.equal(toolbarCount(), 1);
+  await notes.act(() => {
+    notes.editor().commands.blur();
+    notes.editor().commands.setTextSelection({ from: 1, to: 6 });
+  }, 300);
+  assert.equal(isShown(TOOLBAR), false, "over a selection the editor doesn't hold focus for");
+  assert.deepEqual(notes.errors, []);
+});
+
+test("the formatting toolbar stays away from code blocks, list items and nodes", async (t) => {
+  const notes = await mountNotes(t, "```js\nconst a = 1;\n```\n\n- item\n\n---\n\nAfter");
+  const editor = () => notes.editor();
+  const selectIn = (text, length) => {
+    let from;
+    editor().state.doc.descendants((node, pos) => {
+      if (from === undefined && node.isText && node.text.includes(text)) from = pos;
+    });
+    editor().commands.setTextSelection({ from, to: from + length });
+  };
+  await notes.act(() => selectIn("const a", 5), 300);
+  assert.equal(isShown(TOOLBAR), false, "over code in a code block");
+  await notes.act(() => selectIn("item", 4), 300);
+  assert.ok(isShown(TOOLBAR), "over text in a list item");
+  await notes.act(() => {
+    // An empty list item is a line the toolbar's blocks and tables can't go on.
+    selectIn("item", 4);
+    editor().commands.deleteSelection();
+  }, 300);
+  assert.equal(isShown(TOOLBAR), false, "on an empty list item");
+  await notes.act(() => {
+    let rule;
+    editor().state.doc.descendants((node, pos) => {
+      if (rule === undefined && node.type.name === "horizontalRule") rule = pos;
+    });
+    editor().commands.setNodeSelection(rule);
+  }, 300);
+  assert.equal(isShown(TOOLBAR), false, "on a selected rule");
+  assert.deepEqual(notes.errors, []);
+});
+
+test("the formatting toolbar formats the selection and inserts a table", async (t) => {
+  const notes = await mountNotes(t, "Intro text\n\nSecond");
+  const editor = () => notes.editor();
+  await notes.act(() => editor().commands.setTextSelection({ from: 1, to: 6 }), 300);
+  await notes.act(() => clickButton(byLabel("notes.editor.format.bold")));
+  assert.equal(byLabel("notes.editor.format.bold").getAttribute("aria-pressed"), "true");
+  await notes.act(() => clickButton(byLabel("notes.editor.format.bulletList")));
+  assert.equal(markdownOf(editor()), "- **Intro** text\n\nSecond");
+
+  await notes.act(() => editor().commands.setTextSelection({ from: 17, to: 23 }), 300);
+  await notes.act(() => pointerDown(byLabel("notes.editor.format.textStyle")));
+  await notes.act(() => menuItem("notes.editor.format.heading2").click());
+  assert.equal(markdownOf(editor()), "- **Intro** text\n\n## Second");
+
+  await notes.act(() => addEmptyLastLine(editor()));
+  const insertTable = byLabel("notes.editor.format.table");
+  assert.equal(insertTable.hasAttribute("aria-pressed"), false, "not a toggle");
+  // Enter on the focused button, as from the keyboard.
+  await notes.act(() => {
+    insertTable.focus();
+    insertTable.click();
+  });
+  assert.equal(markdownOf(editor()), `- **Intro** text\n\n## Second\n\n${EMPTY_TABLE}`);
+  assert.equal(notes.saved().trim(), markdownOf(editor()));
+  assert.ok(editor().isFocused, "the caret is back in the note");
+  assert.deepEqual(notes.errors, []);
+});
+
+test("switching notes while a formatting toolbar's dropdown is open", async (t) => {
+  const onSelection = (editor) => editor.commands.setTextSelection({ from: 1, to: 6 });
+  for (const select of [onSelection, addEmptyLastLine]) {
+    const notes = await mountNotes(t, "Intro text");
+    await notes.act(() => select(notes.editor()), 300);
+    await notes.act(() => pointerDown(byLabel("notes.editor.format.textStyle")));
+    assert.ok(menuItem("notes.editor.format.heading1"), `dropdown open (${select.name})`);
+    await notes.act(notes.showOtherNote);
+    assert.deepEqual(notes.errors, [], select.name);
+  }
+});
+
+test("the menus hide when focus leaves them, also after a click on them", async (t) => {
+  const notes = await mountNotes(t, `Intro text\n\n${TABLE}`);
+  const outside = happyWindow.document.createElement("input");
+  happyWindow.document.body.appendChild(outside);
+  t.after(() => outside.remove());
+  const refocus = () => notes.act(() => notes.editor().commands.focus(), 300);
+
+  // A click on a button keeps focus in the editor, and Tiptap then misses the next blur.
+  await notes.act(() => notes.editor().commands.setTextSelection({ from: 1, to: 6 }), 300);
+  await notes.act(() => clickButton(byLabel("notes.editor.format.bold")));
+  await notes.act(() => outside.focus());
+  assert.equal(isShown(TOOLBAR), false, "after a click on the toolbar");
+  await refocus();
+  assert.ok(isShown(TOOLBAR), "back when the editor is focused again");
+
+  // Leaving a menu with Tab never blurs the editor: it lost focus to the menu.
+  await notes.act(() => byLabel("notes.editor.format.italic").focus());
+  await notes.act(() => outside.focus());
+  assert.equal(isShown(TOOLBAR), false, "tabbing out of the toolbar");
+
+  await refocus();
+  await notes.act(() => caretInCell(notes.editor(), "Ana", 1));
+  await notes.act(() => byLabel("notes.editor.table.actions").focus());
+  await notes.act(() => outside.focus());
+  assert.equal(isShown("notes.editor.table.actions"), false, "tabbing out of the table menu");
+
+  // An open dropdown takes focus back, as from a dialog opened over it.
+  await refocus();
+  await notes.act(() => pointerDown(byLabel("notes.editor.table.actions")));
+  await notes.act(() => outside.focus());
+  assert.ok(menuItem("notes.editor.table.deleteTable"), "the dropdown stays open");
+  assert.equal(isShown("notes.editor.table.actions"), true, "and so does its menu");
+  assert.deepEqual(notes.errors, []);
+});
+
+test("a dropdown closes with the menu it lives in", async (t) => {
+  const notes = await mountNotes(t);
+  await openTableMenu(notes);
+  assert.ok(menuItem("notes.editor.table.deleteTable"), "menu is open");
+  // A change from outside the editor, as dictation or a note action makes.
+  await notes.act(() => notes.editor().commands.insertContentAt(0, "Dictated. "));
+  assert.equal(menuItem("notes.editor.table.deleteTable"), undefined, "the dropdown is gone");
+  assert.notEqual(
+    happyWindow.document.body.style.pointerEvents,
+    "none",
+    "the page takes clicks again"
+  );
+  assert.deepEqual(notes.errors, []);
 });

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { findParentNode, type ChainedCommands, type Editor } from "@tiptap/core";
+import { useCallback } from "react";
+import { findParentNode, type Editor } from "@tiptap/core";
 import { isInTable, selectedRect } from "@tiptap/pm/tables";
 import { BubbleMenu, type BubbleMenuProps } from "@tiptap/react/menus";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
+import {
+  editorHasFocus,
+  refocusEditor,
+  runCommand,
+  useHideOnFocusLeave,
+  useMenuDropdown,
+  type ChainCommand,
+} from "./RichTextEditorMenus";
 
 const findTable = findParentNode((node) => node.type.name === "table");
 
@@ -33,11 +41,11 @@ const MENU_OPTIONS: BubbleMenuProps["options"] = {
   shift: { crossAxis: true },
 };
 
-// Focus inside the editor's scroller counts, so the menu stays while its dropdown is open.
+const PLUGIN_KEY = "tableMenu";
+const PLUGIN_KEYS = [PLUGIN_KEY];
+
 const shouldShowMenu: BubbleMenuProps["shouldShow"] = ({ editor, view }) =>
-  editor.isEditable &&
-  editor.isActive("table") &&
-  !!view.dom.parentElement?.contains(document.activeElement);
+  editor.isEditable && editor.isActive("table") && editorHasFocus(view);
 
 /**
  * Rendered only while the menu is open, from the current selection. The note can
@@ -49,8 +57,7 @@ function TableActions({ editor }: { editor: Editor }) {
   if (!editor.isEditable || !isInTable(editor.state)) return null;
   const rect = selectedRect(editor.state);
 
-  const run = (command: (chain: ChainedCommands) => ChainedCommands) =>
-    command(editor.chain().focus()).run();
+  const run = (command: ChainCommand) => runCommand(editor, command);
 
   // Tables follow the note's text direction, so "left" is the next column in RTL.
   const addColumn = (side: "left" | "right") => {
@@ -105,13 +112,8 @@ function TableActions({ editor }: { editor: Editor }) {
 /** Row and column actions for the table holding the caret. */
 export function RichTextEditorTableMenu({ editor }: { editor: Editor }) {
   const { t } = useTranslation();
-  // The bubble menu hides when focus leaves the element it's attached to, so the
-  // dropdown is portaled into the menu itself. Not into the editor's scroller:
-  // EditorContent moves that element's children when a note closes, and React
-  // could then no longer remove an open dropdown.
-  const bubbleRef = useRef<HTMLDivElement>(null);
-  const [container, setContainer] = useState<HTMLDivElement | null>(null);
-  useEffect(() => setContainer(bubbleRef.current), []);
+  const { menuRef, container, open, setOpen, options } = useMenuDropdown(MENU_OPTIONS);
+  useHideOnFocusLeave(editor, PLUGIN_KEYS);
 
   // Stable, like the options above: BubbleMenu dispatches a transaction whenever these change.
   const getReferencedVirtualElement = useCallback(() => {
@@ -121,15 +123,15 @@ export function RichTextEditorTableMenu({ editor }: { editor: Editor }) {
 
   return (
     <BubbleMenu
-      ref={bubbleRef}
+      ref={menuRef}
       editor={editor}
-      pluginKey="tableMenu"
+      pluginKey={PLUGIN_KEY}
       shouldShow={shouldShowMenu}
       getReferencedVirtualElement={getReferencedVirtualElement}
-      options={MENU_OPTIONS}
+      options={options}
       className="pl-1.5 pb-1.5"
     >
-      <DropdownMenu>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             size="icon"
@@ -144,11 +146,7 @@ export function RichTextEditorTableMenu({ editor }: { editor: Editor }) {
           container={container}
           align="end"
           className="min-w-44 p-1"
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            // Closing can come after a note switch has destroyed this editor.
-            if (!editor.isDestroyed) editor.commands.focus();
-          }}
+          onCloseAutoFocus={refocusEditor(editor)}
         >
           <TableActions editor={editor} />
         </DropdownMenuContent>

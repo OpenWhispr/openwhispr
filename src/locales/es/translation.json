@@ -3011,6 +3011,24 @@
         "deleteRow": "Eliminar fila",
         "deleteColumn": "Eliminar columna",
         "deleteTable": "Eliminar tabla"
+      },
+      "format": {
+        "toolbar": "Formato",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Negrita",
+        "italic": "Cursiva",
+        "strike": "Tachado",
+        "code": "Código",
+        "textStyle": "Estilo de texto",
+        "paragraph": "Texto normal",
+        "heading1": "Encabezado 1",
+        "heading2": "Encabezado 2",
+        "heading3": "Encabezado 3",
+        "bulletList": "Lista con viñetas",
+        "orderedList": "Lista numerada",
+        "taskList": "Lista de verificación",
+        "blockquote": "Cita",
+        "table": "Insertar tabla"
       }
     },
     "participants": {

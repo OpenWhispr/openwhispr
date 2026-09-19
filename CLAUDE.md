@@ -176,7 +176,8 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **ui/**: Reusable UI components (buttons, cards, inputs, etc.)
 - **ui/RichTextEditor.tsx**: Tiptap note editor. Note bodies (`content`, `enhanced_content`) are stored as Markdown via tiptap-markdown (`html: false`)
   - `RichTextEditorExtensions.ts` holds the extension list (`RichTextEditor` adds the mention extension in front of it); order matters: at equal priority, later extensions' keymaps and clipboard props run first
-  - `RichTextEditorTable.ts` keeps every table to what a GFM pipe table can store: header first row, one single-line paragraph per cell, no merged cells, no alignment or column widths. Pasted cells are flattened while parsing, a normalizer fixes what commands and pastes leave behind, and the table serializer escapes `|` in cells. Tests: `test/components/richTextEditorTable.test.js` (happy-dom)
+  - `RichTextEditorTable.ts` keeps every table to what a GFM pipe table can store: header first row, one single-line paragraph per cell, no merged cells, no alignment or column widths. Pasted cells are flattened while parsing, a normalizer fixes what commands and pastes leave behind, and the table serializer escapes `|` in cells. Tests: `test/components/richTextEditor.test.js` (happy-dom)
+  - Floating menus: `RichTextEditorFormatMenu.tsx` shows one formatting toolbar (marks, text style, lists, quote, insert table) above selected text (Tiptap `BubbleMenu`) and beside the caret on an empty top-level line (`FloatingMenu`); `RichTextEditorTableMenu.tsx` is the table's `⋯` menu. They share `RichTextEditorMenus.ts`: a menu hides when focus leaves it, so dropdowns portal into the menu element itself, never into the editor's scroller (EditorContent moves the scroller's children when a note closes); `useHideOnFocusLeave` hides a menu when focus leaves from inside it or after a click on it, which Tiptap misses. The menus detach their element without unmounting it, so buttons use a native `title` rather than `<Tooltip>`, and a dropdown inside a menu is controlled and closed from the menu's `onHide` — otherwise it stays open over a scroll-locked page when the menu hides. Keep menu props stable, or each render dispatches an `updateOptions` transaction
 
 ### React Hooks (src/hooks/)
 
@@ -759,7 +760,7 @@ const { t } = useTranslation();
 
 Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`). Vector provider/brand marks live in `src/assets/icons/`.
 
-UI icons come from `src/components/icons/` (vendored Nucleo core outline components behind lucide-style names, e.g. `import { Check, Loader2 } from "../icons"`). To add one, map a name to a Nucleo label in `src/components/icons/nucleo-map.json` and run `node scripts/sync-nucleo-icons.js`; never import from `lucide-react` or a machine-local Nucleo path.
+UI icons come from `src/components/icons/` (vendored Nucleo core outline components behind lucide-style names, e.g. `import { Check, Loader2 } from "../icons"`). To add one, map a name to a Nucleo label in `src/components/icons/nucleo-map.json` and run `node scripts/sync-nucleo-icons.js`; never import from `lucide-react` or a machine-local Nucleo path. Icons outside that set — the status marks and the note toolbar's formatting glyphs — are drawn by hand in `src/components/icons/primitives.tsx`, which the generated `index.ts` re-exports.
 
 **Typography**: `--font-family-sans` is Yowza (brand, Latin only) falling back to the bundled Noto Sans; `--font-family-display` is Yowza Soft for headings. The font files are licensed and never committed — `src/brandFonts.ts` registers whatever `scripts/download-brand-fonts.js` fetched at build time, and a build without them silently uses Noto Sans.
 

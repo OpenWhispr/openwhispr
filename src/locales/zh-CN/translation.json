@@ -2958,6 +2958,24 @@
         "deleteRow": "删除行",
         "deleteColumn": "删除列",
         "deleteTable": "删除表格"
+      },
+      "format": {
+        "toolbar": "格式",
+        "withShortcut": "{{action}}（{{shortcut}}）",
+        "bold": "粗体",
+        "italic": "斜体",
+        "strike": "删除线",
+        "code": "代码",
+        "textStyle": "文本样式",
+        "paragraph": "正文",
+        "heading1": "标题 1",
+        "heading2": "标题 2",
+        "heading3": "标题 3",
+        "bulletList": "项目符号列表",
+        "orderedList": "编号列表",
+        "taskList": "清单",
+        "blockquote": "引用",
+        "table": "插入表格"
       }
     },
     "participants": {

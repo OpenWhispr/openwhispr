@@ -9,7 +9,13 @@ import {
   type Schema,
 } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
-import { Plugin, PluginKey, TextSelection, type EditorState } from "@tiptap/pm/state";
+import {
+  Plugin,
+  PluginKey,
+  TextSelection,
+  type EditorState,
+  type Selection,
+} from "@tiptap/pm/state";
 import {
   CellSelection,
   TableMap,
@@ -222,6 +228,18 @@ function createTableFromHeaderRow({ state, view }: Editor): boolean {
   if (!labels || !$from.node(-1).canReplaceWith(index, index + 1, schema.nodes.table)) {
     return false;
   }
+  const table = buildTable(schema, labels, 1);
+  const from = $from.before();
+  // Its own undo step, so undo gives back the typed line.
+  const tr = closeHistory(state.tr).replaceWith(from, $from.after(), table);
+  // Table open, header row, body row open, cell open, paragraph open.
+  tr.setSelection(TextSelection.create(tr.doc, from + 1 + table.firstChild.nodeSize + 3));
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+/** A header row with these labels, then `bodyRows` empty rows. */
+function buildTable(schema: Schema, labels: string[], bodyRows: number): ProseMirrorNode {
   const { table, tableRow, tableHeader, tableCell, paragraph } = schema.nodes;
   const header = tableRow.create(
     null,
@@ -229,21 +247,39 @@ function createTableFromHeaderRow({ state, view }: Editor): boolean {
       tableHeader.create(null, paragraph.create(null, label ? schema.text(label) : null))
     )
   );
-  const body = tableRow.create(
-    null,
-    labels.map(() => tableCell.createAndFill())
+  const body = Array.from({ length: bodyRows }, () =>
+    tableRow.create(
+      null,
+      labels.map(() => tableCell.createAndFill())
+    )
   );
-  const from = $from.before();
-  // Its own undo step, so undo gives back the typed line.
+  return table.create(null, [header, ...body]);
+}
+
+/** An empty top-level line: the formatting toolbar shows there, and Insert table replaces it. */
+export const isOnEmptyLine = ({ empty, $from }: Selection) =>
+  empty &&
+  $from.depth === 1 &&
+  $from.parent.type.name === "paragraph" &&
+  !$from.parent.content.size;
+
+/**
+ * Inserts an empty three-column table in place of an empty top-level line, or
+ * after the top-level block holding the selection, and puts the caret in its
+ * first header cell.
+ */
+export function insertEmptyTable({ state, view }: Editor): void {
+  const { $from, $to } = state.selection;
+  const onEmptyLine = isOnEmptyLine(state.selection);
+  const from = onEmptyLine ? $from.before() : $to.depth ? $to.after(1) : state.doc.content.size;
   const tr = closeHistory(state.tr).replaceWith(
     from,
-    $from.after(),
-    table.create(null, [header, body])
+    onEmptyLine ? $from.after() : from,
+    buildTable(state.schema, ["", "", ""], 2)
   );
-  // Table open, header row, body row open, cell open, paragraph open.
-  tr.setSelection(TextSelection.create(tr.doc, from + 1 + header.nodeSize + 3));
+  // Table open, header row open, cell open, paragraph open.
+  tr.setSelection(TextSelection.create(tr.doc, from + 4));
   view.dispatch(tr.scrollIntoView());
-  return true;
 }
 
 const MarkdownTable = Table.extend({

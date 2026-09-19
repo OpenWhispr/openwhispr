@@ -1638,6 +1638,24 @@
         "deleteRow": "حذف الصف",
         "deleteColumn": "حذف العمود",
         "deleteTable": "حذف الجدول"
+      },
+      "format": {
+        "toolbar": "التنسيق",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "غامق",
+        "italic": "مائل",
+        "strike": "يتوسطه خط",
+        "code": "تعليمات برمجية",
+        "textStyle": "نمط النص",
+        "paragraph": "نص عادي",
+        "heading1": "عنوان 1",
+        "heading2": "عنوان 2",
+        "heading3": "عنوان 3",
+        "bulletList": "قائمة نقطية",
+        "orderedList": "قائمة مرقمة",
+        "taskList": "قائمة مهام",
+        "blockquote": "اقتباس",
+        "table": "إدراج جدول"
       }
     },
     "participants": {

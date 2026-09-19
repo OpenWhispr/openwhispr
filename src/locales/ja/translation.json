@@ -2852,6 +2852,24 @@
         "deleteRow": "行を削除",
         "deleteColumn": "列を削除",
         "deleteTable": "表を削除"
+      },
+      "format": {
+        "toolbar": "書式",
+        "withShortcut": "{{action}}（{{shortcut}}）",
+        "bold": "太字",
+        "italic": "斜体",
+        "strike": "取り消し線",
+        "code": "コード",
+        "textStyle": "テキストスタイル",
+        "paragraph": "標準テキスト",
+        "heading1": "見出し 1",
+        "heading2": "見出し 2",
+        "heading3": "見出し 3",
+        "bulletList": "箇条書き",
+        "orderedList": "番号付きリスト",
+        "taskList": "チェックリスト",
+        "blockquote": "引用",
+        "table": "表を挿入"
       }
     },
     "participants": {

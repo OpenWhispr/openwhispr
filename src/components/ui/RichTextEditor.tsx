@@ -3,6 +3,7 @@ import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import { cn } from "../lib/utils";
 import { createMentionExtension } from "./RichTextEditorMention";
 import { createRichTextExtensions } from "./RichTextEditorExtensions";
+import { RichTextEditorFormatMenu } from "./RichTextEditorFormatMenu";
 import { RichTextEditorTableMenu } from "./RichTextEditorTableMenu";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
 
@@ -111,6 +112,7 @@ export function RichTextEditor({
           "pb-[var(--floating-inset,0px)]"
         )}
       />
+      {editor && <RichTextEditorFormatMenu editor={editor} />}
       {editor && <RichTextEditorTableMenu editor={editor} />}
     </div>
   );
