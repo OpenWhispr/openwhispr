@@ -241,12 +241,18 @@ function downloadFile(url, dest, retryCount = 0) {
 
 async function extractZip(zipPath, destDir) {
   if (process.platform === "win32") {
-    // Use unzipper package on Windows for better path handling
-    const unzipper = require("unzipper");
-    await fs
-      .createReadStream(zipPath)
-      .pipe(unzipper.Extract({ path: destDir }))
-      .promise();
+    try {
+      const unzipper = require("unzipper");
+      await fs
+        .createReadStream(zipPath)
+        .pipe(unzipper.Extract({ path: destDir }))
+        .promise();
+    } catch {
+      execSync(
+        `powershell -Command "Expand-Archive -Path '${zipPath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force"`,
+        { stdio: "inherit" }
+      );
+    }
   } else {
     execSync(`unzip -o "${zipPath}" -d "${destDir}"`, { stdio: "inherit" });
   }
