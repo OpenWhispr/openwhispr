@@ -68,6 +68,7 @@ interface AssistantPanelProps {
   onConversationIdChange: (id: number | null) => void;
   /** Live voice state while the user records a follow-up with the panel open. */
   voiceState: Extract<AgentState, "idle" | "listening" | "transcribing">;
+  blockEscapeCancellation: boolean;
   /** Keeps follow-up thinking feedback inside an already-open panel. */
   thinking: boolean;
   open: boolean;
@@ -92,6 +93,7 @@ export function AssistantPanel({
   initialConversationId,
   onConversationIdChange,
   voiceState,
+  blockEscapeCancellation,
   thinking,
   open,
   footerPhase,
@@ -379,7 +381,7 @@ export function AssistantPanel({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (voiceState === "listening") return;
+        if (blockEscapeCancellation || voiceState === "listening") return;
         if (isBusy) {
           streaming.cancelStream();
           // A hidden panel means the compact Beam circle owns the thinking
@@ -415,6 +417,7 @@ export function AssistantPanel({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [
     voiceState,
+    blockEscapeCancellation,
     isBusy,
     streaming,
     open,

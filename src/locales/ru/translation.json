@@ -1885,6 +1885,8 @@
       },
       "hotkey": {
         "activationMode": "Режим активации",
+        "cancelWithEscape": "Включить отмену по Escape",
+        "cancelWithEscapeDescription": "Нажмите Escape, чтобы отменить активную диктовку",
         "description": "Комбинация клавиш для запуска и остановки голосовой диктовки",
         "resetToDefault": "Сбросить на {{hotkey}}",
         "title": "Горячая клавиша диктовки",

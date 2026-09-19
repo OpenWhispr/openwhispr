@@ -64,6 +64,7 @@ export interface HotkeySettings {
   voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
   activationMode: "tap" | "push";
+  escapeCancelsDictation: boolean;
 }
 
 export interface OnboardingSettings {
@@ -321,6 +322,7 @@ function useSettingsInternal() {
     deepgramApiKey: store.deepgramApiKey,
     assemblyaiApiKey: store.assemblyaiApiKey,
     dictationKey: store.dictationKey,
+    escapeCancelsDictation: store.escapeCancelsDictation,
     meetingKey: store.meetingKey,
     voiceAgentKey: store.voiceAgentKey,
     meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
@@ -365,6 +367,7 @@ function useSettingsInternal() {
     cleanupCustomApiKey: store.cleanupCustomApiKey,
     setCleanupCustomApiKey: store.setCleanupCustomApiKey,
     setDictationKey: store.setDictationKey,
+    setEscapeCancelsDictation: store.setEscapeCancelsDictation,
     setMeetingKey: store.setMeetingKey,
     setVoiceAgentKey: store.setVoiceAgentKey,
     onboardingUseCases: store.onboardingUseCases,

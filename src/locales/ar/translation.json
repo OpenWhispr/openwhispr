@@ -2941,6 +2941,8 @@
       },
       "hotkey": {
         "activationMode": "وضع التنشيط",
+        "cancelWithEscape": "تفعيل الإلغاء باستخدام Escape",
+        "cancelWithEscapeDescription": "اضغط على Escape لإلغاء الإملاء الجاري",
         "description": "مجموعة المفاتيح التي تبدأ وتوقف الإملاء الصوتي",
         "resetToDefault": "إعادة التعيين إلى {{hotkey}}",
         "title": "مفتاح اختصار الإملاء",

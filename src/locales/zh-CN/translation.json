@@ -1881,6 +1881,8 @@
       },
       "hotkey": {
         "activationMode": "激活模式",
+        "cancelWithEscape": "启用 Escape 取消",
+        "cancelWithEscapeDescription": "按 Escape 取消正在进行的听写",
         "description": "用于开始和停止语音听写的组合键",
         "resetToDefault": "重置为 {{hotkey}}",
         "title": "听写快捷键",

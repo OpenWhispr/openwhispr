@@ -1934,6 +1934,8 @@
       },
       "hotkey": {
         "activationMode": "Modo de activación",
+        "cancelWithEscape": "Activar Escape para cancelar",
+        "cancelWithEscapeDescription": "Pulsa Escape para cancelar un dictado activo",
         "description": "La combinación de teclas que inicia y detiene el dictado por voz",
         "resetToDefault": "Restablecer a {{hotkey}}",
         "title": "Atajo de dictado",

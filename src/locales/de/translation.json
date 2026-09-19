@@ -2174,6 +2174,8 @@
       },
       "hotkey": {
         "activationMode": "Aktivierungsmodus",
+        "cancelWithEscape": "Escape zum Abbrechen aktivieren",
+        "cancelWithEscapeDescription": "Drücke Escape, um ein aktives Diktat abzubrechen",
         "description": "Die Tastenkombination, die das Sprachdiktat startet und stoppt",
         "resetToDefault": "Auf {{hotkey}} zurücksetzen",
         "title": "Diktat-Hotkey",

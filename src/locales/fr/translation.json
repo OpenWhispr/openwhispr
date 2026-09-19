@@ -2174,6 +2174,8 @@
       },
       "hotkey": {
         "activationMode": "Mode d'activation",
+        "cancelWithEscape": "Activer Échap pour annuler",
+        "cancelWithEscapeDescription": "Appuyez sur Échap pour annuler une dictée en cours",
         "description": "La combinaison de touches qui démarre et arrête la dictée vocale",
         "resetToDefault": "Réinitialiser à {{hotkey}}",
         "title": "Raccourci de dictée",

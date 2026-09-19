@@ -1881,6 +1881,8 @@
       },
       "hotkey": {
         "activationMode": "Modalità di attivazione",
+        "cancelWithEscape": "Abilita Esc per annullare",
+        "cancelWithEscapeDescription": "Premi Esc per annullare una dettatura in corso",
         "description": "La combinazione di tasti che avvia e ferma la dettatura vocale",
         "resetToDefault": "Ripristina a {{hotkey}}",
         "title": "Scorciatoia di dettatura",

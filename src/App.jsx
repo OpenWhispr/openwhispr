@@ -76,6 +76,7 @@ export default function App() {
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
+  const escapeCancelsDictation = useSettingsStore((s) => s.escapeCancelsDictation);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
   const [voiceHorizontalDirection, setVoiceHorizontalDirection] = useState(() =>
     resolveVoiceHorizontalDirection(panelStartPosition)
@@ -455,12 +456,10 @@ export default function App() {
         if (assistant.mounted) return;
         if (isCommandMenuOpen) {
           setIsCommandMenuOpen(false);
-        } else if (isRecording) {
-          cancelRecording();
-        } else if (isPreparing) {
-          cancelRecording();
-        } else if (isProcessing) {
-          cancelProcessing();
+        } else if (isRecording || isPreparing || isProcessing) {
+          if (!escapeCancelsDictation) return;
+          if (isRecording || isPreparing) cancelRecording();
+          else cancelProcessing();
         } else {
           handleClose();
         }
@@ -475,6 +474,7 @@ export default function App() {
     isRecording,
     isPreparing,
     isProcessing,
+    escapeCancelsDictation,
     cancelRecording,
     cancelProcessing,
   ]);
@@ -818,6 +818,11 @@ export default function App() {
             initialConversationId={assistant.conversationId}
             onConversationIdChange={assistant.setConversationId}
             voiceState={assistantVoiceState}
+            blockEscapeCancellation={
+              !escapeCancelsDictation &&
+              isAssistantVoice &&
+              (isRecording || isPreparing || isProcessing)
+            }
             thinking={assistant.thinking && assistant.open}
             open={assistant.open}
             footerPhase={assistant.footerPhase}

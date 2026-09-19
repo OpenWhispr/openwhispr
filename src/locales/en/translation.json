@@ -2174,6 +2174,8 @@
       },
       "hotkey": {
         "activationMode": "Activation Mode",
+        "cancelWithEscape": "Enable Escape to cancel",
+        "cancelWithEscapeDescription": "Press Escape to cancel an active dictation",
         "description": "The key combination that starts and stops voice dictation",
         "resetToDefault": "Reset to {{hotkey}}",
         "title": "Dictation Hotkey",

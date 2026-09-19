@@ -1881,6 +1881,8 @@
       },
       "hotkey": {
         "activationMode": "起動モード",
+        "cancelWithEscape": "Escapeでキャンセルを有効化",
+        "cancelWithEscapeDescription": "Escapeを押して進行中の音声入力をキャンセル",
         "description": "音声ディクテーションの開始/停止に使用するキーの組み合わせ",
         "resetToDefault": "{{hotkey}}にリセット",
         "title": "ディクテーションホットキー",
