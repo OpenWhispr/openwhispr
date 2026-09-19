@@ -247,6 +247,37 @@ test("transcripts: partials replace, finals accumulate", async () => {
   );
 });
 
+test("transcripts: a trailing partial after a final is kept on disconnect", async () => {
+  await withServer(
+    async ({ streaming }) => {
+      await streaming.connect({ token: "t", mode: "byok" });
+      streaming.sendAudio(FRAME);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
+      assert.equal(streaming.getFullTranscript(), "The first sentence. and the last ten seconds");
+
+      const result = await streaming.disconnect(true);
+      assert.equal(result.text, "The first sentence. and the last ten seconds");
+    },
+    (socket, message) => {
+      if (message.setup) {
+        socket.send(JSON.stringify({ setupComplete: {} }));
+        return;
+      }
+      if (!message.realtimeInput?.audio) return;
+      socket.send(
+        JSON.stringify({ serverContent: { inputTranscription: { text: "The first sentence." } } })
+      );
+      socket.send(JSON.stringify({ serverContent: { generationComplete: true } }));
+      socket.send(
+        JSON.stringify({
+          serverContent: { interimInputTranscription: { text: "and the last ten seconds" } },
+        })
+      );
+    }
+  );
+});
+
 test("disconnect sends audioStreamEnd once and waits for the end of the turn", async () => {
   await withServer(
     async ({ streaming, received }) => {
