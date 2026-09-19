@@ -630,11 +630,24 @@
       "connectFailed": "فشل الاتصال",
       "connectFailedDescription": "حدث خطأ ما أثناء الاتصال بتطبيق Calendar.app. يرجى إعادة تشغيل OpenWhispr والمحاولة مرة أخرى."
     },
+    "gmail": {
+      "title": "Gmail",
+      "optional": "اختياري",
+      "description": "أرسل رسائل متابعة مُعدّة من ملاحظاتك مباشرةً من المحادثة.",
+      "connect": "ربط Gmail",
+      "connected": "متصل",
+      "disconnect": "قطع الاتصال",
+      "disconnectConfirm": "هل تريد قطع اتصال {{email}}؟",
+      "disconnectDescription": "لن يتمكن OpenWhispr من إرسال رسائل البريد الإلكتروني من هذا الحساب بعد الآن.",
+      "connectFailed": "فشل الاتصال",
+      "connectFailedDescription": "حدث خطأ ما أثناء ربط Gmail. يرجى المحاولة مرة أخرى."
+    },
     "sections": {
       "calendar": "التقويم (Calendar)",
       "api": "API",
       "mcp": "MCP",
-      "cli": "CLI"
+      "cli": "CLI",
+      "email": "البريد الإلكتروني"
     },
     "api": {
       "title": "مفاتيح API",
@@ -1254,7 +1267,21 @@
       "copiedToClipboard": "تم النسخ إلى حافظتك",
       "openNote": "فتح الملاحظة",
       "unknownTool": "أداة غير معروفة: {{name}}",
-      "invalidArgs": "وسيطات غير صالحة للأداة {{name}}"
+      "invalidArgs": "وسيطات غير صالحة للأداة {{name}}",
+      "draft_emailStatus": "جاري صياغة البريد الإلكتروني..."
+    },
+    "emailDraft": {
+      "title": "مسودة بريد إلكتروني",
+      "via": "عبر {{email}}",
+      "to": "إلى",
+      "cc": "نسخة",
+      "subject": "الموضوع",
+      "send": "إرسال",
+      "sending": "جاري الإرسال...",
+      "sent": "تم الإرسال",
+      "retry": "إعادة المحاولة",
+      "invalidRecipients": "أدخل عنوان مستلم صالحًا",
+      "sendFailed": "تعذّر الإرسال — تحقق من اتصال Gmail"
     }
   },
   "noteEditor": {

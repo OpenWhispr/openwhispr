@@ -306,6 +306,7 @@ const BOOLEAN_SETTINGS = new Set([
   "gcalPrimaryOnly",
   "mcalPrimaryOnly",
   "appleCalendarConnected",
+  "gmailConnected",
 ]);
 
 const ARRAY_SETTINGS = new Set([
@@ -873,6 +874,8 @@ export interface SettingsState
   gcalPrimaryOnly: boolean;
   mcalPrimaryOnly: boolean;
   appleCalendarConnected: boolean;
+  gmailConnected: boolean;
+  gmailEmail: string;
   meetingProcessDetection: boolean;
   speakerDiarizationEnabled: boolean;
   dictationSileroEnabled: boolean;
@@ -1182,6 +1185,7 @@ export interface SettingsState
   setGcalPrimaryOnly: (value: boolean) => void;
   setMcalPrimaryOnly: (value: boolean) => void;
   setAppleCalendarConnected: (value: boolean) => void;
+  setGmailConnection: (connected: boolean, email: string | null) => void;
   setMeetingProcessDetection: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
   setDictationSileroEnabled: (value: boolean) => void;
@@ -1629,6 +1633,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   gcalPrimaryOnly: readBoolean("gcalPrimaryOnly", true),
   mcalPrimaryOnly: readBoolean("mcalPrimaryOnly", true),
   appleCalendarConnected: readBoolean("appleCalendarConnected", false),
+  gmailConnected: readBoolean("gmailConnected", false),
+  gmailEmail: readString("gmailEmail", ""),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
   // Off by default: VAD on pause-heavy dictations can strip the speech and make
@@ -2412,6 +2418,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) window.electronAPI?.mcalSetPrimaryOnly?.(value);
   },
   setAppleCalendarConnected: createBooleanSetter("appleCalendarConnected"),
+  setGmailConnection: (connected: boolean, email: string | null) => {
+    if (isBrowser) {
+      localStorage.setItem("gmailConnected", String(connected));
+      localStorage.setItem("gmailEmail", email ?? "");
+    }
+    useSettingsStore.setState({ gmailConnected: connected, gmailEmail: email ?? "" });
+  },
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
   setSpeakerDiarizationEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("speakerDiarizationEnabled", String(value));

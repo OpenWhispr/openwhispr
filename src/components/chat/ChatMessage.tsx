@@ -5,6 +5,8 @@ import { cn } from "../lib/utils";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import type { ToolCallInfo } from "./types";
 import { extractNoteCards } from "./noteCards";
+import { EmailDraftCard } from "./EmailDraftCard";
+import { extractEmailDrafts } from "./emailDrafts";
 import { toolIcons } from "./toolIcons";
 
 interface ChatMessageProps {
@@ -205,6 +207,7 @@ export function ChatMessage({
   const hasToolCalls = toolCalls && toolCalls.length > 0;
   const hasContent = content.length > 0;
   const noteCards = extractNoteCards(toolCalls, t("notes.list.untitledNote"));
+  const emailDrafts = extractEmailDrafts(toolCalls);
 
   return (
     <div
@@ -263,6 +266,9 @@ export function ChatMessage({
             ))}
           </div>
         )}
+
+        {!isStreaming &&
+          emailDrafts.map((draft) => <EmailDraftCard key={draft.callId} draft={draft} />)}
 
         {hasContent && !isStreaming && (
           <div className="flex justify-start mt-1.5 -mb-0.5">
