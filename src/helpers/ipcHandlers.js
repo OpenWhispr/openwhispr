@@ -6211,6 +6211,7 @@ class IPCHandlers {
           clientTranscriptionId,
           localDate: opts.localDate,
           analyticsOccurredAt: opts.analyticsOccurredAt,
+          streamingFallbackReason: opts.streamingFallbackReason,
         };
 
         debugLogger.debug("Cloud transcribe request", { audioSize: audioData.length }, "cloud-api");

@@ -197,11 +197,15 @@ export const useAudioRecording = (toast, options = {}) => {
           audioManagerRef.current.beginSelectionCapture();
         }
 
-        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready).
-        // Await it only when it can change the start decision (signed-in
-        // OpenWhispr-cloud streaming); for local STT or a signed-out session the
-        // fetch stalls on auth resolution and would delay the mic open (#1673).
-        if (!audioManagerRef.current.sttConfig) {
+        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready),
+        // and refresh a copy older than its TTL so a server-side rollout change
+        // reaches a long-running app. Await it only when it can change the start
+        // decision (no config yet, signed-in OpenWhispr-cloud streaming); for
+        // local STT or a signed-out session the fetch stalls on auth resolution
+        // and would delay the mic open (#1673). A stale-but-present copy is
+        // refreshed in the background and this recording keeps the old decision.
+        if (audioManagerRef.current.isSttConfigStale()) {
+          const hadConfig = Boolean(audioManagerRef.current.sttConfig);
           const configFetch = (async () => {
             const config = await window.electronAPI.getSttConfig?.();
             if (config?.success) {
@@ -210,7 +214,7 @@ export const useAudioRecording = (toast, options = {}) => {
           })().catch((error) => {
             logger.warn("STT config fetch failed", { error: error?.message });
           });
-          if (needsSttConfigBeforeStart(getSettings())) {
+          if (!hadConfig && needsSttConfigBeforeStart(getSettings())) {
             await configFetch;
           }
         }

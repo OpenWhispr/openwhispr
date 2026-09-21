@@ -81,7 +81,10 @@ import {
   isSelfHostedTranscription,
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription";
-import { resolveStreamingFallbackTarget } from "./transcriptionFallback";
+import {
+  resolveStreamingFallbackTarget,
+  resolveStreamingStartFallback,
+} from "./transcriptionFallback";
 import {
   executeTranslationChain,
   hasTextContent,
@@ -126,11 +129,15 @@ import {
 import {
   REALTIME_MODELS,
   defaultStreamingProviderName,
+  resolveManagedOrukeetRoute,
   resolveStreamingProviderName,
   buildStreamingSessionOptions,
 } from "./dictationStreamingRouting";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
+// A server-side rollout change (a provider switched on or rolled back) must
+// reach a long-running app without a restart.
+const STT_CONFIG_TTL_MS = 15 * 60 * 1000;
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
 // Failure detector only: fires when the worklet or audio graph is dead and never flushes.
 const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
@@ -625,6 +632,8 @@ class AudioManager {
     this.screenContextPromise = null;
     this.selectionCapturePromise = null;
     this.sttConfig = null;
+    this.sttConfigFetchedAt = null;
+    this.streamingFallbackReason = null;
     this.warmupFailureStreak = 0;
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
@@ -974,6 +983,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   setSttConfig(config) {
     this.sttConfig = config;
+    this.sttConfigFetchedAt = Date.now();
+  }
+
+  isSttConfigStale(now = Date.now()) {
+    return (
+      !this.sttConfig ||
+      !this.sttConfigFetchedAt ||
+      now - this.sttConfigFetchedAt > STT_CONFIG_TTL_MS
+    );
+  }
+
+  invalidateSttConfig() {
+    this.sttConfig = null;
+    this.sttConfigFetchedAt = null;
   }
 
   getStreamingProvider() {
@@ -983,10 +1006,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   getStreamingProviderName() {
     // Every AudioManager instance records dictation; notes and meetings have
     // their own routing, so the context is a literal here.
+    const settings = getSettings();
     const name = resolveStreamingProviderName({
-      settings: getSettings(),
+      settings,
       context: "dictation",
       sttConfig: this.sttConfig,
+      language: this.getEffectiveSttLanguage(settings),
     });
     // A server-driven sttConfig.streamingProvider we don't recognize must fall
     // back to a provider we can run — and the reported name must match the
@@ -3334,6 +3359,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const opts = {};
     const analyticsOccurredAt = new Date(metadata.analyticsOccurredAt || Date.now());
     if (language) opts.language = language;
+    const streamingFallbackReason =
+      metadata.streamingFallbackReason ?? this.consumeStreamingFallbackReason(settings);
+    if (streamingFallbackReason) opts.streamingFallbackReason = streamingFallbackReason;
     if (analyticsSyncEnabled(settings)) {
       opts.analyticsOccurredAt = analyticsOccurredAt.toISOString();
       opts.localDate = localDateKey(analyticsOccurredAt);
@@ -4223,10 +4251,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       s.cloudTranscriptionMode === "openwhispr" &&
       this.sttConfig?.streamingProvider === "orukeet"
     ) {
-      return (
-        Boolean(isSignedInOverride ?? s.isSignedIn) &&
-        this.sttConfig.dictation?.mode === "streaming"
-      );
+      // A language the model does not cover takes the batch path, which
+      // carries the language, instead of a socket that would ignore it.
+      const route = resolveManagedOrukeetRoute({
+        settings: s,
+        sttConfig: this.sttConfig,
+        language: this.getEffectiveSttLanguage(s),
+      });
+      return route === "orukeet" && Boolean(isSignedInOverride ?? s.isSignedIn);
     }
 
     // Corti (BYOK) streams over its own WSS — independent of OpenWhispr Cloud.
@@ -4466,6 +4498,58 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     for (const resolve of this._streamingStartSettlementWaiters.splice(0)) resolve();
   }
 
+  // Turns a failed dictation-realtime-start result into a batch fallback or
+  // the error the user must see.
+  classifyStreamingStartResult(res, { useLocalWhisper }) {
+    if (res.success) return res;
+    if (res.code === "NO_API") return { needsFallback: true };
+    if (res.code === "NETWORK_ERROR" && useLocalWhisper) {
+      this.onError?.({
+        code: "NETWORK_ERROR",
+        title: "streaming.errors.cloudUnreachable.title",
+        description: "Cloud unreachable — using local engine for this recording.",
+        messageKey: "streaming.errors.cloudUnreachable.fallback",
+      });
+      return { needsFallback: true };
+    }
+    const fallbackReason = resolveStreamingStartFallback({
+      providerName: this.getStreamingProviderName(),
+      cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+      result: res,
+    });
+    if (fallbackReason) {
+      // The cached config advertised a route the server no longer grants: drop
+      // it so the next recording refetches instead of retrying a denied route.
+      if (res.code === "FEATURE_NOT_ENABLED") this.invalidateSttConfig();
+      this.streamingFallbackReason = fallbackReason;
+      logger.warn(
+        "Managed Orukeet session refused, falling back to batch recording",
+        { code: res.code, status: res.status, reason: fallbackReason },
+        "streaming"
+      );
+      return { needsFallback: true };
+    }
+    const err = new Error(res.error || "Failed to start streaming session");
+    err.code = res.code;
+    err.messageKey = res.messageKey;
+    err.networkCode = res.networkCode;
+    throw err;
+  }
+
+  // Why this cloud upload is batch instead of the managed Orukeet stream, for
+  // the rollout's fallback-rate metric. Cleared on read: it describes one recording.
+  consumeStreamingFallbackReason(settings) {
+    const reason = this.streamingFallbackReason;
+    this.streamingFallbackReason = null;
+    if (reason) return reason;
+    const route = resolveManagedOrukeetRoute({
+      settings,
+      sttConfig: this.sttConfig,
+      language: this.getEffectiveSttLanguage(settings),
+    });
+    return route === "language_unsupported" ? route : undefined;
+  }
+
   async startStreamingRecording(forceDefaultMic = false) {
     let acquiredStream = null;
     let usedPreparedCapture = false;
@@ -4490,6 +4574,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.stopRequestedDuringStreamingStart = false;
       sessionId = (this._streamingSessionGeneration || 0) + 1;
       this._streamingSessionGeneration = sessionId;
+      this.streamingFallbackReason = null;
       this._activeStreamingSessionId = sessionId;
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
@@ -4658,26 +4743,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           })
         );
 
-        if (!res.success) {
-          if (res.code === "NO_API") {
-            return { needsFallback: true };
-          }
-          if (res.code === "NETWORK_ERROR" && useLocalWhisper) {
-            this.onError?.({
-              code: "NETWORK_ERROR",
-              title: "streaming.errors.cloudUnreachable.title",
-              description: "Cloud unreachable — using local engine for this recording.",
-              messageKey: "streaming.errors.cloudUnreachable.fallback",
-            });
-            return { needsFallback: true };
-          }
-          const err = new Error(res.error || "Failed to start streaming session");
-          err.code = res.code;
-          err.messageKey = res.messageKey;
-          err.networkCode = res.networkCode;
-          throw err;
-        }
-        return res;
+        return this.classifyStreamingStartResult(res, { useLocalWhisper });
       });
       const tWs = performance.now();
       this._settleStreamingStart();
@@ -4690,11 +4756,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         await this.cleanupStreaming();
         if (ownsSession()) this._activeStreamingSessionId = null;
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
-        logger.debug(
-          "Streaming API not configured, falling back to regular recording",
-          {},
-          "streaming"
-        );
+        logger.debug("Streaming unavailable, falling back to regular recording", {}, "streaming");
         return this.startRecording();
       }
 
@@ -5332,6 +5394,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   {
                     durationSeconds,
                     analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+                    streamingFallbackReason: "stream_no_final",
                   },
                   wasCancelled
                 )

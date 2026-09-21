@@ -6,6 +6,12 @@
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
 import { isOrukeetStreaming } from "./selfHostedTranscription.js";
 import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
+import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
+
+export const ORUKEET_MODEL = "orukeet-v0.1.0";
+const ORUKEET_LANGUAGES = new Set(
+  modelRegistryData.parakeetModels[ORUKEET_MODEL].supportedLanguages
+);
 
 export const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
@@ -18,16 +24,32 @@ export function defaultStreamingProviderName(context) {
   return context === "notes" ? "deepgram" : "openai-realtime";
 }
 
-export function resolveStreamingProviderName({ settings, context, sttConfig }) {
+// The managed Orukeet route carries no language on the wire and the model
+// covers a fixed list, so an explicitly selected language outside it stays on
+// the batch path, the one route that honors the user's language end to end.
+// "auto" (the default) uses the model's own detection, as every other
+// streaming provider does.
+export function resolveManagedOrukeetRoute({ settings, sttConfig, language }) {
+  if (
+    settings.cloudTranscriptionMode !== "openwhispr" ||
+    sttConfig?.dictation?.mode !== "streaming" ||
+    sttConfig?.streamingProvider !== "orukeet"
+  ) {
+    return null;
+  }
+  if (!language || language === "auto") return "orukeet";
+  const base = language.split("-")[0].toLowerCase();
+  return ORUKEET_LANGUAGES.has(base) ? "orukeet" : "language_unsupported";
+}
+
+export function resolveStreamingProviderName({ settings, context, sttConfig, language }) {
   // The managed rollout must outrank a stale personal model selection. Notes
   // keep their separate provider contract; this endpoint is for dictation.
-  if (
-    context === "dictation" &&
-    settings.cloudTranscriptionMode === "openwhispr" &&
-    sttConfig?.dictation?.mode === "streaming" &&
-    sttConfig?.streamingProvider === "orukeet"
-  )
-    return "orukeet";
+  if (context === "dictation") {
+    const managedOrukeet = resolveManagedOrukeetRoute({ settings, sttConfig, language });
+    if (managedOrukeet === "orukeet") return "orukeet";
+    if (managedOrukeet === "language_unsupported") return defaultStreamingProviderName(context);
+  }
   if (isOrukeetStreaming(settings)) return "orukeet";
   if (settings.cloudTranscriptionProvider === "tinfoil") {
     return "tinfoil-realtime";
@@ -83,7 +105,7 @@ export function buildStreamingSessionOptions({
     options.preview = true;
   }
   if (providerName === "orukeet") {
-    options.model = "orukeet-v0.1.0";
+    options.model = ORUKEET_MODEL;
     if (options.mode === "byok") {
       options.baseUrl = settings.remoteTranscriptionUrl || settings.cloudTranscriptionBaseUrl;
     }

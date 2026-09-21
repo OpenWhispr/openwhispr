@@ -207,3 +207,139 @@ test("managed Orukeet rollout overrides stale personal provider and model withou
   setSettings({ cloudTranscriptionMode: "byok" });
   assert.equal(manager.getStreamingProviderName(), "openai-realtime");
 });
+
+const orukeetConfig = { dictation: { mode: "streaming" }, streamingProvider: "orukeet" };
+const managedSettings = (overrides) =>
+  setSettings({ cloudTranscriptionMode: "openwhispr", isSignedIn: true, ...overrides });
+
+test("managed Orukeet only streams languages the model covers", async (t) => {
+  const manager = await loadManager(t);
+  manager.sttConfig = orukeetConfig;
+
+  managedSettings({ preferredLanguage: "fr" });
+  assert.equal(manager.shouldUseStreaming(), true);
+  assert.equal(manager.getStreamingProviderName(), "orukeet");
+
+  managedSettings({ preferredLanguage: "ja" });
+  assert.equal(manager.shouldUseStreaming(), false);
+
+  managedSettings({ preferredLanguage: "auto" });
+  assert.equal(manager.shouldUseStreaming(), true);
+
+  managedSettings({ preferredLanguage: "fr", isSignedIn: false });
+  assert.equal(manager.shouldUseStreaming(), false);
+});
+
+test("a refused managed Orukeet session starts a batch recording instead of failing", async (t) => {
+  const manager = await loadManager(t);
+  manager.sttConfig = orukeetConfig;
+  managedSettings({ preferredLanguage: "fr" });
+  const errors = [];
+  manager.onError = (error) => errors.push(error);
+  const classify = (result) =>
+    manager.classifyStreamingStartResult(result, { useLocalWhisper: false });
+
+  assert.deepEqual(classify({ success: false, code: "FEATURE_NOT_ENABLED", status: 403 }), {
+    needsFallback: true,
+  });
+  // The cached config advertised a route the server no longer grants: drop it
+  // so the next recording refetches instead of retrying a denied route.
+  assert.equal(manager.sttConfig, null);
+  assert.equal(manager.streamingFallbackReason, "feature_disabled");
+
+  manager.sttConfig = orukeetConfig;
+  assert.deepEqual(classify({ success: false, status: 503 }), { needsFallback: true });
+  assert.equal(manager.sttConfig, orukeetConfig);
+  assert.equal(manager.streamingFallbackReason, "session_unavailable");
+
+  assert.throws(() => classify({ success: false, code: "POLICY_MODE_BLOCKED", status: 403 }), {
+    code: "POLICY_MODE_BLOCKED",
+  });
+  assert.throws(() => classify({ success: false, code: "AUTH_EXPIRED", status: 401 }), {
+    code: "AUTH_EXPIRED",
+  });
+  assert.equal(errors.length, 0);
+});
+
+test("a missing streaming API still falls back to batch for every provider", async (t) => {
+  const manager = await loadManager(t);
+  setSettings();
+  assert.deepEqual(
+    manager.classifyStreamingStartResult(
+      { success: false, code: "NO_API" },
+      { useLocalWhisper: false }
+    ),
+    { needsFallback: true }
+  );
+  assert.equal(manager.streamingFallbackReason, undefined);
+});
+
+test("the STT config goes stale after fifteen minutes and immediately when invalidated", async (t) => {
+  const manager = await loadManager(t);
+  assert.equal(manager.isSttConfigStale(), true);
+
+  manager.setSttConfig({ success: true, dictation: { mode: "batch" } });
+  const fetchedAt = manager.sttConfigFetchedAt;
+  assert.equal(manager.isSttConfigStale(fetchedAt), false);
+  assert.equal(manager.isSttConfigStale(fetchedAt + 14 * 60 * 1000), false);
+  assert.equal(manager.isSttConfigStale(fetchedAt + 15 * 60 * 1000 + 1), true);
+
+  manager.invalidateSttConfig();
+  assert.equal(manager.sttConfig, null);
+  assert.equal(manager.isSttConfigStale(fetchedAt), true);
+});
+
+test("a cloud upload reports why it was batch instead of the managed Orukeet stream", async (t) => {
+  const manager = await loadManager(t);
+  const originalNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...originalNavigator, onLine: true },
+    configurable: true,
+  });
+  t.after(() => {
+    Object.defineProperty(globalThis, "navigator", {
+      value: originalNavigator,
+      configurable: true,
+    });
+  });
+  manager.sttConfig = orukeetConfig;
+  const captured = [];
+  globalThis.window.electronAPI.cloudTranscribe = async (_audio, opts) => {
+    captured.push(opts.streamingFallbackReason);
+    return { success: false, error: "stop here" };
+  };
+  const upload = () =>
+    manager
+      .processWithOpenWhisprCloud(new Blob([new Uint8Array(16)], { type: "audio/webm" }))
+      .catch((error) => {
+        if (error.message !== "stop here") throw error;
+      });
+
+  // The language gate declined the stream.
+  managedSettings({ preferredLanguage: "ja" });
+  await upload();
+  // A refused session start, consumed by the one recording it describes.
+  managedSettings({ preferredLanguage: "fr" });
+  manager.streamingFallbackReason = "feature_disabled";
+  await upload();
+  await upload();
+  // The stream came up but produced no final; the stop path names that itself.
+  await manager
+    .processWithOpenWhisprCloud(new Blob([new Uint8Array(16)]), {
+      streamingFallbackReason: "stream_no_final",
+    })
+    .catch((error) => {
+      if (error.message !== "stop here") throw error;
+    });
+  // Batch by design (server config is not Orukeet) carries nothing.
+  manager.sttConfig = { dictation: { mode: "batch" }, streamingProvider: "deepgram" };
+  await upload();
+
+  assert.deepEqual(captured, [
+    "language_unsupported",
+    "feature_disabled",
+    undefined,
+    "stream_no_final",
+    undefined,
+  ]);
+});

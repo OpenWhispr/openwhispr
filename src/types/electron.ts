@@ -2325,6 +2325,8 @@ declare global {
           diarization?: boolean;
           localDate?: string;
           analyticsOccurredAt?: string;
+          // Why a managed-streaming user's dictation went batch (rollout metric).
+          streamingFallbackReason?: string;
         }
       ) => Promise<
         {
