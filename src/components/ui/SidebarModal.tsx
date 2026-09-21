@@ -249,10 +249,9 @@ export default function SidebarModal<T extends string>({
               {/* Main Content */}
               <div className="flex-1 overflow-y-auto bg-background dark:bg-surface-1">
                 <SettingsLayoutProvider value={{ isCompact }}>
-                  {/* The notice pill and close button float over this column's top corner. */}
-                  <div className={`${isCompact ? "p-4" : "p-6"} ${notice ? "pt-14" : ""}`}>
-                    {children}
-                  </div>
+                  {/* The notice pill and close button float over this column's top corner
+                      (top-4, 26px tall); pt-[22px] centres a text-xs heading (line-height 1.15) on that row. */}
+                  <div className={`${isCompact ? "p-4" : "p-6"} pt-[22px]`}>{children}</div>
                 </SettingsLayoutProvider>
               </div>
             </div>
