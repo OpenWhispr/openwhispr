@@ -280,6 +280,83 @@ test("countPromptTokens returns null when the server cannot measure", async () =
   );
 });
 
+// --- reading the reply ---------------------------------------------------
+//
+// With thinking on, `reasoning_content` is the reasoning, not the answer (#2187).
+
+const MESSAGES = [{ role: "user", content: "hi" }];
+
+// Stubs one chat completion and records the request bodies it receives.
+function withReply(message, finishReason = "stop") {
+  const requests = [];
+  const run = withStubServer({
+    "/v1/chat/completions": (body) => {
+      requests.push(JSON.parse(body));
+      return { payload: { choices: [{ message, finish_reason: finishReason }] } };
+    },
+  });
+  return { run, requests };
+}
+
+const TRUNCATED = { code: "OUTPUT_TRUNCATED" };
+
+test("reasoning never stands in for the answer when thinking was requested", async () => {
+  const reasoningOnly = { content: "", reasoning_content: "Thinking Process:\n\n1. Analyze" };
+
+  // Cut off mid-reasoning: there is no answer to return, so every caller gets
+  // the truncation error rather than an empty string it would have to explain.
+  const truncated = withReply(reasoningOnly, "length");
+  await truncated.run(async (manager) => {
+    await assert.rejects(manager.inference(MESSAGES, { disableThinking: false }), TRUNCATED);
+    const strict = { disableThinking: false, requireCompleteOutput: true };
+    await assert.rejects(manager.inference(MESSAGES, strict), TRUNCATED);
+  });
+  assert.equal(truncated.requests[0].chat_template_kwargs, undefined);
+
+  // Finished with no answer: reaches strict callers such as dictation cleanup too.
+  const finished = withReply(reasoningOnly, "stop");
+  await finished.run(async (manager) => {
+    const options = { disableThinking: false, requireCompleteOutput: true };
+    assert.equal(await manager.inference(MESSAGES, options), "");
+  });
+});
+
+test("a cut-off reply with no content is truncated even when thinking was suppressed", async () => {
+  // gpt-oss ignores enable_thinking and reasons into reasoning_content anyway;
+  // a budget spent entirely there is a cut-off reply, not a misrouted answer.
+  const analysisOnly = withReply({ content: "", reasoning_content: "analysis..." }, "length");
+  await analysisOnly.run(async (manager) => {
+    await assert.rejects(manager.inference(MESSAGES, { disableThinking: true }), TRUNCATED);
+  });
+});
+
+test("a cut-off reply that has content is still returned to lenient callers", async () => {
+  // Only requireCompleteOutput callers reject a partial answer (#2130).
+  const partial = withReply({ content: "Cleaned te", reasoning_content: "" }, "length");
+  await partial.run(async (manager) => {
+    assert.equal(await manager.inference(MESSAGES, { disableThinking: true }), "Cleaned te");
+    await assert.rejects(manager.inference(MESSAGES, { requireCompleteOutput: true }), TRUNCATED);
+  });
+});
+
+test("an answer routed into reasoning_content with thinking suppressed is still returned", async () => {
+  // Some llama-server builds do this despite enable_thinking: false (#809).
+  const misrouted = withReply({ content: "", reasoning_content: "Cleaned text." });
+  await misrouted.run(async (manager) => {
+    assert.equal(await manager.inference(MESSAGES, { disableThinking: true }), "Cleaned text.");
+    assert.equal(await manager.inference(MESSAGES, {}), "Cleaned text.");
+  });
+  assert.deepEqual(misrouted.requests[0].chat_template_kwargs, { enable_thinking: false });
+});
+
+test("content is returned over reasoning_content whether or not thinking was on", async () => {
+  const both = withReply({ content: "Cleaned text.", reasoning_content: "Thinking Process:" });
+  await both.run(async (manager) => {
+    assert.equal(await manager.inference(MESSAGES, { disableThinking: false }), "Cleaned text.");
+    assert.equal(await manager.inference(MESSAGES, {}), "Cleaned text.");
+  });
+});
+
 // --- Vulkan context step-down --------------------------------------------
 //
 // Sizing the context to the request is bounded by SYSTEM RAM, but a discrete
