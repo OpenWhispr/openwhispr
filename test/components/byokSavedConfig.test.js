@@ -12,9 +12,6 @@ const {
 // resumeState and have to reopen on what the user already saved.
 
 const MIGRATED = { _providerSettingsMigrated: "1", uploadTranscriptionMigrated: "true" };
-// Saving a key schedules its secret write (250 ms) and a .env persist (1 s); outlast
-// both before the globals go.
-const SECRET_SAVE_SETTLE_MS = 1100;
 const PLACEHOLDER = {
   endpoint: "onboarding.rehaul.provider.endpointPlaceholder",
   selfHostedKey: "onboarding.rehaul.provider.optional",
@@ -69,6 +66,25 @@ async function mountByokStep(
   // the globals are gone would run the step's cleanup without a window.
   let unmount = async () => {};
   t.after(() => unmount());
+  // Saving a key schedules its secret write and a .env persist; those would run
+  // against a window that is already gone, so whatever is still pending is dropped
+  // rather than waited out.
+  const pendingTimers = new Set();
+  const { setTimeout: realSetTimeout, clearTimeout: realClearTimeout } = globalThis;
+  globalThis.setTimeout = (...args) => {
+    const id = realSetTimeout(...args);
+    pendingTimers.add(id);
+    return id;
+  };
+  globalThis.clearTimeout = (id) => {
+    pendingTimers.delete(id);
+    realClearTimeout(id);
+  };
+  t.after(() => {
+    for (const id of pendingTimers) realClearTimeout(id);
+    globalThis.setTimeout = realSetTimeout;
+    globalThis.clearTimeout = realClearTimeout;
+  });
   installBrowserGlobals(t, {
     initialStorage: { ...MIGRATED, ...settings },
     window: { electronAPI: { getPlatform: () => "linux" }, dispatchEvent: () => true },
@@ -98,6 +114,7 @@ async function mountByokStep(
 
   let tree;
   const drafts = [];
+  const selfHostedChanges = [];
   function Harness() {
     // Run the real component and hooks, leaving native controls unmounted: the
     // returned element tree and the persisted draft are the test boundary.
@@ -105,7 +122,7 @@ async function mountByokStep(
       stepId,
       selfHostedRequested,
       resumeState,
-      onSelfHostedChange() {},
+      onSelfHostedChange: (requested) => selfHostedChanges.push(requested),
       onConnectionChange() {},
       onProceed() {},
       onResumeStateChange: (draft) => drafts.push(draft),
@@ -128,6 +145,7 @@ async function mountByokStep(
     find((node) => node.props?.children === "onboarding.rehaul.provider.proceed")[0];
   return {
     vite,
+    selfHostedChanges,
     state: () => useSettingsStore.getState(),
     setStore: (patch) => act(() => useSettingsStore.setState(patch)),
     value: (placeholder) => input(placeholder)?.props.value,
@@ -140,6 +158,12 @@ async function mountByokStep(
       ),
     toggleSelfHosted: () =>
       act(() => find((node) => node.props?.role === "checkbox")[0].props.onClick()),
+    chooseProvider: (providerId) =>
+      act(() =>
+        find((node) => typeof node.props?.onValueChange === "function")[0].props.onValueChange(
+          providerId
+        )
+      ),
     passConnectionTest: () =>
       act(() =>
         find((node) => typeof node.props?.onSuccessChange === "function")[0].props.onSuccessChange(
@@ -147,10 +171,7 @@ async function mountByokStep(
         )
       ),
     proceedDisabled: () => proceedButton().props.disabled,
-    proceed: async () => {
-      await act(() => proceedButton().props.onClick());
-      await new Promise((resolve) => setTimeout(resolve, SECRET_SAVE_SETTLE_MS));
-    },
+    proceed: () => act(() => proceedButton().props.onClick()),
     // Unmounting flushes the debounced draft write, as advancing past the step does.
     unmountForDrafts: async () => {
       await unmount();
@@ -367,7 +388,6 @@ test("a saved hosted assistant provider reopens with its model and key", async (
 test("a self-hosted assistant setup ignores a leftover agent key", async (t) => {
   const step = await mountByokStep(t, {
     stepId: "byok-assistant",
-    selfHostedRequested: true,
     // Saved as a hosted provider, so the abandoned self-hosted key is not this
     // endpoint's: offering it would send it to the server the user is about to type.
     settings: {
@@ -377,6 +397,7 @@ test("a self-hosted assistant setup ignores a leftover agent key", async (t) => 
     },
     secrets: { chatAgentCustomApiKey: "sk-abandoned-agent-key" },
   });
+  await step.toggleSelfHosted();
   assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
 
   // Secrets hydrate over IPC, so a key arriving after mount must stay out too.
@@ -488,12 +509,101 @@ test("an in-progress draft wins over saved settings, and a blank one falls back 
   });
 });
 
-test("switching modes keeps both halves of the form and swaps only the key", async (t) => {
+test("with no draft, the saved setup picks the card, whichever tile was clicked", async (t) => {
+  // Restarting onboarding wipes the session, so the tile clicked on setup-choice is the
+  // only mode on record; a reverse-proxy user who clicks "Bring your own key" must still
+  // land on their endpoint (#2128).
+  await t.test("a saved custom endpoint opens self-hosted from the BYOK tile", async (t) => {
+    const step = await mountByokStep(t, {
+      selfHostedRequested: false,
+      settings: CUSTOM_ENDPOINT,
+      secrets: { customTranscriptionApiKey: "sk-custom-key" },
+    });
+    assert.equal(step.value(PLACEHOLDER.endpoint), "https://stt.example.com/v1");
+    assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-custom-key");
+    assert.deepEqual(step.selfHostedChanges, [true], "the session follows the card");
+  });
+
+  await t.test("a saved hosted provider opens hosted from the Self-hosted tile", async (t) => {
+    const step = await mountByokStep(t, { selfHostedRequested: true, settings: HOSTED_GROQ });
+    assert.deepEqual(step.selectValues(), ["groq", "whisper-large-v3-turbo"]);
+    assert.deepEqual(step.selfHostedChanges, [false]);
+  });
+
+  await t.test("a self-hosted assistant opens self-hosted behind a hosted dictation", async (t) => {
+    const step = await mountByokStep(t, {
+      stepId: "byok-assistant",
+      selfHostedRequested: false,
+      settings: {
+        ...HOSTED_GROQ,
+        chatAgentMode: "self-hosted",
+        chatAgentProvider: "custom",
+        chatAgentRemoteUrl: "http://10.0.0.7:8080/v1",
+        chatAgentModel: "qwen3-8b",
+      },
+    });
+    assert.equal(step.value(PLACEHOLDER.endpoint), "http://10.0.0.7:8080/v1");
+    assert.equal(step.value(PLACEHOLDER.modelId), "qwen3-8b");
+    assert.deepEqual(step.selfHostedChanges, [true]);
+  });
+
+  await t.test("a draft keeps the card the session recorded", async (t) => {
+    const step = await mountByokStep(t, {
+      selfHostedRequested: false,
+      settings: CUSTOM_ENDPOINT,
+      resumeState: {
+        selectedProvider: "groq",
+        selectedModel: "whisper-large-v3-turbo",
+        baseUrl: "https://stt.example.com/v1",
+        customModel: "parasail-whisper",
+      },
+    });
+    assert.deepEqual(step.selectValues(), ["groq", "whisper-large-v3-turbo"]);
+    assert.deepEqual(step.selfHostedChanges, []);
+  });
+});
+
+test("the saved key still matches an endpoint typed with a differently cased host", async (t) => {
   const step = await mountByokStep(t, {
     selfHostedRequested: true,
+    settings: CUSTOM_ENDPOINT,
+    secrets: { customTranscriptionApiKey: "sk-custom-key" },
+    resumeState: {
+      selectedProvider: "",
+      selectedModel: "",
+      baseUrl: "HTTPS://STT.Example.com/v1/",
+      customModel: "parasail-whisper",
+    },
+  });
+  assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-custom-key");
+});
+
+test("a hosted save clears the Settings self-hosted server so it cannot resurface", async (t) => {
+  const step = await mountByokStep(t, {
+    selfHostedRequested: true,
+    settings: SETTINGS_SELF_HOSTED,
+    secrets: { groqApiKey: "gsk-saved-key" },
+  });
+  await step.toggleSelfHosted();
+  await step.chooseProvider("groq");
+  await step.passConnectionTest();
+  await step.proceed();
+
+  assert.equal(step.state().cloudTranscriptionProvider, "groq");
+  assert.equal(step.state().remoteTranscriptionUrl, "");
+
+  const route = await routeAfterOnboardingSave(step);
+  assert.equal(route.provider, "groq");
+});
+
+test("switching modes keeps both halves of the form and swaps only the key", async (t) => {
+  const step = await mountByokStep(t, {
     settings: HOSTED_GROQ,
     secrets: { groqApiKey: "gsk-saved-key", customTranscriptionApiKey: "sk-custom-key" },
   });
+  assert.equal(step.value(PLACEHOLDER.hostedKey), "gsk-saved-key");
+
+  await step.toggleSelfHosted();
   // What is saved is a hosted provider, so the stored custom key is not this endpoint's.
   assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
   await step.type(PLACEHOLDER.endpoint, "https://typed.example.com/v1");
@@ -528,10 +638,10 @@ test("a key that loads after mount fills an empty field but never replaces typed
 
 test("policy removing self-hosting mid-step keeps the hosted half and loads its key", async (t) => {
   const step = await mountByokStep(t, {
-    selfHostedRequested: true,
     settings: HOSTED_GROQ,
     secrets: { groqApiKey: "gsk-saved-key", customTranscriptionApiKey: "sk-custom-key" },
   });
+  await step.toggleSelfHosted();
   assert.equal(step.value(PLACEHOLDER.selfHostedKey), "");
 
   await applyTranscriptionPolicy(step, {
@@ -571,13 +681,13 @@ test("a seeded provider that policy removes after mount cannot be saved", async 
 
 test("a key-less endpoint saved over a hosted setup keeps its model and routes to it", async (t) => {
   const step = await mountByokStep(t, {
-    selfHostedRequested: true,
     settings: {
       ...HOSTED_GROQ,
       cloudTranscriptionProvider: "openai",
       cloudTranscriptionModel: "gpt-4o-mini-transcribe",
     },
   });
+  await step.toggleSelfHosted();
   const customBaseUrl = step.state().cloudTranscriptionBaseUrl;
   await step.type(PLACEHOLDER.endpoint, "http://127.0.0.1:8791/v1");
   await step.type(PLACEHOLDER.modelId, "whisper-proxy-test");
