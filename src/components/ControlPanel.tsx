@@ -2,6 +2,8 @@ import React, { Suspense, useState, useEffect, useRef, useCallback } from "react
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
+import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
+import { cn } from "./lib/utils";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Download, RefreshCw, Loader2, AlertTriangle, Zap } from "./icons";
 import UpgradePrompt from "./UpgradePrompt";
@@ -1063,7 +1065,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             />
             <div className="scrollbar-hidden flex-1 overflow-y-auto">
               {updateRequiredByOrg && (
-                <div className="max-w-3xl mx-auto w-full mb-3">
+                <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
                   <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
@@ -1088,7 +1090,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               )}
               <RequiredModelsBanner />
               {usage?.isPastDue && activeView === "home" && (
-                <div className="max-w-3xl mx-auto w-full mb-3">
+                <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
                   <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
@@ -1122,7 +1124,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               {(gpuAccelAvailable.transcription || gpuAccelAvailable.intelligence) &&
                 activeView === "home" &&
                 !gpuBannerDismissed && (
-                  <div className="max-w-3xl mx-auto w-full mb-3">
+                  <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
                     <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
                       <div className="flex items-start gap-3">
                         <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">

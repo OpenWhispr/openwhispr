@@ -1,0 +1,20 @@
+{
+  "name": "parakeet-asr",
+  "version": "1.0.0",
+  "description": "On-device ASR over FluidAudio's Parakeet TDT CoreML models (16kHz mono WAV -> transcript, word timings, download/prepare lifecycle). Also hosts the dev benchmark memory probes.",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "expo-module build",
+    "clean": "expo-module clean",
+    "lint": "expo-module lint",
+    "test": "expo-module test"
+  },
+  "devDependencies": {
+    "expo-module-scripts": "^3.0.0"
+  },
+  "peerDependencies": {
+    "expo": "*"
+  },
+  "private": true
+}

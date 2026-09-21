@@ -882,6 +882,9 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 - **Launch at login**: `HKCU\...\Run` entry written by Electron, named after the AppUserModelId, carrying `--hidden` so a login launch goes to the tray
   - Read the state from `executableWillLaunchAtLogin`; `openAtLogin` misses a startup app disabled from Task Manager or Settings
   - `resources/nsis/installer.nsh` removes the `Run` and `StartupApproved\Run` values on uninstall (but not on update), which Electron itself never cleans up
+- **Tray identity**: signed production builds pass a permanent GUID to `new Tray()` (`tray.js`) so Windows keeps the user's tray placement across updates. Never change the GUID
+  - Windows binds an unsigned executable's GUID to its path, so the GUID is gated on the `windowsTrayIdentity` marker that `electron-builder.json` injects through `extraMetadata`
+  - `electron-builder.json` forces Windows code signing; unsigned Windows builds (PR CI, local) must use `electron-builder.unsigned-win.json`, which clears the marker. Never run the `win-unpacked` a failed signed build leaves behind: it carries the marker and may be unsigned
 - **Push-to-Talk**: Native key listener binary (`windows-key-listener.exe`) enables true push-to-talk
   - Uses Windows Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)
   - Supports compound hotkeys (e.g., `Ctrl+Shift+F11`)
