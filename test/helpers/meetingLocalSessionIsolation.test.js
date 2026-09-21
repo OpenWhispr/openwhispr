@@ -66,9 +66,13 @@ function anything() {
   });
 }
 
-// Mirrors ipcHandlers.js; the watchdog's interval must not tick with it.
+// LOCAL_MEETING_CHUNK_INTERVAL_MS in ipcHandlers.js. Ticks fire only the local
+// transcription timer, not the other intervals a start registers.
 const LOCAL_MEETING_CHUNK_INTERVAL_MS = 5000;
-const UTTERANCES = { 8000: "alpha-one", 8200: "alpha-two", 9000: "bravo" };
+const SAMPLE_BY_WORD = { "alpha-one": 8000, "alpha-two": 8200, bravo: 9000 };
+const WORD_BY_SAMPLE = Object.fromEntries(
+  Object.entries(SAMPLE_BY_WORD).map(([word, sample]) => [sample, word])
+);
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -103,7 +107,7 @@ function scenario(t) {
         decodeCount++;
         const heard = new Set();
         for (let i = 44; i < wav.length; i += 2) {
-          const word = UTTERANCES[wav.readInt16LE(i)];
+          const word = WORD_BY_SAMPLE[wav.readInt16LE(i)];
           if (word) heard.add(word);
         }
         if (decodeCount === 1) await firstDecode.promise;
@@ -124,15 +128,16 @@ function scenario(t) {
   owner.isDestroyed = () => false;
   const invoke = (channel, ...args) => handlers.get(channel)({ sender: owner }, ...args);
   const say = (word) => {
-    const value = Number(Object.keys(UTTERANCES).find((key) => UTTERANCES[key] === word));
     const pcm = Buffer.alloc(4800);
-    for (let i = 0; i < pcm.length; i += 2) pcm.writeInt16LE(value, i);
+    for (let i = 0; i < pcm.length; i += 2) pcm.writeInt16LE(SAMPLE_BY_WORD[word], i);
     listeners.get("meeting-transcription-send")({}, pcm, "system");
   };
   const tick = () => {
-    for (const { callback, delay } of timers.values()) {
-      if (delay === LOCAL_MEETING_CHUNK_INTERVAL_MS) callback();
-    }
+    const local = [...timers.values()].filter(
+      ({ delay }) => delay === LOCAL_MEETING_CHUNK_INTERVAL_MS
+    );
+    assert.equal(local.length, 1, "expected one local transcription timer");
+    local[0].callback();
   };
   return {
     diarized,
