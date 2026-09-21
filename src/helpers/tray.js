@@ -5,7 +5,9 @@ const debugLogger = require("./debugLogger");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 
-// Keep this identity stable so macOS can restore the user's chosen position.
+// macOS saves the menu-bar position under this GUID, so changing it resets every
+// user's placement. Electron lowercases the GUID before handing it to macOS, so
+// it stays lowercase here or the position key below matches no item.
 const MACOS_TRAY_GUID = "eb809902-04b5-5b08-b12a-f81d6f27e185";
 const MACOS_TRAY_POSITION_KEY = `NSStatusItem Preferred Position ${MACOS_TRAY_GUID}`;
 
@@ -143,16 +145,11 @@ class TrayManager {
       }
 
       if (process.platform === "darwin") {
-        try {
-          // Best-effort AppKit preference; registration preserves saved user positions.
-          systemPreferences.registerDefaults({ [MACOS_TRAY_POSITION_KEY]: 0 });
-        } catch (error) {
-          debugLogger.warn(
-            "Could not register the default macOS tray position",
-            { error: error?.message },
-            "tray"
-          );
-        }
+        // The position key is an undocumented AppKit default, so placement is best
+        // effort. Position 0 starts the icon as far right as macOS allows, beside
+        // the system icons. A registered default only fills in for a missing value,
+        // so once the user drags the icon, their saved position wins.
+        systemPreferences.registerDefaults({ [MACOS_TRAY_POSITION_KEY]: 0 });
         this.tray = new Tray(trayIcon, MACOS_TRAY_GUID);
         this.tray.setIgnoreDoubleClickEvents(true);
       } else {
