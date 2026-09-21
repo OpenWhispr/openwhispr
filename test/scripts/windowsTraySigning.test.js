@@ -11,6 +11,7 @@ const sourceMetadata = require("../../package.json");
 const MARKER = "signed-production-v1";
 
 function makeContext(config, metadata = sourceMetadata, platform = "win32") {
+  const appOutDir = path.join(projectDir, "dist", "win-unpacked");
   const packager = {
     info: { metadata: deepAssign({}, metadata, config.extraMetadata) },
     platformSpecificBuildOptions: config.win,
@@ -18,7 +19,7 @@ function makeContext(config, metadata = sourceMetadata, platform = "win32") {
     appInfo: { productFilename: "OpenWhispr" },
     shouldSignFile: WinPackager.prototype.shouldSignFile,
   };
-  return { electronPlatformName: platform, packager };
+  return { appOutDir, electronPlatformName: platform, packager };
 }
 
 test("the real signed configuration injects the marker and requires signing", async () => {
@@ -60,6 +61,18 @@ test("marked Windows output rejects every executable signing bypass", async () =
   }
 });
 
+test("marked Windows output rejects a path-specific main executable exclusion", async () => {
+  const base = await getConfig(projectDir, "electron-builder.json");
+  const executableSuffix = path.join(path.sep, "OpenWhispr.exe");
+  const config = deepAssign({}, base, {
+    win: { signExts: [`!${executableSuffix}`] },
+  });
+  assert.throws(
+    () => verifyWindowsTraySigning(makeContext(config)),
+    /tray identity requires enforced executable signing/
+  );
+});
+
 test("a marker in effective source metadata cannot bypass the guard", () => {
   const context = makeContext(
     { win: { forceCodeSigning: false } },
@@ -87,4 +100,13 @@ test("normal positive executable signing patterns remain allowed", async () => {
     const config = deepAssign({}, base, { win: { signExts } });
     assert.doesNotThrow(() => verifyWindowsTraySigning(makeContext(config)));
   }
+});
+
+test("a path-specific main executable inclusion overrides a broad exclusion", async () => {
+  const base = await getConfig(projectDir, "electron-builder.json");
+  const executableSuffix = path.join(path.sep, "OpenWhispr.exe");
+  const config = deepAssign({}, base, {
+    win: { signExts: ["!.exe", executableSuffix] },
+  });
+  assert.doesNotThrow(() => verifyWindowsTraySigning(makeContext(config)));
 });

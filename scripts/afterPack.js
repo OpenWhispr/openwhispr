@@ -310,7 +310,10 @@ function verifyWindowsTraySigning(context) {
     packager.forceCodeSigning !== true ||
     options.signExecutable === false ||
     options.signAndEditExecutable === false ||
-    !packager.shouldSignFile(`${packager.appInfo.productFilename}.exe`, true)
+    !packager.shouldSignFile(
+      path.join(context.appOutDir, `${packager.appInfo.productFilename}.exe`),
+      true
+    )
   ) {
     throw new Error(
       "afterPack: signed-production-v1 Windows tray identity requires enforced executable signing; use electron-builder.unsigned-win.json for unsigned builds"

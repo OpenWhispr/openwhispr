@@ -47,7 +47,7 @@ Work only in `/Users/joshuadavidpadoa/dev/openwhispr-windows-tray-identity-20260
 - Consumes: `main.js` sets `process.env.OPENWHISPR_CHANNEL` to its resolved channel before requiring `src/helpers/tray.js`.
 - Consumes: packaged `package.json.windowsTrayIdentity`, injected from effective `extraMetadata`.
 - Produces: `verifyWindowsTraySigning(context): void`, named export from `scripts/afterPack.js`; it throws for marked Windows output whose main executable may bypass enforced signing.
-- Uses builder 26.15.3's actual hook context: `context.electronPlatformName`, `context.packager.info.metadata`, `context.packager.forceCodeSigning`, `context.packager.platformSpecificBuildOptions`, `context.packager.appInfo.productFilename`, and `context.packager.shouldSignFile(filename, true)`.
+- Uses builder 26.15.3's actual hook context: `context.electronPlatformName`, `context.appOutDir`, `context.packager.info.metadata`, `context.packager.forceCodeSigning`, `context.packager.platformSpecificBuildOptions`, `context.packager.appInfo.productFilename`, and `context.packager.shouldSignFile(fullExecutablePath, true)`.
 - Preserves: `TrayManager` constructor, `createTray()` signature, existing exports, menus, and events.
 
 - [x] **Step 1: Confirm the isolated branch and read the local patterns.**
@@ -247,6 +247,7 @@ const sourceMetadata = require("../../package.json");
 const MARKER = "signed-production-v1";
 
 function makeContext(config, metadata = sourceMetadata, platform = "win32") {
+  const appOutDir = path.join(projectDir, "dist", "win-unpacked");
   const packager = {
     info: { metadata: deepAssign({}, metadata, config.extraMetadata) },
     platformSpecificBuildOptions: config.win,
@@ -254,7 +255,7 @@ function makeContext(config, metadata = sourceMetadata, platform = "win32") {
     appInfo: { productFilename: "OpenWhispr" },
     shouldSignFile: WinPackager.prototype.shouldSignFile,
   };
-  return { electronPlatformName: platform, packager };
+  return { appOutDir, electronPlatformName: platform, packager };
 }
 
 test("the real signed configuration injects the marker and requires signing", async () => {
@@ -296,6 +297,18 @@ test("marked Windows output rejects every executable signing bypass", async () =
   }
 });
 
+test("marked Windows output rejects a path-specific main executable exclusion", async () => {
+  const base = await getConfig(projectDir, "electron-builder.json");
+  const executableSuffix = path.join(path.sep, "OpenWhispr.exe");
+  const config = deepAssign({}, base, {
+    win: { signExts: [`!${executableSuffix}`] },
+  });
+  assert.throws(
+    () => verifyWindowsTraySigning(makeContext(config)),
+    /tray identity requires enforced executable signing/
+  );
+});
+
 test("a marker in effective source metadata cannot bypass the guard", () => {
   const context = makeContext(
     { win: { forceCodeSigning: false } },
@@ -323,6 +336,15 @@ test("normal positive executable signing patterns remain allowed", async () => {
     const config = deepAssign({}, base, { win: { signExts } });
     assert.doesNotThrow(() => verifyWindowsTraySigning(makeContext(config)));
   }
+});
+
+test("a path-specific main executable inclusion overrides a broad exclusion", async () => {
+  const base = await getConfig(projectDir, "electron-builder.json");
+  const executableSuffix = path.join(path.sep, "OpenWhispr.exe");
+  const config = deepAssign({}, base, {
+    win: { signExts: ["!.exe", executableSuffix] },
+  });
+  assert.doesNotThrow(() => verifyWindowsTraySigning(makeContext(config)));
 });
 ```
 
@@ -386,7 +408,10 @@ function verifyWindowsTraySigning(context) {
     packager.forceCodeSigning !== true ||
     options.signExecutable === false ||
     options.signAndEditExecutable === false ||
-    !packager.shouldSignFile(`${packager.appInfo.productFilename}.exe`, true)
+    !packager.shouldSignFile(
+      path.join(context.appOutDir, `${packager.appInfo.productFilename}.exe`),
+      true
+    )
   ) {
     throw new Error(
       "afterPack: signed-production-v1 Windows tray identity requires enforced executable signing; use electron-builder.unsigned-win.json for unsigned builds"
@@ -480,13 +505,17 @@ Execution evidence, 2026-09-21:
 - Runtime RED: `node --test test/helpers/windowsTrayIdentity.test.js` ran 5 tests; 4 passed and the marked packaged production Windows case failed only because the constructor received the image without `9afd9bd5-53da-42ef-8334-6e2b494c66fe`.
 - Build-contract RED: after replacing the circular deep import with the installed package's public `WinPackager` export, `node --test test/scripts/windowsTraySigning.test.js` loaded both real configurations and ran 6 tests; all 6 failed on the missing marker, unsigned override, or signing guard.
 - Focused GREEN: the six-file tray, Dock, and packaging command passed 22/22 tests. `npm run quality-check` passed with the 6 pre-existing warnings.
-- Full suite: `npm test` ran 4,715 tests; 4,701 passed, 1 failed, 12 skipped, and 1 remains todo. The sole failure was the unrelated load-sensitive cleanup in `modelManagerBridgeDownloadStatus.test.js` (`ENOTEMPTY` removing a temporary `.cache` directory); its file passed 11/11 when rerun alone.
+- Full suite: the original `npm test` run ran 4,715 tests; 4,701 passed, 1 failed, 12 skipped, and 1 remains todo. The sole failure was the unrelated load-sensitive cleanup in `modelManagerBridgeDownloadStatus.test.js` (`ENOTEMPTY` removing a temporary `.cache` directory); its file passed 11/11 when rerun alone. The parent independently reran `node --import tsx --test --test-concurrency=4 'test/**/*.test.js'` at `09dc1a9c`: 4,715 total, 4,702 passed, 0 failed, 12 skipped, 1 todo, exit 0 (`/tmp/ow-windows-tray-full-tests-parent.log`).
+- Independent review: requested repair because the signing guard checked a basename while builder filters and signs the full executable path. The parent reproduced the mismatch with builder's real `shouldSignFile` and `signIf`, then ruled that the binding marked-output contract requires the full path. The review also requested clearer wording for missing/unknown values at the tray selection point.
+- Repair RED: `node --test test/scripts/windowsTraySigning.test.js` ran 8 tests; 6 passed. The new path-specific exclusion case failed because the guard accepted it, and the path-specific positive override case failed because the guard rejected it.
+- Repair GREEN: after using `path.join(context.appOutDir, productFilename + ".exe")`, the six-file tray, Dock, and packaging command passed 24/24 tests. Named-file Prettier made no further changes. `npm run quality-check` passed with the same 6 existing warnings.
 - No Windows 10/11 session, signed artifact, signature subject verification, install/portable update pair, reboot, or tray visibility/order persistence observation was available. Native acceptance remains unverified and the PR must remain draft.
 
 ### Native acceptance and subsequent specialist stages
 
-- [ ] **Independent deep review:** hand the final diff, spec, plan, and exact results to the fresh review specialist. Prioritize unsigned path safety, effective builder metadata, signing exclusion behavior, channel isolation, installed/portable identity, and unchanged other platforms. The reviewer does not implement fixes.
-- [ ] **Separate fixes:** give any concrete findings to the separate fixes specialist; reproduce each with a meaningful regression test before fixing it and rerun affected checks. If no findings exist, record that no fixes were needed.
+- [x] **Independent deep review:** the fresh reviewer checked the whole branch at `09dc1a9c` and requested repair of the basename/full-path signing-policy mismatch plus clarification of channel-resolution wording.
+- [x] **Separate fixes:** the repair specialist reproduced both directions of the full-path mismatch, changed the guard to builder's actual executable path, clarified resolved-channel wording, and reran the affected checks.
+- [ ] **Repair rereview:** a fresh reviewer must inspect the repair commit and focused evidence before the parent makes any readiness decision.
 - [ ] **Native acceptance:** execute the spec's Windows 10/11 matrix when real Windows and authorized signed candidates are available; otherwise leave it unverified and keep the PR draft. Neither unsigned PR CI nor macOS unit tests prove signed Windows persistence.
 
 On Windows, identify the actual running executable with the following PowerShell commands. Replace the process id with the one selected from the first command; this is attended evidence gathering, not a packaging or runtime dependency:
