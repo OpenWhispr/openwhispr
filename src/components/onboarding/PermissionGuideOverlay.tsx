@@ -26,7 +26,7 @@ export function PermissionGuideCard({ state, onAction, onDrag }: CardProps): Rea
 
   return (
     <section
-      className="permission-settings-overlay onboarding-canvas flex h-screen items-center gap-3 overflow-y-auto rounded-2xl border border-[var(--onboarding-control-border)] bg-[color-mix(in_srgb,var(--onboarding-surface)_88%,transparent)] px-4 py-3 text-[var(--onboarding-text-primary)]"
+      className="permission-settings-overlay onboarding-canvas flex h-screen items-center gap-3 overflow-y-auto rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-3 text-[var(--onboarding-text-primary)]"
       style={{ WebkitAppRegion: "drag" } as CSSProperties}
       aria-label="OpenWhispr"
     >

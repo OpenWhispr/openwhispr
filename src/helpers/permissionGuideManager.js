@@ -1,11 +1,22 @@
-const { app, BrowserWindow, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, ipcMain, nativeImage, screen } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const DevServerManager = require("./devServerManager");
 const debugLogger = require("./debugLogger");
+const { computeGuideBounds } = require("./permissionGuidePlacement");
+const { readSettingsWindowState } = require("./settingsWindowState");
 
 const PERMISSIONS = new Set(["microphone", "accessibility", "system-audio", "screen-context"]);
 const ACTIONS = new Set(["check", "settings", "close", "restart"]);
+const GUIDE_SIZE = { width: 560, height: 124 };
+const POLL_MS = 500;
+const SETTINGS_OWNERS = new Set(["System Settings", "System Preferences"]);
+// Dragging the dialog between displays drops it out of the window list for a
+// moment, so only a sustained disappearance counts as closed.
+const SETTINGS_MISSES_BEFORE_CLOSE = 2;
+// System Settings takes a moment to put its window up after the Enable click.
+// Showing before then is what made the overlay appear low and then jump.
+const SETTINGS_WAIT_ATTEMPTS = 6;
 
 function validState(state) {
   return (
@@ -28,14 +39,24 @@ function fromWindow(event, window) {
 }
 
 class PermissionGuideManager {
-  constructor(windowManager) {
+  constructor(windowManager, { wait } = {}) {
     this.windowManager = windowManager;
     this.window = null;
     this.owner = null;
     this.state = null;
     this.bundlePath = null;
     this.icon = null;
-    this.ownerGone = () => this.close(false, true);
+    this.wait = wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.sawSettings = false;
+    this.missedSettings = 0;
+    this.steppedAside = false;
+    this.pollTimer = null;
+    // macOS fires hide on occlusion as well as on a real hide, so the event
+    // alone cannot be trusted — the same trap documented for the Dock icon.
+    this.ownerGone = () => {
+      if (this.owner && !this.owner.isDestroyed() && this.owner.isVisible?.()) return;
+      this.close(false, true);
+    };
 
     ipcMain.handle("permission-guide-open", (event, state) => this.open(event, state));
     ipcMain.handle("permission-guide-update", (event, state) => {
@@ -114,8 +135,85 @@ class PermissionGuideManager {
         state[key],
       ])
     );
-    if (this.window && !this.window.isDestroyed())
+    if (this.window && !this.window.isDestroyed()) {
       this.window.webContents.send("permission-guide-state-changed", this.snapshot());
+    }
+  }
+
+  workAreaFor(rect) {
+    return screen.getDisplayMatching(rect).workArea;
+  }
+
+  // Anchored inside the System Settings window, falling back to the bottom of
+  // the display while that window has not appeared.
+  applyBounds(window, settings) {
+    // Keyed off the dialog, not the onboarding window: System Settings can open
+    // on a different display, and clamping to the onboarding window's screen
+    // strands the overlay away from the dialog it belongs to.
+    const bounds = computeGuideBounds({
+      settingsBounds: settings,
+      workArea: this.workAreaFor(settings ?? this.owner.getBounds()),
+      size: GUIDE_SIZE,
+    });
+    const current = window.getBounds();
+    if (current.x !== bounds.x || current.y !== bounds.y) window.setBounds(bounds);
+  }
+
+  async waitForSettings(window) {
+    let state = await readSettingsWindowState();
+    for (let attempt = 0; attempt < SETTINGS_WAIT_ATTEMPTS && !state?.settings; attempt++) {
+      await this.wait(POLL_MS);
+      if (this.window !== window || window.isDestroyed()) return null;
+      state = await readSettingsWindowState();
+    }
+    return state;
+  }
+
+  // One tick of the overlay's relationship with the settings window: follow it,
+  // step aside for an authorization prompt, and close with it.
+  async poll() {
+    const window = this.window;
+    const owner = this.owner;
+    if (!window || window.isDestroyed() || !owner || owner.isDestroyed()) return;
+
+    const state = await readSettingsWindowState();
+    // A failed read is unknown, not closed: acting on it would dismiss the
+    // overlay over a transient hiccup.
+    if (!state || this.window !== window || window.isDestroyed()) return;
+
+    if (state.settings) {
+      this.missedSettings = 0;
+      this.sawSettings = true;
+      this.applyBounds(window, state.settings);
+    } else if (this.sawSettings && ++this.missedSettings >= SETTINGS_MISSES_BEFORE_CLOSE) {
+      this.close(true, true);
+      return;
+    }
+
+    const aside = this.shouldStepAside(state);
+    if (aside === this.steppedAside) return;
+    this.steppedAside = aside;
+    if (aside) window.hide();
+    else window.showInactive();
+  }
+
+  // The overlay belongs to the settings dialog: it steps aside for an
+  // authorization prompt, and for any other app the user brings to the front.
+  shouldStepAside(state) {
+    if (state.authPrompt) return true;
+    if (!state.frontmost) return false;
+    return !SETTINGS_OWNERS.has(state.frontmost) && state.frontmost !== app.getName();
+  }
+
+  startPolling() {
+    this.stopPolling();
+    this.pollTimer = setInterval(() => void this.poll(), POLL_MS);
+  }
+
+  stopPolling() {
+    if (!this.pollTimer) return;
+    clearInterval(this.pollTimer);
+    this.pollTimer = null;
   }
 
   sendAction(action) {
@@ -142,18 +240,18 @@ class PermissionGuideManager {
     this.close();
     const owner = this.windowManager.controlPanelWindow;
     this.owner = owner;
-    const area = screen.getDisplayMatching(owner.getBounds()).workArea;
-    const width = Math.min(560, area.width);
-    const height = Math.min(140, area.height);
     const window = new BrowserWindow({
-      width,
-      height,
-      x: Math.round(area.x + (area.width - width) / 2),
-      y: Math.max(area.y, area.y + area.height - height - 24),
+      // Created at the fallback spot with no await between here and the
+      // this.window assignment below, so a second publish takes the early
+      // return above instead of tearing this window down. The anchored bounds
+      // are applied further down, while the window is still hidden.
+      ...computeGuideBounds({
+        settingsBounds: null,
+        workArea: this.workAreaFor(owner.getBounds()),
+        size: GUIDE_SIZE,
+      }),
       frame: false,
       transparent: true,
-      vibrancy: "hud",
-      visualEffectState: "active",
       backgroundColor: "#00000000",
       show: false,
       alwaysOnTop: true,
@@ -188,6 +286,13 @@ class PermissionGuideManager {
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
     try {
+      // Anchored before the load, so the overlay is already in place by the time
+      // showInactive() below makes it visible.
+      const settingsState = await this.waitForSettings(window);
+      if (this.window !== window || window.isDestroyed()) return false;
+      if (settingsState?.settings) this.sawSettings = true;
+      this.applyBounds(window, settingsState?.settings ?? null);
+
       if (app.isPackaged) {
         const executable = app.getPath("exe");
         const bundle = path.resolve(executable, "../../..");
@@ -196,7 +301,21 @@ class PermissionGuideManager {
           path.dirname(path.dirname(executable)) === path.join(bundle, "Contents") &&
           fs.existsSync(bundle)
         ) {
-          const icon = await app.getFileIcon(bundle, { size: "normal" });
+          // getFileIcon hands back a generic icon for a bundle LaunchServices
+          // has not registered, which is every unsigned local build, so the
+          // bundled icon file wins whenever it can be read. Downscaled because
+          // the snapshot carries it as a data URL on every state publish.
+          // The PNG, not icon.icns: nativeImage cannot read .icns and hands back
+          // an empty image, which silently drops us onto the generic icon.
+          const iconFile = process.resourcesPath
+            ? nativeImage.createFromPath(
+                path.join(process.resourcesPath, "src", "assets", "icon.png")
+              )
+            : null;
+          const icon =
+            iconFile && !iconFile.isEmpty()
+              ? iconFile.resize({ width: 64, height: 64 })
+              : await app.getFileIcon(bundle, { size: "normal" });
           if (this.window !== window || window.isDestroyed()) return false;
           if (!icon.isEmpty()) {
             this.bundlePath = bundle;
@@ -213,6 +332,7 @@ class PermissionGuideManager {
       if (this.window !== window || window.isDestroyed()) return false;
       window.webContents.send("permission-guide-state-changed", this.snapshot());
       window.showInactive();
+      this.startPolling();
       return true;
     } catch (error) {
       debugLogger.error("Could not open permission guide", { error: error.message });
@@ -224,12 +344,16 @@ class PermissionGuideManager {
   close(restore = false, notify = false) {
     const window = this.window;
     const owner = this.owner;
+    this.stopPolling();
     if (notify) this.sendAction("close");
     this.window = null;
     this.state = null;
     this.owner = null;
     this.bundlePath = null;
     this.icon = null;
+    this.sawSettings = false;
+    this.missedSettings = 0;
+    this.steppedAside = false;
     if (owner) {
       owner.removeListener("closed", this.ownerGone);
       owner.removeListener("hide", this.ownerGone);

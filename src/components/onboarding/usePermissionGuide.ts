@@ -52,7 +52,10 @@ export function usePermissionGuide(options: Options): {
     const refresh = (): void => {
       void guide.refresh();
     };
-    const timer = window.setInterval(refresh, 2000);
+    // Re-checked often enough that the overlay disappears as soon as the user
+    // grants the permission — dragging the app into the list enables it, and a
+    // slower loop reads as the overlay ignoring what you just did.
+    const timer = window.setInterval(refresh, 750);
     window.addEventListener("focus", refresh);
     if (latest.current.progress) void guide.start(undefined, latest.current.progress);
     return () => {
