@@ -65,8 +65,10 @@ export function useMenuDropdown(menuOptions?: BubbleMenuProps["options"]) {
   return { menuRef, container, open, setOpen, options };
 }
 
-/** A dropdown's onCloseAutoFocus: back to the editor, unless a note switch destroyed it. */
-export const refocusEditor = (editor: Editor) => (event: Event) => {
-  event.preventDefault();
-  if (!editor.isDestroyed) editor.commands.focus();
-};
+/** Restore focus only while the note is still editable and mounted. */
+export const refocusEditor =
+  (editor: Editor): ((event: Event) => void) =>
+  (event: Event): void => {
+    event.preventDefault();
+    if (!editor.isDestroyed && editor.isEditable) editor.commands.focus();
+  };

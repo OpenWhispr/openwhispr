@@ -112,8 +112,8 @@ export function RichTextEditor({
           "pb-[var(--floating-inset,0px)]"
         )}
       />
-      {editor && <RichTextEditorFormatMenu editor={editor} />}
-      {editor && <RichTextEditorTableMenu editor={editor} />}
+      {editor && !disabled && <RichTextEditorFormatMenu editor={editor} />}
+      {editor && !disabled && <RichTextEditorTableMenu editor={editor} />}
     </div>
   );
 }

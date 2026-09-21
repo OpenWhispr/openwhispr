@@ -653,11 +653,15 @@ async function mountNotes(t, markdown = `Intro\n\n${TABLE}\n\nAfter`) {
   }
   const editorRef = { current: null };
   let showOtherNote;
+  let setDisabled;
   let saved;
   function Note({ initial }) {
     const [value, setValue] = React.useState(initial);
+    const [disabled, updateDisabled] = React.useState(false);
+    setDisabled = updateDisabled;
     return React.createElement(RichTextEditor, {
       value,
+      disabled,
       onChange: (markdown) => {
         saved = markdown;
         setValue(markdown);
@@ -706,6 +710,7 @@ async function mountNotes(t, markdown = `Intro\n\n${TABLE}\n\nAfter`) {
     host,
     /** The Markdown the note last saved through onChange. */
     saved: () => saved,
+    setDisabled: (disabled) => setDisabled(disabled),
     showOtherNote: () => showOtherNote(),
   };
 }
@@ -915,3 +920,48 @@ test("a dropdown closes with the menu it lives in", async (t) => {
   );
   assert.deepEqual(notes.errors, []);
 });
+
+for (const menu of ["selection", "empty line", "table"]) {
+  test(`disabling the editor closes the ${menu} dropdown and re-enabling restores it`, async (t) => {
+    const notes = await mountNotes(t);
+    const openMenu = async () => {
+      if (menu === "table") {
+        await notes.act(() => notes.editor().commands.focus());
+        await openTableMenu(notes);
+      } else {
+        await notes.act(() => {
+          notes.editor().commands.focus();
+          notes
+            .editor()
+            .commands.setTextSelection(
+              menu === "selection" ? { from: 1, to: 6 } : notes.editor().state.doc.content.size - 1
+            );
+        }, 300);
+        await notes.act(() => pointerDown(byLabel("notes.editor.format.textStyle")));
+      }
+    };
+    if (menu === "empty line") await notes.act(() => addEmptyLastLine(notes.editor()));
+    await openMenu();
+    const actionKey =
+      menu === "table" ? "notes.editor.table.deleteTable" : "notes.editor.format.heading1";
+    assert.ok(menuItem(actionKey), "dropdown starts open");
+    const originalMarkdown = markdownOf(notes.editor());
+    const originalSaved = notes.saved();
+
+    await notes.act(() => notes.setDisabled(true));
+    assert.equal(notes.editor().isEditable, false);
+    assert.equal(!!menuItem(actionKey), false, "read-only notes offer no menu action");
+    assert.equal(toolbarCount(), 0);
+    assert.equal(isShown("notes.editor.table.actions"), false);
+    assert.notEqual(happyWindow.document.body.style.pointerEvents, "none");
+    assert.equal(markdownOf(notes.editor()), originalMarkdown);
+    assert.equal(notes.saved(), originalSaved, "disabling does not save a content change");
+
+    await notes.act(() => notes.setDisabled(false));
+    await openMenu();
+    await notes.act(() => menuItem(actionKey).click());
+    assert.notEqual(markdownOf(notes.editor()), originalMarkdown);
+    assert.equal(notes.saved().trim(), markdownOf(notes.editor()));
+    assert.deepEqual(notes.errors, []);
+  });
+}

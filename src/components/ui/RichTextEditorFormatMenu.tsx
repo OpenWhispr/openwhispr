@@ -107,7 +107,8 @@ const MENU_KEYS = [SELECTION_MENU, LINE_MENU];
 
 // Tables have their own menu, and none of these actions belong in a code block:
 // the marks don't apply there and a list would take the fence apart.
-const canFormat = (editor: Editor, state: EditorState) =>
+const canFormat = (editor: Editor, state: EditorState): boolean =>
+  !editor.isDestroyed &&
   editor.isEditable &&
   editorHasFocus(editor.view) &&
   !isInTable(state) &&
