@@ -296,11 +296,34 @@ function verifyUnpackedBinaries(context) {
   console.log("  afterPack: verified unpacked bundled binaries");
 }
 
+function verifyWindowsTraySigning(context) {
+  const { packager } = context;
+  if (
+    context.electronPlatformName !== "win32" ||
+    packager.info.metadata.windowsTrayIdentity !== "signed-production-v1"
+  ) {
+    return;
+  }
+
+  const options = packager.platformSpecificBuildOptions;
+  if (
+    packager.forceCodeSigning !== true ||
+    options.signExecutable === false ||
+    options.signAndEditExecutable === false ||
+    !packager.shouldSignFile(`${packager.appInfo.productFilename}.exe`, true)
+  ) {
+    throw new Error(
+      "afterPack: signed-production-v1 Windows tray identity requires enforced executable signing; use electron-builder.unsigned-win.json for unsigned builds"
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main hook
 // ---------------------------------------------------------------------------
 
 exports.default = async function (context) {
+  verifyWindowsTraySigning(context);
   stripOnnxruntimeBinaries(context);
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
@@ -309,3 +332,4 @@ exports.default = async function (context) {
 };
 
 exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
+exports.verifyWindowsTraySigning = verifyWindowsTraySigning;

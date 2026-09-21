@@ -4,6 +4,10 @@ const fs = require("fs");
 const debugLogger = require("./debugLogger");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
+const { windowsTrayIdentity } = require("../../package.json");
+
+// Permanent identity for signed production Windows builds; keep across releases.
+const WINDOWS_PRODUCTION_TRAY_GUID = "9afd9bd5-53da-42ef-8334-6e2b494c66fe";
 
 class TrayManager {
   constructor() {
@@ -138,7 +142,15 @@ class TrayManager {
         return;
       }
 
-      this.tray = new Tray(trayIcon);
+      const useWindowsIdentity =
+        process.platform === "win32" &&
+        app.isPackaged === true &&
+        process.env.OPENWHISPR_CHANNEL === "production" &&
+        windowsTrayIdentity === "signed-production-v1";
+
+      this.tray = useWindowsIdentity
+        ? new Tray(trayIcon, WINDOWS_PRODUCTION_TRAY_GUID)
+        : new Tray(trayIcon);
 
       if (process.platform === "darwin") {
         this.tray.setIgnoreDoubleClickEvents(true);
