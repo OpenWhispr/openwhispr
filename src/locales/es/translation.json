@@ -1489,6 +1489,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Algunos ajustes están gestionados por tu organización.",
+    "managedAccount": "Cuenta gestionada",
     "groups": {
       "account": "Cuenta",
       "app": "Aplicación",

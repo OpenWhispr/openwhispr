@@ -1436,6 +1436,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Alcune impostazioni sono gestite dalla tua organizzazione.",
+    "managedAccount": "Account gestito",
     "groups": {
       "account": "Account",
       "app": "App",

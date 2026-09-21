@@ -1436,6 +1436,7 @@
   },
   "settingsModal": {
     "managedByOrg": "部分设置由您的组织管理。",
+    "managedAccount": "受管理的账户",
     "groups": {
       "account": "账户",
       "app": "应用",
