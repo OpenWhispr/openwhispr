@@ -2,89 +2,90 @@
 
 Date: 2026-09-21
 Branch: `feat/windows-tray-identity`
-Base: `6d56d75e7e13ec47009e573e9ff4cded0d0ccc61`
 
 ## Outcome and boundary
 
 Give the signed production Windows tray icon one permanent identifier so Windows can associate the user's visibility and ordering choices with the same icon after relaunches and updates. This improves identity; Windows and the user still control visibility and ordering. The first release adopting this identity may require the user to arrange the icon once again.
 
-This is independent of macOS PR #2267. Do not copy its implementation, reuse its GUID, or modify its worktree. Do not programmatically promote the Windows icon out of overflow or position it beside system controls.
+This is independent of macOS PR #2267 and does not reuse its GUID. Do not programmatically promote the Windows icon out of overflow or position it beside system controls.
 
 ## Decision
 
-Use Electron's supported `new Tray(image, guid)` only when all four conditions hold:
+Use Electron's supported `new Tray(image, guid)` only when all three conditions hold:
 
 1. `process.platform === "win32"`.
-2. `app.isPackaged === true`.
-3. The channel already resolved by `main.js` is `process.env.OPENWHISPR_CHANNEL === "production"`.
-4. Packaged `package.json` contains `windowsTrayIdentity: "signed-production-v1"`.
+2. The channel already resolved by `main.js` is `process.env.OPENWHISPR_CHANNEL === "production"`.
+3. The packaged `package.json` contains `windowsTrayIdentity: true`.
 
 Use the permanent Windows production GUID **`9afd9bd5-53da-42ef-8334-6e2b494c66fe`**. Keep it unchanged across versions and executable paths. All other cases continue to call `new Tray(image)` with exactly one argument.
 
-`main.js:82-83` resolves and sets the channel before loading `TrayManager` at line 274. Reuse that resolved value; do not infer a second channel inside the tray code. At the tray selection point, a missing or unknown resolved value receives no GUID. The existing startup resolver may infer production from missing or invalid raw channel input; preserve that behavior. Development and staging channels receive no new explicit identity, even when packaged and signed, so they cannot claim the production identifier.
+`main.js` resolves and sets the channel before loading `TrayManager`, so the tray reuses that value instead of inferring a second one. Development and staging have their own profile and single-instance lock, so they can run beside production. They receive no GUID, even when packaged and signed, so they cannot claim the production identifier.
 
-Installed and portable production builds share this one identity. Today both use the production app profile and the same single-instance lock (`main.js:85-93,238`). They represent the same app, rather than independently runnable channels. No new portable identity or runtime path-derived identity is needed. Native acceptance must exercise the extracted portable executable, whose temporary path can change between builds.
+Installed and portable production builds share this identity. Both use the production profile and the same single-instance lock, so they never run at the same time. Native acceptance must exercise the extracted portable executable, whose temporary path can change between builds.
 
 ## Signing contract
 
-`app.isPackaged` and a production channel do not establish signing. Couple the marker to the existing build system:
+The marker tells the runtime that the build came from the signed configuration:
 
-- In `electron-builder.json`, add `extraMetadata.windowsTrayIdentity: "signed-production-v1"` and `win.forceCodeSigning: true`.
-- In `electron-builder.unsigned-win.json`, override the marker to `null` and `win.forceCodeSigning` to `false`, retaining its existing `win.azureSignOptions: null`.
-- Keep the source `package.json` free of the marker. Electron-builder injects it into packaged metadata.
-- Add `verifyWindowsTraySigning(context)` to the existing `scripts/afterPack.js` hook. For marked Windows output only, require `context.packager.forceCodeSigning === true`, neither `signExecutable` nor `signAndEditExecutable` to be `false`, and `context.packager.shouldSignFile(path.join(context.appOutDir, productFilename + ".exe"), true)` to return true. This is the full path builder later passes to `signIf`; a basename check can miss path-specific `signExts` rules. Throw an actionable build error otherwise. Read the **effective merged metadata** from `context.packager.info.metadata`, not merely `config.extraMetadata`.
-- Invoke this guard first in the existing `afterPack` hook. Export it for the focused packaging test, matching the existing named-test-export convention in that file.
+- `electron-builder.json` sets `extraMetadata.windowsTrayIdentity: true` and `win.forceCodeSigning: true`.
+- `electron-builder.unsigned-win.json` (PR CI and local unsigned builds) overrides the marker to `false` and `win.forceCodeSigning` to `false`, next to its existing `win.azureSignOptions: null`.
+- The source `package.json` never carries the marker, so development runs never see it. Electron-builder injects it into the packaged metadata.
 
-The guard closes a specific builder 26.15.3 gap: `signIf()` returns early when `signExts` excludes the executable, before reaching the `forceCodeSigning` check in `_sign()`. Existing normal signing failures abort the build. Marked builds cannot opt out of executable signing while retaining the identity marker. Unsigned/local builds must use the existing unsigned configuration; no runtime signature subprocess is added.
+Electron-builder 26 already fails a marked build that would ship unsigned. With Azure configured, its signer returns true or throws, so a failed Trusted Signing call (the PowerShell module exiting nonzero) stops the build. `forceCodeSigning` covers the rest: it fails a default-config build that nulls `win.azureSignOptions` without switching to the unsigned configuration (signtool then finds no certificate and returns false), and it rejects `signExecutable: false` and `signAndEditExecutable: false`. It does not catch deliberate opt-outs that keep the marker: a `signExts` rule excluding the main executable (`signIf()` returns before the `forceCodeSigning` check), a custom signtool `sign` hook that skips signing, or overriding `forceCodeSigning` on the default configuration. Build unsigned Windows packages only with the unsigned configuration; no packaging guard is added for those cases.
 
-The marker is a build contract, not a runtime tamper detector. Configuration plus unit tests do not prove the signature of an output artifact. Before native acceptance/release, verify that the **running inner executable** has a valid Authenticode signature and a publisher subject containing `O=Gizmo Labs Inc.`. Keep that organization consistent across releases; an Azure account/profile or publisher change requires fresh identity acceptance. The Azure `publisherName` configuration is not itself a certificate verification result.
+A signed build that fails at signing still leaves a `dist/win-unpacked` carrying the marker, and it may be unsigned. Never launch it: an unsigned run binds the production GUID to its path, and the signed install on the same machine may then get no tray icon. Run native acceptance on a clean VM snapshot.
+
+The marker is a build contract, not a runtime tamper detector. Before native acceptance or release, verify that the **running inner executable** has a valid Authenticode signature and a publisher subject containing `O=Gizmo Labs Inc.`. Keep that organization consistent across releases; an Azure account, profile, or publisher change requires fresh identity acceptance.
 
 ## Why this approach
 
-| Option                                          | Assessment                                                                                                                                                                                                                    |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Marked package + enforced signing               | Selected. Small runtime change; uses current release/PR configuration; supports one identity across signed install and portable paths. The narrow packaging guard covers the known signing exclusion bypass.                  |
-| One GUID for every Windows build                | Unsafe for unsigned copies: Windows binds an unsigned GUID to its executable path, and a moved copy may fail to add its icon.                                                                                                 |
-| Deterministic GUID derived from executable path | Avoids reusing an unsigned identity at a new path, but loses the useful cross-path behavior for signed installs and changing portable extraction paths. Adds identity hashing without satisfying this outcome.                |
-| Runtime Authenticode check                      | Could check the actual binary, but adds a Windows subprocess, launch delay, timeout/policy failures, and a second identity when verification is unavailable. Unnecessary for the controlled build contract.                   |
-| Marker written from `afterSign` alone           | Insufficient: builder 26.15.3 `signApp()` can return true on an unsigned build, causing `afterSign` to run. Actual signature verification would need another build process; forcing signing plus the narrow guard is smaller. |
+| Option                                          | Assessment                                                                                                                                                                                                     |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Marked package + enforced signing               | Selected. Small runtime change; uses the existing signed and unsigned configurations; supports one identity across signed install and portable paths. Relies on electron-builder's own signing enforcement.    |
+| One GUID for every Windows build                | Unsafe for unsigned copies: Windows binds an unsigned GUID to its executable path, and a moved copy may fail to add its icon.                                                                                  |
+| Deterministic GUID derived from executable path | Avoids reusing an unsigned identity at a new path, but loses the useful cross-path behavior for signed installs and changing portable extraction paths. Adds identity hashing without satisfying this outcome. |
+| Runtime Authenticode check                      | Could check the actual binary, but adds a Windows subprocess, launch delay, timeout/policy failures, and a second identity when verification is unavailable. Unnecessary for the controlled build contract.    |
+| Marker written from `afterSign` alone           | Insufficient: builder 26.15.3 `signApp()` can return true on an unsigned build, causing `afterSign` to run. Actual signature verification would need another build process; forcing signing is smaller.        |
 
-No retry with a different GUID is added. Electron 41.10.5 logs a failed native `Shell_NotifyIcon(NIM_ADD)` call without reliably throwing to JavaScript; the existing outer `try/catch` cannot detect and repair that failure.
+No retry with a different GUID is added. Electron 41.10.5 logs a failed native `Shell_NotifyIcon(NIM_ADD)` call without throwing to JavaScript, so the existing `try/catch` cannot detect or repair it. A broken identity means no tray icon at all, which is why native acceptance gates the release.
 
-## Global constraints
+## Constraints
 
 - Windows identity/persistence only; visibility and exact placement remain controlled by Windows and the user.
-- Permanent Windows production GUID: `9afd9bd5-53da-42ef-8334-6e2b494c66fe`.
-- Packaged metadata marker: `windowsTrayIdentity: "signed-production-v1"`; unsigned override: `null`.
-- Only Windows + packaged + resolved production channel + exact marker may receive the GUID.
-- Marked Windows builds must enforce signing of the main executable; unsigned builds use `electron-builder.unsigned-win.json`.
-- Keep `package.json`, `package-lock.json`, dependencies, `main.js`, and both workflow files unchanged.
 - No new native helpers, dependencies, runtime subprocesses, registry edits, shell restarts, private APIs, or simulated dragging.
 - Preserve existing icon loading, menu actions, tooltip, click handling, error handling, and macOS/Linux behavior.
-- Do not touch macOS PR #2267, its worktree, or its GUID `eb809902-04b5-5b08-b12a-f81d6f27e185`.
-- Toolchain: Node 24; locked Electron 41.10.5 and electron-builder/app-builder-lib 26.15.3; no version changes.
 - Native acceptance scope: Windows 10 x64 and Windows 11 x64, with exact OS builds and app/artifact versions recorded.
-- Preserve the selected sequence: planning, TDD/code-quality implementation, independent deep review, separate fixes.
-- No merge or release is authorized; keep a resulting PR draft while native Windows acceptance remains unverified.
+- Keep the PR draft until native acceptance passes.
 
 ## Validation and acceptance
 
-Automated tests must pin the GUID and constructor argument count, exercise every runtime gate, preserve menu/click behavior, resolve both builder configurations using the installed builder's real inheritance logic, and reject marked output with executable signing disabled or excluded. Signing tests must supply `context.appOutDir`, reject a path-specific main-executable exclusion, and accept a path-specific inclusion that overrides a broad negative extension rule. Test effective metadata inherited from source package metadata as well as build metadata. Existing focused tray/Dock tests remain in the verification command. Run the repository quality check and full test suite after the integrated change; distinguish inherited failures from regressions.
+Automated tests (`test/helpers/windowsTrayIdentity.test.js`) pin the GUID for marked production Windows builds and check that macOS, Linux, development, staging, and a missing or `false` marker keep the one-argument constructor. They cannot prove the signature of a build artifact.
 
-Native evidence remains separate from those tests. For each Windows version:
+Native evidence, for each Windows version:
 
 1. Record the existing released app's tray state, adopt the candidate signed installer, and record whether first adoption preserves or resets it.
-2. Manually promote/reorder the icon, quit normally, relaunch twice, reboot, then upgrade to a second candidate signed by the same organization. Record visibility and order after each step.
-3. Put the icon back in overflow and repeat relaunch/update checks to prove the user's hidden choice is respected.
-4. Repeat at another installation path and with two signed portable versions. Record each running inner executable's path, signature status, subject, version, and SHA; moving only the outer portable launcher is insufficient.
-5. Run unsigned production packages and development/staging variants from two paths. Their tray must remain usable, and a separately runnable channel must not take over production's identity.
-6. Check left-click toggle, right-click menu, quick actions, quit, and no extra icons. Record actual ordering without claiming guaranteed adjacency to Windows controls.
+2. Manually promote/reorder the icon, quit normally, relaunch twice, reboot, then upgrade to a second candidate signed on a different day. Azure Trusted Signing issues short-lived certificates that rotate daily, so this pair checks that Windows keys the GUID to the publisher rather than to one certificate. Record visibility and order after each step.
+3. End the app from Task Manager, then relaunch. A failed icon add is only logged, so confirm the icon returns after a process that never removed it, not only after a normal quit.
+4. Put the icon back in overflow and repeat relaunch/update checks to prove the user's hidden choice is respected.
+5. Repeat at another installation path and with two signed portable versions. Record each running inner executable's path, signature status, subject, version, and SHA; moving only the outer portable launcher is insufficient.
+6. Run unsigned production packages and development/staging variants from two paths. Their tray must remain usable, and a separately runnable channel must not take over production's identity.
+7. Check left-click toggle, right-click menu, quick actions, quit, and no extra icons. Record actual ordering without claiming guaranteed adjacency to Windows controls.
 
-Implementation evidence from 2026-09-21 covers the automated contract only. Runtime RED ran 5 tests with the expected missing-GUID failure and 4 passes. Build-contract RED loaded both real builder configurations and ran 6 tests, all failing on the absent marker, unsigned override, or guard. The integrated focused suite passed 22/22 tests, and `npm run quality-check` passed with the 6 pre-existing warnings. The original `npm test` run executed 4,715 tests: 4,701 passed, 1 failed, 12 skipped, and 1 remained todo. Its sole failure was an unrelated `ENOTEMPTY` temporary-directory cleanup in `modelManagerBridgeDownloadStatus.test.js`; that file passed 11/11 on an immediate isolated rerun. The parent then independently reran the full suite at `09dc1a9c` with Node 24 and concurrency 4: 4,715 total, 4,702 passed, 0 failed, 12 skipped, 1 todo, exit 0 (`/tmp/ow-windows-tray-full-tests-parent.log`).
+Identify the running executable and its signature in PowerShell, choosing the main process id from the first command:
 
-Independent review then found that the guard's basename input did not match builder's full-path signing call. Repair RED ran the focused signing file: 8 tests, 6 passed and the path-specific exclusion and positive-override regressions both failed for the expected reasons. After switching the guard to the actual full path, the six-file focused suite passed 24/24 and `npm run quality-check` passed with the same 6 existing warnings. Independent scoped review approved both fixes at `928a9fdd`, with no new critical or important findings. The parent then verified that commit independently: focused 24/24; full suite with Node 24 and concurrency 4 ran 4,717 tests, with 4,704 passed, 0 failed, 12 skipped and 1 todo (exit 0). The subsequent documentation update does not change production code or tests.
+```powershell
+Get-Process OpenWhispr | Select-Object Id, Path
+$trayProcessId = Read-Host 'OpenWhispr main process id'
+$trayExePath = (Get-Process -Id $trayProcessId).Path
+$traySignature = Get-AuthenticodeSignature -LiteralPath $trayExePath
+$traySignature | Select-Object Status, Path, @{Name='Subject';Expression={$_.SignerCertificate.Subject}}
+Get-FileHash -LiteralPath $trayExePath -Algorithm SHA256
+Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
+```
 
-No native Windows session, signed candidate artifact, update pair, publisher verification, or visibility/order persistence observation was produced. The parent found no local UTM VM or self-hosted Windows runner. Leave every unexecuted native row explicitly unverified and keep the PR draft.
+Require `Status: Valid` and a subject containing `O=Gizmo Labs Inc.` before treating a build as the signed case. Do not edit the registry, restart Explorer, or force icon placement to manufacture a passing result.
+
+Status: no native Windows session, signed candidate, or update pair has been exercised yet. Every step above is unverified.
 
 ## Evidence
 
@@ -92,5 +93,4 @@ No native Windows session, signed candidate artifact, update pair, publisher ver
 - [Microsoft notification identity rules](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-notifyicondataw#troubleshooting) and [preference retention](https://devblogs.microsoft.com/oldnewthing/20171027-00/?p=97296).
 - [Electron-builder v26 metadata/signing configuration](https://www.electron.build/v26/docs/configuration/) and [Windows options](https://www.electron.build/v26/docs/win/). Current v27 documentation has different signing option names; use v26 here.
 - [Microsoft Authenticode inspection](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/get-authenticodesignature?view=powershell-7.5).
-- Installed, lock-matched builder sources: `node_modules/app-builder-lib/out/winPackager.js:103-131,234-279`; `platformPackager.js:321-340,610-613`; `packager.js:264-277`; `codeSign/windowsSignAzureManager.js:61-82`; `util/config/config.js:36-79,167-177`.
-- Source research: `/Users/joshuadavidpadoa/dev/titan-menu-bar-handoff-20260921/artefacts/reports/2026-09-21-windows-tray-feasibility.md`.
+- Installed builder sources (26.15.3): `node_modules/app-builder-lib/out/winPackager.js:106-132,234-239` (signing and `forceCodeSigning` checks), `platformPackager.js:610-613` (`forceCodeSigning` resolution), `packager.js:276-277` and `fileTransformer.js:88-91` (`extraMetadata` merged and written into the packaged `package.json`), `codeSign/windowsSignAzureManager.js:46-69` (Trusted Signing).

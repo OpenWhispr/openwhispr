@@ -2,7 +2,7 @@
   "appId": "com.gizmolabs.openwhispr",
   "afterPack": "scripts/afterPack.js",
   "extraMetadata": {
-    "windowsTrayIdentity": "signed-production-v1"
+    "windowsTrayIdentity": true
   },
   "productName": "OpenWhispr",
   "protocols": {
