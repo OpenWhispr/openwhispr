@@ -4,7 +4,7 @@ const DAY = 24 * HOUR;
 
 export function getUsagePercentage(wordsUsed: number, limit: number): number | null {
   if (!Number.isFinite(limit) || limit <= 0 || !Number.isFinite(wordsUsed)) return null;
-  return Math.min(100, Math.max(0, (wordsUsed / limit) * 100));
+  return Math.min(100, Math.max(0, (wordsUsed * 100) / limit));
 }
 
 export function getUsageReturnCountdown(availableAt: string | null, now: number) {

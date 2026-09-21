@@ -8,6 +8,13 @@ const {
 test("weekly percentage handles empty, partial, exact, and exceeded allowances", () => {
   assert.equal(getUsagePercentage(0, 2000), 0);
   assert.equal(getUsagePercentage(860, 2000), 43);
+  for (const [wordsUsed, percentage] of [
+    [580, 29],
+    [1140, 57],
+    [1160, 58],
+  ]) {
+    assert.equal(getUsagePercentage(wordsUsed, 2000), percentage);
+  }
   assert.equal(getUsagePercentage(1999, 2000), 99.95);
   assert.equal(getUsagePercentage(2000, 2000), 100);
   assert.equal(getUsagePercentage(2300, 2000), 100);

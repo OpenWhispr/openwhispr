@@ -59,6 +59,17 @@ test("exhausted and exceeded allowances use red and cap the percentage at 100", 
   }
 });
 
+test("exact whole percentages do not lose a point to floating-point division", async (t) => {
+  const render = await meterRenderer(t);
+  for (const [wordsUsed, percentage] of [
+    [580, 29],
+    [1140, 57],
+    [1160, 58],
+  ]) {
+    assert.match(render({ wordsUsed }), new RegExp(`>${percentage}%</span>`));
+  }
+});
+
 test("timing precedes the percentage and is absent without authoritative active usage", async (t) => {
   const now = Date.parse("2026-09-21T12:00:00Z");
   t.mock.timers.enable({ apis: ["Date"], now });

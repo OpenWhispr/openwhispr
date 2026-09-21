@@ -1729,8 +1729,11 @@
         "description": "目前無法載入你的方案，你的使用權限不受影響。"
       },
       "usageReturn": {
+        "day_one": "{{count}} 天後恢復可用字數",
         "day_other": "{{count}} 天後恢復可用字數",
+        "hour_one": "{{count}} 小時後恢復可用字數",
         "hour_other": "{{count}} 小時後恢復可用字數",
+        "minute_one": "{{count}} 分鐘後恢復可用字數",
         "minute_other": "{{count}} 分鐘後恢復可用字數"
       }
     },
