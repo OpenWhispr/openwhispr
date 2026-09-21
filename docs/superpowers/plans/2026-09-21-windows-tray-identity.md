@@ -509,13 +509,14 @@ Execution evidence, 2026-09-21:
 - Independent review: requested repair because the signing guard checked a basename while builder filters and signs the full executable path. The parent reproduced the mismatch with builder's real `shouldSignFile` and `signIf`, then ruled that the binding marked-output contract requires the full path. The review also requested clearer wording for missing/unknown values at the tray selection point.
 - Repair RED: `node --test test/scripts/windowsTraySigning.test.js` ran 8 tests; 6 passed. The new path-specific exclusion case failed because the guard accepted it, and the path-specific positive override case failed because the guard rejected it.
 - Repair GREEN: after using `path.join(context.appOutDir, productFilename + ".exe")`, the six-file tray, Dock, and packaging command passed 24/24 tests. Named-file Prettier made no further changes. `npm run quality-check` passed with the same 6 existing warnings.
+- Final parent verification at `928a9fdd`: the six-file focused suite passed 24/24; `node --import tsx --test --test-concurrency=4 'test/**/*.test.js'` ran 4,717 tests, with 4,704 passed, 0 failed, 12 skipped and 1 todo (exit 0). Logs: `/tmp/ow-windows-tray-focused-final.log` and `/tmp/ow-windows-tray-full-final.log`. The following documentation update changes no production code, tests, manifests or dependencies.
 - No Windows 10/11 session, signed artifact, signature subject verification, install/portable update pair, reboot, or tray visibility/order persistence observation was available. Native acceptance remains unverified and the PR must remain draft.
 
 ### Native acceptance and subsequent specialist stages
 
 - [x] **Independent deep review:** the fresh reviewer checked the whole branch at `09dc1a9c` and requested repair of the basename/full-path signing-policy mismatch plus clarification of channel-resolution wording.
 - [x] **Separate fixes:** the repair specialist reproduced both directions of the full-path mismatch, changed the guard to builder's actual executable path, clarified resolved-channel wording, and reran the affected checks.
-- [ ] **Repair rereview:** a fresh reviewer must inspect the repair commit and focused evidence before the parent makes any readiness decision.
+- [x] **Repair rereview:** independent scoped review approved both fixes at `928a9fdd`, with no new critical or important findings. Native acceptance remains unverified; this is approval of the code repair, not readiness to merge.
 - [ ] **Native acceptance:** execute the spec's Windows 10/11 matrix when real Windows and authorized signed candidates are available; otherwise leave it unverified and keep the PR draft. Neither unsigned PR CI nor macOS unit tests prove signed Windows persistence.
 
 On Windows, identify the actual running executable with the following PowerShell commands. Replace the process id with the one selected from the first command; this is attended evidence gathering, not a packaging or runtime dependency:
