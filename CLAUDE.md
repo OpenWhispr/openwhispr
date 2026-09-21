@@ -105,10 +105,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - `wasLaunchedAtLoginHidden()` decides whether this launch should go straight to the tray
   - `syncAutoStartEntry()` runs from `initializeCoreManagers()` and repairs entries written by older builds
   - Decision logic lives in `autoStartPolicy.js` (pure, unit-tested in `test/helpers/autoStartPolicy.test.js`)
-- **autoStartPolicy.js**: Electron-free launch-at-login decisions
+- **autoStartPolicy.js**: Electron-free launch-at-login and relaunch decisions
   - `HIDDEN_LAUNCH_FLAG` (`--hidden`) is how a login launch tells the app to start in the tray. Windows has no native equivalent (`openAsHidden` is macOS-only and a no-op on macOS 13+), so the flag rides on the login item's `args`; Linux puts it on the autostart entry's `Exec`; macOS uses `wasOpenedAtLogin` instead
   - On Windows, read the state from `executableWillLaunchAtLogin`, never from `openAtLogin`: `openAtLogin` only compares the `Run` value against the current executable and args and ignores the `StartupApproved` key that Task Manager and Settings write when a user disables a startup app
   - Reads and writes must pass identical `args`, or `openAtLogin` always reports false
+  - `getRelaunchOptions()` and `getRelaunchWaiter()` shape the `relaunch-app` IPC that follows `cleanup-app` (Reset app data; Delete account with device erase): the relaunch drops `--hidden` and any cold-start deep link, and an AppImage or Windows portable build is started again from its on-disk file (`$APPIMAGE`, `$PORTABLE_EXECUTABLE_FILE`) by a detached waiter, since both run from a directory that disappears when the app exits. The handler in `ipcHandlers.js` only quits under `npm run dev` and, on macOS with an update Squirrel already holds, hands the restart to the updater
 - **linuxAutostart.js**: Launch-at-login on Linux via an XDG autostart entry
   - `app.setLoginItemSettings()` is a no-op on Linux, so the entry is written directly to `$XDG_CONFIG_HOME/autostart/open-whispr.desktop`, matching the executable name electron-builder packages under
   - `Exec` resolves from `$APPIMAGE` first: `process.execPath` is the ephemeral AppImage FUSE mount
@@ -161,7 +162,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **vectorIndex.js**: Qdrant collection management — upsert, delete, search, batch reindex
 - **windowConfig.js**: Centralized window configuration
 - **windowManager.js**: Window creation and lifecycle management
-- **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app.
+- **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app. `POST /v1/transcribe` takes a file **path** (never audio) and runs the user's downloaded local model through `IPCHandlers.transcribeLocalFile`, approving the path with `approveAudioPath` first; `GET /v1/transcribe/models` lists local models with download state and the app's default (`localTranscriptionModels.js`, read from the `.env` pre-warm values).
 - **postMigrationDetector.js**: Detects users returning from the pre-Gizmo bundle ID via a `.bundle-migrated` sentinel in userData; consumed by `ipcHandlers.js` to drive the `PostMigrationOnboarding` modal
 
 ### React Components (src/components/)
@@ -274,6 +275,8 @@ Always-on offline semantic search that finds notes by meaning, not just keywords
 - **download-sherpa-onnx.js**: Downloads sherpa-onnx binaries for Parakeet support
 - **download-qdrant.js**: Downloads Qdrant vector DB binary for local semantic search
 - **download-minilm.js**: Downloads all-MiniLM-L6-v2 ONNX model + tokenizer for local embeddings
+- **download-brand-fonts.js**: Fetches the licensed Yowza font files from the private `OpenWhispr/brand-assets` release into the git-ignored `src/assets/fonts/yowza/`. Runs in `predev:main` and every `prebuild*` chain; skips (Noto Sans fallback) without repo access, fails only when `BRAND_FONTS_REQUIRED=1` (release CI)
+- **sync-nucleo-icons.js**: Regenerates `src/components/icons/` from `nucleo-map.json` using the local Nucleo install (`~/.nucleo/skills`); only the icons the app uses are vendored
 - **build-globe-listener.js**: Compiles macOS Globe key listener from Swift source
 - **build-macos-mic-listener.js**: Compiles macOS mic listener from Swift source
 - **build-windows-key-listener.js**: Compiles Windows key listener (for local development)
@@ -305,6 +308,8 @@ FFmpeg is bundled with the app and doesn't require system installation:
 6. Main process writes to temporary file
 7. whisper.cpp processes file → Result sent back
 8. Temporary file deleted
+
+For offline local engines (whisper.cpp, Parakeet/Orukeet, Cohere) the renderer also keeps a 16 kHz mono PCM copy of the same stream from the moment the mic opens (`pcmTap.js`, pre-roll included, capped at 4 minutes) and sends that WAV instead of the WebM, so no FFmpeg decode runs after stop; the WebM still goes to history and remains the fallback for cloud providers and long recordings.
 
 ### 3. Local Whisper Models (GGML format)
 
@@ -675,7 +680,7 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 1. Hotkey pressed → `voiceAgent` slot callback in `main.js` → `windowManager.sendToggleVoiceAgent()` → `toggle-voice-agent` IPC to the main window → recording capsule appears
 2. `useAudioRecording.js` starts a recording with `audioManager.setVoiceAgentRequested(true)` (any other start resets it to `false`)
 3. On transcription, `resolveReasoningRoute` consults `resolveDictationRouteKind()` (`src/helpers/dictationRouting.js`): a voice assistant recording always takes the agent route and never falls back to cleanup. The dictation agent's reachability only gates selection edits — a selection with the dictation agent unconfigured routes to the panel with the selected text quoted instead of editing in place
-4. Standalone commands (no text selected) run through the chat pipeline (`src/components/dictation/AssistantPanel.tsx`): chat tools (notes search/create/update, calendar, web search, clipboard), RAG memory, and the custom dictionary injected into the system prompt. Conversations persist in the `agent_conversations` table and are browsable from the ControlPanel chat
+4. Standalone commands (no text selected) run through the chat pipeline (`src/components/dictation/AssistantPanel.tsx`): chat tools (notes search/create/update, calendar, web search, clipboard, `get_snippet` — triggers listed in the tool description, body fetched on demand — and `update_dictionary` / `update_snippets`, which write through the settings store so the change syncs like a UI edit), RAG memory, and the custom dictionary plus snippet triggers injected into the system prompt. Conversations persist in the `agent_conversations` table and are browsable from the ControlPanel chat
 5. Response delivery: a capture with `status: "editable"` (a focused writable non-terminal field with no selection) plus auto-paste banks a `deliverySessionId`; the completed answer is pasted via `paste-at-captured-target`, which revalidates the target and fails closed to the panel + clipboard on any change (`assistantResponseDelivery.ts`, `pasteAtCapturedTarget` in `selectionManager.js`). A follow-up spoken while the panel is already open stays panel-first. Cancelled or empty responses never paste and never touch the clipboard
 6. Selection edits are unchanged: highlighted text goes through the `dictationAgent` scope and is safely replaced in place — it never opens the panel
 
@@ -693,8 +698,8 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 **UI**:
 
 - Settings → Hotkeys → "Voice Assistant Hotkey" (with cross-slot conflict validation)
-- Onboarding: optional step right after the dictation hotkey (activation) step
-- Panel conversations run on the `chatIntelligence` scope (the chat's brain); in-place selection edits require the dictation agent (Settings → AI Models) and its `dictationAgent`/`dictationAgentVision` scopes
+- Onboarding: optional pair of steps (hotkey, then demo) after the Notes step, so the demo can suggest meeting times from a calendar connected there. The demo card is a mail thread; the reply is answered headlessly in the dictation window by `useOnboardingAssistantDemo` (the panel's streaming pipeline, tools and screenshot included) and streamed back over `onboarding-demo-event` as `processing` (transcript) → `replying` (partial reply, `tool` while one runs) → `success`
+- Panel conversations and in-place selection edits both run on the Voice Assistant scope (Settings → AI Models → Voice Assistant; `dictationAgent`/`dictationAgentVision`), resolved by `resolveChatStreamingInference`; the panel falls back to the `chatIntelligence` scope while the Voice Assistant scope is unreachable. Typed chat (Control Panel, note and container chat) stays on `chatIntelligence`
 
 **Screen Context (opt-in)**:
 
@@ -744,12 +749,16 @@ const { t } = useTranslation();
 1. Every new UI string must have a translation key in `en/translation.json` and all other language files
 2. Use `useTranslation()` hook in components and hooks
 3. Keep `{{variable}}` interpolation syntax for dynamic values
-4. Do NOT translate: brand names (OpenWhispr, Pro), technical terms (Markdown, Signal ID), format names (MP3, WAV), AI system prompts
+4. Do NOT translate: brand names (OpenWhispr, Pro), technical terms (Markdown, Signal ID), format names (MP3, WAV), or the shared assistant `fullPrompt` in `prompts.json`. The other prompt keys (`cleanupPrompt`, `translatePrompt`, `dictionarySuffix`, `screenContextSuffix`) are translated per locale, and any change to a default prompt must update `CURRENT_DEFAULT_PROMPT_HASHES` in `src/config/retiredPrompts.js`
 5. Group keys by feature area (e.g., `notes.editor.*`, `referral.toasts.*`)
 
 ### Image and Icon Assets — REQUIRED
 
 Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`). Vector provider/brand marks live in `src/assets/icons/`.
+
+UI icons come from `src/components/icons/` (vendored Nucleo core outline components behind lucide-style names, e.g. `import { Check, Loader2 } from "../icons"`). To add one, map a name to a Nucleo label in `src/components/icons/nucleo-map.json` and run `node scripts/sync-nucleo-icons.js`; never import from `lucide-react` or a machine-local Nucleo path.
+
+**Typography**: `--font-family-sans` is Yowza (brand, Latin only) falling back to the bundled Noto Sans; `--font-family-display` is Yowza Soft for headings. The font files are licensed and never committed — `src/brandFonts.ts` registers whatever `scripts/download-brand-fonts.js` fetched at build time, and a build without them silently uses Noto Sans.
 
 **Rules**:
 
@@ -873,6 +882,9 @@ Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`
 - **Launch at login**: `HKCU\...\Run` entry written by Electron, named after the AppUserModelId, carrying `--hidden` so a login launch goes to the tray
   - Read the state from `executableWillLaunchAtLogin`; `openAtLogin` misses a startup app disabled from Task Manager or Settings
   - `resources/nsis/installer.nsh` removes the `Run` and `StartupApproved\Run` values on uninstall (but not on update), which Electron itself never cleans up
+- **Tray identity**: signed production builds pass a permanent GUID to `new Tray()` (`tray.js`) so Windows keeps the user's tray placement across updates. Never change the GUID
+  - Windows binds an unsigned executable's GUID to its path, so the GUID is gated on the `windowsTrayIdentity` marker that `electron-builder.json` injects through `extraMetadata`
+  - `electron-builder.json` forces Windows code signing; unsigned Windows builds (PR CI, local) must use `electron-builder.unsigned-win.json`, which clears the marker. Never run the `win-unpacked` a failed signed build leaves behind: it carries the marker and may be unsigned
 - **Push-to-Talk**: Native key listener binary (`windows-key-listener.exe`) enables true push-to-talk
   - Uses Windows Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)
   - Supports compound hotkeys (e.g., `Ctrl+Shift+F11`)

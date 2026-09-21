@@ -378,7 +378,7 @@ test("starting a new conversation clears the displayed response and parent conte
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-assistant-panel-reset-test-",
     mockModules: {
-      "lucide-react": `
+      "/components/icons": `
         import React from "react";
         const Icon = () => React.createElement("span");
         export const Check = Icon;

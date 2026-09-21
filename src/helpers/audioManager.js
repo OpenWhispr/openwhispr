@@ -1,9 +1,9 @@
 import ReasoningService from "../services/ReasoningService";
-import { PROVIDER_REGISTRY } from "../services/ai/inferenceProviders";
 import logger from "../utils/logger";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
+import { convertToWav, needsWavConversion } from "../utils/audioContainer";
 import {
   applyChineseScript,
   mergeWhisperPrompt,
@@ -24,6 +24,7 @@ import {
   PRE_ROLL_MAX_AGE_MS,
 } from "./preparedMicCapture";
 import { MicStreamHold } from "./micStreamHold";
+import { PcmTap } from "./pcmTap";
 import { ActiveMicRecoveryController } from "./activeMicRecovery";
 import { followsSystemDefaultMic } from "./micSelectionRecovery";
 import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
@@ -64,6 +65,7 @@ import {
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import {
+  byokFileSizeLimit,
   resolveByokModel,
   resolveTranscriptionRoute,
   STREAMING_ONLY_PROVIDERS,
@@ -95,6 +97,7 @@ import {
   resolveDictationAgentInference,
   resolveDictationAgentVisionInference,
 } from "./dictationAgentInference";
+import { providerSupportsImages } from "../services/ai/inferenceProviders";
 import { resolveDictationTranslationInference } from "./dictationTranslationInference";
 import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
@@ -111,6 +114,7 @@ import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionary
 import { dictionaryKeywords, usesTranscriptionKeywords } from "../utils/dictionaryKeywords.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
+import { getAgentName } from "../utils/agentName";
 import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
 import {
   buildSelectionEditSystemPrompt,
@@ -169,9 +173,6 @@ function analyticsSyncEnabled(settings = getSettings()) {
   );
 }
 
-const providerSupportsImages = (providerId) =>
-  !!(providerId && PROVIDER_REGISTRY[providerId]?.supportsImages);
-
 // Shared by the agent route and its text-only retry, which needs the prompt
 // without the screen-context suffix.
 function dictationAgentPrompt(settings, agentName) {
@@ -203,7 +204,13 @@ function resolveReasoningRoute(
   screenContext,
   detectedLanguage
 ) {
+  const wakeWordLanguage = resolveWakeWordLanguage(settings, detectedLanguage, text);
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
+  // Pin cleanup to 0 where supported; bridges otherwise default to 0.7 (local)
+  // or 0.3 (Anthropic/enterprise). Zero does not guarantee determinism.
+  // Direct Gemini owns its defaults (3: 1.0, older: 0); check mode to ignore stale providers.
+  const cleanupTemperature =
+    cleanup.mode === "providers" && cleanup.provider === "gemini" ? undefined : 0;
   const cleanupReachable =
     !!settings.useCleanupModel && (!!cleanup.model?.trim() || isCloudCleanupMode());
   const agent = resolveDictationAgentInference(settings, {
@@ -221,7 +228,7 @@ function resolveReasoningRoute(
     agentInvoked:
       !translationRequested &&
       !!agentName &&
-      detectAgentName(text, agentName, resolveWakeWordLanguage(settings, detectedLanguage)),
+      detectAgentName(text, agentName, wakeWordLanguage, settings.snippets),
     voiceAgentRequested,
     translationRequested,
     translationReachable: translation.reachable,
@@ -246,18 +253,22 @@ function resolveReasoningRoute(
       "transcription"
     );
   }
+  // Shared by ordinary cleanup and the translation chain's cleanup step.
+  // A truncated reply must fail rather than replace the dictation with its first part:
+  // the cleanup route pastes the raw transcript and the chain translates it, and both
+  // raise the cleanup-failed toast (#2091).
+  const cleanupConfig = {
+    inferenceScope: /** @type {const} */ ("dictationCleanup"),
+    disableThinking: settings.cleanupDisableThinking,
+    temperature: cleanupTemperature,
+    requireCompleteOutput: true,
+  };
   if (kind === "translation") {
     return {
       kind: "translation",
       model: translation.model,
       cleanupReachable,
-      cleanupConfig: {
-        inferenceScope: /** @type {const} */ ("dictationCleanup"),
-        disableThinking: settings.cleanupDisableThinking,
-        // The chain's cleanup step is the same deterministic transform — see
-        // the cleanup route below for why the value has to be explicit.
-        temperature: 0,
-      },
+      cleanupConfig,
       config: {
         ...translation.config,
         systemPrompt: resolvePrompt("translate", {
@@ -279,7 +290,7 @@ function resolveReasoningRoute(
       visionProviderImageWired: providerSupportsImages(vision.config.provider),
       baseProviderImageWired: providerSupportsImages(agent.config.provider),
       isCloudAgent: isCloudDictationAgentMode(),
-      baseModelSupportsVision: !!getCloudModel(agent.model)?.supportsVision,
+      baseModelSupportsVision: !!getCloudModel(agent.model, agent.config.provider)?.supportsVision,
     });
     const target = useVisionOverride ? vision : agent;
     logger.logReasoning("AGENT_IMAGE_TARGET", {
@@ -301,26 +312,21 @@ function resolveReasoningRoute(
           : systemPrompt,
         ...(attach ? { screenContext, textOnlySystemPrompt: systemPrompt } : {}),
         // Selection edits run on this (dictation) scope, so they need it
-        // reachable; standalone commands run on the chat scope in the panel.
+        // reachable; standalone commands resolve the same scope again in the
+        // panel and report their own configuration problems in-conversation.
         selectionEditReachable: agent.reachable,
-        // The panel re-decides attach/drop against the chat scope's model,
-        // which may see images even when this scope's cannot — carry the raw
-        // screenshot past the attach gate for that path.
+        // Detection and stripping must read the transcript identically, so both
+        // inputs ride the route rather than being re-read after the await.
+        wakeWordLanguage,
+        snippets: settings.snippets,
+        // The panel re-decides attach/drop for its own request, so carry the
+        // raw screenshot past this attach gate for that path.
         ...(screenContext ? { rawScreenContext: screenContext } : {}),
       },
     };
   }
   if (kind === "cleanup") {
-    return {
-      kind: "cleanup",
-      config: {
-        inferenceScope: /** @type {const} */ ("dictationCleanup"),
-        disableThinking: settings.cleanupDisableThinking,
-        // Cleanup is a deterministic transform: pass 0 explicitly, because the IPC-bridged
-        // providers (local bridge, Anthropic, enterprise) otherwise apply their own default.
-        temperature: 0,
-      },
-    };
+    return { kind: "cleanup", config: cleanupConfig };
   }
   return { kind: "skip" };
 }
@@ -566,6 +572,9 @@ class AudioManager {
       this.rejectedMicDeviceId = null;
       this.cancelPreparedMicCapture();
       this.micStreamHold.drop();
+      // The main process keeps the OS default mic until told it changed, so
+      // re-resolve now rather than on the next hotkey press (~2s on Windows).
+      window.electronAPI?.getSystemDefaultMicrophone?.({ refresh: true })?.catch(() => {});
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
     this.recordingStartTime = null;
@@ -617,6 +626,7 @@ class AudioManager {
     this._streamingCommitActive = false;
     this._previewFlushResolve = null;
     this._batchSegments = [];
+    this._batchPcmTap = null;
     this._rotatingBatchRecorder = null;
     this._rotationResolve = null;
     this._stopRequestedDuringMicRecovery = false;
@@ -1087,11 +1097,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
     try {
       const prepared = await this.preparedMicCapture.prepare(async () => {
-        const constraints = await this.getAudioConstraints();
-        const stream = await this._acquireCaptureStream(constraints);
-        const value = { stream, constraints, recorder: null, chunks: [], startedAt: Date.now() };
-        if (!this.shouldUseStreaming()) this._startPreRollRecorder(value);
-        return value;
+        // Built before the mic opens so its graph is rendering by the time the
+        // pre-roll recorder starts; a tap attached later misses the first frames.
+        const pcmTap = this._startPcmTap();
+        try {
+          const constraints = await this.getAudioConstraints();
+          const stream = await this._acquireCaptureStream(constraints);
+          const value = {
+            stream,
+            constraints,
+            recorder: null,
+            chunks: [],
+            pcmTap: null,
+            startedAt: Date.now(),
+          };
+          if (!this.shouldUseStreaming()) this._startPreRollRecorder(value, pcmTap);
+          if (!value.pcmTap) pcmTap?.close();
+          return value;
+        } catch (error) {
+          pcmTap?.close();
+          throw error;
+        }
       });
       if (prepared) {
         logger.debug("Microphone capture prepared", { preRoll: !!prepared.recorder }, "audio");
@@ -1127,17 +1153,42 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Record from the instant the prepared stream delivers frames. If the hold
   // guard confirms a real dictation these chunks become the recording's opening;
   // a cancel discards them without the audio ever leaving the renderer.
-  _startPreRollRecorder(prepared) {
+  _startPreRollRecorder(prepared, pcmTap) {
     try {
       const recorder = new MediaRecorder(prepared.stream);
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) prepared.chunks.push(event.data);
       };
       recorder.start(RECORDING_TIMESLICE_MS);
+      pcmTap?.attach(prepared.stream);
       prepared.recorder = recorder;
+      prepared.pcmTap = pcmTap;
     } catch (e) {
       logger.debug("Pre-roll recorder unavailable", { error: e.message }, "audio");
     }
+  }
+
+  // Offline local engines decode a renderer-captured 16 kHz WAV as-is, so the
+  // batch recorder gets a PCM shadow (PcmTap). Online models commit their own
+  // stream and every cloud lane wants the smaller WebM, so those get none.
+  _startPcmTap() {
+    const { useLocalWhisper, localTranscriptionProvider, parakeetModel } = getSettings();
+    const offlineLocal =
+      useLocalWhisper &&
+      !getManagedTranscriptionResolution() &&
+      !(localTranscriptionProvider === "nvidia" && isOnlineParakeetModel(parakeetModel));
+    if (!offlineLocal) return null;
+    try {
+      return new PcmTap(this.getWorkletBlobUrl());
+    } catch (e) {
+      logger.debug("PCM tap unavailable", { error: e.message }, "audio");
+      return null;
+    }
+  }
+
+  _closeBatchPcmTap() {
+    this._batchPcmTap?.close();
+    this._batchPcmTap = null;
   }
 
   _constraintsKey(constraints) {
@@ -1253,6 +1304,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async startRecording(forceDefaultMic = false) {
     let prepared = null;
     let preparedAdopted = false;
+    let freshTap = null;
     this._startInProgress = true;
     try {
       if (!this.isRecordingAllowedByPolicy()) {
@@ -1273,6 +1325,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       prepared = forceDefaultMic ? null : await this.preparedMicCapture.take();
       const constraints =
         prepared?.constraints ?? (await this.getAudioConstraints(forceDefaultMic));
+      // Without a prepared capture the tap starts here, before the mic opens.
+      freshTap = prepared ? null : this._startPcmTap();
       const micStream = prepared?.stream ?? (await this._acquireCaptureStream(constraints));
       const micReadyAt = performance.now();
 
@@ -1328,22 +1382,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       this.audioChunks = [];
       this._batchSegments = [];
+      this._closeBatchPcmTap();
       this._stopRequestedDuringMicRecovery = false;
       this._cancelRequestedDuringMicRecovery = false;
       this._receivedAudioData = false;
-      if (prepared && Date.now() - prepared.startedAt > PRE_ROLL_MAX_AGE_MS) {
-        discardPreRoll(prepared);
-      }
-      const preRoll =
-        prepared?.recorder && prepared.recorder.state === "recording"
-          ? { recorder: prepared.recorder, chunks: prepared.chunks }
-          : null;
+      const preRollUsable =
+        prepared?.recorder?.state === "recording" &&
+        Date.now() - prepared.startedAt <= PRE_ROLL_MAX_AGE_MS;
+      if (!preRollUsable) discardPreRoll(prepared);
+      const preRoll = preRollUsable
+        ? { recorder: prepared.recorder, chunks: prepared.chunks }
+        : null;
       // Pre-roll audio is part of the recording, so the reported duration
       // starts when the prepared stream started — but only when its recorder
       // was adopted; a prepared stream without pre-roll contributes no audio
       // before this point, and back-dating would inflate durationSeconds.
       this.recordingStartTime = preRoll ? prepared.startedAt : Date.now();
+      // The tap shadows the recorder from its first frame: the pre-roll's own,
+      // or the one built before the mic opened. A tap started now would miss
+      // the opening, so an unusable pre-roll leaves the WebM path in charge.
+      this._batchPcmTap = preRoll ? prepared.pcmTap : freshTap;
       this.createBatchRecorder(micStream, preRoll);
+      freshTap?.attach(micStream);
       preparedAdopted = true;
       this.isRecording = true;
       this.onStateChange?.({
@@ -1420,6 +1480,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     } catch (error) {
       // A prepared value the recording never adopted still owns a live stream
       // (and possibly a pre-roll recorder); release it before any retry.
+      freshTap?.close();
       if (prepared && !preparedAdopted) this._disposePrepared(prepared);
       if (isStaleDeviceError(error) && !forceDefaultMic) {
         // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
@@ -1520,6 +1581,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const previewStopPromise = this.cleanupPreview({
       showCleanup: this.shouldShowPreviewCleanupState(),
     });
+    const rawWavPromise = this._batchPcmTap?.stop();
+    this._batchPcmTap = null;
     this.isRecording = false;
     this.isProcessing = true;
     this.onStateChange?.({
@@ -1593,6 +1656,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return;
     }
     this._streamingCommitActive = false;
+    const rawWav = await rawWavPromise;
 
     await this.processAudio(
       audioBlob,
@@ -1601,6 +1665,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         analyticsOccurredAt,
         ...(salvagedRecording ? { salvagedRecording: true } : {}),
         ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
+        ...(rawWav ? { rawWav } : {}),
       },
       processingPipeline
     );
@@ -1631,6 +1696,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._previewSource = this._previewAudioContext.createMediaStreamSource(replacement);
         this._previewSource.connect(this._previewProcessor);
       }
+      this._batchPcmTap?.attach(replacement);
       this.createBatchRecorder(replacement);
     } finally {
       // Honor a stop/cancel that arrived mid-rotation even when the swap failed —
@@ -1753,6 +1819,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       durationSeconds: this.recordingStartTime
         ? (Date.now() - this.recordingStartTime) / 1000
         : null,
+      analyticsOccurredAt: new Date(this.recordingStartTime || Date.now()).toISOString(),
       chunks: this.audioChunks,
       segments: this._batchSegments,
       mimeType: this.recordingMimeType,
@@ -1764,6 +1831,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._localSpeechGateState = null;
 
     this.cleanupPreview({ dismiss: true });
+    this._closeBatchPcmTap();
     this.isRecording = false;
     this.isProcessing = false;
     this.mediaRecorder = null;
@@ -1773,7 +1841,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.onStateChange?.({ isRecording: false, isProcessing: false });
   }
 
-  persistDiscardedBatchRecording({ durationSeconds, chunks, segments, mimeType }) {
+  persistDiscardedBatchRecording({
+    durationSeconds,
+    analyticsOccurredAt,
+    chunks,
+    segments,
+    mimeType,
+  }) {
     // This must run after MediaRecorder's final dataavailable event, so decide
     // whether to retain the discarded audio from the snapshot rather than live
     // manager state (which may already belong to a new recording).
@@ -1787,7 +1861,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         try {
           const current = new Blob(chunks, { type: mimeType });
           const blob = await this.mergeRecordedSegments([...segments, current]);
-          if (blob) await this.saveDiscardedTranscription(blob, durationSeconds);
+          if (blob)
+            await this.saveDiscardedTranscription(blob, durationSeconds, analyticsOccurredAt);
         } catch (error) {
           const fallback = this.getLargestRecordedSegment([
             ...segments,
@@ -1795,7 +1870,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           ]);
           if (fallback) {
             try {
-              await this.saveDiscardedTranscription(fallback, durationSeconds);
+              await this.saveDiscardedTranscription(fallback, durationSeconds, analyticsOccurredAt);
             } catch (fallbackError) {
               logger.warn(
                 "Failed to save discarded recording fallback",
@@ -1971,7 +2046,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         model: activeModel || null,
       };
 
-      result = withSalvageWarning(result, metadata.salvagedRecording);
+      // A salvaged WebM only matters to whoever decoded it; the tap's WAV spans
+      // the whole recording.
+      result = withSalvageWarning(result, metadata.salvagedRecording && !result?.decodedRawWav);
 
       result = {
         ...result,
@@ -2073,9 +2150,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const timings = {};
 
     try {
-      // Send original audio to main process - FFmpeg in main process handles conversion
-      // (renderer-side AudioContext conversion was unreliable with WebM/Opus format)
-      const arrayBuffer = await audioBlob.arrayBuffer();
+      // The PCM tap's WAV skips FFmpeg in the main process; the WebM stays the
+      // fallback and is what history and any cloud retry receive.
+      const source = metadata.rawWav ?? audioBlob;
+      const arrayBuffer = await source.arrayBuffer();
       const language = getBaseLanguageCode(this.getEffectiveSttLanguage(getSettings()));
       const options = { model };
       if (language) {
@@ -2092,8 +2170,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       logger.debug(
         "Local transcription starting",
         {
-          audioFormat: audioBlob.type,
-          audioSizeBytes: audioBlob.size,
+          audioFormat: source.type,
+          audioSizeBytes: source.size,
         },
         "performance"
       );
@@ -2208,7 +2286,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         if (text !== null && text !== undefined) {
-          return { success: true, text: text || result.text, rawText, source: "local", timings };
+          return {
+            success: true,
+            text: text || result.text,
+            rawText,
+            source: "local",
+            timings,
+            ...(metadata.rawWav ? { decodedRawWav: true } : {}),
+          };
         } else {
           throw new Error("No text transcribed");
         }
@@ -2272,13 +2357,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         timings.transcriptionProcessingDurationMs = 0;
         result = { success: true, text: streamedText };
       } else {
-        const arrayBuffer = await audioBlob.arrayBuffer();
+        const source = metadata.rawWav ?? audioBlob;
+        const arrayBuffer = await source.arrayBuffer();
 
         logger.debug(
           "Parakeet transcription starting",
           {
-            audioFormat: audioBlob.type,
-            audioSizeBytes: audioBlob.size,
+            audioFormat: source.type,
+            audioSizeBytes: source.size,
             model,
           },
           "performance"
@@ -2317,6 +2403,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             source: "local-parakeet",
             timings,
             ...(result.warning ? { warning: result.warning } : {}),
+            ...(metadata.rawWav ? { decodedRawWav: true } : {}),
           };
         } else {
           throw new Error("No text transcribed");
@@ -2582,8 +2669,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       transcript,
       // resolveReasoningRoute mirrors an attached screenContext into
       // rawScreenContext (same object), so the raw carry is the single source
-      // to read — it also survives when the agent scope's attach gate dropped
-      // the image (the panel re-decides against the chat scope's model).
+      // to read — it also survives when this attach gate dropped the image
+      // (the panel re-decides for its own request).
       screenContext: config?.rawScreenContext ?? null,
       ...(selectedContext ? { selectedContext } : {}),
       ...(deliverySessionId ? { deliverySessionId } : {}),
@@ -2606,8 +2693,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return extras;
   }
 
-  // Panel-first commands skip the dictation-agent model, so the org policy
-  // guard that protected that model must run here instead.
+  // Panel-first commands make no LLM call here — the panel resolves the Voice
+  // Assistant scope itself — so the org policy guard must run at bank time.
   _bankPanelAgentCommand(
     text,
     agentName,
@@ -2615,9 +2702,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     { selectedContext, selectedText, deliverySessionId } = {}
   ) {
     this.assertAgentAllowedByPolicy();
+    const settings = getSettings();
     const command = this.voiceAgentRequested
       ? text
-      : stripAgentAddress(text, agentName, resolveWakeWordLanguage(getSettings()));
+      : stripAgentAddress(
+          text,
+          agentName,
+          config?.wakeWordLanguage ?? resolveWakeWordLanguage(settings),
+          config?.snippets ?? settings.snippets
+        );
     const transcript = selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
     this._bankAssistantDirective(transcript, config, { selectedContext, deliverySessionId });
     return text;
@@ -2700,10 +2793,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw error;
     }
 
-    // selectionEditReachable and rawScreenContext are routing directives for
-    // this method, not reasoning options — strip them before the config
-    // reaches ReasoningService.
-    const { selectionEditReachable, rawScreenContext, ...reasoningOptions } = config ?? {};
+    // These are routing directives for this method, not reasoning options —
+    // strip them before the config reaches ReasoningService.
+    const { selectionEditReachable, rawScreenContext, wakeWordLanguage, ...reasoningOptions } =
+      config ?? {};
     const selectionConfig = {
       ...reasoningOptions,
       maxTokens: Math.max(config?.maxTokens || 0, 8192),
@@ -2827,6 +2920,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const res = await window.electronAPI.cloudReason(currentText, {
             agentName,
             promptMode: "cleanup",
+            purpose: "cleanup",
             customDictionary: getDictionaryHintWords(settings),
             customPrompt: this.getCustomPrompt(),
             language: this.getCleanupLanguage(settings),
@@ -2876,6 +2970,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             { ...(extra || {}), error: cleanupError.message },
             channel
           );
+          // The chain translates the raw transcript, so the dropped cleanup has to
+          // surface the same toast the cleanup route raises (#2091).
+          this.pendingCleanupFailure = cleanupFailureFromError(cleanupError);
         },
         onEmptyTranslate: () => {
           const { channel } = cleanup.log || {};
@@ -2930,15 +3027,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const cleanupReachable = !!settings.useCleanupModel && (!!cleanupModel || isCloud);
     const agentReachable = dictationAgentReachable(settings);
     const agentName =
-      typeof window !== "undefined" && window.localStorage
-        ? localStorage.getItem("agentName") || null
-        : null;
+      typeof window !== "undefined" && window.localStorage ? getAgentName() : "OpenWhispr";
     if (
       !cleanupReachable &&
       !agentReachable &&
       !(this.translationRequested && translationChainReachable(settings)) &&
-      // A voice-assistant command always routes: standalone commands run on
-      // the chat scope in the panel, so no dictation-scope model is needed.
+      // A voice-assistant command always routes: standalone commands stream
+      // in the panel, which reports a missing model in-conversation.
       !this.voiceAgentRequested
     ) {
       logger.logReasoning("REASONING_SKIPPED", {
@@ -3273,7 +3368,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let processedText = result.text;
     if (processedText) {
       const reasoningStart = performance.now();
-      const agentName = localStorage.getItem("agentName") || null;
+      const agentName = getAgentName();
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
       const route = resolveReasoningRoute(
         processedText,
@@ -3307,6 +3402,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             const res = await window.electronAPI.cloudReason(processedText, {
               agentName,
               promptMode: "cleanup",
+              purpose: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
               customPrompt: this.getCustomPrompt(),
               language: this.getCleanupLanguage(settings),
@@ -3509,9 +3605,45 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return { success: true, text, rawText: proxyText, source, timings };
       }
 
+      // Some Custom endpoints decode the upload and reject anything that isn't
+      // WAV/MP3/FLAC (Azure MAI-Transcribe via OpenRouter, for one), which
+      // Chromium's WebM/Opus recordings always are. Re-encode for those rather
+      // than failing the dictation; a conversion failure falls through to the
+      // original bytes so this can only widen what works.
+      let uploadAudio = optimizedAudio;
+      if (needsWavConversion(provider, optimizedAudio.type, optimizedAudio.size)) {
+        try {
+          const wavAudio = await convertToWav(optimizedAudio);
+          // Keep compressed recordings usable on endpoints that already accept
+          // them when PCM expansion would exceed the upload limit.
+          if (wavAudio.size <= byokFileSizeLimit(provider)) {
+            uploadAudio = wavAudio;
+          }
+          logger.debug(
+            "Prepared recording for custom endpoint",
+            {
+              fromType: optimizedAudio.type,
+              fromSize: optimizedAudio.size,
+              toType: uploadAudio.type,
+              toSize: uploadAudio.size,
+            },
+            "transcription"
+          );
+        } catch (conversionError) {
+          logger.warn(
+            "WAV re-encode failed; uploading original container",
+            { error: conversionError?.message, type: optimizedAudio.type },
+            "transcription"
+          );
+        }
+      }
+
+      // Decoding can outlive cancellation and a newer recording's request.
+      if (wasCancelled()) throw new DOMException("Transcription cancelled", "AbortError");
+
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
-      const mimeType = optimizedAudio.type || "audio/webm";
+      const mimeType = uploadAudio.type || "audio/webm";
       const extension = audioExtensionForMime(mimeType);
 
       logger.debug(
@@ -3519,13 +3651,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         {
           mimeType,
           extension,
-          optimizedSize: optimizedAudio.size,
+          optimizedSize: uploadAudio.size,
           hasApiKey: !!apiKey,
         },
         "transcription"
       );
 
-      formData.append("file", optimizedAudio, `audio.${extension}`);
+      formData.append("file", uploadAudio, `audio.${extension}`);
       formData.append("model", model);
 
       if (language) {
@@ -3927,6 +4059,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const result = await window.electronAPI.saveTranscription(text, rawText, {
         clientTranscriptionId: eventId,
         routeKind: this.translationRequested ? "translation" : null,
+        analyticsOccurredAt: occurredAt.toISOString(),
       });
       if (result?.id) syncService.debouncedPush("transcription", result.id);
 
@@ -3970,6 +4103,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         errorMessage,
         errorCode,
         routeKind: this.translationRequested ? "translation" : null,
+        ...(metadata?.analyticsOccurredAt
+          ? { analyticsOccurredAt: metadata.analyticsOccurredAt }
+          : {}),
       });
       if (result?.id) syncService.debouncedPush("transcription", result.id);
 
@@ -4009,12 +4145,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async saveDiscardedTranscription(blob, durationSeconds) {
+  async saveDiscardedTranscription(blob, durationSeconds, analyticsOccurredAt = null) {
     let savedId = null;
     try {
       const result = await window.electronAPI.saveTranscription("", null, {
         status: "discarded",
         routeKind: this.translationRequested ? "translation" : null,
+        ...(analyticsOccurredAt ? { analyticsOccurredAt } : {}),
       });
       if (!result?.id) return;
       savedId = result.id;
@@ -4954,7 +5091,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let usedCloudReasoning = false;
     if (finalText) {
       const reasoningStart = performance.now();
-      const agentName = localStorage.getItem("agentName") || null;
+      const agentName = getAgentName();
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
       if (wasCancelled()) return true;
       const route = resolveReasoningRoute(
@@ -4963,7 +5100,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         agentName,
         this.voiceAgentRequested,
         this.translationRequested,
-        screenContext
+        screenContext,
+        streamingSttLanguage
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
@@ -4993,6 +5131,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             const res = await window.electronAPI.cloudReason(finalText, {
               agentName,
               promptMode: "cleanup",
+              purpose: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
               customPrompt: this.getCustomPrompt(),
               language: this.getCleanupLanguage(stSettings),
@@ -5391,6 +5530,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.micRecovery.stop();
     this._unsubscribeSettings?.();
     this.preparedMicCapture.cancel();
+    this._closeBatchPcmTap();
     this.micStreamHold.drop();
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;

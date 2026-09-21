@@ -1,4 +1,4 @@
-// Launch-at-login decisions, kept free of Electron so they can be unit-tested.
+// Launch-at-login and relaunch decisions, kept free of Electron so they can be unit-tested.
 //
 // A login launch should come up in the tray, and Windows has no way to ask for
 // that (macOS' openAsHidden is macOS-only and a no-op on macOS 13+). So the login
@@ -45,10 +45,61 @@ function wasLaunchedHidden({ platform, argv, loginItemSettings }) {
   return argv.includes(HIDDEN_LAUNCH_FLAG);
 }
 
+// A relaunch must not replay how this process was launched: --hidden would put the
+// restarted app in the tray, and startup would handle a cold-start deep link again
+// (a sign-in link would restore the session a reset just cleared). An AppImage and
+// the Windows portable build run from a directory that is gone once this process
+// exits (the FUSE mount; the stub's %TEMP% unpack dir), so app.relaunch() cannot
+// bring them back: getRelaunchWaiter() starts the on-disk file from outside instead.
+function getRelaunchOptions({ argv, protocol, appImagePath, portableExecutablePath }) {
+  const args = argv
+    .slice(1)
+    .filter((arg) => arg !== HIDDEN_LAUNCH_FLAG && !arg.startsWith(`${protocol}://`));
+  const launcherPath = appImagePath || portableExecutablePath;
+  return launcherPath ? { launcherPath, args } : { args };
+}
+
+// The portable stub deletes its unpack dir only after the app exits, so on Windows the
+// waiter must outlive the stub (this process's parent), not just this process.
+function getRelaunchWaiter({
+  platform,
+  launcherPath,
+  args,
+  pid,
+  ppid,
+  systemRoot = "C:\\Windows",
+}) {
+  if (platform === "win32") {
+    const quote = (value) => `'${String(value).replace(/'/g, "''")}'`;
+    const argumentList = args.length ? ` -ArgumentList ${args.map(quote).join(",")}` : "";
+    return {
+      file: `${systemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`,
+      args: [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `Wait-Process -Id ${ppid}; Start-Process -FilePath ${quote(launcherPath)}${argumentList}`,
+      ],
+    };
+  }
+  return {
+    file: "/bin/sh",
+    args: [
+      "-c",
+      'while kill -0 "$0"; do sleep 0.2; done; exec "$@"',
+      String(pid),
+      launcherPath,
+      ...args,
+    ],
+  };
+}
+
 module.exports = {
   HIDDEN_LAUNCH_FLAG,
   getLoginItemArgs,
   resolveAutoStartState,
   needsHiddenFlagMigration,
   wasLaunchedHidden,
+  getRelaunchOptions,
+  getRelaunchWaiter,
 };

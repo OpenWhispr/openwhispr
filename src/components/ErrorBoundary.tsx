@@ -38,7 +38,10 @@ export default class ErrorBoundary extends React.Component<ErrorBoundaryProps, E
             </h1>
             <p className="text-sm text-muted-foreground">{i18n.t("errorBoundary.description")}</p>
             {this.state.error && (
-              <pre className="text-xs text-destructive bg-surface-1 rounded-md p-3 overflow-auto max-h-32 text-left">
+              <pre
+                dir="ltr"
+                className="text-xs text-destructive bg-surface-1 rounded-md p-3 overflow-auto max-h-32 text-left"
+              >
                 {this.state.error.message}
               </pre>
             )}

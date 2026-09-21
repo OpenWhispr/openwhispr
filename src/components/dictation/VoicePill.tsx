@@ -1,5 +1,5 @@
 import { forwardRef, type HTMLAttributes } from "react";
-import { ChevronUp } from "lucide-react";
+import { ChevronUp } from "../icons";
 import { cn } from "../lib/utils";
 import { PillWaveform } from "./PillWaveform";
 import { VoiceIdentityIcon } from "./VoiceIdentityIcon";

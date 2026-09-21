@@ -19,6 +19,8 @@ export type OnboardingStepId =
   | "languages"
   | "use-cases"
   | "dictation-hotkey"
+  /** No longer routed — tap/hold lives on dictation-hotkey. Kept so a session
+      saved on it still parses and reconciles onto its neighbour. */
   | "activation-mode"
   | "dictation-demo"
   | "assistant-hotkey"
@@ -79,6 +81,13 @@ export interface OnboardingSession {
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
   selfHostedRequested: boolean;
+  /**
+   * The permissions step's screen-context Enable was clicked and the grant has
+   * not landed yet. Persisted so the opt-in completes across the quit-and-reopen
+   * macOS asks for after granting Screen Recording; cleared once consumed and
+   * dropped with the session at finalization.
+   */
+  screenContextRequested: boolean;
   resume: OnboardingResumeState;
 }
 
@@ -97,14 +106,17 @@ export interface OnboardingRouteContext {
   skipSetupChoice?: boolean;
 }
 
+// Dictation first, then Notes (the meeting recorder and its calendar
+// connections), then the assistant: the assistant demo suggests meeting times
+// from whatever calendar the Notes step connected.
 const ACCOUNT_ROUTE: OnboardingStepId[] = [
   "auth",
   "permissions",
   "languages",
   "use-cases",
   "dictation-hotkey",
-  "activation-mode",
   "dictation-demo",
+  "notes",
 ];
 
 const SETUP_ROUTES: Record<Exclude<OnboardingSetupMode, null | "cloud">, OnboardingStepId[]> = {
@@ -123,9 +135,9 @@ const STEP_ORDER: OnboardingStepId[] = [
   "dictation-hotkey",
   "activation-mode",
   "dictation-demo",
+  "notes",
   "assistant-hotkey",
   "assistant-demo",
-  "notes",
   "setup-choice",
   "byok-dictation",
   "byok-assistant",
@@ -134,6 +146,11 @@ const STEP_ORDER: OnboardingStepId[] = [
 ];
 
 const KNOWN_STEPS = new Set<OnboardingStepId>(STEP_ORDER);
+const PERMISSIONS_STEP_INDEX = STEP_ORDER.indexOf("permissions");
+
+export function shouldInitializeMacAccessibilityFeatures(stepId: OnboardingStepId): boolean {
+  return STEP_ORDER.indexOf(stepId) >= PERMISSIONS_STEP_INDEX;
+}
 
 /**
  * Steps that render in the compact frame. That frame has no footer, so these
@@ -186,6 +203,7 @@ export function createOnboardingSession(): OnboardingSession {
     authPath: null,
     setupMode: null,
     selfHostedRequested: false,
+    screenContextRequested: false,
     resume: createOnboardingResumeState(),
   };
 }
@@ -213,19 +231,12 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
         // finalizeOnboarding registers dictationHotkey either way, and skipping
         // these steps shipped users who neither granted the mic nor knew their
         // trigger key.
-        ([
-          "auth",
-          "permissions",
-          "dictation-hotkey",
-          "activation-mode",
-          "setup-choice",
-        ] as OnboardingStepId[])
+        (["auth", "permissions", "dictation-hotkey", "setup-choice"] as OnboardingStepId[])
       : [
           ...ACCOUNT_ROUTE,
           ...(context.agentAllowed
             ? (["assistant-hotkey", "assistant-demo"] as OnboardingStepId[])
             : []),
-          "notes" as const,
           ...setupChoice,
         ];
 
@@ -247,35 +258,31 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
 /**
  * The Notes step's forward action. Calendar connections are optional, so the step
  * offers Skip until one connects and Continue afterwards. "loading" is its own
- * state rather than an absence: while the workspace resolves there is nothing to
- * commit yet, but the step still has to show a disabled Continue — dropping the
- * action entirely leaves the footer with only Back and no explanation.
+ * state rather than an absence: while the setup decision is pending there is
+ * nothing to commit yet, but the step still has to show a disabled Continue —
+ * dropping the action entirely leaves the footer with only Back and no explanation.
  */
 export function getNotesFooterAction({
-  workspaceResolutionPending,
+  setupDecisionPending,
   hasConnectedCalendar,
 }: {
-  workspaceResolutionPending: boolean;
+  setupDecisionPending: boolean;
   hasConnectedCalendar: boolean;
 }): "skip" | "continue" | "loading" {
-  if (workspaceResolutionPending) return "loading";
+  if (setupDecisionPending) return "loading";
   return hasConnectedCalendar ? "continue" : "skip";
 }
 
 /**
- * Whether the permissions step offers Log out. `authPath` alone is not the
- * question: migrateLegacyOnboardingStep labels any pre-v2 session past the auth
- * step "account" without anyone having signed in, and the action clears the
- * session, localSetupPending and the pending model selections without confirming.
+ * The step whose Continue commits the setup decision: it leads into setup-choice,
+ * or ends the route once a confirmed Enterprise workspace has removed that step.
+ * Advancing from it before the workspace resolves could show setup-choice to a
+ * managed user, so the flow holds Continue there until resolution lands.
  */
-export function shouldOfferOnboardingLogout({
-  isSignedIn,
-  authPath,
-}: {
-  isSignedIn: boolean;
-  authPath: OnboardingAuthPath;
-}): boolean {
-  return isSignedIn && authPath === "account";
+export function isSetupDecisionStep(stepId: OnboardingStepId, route: OnboardingStepId[]): boolean {
+  const setupChoiceIndex = route.indexOf("setup-choice");
+  const decisionStep = setupChoiceIndex === -1 ? route.at(-1) : route[setupChoiceIndex - 1];
+  return stepId === decisionStep;
 }
 
 export function isOnboardingStepId(value: unknown): value is OnboardingStepId {
@@ -415,6 +422,12 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
     ) {
       return null;
     }
+    if (
+      parsed.screenContextRequested !== undefined &&
+      typeof parsed.screenContextRequested !== "boolean"
+    ) {
+      return null;
+    }
 
     return {
       version: ONBOARDING_FLOW_VERSION,
@@ -423,6 +436,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
       authPath,
       setupMode,
       selfHostedRequested: parsed.selfHostedRequested ?? false,
+      screenContextRequested: parsed.screenContextRequested ?? false,
       resume: parseOnboardingResumeState(parsed.resume, parsed.currentStepId),
     };
   } catch {
@@ -452,7 +466,7 @@ export function migrateLegacyOnboardingStep(value: string | null): OnboardingSte
 
 /**
  * Map a step onto the caller's route, for when a saved session names a step the
- * current route no longer has (the agent gets disallowed, setupMode changes, or a
+ * current route no longer has (the assistant gets disallowed, setupMode changes, or a
  * dev jump asks for an off-route step).
  *
  * Clamps to the route step nearest in the canonical order, ties going to the
@@ -494,7 +508,7 @@ export interface OnboardingProgressState {
  * counter on, filled up to the current one.
  *
  * The total comes from the route rather than a constant because the route itself
- * is conditional — the assistant pair drops out when the agent is disallowed, and
+ * is conditional — the assistant pair drops out when the assistant is disallowed, and
  * the provider pair only exists once a non-cloud setup mode is picked. Choosing
  * BYOK/local on setup-choice therefore appends two steps and the row
  * grows by two dots at that moment, which is the flow honestly getting longer.

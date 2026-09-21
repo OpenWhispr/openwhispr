@@ -153,14 +153,14 @@ export function SpectrogramCard({ referralCode }: SpectrogramCardProps) {
 
       {/* Brand + Signal ID */}
       <div className="absolute top-0 inset-x-0 px-5 pt-3.5 flex items-center justify-between z-10">
-        <span className="text-xs font-medium uppercase tracking-[0.2em] text-foreground/20 select-none">
+        <span className="text-xs font-medium uppercase tracking-[0.2em] text-foreground/45 select-none">
           {t("referral.card.brand")}
         </span>
         <div className="flex flex-col items-end">
-          <span className="text-xs font-mono text-foreground/30 tracking-wider select-all">
+          <span className="text-xs font-mono text-foreground/45 tracking-wider select-all">
             {referralCode}
           </span>
-          <span className="text-[7px] uppercase tracking-[0.15em] text-foreground/12 select-none">
+          <span className="text-[7px] uppercase tracking-[0.15em] text-foreground/45 select-none">
             {t("referral.card.signalId")}
           </span>
         </div>
@@ -218,7 +218,7 @@ export function SpectrogramCard({ referralCode }: SpectrogramCardProps) {
                 "border border-foreground/10 active:scale-[0.93]",
                 playing
                   ? "bg-foreground/12 text-foreground/80"
-                  : "bg-foreground/6 text-foreground/40 hover:bg-foreground/10 hover:text-foreground/70"
+                  : "bg-foreground/6 text-foreground/45 hover:bg-foreground/10 hover:text-foreground/70"
               )}
               aria-label={playing ? t("referral.card.stop") : t("referral.card.playSignal")}
             >

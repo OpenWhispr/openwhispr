@@ -2,8 +2,10 @@ const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = 
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const { isRestorablePasteTarget } = require("./windowsPasteTarget");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
@@ -78,6 +80,7 @@ const diarizationHost = (endpoint) => {
 };
 const { resolveLocalServerNeeds } = require("./localServerPolicy");
 const autoStart = require("./autoStart");
+const { getRelaunchOptions, getRelaunchWaiter } = require("./autoStartPolicy");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
@@ -86,7 +89,7 @@ const { GeminiLiveStreaming, GEMINI_LIVE_MODEL } = require("./geminiLiveStreamin
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
-const { ONBOARDING_DEMO_KINDS } = require("./onboardingInputPolicy");
+const { ONBOARDING_DEMO_KINDS, ONBOARDING_DEMO_STATUSES } = require("./onboardingInputPolicy");
 const { focusWindowsHotkeyCaptureWindow } = require("./hotkeyCaptureFocus");
 const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
@@ -97,7 +100,6 @@ const AudioStorageManager = require("./audioStorage");
 const LocalModelDownloadStatus = require("./localModelDownloadStatus");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
-const { registerMeetingAutoEndLifecycleHandlers } = require("./meetingAutoEndLifecycle");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
@@ -141,6 +143,8 @@ const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
 } = require("../constants/speakerDetection.json");
+const { UPLOAD_AUDIO_EXTENSIONS } = require("../constants/uploadAudioFormats.json");
+const { providerContentType, prepareProviderUpload } = require("./providerUploadAudio");
 const {
   DEFAULT_WHISPER_VAD_CONFIG,
   sanitizeWhisperVadConfig,
@@ -177,18 +181,6 @@ const AUTO_LEARN_DEBOUNCE_MS = 1500;
 // the message reports the cap that actually applied.
 const byokSizeCapError = (sizeCapBytes) =>
   `File too large. Maximum size for bring-your-own-key is ${Math.floor(sizeCapBytes / (1024 * 1024))} MB.`;
-
-const AUDIO_MIME_TYPES = {
-  mp3: "audio/mpeg",
-  wav: "audio/wav",
-  m4a: "audio/mp4",
-  webm: "audio/webm",
-  ogg: "audio/ogg",
-  oga: "audio/ogg",
-  flac: "audio/flac",
-  aac: "audio/aac",
-  opus: "audio/ogg",
-};
 
 const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
 // The enterprise "Test Connection" probe only needs one word back, but the
@@ -266,6 +258,7 @@ const {
   formatSpeakerTranscript,
 } = require("./speakerMerge");
 const { timestampRequestFields, mapVerboseSegments } = require("./uploadTimestamps");
+const { listLocalTranscriptionModels } = require("./localTranscriptionModels");
 
 // Canonicalize allowed dirs so realpath'd inputs match on macOS (/var -> /private/var).
 // Deliberately narrow: user-picked paths anywhere else are approved individually via
@@ -590,6 +583,11 @@ async function chunkedCloudTranscribe({
   }
 }
 
+// Cleanup toast wording for replies the main-process providers reject; mirror
+// TRUNCATED_/EMPTY_OUTPUT_MESSAGE_KEY in services/ai/chatRequestBody.ts (#2091).
+const CLEANUP_TRUNCATED_MESSAGE_KEY = "hooks.audioRecording.errorDescriptions.cleanupTruncated";
+const CLEANUP_EMPTY_REPLY_MESSAGE_KEY = "hooks.audioRecording.errorDescriptions.cleanupEmptyReply";
+
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
@@ -653,6 +651,7 @@ class IPCHandlers {
     this._retentionSettingsSynced = false;
     this._noteFilesEnabled = false;
     this._granolaImportPending = null;
+    this._analyticsHistoryBackfillPromise = null;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
     this.whisperVadSettings = {
@@ -665,6 +664,8 @@ class IPCHandlers {
     this._setupTextEditMonitor();
     this._setupRetentionCleanup();
     this._logDetectedGpus();
+    // Warm the OS default mic answer before the first hotkey press (~2s on Windows).
+    resolveSystemDefaultMicrophone();
     this.setupHandlers();
     // Lives for the app's lifetime; IPCHandlers has no teardown path.
     tokenStore.subscribe(({ generation, token }) => {
@@ -700,6 +701,104 @@ class IPCHandlers {
         this._syncStartupEnv({}, ["WHISPER_VULKAN_DEVICE"]);
       });
     }
+  }
+
+  // Reconstructing counters from the transcripts already on disk records exactly
+  // what "keep local history" turns off, so it answers to the same switch the
+  // live path checks in audioManager.saveTranscription. The main process boots
+  // with defaults rather than the user's choice, so an unsynced setting is not
+  // consent either -- the renderer's first sync is what starts this (#1370).
+  _canReconstructAnalyticsHistory() {
+    return this._retentionSettingsSynced && this._retentionSettings.dataRetentionEnabled;
+  }
+
+  /** Whether a signed-in account is bound to this install. */
+  _hasActiveAccountScope() {
+    return Boolean(accountScopeBinding.read());
+  }
+
+  // The switch alone is not enough to start: a managed workspace can force local
+  // history off, and that policy arrives over the network while this scan takes
+  // milliseconds, so the renderer reports the permissive personal default until
+  // it lands. Waiting for the real answer is only possible where there is one --
+  // signed out the policy store stays idle forever and the user's own preference
+  // is the only authority there is. Mid-scan arrival needs no separate check:
+  // a policy that resolves "always_off" flips the switch, which the loop reads.
+  _mayStartAnalyticsHistoryReconstruction() {
+    if (!this._canReconstructAnalyticsHistory()) return false;
+    if (this._retentionSettings.localHistoryPolicyResolved === true) return true;
+    return !this._hasActiveAccountScope();
+  }
+
+  // Reconciliation is best-effort. Analytics reads await it so later-eligible
+  // history shows up before the numbers are read, which means a failure here
+  // must never fail the read itself: a broken scan would otherwise blank an
+  // Insights summary that SQLite could have answered perfectly well.
+  async _ensureAnalyticsHistoryBackfilled() {
+    if (!this._mayStartAnalyticsHistoryReconstruction()) return { inserted: 0, scanned: 0 };
+    if (this._analyticsHistoryBackfillPromise) return this._analyticsHistoryBackfillPromise;
+    // The failure is absorbed inside this promise rather than around the
+    // creator's await, because callers that join an in-flight pass are handed
+    // this promise directly and would otherwise receive the raw rejection --
+    // which is every analytics read that arrives while the startup pass is
+    // still scanning.
+    const backfillPromise = (async () => {
+      let inserted = 0;
+      let scanned = 0;
+      let skipped = 0;
+      let stoppedEarly = false;
+      const state = this.databaseManager.getAnalyticsHistoryBackfillState(
+        ANALYTICS_HISTORY_BACKFILL_VERSION
+      );
+      if (state.scannedThroughId >= state.targetId) return { inserted, scanned };
+      while (true) {
+        // The database reads its persisted cursor again for every batch. An
+        // older row made eligible while this pass yields can move that cursor
+        // backward without being overwritten by stale in-memory progress.
+        const batch = this.databaseManager.backfillAnalyticsHistoryBatch({
+          throughId: state.targetId,
+          checkpointVersion: ANALYTICS_HISTORY_BACKFILL_VERSION,
+        });
+        inserted += batch.inserted;
+        scanned += batch.scanned;
+        skipped += batch.skipped;
+        if (batch.complete) break;
+        await new Promise((resolve) => setImmediate(resolve));
+        // The switch can be turned off while this pass yields -- by the user, or
+        // by a managed policy that resolved after the renderer's first sync sent
+        // the personal default. Re-reading it here stops the scan at the next
+        // batch boundary instead of mining the rest of a history the user has
+        // just opted out of.
+        if (!this._canReconstructAnalyticsHistory()) {
+          stoppedEarly = true;
+          break;
+        }
+      }
+      if (inserted > 0) broadcastToWindows("analytics-changed");
+      if (scanned > 0) {
+        debugLogger.info(
+          stoppedEarly
+            ? "Analytics history backfill stopped: local history was turned off mid-scan"
+            : "Analytics history backfill complete",
+          { inserted, skipped, scanned },
+          "analytics"
+        );
+      }
+      return { inserted, scanned };
+    })().catch((error) => {
+      debugLogger.error("Analytics history backfill failed", { error: error.message }, "analytics");
+      return { inserted: 0, scanned: 0 };
+    });
+    this._analyticsHistoryBackfillPromise = backfillPromise;
+    // Cleared after the assignment above, never inside the pass: a scan that
+    // finishes without ever awaiting would otherwise strand its own resolved
+    // promise here and every later read would join a pass that already ended.
+    void backfillPromise.then(() => {
+      if (this._analyticsHistoryBackfillPromise === backfillPromise) {
+        this._analyticsHistoryBackfillPromise = null;
+      }
+    });
+    return backfillPromise;
   }
 
   // The dictation slot reports its own changes from the renderer. Slots
@@ -761,6 +860,30 @@ class IPCHandlers {
     }
     this.whisperVadSettings = { ...this._getWhisperVadSettings(), ...filtered };
     return this._getWhisperVadSettings();
+  }
+
+  // Shared by the upload IPC handler and the CLI bridge. `filePath` must
+  // already have passed resolveAllowedAudioPath (or approveAudioPath).
+  async transcribeLocalFile(filePath, options = {}) {
+    const audioBuffer = fs.readFileSync(filePath);
+    if (isSherpaLocalProvider(options.provider)) {
+      return this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
+    }
+    return this.whisperManager.transcribeLocalWhisper(audioBuffer, {
+      ...options,
+      ...this._resolveWhisperVadOptions("noteRecording"),
+    });
+  }
+
+  approveAudioPath(filePath) {
+    approveAudioPath(filePath);
+  }
+
+  listLocalTranscriptionModels() {
+    return listLocalTranscriptionModels({
+      whisperManager: this.whisperManager,
+      parakeetManager: this.parakeetManager,
+    });
   }
 
   _resolveWhisperVadOptions(context) {
@@ -1281,17 +1404,21 @@ class IPCHandlers {
     ipcMain.handle("onboarding-demo-publish", (_event, event) => {
       const session = this._onboardingDemoSession;
       if (!session || !event || event.kind !== session.kind) return false;
-      if (!["listening", "processing", "partial", "success", "error"].includes(event.status)) {
-        return false;
-      }
+      if (!ONBOARDING_DEMO_STATUSES.has(event.status)) return false;
       const text = typeof event.text === "string" ? event.text.slice(0, 20000) : undefined;
       const message = typeof event.message === "string" ? event.message.slice(0, 500) : undefined;
+      const tool = typeof event.tool === "string" ? event.tool.slice(0, 64) : undefined;
+      const level = Number.isFinite(event.level)
+        ? Math.min(1, Math.max(0, event.level))
+        : undefined;
       broadcastToWindows("onboarding-demo-event", {
         demoId: session.id,
         kind: session.kind,
         status: event.status,
         text,
         message,
+        tool,
+        level,
       });
       return true;
     });
@@ -1410,6 +1537,11 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("set-main-window-input-region", (event, region) => {
+      if (event.sender !== this.windowManager.mainWindow?.webContents) return null;
+      return this.windowManager.setMainWindowInputRegion(region);
+    });
+
     ipcMain.handle("get-main-window-horizontal-direction", () => {
       return this.windowManager.getMainWindowHorizontalDirection();
     });
@@ -1451,6 +1583,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("analytics-record-event", async (_event, input) => {
+      // The renderer only warns when this write fails, then saves the
+      // transcription as completed anyway -- leaving a row the backfill is
+      // the only thing that will ever reconcile.
       const result = this.databaseManager.recordAnalyticsEvent(input);
       // Dictation and the control panel are separate renderers, so the
       // Insights view can only learn about a new event through the main process.
@@ -1463,11 +1598,13 @@ class IPCHandlers {
     });
 
     ipcMain.handle("analytics-get-summary", async () => {
+      await this._ensureAnalyticsHistoryBackfilled();
       return this.databaseManager.getAnalyticsSummary();
     });
 
     ipcMain.handle("analytics-get-pending", async (_event, limit, context) => {
       const accountId = assertAnalyticsSyncContext(context);
+      await this._ensureAnalyticsHistoryBackfilled();
       return this.databaseManager.getPendingAnalyticsEvents(limit, accountId);
     });
 
@@ -1498,11 +1635,13 @@ class IPCHandlers {
 
     ipcMain.handle("analytics-count-unclaimed", async (_event, context) => {
       assertAnalyticsSyncContext(context);
+      await this._ensureAnalyticsHistoryBackfilled();
       return this.databaseManager.countUnclaimedAnalyticsEvents();
     });
 
     ipcMain.handle("analytics-count-awaiting-upload", async (_event, context) => {
       const accountId = assertAnalyticsSyncContext(context);
+      await this._ensureAnalyticsHistoryBackfilled();
       return this.databaseManager.countAnalyticsEventsAwaitingUpload(accountId);
     });
 
@@ -1630,6 +1769,10 @@ class IPCHandlers {
           this._retentionSettings = settings;
           this._retentionSettingsSynced = true;
           this._runRetentionCleanup();
+          // First point at which the local-history switch is known to be real.
+          // After the sweep, so expired transcripts are gone before they can be
+          // reconstructed into counters the sweep would only have to purge.
+          void this._ensureAnalyticsHistoryBackfilled();
         },
       })
     );
@@ -2564,9 +2707,9 @@ class IPCHandlers {
     ipcMain.handle("db-get-transcription-by-client-id", (_, clientId) =>
       this.databaseManager.getTranscriptionByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-transcription-from-cloud", (_, cloudTranscription) =>
-      this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription)
-    );
+    ipcMain.handle("db-upsert-transcription-from-cloud", (_, cloudTranscription) => {
+      return this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription);
+    });
     ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId) =>
       this.databaseManager.markTranscriptionSynced(id, cloudId)
     );
@@ -2696,12 +2839,7 @@ class IPCHandlers {
       if (options.multiple === true) properties.push("multiSelections");
       const result = await dialog.showOpenDialog({
         properties,
-        filters: [
-          {
-            name: "Audio Files",
-            extensions: ["mp3", "wav", "m4a", "webm", "ogg", "oga", "flac", "aac", "opus"],
-          },
-        ],
+        filters: [{ name: "Audio and Video Files", extensions: UPLOAD_AUDIO_EXTENSIONS }],
       });
       if (result.canceled || !result.filePaths.length) {
         return { canceled: true };
@@ -2814,7 +2952,6 @@ class IPCHandlers {
     });
 
     ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
-      const fs = require("fs");
       // Uploads pass a requestId so cancel-upload-transcription can abort the
       // local decode; flows without one (voice drafts) register nothing.
       const { signal, release } = this._uploadCancelRegistry.register(options.requestId);
@@ -2824,21 +2961,7 @@ class IPCHandlers {
         }
         const real = resolveAllowedAudioPath(filePath);
         if (!real) return { success: false, error: "File path not allowed" };
-        const audioBuffer = fs.readFileSync(real);
-        if (isSherpaLocalProvider(options.provider)) {
-          const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, {
-            ...options,
-            signal,
-          });
-          return result;
-        }
-        const vadOptions = this._resolveWhisperVadOptions("noteRecording");
-        const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, {
-          ...options,
-          ...vadOptions,
-          signal,
-        });
-        return result;
+        return await this.transcribeLocalFile(real, { ...options, signal });
       } catch (error) {
         if (error?.name === "AbortError" || signal?.aborted) {
           debugLogger.debug("Local audio file transcription cancelled", {
@@ -2925,9 +3048,20 @@ class IPCHandlers {
       // paste lands in the field the user was dictating into, not wherever focus
       // drifted during transcription (#859). macOS handles this via
       // activateTargetPid above; Linux re-detects the target inside pasteLinux.
-      const targetWindow =
+      const winTarget =
         process.platform === "win32"
-          ? ((await this.selectionManager?.getWinTargetHwnd?.()) ?? null)
+          ? ((await this.selectionManager?.getWinTarget?.()) ?? null)
+          : null;
+      const targetWindow =
+        winTarget &&
+        isRestorablePasteTarget({
+          target: winTarget,
+          ownExeName: path.basename(process.execPath),
+          ownWindowHandles: BrowserWindow.getAllWindows()
+            .filter((win) => !win.isDestroyed())
+            .map((win) => win.getNativeWindowHandle()),
+        })
+          ? winTarget.id
           : null;
 
       const pasteResult = await this.clipboardManager.pasteText(textToPaste, {
@@ -3740,6 +3874,47 @@ class IPCHandlers {
       return this.diarizationManager.cancelDownload();
     });
 
+    // Under `npm run dev` the Vite server dies with Electron, so a relaunched dev
+    // instance would have no renderer: just quit there.
+    ipcMain.handle("relaunch-app", async () => {
+      if (process.env.NODE_ENV === "development") return app.quit();
+      // Once Squirrel.Mac holds a downloaded update it installs it on this quit regardless
+      // of any flag, so the updater owns that restart instead of racing app.relaunch().
+      if (this.updateManager.hasStagedUpdate()) {
+        const { success } = await this.updateManager
+          .installUpdate()
+          .catch(() => ({ success: false }));
+        if (success) return;
+      }
+      this.updateManager.deferInstallOnQuit();
+      const { launcherPath, args } = getRelaunchOptions({
+        argv: process.argv,
+        protocol: this.oauthProtocol,
+        appImagePath: process.env.APPIMAGE,
+        portableExecutablePath: process.env.PORTABLE_EXECUTABLE_FILE,
+      });
+      if (launcherPath) {
+        const waiter = getRelaunchWaiter({
+          platform: process.platform,
+          launcherPath,
+          args,
+          pid: process.pid,
+          ppid: process.ppid,
+          systemRoot: process.env.SystemRoot,
+        });
+        require("child_process")
+          .spawn(waiter.file, waiter.args, {
+            detached: true,
+            stdio: "ignore",
+            cwd: path.dirname(launcherPath), // never inside the directory being removed
+          })
+          .unref();
+      } else {
+        app.relaunch({ args });
+      }
+      app.quit();
+    });
+
     ipcMain.handle("cleanup-app", async (event) => {
       const fs = require("fs");
       const os = require("os");
@@ -4018,9 +4193,15 @@ class IPCHandlers {
         // On Hyprland Wayland, unregister the keybinding during capture
         if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager) {
           debugLogger.log("[IPC] Unregistering Hyprland keybinding for hotkey capture mode");
-          await hotkeyManager.hyprlandManager.unregisterKeybinding().catch((err) => {
-            debugLogger.warn("[IPC] Failed to unregister Hyprland keybinding:", err.message);
-          });
+          const unregistered = await hotkeyManager.hyprlandManager
+            .unregisterKeybinding()
+            .catch((err) => {
+              debugLogger.warn("[IPC] Failed to unregister Hyprland keybinding:", err.message);
+              return false;
+            });
+          if (!unregistered) {
+            debugLogger.warn("[IPC] Hyprland keybinding remained active during capture");
+          }
         }
       } else {
         // Exiting capture mode - re-register globalShortcut if not already registered
@@ -4105,9 +4286,15 @@ class IPCHandlers {
           debugLogger.log(
             `[IPC] Re-registering slot "${slot}" ("${hotkeys.join(", ")}") after capture mode`
           );
-          await hotkeyManager.registerSlot(slot, hotkeys, info.callback).catch((err) => {
-            debugLogger.warn(`[IPC] Failed to re-register slot "${slot}":`, err.message);
-          });
+          const result = await hotkeyManager
+            .registerSlot(slot, hotkeys, info.callback)
+            .catch((err) => {
+              debugLogger.warn(`[IPC] Failed to re-register slot "${slot}":`, err.message);
+              return { success: false };
+            });
+          if (!result.success) {
+            debugLogger.warn(`[IPC] Slot "${slot}" was not restored after capture`);
+          }
         }
       }
 
@@ -4126,7 +4313,9 @@ class IPCHandlers {
           ? isUsingNativeShortcut
             ? hotkeyManager.supportsPushToTalk(hotkey)
             : this.linuxKeyManager?.isAvailable?.() === true
-          : !isUsingNativeShortcut;
+          : process.platform === "darwin"
+            ? hotkeyManager.supportsPushToTalk(hotkey)
+            : !isUsingNativeShortcut;
 
       return {
         isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
@@ -4746,7 +4935,9 @@ class IPCHandlers {
               config?.requireCompleteOutput &&
               ["length", "max-tokens", "max_tokens"].includes(finishReason)
             ) {
-              throw new Error("Model output was truncated before the selection edit completed");
+              throw Object.assign(new Error("Model output was truncated"), {
+                messageKey: CLEANUP_TRUNCATED_MESSAGE_KEY,
+              });
             }
 
             return { success: true, text: (generated || "").trim() };
@@ -4766,7 +4957,9 @@ class IPCHandlers {
           return {
             success: false,
             error: mapped.message,
-            messageKey: mapped.messageKey,
+            // mapEnterpriseError matches provider failures, so a truncation falls through
+            // to its generic mapping — keep the key the throw site set.
+            messageKey: err.messageKey || mapped.messageKey,
             messageParams: mapped.messageParams,
             action: mapped.action,
             actionKey: mapped.actionKey,
@@ -5059,7 +5252,15 @@ class IPCHandlers {
         const result = await LocalReasoningService.processText(text, modelId, config);
         return { success: true, text: result };
       } catch (error) {
-        return { success: false, error: error.message };
+        // code/details carry the machine-readable failure across to the
+        // renderer, which owns the translation keys. Flattening to a bare
+        // string is how llama.cpp JSON used to reach users (#2142).
+        return {
+          success: false,
+          error: error.message,
+          code: error.code,
+          details: error.details,
+        };
       }
     });
 
@@ -5133,16 +5334,20 @@ class IPCHandlers {
 
           const data = await response.json();
           if (config?.requireCompleteOutput && data.stop_reason === "max_tokens") {
-            throw new Error("Model output was truncated before the selection edit completed");
+            throw Object.assign(new Error("Model output was truncated"), {
+              messageKey: CLEANUP_TRUNCATED_MESSAGE_KEY,
+            });
           }
           const outputText = extractAnthropicText(data);
           if (outputText === null) {
-            throw new Error(describeMissingAnthropicText(data));
+            throw Object.assign(new Error(describeMissingAnthropicText(data)), {
+              messageKey: CLEANUP_EMPTY_REPLY_MESSAGE_KEY,
+            });
           }
           return { success: true, text: outputText };
         } catch (error) {
           debugLogger.error("Anthropic reasoning error:", error);
-          return { success: false, error: error.message };
+          return { success: false, error: error.message, messageKey: error.messageKey };
         }
       }
     );
@@ -5559,18 +5764,6 @@ class IPCHandlers {
     });
 
     ipcMain.handle("open-calendar-privacy-settings", () => openSystemSettings("calendars"));
-
-    ipcMain.handle("show-emoji-panel", () => {
-      try {
-        if (app.isEmojiPanelSupported()) {
-          app.showEmojiPanel();
-          return true;
-        }
-      } catch (error) {
-        debugLogger.error("Failed to show native emoji panel:", error);
-      }
-      return false;
-    });
 
     ipcMain.handle("toggle-media-playback", () => {
       const mediaPlayer = require("./mediaPlayer");
@@ -6140,6 +6333,7 @@ class IPCHandlers {
             ? preferredLanguage.split("-")[0]
             : undefined;
         const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+        const { convertBufferToWav, isWavFormat } = require("./ffmpegUtils");
         // Renderer pre-flight owns policy; retry re-routes stored audio through
         // whatever is selected NOW.
         const route = resolveTranscriptionRoute({
@@ -6328,8 +6522,35 @@ class IPCHandlers {
             throw new Error(`${provider} API key not configured`);
           }
 
+          // The renderer re-encodes WebM before uploading to a Custom endpoint
+          // (src/utils/audioContainer.ts); retries re-upload stored audio from
+          // the main process, so without the same step here every retry of a
+          // dictation that failed for that reason fails again -- which is the
+          // exact recovery a user reaches for after hitting it.
+          let uploadBuffer = buffer;
+          let uploadType = "audio/webm";
+          let uploadName = "audio.webm";
+          if (provider === "custom" && buffer.length && !isWavFormat(buffer)) {
+            try {
+              const wavBuffer = await convertBufferToWav(buffer);
+              // Match fresh dictation: PCM expansion must not break an upload
+              // that the endpoint could accept in its original container.
+              if (wavBuffer.length <= route.sizeCapBytes) {
+                uploadBuffer = wavBuffer;
+                uploadType = "audio/wav";
+                uploadName = "audio.wav";
+              }
+            } catch (conversionError) {
+              // Fail open, matching the renderer: an unconverted retry is no
+              // worse than today's behaviour.
+              debugLogger.warn("WAV re-encode failed on retry; uploading stored container", {
+                error: conversionError?.message,
+              });
+            }
+          }
+
           const formData = new FormData();
-          formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
+          formData.append("file", new Blob([uploadBuffer], { type: uploadType }), uploadName);
           if (provider === "xai") {
             // xAI STT does not accept a model field; the route pre-filters language
             if (route.language) {
@@ -6381,6 +6602,8 @@ class IPCHandlers {
         if (updated) {
           setImmediate(() => {
             broadcastToWindows("transcription-updated", updated);
+            // A row that just reached "completed" is newly eligible.
+            void this._ensureAnalyticsHistoryBackfilled();
           });
         }
         return { success: true, transcription: updated };
@@ -6910,6 +7133,7 @@ class IPCHandlers {
           const connectOpts = {
             model: options.model,
             language: options.language,
+            mode: options.mode,
             preconfigured: options.mode !== "byok",
             environment: options.environment,
             tenant: options.tenant,
@@ -7120,6 +7344,7 @@ class IPCHandlers {
       const connectOpts = {
         model: options.model,
         language: options.language,
+        mode: options.mode,
         preconfigured: options.mode !== "byok",
         environment: options.environment,
         tenant: options.tenant,
@@ -7917,6 +8142,10 @@ class IPCHandlers {
       if (dictationPreviewTranscribing) return;
       if (!dictationPreviewBuffer.length) return;
 
+      const gen = dictationPreviewGen;
+      const provider = dictationPreviewProvider;
+      const model = dictationPreviewModel;
+      const language = dictationPreviewLanguage;
       dictationPreviewTranscribing = true;
       try {
         const pcm = Buffer.concat(dictationPreviewBuffer);
@@ -7939,35 +8168,37 @@ class IPCHandlers {
         const wav = pcm16ToWav(pcm);
 
         let result;
-        if (isSherpaLocalProvider(dictationPreviewProvider)) {
+        if (isSherpaLocalProvider(provider)) {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
-            model: dictationPreviewModel,
-            language: dictationPreviewLanguage,
+            model,
+            language,
           });
         } else {
           const vadOptions = this._resolveWhisperVadOptions("dictation");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
-            model: dictationPreviewModel,
-            language: dictationPreviewLanguage,
+            model,
+            language,
             ...vadOptions,
           });
         }
 
+        if (gen !== dictationPreviewGen) return;
         if (result?.success && result.text?.trim()) {
           this.windowManager.appendTranscriptionPreview(result.text.trim());
         } else if (result && !result.success) {
           debugLogger.warn("Dictation preview chunk returned failure", {
             error: result.error || result.message,
-            provider: dictationPreviewProvider,
+            provider,
           });
         }
       } catch (error) {
+        if (gen !== dictationPreviewGen) return;
         debugLogger.error("Dictation preview transcription chunk failed", {
           error: error.message,
-          provider: dictationPreviewProvider,
+          provider,
         });
       } finally {
-        dictationPreviewTranscribing = false;
+        if (gen === dictationPreviewGen) dictationPreviewTranscribing = false;
       }
     };
 
@@ -8291,6 +8522,7 @@ class IPCHandlers {
           sessionId: recordingSessionId,
           autoEndEligible: options.autoEndEligible === true,
           ownerWebContents: event.sender,
+          noteId: options.noteId ?? null,
           // Renderer loopback may still fail after main chooses its strategy.
           // Auto-end stays fail-safe until the renderer confirms a real source.
           systemAudioAvailable: false,
@@ -9017,9 +9249,10 @@ class IPCHandlers {
         if (streamedText && display && dictationPreviewSessionActive) {
           this.windowManager.showTranscriptionPreview(streamedText);
         }
-      } else {
-        await transcribeDictationPreviewChunk();
       }
+      // Offline chunks only draw previews. The renderer decodes the full
+      // recording separately, so another preview decode here competes with
+      // final transcription without contributing to its result.
       resetDictationPreviewState({ preserveSession: display });
       if (!display || !dictationPreviewSessionActive) {
         return { success: true, streamed, text: streamedText };
@@ -9084,6 +9317,7 @@ class IPCHandlers {
             systemPrompt: opts.systemPrompt,
             requestPurpose: opts.requestPurpose,
             promptMode: opts.promptMode,
+            purpose: opts.purpose,
             screenContext: opts.screenContext,
             language: opts.language,
             locale: opts.locale,
@@ -9547,6 +9781,7 @@ class IPCHandlers {
     ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath, opts = {}) => {
       const requestId = typeof opts?.requestId === "string" ? opts.requestId : null;
       const { signal, release } = this._uploadCancelRegistry.register(requestId);
+      let cleanupUpload = null;
       try {
         if (typeof filePath !== "string") {
           return { success: false, error: "Invalid file path" };
@@ -9590,15 +9825,12 @@ class IPCHandlers {
           };
         }
 
-        const audioBuffer = fs.readFileSync(realCloud);
-        const ext = path.extname(realCloud).toLowerCase().replace(".", "");
-        const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
-        const fileName = path.basename(realCloud);
-
+        const upload = await prepareProviderUpload(realCloud, { signal });
+        cleanupUpload = upload.cleanup;
         const { body, boundary } = buildMultipartBody(
-          audioBuffer,
-          fileName,
-          contentType,
+          fs.readFileSync(upload.path),
+          path.basename(upload.path),
+          providerContentType(upload.path),
           multipartFields
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
@@ -9620,6 +9852,7 @@ class IPCHandlers {
         debugLogger.error("Cloud audio file transcription error", { error: error.message });
         return toPolicyFailure(error);
       } finally {
+        cleanupUpload?.();
         release();
       }
     });
@@ -9652,12 +9885,13 @@ class IPCHandlers {
         }
       ) => {
         const fs = require("fs");
+        let cleanupUpload = null;
         try {
           if (typeof filePath !== "string") {
             return { success: false, error: "Invalid file path" };
           }
-          const realByok = resolveAllowedAudioPath(filePath);
-          if (!realByok) return { success: false, error: "File path not allowed" };
+          const sourcePath = resolveAllowedAudioPath(filePath);
+          if (!sourcePath) return { success: false, error: "File path not allowed" };
 
           const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
           const route = resolveTranscriptionRoute({
@@ -9686,26 +9920,28 @@ class IPCHandlers {
             };
           }
 
+          const upload = await prepareProviderUpload(sourcePath);
+          cleanupUpload = upload.cleanup;
+          const realByok = upload.path;
+
           if (route.transport === "managed") {
             if (fs.statSync(realByok).size > route.sizeCapBytes) {
               return { success: false, error: byokSizeCapError(route.sizeCapBytes) };
             }
-            const ext = path.extname(realByok).toLowerCase().replace(".", "");
             const text = await this.executeManagedTranscription(event, route, {
               audioBuffer: fs.readFileSync(realByok),
               fileName: path.basename(realByok),
-              contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+              contentType: providerContentType(realByok),
             });
             return { success: true, text };
           }
 
           if (route.transport === "http-batch" && route.provider === "self-hosted") {
             // User's own server, so the 25 MB third-party cap does not apply.
-            const ext = path.extname(realByok).toLowerCase().replace(".", "");
             const { body, boundary } = buildMultipartBody(
               fs.readFileSync(realByok),
               path.basename(realByok),
-              AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+              providerContentType(realByok),
               { model: route.model, language: route.language }
             );
             const data = await postMultipart(new URL(route.endpoint), body, boundary);
@@ -9743,11 +9979,10 @@ class IPCHandlers {
           }
 
           if (route.transport === "proxied" && route.provider === "tinfoil") {
-            const ext = path.extname(realByok).toLowerCase().replace(".", "");
             const { text } = await transcribeWithTinfoil({
               audioBuffer: fs.readFileSync(realByok),
               fileName: path.basename(realByok),
-              contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+              contentType: providerContentType(realByok),
               language: route.language,
               apiKey: this.environmentManager.getTinfoilKey(),
             });
@@ -9755,13 +9990,12 @@ class IPCHandlers {
           }
 
           if (route.transport === "proxied" && route.provider === "gemini") {
-            const ext = path.extname(realByok).toLowerCase().replace(".", "");
             // Deliberately no language hint — same rationale as the multipart
             // branch below, and Gemini's language_codes is a hard constraint.
             const { text } = await transcribeWithGemini({
               audioBuffer: fs.readFileSync(realByok),
               model: route.model,
-              contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+              contentType: providerContentType(realByok),
               apiKey: apiKey || this.environmentManager.getGeminiKey(),
             });
             return { success: true, text };
@@ -9772,8 +10006,7 @@ class IPCHandlers {
           }
 
           const audioBuffer = fs.readFileSync(realByok);
-          const ext = path.extname(realByok).toLowerCase().replace(".", "");
-          const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
+          const contentType = providerContentType(realByok);
           const fileName = path.basename(realByok);
 
           // mistral/xai have no OpenAI-compatible endpoint — talk to them
@@ -9898,6 +10131,8 @@ class IPCHandlers {
             code: error.code,
             messageKey: error.messageKey,
           };
+        } finally {
+          cleanupUpload?.();
         }
       }
     );
@@ -10171,6 +10406,11 @@ class IPCHandlers {
 
     ipcMain.handle("get-update-info", async () => {
       return this.updateManager.getUpdateInfo();
+    });
+
+    ipcMain.handle("set-auto-updates-enabled", async (_event, enabled) => {
+      this.updateManager.setAutoUpdatesEnabled(enabled === true);
+      return { success: true };
     });
 
     const fetchStreamingToken = async (event) => {
@@ -10927,7 +11167,8 @@ class IPCHandlers {
       }
 
       if (!hotkey) {
-        hotkeyManager.unregisterSlot("voiceAgent");
+        const removed = await hotkeyManager.unregisterSlot("voiceAgent");
+        if (removed === false) return { success: false };
         this.environmentManager.saveVoiceAgentKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
         this._notifyHotkeyChanged("");
@@ -10962,7 +11203,8 @@ class IPCHandlers {
       }
 
       if (!hotkey) {
-        hotkeyManager.unregisterSlot("translation");
+        const removed = await hotkeyManager.unregisterSlot("translation");
+        if (removed === false) return { success: false };
         this.environmentManager.saveTranslationKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
         this._notifyHotkeyChanged("");
@@ -11240,7 +11482,6 @@ class IPCHandlers {
       "notificationsEnabled",
       "notifyMeetingDetection",
       "notifyCalendarReminders",
-      "notifyUpdates",
     ]);
 
     ipcMain.handle("sync-notification-preferences", async (_event, prefs) => {
@@ -11327,8 +11568,6 @@ class IPCHandlers {
       }
     });
 
-    registerMeetingAutoEndLifecycleHandlers(ipcMain, () => this.meetingDetectionEngine);
-
     ipcMain.handle("join-calendar-meeting", async (_event, eventId) => {
       try {
         await this.meetingDetectionEngine.joinCalendarMeeting(eventId);
@@ -11337,6 +11576,8 @@ class IPCHandlers {
         return { success: false, error: error.message };
       }
     });
+
+    ipcMain.handle("start-manual-meeting", () => this.windowManager.startManualMeeting());
 
     ipcMain.handle("get-meeting-notification-data", async () => {
       return this.windowManager?._pendingNotificationData ?? null;
@@ -11352,26 +11593,6 @@ class IPCHandlers {
 
     ipcMain.handle("meeting-notification-ready", async (event) => {
       this.windowManager?.showNotificationWindow(event.sender);
-    });
-
-    ipcMain.handle("get-update-notification-data", async () => {
-      return this.windowManager?._pendingUpdateNotificationData ?? null;
-    });
-
-    ipcMain.handle("update-notification-ready", async () => {
-      this.windowManager?.showUpdateNotificationWindow();
-    });
-
-    ipcMain.handle("update-notification-respond", async (_event, action) => {
-      this.windowManager?.dismissUpdateNotification();
-      if (action === "update") {
-        try {
-          await this.updateManager?.downloadUpdate();
-        } catch (error) {
-          console.error("Failed to start update download from notification:", error);
-        }
-      }
-      return { success: true };
     });
 
     // Note files (markdown mirror) handlers

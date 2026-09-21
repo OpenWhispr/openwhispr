@@ -54,6 +54,15 @@ function resolveActiveAccountScope({ token, generation, binding }) {
   return accountId ? { accountId, authGeneration: generation } : null;
 }
 
+function matchesActiveAccountScope(expected, current) {
+  return Boolean(
+    expected &&
+    current &&
+    expected.accountId === current.accountId &&
+    expected.authGeneration === current.authGeneration
+  );
+}
+
 function read() {
   try {
     const parsed = JSON.parse(fs.readFileSync(bindingFile(), "utf8"));
@@ -90,6 +99,7 @@ module.exports = {
   clear,
   evaluateScopeRequest,
   hashToken,
+  matchesActiveAccountScope,
   persist,
   read,
   resolveActiveAccountScope,

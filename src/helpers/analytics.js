@@ -3,6 +3,13 @@
 // via Node's require(esm) with module-syntax detection.
 const DAY_MS = 86_400_000;
 export const ANALYTICS_ACTIVITY_MONTH_COUNT = 6;
+// Bump only when changed eligibility rules require old transcription rows to
+// be reconsidered. Each local database keeps its own scan cursor per version.
+export const ANALYTICS_HISTORY_BACKFILL_VERSION = 1;
+// Version 0 is deliberately below every exact counting rule. Historical rows
+// reconstructed from legacy desktop storage can therefore be upgraded by the
+// API's richer server history without overwriting a live event.
+export const ANALYTICS_HISTORICAL_COUNTER_VERSION = 0;
 export const ANALYTICS_COUNTER_VERSION = 2;
 
 const CJK_SCRIPT_PATTERN =
@@ -75,6 +82,11 @@ function modeFromStoredProvider(provider) {
   if (provider === "openwhispr") return "openwhispr_cloud";
   if (provider.includes("self-hosted") || provider === "lan") return "self_hosted";
   return "byok";
+}
+
+export function inferHistoricalAnalyticsMode(provider) {
+  const mode = modeFromStoredProvider(provider);
+  return mode === "byok" ? "unknown" : mode;
 }
 
 // The provider that actually ran wins when it names a concrete engine or ends

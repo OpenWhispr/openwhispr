@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Info } from "lucide-react";
+import { Info } from "../icons";
 import { InfoBox } from "./InfoBox";
 import { CopyableCommand } from "./CopyableCommand";
 
