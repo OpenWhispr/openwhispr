@@ -500,7 +500,7 @@ class SelectionManager {
     if (target.kind === "atspi-pid" && (await this._isTerminalPid(target.id))) return capture;
     // macOS targets normally carry the copier's NSWorkspace app name, already
     // matched above; only an unnamed target needs its executable resolved so a
-    // terminal cannot reach the trusted-unknown verdict below. Never resolve a
+    // terminal cannot become a caret destination. Never resolve a
     // named one — `ps` reports bundle paths like "Visual Studio Code" whose
     // "st" substring would misread editors as terminals.
     if (
@@ -512,12 +512,9 @@ class SelectionManager {
     }
     const verdict = await this.textEditMonitor?.isFocusedEditable?.(target);
     if (verdict === "editable") return { status: "editable", target };
-    // "unknown" is the dormant-accessibility signature (Chromium-family: Arc,
-    // Dia, Chrome, Electron) where nothing can verify the field and no wake-up
-    // switch exists. The synthetic copy already ruled out a live selection and
-    // the terminal checks passed, so trust the caret — dictation auto-paste's
-    // long-standing risk profile. A confirmed "not_editable" still declines.
-    if (verdict === "unknown") return { status: "editable", target };
+    // An empty copy cannot distinguish a caret from an integrated terminal or
+    // a page without an input; it can also hide a selection matching the clipboard.
+    // Unknown accessibility must keep the panel fallback, including on revalidation.
     return capture;
   }
 
@@ -648,11 +645,9 @@ class SelectionManager {
     // A clipboard side the sentinel write didn't reach (KDE desyncs X11 from
     // Wayland) still holds pre-copy content; snapshot it so stale text can't
     // be mistaken for the copied selection. Known limitation: a clipboard that
-    // already held exactly the selected text reads as "no selection". Where
-    // accessibility can inspect the focused element, the editable probe still
-    // refuses the field's live selection; in AX-dormant apps the trusted
-    // "unknown" caret cannot see it — the blind spot dictation's auto-paste
-    // has always had.
+    // already held exactly the selected text reads as "no selection". The
+    // editable probe must independently verify an empty writable field before
+    // caret delivery; a live selection or unknown accessibility keeps the panel.
     const baseline = new Set([...beforeWrite, ...this.clipboardManager._readClipboardTextAll()]);
 
     const copyResult = await sendCopy();
