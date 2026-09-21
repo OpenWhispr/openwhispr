@@ -64,8 +64,8 @@ const NOVA3_LANGUAGES = new Set([
   "multi",
 ]);
 
-// 100ms of silence at 16kHz 16-bit mono — sent to warm connections to prevent
-// Deepgram's net0001 idle timeout (which only resets on audio data, not KeepAlive).
+// 100ms of silence at 16kHz 16-bit mono. Warm sockets send this so a cached
+// connection survives until dictation starts; a live socket uses KeepAlive JSON.
 const SILENCE_FRAME = Buffer.alloc((SAMPLE_RATE / 10) * 2);
 
 // Deepgram binds the scheme to the credential: a raw API key (BYOK) is accepted
@@ -211,9 +211,10 @@ class DeepgramStreaming {
     this.keepAliveInterval = setInterval(() => {
       if (target && target.readyState === WebSocket.OPEN) {
         try {
-          // Warm connections send silence audio — Deepgram's net0001 idle timeout
-          // only resets on audio data, not KeepAlive messages, for pre-audio sessions.
-          // Active connections use KeepAlive JSON (audio flow already resets the timer).
+          // A pre-audio socket (warm cache, or a cold meeting socket waiting on
+          // capture setup) dies with net0001 in about 10s unless it hears audio
+          // or a KeepAlive. Warm sockets send silence; a live session sends
+          // KeepAlive JSON, which also resets that timer before the first frame.
           target.send(isWarm ? SILENCE_FRAME : JSON.stringify({ type: "KeepAlive" }));
         } catch (err) {
           debugLogger.debug("Deepgram keep-alive failed", { error: err.message });
@@ -667,6 +668,11 @@ class DeepgramStreaming {
 
       this.ws.on("open", () => {
         debugLogger.debug("Deepgram WebSocket connected");
+        // Deepgram stays silent until it receives audio, and the meeting path
+        // does not send audio until connect() resolves — waiting here for the
+        // first message deadlocks, and a 10s idle close (net0001) is what used
+        // to unblock it. Open is enough, matching the warm path.
+        this._markColdSocketReady();
       });
 
       this.ws.on("message", (data) => {
@@ -727,29 +733,40 @@ class DeepgramStreaming {
     }
   }
 
+  // connect() used to wait for Deepgram's first frame. That frame never
+  // arrives until audio does, and meeting setup can sit past the 10s idle
+  // close. Ready-on-open lets capture proceed; KeepAlive holds the socket.
+  _markColdSocketReady(firstMessageType) {
+    if (!this.pendingResolve) return;
+    this.isConnected = true;
+    if (this.sessionStartedAt == null) this.sessionStartedAt = Date.now();
+    clearTimeout(this.connectionTimeout);
+    this.connectionTimeout = null;
+    if (this.ws?.readyState === WebSocket.OPEN && !this.keepAliveInterval) {
+      try {
+        this.ws.send(JSON.stringify({ type: "KeepAlive" }));
+      } catch (err) {
+        debugLogger.debug("Deepgram immediate keep-alive failed", { error: err.message });
+      }
+    }
+    this.startKeepAlive(this.ws);
+    debugLogger.debug("Deepgram session started", {
+      sessionId: this.sessionId,
+      firstMessageType: firstMessageType || "open",
+    });
+    const resolve = this.pendingResolve;
+    this.pendingResolve = null;
+    this.pendingReject = null;
+    resolve();
+  }
+
   handleMessage(data) {
     try {
       const message = JSON.parse(data.toString());
 
-      // Resolve pending connect() promise on first valid message.
-      // With nova-3, when audio is already flowing, Deepgram may skip
-      // the Metadata message and jump straight to SpeechStarted/Results.
-      if (this.pendingResolve) {
-        this.isConnected = true;
-        this.sessionStartedAt = Date.now();
-        clearTimeout(this.connectionTimeout);
-        this.startKeepAlive(this.ws);
-        if (message.type === "Metadata") {
-          this.sessionId = message.request_id;
-        }
-        debugLogger.debug("Deepgram session started", {
-          sessionId: this.sessionId,
-          firstMessageType: message.type,
-        });
-        this.pendingResolve();
-        this.pendingResolve = null;
-        this.pendingReject = null;
-      }
+      // A socket that opened without this running (older sessions) still
+      // becomes ready on the first server frame.
+      if (this.pendingResolve) this._markColdSocketReady(message.type);
 
       switch (message.type) {
         case "Metadata":
