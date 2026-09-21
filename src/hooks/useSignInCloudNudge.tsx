@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { ToastActionButton } from "../components/ui/Toast";
 import { useToast } from "../components/ui/useToast";
 import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
 import { SIGN_IN_PROMPTED_AT_KEY } from "../utils/requestSignIn";
@@ -43,15 +44,14 @@ export function useSignInCloudNudge(
       description: t("controlPanel.cloudNudge.description"),
       duration: 10000,
       action: (
-        <button
+        <ToastActionButton
           onClick={() => {
             dismiss(toastId);
             onOpenTranscriptionSettings();
           }}
-          className="rounded-sm border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-medium whitespace-nowrap text-white/90 transition-colors hover:border-white/35 hover:bg-white/20 hover:text-white"
         >
           {t("controlPanel.cloudNudge.action")}
-        </button>
+        </ToastActionButton>
       ),
     });
   }, [dismiss, isSignedIn, onOpenTranscriptionSettings, policy, t, toast, transcriptionMode]);

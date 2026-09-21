@@ -705,7 +705,7 @@
     },
     "cloudNudge": {
       "title": "你已登录",
-      "description": "听写仍在使用你自己的配置。你可以随时切换到 OpenWhispr 云端。",
+      "description": "听写仍在使用你自己的配置。你可以随时切换到 OpenWhispr Cloud。",
       "action": "打开设置"
     }
   },
