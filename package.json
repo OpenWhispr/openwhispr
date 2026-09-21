@@ -191,7 +191,7 @@
     "zustand": "^5.0.11"
   },
   "overrides": {
-    "adm-zip": "^0.6.0",
+    "adm-zip": "^0.6.1",
     "@tiptap/extension-blockquote": "3.31.3",
     "@tiptap/extension-bold": "3.31.3",
     "@tiptap/extension-bubble-menu": "3.31.3",
