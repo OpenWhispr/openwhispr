@@ -1,0 +1,118 @@
+name: Mobile CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CI: "true"
+  EXPO_NO_DOTENV: "1"
+  SENTRY_DISABLE_AUTO_UPLOAD: "true"
+
+jobs:
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
+  lockfile:
+    name: Mobile lockfile
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: openwhispr-mobile/.nvmrc
+      # Validate before installing packages from the contributor's lockfile.
+      - name: Validate dependency sources and integrity
+        run: npx --yes --ignore-scripts --package=lockfile-lint@5.0.1 lockfile-lint --path openwhispr-mobile/package-lock.json --type npm --validate-https --allowed-hosts npm --validate-integrity
+      - name: Reject high and critical dependency advisories
+        working-directory: openwhispr-mobile
+        run: npm audit --package-lock-only --ignore-scripts --audit-level=high
+
+  checks:
+    name: Mobile ${{ matrix.check }}
+    needs: [changes, lockfile]
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [static, tests, bundles]
+    defaults:
+      run:
+        working-directory: openwhispr-mobile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: openwhispr-mobile/.nvmrc
+          cache: npm
+          cache-dependency-path: openwhispr-mobile/package-lock.json
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Apply reviewed dependency patches
+        run: node_modules/.bin/patch-package --error-on-fail
+      - name: Check formatting
+        if: matrix.check == 'static'
+        run: npm run format
+      - name: Lint
+        if: matrix.check == 'static'
+        run: npm run lint
+      - name: Typecheck
+        if: matrix.check == 'static'
+        run: npm run typecheck
+      - name: Check Expo dependencies and configuration
+        if: matrix.check == 'static'
+        run: npm run doctor
+      - name: Validate development and production app configuration
+        if: matrix.check == 'static'
+        run: |
+          OPENWHISPR_APP_ENV=development node_modules/.bin/expo config --type public > /dev/null
+          OPENWHISPR_APP_ENV=production node_modules/.bin/expo config --type public > /dev/null
+      - name: Build SQLite test binding
+        if: matrix.check == 'tests'
+        run: npm rebuild better-sqlite3
+      - name: Run tests
+        if: matrix.check == 'tests'
+        run: npm run test --ignore-scripts -- --ci --runInBand
+      - name: Bundle iOS
+        if: matrix.check == 'bundles'
+        run: node_modules/.bin/expo export --platform ios --max-workers 2 --output-dir "$RUNNER_TEMP/mobile-export"
+        env:
+          OPENWHISPR_APP_ENV: production
+
+  mobile-status:
+    name: Mobile CI
+    needs: [changes, lockfile, checks]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require all selected mobile checks
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          MOBILE: ${{ needs.changes.outputs.mobile }}
+          LOCKFILE_RESULT: ${{ needs.lockfile.result }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          if [ "$MOBILE" = true ]; then
+            test "$LOCKFILE_RESULT" = success
+            test "$CHECKS_RESULT" = success
+          fi
