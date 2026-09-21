@@ -31,7 +31,7 @@
   "dependencies": {
     "@better-auth/expo": "1.6.22",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
-    "@hookform/resolvers": "^5.2.2",
+    "@hookform/resolvers": "^5.9.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-menu/menu": "^2.0.0",
     "@react-navigation/native": "^7.1.33",
