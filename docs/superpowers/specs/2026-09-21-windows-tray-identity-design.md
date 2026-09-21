@@ -55,7 +55,7 @@ No retry with a different GUID is added. Electron 41.10.5 logs a failed native `
 - No new native helpers, dependencies, runtime subprocesses, registry edits, shell restarts, private APIs, or simulated dragging.
 - Preserve existing icon loading, menu actions, tooltip, click handling, error handling, and macOS/Linux behavior.
 - Native acceptance scope: Windows 10 x64 and Windows 11 x64, with exact OS builds and app/artifact versions recorded.
-- Keep the PR draft until native acceptance passes.
+- Run native acceptance before the first release that ships this identity.
 
 ## Validation and acceptance
 
