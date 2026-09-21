@@ -14,8 +14,8 @@ import {
   Pencil,
   Plus,
   Search,
+  Settings,
   Share2,
-  Smile,
   Trash2,
   Users,
 } from "../icons";
@@ -35,9 +35,10 @@ import { useDialogs } from "../../hooks/useDialogs";
 import { useToast } from "../ui/useToast";
 import { useNoteDragAndDrop, type NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
+import { useCanCreateTeamSpace } from "../../hooks/useCanCreateTeamSpace";
 import { useAuth } from "../../hooks/useAuth";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { EmojiPickerInput } from "./EmojiPickerInput";
+import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
   canChangeSpaceNoteScope,
   canDeleteSpaceNote,
@@ -53,13 +54,11 @@ import {
 } from "../../lib/notePermissions";
 import { groupTeamSpacesByWorkspace } from "../../lib/workspaceSelection";
 import { localMutationErrorKey } from "../../lib/localMutationError";
-import { deleteSpace, renameSpace } from "../../services/spaceActions";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
 import { getCachedPlatform } from "../../utils/platform";
 import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
-import SpaceMembersDialog from "./SpaceMembersDialog";
 import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
 import { defaultFolderDisplayName } from "./shared";
 import type { FolderItem, NoteItem, SpaceItem, WorkspaceRole } from "../../types/electron";
@@ -405,13 +404,10 @@ function SpaceRow({
   isDragOver,
   isDropSuccess,
   dropHandlers,
-  canManage,
   onActivate,
   onToggle,
   onNewFolder,
-  onMembers,
-  onRename,
-  onDelete,
+  onSettings,
   a11y,
   t,
 }: {
@@ -423,13 +419,10 @@ function SpaceRow({
   isDragOver: boolean;
   isDropSuccess: boolean;
   dropHandlers: DropHandlers;
-  canManage: boolean;
   onActivate: () => void;
   onToggle: () => void;
   onNewFolder: () => void;
-  onMembers: () => void;
-  onRename: (focus: "name" | "emoji") => void;
-  onDelete: () => void;
+  onSettings: () => void;
   a11y: RowA11yProps;
   t: TFn;
 }) {
@@ -527,60 +520,16 @@ function SpaceRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={4} className="min-w-36">
-              {space.cloud_space_id && (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onMembers();
-                  }}
-                  className={MENU_ITEM_CLASS}
-                >
-                  <Users size={11} className="text-muted-foreground/70" />
-                  {t("notes.spaces.teamsMembers.menu")}
-                </DropdownMenuItem>
-              )}
-              {canManage && (
-                <>
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRename("name");
-                    }}
-                    className={MENU_ITEM_CLASS}
-                  >
-                    <Pencil size={11} className="text-muted-foreground/70" />
-                    {t("notes.spaces.rename")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRename("emoji");
-                    }}
-                    className={MENU_ITEM_CLASS}
-                  >
-                    <Smile size={11} className="text-muted-foreground/70" />
-                    {t("notes.spaces.changeEmoji")}
-                  </DropdownMenuItem>
-                </>
-              )}
-              {canManage && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete();
-                    }}
-                    className={cn(
-                      MENU_ITEM_CLASS,
-                      "text-destructive focus:text-destructive focus:bg-destructive/10"
-                    )}
-                  >
-                    <Trash2 size={11} />
-                    {t("notes.spaces.deleteSpace")}
-                  </DropdownMenuItem>
-                </>
-              )}
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSettings();
+                }}
+                className={MENU_ITEM_CLASS}
+              >
+                <Settings size={11} className="text-muted-foreground/70" />
+                {t("notes.spaces.settings")}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -1175,6 +1124,7 @@ export default function SpacesTree({
   const isTreeLoading = useIsTreeLoading();
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
+  const canCreateTeamSpace = useCanCreateTeamSpace();
   const { workspaces, loaded: workspacesLoaded } = useWorkspace();
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const shareByCloudId = useShareCache();
@@ -1183,15 +1133,10 @@ export default function SpacesTree({
   const [newFolderName, setNewFolderName] = useState("");
   const [renamingFolderId, setRenamingFolderId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [renamingSpaceId, setRenamingSpaceId] = useState<number | null>(null);
-  const [renameSpaceName, setRenameSpaceName] = useState("");
-  const [renameSpaceEmoji, setRenameSpaceEmoji] = useState("");
-  const [spaceRenameFocus, setSpaceRenameFocus] = useState<"name" | "emoji">("name");
-  const emojiPickerOpenRef = useRef(false);
+  const [settingsSpaceId, setSettingsSpaceId] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [createSpaceWorkspaceId, setCreateSpaceWorkspaceId] = useState<string | null>(null);
-  const [membersSpaceId, setMembersSpaceId] = useState<number | null>(null);
-  const [membersOpen, setMembersOpen] = useState(false);
   const [deleteSpaceTarget, setDeleteSpaceTarget] = useState<SpaceItem | null>(null);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -1235,12 +1180,6 @@ export default function SpacesTree({
   // Signed-out users never load workspaces (mirrored team spaces render flat);
   // errors still flip `loaded`, so this can't skeleton forever.
   const workspacesPending = isSignedIn && !workspacesLoaded;
-
-  // The server 403s team creation for plain members; no-workspace users get the create funnel.
-  const canCreateTeamSpace =
-    isSignedIn &&
-    workspacesLoaded &&
-    (workspaces.length === 0 || workspaces.some((w) => canManageWorkspace(w.role)));
 
   const currentUserId = user?.id ?? null;
   const workspaceRoleFor = (space: SpaceItem | undefined): WorkspaceRole | null =>
@@ -1596,11 +1535,9 @@ export default function SpacesTree({
     setRenameValue(folder.name);
   };
 
-  const startRenameSpace = (space: SpaceItem, focus: "name" | "emoji") => {
-    setRenamingSpaceId(space.id);
-    setRenameSpaceName(space.name);
-    setRenameSpaceEmoji(space.emoji ?? "");
-    setSpaceRenameFocus(focus);
+  const openSpaceSettings = (space: SpaceItem) => {
+    setSettingsSpaceId(space.id);
+    setSettingsOpen(true);
   };
 
   const requestDeleteFolder = (folder: FolderItem) => {
@@ -1629,19 +1566,6 @@ export default function SpacesTree({
 
   const requestDeleteSpace = (space: SpaceItem) => {
     setDeleteSpaceTarget(space);
-  };
-
-  const performDeleteSpace = async (space: SpaceItem) => {
-    const result = await deleteSpace(space);
-    if (!result.success) {
-      toast({
-        title: t("notes.spaces.couldNotDelete"),
-        description: t(localMutationErrorKey(result.error)),
-        variant: "destructive",
-      });
-      return;
-    }
-    toast({ title: t("notes.spaces.deleted", { space: space.name }) });
   };
 
   const handleRowKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, row: TreeRow) => {
@@ -1690,7 +1614,7 @@ export default function SpacesTree({
           row.space.kind === "team" &&
           canManageTeamSpace(row.space)
         ) {
-          startRenameSpace(row.space, "name");
+          openSpaceSettings(row.space);
         }
         break;
       case "Delete":
@@ -1774,27 +1698,6 @@ export default function SpacesTree({
         variant: "destructive",
       });
     }
-  };
-
-  const confirmSpaceRename = async () => {
-    const spaceId = renamingSpaceId;
-    if (spaceId == null) return;
-    const space = spaces.find((s) => s.id === spaceId);
-    const name = renameSpaceName.trim();
-    const emoji = renameSpaceEmoji.trim() || null;
-    setRenamingSpaceId(null);
-    if (!space || !name) return;
-    if (name === space.name && emoji === (space.emoji ?? null)) return;
-    const result = await renameSpace(space, { name, emoji });
-    if (!result.success) {
-      toast({
-        title: t("notes.spaces.couldNotRename"),
-        description: t(localMutationErrorKey(result.error)),
-        variant: "destructive",
-      });
-      return;
-    }
-    toast({ title: t("notes.spaces.renamed", { space: name }) });
   };
 
   const renderNote = (
@@ -1982,87 +1885,33 @@ export default function SpacesTree({
       (spaceRootCounts[space.id] ?? 0);
     return (
       <div key={space.id} role="none">
-        {renamingSpaceId === space.id ? (
-          <div
-            role="none"
-            className="flex items-center gap-1 h-[30px] px-2"
-            onBlur={(e) => {
-              // The emoji grid is portaled: while it's open, focus sits outside
-              // this row and a blur-commit would unmount the picker mid-pick.
-              if (emojiPickerOpenRef.current) return;
-              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                confirmSpaceRename();
-              }
-            }}
-            onKeyDown={(e) => {
-              // Portal events bubble through the React tree — Enter/Escape
-              // inside the open picker must not commit or cancel the rename.
-              if (emojiPickerOpenRef.current) return;
-              if (e.key === "Enter") {
-                confirmSpaceRename();
-                focusRowSoon(spaceKey);
-              }
-              if (e.key === "Escape") {
-                setRenamingSpaceId(null);
-                focusRowSoon(spaceKey);
-              }
-            }}
-          >
-            <EmojiPickerInput
-              autoFocus={spaceRenameFocus === "emoji"}
-              value={renameSpaceEmoji}
-              onChange={setRenameSpaceEmoji}
-              ariaLabel={t("notes.spaces.changeEmoji")}
-              className={cn(FOLDER_INPUT_CLASS, "w-8 shrink-0 px-0 text-center")}
-              onPickerOpenChange={(open) => {
-                emojiPickerOpenRef.current = open;
-              }}
-            />
-            <input
-              dir="auto"
-              autoFocus={spaceRenameFocus === "name"}
-              value={renameSpaceName}
-              onChange={(e) => setRenameSpaceName(e.target.value)}
-              onFocus={(e) => e.currentTarget.select()}
-              aria-label={t("notes.spaces.rename")}
-              className={FOLDER_INPUT_CLASS}
-            />
-          </div>
-        ) : (
-          <SpaceRow
-            space={space}
-            displayName={displayName}
-            isExpanded={isExpanded}
-            isActive={
-              activeNoteId == null &&
-              activeContext?.spaceId === space.id &&
-              activeContext.folderId == null
-            }
-            count={noteCount}
-            isDragOver={dragState.dragOverKey === spaceKey}
-            isDropSuccess={dragState.dropSuccessKey === spaceKey}
-            dropHandlers={dropTargetHandlers({ spaceId: space.id, folderId: null })}
-            canManage={canManageTeamSpace(space)}
-            onActivate={() => activateRow({ type: "space", key: spaceKey, space })}
-            onToggle={() => toggleContainerExpanded(spaceKey)}
-            onNewFolder={() => startCreateFolder(space)}
-            onMembers={() => {
-              setMembersSpaceId(space.id);
-              setMembersOpen(true);
-            }}
-            onRename={(focus) => startRenameSpace(space, focus)}
-            onDelete={() => requestDeleteSpace(space)}
-            a11y={a11yFor(spaceKey)}
-            t={t}
-          />
-        )}
+        <SpaceRow
+          space={space}
+          displayName={displayName}
+          isExpanded={isExpanded}
+          isActive={
+            activeNoteId == null &&
+            activeContext?.spaceId === space.id &&
+            activeContext.folderId == null
+          }
+          count={noteCount}
+          isDragOver={dragState.dragOverKey === spaceKey}
+          isDropSuccess={dragState.dropSuccessKey === spaceKey}
+          dropHandlers={dropTargetHandlers({ spaceId: space.id, folderId: null })}
+          onActivate={() => activateRow({ type: "space", key: spaceKey, space })}
+          onToggle={() => toggleContainerExpanded(spaceKey)}
+          onNewFolder={() => startCreateFolder(space)}
+          onSettings={() => openSpaceSettings(space)}
+          a11y={a11yFor(spaceKey)}
+          t={t}
+        />
         <TreeChildren open={isExpanded}>{renderSpaceContents(space)}</TreeChildren>
       </div>
     );
   };
 
-  const membersSpace =
-    membersSpaceId != null ? spaces.find((s) => s.id === membersSpaceId) : undefined;
+  const settingsSpace =
+    settingsSpaceId != null ? spaces.find((s) => s.id === settingsSpaceId) : undefined;
 
   if (isTreeLoading && spaces.length === 0) {
     return (
@@ -2239,15 +2088,20 @@ export default function SpacesTree({
         initialWorkspaceId={createSpaceWorkspaceId}
       />
 
-      {membersSpace && (
-        <SpaceMembersDialog space={membersSpace} open={membersOpen} onOpenChange={setMembersOpen} />
+      {settingsSpace && (
+        <SpaceSettingsDialog
+          space={settingsSpace}
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          onCloseAutoFocus={(event) => {
+            // No trigger element to return to: the row the settings belong to is the natural target.
+            event.preventDefault();
+            focusRow(spaceContainerKey(settingsSpace.id));
+          }}
+        />
       )}
 
-      <DeleteSpaceDialog
-        space={deleteSpaceTarget}
-        onClose={() => setDeleteSpaceTarget(null)}
-        onConfirm={(space) => void performDeleteSpace(space)}
-      />
+      <DeleteSpaceDialog space={deleteSpaceTarget} onClose={() => setDeleteSpaceTarget(null)} />
 
       <ConfirmDialog
         open={confirmDialog.open}

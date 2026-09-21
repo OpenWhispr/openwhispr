@@ -18,6 +18,7 @@ import { usePolicyStore } from "../stores/policyStore";
 import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
 import { Button } from "./ui/button";
+import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Tooltip } from "./ui/tooltip";
 
@@ -432,7 +433,7 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
     : t("insights.onDevice");
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-6 py-6">
+    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex min-h-full flex-col px-6 py-6")}>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-1 flex-col">
         <div className="flex min-h-8 items-center justify-between gap-4">
           <TabsList className="h-7 p-0.5 rounded-[7px]">

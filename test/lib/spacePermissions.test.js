@@ -152,3 +152,32 @@ test("canMoveOrDeleteSpaceFolder: private and local-only spaces stay manageable"
   assert.equal(canMoveOrDeleteSpaceFolder(localOnlySpace, null), true);
   assert.equal(canMoveOrDeleteSpaceFolder(undefined, null), true);
 });
+
+test("teamsUserCanLeave: only teams the user explicitly belongs to", () => {
+  const { teamsUserCanLeave } = require("../../src/lib/spacePermissions.ts");
+  const teams = [
+    { id: "t1", name: "Sales", my_role: "member" },
+    { id: "t2", name: "Leads", my_role: "admin" },
+    { id: "t3", name: "Ops", my_role: null },
+    { id: "t4", name: "Legacy" },
+  ];
+  assert.deepEqual(
+    teamsUserCanLeave({ teams }).map((team) => team.id),
+    ["t1", "t2"]
+  );
+  assert.deepEqual(teamsUserCanLeave({ teams: [] }), []);
+});
+
+test("canLeaveSpace: a direct grant or an explicit team membership can be given up", () => {
+  const { canLeaveSpace } = require("../../src/lib/spacePermissions.ts");
+  const viaTeam = [{ id: "t1", name: "Sales", my_role: "member" }];
+  const implicitOnly = [{ id: "t2", name: "Ops", my_role: null }];
+  assert.equal(canLeaveSpace({ my_direct_role: "member", teams: [] }), true);
+  assert.equal(canLeaveSpace({ my_direct_role: "admin", teams: implicitOnly }), true);
+  assert.equal(canLeaveSpace({ my_direct_role: null, teams: viaTeam }), true);
+  assert.equal(canLeaveSpace({ my_direct_role: null, teams: implicitOnly }), false);
+  assert.equal(canLeaveSpace({ my_direct_role: null, teams: [] }), false);
+  // Mirrors written before the API shipped my_direct_role omit it entirely.
+  assert.equal(canLeaveSpace({ teams: viaTeam }), true);
+  assert.equal(canLeaveSpace({ teams: [] }), false);
+});

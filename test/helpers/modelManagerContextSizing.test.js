@@ -50,7 +50,10 @@ const SHORT_PROMPT = "Clean up this sentence.";
 // ~20k estimated tokens, the size that fails on main today.
 const LONG_PROMPT = "word ".repeat(12000);
 
-async function setup(t, { tokenCount = null, totalMemoryBytes = 48 * GIB } = {}) {
+async function setup(
+  t,
+  { tokenCount = null, totalMemoryBytes = 48 * GIB, finishReason = "stop" } = {}
+) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-ctx-sizing-"));
   electronHome = home;
   t.after(() => fs.rm(home, { recursive: true, force: true }));
@@ -82,7 +85,7 @@ async function setup(t, { tokenCount = null, totalMemoryBytes = 48 * GIB } = {})
       } else {
         calls.completions += 1;
         completionBody = JSON.parse(raw);
-        payload = { choices: [{ finish_reason: "stop", message: { content: "done" } }] };
+        payload = { choices: [{ finish_reason: finishReason, message: { content: "done" } }] };
       }
       res.writeHead(status, { "Content-Type": "application/json" });
       res.end(JSON.stringify(payload));
@@ -476,4 +479,18 @@ test("only Apple Silicon is treated as memory the GPU already shares", async (t)
   assert.notEqual(unified.reason, "gpu-cap", "unified memory needs no unverified-GPU cap");
   assert.equal(discrete.reason, "gpu-cap", "an Intel Mac's GPU memory is not system memory");
   assert.ok(discrete.ceiling < unified.ceiling);
+});
+
+test("a reply cut off at the token cap keeps its code through the bridge", async (t) => {
+  // The bridge rewraps failures; the renderer maps this code to the cleanup toast (#2091).
+  const { modelManager, modelId } = await setup(t, { tokenCount: 40, finishReason: "length" });
+
+  await assert.rejects(
+    () => modelManager.runInference(modelId, SHORT_PROMPT, { requireCompleteOutput: true }),
+    (error) => {
+      assert.equal(error.code, "OUTPUT_TRUNCATED");
+      assert.equal(error.details.modelId, modelId);
+      return true;
+    }
+  );
 });

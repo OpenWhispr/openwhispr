@@ -62,6 +62,7 @@ import {
   setSessionExpectedCount,
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
+import { startRecordingForNote, useCreateNote } from "../../hooks/useCreateNote";
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
@@ -123,7 +124,7 @@ interface PersonalNotesViewProps {
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
-  invitationEntry?: { workspaceId: string; teamIds: string[] } | null;
+  invitationEntry?: { workspaceId: string; teamIds: string[]; spaceIds: string[] } | null;
   onInvitationEntryHandled?: () => void;
 }
 
@@ -295,21 +296,25 @@ export default function PersonalNotesView({
   }, [invitationEntry, isSidePanelLayout]);
 
   // The acceptance modal starts a sync before navigating here. Once the first
-  // space an invited team can access appears in the local mirror, take the
-  // user to it instead of leaving the newly shared content hidden behind
-  // Personal.
+  // space the invitation granted (directly or via a team) appears in the local
+  // mirror, take the user to it instead of leaving the newly shared content
+  // hidden behind Personal.
   useEffect(() => {
     if (!invitationEntry) return;
     const invitedTeamIds = new Set(invitationEntry.teamIds);
+    const invitedSpaceIds = new Set(invitationEntry.spaceIds);
+    // Workspace owners/admins receive implicit access, so their invitation
+    // may enumerate no grants at all. In that case, open the first accessible
+    // team space belonging to the accepted workspace.
+    const anyGrant = invitedTeamIds.size === 0 && invitedSpaceIds.size === 0;
     const invitedSpace = spaces.find(
       (space) =>
         space.kind === "team" &&
         space.workspace_id === invitationEntry.workspaceId &&
         space.cloud_space_id != null &&
-        // Workspace owners/admins receive implicit access, so their invitation
-        // may not enumerate team ids. In that case, open the first accessible
-        // team space belonging to the accepted workspace.
-        (invitedTeamIds.size === 0 || space.teams.some((team) => invitedTeamIds.has(team.id)))
+        (anyGrant ||
+          invitedSpaceIds.has(space.cloud_space_id) ||
+          space.teams.some((team) => invitedTeamIds.has(team.id)))
     );
     if (!invitedSpace) return;
 
@@ -354,24 +359,7 @@ export default function PersonalNotesView({
     });
   }, [activeNote?.calendar_event_id]);
 
-  const startRecordingForNote = useCallback(async (note: NoteItem | null) => {
-    const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
-    await storeStartRecording({
-      noteId: note?.id ?? null,
-      noteTitle: note?.title ?? null,
-      folderId: note?.folder_id ?? null,
-      seedSegments,
-      diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: resolveExpectedSpeakerCount(note),
-      expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
-      autoEndEligible: isMeetingAutoEndEligible(note),
-    });
-  }, []);
-
-  const startRecording = useCallback(
-    () => startRecordingForNote(activeNote ?? null),
-    [activeNote, startRecordingForNote]
-  );
+  const startRecording = useCallback(() => startRecordingForNote(activeNote ?? null), [activeNote]);
 
   const stopRecording = useCallback(async () => {
     await storeStopRecording();
@@ -507,42 +495,12 @@ export default function PersonalNotesView({
     return () => flushPendingSaves("unmount");
   }, [flushPendingSaves]);
 
-  const handleNewNoteIn = useCallback(
-    async (spaceId: number, folderId: number | null) => {
-      const result = await window.electronAPI.saveNote(
-        t("notes.list.untitledNote"),
-        "",
-        "personal",
-        null,
-        null,
-        folderId,
-        spaceId
-      );
-      if (result.success && result.note) {
-        setActiveContext(result.note.space_id, result.note.folder_id);
-        revealContainer(result.note.space_id, result.note.folder_id);
-        setActiveNoteId(result.note.id);
-        // A new note is a recording waiting to happen: start it unless one is already live.
-        if (meetingRecordingAllowed && !isTranscribing) void startRecordingForNote(result.note);
-      }
-    },
-    [t, meetingRecordingAllowed, isTranscribing, startRecordingForNote]
-  );
+  const { createNote, createNoteIn } = useCreateNote();
 
   const privateSpaceId = useMemo(
     () => spaces.find((s) => s.kind === "private")?.id ?? null,
     [spaces]
   );
-
-  const handleNewNoteInPrivate = useCallback(() => {
-    if (privateSpaceId == null) return;
-    handleNewNoteIn(privateSpaceId, null);
-  }, [privateSpaceId, handleNewNoteIn]);
-
-  const handleNewNote = useCallback(() => {
-    if (activeContext) handleNewNoteIn(activeContext.spaceId, activeContext.folderId);
-    else handleNewNoteInPrivate();
-  }, [activeContext, handleNewNoteIn, handleNewNoteInPrivate]);
 
   const handleNotesAdded = useCallback(async () => {
     if (activeFolderId) {
@@ -689,18 +647,6 @@ export default function PersonalNotesView({
   // the store — this view can be unmounted when an auto-end stop fires.
   const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
 
-  if (!isOnboardingComplete) {
-    return (
-      <>
-        <NotesOnboarding onComplete={completeOnboarding} />
-        <NotesStructureIntroDialog
-          open={showStructureIntro}
-          onOpenChange={handleStructureIntroOpenChange}
-        />
-      </>
-    );
-  }
-
   const runNoteAction = async (action: ActionItem) => {
     if (!editorNote) return;
     const { recordingNoteId: liveNoteId, transcript: liveTranscript } =
@@ -763,6 +709,18 @@ export default function PersonalNotesView({
     if (action) void runNoteAction(action);
   };
 
+  if (!isOnboardingComplete) {
+    return (
+      <>
+        <NotesOnboarding onComplete={completeOnboarding} />
+        <NotesStructureIntroDialog
+          open={showStructureIntro}
+          onOpenChange={handleStructureIntroOpenChange}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="flex h-full">
       <div
@@ -789,7 +747,7 @@ export default function PersonalNotesView({
             onDeleteNote={handleDelete}
             onMoveNote={handleMoveNote}
             onCreateFolderAndMove={handleCreateFolderAndMove}
-            onNewNote={handleNewNoteIn}
+            onNewNote={createNoteIn}
             onShowStructureIntro={() => setShowStructureIntro(true)}
           />
         </div>
@@ -861,7 +819,7 @@ export default function PersonalNotesView({
             space={overviewSpace}
             folder={overviewFolder}
             onOpenNote={setActiveNoteId}
-            onNewNote={handleNewNote}
+            onNewNote={createNote}
             onAddExisting={activeFolderId != null ? () => setShowAddNotesDialog(true) : undefined}
           />
         ) : (
@@ -972,7 +930,7 @@ export default function PersonalNotesView({
                 </p>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleNewNote}
+                    onClick={createNote}
                     className="flex items-center gap-1.5 px-4 h-7 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
                   >
                     <Plus size={11} />

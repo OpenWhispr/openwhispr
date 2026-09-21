@@ -25,7 +25,7 @@ import {
   type NoteAclState,
 } from "../../lib/notePermissions";
 import { ownsNote } from "../../lib/spacePermissions";
-import SpaceMembersDialog from "./SpaceMembersDialog";
+import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
   useShareCacheEntry,
   useNoteConflict,
@@ -54,6 +54,12 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
+import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
+import {
+  SPLIT_BUTTON_DIVIDER_CLASS,
+  SPLIT_BUTTON_GROUP_CLASS,
+  SPLIT_BUTTON_SEGMENT_CLASS,
+} from "../ui/splitButton";
 import type { NoteItem, FolderItem } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
@@ -74,14 +80,15 @@ import {
 import NoteParticipants from "./NoteParticipants";
 import type { CalendarAttendee } from "../../types/calendar";
 import { observeFloatingChatLayout } from "./floatingChatLayout";
-import { NOTE_META_CHIP_CLASS, defaultFolderDisplayName, folderMatchesQuery } from "./shared";
+import {
+  NOTE_META_CHIP_CLASS,
+  defaultFolderDisplayName,
+  folderMatchesQuery,
+  shouldOfferMeetingSummary,
+} from "./shared";
 
 const SEGMENT_BUTTON_CLASS =
   "relative z-1 flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors duration-150";
-const SHARE_GROUP_CLASS =
-  "flex h-[30px] items-stretch overflow-hidden rounded-full border border-border bg-surface-3 dark:border-white/10 dark:bg-surface-2";
-const SHARE_SEGMENT_CLASS =
-  "flex items-center text-xs font-medium text-foreground/80 outline-none transition-colors duration-150 hover:bg-surface-raised hover:text-foreground focus-visible:bg-surface-raised dark:hover:bg-surface-3";
 
 const TRANSCRIPT_EXPORT_LABEL_KEYS = {
   txt: "notes.editor.asTranscriptText",
@@ -239,7 +246,8 @@ export default function NoteEditor({
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
-  const [viewMode, setViewMode] = useState<MeetingViewMode>("raw");
+  const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
+  const [viewMode, setViewMode] = useState<MeetingViewMode>(defaultViewMode);
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   const [folderSearch, setFolderSearch] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -398,15 +406,15 @@ export default function NoteEditor({
   }, [diarizedSegments, note.transcript]);
 
   const hasChatSegments = displaySegments.length > 0;
-  // A finished recording with no AI summary yet offers one from the transcript view.
   const showSummaryCallout =
-    viewMode === "transcript" &&
-    !isRecording &&
-    hasChatSegments &&
-    !enhancement &&
-    canEditNote &&
     !!onGenerateSummary &&
-    actionProcessingState !== "processing";
+    shouldOfferMeetingSummary({
+      isRecording,
+      hasTranscriptSegments: hasChatSegments,
+      hasSummary: !!enhancement,
+      canEdit: canEditNote,
+      isProcessingAction: actionProcessingState === "processing",
+    });
 
   const knownSpeakers = useMemo(
     () => buildKnownSpeakers(speakerProfiles, displaySegments, speakerMappings),
@@ -495,14 +503,14 @@ export default function NoteEditor({
         setDiarizedSegments(null);
         setIsDiarizing(false);
         setSpeakerMappings({});
-        setViewMode("raw");
+        setViewMode(defaultViewMode);
         if (titleRef.current && titleRef.current.textContent !== note.title) {
           titleRef.current.textContent = note.title || "";
         }
         editorRef.current?.commands.focus();
       });
     }
-  }, [note.id, note.title, scheduleUiUpdate]);
+  }, [note.id, note.title, defaultViewMode, scheduleUiUpdate]);
 
   useEffect(() => {
     window.electronAPI?.getSpeakerMappings?.(note.id).then((mappings) => {
@@ -824,7 +832,7 @@ export default function NoteEditor({
   return (
     <div className="flex h-full min-h-0">
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="px-5 pt-5 pb-0">
+        <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-5 pt-5 pb-0")}>
           <div
             dir="auto"
             ref={titleRef}
@@ -1055,7 +1063,7 @@ export default function NoteEditor({
                     )}
                   >
                     <Sparkles size={12} />
-                    {t("notes.editor.enhanced")}
+                    {t("notes.editor.aiSummary")}
                     {enhancement.isStale && (
                       <span
                         className="h-1 w-1 rounded-full bg-amber-400/60"
@@ -1076,21 +1084,21 @@ export default function NoteEditor({
                   onStop={onStopRecording}
                 />
               )}
-              <div className={SHARE_GROUP_CLASS}>
+              <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-[30px]")}>
                 <button
                   type="button"
                   onClick={() => openShare("open")}
-                  className={cn(SHARE_SEGMENT_CLASS, "gap-1.5 ps-2.5 pe-3")}
+                  className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "gap-1.5 ps-2.5 pe-3")}
                 >
                   <Lock size={13} className={isShared ? "text-primary" : "text-foreground/60"} />
                   {t("noteEditor.share.button")}
                 </button>
-                <span aria-hidden="true" className="my-1.5 w-px bg-border dark:bg-white/10" />
+                <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
                 <button
                   type="button"
                   onClick={() => openShare("copy-link")}
                   aria-label={t("noteEditor.share.dialog.copyLink")}
-                  className={cn(SHARE_SEGMENT_CLASS, "w-[30px] justify-center")}
+                  className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-[30px] justify-center")}
                 >
                   <Link2 size={13} className="text-foreground/60" />
                 </button>
@@ -1102,37 +1110,39 @@ export default function NoteEditor({
         {conflict && (
           <div
             className={cn(
-              "flex items-center gap-2 px-5 h-8 mt-2 shrink-0",
+              "h-8 mt-2 shrink-0",
               "bg-amber-400/5 dark:bg-amber-400/[0.07]",
               "border-y border-amber-400/15 dark:border-amber-400/20",
               "animate-in slide-in-from-top-2 duration-300"
             )}
           >
-            <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
-            <p className="text-[11px] text-foreground/50 flex-1 truncate">
-              {t("notes.spaces.conflictBanner")}
-              {conflictEditorName && (
-                <span className="text-foreground/45">
-                  {" "}
-                  {t("notes.spaces.editedBy", {
-                    name: conflictEditorName,
-                    time: formatRelativeTime(conflict.updated_at, t, locale),
-                  })}
-                </span>
-              )}
-            </p>
-            <button
-              onClick={handleConflictRefresh}
-              className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-            >
-              {t("notes.spaces.conflictRefresh")}
-            </button>
-            <button
-              onClick={handleConflictKeep}
-              className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-            >
-              {t("notes.spaces.conflictKeep")}
-            </button>
+            <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
+              <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
+              <p className="text-[11px] text-foreground/50 flex-1 truncate">
+                {t("notes.spaces.conflictBanner")}
+                {conflictEditorName && (
+                  <span className="text-foreground/45">
+                    {" "}
+                    {t("notes.spaces.editedBy", {
+                      name: conflictEditorName,
+                      time: formatRelativeTime(conflict.updated_at, t, locale),
+                    })}
+                  </span>
+                )}
+              </p>
+              <button
+                onClick={handleConflictRefresh}
+                className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              >
+                {t("notes.spaces.conflictRefresh")}
+              </button>
+              <button
+                onClick={handleConflictKeep}
+                className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              >
+                {t("notes.spaces.conflictKeep")}
+              </button>
+            </div>
           </div>
         )}
 
@@ -1141,6 +1151,7 @@ export default function NoteEditor({
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
+                  contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   speakerMappings={speakerMappings}
                   speakerProfiles={speakerProfiles}
                   participants={parsedParticipants}
@@ -1157,6 +1168,7 @@ export default function NoteEditor({
                 />
               ) : (
                 <MeetingTranscriptChat
+                  contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   segments={displaySegments}
                   speakerMappings={speakerMappings}
                   speakerProfiles={knownSpeakers}
@@ -1182,7 +1194,7 @@ export default function NoteEditor({
                 icon={Mic}
                 title={t("notes.editor.transcriptEmptyTitle")}
                 description={t("notes.editor.transcriptEmptyDescription")}
-                className="mt-2"
+                className={cn(PAGE_CONTENT_WIDTH_CLASS, "mt-2")}
               >
                 {canEditNote && recordingAllowed && (
                   <Button size="sm" onClick={onStartRecording} disabled={isProcessing}>
@@ -1285,10 +1297,11 @@ export default function NoteEditor({
         copyLinkOnOpen={shareIntent === "copy-link"}
       />
       {isTeamNote && space?.cloud_space_id && (
-        <SpaceMembersDialog
+        <SpaceSettingsDialog
           space={space}
           open={membersDialogOpen}
           onOpenChange={setMembersDialogOpen}
+          initialTab="members"
         />
       )}
     </div>

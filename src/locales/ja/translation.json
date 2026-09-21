@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "AI処理は組織によって制限されています。",
     "policyAgentRestricted": "AIアシスタントの使用は組織によって制限されています。",
     "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。",
+    "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
     "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。"
@@ -911,7 +912,9 @@
         "managedRouteInvalid": "設定の不一致により、マネージド文字起こしを開始できませんでした。もう一度お試しいただくか、管理者にお問い合わせください。",
         "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。",
         "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
-        "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。"
+        "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。",
+        "cleanupTruncated": "AI モデルの出力が上限に達し、ディクテーションのクリーンアップが完了しませんでした。",
+        "cleanupEmptyReply": "AI モデルが空の応答を返したため、クリーンアップされたテキストがありません。"
       },
       "translationFallback": {
         "unreachableTitle": "翻訳を利用できません",
@@ -1823,10 +1826,10 @@
       "removing": "削除中...",
       "resetAll": {
         "confirmText": "すべて削除",
-        "description": "すべてのローカル設定、文字起こし、音声録音、ダウンロード済みAIモデル、カレンダー接続、キャッシュデータが完全に削除されます。クラウドデータとアカウントは影響を受けません。リセット後にアプリが再読み込みされます。",
+        "description": "すべてのローカル設定、文字起こし、音声録音、ダウンロード済みAIモデル、カレンダー接続、キャッシュデータが完全に削除されます。クラウドデータとアカウントは影響を受けません。リセット後にアプリが再起動します。",
         "failedDescription": "問題が発生しました。もう一度試すか、アプリを再インストールしてください。",
         "failedTitle": "リセットできませんでした",
-        "successDescription": "すべてリセットされました。アプリを再読み込みします。",
+        "successDescription": "すべてリセットされました。アプリを再起動します。",
         "successTitle": "完了しました",
         "title": "すべてのアプリデータをリセット"
       },
@@ -2299,7 +2302,7 @@
       "tab": {
         "general": "一般",
         "members": "メンバー",
-        "teams": "チーム",
+        "teams": "グループ",
         "developer": "開発者"
       },
       "role": {
@@ -2357,33 +2360,33 @@
         "errorTitle": "リクエストを更新できませんでした"
       },
       "teams": {
-        "title": "チーム",
-        "description": "チームスペースへのアクセスを付与するワークスペースメンバーのグループ。",
-        "new": "新しいチーム",
-        "empty": "チームはまだありません。",
-        "createFirst": "最初のチームを作成",
+        "title": "グループ",
+        "description": "チームスペースへのアクセスをまとめて付与できるワークスペースメンバーのグループ。",
+        "new": "新しいグループ",
+        "empty": "グループはまだありません。",
+        "createFirst": "最初のグループを作成",
         "addMembersLabel": "メンバーを追加",
-        "createTitle": "チームを作成",
-        "nameLabel": "チーム名",
+        "createTitle": "グループを作成",
+        "nameLabel": "グループ名",
         "memberCount_one": "{{count}}人のメンバー",
         "memberCount_other": "{{count}}人のメンバー",
         "membersButton": "メンバー",
         "grantsAccessToSpaces_one": "{{count}} 件のスペースへのアクセスを付与しています",
         "grantsAccessToSpaces_other": "{{count}} 件のスペースへのアクセスを付与しています",
-        "couldNotCreate": "チームを作成できませんでした",
+        "couldNotCreate": "グループを作成できませんでした",
         "created": "{{team}} を作成しました",
         "deleted": "{{team}} を削除しました",
         "deleteConfirmTitle": "{{team}} を削除しますか？",
-        "deleteConfirmDescription": "チームをアーカイブします。このチームが付与していたアクセスは失われます。",
-        "deleteConfirmSpaceAccess_one": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
-        "deleteConfirmSpaceAccess_other": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
+        "deleteConfirmDescription": "グループをアーカイブします。このグループが付与していたアクセスは失われます。",
+        "deleteConfirmSpaceAccess_one": "このグループは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
+        "deleteConfirmSpaceAccess_other": "このグループは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
         "members": {
           "title": "{{team}} のメンバー",
           "removeConfirm": "{{name}} を {{team}} から外しますか？",
-          "leave": "チームから退出",
+          "leave": "グループから退出",
           "leftTeam": "{{team}} から退出しました",
           "leaveConfirm": "{{team}} から退出しますか？",
-          "leaveConfirmDescription": "他のチームに含まれていない限り、このチームが付与するスペースへのアクセスを失います。"
+          "leaveConfirmDescription": "直接追加されているか他のグループに含まれていない限り、このグループが付与するスペースへのアクセスを失います。"
         }
       },
       "invites": {
@@ -2679,20 +2682,32 @@
       "newSpace": "新しいチームスペース",
       "newSpaceInWorkspace": "{{workspace}} に新しいチームスペース",
       "createTitle": "チームスペースを作成",
-      "createDescription": "ワークスペース内の共有エリアで、1つ以上のチームがアクセスできます。",
-      "nameLabel": "名前",
-      "emojiLabel": "絵文字",
+      "createDescription": "ワークスペース内の共有エリアです。追加した人やグループがアクセスできます。",
+      "nameAndIconLabel": "名前とアイコン",
       "create": "作成",
       "couldNotCreate": "スペースを作成できませんでした",
       "created": "{{space}} を作成しました",
-      "rename": "名前を変更",
       "changeEmoji": "絵文字を変更",
+      "settings": "設定",
+      "settingsTitle": "スペースの設定",
       "couldNotRename": "スペースの名前を変更できませんでした",
-      "renamed": "{{space}} の名前を変更しました",
+      "couldNotChangeEmoji": "絵文字を変更できませんでした",
       "deleteSpace": "スペースを削除",
+      "deleteHintTeam": "全員からこのスペースを削除します。グループは残ります。",
+      "deleteHintLocal": "このデバイス上のフォルダーとノートを含め、このスペースを完全に削除します。",
+      "leaveTitle": "スペースから退出",
+      "leaveDescription": "あなたのノートは他のメンバーが引き続き利用できます。",
+      "leave": "スペースから退出",
+      "leaveConfirmTitle": "{{space}} から退出しますか？",
+      "leaveConfirmDescription": "{{teams}} から削除され、それらのグループが開ける他のスペースへのアクセスも失われます。",
+      "leaveDirectDescription": "このスペースへのアクセスを失います。",
+      "leaveKeepsGroupAccess": "{{groups}} 経由のアクセスは維持されます。",
+      "left": "{{space}} から退出しました",
+      "stillViaGroups": "{{groups}} 経由で引き続き {{space}} にアクセスできます。",
+      "couldNotLeave": "スペースから退出できませんでした",
       "deleteConfirmTitle": "スペースを削除しますか？",
       "deleteConfirmDescription": "{{space}}とそのすべてのフォルダとノートがこのデバイスから完全に削除されます。",
-      "deleteConfirmTeamDescription": "{{space}} を全員に対して削除します。チームは残りますが、メンバーはすべてのフォルダーとノートへのアクセスを失います。",
+      "deleteConfirmTeamDescription": "{{space}} を全員に対して削除します。グループは残りますが、メンバーはすべてのフォルダーとノートへのアクセスを失います。",
       "deleteTypeName": "確認のため {{space}} と入力してください",
       "couldNotDelete": "スペースを削除できませんでした",
       "deleted": "{{space}} を削除しました",
@@ -2728,9 +2743,10 @@
       "conflictKeep": "編集を続ける",
       "editedBy": "{{name}} が編集 · {{time}}",
       "members": {
-        "addPeopleToTeam": "{{team}} にメンバーを追加",
+        "addPeople": "メンバーを追加",
         "addedToTeam": "{{name}} を {{team}} に追加しました",
         "removedFromTeam": "{{name}} を {{team}} から削除しました",
+        "stillViaGroups": "{{name}} は {{groups}} 経由で引き続きアクセスできます",
         "roleUpdated": "役割を更新しました",
         "you": "自分",
         "addFailed": "{{total}}人中{{failed}}人を追加できませんでした",
@@ -2738,28 +2754,32 @@
         "noResults": "メンバーが見つかりません",
         "roleAdmin": "管理者",
         "roleMember": "メンバー",
+        "roleAdminDescription": "メンバーと設定を管理できます。",
+        "roleMemberDescription": "ノートの閲覧と編集ができます。",
         "remove": "削除",
         "removeConfirm": "{{name}} を {{space}} から削除しますか？",
         "removeConfirmDescription": "このスペースのすべてのノートにアクセスできなくなります。",
+        "removeKeepsGroupAccess": "{{groups}} 経由のアクセスは維持されます。",
         "inviteFooter": "{{email}} をワークスペースに招待…",
-        "empty": "まだ誰も追加されていません"
+        "empty": "まだ誰も追加されていません",
+        "viaGroup": "{{group}} 経由",
+        "managedByGroup": "{{group}} 経由で追加されています。削除はそのグループで行ってください。",
+        "roleFromGroup": "{{group}} 経由の管理者です。変更はそちらで行ってください。",
+        "invited": "{{email}} に招待を送信しました"
       },
       "invitedTo_one": "{{count}} 件のチームスペースに参加します",
       "invitedTo_other": "{{count}} 件のチームスペースに参加します",
+      "invitedToSpaces": "{{spaces}} に参加します",
       "teamsMembers": {
-        "menu": "チームとメンバー…",
-        "title": "{{space}} のチームとメンバー",
-        "noTeams": "このスペースにアクセスできるチームはまだありません。ワークスペース管理者のみが閲覧できます。",
-        "addTeamLabel": "このスペースにチームを追加",
-        "chooseTeam": "チームを選択…",
+        "title": "{{space}} のメンバー",
+        "noTeams": "このスペースにアクセスできるグループはまだありません。",
+        "addTeamLabel": "このスペースにグループを追加",
+        "chooseTeam": "グループを選択…",
         "teamAdded": "{{team}} を {{space}} に追加しました",
         "teamRemoved": "{{team}} を {{space}} から削除しました",
         "removeTeamFromSpace": "スペースから外す",
         "removeTeamConfirm": "{{team}} を {{space}} から外しますか？",
-        "removeTeamConfirmDescription": "他の割り当て済みチームに含まれていない限り、そのメンバーはこのスペースへのアクセスを失います。",
-        "lastTeamWarning": "このスペースにアクセスできる唯一のチームです。外すと、ワークスペース管理者のみがアクセスを保持します。",
-        "affectsOtherSpaces_one": "{{team}} への変更は、このチームがアクセスできる他 {{count}} 件のスペースにも適用されます。",
-        "affectsOtherSpaces_other": "{{team}} への変更は、このチームがアクセスできる他 {{count}} 件のスペースにも適用されます。",
+        "removeTeamConfirmDescription": "直接追加されているか他の割り当て済みグループに含まれていない限り、そのメンバーはこのスペースへのアクセスを失います。",
         "accessLabel": "スペースへのアクセス",
         "accessAdmin": "管理者",
         "accessMember": "メンバー",
@@ -2767,10 +2787,12 @@
         "accessHint": "{{team}} の管理者は、アクセスが「管理者」に設定されている場合のみこのスペースを管理できます。"
       },
       "teams": {
-        "assignLabel": "チーム",
-        "newTeam": "新しいチーム",
-        "newTeamNameLabel": "チーム名",
-        "loadError": "チームを読み込めませんでした。"
+        "newTeam": "新しいグループ",
+        "loadError": "グループを読み込めませんでした。"
+      },
+      "groups": {
+        "title": "アクセスできるグループ",
+        "optional": "グループ（任意）"
       }
     },
     "structureIntro": {
@@ -2786,7 +2808,7 @@
       },
       "teamSpace": {
         "title": "チームスペース",
-        "description": "ワークスペース内の共有エリア。1つ以上のチームがアクセスを付与します。"
+        "description": "ワークスペース内の共有エリア。人やグループを追加してアクセスを付与します。"
       },
       "contents": "各スペースにはフォルダーとノートを作成できます。",
       "done": "了解",
@@ -2797,7 +2819,7 @@
       "staleIndicator": "強化後にコンテンツが変更されました",
       "live": "ライブ",
       "transcript": "文字起こし",
-      "notes": "ノート",
+      "notes": "あなたのノート",
       "conversationWillAppear": "会話がここに表示されます...",
       "linkedEvent": "リンクされたイベント",
       "noFolder": "フォルダなし",
@@ -2814,7 +2836,7 @@
       "asJson": "JSON (.json)",
       "asTranscriptMarkdown": "Markdown (.md)",
       "raw": "元のテキスト",
-      "enhanced": "強化済み",
+      "aiSummary": "AI要約",
       "saving": "保存中",
       "transcriptEmptyTitle": "まだ録音がありません",
       "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
@@ -2923,11 +2945,18 @@
       "hoursAgo": "{{count}}時間前",
       "daysAgo": "{{count}}日前"
     },
+    "createMenu": {
+      "note": "ノート",
+      "assistantChat": "アシスタントとのチャット",
+      "teamSpace": "チームスペース",
+      "chooseType": "作成する項目を選択"
+    },
     "upload": {
       "title": "音声をアップロード",
       "using": "{{model}} を使用中",
-      "dropOrBrowse": "音声ファイルをドロップまたはクリックして選択",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "音声または動画ファイルをドロップ、またはクリックして選択",
+      "supportedFormats": "MP3、WAV、M4A、MP4、MOV など、ほとんどの音声・動画形式",
+      "unsupportedFiles": "{{names}} をスキップしました: 対応していない音声・動画形式です。",
       "dropToUpload": "ドロップしてアップロード",
       "transcribe": "文字起こし",
       "cancel": "キャンセル",
@@ -3014,8 +3043,6 @@
       "unsupportedSelfHosted": "ノート録音はまだセルフホストのエンドポイントを利用できません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
       "unsupportedProvider": "ノート録音ではライブ文字起こしに {{provider}} を利用できません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
       "noProviderSelected": "ノート録音のプロバイダーが選択されていません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
-      "autoEnded": "会議の終了後、録音は自動的に停止しました。",
-      "restartFailed": "会議の録音を再開できませんでした。",
       "systemAudioSilent": {
         "title": "会議の音声がまだ検出されていません",
         "description": "これまでのところ、音声を拾っているのはマイクのみです。ビデオ会議中の場合は、会議の音声がこのコンピューターで再生されており、ミュートになっていないことを確認してください。対面で録音している場合は、この通知は無視してかまいません。マイクが室内の音を拾います。"
@@ -3410,6 +3437,7 @@
     "upload": "アップロード",
     "dictionary": "辞書",
     "referral": "1か月無料を取得",
+    "inviteTeam": "チームを招待",
     "settings": "設定",
     "support": "サポート",
     "limitReached": "週間の利用上限に達しました",
@@ -3532,7 +3560,9 @@
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示",
-      "askAssistant": "アシスタントに質問"
+      "askAssistant": "アシスタントに質問",
+      "busyRecording": "先に録音を終了してください",
+      "startMeetingRecording": "ミーティングの録音を開始"
     }
   },
   "dictationAgent": {
@@ -3892,6 +3922,23 @@
       "dismiss": "閉じる"
     }
   },
+  "emojiPicker": {
+    "search": "絵文字を検索…",
+    "recent": "最近使った項目",
+    "noResults": "絵文字が見つかりません",
+    "remove": "削除",
+    "groups": {
+      "smileys": "スマイリーと感情",
+      "people": "人と体",
+      "animals": "動物と自然",
+      "food": "食べ物と飲み物",
+      "travel": "旅行と場所",
+      "activities": "アクティビティ",
+      "objects": "物",
+      "symbols": "記号",
+      "flags": "旗"
+    }
+  },
   "permissionsGate": {
     "title": "権限が必要です",
     "description": "OpenWhispr がこのコンピュータで動作するために、いくつかの権限が必要です。",
@@ -4084,15 +4131,6 @@
       "underway": "会議はすでに進行中のようです。メモを取りますか？"
     },
     "start": "メモを取る",
-    "join": "参加して文字起こし",
-    "autoEnd": {
-      "title": "会議の録音が終了しました",
-      "body": {
-        "micReleased": "ほかのアプリがマイクを使用していないため、録音を自動停止しました。{{seconds}}秒以内に再開できます。",
-        "silence": "音声が検出されなかったため、録音を自動停止しました。{{seconds}}秒以内に再開できます。",
-        "processExit": "会議アプリが終了したため、録音を自動停止しました。{{seconds}}秒以内に再開できます。"
-      },
-      "restart": "録音を再開"
-    }
+    "join": "参加して文字起こし"
   }
 }

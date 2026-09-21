@@ -114,7 +114,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/electron
-          key: linux-electron-${{ hashFiles('**/package-lock.json') }}
+          key: linux-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: linux-electron-
 
       - name: Install Linux build and packaging dependencies
@@ -234,7 +234,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/AppData/Local/electron/Cache
-          key: windows-electron-${{ hashFiles('**/package-lock.json') }}
+          key: windows-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: windows-electron-
 
       - name: Create runtime env
@@ -331,7 +331,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/electron
-          key: macos-${{ matrix.arch }}-electron-${{ hashFiles('**/package-lock.json') }}
+          key: macos-${{ matrix.arch }}-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: macos-${{ matrix.arch }}-electron-
 
       - name: Setup macOS Code Signing

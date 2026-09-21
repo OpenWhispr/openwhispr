@@ -1674,7 +1674,10 @@ a:hover {
 .rich-text-editor-content {
   outline: none;
   unicode-bidi: plaintext;
-  padding: 0.75rem 1.25rem 5rem;
+  padding-block: 0.75rem 5rem;
+  /* Centers the text in the page column (PAGE_CONTENT_WIDTH_CLASS) with padding, not a
+     max-width, so the editable area spans the pane and a margin click places the caret. */
+  padding-inline: max(1.25rem, calc((100% - var(--container-5xl)) / 2 + 1.25rem));
   font-size: 0.875rem;
   line-height: 1.7;
   color: var(--color-foreground);
@@ -1842,4 +1845,26 @@ a:hover {
 
 .dark .rich-text-editor-content p.is-editor-empty:first-child::before {
   color: oklch(0.7 0 0 / 0.2);
+}
+
+/* Colour emoji fonts per platform. Keep in sync with EMOJI_FONT_FAMILY in
+   src/lib/emojiData.ts, which probes emoji support with the same stack. */
+.font-emoji {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+
+/* Styling the scrollbar makes Chromium draw a fixed-width classic bar on every
+   platform, so the emoji grid keeps one width whether or not the OS uses overlay
+   scrollbars. */
+.emoji-picker-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.emoji-picker-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.emoji-picker-scroll::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  background-color: var(--color-border);
 }

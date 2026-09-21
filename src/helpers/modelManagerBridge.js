@@ -854,6 +854,9 @@ class ModelManager {
           maxContextTokens: error.maxContextTokens ?? null,
         });
       }
+      if (error.code === "OUTPUT_TRUNCATED") {
+        throw new ModelError(error.message, "OUTPUT_TRUNCATED", { modelId });
+      }
       throw new ModelError(`Inference failed: ${error.message}`, "INFERENCE_FAILED", {
         error: error.message,
       });

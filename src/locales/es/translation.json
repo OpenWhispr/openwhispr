@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "El procesamiento con IA está restringido por tu organización.",
     "policyAgentRestricted": "El uso del asistente de IA está restringido por tu organización.",
     "policyTranscriptionRestricted": "La transcripción está restringida por tu organización.",
+    "policyUnresolved": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento.",
     "managedConfigLoading": "Comprobando la configuración gestionada de tu organización. Inténtalo de nuevo en un momento.",
     "managedConfigUnavailable": "El acceso empresarial gestionado no está disponible. Vuelve a iniciar sesión o contacta a tu administrador.",
     "managedPolicyConflict": "El acceso gestionado está bloqueado por la política de tu espacio de trabajo. Contacta a tu administrador."
@@ -911,7 +912,9 @@
         "managedRouteInvalid": "La transcripción gestionada no pudo iniciarse debido a una discrepancia de configuración. Inténtalo de nuevo o contacta a tu administrador.",
         "managedAuthRejected": "Las credenciales de transcripción gestionada de tu organización fueron rechazadas. Contacta a tu administrador.",
         "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
-        "providerKeyMissing": "No hay ninguna clave de API configurada para tu proveedor de transcripción. Añádela en Ajustes → Voz a texto."
+        "providerKeyMissing": "No hay ninguna clave de API configurada para tu proveedor de transcripción. Añádela en Ajustes → Voz a texto.",
+        "cleanupTruncated": "El modelo de IA se quedó sin espacio antes de terminar de limpiar tu dictado.",
+        "cleanupEmptyReply": "El modelo de IA devolvió una respuesta vacía en lugar del dictado limpio."
       },
       "translationFallback": {
         "unreachableTitle": "Traducción no disponible",
@@ -1876,10 +1879,10 @@
       "removing": "Eliminando...",
       "resetAll": {
         "confirmText": "Eliminar todo",
-        "description": "Esta acción eliminará permanentemente todas las configuraciones locales, transcripciones, grabaciones de audio, modelos de IA descargados, conexiones de calendario y datos en caché. Los datos en la nube y tu cuenta no se verán afectados. La aplicación se recargará después del restablecimiento.",
+        "description": "Esta acción eliminará permanentemente todas las configuraciones locales, transcripciones, grabaciones de audio, modelos de IA descargados, conexiones de calendario y datos en caché. Los datos en la nube y tu cuenta no se verán afectados. La app se reiniciará después del restablecimiento.",
         "failedDescription": "Algo salió mal. Inténtalo de nuevo o reinstala la app.",
         "failedTitle": "No se pudo restablecer",
-        "successDescription": "Todo ha sido restablecido. La app se recargará ahora.",
+        "successDescription": "Todo ha sido restablecido. La app se reiniciará ahora.",
         "successTitle": "Completado",
         "title": "Restablecer todos los datos de la app"
       },
@@ -2352,7 +2355,7 @@
       "tab": {
         "general": "General",
         "members": "Miembros",
-        "teams": "Equipos",
+        "teams": "Grupos",
         "developer": "Desarrollador"
       },
       "role": {
@@ -2410,33 +2413,33 @@
         "errorTitle": "No se pudo actualizar la solicitud"
       },
       "teams": {
-        "title": "Equipos",
-        "description": "Grupos de miembros del workspace que conceden acceso a espacios de equipo.",
-        "new": "Nuevo equipo",
-        "empty": "Aún no hay equipos.",
-        "createFirst": "Crea tu primer equipo",
+        "title": "Grupos",
+        "description": "Grupos de miembros del workspace a los que se puede dar acceso a espacios de equipo de una vez.",
+        "new": "Nuevo grupo",
+        "empty": "Aún no hay grupos.",
+        "createFirst": "Crea tu primer grupo",
         "addMembersLabel": "Añadir miembros",
-        "createTitle": "Crear equipo",
-        "nameLabel": "Nombre del equipo",
+        "createTitle": "Crear grupo",
+        "nameLabel": "Nombre del grupo",
         "memberCount_one": "{{count}} miembro",
         "memberCount_other": "{{count}} miembros",
         "membersButton": "Miembros",
         "grantsAccessToSpaces_one": "Da acceso a {{count}} espacio",
         "grantsAccessToSpaces_other": "Da acceso a {{count}} espacios",
-        "couldNotCreate": "No se pudo crear el equipo",
+        "couldNotCreate": "No se pudo crear el grupo",
         "created": "{{team}} creado",
         "deleted": "{{team}} eliminado",
         "deleteConfirmTitle": "¿Eliminar {{team}}?",
-        "deleteConfirmDescription": "Esto archiva el equipo. Sus miembros pierden el acceso que concedía.",
-        "deleteConfirmSpaceAccess_one": "Este equipo da acceso a {{count}} espacio. Sus miembros perderán ese acceso.",
-        "deleteConfirmSpaceAccess_other": "Este equipo da acceso a {{count}} espacios. Sus miembros perderán ese acceso.",
+        "deleteConfirmDescription": "Esto archiva el grupo. Sus miembros pierden el acceso que concedía.",
+        "deleteConfirmSpaceAccess_one": "Este grupo da acceso a {{count}} espacio. Sus miembros perderán ese acceso.",
+        "deleteConfirmSpaceAccess_other": "Este grupo da acceso a {{count}} espacios. Sus miembros perderán ese acceso.",
         "members": {
           "title": "Miembros de {{team}}",
           "removeConfirm": "¿Quitar a {{name}} de {{team}}?",
-          "leave": "Salir del equipo",
+          "leave": "Salir del grupo",
           "leftTeam": "Saliste de {{team}}",
           "leaveConfirm": "¿Salir de {{team}}?",
-          "leaveConfirmDescription": "Perderás el acceso a los espacios asignados a este equipo salvo que otro equipo te incluya."
+          "leaveConfirmDescription": "Perderás el acceso a los espacios asignados a este grupo salvo que te hayan añadido directamente u otro grupo te incluya."
         }
       },
       "invites": {
@@ -2804,20 +2807,32 @@
       "newSpace": "Nuevo espacio de equipo",
       "newSpaceInWorkspace": "Nuevo espacio de equipo en {{workspace}}",
       "createTitle": "Crear espacio de equipo",
-      "createDescription": "Un área compartida dentro de un workspace a la que pueden acceder uno o más equipos.",
-      "nameLabel": "Nombre",
-      "emojiLabel": "Emoji",
+      "createDescription": "Un área compartida dentro de un workspace para las personas y grupos que añadas.",
+      "nameAndIconLabel": "Nombre e icono",
       "create": "Crear",
       "couldNotCreate": "No se pudo crear el espacio",
       "created": "{{space}} creado",
-      "rename": "Renombrar",
       "changeEmoji": "Cambiar emoji",
+      "settings": "Ajustes",
+      "settingsTitle": "Ajustes del espacio",
       "couldNotRename": "No se pudo renombrar el espacio",
-      "renamed": "{{space}} renombrado",
+      "couldNotChangeEmoji": "No se pudo cambiar el emoji",
       "deleteSpace": "Eliminar espacio",
+      "deleteHintTeam": "Elimina este espacio para todos. Sus grupos se conservan.",
+      "deleteHintLocal": "Elimina permanentemente este espacio con sus carpetas y notas en este dispositivo.",
+      "leaveTitle": "Salir del espacio",
+      "leaveDescription": "Tus notas seguirán disponibles para los demás miembros.",
+      "leave": "Salir del espacio",
+      "leaveConfirmTitle": "¿Salir de {{space}}?",
+      "leaveConfirmDescription": "Se te quitará de {{teams}} y perderás el acceso a cualquier otro espacio que abran esos grupos.",
+      "leaveDirectDescription": "Perderás el acceso a este espacio.",
+      "leaveKeepsGroupAccess": "Conservarás el acceso a través de {{groups}}.",
+      "left": "Saliste de {{space}}",
+      "stillViaGroups": "Sigues teniendo acceso a {{space}} a través de {{groups}}.",
+      "couldNotLeave": "No se pudo salir del espacio",
       "deleteConfirmTitle": "¿Eliminar espacio?",
       "deleteConfirmDescription": "Esto elimina permanentemente {{space}} con todas sus carpetas y notas en este dispositivo.",
-      "deleteConfirmTeamDescription": "Esto elimina {{space}} para todos. Sus equipos permanecen, pero los miembros pierden el acceso a todas sus carpetas y notas.",
+      "deleteConfirmTeamDescription": "Esto elimina {{space}} para todos. Sus grupos permanecen, pero los miembros pierden el acceso a todas sus carpetas y notas.",
       "deleteTypeName": "Escribe {{space}} para confirmar",
       "couldNotDelete": "No se pudo eliminar el espacio",
       "deleted": "{{space}} eliminado",
@@ -2853,9 +2868,10 @@
       "conflictKeep": "Seguir editando",
       "editedBy": "Editado por {{name}} · {{time}}",
       "members": {
-        "addPeopleToTeam": "Añadir personas a {{team}}",
+        "addPeople": "Añadir personas",
         "addedToTeam": "{{name}} añadido a {{team}}",
         "removedFromTeam": "{{name}} eliminado de {{team}}",
+        "stillViaGroups": "{{name}} sigue teniendo acceso a través de {{groups}}",
         "roleUpdated": "Rol actualizado",
         "you": "Tú",
         "addFailed": "No se pudo añadir a {{failed}} de {{total}} personas",
@@ -2863,28 +2879,32 @@
         "noResults": "No se encontraron personas",
         "roleAdmin": "Administrador",
         "roleMember": "Miembro",
+        "roleAdminDescription": "Gestiona personas y ajustes.",
+        "roleMemberDescription": "Puede ver y editar notas.",
         "remove": "Quitar",
         "removeConfirm": "¿Quitar a {{name}} de {{space}}?",
         "removeConfirmDescription": "Perderá el acceso a todas las notas de este espacio.",
+        "removeKeepsGroupAccess": "Conservarán el acceso a través de {{groups}}.",
         "inviteFooter": "Invitar a {{email}} al espacio de trabajo…",
-        "empty": "Aún no se ha añadido a nadie"
+        "empty": "Aún no se ha añadido a nadie",
+        "viaGroup": "vía {{group}}",
+        "managedByGroup": "Añadido a través de {{group}}. Quítalo desde ahí.",
+        "roleFromGroup": "Administrador a través de {{group}}. Cámbialo allí.",
+        "invited": "Invitación enviada a {{email}}"
       },
       "invitedTo_one": "Te unirás a {{count}} espacio de equipo",
       "invitedTo_other": "Te unirás a {{count}} espacios de equipo",
+      "invitedToSpaces": "Te unirás a {{spaces}}",
       "teamsMembers": {
-        "menu": "Equipos y miembros…",
-        "title": "Equipos y miembros de {{space}}",
-        "noTeams": "Ningún equipo tiene acceso a este espacio todavía. Solo los administradores del workspace pueden verlo.",
-        "addTeamLabel": "Añadir un equipo a este espacio",
-        "chooseTeam": "Elegir equipo…",
+        "title": "Miembros de {{space}}",
+        "noTeams": "Ningún grupo tiene acceso a este espacio todavía.",
+        "addTeamLabel": "Añadir un grupo a este espacio",
+        "chooseTeam": "Elegir grupo…",
         "teamAdded": "{{team}} añadido a {{space}}",
         "teamRemoved": "{{team}} eliminado de {{space}}",
         "removeTeamFromSpace": "Quitar del espacio",
         "removeTeamConfirm": "¿Quitar {{team}} de {{space}}?",
-        "removeTeamConfirmDescription": "Sus miembros perderán el acceso a este espacio salvo que otro equipo asignado los incluya.",
-        "lastTeamWarning": "Es el único equipo con acceso a este espacio. Tras quitarlo, solo los administradores del workspace mantendrán el acceso.",
-        "affectsOtherSpaces_one": "Los cambios en {{team}} también se aplican a {{count}} otro espacio al que tiene acceso.",
-        "affectsOtherSpaces_other": "Los cambios en {{team}} también se aplican a {{count}} otros espacios a los que tiene acceso.",
+        "removeTeamConfirmDescription": "Sus miembros perderán el acceso a este espacio salvo que los hayan añadido directamente u otro grupo los incluya.",
         "accessLabel": "Acceso al espacio",
         "accessAdmin": "Administrador",
         "accessMember": "Miembro",
@@ -2892,10 +2912,12 @@
         "accessHint": "Los administradores de {{team}} solo gestionan este espacio cuando su acceso está establecido en Administrador."
       },
       "teams": {
-        "assignLabel": "Equipos",
-        "newTeam": "Nuevo equipo",
-        "newTeamNameLabel": "Nombre del equipo",
-        "loadError": "No se pudieron cargar los equipos."
+        "newTeam": "Nuevo grupo",
+        "loadError": "No se pudieron cargar los grupos."
+      },
+      "groups": {
+        "title": "Grupos con acceso",
+        "optional": "Grupos (opcional)"
       }
     },
     "structureIntro": {
@@ -2911,7 +2933,7 @@
       },
       "teamSpace": {
         "title": "Espacio de equipo",
-        "description": "Un área compartida dentro de un workspace. Uno o más equipos conceden acceso a ella."
+        "description": "Un área compartida dentro de un workspace. Añade personas o grupos para darles acceso."
       },
       "contents": "Cada espacio puede contener carpetas y notas.",
       "done": "Entendido",
@@ -2945,6 +2967,12 @@
       "hoursAgo": "hace {{count}}h",
       "daysAgo": "hace {{count}}d"
     },
+    "createMenu": {
+      "note": "Nota",
+      "assistantChat": "Chat con el asistente",
+      "teamSpace": "Espacio de equipo",
+      "chooseType": "Elegir qué crear"
+    },
     "editor": {
       "untitled": "Sin título",
       "noteTitle": "Título de la nota",
@@ -2959,7 +2987,7 @@
       "asJson": "Como JSON (.json)",
       "asTranscriptMarkdown": "Como Markdown (.md)",
       "raw": "Sin procesar",
-      "enhanced": "Mejorado",
+      "aiSummary": "Resumen con IA",
       "saving": "Guardando",
       "transcriptEmptyTitle": "Aún no hay grabaciones",
       "transcriptEmptyDescription": "Pulsa grabar para empezar a transcribir. Todo lo que se diga aparecerá aquí en tiempo real.",
@@ -2969,7 +2997,7 @@
       "staleIndicator": "El contenido ha cambiado desde la mejora",
       "live": "En vivo",
       "transcript": "Transcripción",
-      "notes": "Notas",
+      "notes": "Tus notas",
       "conversationWillAppear": "La conversación aparecerá aquí...",
       "linkedEvent": "Evento vinculado",
       "noFolder": "Sin carpeta",
@@ -2986,8 +3014,9 @@
     "upload": {
       "title": "Subir audio",
       "using": "Usando {{model}}",
-      "dropOrBrowse": "Arrastra un archivo de audio o haz clic para explorar",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "Arrastra un archivo de audio o video, o haz clic para explorar",
+      "supportedFormats": "MP3, WAV, M4A, MP4, MOV y la mayoría de los demás formatos de audio o video",
+      "unsupportedFiles": "Se omitió {{names}}: no es un formato de audio o video compatible.",
       "dropToUpload": "Suelta para subir",
       "transcribe": "Transcribir",
       "cancel": "Cancelar",
@@ -3074,8 +3103,6 @@
       "unsupportedSelfHosted": "La grabación de notas aún no puede usar un servidor propio. Abre Ajustes y elige Local o un proveedor de streaming.",
       "unsupportedProvider": "La grabación de notas no puede usar {{provider}} para transcripción en vivo. Abre Ajustes y elige Local o un proveedor de streaming.",
       "noProviderSelected": "No hay ningún proveedor seleccionado para la grabación de notas. Abre Ajustes y elige Local o un proveedor de streaming.",
-      "autoEnded": "La grabación se detuvo automáticamente cuando terminó la reunión.",
-      "restartFailed": "No se pudo reiniciar la grabación de la reunión.",
       "systemAudioSilent": {
         "title": "Aún no se detecta el audio de la reunión",
         "description": "Hasta ahora solo tu micrófono ha captado sonido. ¿Estás en una videollamada? Comprueba que el audio de la reunión se reproduce en este equipo y no está silenciado. ¿Estás grabando en persona? Puedes ignorar este aviso: tu micrófono capta la sala."
@@ -3463,6 +3490,7 @@
     "upload": "Subir",
     "dictionary": "Diccionario",
     "referral": "Obtener un mes gratis",
+    "inviteTeam": "Invita a tu equipo",
     "settings": "Configuración",
     "support": "Soporte",
     "limitReached": "Límite semanal alcanzado",
@@ -3585,7 +3613,9 @@
       "stopListening": "Dejar de escuchar",
       "startListening": "Empezar a escuchar",
       "hideForNow": "Ocultar por ahora",
-      "askAssistant": "Preguntar al asistente"
+      "askAssistant": "Preguntar al asistente",
+      "busyRecording": "Primero termina la grabación actual",
+      "startMeetingRecording": "Iniciar grabación de reunión"
     }
   },
   "dictationAgent": {
@@ -3945,6 +3975,23 @@
       "dismiss": "Cerrar"
     }
   },
+  "emojiPicker": {
+    "search": "Buscar emoji…",
+    "recent": "Recientes",
+    "noResults": "No se encontraron emojis",
+    "remove": "Quitar",
+    "groups": {
+      "smileys": "Emoticonos y emociones",
+      "people": "Personas y cuerpo",
+      "animals": "Animales y naturaleza",
+      "food": "Comida y bebida",
+      "travel": "Viajes y lugares",
+      "activities": "Actividades",
+      "objects": "Objetos",
+      "symbols": "Símbolos",
+      "flags": "Banderas"
+    }
+  },
   "permissionsGate": {
     "title": "Permisos necesarios",
     "description": "OpenWhispr necesita algunos permisos para funcionar en este ordenador.",
@@ -4084,15 +4131,6 @@
       "underway": "Parece que tu reunión ya está en curso. ¿Quieres tomar notas?"
     },
     "start": "Tomar notas",
-    "join": "Unirse y transcribir",
-    "autoEnd": {
-      "title": "La grabación de la reunión terminó",
-      "body": {
-        "micReleased": "Ninguna otra app está usando el micrófono, así que la grabación se detuvo automáticamente. Reiníciala en {{seconds}} s.",
-        "silence": "No se detectó audio, así que la grabación se detuvo automáticamente. Reiníciala en {{seconds}} s.",
-        "processExit": "La app de reuniones se cerró, así que la grabación se detuvo automáticamente. Reiníciala en {{seconds}} s."
-      },
-      "restart": "Reiniciar grabación"
-    }
+    "join": "Unirse y transcribir"
   }
 }

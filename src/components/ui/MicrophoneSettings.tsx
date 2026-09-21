@@ -116,10 +116,10 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
           </label>
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={loadDevices}
             disabled={isLoading}
-            className="h-7 w-7 p-0"
+            className="size-7"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
           </Button>

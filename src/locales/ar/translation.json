@@ -46,7 +46,9 @@
         "managedRouteInvalid": "تعذر بدء التفريغ المُدار بسبب عدم تطابق في الإعدادات. أعد المحاولة أو اتصل بالمسؤول.",
         "managedAuthRejected": "رُفضت بيانات اعتماد التفريغ المُدار الخاصة بمؤسستك. اتصل بالمسؤول.",
         "streamingOnlyProvider": "هذا المزود يدعم التفريغ المباشر فقط. اختر مزودًا آخر لرفع الملفات وإعادة المحاولة.",
-        "providerKeyMissing": "لم يتم تعيين مفتاح API لمزود التفريغ الخاص بك. أضفه في الإعدادات ← تحويل الكلام إلى نص (Speech to Text)."
+        "providerKeyMissing": "لم يتم تعيين مفتاح API لمزود التفريغ الخاص بك. أضفه في الإعدادات ← تحويل الكلام إلى نص (Speech to Text).",
+        "cleanupTruncated": "نفدت مساحة الإخراج لدى نموذج الذكاء الاصطناعي قبل أن يُكمل تنقيح إملائك.",
+        "cleanupEmptyReply": "أرجع نموذج الذكاء الاصطناعي ردًا فارغًا بدلًا من الإملاء المنقَّح."
       },
       "translationFallback": {
         "unreachableTitle": "الترجمة غير متاحة",
@@ -1355,7 +1357,9 @@
       "stopListening": "إيقاف الاستماع",
       "startListening": "بدء الاستماع",
       "hideForNow": "إخفاء الآن",
-      "askAssistant": "اسأل المساعد"
+      "askAssistant": "اسأل المساعد",
+      "busyRecording": "أنهِ التسجيل الحالي أولاً",
+      "startMeetingRecording": "بدء تسجيل الاجتماع"
     }
   },
   "calendar": {
@@ -1422,20 +1426,32 @@
       "newSpace": "مساحة فريق جديدة",
       "newSpaceInWorkspace": "مساحة فريق جديدة في {{workspace}}",
       "createTitle": "إنشاء مساحة فريق",
-      "createDescription": "منطقة مشتركة داخل مساحة عمل يمكن لفريق واحد أو أكثر الوصول إليها.",
-      "nameLabel": "الاسم",
-      "emojiLabel": "رمز تعبيري (Emoji)",
+      "createDescription": "منطقة مشتركة داخل مساحة عمل للأشخاص والمجموعات الذين تضيفهم.",
+      "nameAndIconLabel": "الاسم والأيقونة",
       "create": "إنشاء",
       "couldNotCreate": "تعذر إنشاء المساحة",
       "created": "تم إنشاء {{space}}",
-      "rename": "إعادة تسمية",
       "changeEmoji": "تغيير الرمز التعبيري",
+      "settings": "الإعدادات",
+      "settingsTitle": "إعدادات المساحة",
       "couldNotRename": "تعذر إعادة تسمية المساحة",
-      "renamed": "تمت إعادة تسمية {{space}}",
+      "couldNotChangeEmoji": "تعذّر تغيير الرمز التعبيري",
       "deleteSpace": "حذف المساحة",
+      "deleteHintTeam": "يزيل هذه المساحة للجميع. تبقى مجموعاتها كما هي.",
+      "deleteHintLocal": "يحذف هذه المساحة نهائيًا مع مجلداتها وملاحظاتها على هذا الجهاز.",
+      "leaveTitle": "مغادرة المساحة",
+      "leaveDescription": "ستبقى ملاحظاتك متاحة للأعضاء الآخرين.",
+      "leave": "مغادرة المساحة",
+      "leaveConfirmTitle": "مغادرة {{space}}؟",
+      "leaveConfirmDescription": "ستتم إزالتك من {{teams}} وستفقد الوصول إلى أي مساحات أخرى تفتحها تلك المجموعات.",
+      "leaveDirectDescription": "ستفقد إمكانية الوصول إلى هذه المساحة.",
+      "leaveKeepsGroupAccess": "ستحتفظ بالوصول عبر {{groups}}.",
+      "left": "غادرت {{space}}",
+      "stillViaGroups": "لا يزال بإمكانك الوصول إلى {{space}} عبر {{groups}}.",
+      "couldNotLeave": "تعذّرت مغادرة المساحة",
       "deleteConfirmTitle": "حذف المساحة؟",
       "deleteConfirmDescription": "سيؤدي هذا إلى حذف {{space}} بشكل دائم مع جميع مجلداتها وملاحظاتها على هذا الجهاز.",
-      "deleteConfirmTeamDescription": "سيؤدي هذا إلى حذف {{space}} للجميع. ستبقى فرقها، ولكن سيفقد الأعضاء إمكانية الوصول إلى جميع مجلداتها وملاحظاتها.",
+      "deleteConfirmTeamDescription": "سيؤدي هذا إلى حذف {{space}} للجميع. ستبقى مجموعاتها، ولكن سيفقد الأعضاء إمكانية الوصول إلى جميع مجلداتها وملاحظاتها.",
       "deleteTypeName": "اكتب {{space}} للتأكيد",
       "couldNotDelete": "تعذر حذف المساحة",
       "deleted": "تم حذف {{space}}",
@@ -1475,9 +1491,10 @@
       "conflictKeep": "متابعة التعديل",
       "editedBy": "تم التعديل بواسطة {{name}} · {{time}}",
       "members": {
-        "addPeopleToTeam": "إضافة أشخاص إلى {{team}}",
+        "addPeople": "إضافة أشخاص",
         "addedToTeam": "تمت إضافة {{name}} إلى {{team}}",
         "removedFromTeam": "تمت إزالة {{name}} من {{team}}",
+        "stillViaGroups": "لا يزال {{name}} يملك الوصول عبر {{groups}}",
         "roleUpdated": "تم تحديث الدور",
         "you": "أنت",
         "addFailed": "عدد الأشخاص الذين تعذرت إضافتهم: {{failed}} من أصل {{total}}",
@@ -1485,11 +1502,18 @@
         "noResults": "لم يتم العثور على أشخاص",
         "roleAdmin": "مسؤول",
         "roleMember": "عضو",
+        "roleAdminDescription": "يدير الأشخاص والإعدادات.",
+        "roleMemberDescription": "يمكنه عرض الملاحظات وتعديلها.",
         "remove": "إزالة",
         "removeConfirm": "إزالة {{name}} من {{space}}؟",
         "removeConfirmDescription": "سيفقد هذا الشخص إمكانية الوصول إلى جميع الملاحظات في هذه المساحة.",
+        "removeKeepsGroupAccess": "سيحتفظون بالوصول عبر {{groups}}.",
         "inviteFooter": "دعوة {{email}} إلى مساحة العمل…",
-        "empty": "لم تتم إضافة أحد بعد"
+        "empty": "لم تتم إضافة أحد بعد",
+        "viaGroup": "عبر {{group}}",
+        "managedByGroup": "تمت الإضافة عبر {{group}}. أزل العضو من هناك.",
+        "roleFromGroup": "مشرف عبر {{group}}. غيّر ذلك هناك.",
+        "invited": "تم إرسال الدعوة إلى {{email}}"
       },
       "invitedTo_zero": "ستنضم إلى {{count}} مساحات فريق",
       "invitedTo_one": "ستنضم إلى {{count}} مساحة فريق",
@@ -1497,24 +1521,17 @@
       "invitedTo_few": "ستنضم إلى {{count}} مساحات فريق",
       "invitedTo_many": "ستنضم إلى {{count}} مساحة فريق",
       "invitedTo_other": "ستنضم إلى {{count}} مساحة فريق",
+      "invitedToSpaces": "ستنضم إلى {{spaces}}",
       "teamsMembers": {
-        "menu": "الفرق والأعضاء…",
-        "title": "الفرق والأعضاء في {{space}}",
-        "noTeams": "لا توجد فرق لديها وصول إلى هذه المساحة بعد. يمكن فقط لمسؤولي مساحة العمل رؤيتها.",
-        "addTeamLabel": "إضافة فريق إلى هذه المساحة",
-        "chooseTeam": "اختيار فريق…",
+        "title": "أعضاء {{space}}",
+        "noTeams": "لا توجد مجموعات لديها وصول إلى هذه المساحة بعد.",
+        "addTeamLabel": "إضافة مجموعة إلى هذه المساحة",
+        "chooseTeam": "اختيار مجموعة…",
         "teamAdded": "تمت إضافة {{team}} إلى {{space}}",
         "teamRemoved": "تمت إزالة {{team}} من {{space}}",
         "removeTeamFromSpace": "إزالة من المساحة",
         "removeTeamConfirm": "إزالة {{team}} من {{space}}؟",
-        "removeTeamConfirmDescription": "سيفقد أعضاؤه إمكانية الوصول إلى هذه المساحة ما لم يشملهم فريق آخر معين.",
-        "lastTeamWarning": "هذا هو الفريق الوحيد الذي لديه وصول إلى هذه المساحة. بعد إزالته، سيحتفظ مسؤولو مساحة العمل فقط بإمكانية الوصول.",
-        "affectsOtherSpaces_zero": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحات أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_one": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحة أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_two": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحتين أخريين يمكنه الوصول إليهما.",
-        "affectsOtherSpaces_few": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحات أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_many": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحةً أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_other": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحة أخرى يمكنه الوصول إليها.",
+        "removeTeamConfirmDescription": "سيفقد أعضاؤها إمكانية الوصول إلى هذه المساحة ما لم يكونوا مضافين مباشرةً أو تشملهم مجموعة أخرى.",
         "accessLabel": "صلاحية الوصول إلى المساحة",
         "accessAdmin": "مسؤول",
         "accessMember": "عضو",
@@ -1522,10 +1539,12 @@
         "accessHint": "يدير مسؤولو {{team}} هذه المساحة فقط عندما يتم تعيين وصولها إلى مسؤول (Admin)."
       },
       "teams": {
-        "assignLabel": "الفرق",
-        "newTeam": "فريق جديد",
-        "newTeamNameLabel": "اسم الفريق",
-        "loadError": "تعذر تحميل الفرق."
+        "newTeam": "مجموعة جديدة",
+        "loadError": "تعذر تحميل المجموعات."
+      },
+      "groups": {
+        "title": "المجموعات التي لديها وصول",
+        "optional": "المجموعات (اختياري)"
       }
     },
     "structureIntro": {
@@ -1541,7 +1560,7 @@
       },
       "teamSpace": {
         "title": "مساحة الفريق",
-        "description": "منطقة مشتركة داخل مساحة العمل. يمنح فريق واحد أو أكثر الوصول إليها."
+        "description": "منطقة مشتركة داخل مساحة العمل. أضف أشخاصًا أو مجموعات لمنحهم الوصول."
       },
       "contents": "يمكن أن تحتوي كل مساحة على مجلدات وملاحظات.",
       "done": "فهمت",
@@ -1575,6 +1594,12 @@
       "hoursAgo": "منذ {{count}} س",
       "daysAgo": "منذ {{count}} ي"
     },
+    "createMenu": {
+      "note": "ملاحظة",
+      "assistantChat": "دردشة مع المساعد",
+      "teamSpace": "مساحة فريق",
+      "chooseType": "اختر ما تريد إنشاءه"
+    },
     "editor": {
       "untitled": "بدون عنوان",
       "noteTitle": "عنوان الملاحظة",
@@ -1589,7 +1614,7 @@
       "asJson": "بصيغة JSON (.json)",
       "asTranscriptMarkdown": "بصيغة Markdown (.md)",
       "raw": "خام",
-      "enhanced": "مُحسّن",
+      "aiSummary": "ملخص بالذكاء الاصطناعي",
       "saving": "جاري الحفظ",
       "transcriptEmptyTitle": "لم يتم تسجيل أي شيء بعد",
       "transcriptEmptyDescription": "اضغط على تسجيل لبدء النسخ. كل ما يُقال يظهر هنا لحظيًا.",
@@ -1599,7 +1624,7 @@
       "staleIndicator": "تم تغيير المحتوى منذ التحسين",
       "live": "مباشر",
       "transcript": "النص المفرَّغ",
-      "notes": "الملاحظات",
+      "notes": "ملاحظاتك",
       "conversationWillAppear": "ستظهر المحادثة هنا...",
       "linkedEvent": "الحدث المرتبط",
       "noFolder": "بدون مجلد",
@@ -1616,8 +1641,9 @@
     "upload": {
       "title": "رفع ملف صوتي",
       "using": "باستخدام {{model}}",
-      "dropOrBrowse": "أسقط ملفًا صوتيًا أو انقر للتصفح",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "أفلت ملف صوت أو فيديو، أو انقر للتصفح",
+      "supportedFormats": "MP3 وWAV وM4A وMP4 وMOV ومعظم صيغ الصوت أو الفيديو الأخرى",
+      "unsupportedFiles": "تم تخطي {{names}}: صيغة صوت أو فيديو غير مدعومة.",
       "dropToUpload": "أسقط للرفع",
       "transcribe": "تفريغ",
       "cancel": "إلغاء",
@@ -1701,8 +1727,6 @@
       "description": "نصوص مفرَّغة وملخصات مهيكلة",
       "back": "رجوع",
       "restrictedByOrg": "تفريغ الاجتماعات مقيد بواسطة مؤسستك.",
-      "autoEnded": "توقف التسجيل تلقائيًا بعد انتهاء اجتماعك.",
-      "restartFailed": "تعذرت إعادة تشغيل تسجيل الاجتماع.",
       "systemAudioSilent": {
         "title": "لم يتم اكتشاف صوت الاجتماع بعد",
         "description": "لم يلتقط الصوت حتى الآن سوى ميكروفونك. هل أنت في مكالمة فيديو؟ تحقق من أن صوت الاجتماع يُشغَّل على هذا الكمبيوتر وأنه غير مكتوم. هل تسجّل اجتماعًا حضوريًا؟ يمكنك تجاهل هذا — فالميكروفون يلتقط صوت الغرفة."
@@ -2305,7 +2329,7 @@
       "tab": {
         "general": "عام",
         "members": "الأعضاء",
-        "teams": "الفرق",
+        "teams": "المجموعات",
         "developer": "للمطورين"
       },
       "role": {
@@ -2369,14 +2393,14 @@
         "errorTitle": "تعذر تحديث الطلب"
       },
       "teams": {
-        "title": "الفرق",
-        "description": "مجموعات من أعضاء مساحة العمل التي تمنح الوصول إلى مساحات الفريق.",
-        "new": "فريق جديد",
-        "empty": "لا توجد فرق بعد.",
-        "createFirst": "أنشئ فريقك الأول",
+        "title": "المجموعات",
+        "description": "مجموعات من أعضاء مساحة العمل يمكن منحها الوصول إلى مساحات الفريق معًا.",
+        "new": "مجموعة جديدة",
+        "empty": "لا توجد مجموعات بعد.",
+        "createFirst": "أنشئ مجموعتك الأولى",
         "addMembersLabel": "إضافة أعضاء",
-        "createTitle": "إنشاء فريق",
-        "nameLabel": "اسم الفريق",
+        "createTitle": "إنشاء مجموعة",
+        "nameLabel": "اسم المجموعة",
         "memberCount_zero": "{{count}} أعضاء",
         "memberCount_one": "{{count}} عضو",
         "memberCount_two": "{{count}} عضوان",
@@ -2390,24 +2414,24 @@
         "grantsAccessToSpaces_few": "يمنح الوصول إلى {{count}} مساحات",
         "grantsAccessToSpaces_many": "يمنح الوصول إلى {{count}} مساحةً",
         "grantsAccessToSpaces_other": "يمنح الوصول إلى {{count}} مساحة",
-        "couldNotCreate": "تعذر إنشاء الفريق",
+        "couldNotCreate": "تعذر إنشاء المجموعة",
         "created": "تم إنشاء {{team}}",
         "deleted": "تم حذف {{team}}",
         "deleteConfirmTitle": "حذف {{team}}؟",
-        "deleteConfirmDescription": "هذا يؤرشف الفريق. سيفقد أعضاؤه أي وصول منحه إياهم.",
-        "deleteConfirmSpaceAccess_zero": "يمنح هذا الفريق الوصول إلى {{count}} مساحات. سيفقد أعضاؤه هذا الوصول.",
-        "deleteConfirmSpaceAccess_one": "يمنح هذا الفريق الوصول إلى {{count}} مساحة. سيفقد أعضاؤه هذا الوصول.",
-        "deleteConfirmSpaceAccess_two": "يمنح هذا الفريق الوصول إلى {{count}} مساحتين. سيفقد أعضاؤه هذا الوصول.",
-        "deleteConfirmSpaceAccess_few": "يمنح هذا الفريق الوصول إلى {{count}} مساحات. سيفقد أعضاؤه هذا الوصول.",
-        "deleteConfirmSpaceAccess_many": "يمنح هذا الفريق الوصول إلى {{count}} مساحةً. سيفقد أعضاؤه هذا الوصول.",
-        "deleteConfirmSpaceAccess_other": "يمنح هذا الفريق الوصول إلى {{count}} مساحة. سيفقد أعضاؤه هذا الوصول.",
+        "deleteConfirmDescription": "هذا يؤرشف المجموعة. سيفقد أعضاؤها أي وصول منحته إياهم.",
+        "deleteConfirmSpaceAccess_zero": "تمنح هذه المجموعة الوصول إلى {{count}} مساحات. سيفقد أعضاؤها هذا الوصول.",
+        "deleteConfirmSpaceAccess_one": "تمنح هذه المجموعة الوصول إلى {{count}} مساحة. سيفقد أعضاؤها هذا الوصول.",
+        "deleteConfirmSpaceAccess_two": "تمنح هذه المجموعة الوصول إلى {{count}} مساحتين. سيفقد أعضاؤها هذا الوصول.",
+        "deleteConfirmSpaceAccess_few": "تمنح هذه المجموعة الوصول إلى {{count}} مساحات. سيفقد أعضاؤها هذا الوصول.",
+        "deleteConfirmSpaceAccess_many": "تمنح هذه المجموعة الوصول إلى {{count}} مساحةً. سيفقد أعضاؤها هذا الوصول.",
+        "deleteConfirmSpaceAccess_other": "تمنح هذه المجموعة الوصول إلى {{count}} مساحة. سيفقد أعضاؤها هذا الوصول.",
         "members": {
           "title": "أعضاء {{team}}",
           "removeConfirm": "إزالة {{name}} من {{team}}؟",
-          "leave": "مغادرة الفريق",
+          "leave": "مغادرة المجموعة",
           "leftTeam": "لقد غادرت {{team}}",
           "leaveConfirm": "مغادرة {{team}}؟",
-          "leaveConfirmDescription": "ستفقد إمكانية الوصول إلى المساحات المخصصة لهذا الفريق ما لم يضمك فريق آخر."
+          "leaveConfirmDescription": "ستفقد إمكانية الوصول إلى المساحات المخصصة لهذه المجموعة ما لم تكن مضافًا مباشرةً أو تضمك مجموعة أخرى."
         }
       },
       "invites": {
@@ -2862,10 +2886,10 @@
       "removing": "جاري الإزالة...",
       "resetAll": {
         "confirmText": "حذف كل شيء",
-        "description": "سيؤدي هذا إلى حذف جميع الإعدادات المحلية والنصوص المفرَّغة والتسجيلات الصوتية ونماذج الذكاء الاصطناعي التي تم تنزيلها واتصالات التقويم والبيانات المخزنة مؤقتًا بشكل دائم. لن تتأثر البيانات السحابية وحسابك. سيتم إعادة تحميل التطبيق بعد إعادة التعيين.",
+        "description": "سيؤدي هذا إلى حذف جميع الإعدادات المحلية والنصوص المفرَّغة والتسجيلات الصوتية ونماذج الذكاء الاصطناعي التي تم تنزيلها واتصالات التقويم والبيانات المخزنة مؤقتًا بشكل دائم. لن تتأثر البيانات السحابية وحسابك. سيتم إعادة تشغيل التطبيق بعد إعادة التعيين.",
         "failedDescription": "حدث خطأ ما. يرجى المحاولة مرة أخرى أو إعادة تثبيت التطبيق.",
         "failedTitle": "تعذر إعادة التعيين",
-        "successDescription": "تمت إعادة تعيين كل شيء. سيتم إعادة تحميل التطبيق الآن.",
+        "successDescription": "تمت إعادة تعيين كل شيء. سيتم إعادة تشغيل التطبيق الآن.",
         "successTitle": "تم الانتهاء",
         "title": "إعادة تعيين جميع بيانات التطبيق"
       },
@@ -3581,6 +3605,7 @@
     "policyAiProcessingRestricted": "معالجة الذكاء الاصطناعي مقيدة من قبل مؤسستك.",
     "policyAgentRestricted": "استخدام مساعد الذكاء الاصطناعي مقيد من قبل مؤسستك.",
     "policyTranscriptionRestricted": "التفريغ الصوتي مقيد من قبل مؤسستك.",
+    "policyUnresolved": "لم يتم تحميل إعدادات مؤسستك بعد. حاول مرة أخرى بعد قليل.",
     "logout": "تسجيل الخروج",
     "managedConfigLoading": "جارٍ التحقق من الإعداد المُدار لمؤسستك. أعد المحاولة بعد لحظات.",
     "managedConfigUnavailable": "الوصول المُدار للمؤسسة غير متاح. سجّل الدخول مرة أخرى أو اتصل بالمسؤول.",
@@ -3850,6 +3875,7 @@
     "upload": "رفع",
     "dictionary": "القاموس",
     "referral": "احصل على شهر مجاني",
+    "inviteTeam": "ادعُ فريقك",
     "settings": "الإعدادات",
     "support": "الدعم",
     "limitReached": "تم الوصول إلى الحد الأسبوعي",
@@ -4147,6 +4173,23 @@
       "dismiss": "تجاهل"
     }
   },
+  "emojiPicker": {
+    "search": "ابحث عن رمز تعبيري…",
+    "recent": "الأخيرة",
+    "noResults": "لم يتم العثور على رموز تعبيرية",
+    "remove": "إزالة",
+    "groups": {
+      "smileys": "الوجوه والمشاعر",
+      "people": "الأشخاص والجسم",
+      "animals": "الحيوانات والطبيعة",
+      "food": "الطعام والشراب",
+      "travel": "السفر والأماكن",
+      "activities": "الأنشطة",
+      "objects": "الأشياء",
+      "symbols": "الرموز",
+      "flags": "الأعلام"
+    }
+  },
   "permissionsGate": {
     "title": "الأذونات مطلوبة",
     "description": "يحتاج OpenWhispr إلى بعض الأذونات للعمل على هذا الكمبيوتر.",
@@ -4210,15 +4253,6 @@
       "underway": "يبدو أن اجتماعك جارٍ بالفعل. هل ترغب في تدوين الملاحظات؟"
     },
     "start": "تدوين الملاحظات",
-    "join": "انضمام وتفريغ صوتي",
-    "autoEnd": {
-      "title": "انتهى تسجيل الاجتماع",
-      "body": {
-        "micReleased": "لا يستخدم أي تطبيق آخر ميكروفونك، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
-        "silence": "لم يُكتشف أي صوت، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
-        "processExit": "أُغلق تطبيق الاجتماع، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث."
-      },
-      "restart": "إعادة تشغيل التسجيل"
-    }
+    "join": "انضمام وتفريغ صوتي"
   }
 }

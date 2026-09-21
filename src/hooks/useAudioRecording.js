@@ -316,6 +316,10 @@ export const useAudioRecording = (toast, options = {}) => {
   useEffect(() => {
     audioManagerRef.current = new AudioManager();
 
+    // Resolve and pin the input device now, not on the first hotkey press, which
+    // would otherwise wait on the device lookup before the mic can open.
+    void audioManagerRef.current.cacheMicrophoneDeviceId?.();
+
     // Reset stale main-process state after a renderer reload or crash recovery.
     reportLifecycle("idle");
 

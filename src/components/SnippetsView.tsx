@@ -10,6 +10,8 @@ import {
   DialogFooter,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
+import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
+import { cn } from "./lib/utils";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
@@ -165,7 +167,7 @@ export default function SnippetsView() {
   const canCreate = !!trimmedTrigger && !!expansion.trim() && !duplicate;
 
   return (
-    <div className="px-5 py-4 flex flex-col gap-3">
+    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-4 flex flex-col gap-3")}>
       <EditSnippetDialog
         snippet={editing}
         onOpenChange={(open) => {

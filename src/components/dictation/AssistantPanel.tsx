@@ -81,10 +81,7 @@ interface AssistantPanelProps {
   onSelectionContextChange: (context: AgentSelectionContext | null) => void;
 }
 
-// Updating the selection indicator must not rerender react-markdown: its
-// component map is recreated on render, which remounts the text nodes and
-// collapses the browser's live selection. Streaming content still rerenders
-// normally because the content prop changes.
+// Avoid reparsing Markdown when only the selection indicator changes.
 const StableAssistantMarkdown = memo(MarkdownRenderer);
 
 export function AssistantPanel({
@@ -613,7 +610,7 @@ export function AssistantPanel({
               type="button"
               variant="secondary"
               size="sm"
-              className="rounded-full px-4"
+              className="px-4"
               onClick={onClose}
               tabIndex={footerPhase === "actions" ? 0 : -1}
             >
@@ -623,7 +620,7 @@ export function AssistantPanel({
             <Button
               type="button"
               size="sm"
-              className="rounded-full border-border/70 bg-surface-raised px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
+              className="bg-surface-raised bg-none px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
               onClick={() => void handleCopy()}
               aria-live="polite"
               tabIndex={footerPhase === "actions" ? 0 : -1}

@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "AI 處理已被您的組織限制。",
     "policyAgentRestricted": "AI 助理的使用已被您的組織限制。",
     "policyTranscriptionRestricted": "轉錄已被您的組織限制。",
+    "policyUnresolved": "貴組織的設定尚未載入完成。請稍後再試。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
     "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。"
@@ -911,7 +912,9 @@
         "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
         "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。",
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
-        "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。"
+        "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。",
+        "cleanupTruncated": "AI 模型的輸出長度達到上限，未能完成聽寫清理。",
+        "cleanupEmptyReply": "AI 模型傳回空白回應，沒有產生清理後的文字。"
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
@@ -1823,10 +1826,10 @@
       "removing": "移除中...",
       "resetAll": {
         "confirmText": "刪除所有資料",
-        "description": "這將永久刪除所有本地設定、轉錄、音訊錄製、下載的 AI 模型、行事曆連線和快取資料。雲端資料和您的帳戶不會受到影響。應用程式將在重設後重新載入。",
+        "description": "這將永久刪除所有本地設定、轉錄、音訊錄製、下載的 AI 模型、行事曆連線和快取資料。雲端資料和您的帳戶不會受到影響。應用程式將在重設後重新啟動。",
         "failedDescription": "發生錯誤。請再試一次或重新安裝應用程式。",
         "failedTitle": "無法重設",
-        "successDescription": "所有資料已重設。應用程式即將重新載入。",
+        "successDescription": "所有資料已重設。應用程式即將重新啟動。",
         "successTitle": "完成",
         "title": "重設所有應用程式資料"
       },
@@ -2299,7 +2302,7 @@
       "tab": {
         "general": "一般",
         "members": "成員",
-        "teams": "團隊",
+        "teams": "群組",
         "developer": "開發者"
       },
       "role": {
@@ -2357,33 +2360,33 @@
         "errorTitle": "無法更新申請"
       },
       "teams": {
-        "title": "團隊",
-        "description": "授予團隊空間存取權的工作區成員群組。",
-        "new": "新增團隊",
-        "empty": "還沒有團隊。",
-        "createFirst": "建立你的第一個團隊",
+        "title": "群組",
+        "description": "可一次取得團隊空間存取權的工作區成員群組。",
+        "new": "新增群組",
+        "empty": "還沒有群組。",
+        "createFirst": "建立你的第一個群組",
         "addMembersLabel": "新增成員",
-        "createTitle": "建立團隊",
-        "nameLabel": "團隊名稱",
+        "createTitle": "建立群組",
+        "nameLabel": "群組名稱",
         "memberCount_one": "{{count}} 位成員",
         "memberCount_other": "{{count}} 位成員",
         "membersButton": "成員",
         "grantsAccessToSpaces_one": "授予 {{count}} 個空間的存取權",
         "grantsAccessToSpaces_other": "授予 {{count}} 個空間的存取權",
-        "couldNotCreate": "無法建立團隊",
+        "couldNotCreate": "無法建立群組",
         "created": "已建立 {{team}}",
         "deleted": "已刪除 {{team}}",
         "deleteConfirmTitle": "刪除 {{team}}？",
-        "deleteConfirmDescription": "這將封存該團隊。其成員將失去它授予的存取權。",
-        "deleteConfirmSpaceAccess_one": "該團隊授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
-        "deleteConfirmSpaceAccess_other": "該團隊授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
+        "deleteConfirmDescription": "這將封存該群組。其成員將失去它授予的存取權。",
+        "deleteConfirmSpaceAccess_one": "該群組授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
+        "deleteConfirmSpaceAccess_other": "該群組授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
         "members": {
           "title": "{{team}} 的成員",
           "removeConfirm": "將 {{name}} 從 {{team}} 移除？",
-          "leave": "退出團隊",
+          "leave": "退出群組",
           "leftTeam": "你已退出 {{team}}",
           "leaveConfirm": "退出 {{team}}？",
-          "leaveConfirmDescription": "除非其他團隊包含你，否則你將失去透過該團隊取得的空間存取權。"
+          "leaveConfirmDescription": "除非你被直接加入或其他群組包含你，否則你將失去透過該群組取得的空間存取權。"
         }
       },
       "invites": {
@@ -2751,20 +2754,32 @@
       "newSpace": "新增團隊空間",
       "newSpaceInWorkspace": "在 {{workspace}} 中新增團隊空間",
       "createTitle": "建立團隊空間",
-      "createDescription": "工作區內的共享區域，可供一個或多個團隊存取。",
-      "nameLabel": "名稱",
-      "emojiLabel": "表情符號",
+      "createDescription": "工作區內的共享區域，供你加入的人員和群組存取。",
+      "nameAndIconLabel": "名稱與圖示",
       "create": "建立",
       "couldNotCreate": "無法建立空間",
       "created": "已建立 {{space}}",
-      "rename": "重新命名",
       "changeEmoji": "變更表情符號",
+      "settings": "設定",
+      "settingsTitle": "空間設定",
       "couldNotRename": "無法重新命名空間",
-      "renamed": "已重新命名 {{space}}",
+      "couldNotChangeEmoji": "無法變更表情符號",
       "deleteSpace": "刪除空間",
+      "deleteHintTeam": "為所有人移除此空間，其群組會保留。",
+      "deleteHintLocal": "永久刪除此空間以及此裝置上的資料夾與筆記。",
+      "leaveTitle": "離開空間",
+      "leaveDescription": "你的筆記仍可供其他成員存取。",
+      "leave": "離開空間",
+      "leaveConfirmTitle": "要離開 {{space}} 嗎？",
+      "leaveConfirmDescription": "你將從 {{teams}} 中移除，並失去這些群組可開啟的其他空間的存取權。",
+      "leaveDirectDescription": "你將失去此空間的存取權。",
+      "leaveKeepsGroupAccess": "你將保留透過 {{groups}} 的存取權。",
+      "left": "已離開 {{space}}",
+      "stillViaGroups": "你仍可透過 {{groups}} 存取 {{space}}。",
+      "couldNotLeave": "無法離開空間",
       "deleteConfirmTitle": "刪除空間？",
       "deleteConfirmDescription": "這會從此裝置永久刪除 {{space}} 及其所有資料夾和筆記。",
-      "deleteConfirmTeamDescription": "這將為所有人刪除 {{space}}。團隊會保留，但成員將失去其所有資料夾與筆記的存取權。",
+      "deleteConfirmTeamDescription": "這將為所有人刪除 {{space}}。群組會保留，但成員將失去其所有資料夾與筆記的存取權。",
       "deleteTypeName": "輸入 {{space}} 以確認",
       "couldNotDelete": "無法刪除空間",
       "deleted": "已刪除 {{space}}",
@@ -2800,9 +2815,10 @@
       "conflictKeep": "繼續編輯",
       "editedBy": "由 {{name}} 編輯 · {{time}}",
       "members": {
-        "addPeopleToTeam": "將成員加入 {{team}}",
+        "addPeople": "新增成員",
         "addedToTeam": "已將 {{name}} 加入 {{team}}",
         "removedFromTeam": "已將 {{name}} 從 {{team}} 移除",
+        "stillViaGroups": "{{name}} 仍可透過 {{groups}} 存取",
         "roleUpdated": "角色已更新",
         "you": "你",
         "addFailed": "{{total}} 人中有 {{failed}} 人無法加入",
@@ -2810,28 +2826,32 @@
         "noResults": "找不到成員",
         "roleAdmin": "管理員",
         "roleMember": "成員",
+        "roleAdminDescription": "管理成員與設定。",
+        "roleMemberDescription": "可以檢視與編輯筆記。",
         "remove": "移除",
         "removeConfirm": "要將 {{name}} 從 {{space}} 移除嗎？",
         "removeConfirmDescription": "對方將無法再存取此空間的所有筆記。",
+        "removeKeepsGroupAccess": "他們將保留透過 {{groups}} 的存取權。",
         "inviteFooter": "邀請 {{email}} 加入工作區…",
-        "empty": "尚未新增任何成員"
+        "empty": "尚未新增任何成員",
+        "viaGroup": "透過 {{group}}",
+        "managedByGroup": "透過 {{group}} 加入。請在該群組中移除。",
+        "roleFromGroup": "透過 {{group}} 取得管理員身分，請在該群組中變更。",
+        "invited": "已向 {{email}} 傳送邀請"
       },
       "invitedTo_one": "你將加入 {{count}} 個團隊空間",
       "invitedTo_other": "你將加入 {{count}} 個團隊空間",
+      "invitedToSpaces": "你將加入 {{spaces}}",
       "teamsMembers": {
-        "menu": "團隊與成員…",
-        "title": "{{space}} 的團隊與成員",
-        "noTeams": "尚無團隊可存取此空間。只有工作區管理員可以看到它。",
-        "addTeamLabel": "將團隊加入此空間",
-        "chooseTeam": "選擇團隊…",
+        "title": "{{space}} 的成員",
+        "noTeams": "尚無群組可存取此空間。",
+        "addTeamLabel": "將群組加入此空間",
+        "chooseTeam": "選擇群組…",
         "teamAdded": "已將 {{team}} 加入 {{space}}",
         "teamRemoved": "已將 {{team}} 從 {{space}} 移除",
         "removeTeamFromSpace": "從空間移除",
         "removeTeamConfirm": "將 {{team}} 從 {{space}} 移除？",
-        "removeTeamConfirmDescription": "除非其他已指派的團隊包含這些成員，否則他們將失去此空間的存取權。",
-        "lastTeamWarning": "這是唯一可存取此空間的團隊。移除後，只有工作區管理員保留存取權。",
-        "affectsOtherSpaces_one": "對 {{team}} 的變更也會套用到它可存取的另外 {{count}} 個空間。",
-        "affectsOtherSpaces_other": "對 {{team}} 的變更也會套用到它可存取的另外 {{count}} 個空間。",
+        "removeTeamConfirmDescription": "除非這些成員被直接加入或其他已指派的群組包含他們，否則他們將失去此空間的存取權。",
         "accessLabel": "空間存取權",
         "accessAdmin": "管理員",
         "accessMember": "成員",
@@ -2839,10 +2859,12 @@
         "accessHint": "僅當存取權設為「管理員」時，{{team}} 的管理員才能管理此空間。"
       },
       "teams": {
-        "assignLabel": "團隊",
-        "newTeam": "新增團隊",
-        "newTeamNameLabel": "團隊名稱",
-        "loadError": "無法載入團隊。"
+        "newTeam": "新增群組",
+        "loadError": "無法載入群組。"
+      },
+      "groups": {
+        "title": "有存取權的群組",
+        "optional": "群組（選填）"
       }
     },
     "structureIntro": {
@@ -2858,7 +2880,7 @@
       },
       "teamSpace": {
         "title": "團隊空間",
-        "description": "工作區內的共享區域。由一個或多個團隊授予存取權。"
+        "description": "工作區內的共享區域。加入人員或群組以授予存取權。"
       },
       "contents": "每個空間都可以包含資料夾和筆記。",
       "done": "知道了",
@@ -2892,6 +2914,12 @@
       "hoursAgo": "{{count}} 小時前",
       "daysAgo": "{{count}} 天前"
     },
+    "createMenu": {
+      "note": "筆記",
+      "assistantChat": "助理聊天",
+      "teamSpace": "團隊空間",
+      "chooseType": "選擇要建立的內容"
+    },
     "editor": {
       "untitled": "未命名",
       "noteTitle": "筆記標題",
@@ -2906,7 +2934,7 @@
       "asJson": "匯出為 JSON (.json)",
       "asTranscriptMarkdown": "匯出為 Markdown (.md)",
       "raw": "原始",
-      "enhanced": "已增強",
+      "aiSummary": "AI 摘要",
       "saving": "儲存中",
       "transcriptEmptyTitle": "尚未錄製任何內容",
       "transcriptEmptyDescription": "點擊錄製開始轉錄。所說的內容會即時顯示在這裡。",
@@ -2916,7 +2944,7 @@
       "staleIndicator": "內容在增強後已變更",
       "live": "即時",
       "transcript": "轉錄",
-      "notes": "筆記",
+      "notes": "你的筆記",
       "conversationWillAppear": "對話將顯示在這裡...",
       "linkedEvent": "關聯行程",
       "noFolder": "無資料夾",
@@ -2933,8 +2961,9 @@
     "upload": {
       "title": "上傳音訊",
       "using": "使用 {{model}}",
-      "dropOrBrowse": "拖放音訊檔案或點擊瀏覽",
-      "supportedFormats": "MP3、WAV、M4A、WebM、OGG、FLAC、AAC、Opus",
+      "dropOrBrowse": "拖放音訊或影片檔案，或點擊瀏覽",
+      "supportedFormats": "MP3、WAV、M4A、MP4、MOV 及大多數其他音訊或影片格式",
+      "unsupportedFiles": "已略過 {{names}}：不支援的音訊或影片格式。",
       "dropToUpload": "拖放以上傳",
       "transcribe": "轉錄",
       "cancel": "取消",
@@ -3021,8 +3050,6 @@
       "unsupportedSelfHosted": "筆記錄音尚不支援自架端點。請開啟設定，選擇本機或支援串流的服務商。",
       "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
       "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
-      "autoEnded": "會議結束後，錄音已自動停止。",
-      "restartFailed": "無法重新開始會議錄音。",
       "systemAudioSilent": {
         "title": "尚未偵測到會議音訊",
         "description": "到目前為止，只有您的麥克風收到聲音。正在進行視訊通話？請檢查會議音訊是否正在此電腦上播放且未被靜音。正在進行現場錄音？您可以忽略此提示——您的麥克風會收錄房間內的聲音。"
@@ -3410,6 +3437,7 @@
     "upload": "上傳",
     "dictionary": "字典",
     "referral": "獲得一個月免費",
+    "inviteTeam": "邀請你的團隊",
     "settings": "設定",
     "support": "支援",
     "limitReached": "已達每週上限",
@@ -3532,7 +3560,9 @@
       "stopListening": "停止錄音",
       "startListening": "開始錄音",
       "hideForNow": "暫時隱藏",
-      "askAssistant": "詢問助理"
+      "askAssistant": "詢問助理",
+      "busyRecording": "請先結束目前的錄音",
+      "startMeetingRecording": "開始會議錄音"
     }
   },
   "dictationAgent": {
@@ -3892,6 +3922,23 @@
       "dismiss": "關閉"
     }
   },
+  "emojiPicker": {
+    "search": "搜尋表情符號…",
+    "recent": "最近使用",
+    "noResults": "找不到表情符號",
+    "remove": "移除",
+    "groups": {
+      "smileys": "表情與情感",
+      "people": "人物與身體",
+      "animals": "動物與自然",
+      "food": "食物與飲料",
+      "travel": "旅行與地點",
+      "activities": "活動",
+      "objects": "物品",
+      "symbols": "符號",
+      "flags": "旗幟"
+    }
+  },
   "permissionsGate": {
     "title": "需要權限",
     "description": "OpenWhispr 需要一些權限才能在此電腦上正常運作。",
@@ -4084,15 +4131,6 @@
       "underway": "你的會議似乎已在進行中。要開始記錄嗎？"
     },
     "start": "開始記錄",
-    "join": "加入並轉錄",
-    "autoEnd": {
-      "title": "會議錄音已結束",
-      "body": {
-        "micReleased": "沒有其他應用程式在使用麥克風，因此錄音已自動停止。請在 {{seconds}} 秒內重新開始錄音。",
-        "silence": "未偵測到音訊，因此錄音已自動停止。請在 {{seconds}} 秒內重新開始錄音。",
-        "processExit": "會議應用程式已關閉，因此錄音已自動停止。請在 {{seconds}} 秒內重新開始錄音。"
-      },
-      "restart": "重新開始錄音"
-    }
+    "join": "加入並轉錄"
   }
 }

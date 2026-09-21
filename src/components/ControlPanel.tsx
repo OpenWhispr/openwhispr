@@ -2,6 +2,8 @@ import React, { Suspense, useState, useEffect, useRef, useCallback } from "react
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
+import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
+import { cn } from "./lib/utils";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Download, RefreshCw, Loader2, AlertTriangle, Zap } from "./icons";
 import UpgradePrompt from "./UpgradePrompt";
@@ -15,6 +17,8 @@ import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
 import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
+import { useWorkspace } from "../hooks/useWorkspace";
+import { manageableWorkspaces, selectWorkspaceForSpaceCreation } from "../lib/workspaceSelection";
 import { useUsage } from "../hooks/useUsage";
 import { decideUpsell } from "../lib/upsell";
 import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
@@ -51,10 +55,12 @@ import ControlPanelTopBar from "./ControlPanelTopBar";
 import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
+import NewNoteMenu from "./notes/NewNoteMenu";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
+import { useCreateNote } from "../hooks/useCreateNote";
 import {
   setActiveNoteId,
   setActiveFolderId,
@@ -92,6 +98,7 @@ const SEMANTIC_REINDEX_VERSION = 2;
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
+const InviteTeammateDialog = React.lazy(() => import("./InviteTeammateDialog"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
 const InsightsView = React.lazy(() => import("./InsightsView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
@@ -121,10 +128,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
   const [showReferrals, setShowReferrals] = useState(false);
+  const [showInviteTeam, setShowInviteTeam] = useState(false);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [invitationNotesEntry, setInvitationNotesEntry] = useState<{
     workspaceId: string;
     teamIds: string[];
+    spaceIds: string[];
   } | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
@@ -164,6 +173,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     dismiss: dismissJoinable,
     markRequested,
   } = useJoinableWorkspaces(user?.id ?? null, isSignedIn && !invitationToken);
+  const { workspaces, active: activeWorkspace } = useWorkspace();
+  // Invitations are owner/admin-only (server-enforced), so the sidebar row
+  // only exists when the user can manage a workspace.
+  const inviteWorkspace = selectWorkspaceForSpaceCreation(
+    manageableWorkspaces(workspaces),
+    activeWorkspace,
+    null
+  );
   const usage = useUsage();
   const upsell = decideUpsell({
     authLoaded,
@@ -182,6 +199,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   } = useUpdater();
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
+  const { createNote } = useCreateNote();
+  // The note is created before the view switches so Notes mounts with it already open.
+  const handleNewNote = useCallback(async () => {
+    await createNote();
+    setActiveView("personal-notes");
+  }, [createNote]);
   const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
   useEffect(() => {
     if (!isControlPanelViewAllowed(activeView, agentAllowedByPolicy, policyActionsAllowed)) {
@@ -635,12 +658,22 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     settings.translationSourceLanguage,
                     settings.translationTargetLanguage
                   ),
-                  onCleanupError: (cleanupError: Error) =>
+                  onCleanupError: (cleanupError: Error & { messageKey?: string }) => {
                     logger.warn(
                       "Cleanup step failed in translation chain, translating raw transcript",
                       { error: cleanupError.message },
                       "transcription"
-                    ),
+                    );
+                    // The chain still translates the raw transcript, so say why cleanup
+                    // was dropped rather than reporting a clean success (#2091).
+                    toast({
+                      title: t("app.toasts.cleanupFailed.title"),
+                      description: cleanupError.messageKey
+                        ? t(cleanupError.messageKey)
+                        : cleanupError.message,
+                      variant: "destructive",
+                    });
+                  },
                   onEmptyTranslate: () =>
                     logger.warn(
                       "Translation step returned empty text, keeping previous text",
@@ -690,6 +723,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const agentName = getAgentName();
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,
+                  requireCompleteOutput: true,
                 });
                 if (hasTextContent(reasonedText) && reasonedText !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
@@ -702,8 +736,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   }
                 }
               }
-            } catch {
-              // Reasoning failed — keep the raw STT result
+            } catch (cleanupError) {
+              // The row keeps its raw transcript, so the retry must not look like it
+              // cleaned anything — report why, the way dictation does (#2091).
+              const failure = cleanupError as Error & { messageKey?: string };
+              toast({
+                title: t("app.toasts.cleanupFailed.title"),
+                description: failure.messageKey ? t(failure.messageKey) : failure.message,
+                variant: "destructive",
+              });
             }
           }
 
@@ -897,6 +938,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </Suspense>
       )}
 
+      {showInviteTeam && inviteWorkspace && (
+        <Suspense fallback={null}>
+          <InviteTeammateDialog
+            open={showInviteTeam}
+            onOpenChange={setShowInviteTeam}
+            workspaceId={inviteWorkspace.id}
+            workspaceName={inviteWorkspace.name}
+          />
+        </Suspense>
+      )}
+
       <AcceptInvitationModal
         token={invitationToken}
         onClose={() => setInvitationToken(null)}
@@ -962,6 +1014,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               setShowSettings(true);
             }}
             onOpenReferrals={() => setShowReferrals(true)}
+            onInviteTeam={inviteWorkspace ? () => setShowInviteTeam(true) : undefined}
             onUpgrade={() => {
               setSettingsSection("plansBilling");
               setShowSettings(true);
@@ -1003,10 +1056,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               onOpenSearch={() => setShowSearch(true)}
               isSidePanelLayout={isSidePanelLayout}
               onExitSidePanel={handleExitSidePanel}
+              actions={
+                <NewNoteMenu
+                  onNewNote={handleNewNote}
+                  onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
+                />
+              }
             />
             <div className="scrollbar-hidden flex-1 overflow-y-auto">
               {updateRequiredByOrg && (
-                <div className="max-w-3xl mx-auto w-full mb-3">
+                <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
                   <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
@@ -1031,7 +1090,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               )}
               <RequiredModelsBanner />
               {usage?.isPastDue && activeView === "home" && (
-                <div className="max-w-3xl mx-auto w-full mb-3">
+                <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
                   <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
@@ -1065,7 +1124,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               {(gpuAccelAvailable.transcription || gpuAccelAvailable.intelligence) &&
                 activeView === "home" &&
                 !gpuBannerDismissed && (
-                  <div className="max-w-3xl mx-auto w-full mb-3">
+                  <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
                     <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
                       <div className="flex items-start gap-3">
                         <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">

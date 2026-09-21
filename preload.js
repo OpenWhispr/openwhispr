@@ -90,6 +90,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
+  onOpenAssistantPanel: registerListener("open-assistant-panel", (callback) => () => callback()),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
   onPrepareDictation: registerListener(
@@ -520,6 +521,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Cleanup function
   cleanupApp: () => ipcRenderer.invoke("cleanup-app"),
+  relaunchApp: () => ipcRenderer.invoke("relaunch-app"),
   updateHotkey: (hotkey) => ipcRenderer.invoke("update-hotkey", hotkey),
   setHotkeyListeningMode: (enabled) => ipcRenderer.invoke("set-hotkey-listening-mode", enabled),
   getHotkeyModeInfo: (hotkey) => ipcRenderer.invoke("get-hotkey-mode-info", hotkey),
@@ -541,6 +543,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ackMainWindowResizeMask: (token) => ipcRenderer.send("main-window-resize-mask-ready", token),
   setMainWindowInteractivity: (interactive) =>
     ipcRenderer.invoke("set-main-window-interactivity", interactive),
+  setMainWindowInputRegion: (region) => ipcRenderer.invoke("set-main-window-input-region", region),
+  onMainWindowVisibilityChanged: registerListener(
+    "main-window-visibility-changed",
+    (callback) => (_event, visible) => callback(visible)
+  ),
   setNotificationInteractivity: (interactive) =>
     ipcRenderer.invoke("set-notification-interactivity", interactive),
   resizeMainWindow: (sizeKey) => ipcRenderer.invoke("resize-main-window", sizeKey),
@@ -742,7 +749,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   requestScreenRecordingAccess: () => ipcRenderer.invoke("request-screen-recording-access"),
   captureScreenContext: () => ipcRenderer.invoke("capture-screen-context"),
   setScreenContextEnabled: (enabled) => ipcRenderer.invoke("screen-context-set-enabled", enabled),
-  showEmojiPanel: () => ipcRenderer.invoke("show-emoji-panel"),
   toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
   pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
   resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
@@ -1327,19 +1333,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-auto-end-requested",
     (callback) => (_event, data) => callback(data)
   ),
-  meetingAutoEndCompleted: (sessionId) =>
-    ipcRenderer.invoke("meeting-auto-end-completed", sessionId),
-  meetingAutoEndRespond: (sessionId, action) =>
-    ipcRenderer.invoke("meeting-auto-end-respond", sessionId, action),
-  onMeetingAutoEndRestartRequested: registerListener(
-    "meeting-auto-end-restart-requested",
-    (callback) => (_event, data) => callback(data)
-  ),
   getMeetingNotificationData: () => ipcRenderer.invoke("get-meeting-notification-data"),
   meetingNotificationReady: () => ipcRenderer.invoke("meeting-notification-ready"),
   meetingNotificationRespond: (detectionId, action) =>
     ipcRenderer.invoke("meeting-notification-respond", detectionId, action),
   joinCalendarMeeting: (eventId) => ipcRenderer.invoke("join-calendar-meeting", eventId),
+  startManualMeeting: () => ipcRenderer.invoke("start-manual-meeting"),
   getPendingMeetingNoteNavigation: () => ipcRenderer.invoke("get-pending-meeting-note-navigation"),
   onMeetingNoteNavigationPending: registerListener(
     "meeting-note-navigation-pending",

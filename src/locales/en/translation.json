@@ -204,6 +204,7 @@
     "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
     "policyAgentRestricted": "AI assistant use is restricted by your organization.",
     "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
+    "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
     "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator."
@@ -911,7 +912,9 @@
         "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
         "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator.",
         "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
-        "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text."
+        "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text.",
+        "cleanupTruncated": "The AI model ran out of room before it finished cleaning up your dictation.",
+        "cleanupEmptyReply": "The AI model returned an empty reply instead of the cleaned-up dictation."
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",
@@ -1589,7 +1592,7 @@
       "tab": {
         "general": "General",
         "members": "Members",
-        "teams": "Teams",
+        "teams": "Groups",
         "developer": "Developer"
       },
       "role": {
@@ -1647,33 +1650,33 @@
         "errorTitle": "Could not update the request"
       },
       "teams": {
-        "title": "Teams",
-        "description": "Groups of workspace members that grant access to team spaces.",
-        "new": "New team",
-        "empty": "No teams yet.",
-        "createFirst": "Create your first team",
+        "title": "Groups",
+        "description": "Groups of workspace members that can be given access to team spaces together.",
+        "new": "New group",
+        "empty": "No groups yet.",
+        "createFirst": "Create your first group",
         "addMembersLabel": "Add members",
-        "createTitle": "Create team",
-        "nameLabel": "Team name",
+        "createTitle": "Create group",
+        "nameLabel": "Group name",
         "memberCount_one": "{{count}} member",
         "memberCount_other": "{{count}} members",
         "membersButton": "Members",
         "grantsAccessToSpaces_one": "Grants access to {{count}} space",
         "grantsAccessToSpaces_other": "Grants access to {{count}} spaces",
-        "couldNotCreate": "Couldn't create team",
+        "couldNotCreate": "Couldn't create group",
         "created": "Created {{team}}",
         "deleted": "Deleted {{team}}",
         "deleteConfirmTitle": "Delete {{team}}?",
-        "deleteConfirmDescription": "This archives the team. Its members lose any access it granted.",
-        "deleteConfirmSpaceAccess_one": "This team grants access to {{count}} space. Its members will lose that access.",
-        "deleteConfirmSpaceAccess_other": "This team grants access to {{count}} spaces. Its members will lose that access.",
+        "deleteConfirmDescription": "This archives the group. Its members lose any access it granted.",
+        "deleteConfirmSpaceAccess_one": "This group grants access to {{count}} space. Its members will lose that access.",
+        "deleteConfirmSpaceAccess_other": "This group grants access to {{count}} spaces. Its members will lose that access.",
         "members": {
           "title": "Members of {{team}}",
           "removeConfirm": "Remove {{name}} from {{team}}?",
-          "leave": "Leave team",
+          "leave": "Leave group",
           "leftTeam": "You left {{team}}",
           "leaveConfirm": "Leave {{team}}?",
-          "leaveConfirmDescription": "You'll lose access to the spaces this team is assigned to unless another team includes you."
+          "leaveConfirmDescription": "You'll lose access to the spaces this group is assigned to unless you were added directly or another group includes you."
         }
       },
       "invites": {
@@ -2116,10 +2119,10 @@
       "removing": "Removing...",
       "resetAll": {
         "confirmText": "Delete Everything",
-        "description": "This will permanently delete all local settings, transcriptions, audio recordings, downloaded AI models, calendar connections, and cached data. Cloud data and your account will not be affected. The app will reload after reset.",
+        "description": "This will permanently delete all local settings, transcriptions, audio recordings, downloaded AI models, calendar connections, and cached data. Cloud data and your account will not be affected. The app will restart after reset.",
         "failedDescription": "Something went wrong. Please try again or reinstall the app.",
         "failedTitle": "Couldn't reset",
-        "successDescription": "Everything has been reset. The app will reload now.",
+        "successDescription": "Everything has been reset. The app will restart now.",
         "successTitle": "All done",
         "title": "Reset All App Data"
       },
@@ -2755,6 +2758,7 @@
     "upload": "Upload",
     "dictionary": "Dictionary",
     "referral": "Get a free month",
+    "inviteTeam": "Invite your team",
     "settings": "Settings",
     "support": "Support",
     "limitReached": "Weekly limit reached",
@@ -3093,20 +3097,32 @@
       "newSpace": "New team space",
       "newSpaceInWorkspace": "New team space in {{workspace}}",
       "createTitle": "Create team space",
-      "createDescription": "A shared area inside a workspace that one or more teams can access.",
-      "nameLabel": "Name",
-      "emojiLabel": "Emoji",
+      "createDescription": "A shared area inside a workspace for the people and groups you add.",
+      "nameAndIconLabel": "Name and icon",
       "create": "Create",
       "couldNotCreate": "Couldn't create space",
       "created": "Created {{space}}",
-      "rename": "Rename",
       "changeEmoji": "Change emoji",
+      "settings": "Settings",
+      "settingsTitle": "Space settings",
       "couldNotRename": "Couldn't rename space",
-      "renamed": "Renamed {{space}}",
+      "couldNotChangeEmoji": "Couldn't change emoji",
       "deleteSpace": "Delete space",
+      "deleteHintTeam": "Removes this space for everyone. Its groups remain.",
+      "deleteHintLocal": "Permanently deletes this space with its folders and notes on this device.",
+      "leaveTitle": "Leave space",
+      "leaveDescription": "Your notes stay available to the other members.",
+      "leave": "Leave space",
+      "leaveConfirmTitle": "Leave {{space}}?",
+      "leaveConfirmDescription": "You'll be removed from {{teams}} and lose access to any other spaces those groups can open.",
+      "leaveDirectDescription": "You'll lose access to this space.",
+      "leaveKeepsGroupAccess": "You'll keep access through {{groups}}.",
+      "left": "Left {{space}}",
+      "stillViaGroups": "You still have access to {{space}} through {{groups}}.",
+      "couldNotLeave": "Couldn't leave space",
       "deleteConfirmTitle": "Delete space?",
       "deleteConfirmDescription": "This permanently deletes {{space}} with all of its folders and notes on this device.",
-      "deleteConfirmTeamDescription": "This deletes {{space}} for everyone. Its teams remain, but members lose access to all of its folders and notes.",
+      "deleteConfirmTeamDescription": "This deletes {{space}} for everyone. Its groups remain, but members lose access to all of its folders and notes.",
       "deleteTypeName": "Type {{space}} to confirm",
       "couldNotDelete": "Couldn't delete space",
       "deleted": "Deleted {{space}}",
@@ -3142,9 +3158,10 @@
       "conflictKeep": "Keep editing",
       "editedBy": "Edited by {{name}} · {{time}}",
       "members": {
-        "addPeopleToTeam": "Add people to {{team}}",
+        "addPeople": "Add people",
         "addedToTeam": "{{name}} added to {{team}}",
         "removedFromTeam": "{{name}} removed from {{team}}",
+        "stillViaGroups": "{{name}} still has access through {{groups}}",
         "roleUpdated": "Role updated",
         "you": "You",
         "addFailed": "{{failed}} of {{total}} people couldn't be added",
@@ -3152,28 +3169,32 @@
         "noResults": "No people found",
         "roleAdmin": "Admin",
         "roleMember": "Member",
+        "roleAdminDescription": "Manages people and settings.",
+        "roleMemberDescription": "Can view and edit notes.",
         "remove": "Remove",
         "removeConfirm": "Remove {{name}} from {{space}}?",
         "removeConfirmDescription": "They'll lose access to all notes in this space.",
+        "removeKeepsGroupAccess": "They'll keep access through {{groups}}.",
         "inviteFooter": "Invite {{email}} to workspace…",
-        "empty": "No one has been added yet"
+        "empty": "No one has been added yet",
+        "viaGroup": "via {{group}}",
+        "managedByGroup": "Added through {{group}}. Remove them there.",
+        "roleFromGroup": "Admin through {{group}}. Change it there.",
+        "invited": "Invitation sent to {{email}}"
       },
       "invitedTo_one": "You'll join {{count}} team space",
       "invitedTo_other": "You'll join {{count}} team spaces",
+      "invitedToSpaces": "You'll join {{spaces}}",
       "teamsMembers": {
-        "menu": "Teams & members…",
-        "title": "Teams & members of {{space}}",
-        "noTeams": "No teams have access to this space yet. Only workspace admins can see it.",
-        "addTeamLabel": "Add a team to this space",
-        "chooseTeam": "Choose team…",
+        "title": "Members of {{space}}",
+        "noTeams": "No groups have access to this space yet.",
+        "addTeamLabel": "Add a group to this space",
+        "chooseTeam": "Choose group…",
         "teamAdded": "{{team}} added to {{space}}",
         "teamRemoved": "{{team}} removed from {{space}}",
         "removeTeamFromSpace": "Remove from space",
         "removeTeamConfirm": "Remove {{team}} from {{space}}?",
-        "removeTeamConfirmDescription": "Its members will lose access to this space unless another assigned team includes them.",
-        "lastTeamWarning": "This is the only team with access to this space. After removing it, only workspace admins keep access.",
-        "affectsOtherSpaces_one": "Changes to {{team}} also apply to {{count}} other space it has access to.",
-        "affectsOtherSpaces_other": "Changes to {{team}} also apply to {{count}} other spaces it has access to.",
+        "removeTeamConfirmDescription": "Its members will lose access to this space unless they were added directly or another group includes them.",
         "accessLabel": "Space access",
         "accessAdmin": "Admin",
         "accessMember": "Member",
@@ -3181,10 +3202,12 @@
         "accessHint": "Admins of {{team}} manage this space only when its access is set to Admin."
       },
       "teams": {
-        "assignLabel": "Teams",
-        "newTeam": "New team",
-        "newTeamNameLabel": "Team name",
-        "loadError": "Couldn't load teams."
+        "newTeam": "New group",
+        "loadError": "Couldn't load groups."
+      },
+      "groups": {
+        "title": "Groups with access",
+        "optional": "Groups (optional)"
       }
     },
     "structureIntro": {
@@ -3200,7 +3223,7 @@
       },
       "teamSpace": {
         "title": "Team space",
-        "description": "A shared area inside a workspace. One or more teams grant access to it."
+        "description": "A shared area inside a workspace. Add people or groups to give them access."
       },
       "contents": "Each space can contain folders and notes.",
       "done": "Got it",
@@ -3234,6 +3257,12 @@
       "hoursAgo": "{{count}}h",
       "daysAgo": "{{count}}d"
     },
+    "createMenu": {
+      "note": "Note",
+      "assistantChat": "Assistant chat",
+      "teamSpace": "Team space",
+      "chooseType": "Choose what to create"
+    },
     "editor": {
       "untitled": "Untitled",
       "noteTitle": "Note title",
@@ -3248,7 +3277,7 @@
       "asJson": "As JSON (.json)",
       "asTranscriptMarkdown": "As Markdown (.md)",
       "raw": "Raw",
-      "enhanced": "Enhanced",
+      "aiSummary": "AI Summary",
       "saving": "Saving",
       "transcriptEmptyTitle": "Nothing recorded yet",
       "transcriptEmptyDescription": "Hit record to start transcribing. Everything said shows up here as it happens.",
@@ -3258,7 +3287,7 @@
       "staleIndicator": "Content has changed since enhancement",
       "live": "Live",
       "transcript": "Transcript",
-      "notes": "Notes",
+      "notes": "Your notes",
       "conversationWillAppear": "Conversation will appear here...",
       "linkedEvent": "Linked event",
       "noFolder": "No folder",
@@ -3275,8 +3304,9 @@
     "upload": {
       "title": "Upload Audio",
       "using": "Using {{model}}",
-      "dropOrBrowse": "Drop audio file or click to browse",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "Drop an audio or video file, or click to browse",
+      "supportedFormats": "MP3, WAV, M4A, MP4, MOV and most other audio or video formats",
+      "unsupportedFiles": "Skipped {{names}}: not a supported audio or video format.",
       "dropToUpload": "Drop to upload",
       "transcribe": "Transcribe",
       "cancel": "Cancel",
@@ -3363,8 +3393,6 @@
       "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
-      "autoEnded": "Recording stopped automatically after your meeting ended.",
-      "restartFailed": "Couldn't restart the meeting recording.",
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",
         "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
@@ -3701,7 +3729,9 @@
       "stopListening": "Stop listening",
       "startListening": "Start listening",
       "hideForNow": "Hide for now",
-      "askAssistant": "Ask Assistant"
+      "askAssistant": "Ask assistant",
+      "busyRecording": "Finish the current dictation first",
+      "startMeetingRecording": "Start meeting recording"
     }
   },
   "dictationAgent": {
@@ -4021,6 +4051,23 @@
       "dismiss": "Dismiss"
     }
   },
+  "emojiPicker": {
+    "search": "Search emoji…",
+    "recent": "Recent",
+    "noResults": "No emoji found",
+    "remove": "Remove",
+    "groups": {
+      "smileys": "Smileys & emotion",
+      "people": "People & body",
+      "animals": "Animals & nature",
+      "food": "Food & drink",
+      "travel": "Travel & places",
+      "activities": "Activities",
+      "objects": "Objects",
+      "symbols": "Symbols",
+      "flags": "Flags"
+    }
+  },
   "permissionsGate": {
     "title": "Permissions Required",
     "description": "OpenWhispr needs a few permissions to work on this computer.",
@@ -4084,15 +4131,6 @@
       "underway": "It sounds like your meeting is underway. Want to take notes?"
     },
     "start": "Take notes",
-    "join": "Join & transcribe",
-    "autoEnd": {
-      "title": "Meeting recording ended",
-      "body": {
-        "micReleased": "No other app is using your microphone, so recording stopped automatically. Restart within {{seconds}}s.",
-        "silence": "No audio was detected, so recording stopped automatically. Restart within {{seconds}}s.",
-        "processExit": "Your meeting app closed, so recording stopped automatically. Restart within {{seconds}}s."
-      },
-      "restart": "Restart recording"
-    }
+    "join": "Join & transcribe"
   }
 }

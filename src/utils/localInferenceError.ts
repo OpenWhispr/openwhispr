@@ -9,6 +9,8 @@
  * Before #2142 the raw llama.cpp 400 body was shown to the user verbatim.
  */
 
+import { TRUNCATED_OUTPUT_MESSAGE_KEY } from "../services/ai/chatRequestBody";
+
 export interface LocalInferenceFailure {
   error?: string;
   code?: string;
@@ -55,6 +57,9 @@ export function buildLocalInferenceError(result: LocalInferenceFailure): LocalIn
     // name crosses, so there is nothing here that could reach the user raw.
     error.messageKey = "models.errors.localServerUnavailable";
     error.messageParams = { model: typeof details.modelName === "string" ? details.modelName : "" };
+  } else if (result.code === "OUTPUT_TRUNCATED") {
+    // Same toast the cloud providers raise when a cleanup reply hits the token cap (#2091).
+    error.messageKey = TRUNCATED_OUTPUT_MESSAGE_KEY;
   }
 
   return error;

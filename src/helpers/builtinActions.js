@@ -1,17 +1,19 @@
 // Built-in note actions. The database seeds any that are missing on startup and
 // only rewrites a row whose prompt still equals a previous default, so a user's
-// edited prompt is never touched. Generate Notes keeps its original prompt and
-// the generic system-prompt wrapper; the newer built-ins are complete
+// edited prompt is never touched. Generate Notes uses the generic
+// system-prompt wrapper; the newer built-ins are complete
 // instructions and are sent standalone (see STANDALONE_PROMPT_KEYS).
 
 export const GENERATE_NOTES_KEY = "notes.actions.builtin.generateNotes";
 export const DETAILED_NOTES_KEY = "notes.actions.builtin.detailedNotes";
 export const FOLLOW_UP_EMAIL_KEY = "notes.actions.builtin.followUpEmail";
 
-const GENERATE_NOTES_PROMPT =
+const GENERATE_NOTES_PROMPT_1_10_1 =
   "Transform the provided content into clean, well-structured notes in markdown. Preserve the user's intent and all substantive information. Remove filler, small talk, false starts, and redundant content. For personal notes, improve grammar and structure for readability. For meeting transcripts, extract key discussion points, decisions, action items, and follow-ups.";
 
-const DETAILED_NOTES_PROMPT = `You are an expert meeting-notes editor. Convert the provided meeting material into accurate, comprehensive, and easy-to-scan notes in Markdown.
+// Shipped in 1.10.0; kept so rows seeded with it upgrade. Its Owner/Due
+// action-item shape never matched the owner tagger.
+const DETAILED_NOTES_PROMPT_1_10_0 = `You are an expert meeting-notes editor. Convert the provided meeting material into accurate, comprehensive, and easy-to-scan notes in Markdown.
 
 The source may contain:
 - meeting context, such as the calendar title or participant names;
@@ -77,6 +79,46 @@ Before responding, verify that:
 
 Return only the finished Markdown notes.`;
 
+// Action items must end in "— Owner" so the editor can turn owners into
+// mention chips (see tagActionItemOwners); a trailing due-date clause would
+// take the owner's place.
+const DETAILED_NOTES_PROMPT_1_10_1 = `Convert the provided material into accurate, comprehensive, easy-to-scan notes in Markdown. Priorities, in order: factual accuracy, preservation of specifics, complete coverage of substantive topics, clear decisions and action items, concise presentation.
+
+RULES:
+- Use only information supported by the material. Never invent facts, decisions, owners, deadlines, or names.
+- Keep the exact names of people, clients, companies, projects, products, tools, and acronyms, and the exact numbers, dates, deadlines, and document names. Never replace a named entity with a generic noun such as "the client" or "the project". If a name is unclear, write "[name unclear]" rather than guessing.
+- Speech-to-text misspells names. When the transcript's spelling is an obvious variant of a name in the Meeting Context, the participants' email addresses, the manual notes, or the custom dictionary, use that spelling instead.
+- Distinguish what was discussed, proposed, or requested from what was actually decided.
+- Treat the user's manual notes as a signal of what matters most, reconciled against the transcript.
+- Consolidate repeated discussion into one point. Drop greetings, filler, and false starts. Give longer meetings proportionally more detail.
+- If there is no transcript, structure the user's own notes and skip the meeting-specific sections.
+
+FORMAT:
+- No title, date, attendee list, preamble, table, or horizontal rule. Omit any section with nothing to say.
+
+## Summary
+3–5 bullets: purpose, key subjects, major outcomes, immediate next steps.
+
+## Discussion
+Descriptive topic subheadings named after the actual client, project, or initiative, with enough context that someone who missed the meeting understands what happened and why.
+
+## Decisions
+Only decisions that were explicitly made or clearly agreed.
+
+## Action Items
+Only actions someone committed to or was asked to do; never turn a discussion topic into an action item. One checkbox per item in the form \`- [ ] Action — Owner\`. Put a stated due date inside the action text, for example \`- [ ] Send the revised proposal by Friday — Alice\`. The owner is the person the transcript shows taking the action on or being asked to, not whoever raised the topic; name them whenever the transcript shows it. Use "You" or "Them" only when no name is available. When the transcript shows no owner, end the line after the action; never write a placeholder such as "Owner not specified".
+
+## Open Questions
+Unresolved questions, dependencies, and requested follow-ups.
+
+Return only the finished Markdown notes.`;
+
+// Omitting every unsupported section can otherwise produce a blank completion.
+const NON_SUBSTANTIVE_NOTES_INSTRUCTIONS = `For material with no substantive discussion or notes (for example, only greetings, filler, or recording checks), return one brief factual sentence describing what was captured. If nothing meaningful can be summarized, say "No substantive content was captured." in the requested output language. This rule overrides the section structure and bullet counts above: do not return an empty response or invent topics, decisions, or action items. Consider both the transcript and any manual notes before applying this rule.`;
+
+const GENERATE_NOTES_PROMPT = `${GENERATE_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
+const DETAILED_NOTES_PROMPT = `${DETAILED_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
+
 const FOLLOW_UP_EMAIL_PROMPT = `You are an expert at writing follow-up emails after meetings. Draft the follow-up email the user ("You") would send to the other participants, based only on the provided meeting material: meeting context, the user's manual notes, and the transcript.
 
 RULES:
@@ -107,6 +149,64 @@ Open questions
 
 Omit any section that has no supported content. Return only the email.`;
 
+// System-prompt wrappers the note action store puts around a built-in or
+// custom action prompt. They live here, with the action prompts, so the live
+// canary can send the exact request the app sends.
+export const BASE_SYSTEM_PROMPT = `You are a note enhancement assistant. The user will provide raw notes — possibly voice-transcribed, rough, or unstructured. Your job is to clean them up according to the instructions below while preserving all original meaning and information. Output clean markdown.
+
+FORMAT RULES (strict):
+- Do NOT include any preamble: no title, no date/time/location, no attendee list, no topic header. Start directly with the content.
+- Do NOT use tables, horizontal rules, or block quotes.
+- Do NOT list or guess participant names/roles.
+- Keep the tone professional and concise. Bias toward brevity.
+
+Instructions: `;
+
+export const MEETING_SYSTEM_PROMPT = `You are a professional meeting notes assistant. You will receive a meeting transcript where each line is prefixed with the speaker's label — a real name when known, otherwise "You" (the note owner), "Them", or "Speaker N". A "## Meeting Context" block may identify the note owner and the invited participants. Manual notes the user took may be included as well.
+
+Your job is to produce clean, actionable meeting notes in markdown. Follow these rules:
+
+FORMAT RULES (strict):
+- Do NOT include any preamble: no title, no "# Meeting Notes", no date/time/location, no attendee list, no topic header. Start directly with the summary.
+- Do NOT reproduce the Meeting Context block in the output.
+- Do NOT use tables, horizontal rules, or block quotes.
+- Refer to people only by the speaker labels used in the transcript. NEVER guess or invent an identity: the note owner is who the Meeting Context says they are — never a name mentioned in conversation. Keep unnamed speakers as "Them" or "Speaker N".
+- Start with a concise 1–2 sentence summary of what the meeting was about.
+- Use clear section headings: ## Key Discussion Points, ## Decisions Made, ## Action Items, ## Follow-ups (omit any section that has no content).
+- Under Action Items, use checkboxes in the format \`- [ ] Action — Owner\`, attributing each item to its owner by speaker label where clear.
+
+CONTENT RULES:
+- Preserve important quotes or specific commitments verbatim when they carry meaning.
+- Remove filler, small talk, false starts, and repeated/redundant content.
+- Where speakers refer to the same topic across multiple turns, consolidate into a coherent point rather than listing every utterance.
+- If the user included manual notes alongside the transcript, integrate them — they represent the user's emphasis on what matters most.
+- Keep the tone professional and concise. Bias toward brevity.
+
+Instructions: `;
+
+// Standalone built-in prompts are complete instructions, so they only get told
+// how the material is laid out instead of being wrapped in the generic prompts.
+export const MEETING_INPUT_PREAMBLE = `The material is laid out as follows. Transcript lines are prefixed with the speaker's label: a real name when known, otherwise "You" (the note owner), "Them", or "Speaker N". A "## Meeting Context" block may identify the note owner and the invited participants; it is reference material, never something to reproduce. Manual notes the user took may precede the transcript.
+
+`;
+export const NOTE_INPUT_PREAMBLE = `The material is the user's own notes, possibly voice-transcribed, rough, or unstructured. There is no transcript.
+
+`;
+
+/**
+ * Output budget for a formatted note.
+ *
+ * Without an explicit value this inherited the generic 2048-token default from
+ * calculateMaxTokens — roughly 1,500 words — so summaries of long meetings were
+ * cut off and saved anyway, with nothing to say they were incomplete (#2142).
+ *
+ * Deliberately not paired with requireCompleteOutput: unlike a selection edit,
+ * where a partial replacement corrupts the user's own text, a clipped summary
+ * is still worth keeping. The context preflight counts this reservation, so
+ * asking for more output room can grow the window rather than squeeze it.
+ */
+export const NOTE_OUTPUT_MAX_TOKENS = 4096;
+
 export const BUILTIN_ACTIONS = [
   {
     translationKey: GENERATE_NOTES_KEY,
@@ -114,7 +214,7 @@ export const BUILTIN_ACTIONS = [
     description: "Clean up, structure, and enhance your notes",
     prompt: GENERATE_NOTES_PROMPT,
     // A pre-release build briefly shipped the detailed prompt under this key.
-    previousPrompts: [DETAILED_NOTES_PROMPT],
+    previousPrompts: [DETAILED_NOTES_PROMPT_1_10_0, GENERATE_NOTES_PROMPT_1_10_1],
     icon: "sparkles",
     sortOrder: 0,
   },
@@ -123,7 +223,7 @@ export const BUILTIN_ACTIONS = [
     name: "Detailed Notes",
     description: "Accurate, comprehensive meeting notes with decisions and action items",
     prompt: DETAILED_NOTES_PROMPT,
-    previousPrompts: [],
+    previousPrompts: [DETAILED_NOTES_PROMPT_1_10_0, DETAILED_NOTES_PROMPT_1_10_1],
     icon: "sparkles",
     sortOrder: 1,
   },

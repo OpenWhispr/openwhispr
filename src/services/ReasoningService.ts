@@ -14,7 +14,10 @@ import logger from "../utils/logger";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
-import { getLlmRequestTimeoutSeconds } from "../helpers/llmRequestTimeout.js";
+import {
+  getLlmRequestTimeoutSeconds,
+  llmRequestTimeoutError,
+} from "../helpers/llmRequestTimeout.js";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
@@ -28,8 +31,10 @@ import {
 } from "./ai/openaiBase";
 import {
   applyChatCompletionsParams,
+  emptyResponseError,
   fetchWithParamFallback,
   isTruncatedFinishReason,
+  truncatedOutputError,
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
@@ -330,7 +335,7 @@ class ReasoningService extends BaseReasoningService {
       }
       const controller = new AbortController();
       this.activeRequestControllers.add(controller);
-      const timeoutSeconds = getLlmRequestTimeoutSeconds();
+      const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
       try {
         const headers: Record<string, string> = {
@@ -394,7 +399,7 @@ class ReasoningService extends BaseReasoningService {
           if (requestGeneration !== this.requestCancellationGeneration) {
             throw httpError("Request cancelled", 499);
           }
-          throw new Error(`Request timed out after ${timeoutSeconds}s`);
+          throw llmRequestTimeoutError(timeoutSeconds);
         }
         throw error;
       } finally {
@@ -415,7 +420,7 @@ class ReasoningService extends BaseReasoningService {
 
     const choice = response.choices[0];
     if (config.requireCompleteOutput && isTruncatedFinishReason(choice?.finish_reason)) {
-      throw new Error("Model output was truncated before the selection edit completed");
+      throw truncatedOutputError();
     }
     // Reasoning models leak <think> blocks into non-streamed output; strip them
     // unless the user explicitly enabled thinking (same default as streaming).
@@ -430,7 +435,10 @@ class ReasoningService extends BaseReasoningService {
         hasMessage: !!choice.message,
         response: JSON.stringify(choice).substring(0, 500),
       });
-      throw new Error(`${providerName} returned empty response`);
+      throw (
+        emptyResponseError(providerName, config, isTruncatedFinishReason(choice.finish_reason)) ??
+        new Error(`${providerName} returned empty response`)
+      );
     }
 
     logger.logReasoning(`${providerName.toUpperCase()}_RESPONSE`, {
