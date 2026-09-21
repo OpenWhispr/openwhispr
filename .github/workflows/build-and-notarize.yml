@@ -151,7 +151,7 @@ jobs:
 
       - name: Upload Artifacts
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-build
           path: dist/
@@ -269,7 +269,7 @@ jobs:
 
       - name: Upload Artifacts
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-build
           path: dist/
@@ -416,7 +416,7 @@ jobs:
 
       - name: Upload Artifacts
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-${{ matrix.arch }}-build
           path: dist/
