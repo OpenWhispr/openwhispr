@@ -10,6 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-20-macos-menu-bar-placement-design.md`
 
+**Execution status (2026-09-21):** Implementation, independent deep review, and the separate repair stage are complete in [PR #2267](https://github.com/OpenWhispr/openwhispr/pull/2267). The tested code is at `937bec156283709d29506bbaf5c8c4aba756e2c8`. The focused suite passed 14/14; repository quality checks and the GitHub test step passed. GitHub's quality job failed only at the inherited dependency audit, so the PR is still draft and unmerged.
+
+Josh launched the full macOS development build and reported “Nice it works” on 21 September. This records his successful visible dev-build check. It does not establish the specific Command-drag/two-relaunch sequence below or official-installer acceptance; those detailed checks remain unrecorded. The earlier real Electron component harness separately verified saved-position persistence across two relaunches.
+
+The next requested task is to investigate whether a similar experience is feasible on Windows. That investigation needs its own platform evidence and scope; this completed macOS implementation plan does not authorize copying the AppKit preference to Windows.
+
 ## Global Constraints
 
 - Apply the new placement behavior only when `process.platform === "darwin"`.
@@ -46,7 +52,7 @@ The only production file is `src/helpers/tray.js`, which already owns native tra
 - Produces: the existing `TrayManager.tray` instance; on macOS its UUID is always `eb809902-04b5-5b08-b12a-f81d6f27e185`.
 - Preserves: the exported `TrayManager` class and all existing public methods; no new exports.
 
-- [ ] **Step 1: Add the failing boundary regression tests**
+- [x] **Step 1: Add the failing boundary regression tests**
 
 Create `test/helpers/trayPlacement.test.js` with the following complete content. The VM loads the entire existing module and isolates the platform value without changing global Node state. Only native APIs, logging, and translation dependencies are stubbed. The image loader is replaced with a known valid image so these tests focus on tray construction; real menu creation and event wiring still run.
 
@@ -228,7 +234,7 @@ test("an empty tray image does not register a preference or construct a tray", a
 
 The second test pins the app's persistence contract: stable identity plus fallback registration without a stored-value mutation. It does not simulate or prove macOS restoring a dragged position; Step 6 checks that behavior natively.
 
-- [ ] **Step 2: Run the focused test and record RED**
+- [x] **Step 2: Run the focused test and record RED**
 
 Run from the worktree with Node `24` selected:
 
@@ -238,7 +244,7 @@ node --test test/helpers/trayPlacement.test.js
 
 Expected: the three new macOS behavior tests fail because the current implementation never registers the preference and supplies no GUID. The Windows, Linux, and empty-image characterization tests pass. Record the actual failure messages before changing `src/helpers/tray.js`; fix a test-harness error first if it fails for a different reason.
 
-- [ ] **Step 3: Make the minimal tray implementation change**
+- [x] **Step 3: Make the minimal tray implementation change**
 
 Extend the existing Electron import and add private constants after the existing imports:
 
@@ -275,7 +281,7 @@ if (process.platform === "darwin") {
 
 Leave the empty-image return above this block and the existing menu/handler setup below it unchanged. No fallback re-creation, persistent preference write, position polling, or native helper is needed.
 
-- [ ] **Step 4: Run the focused regression suite and record GREEN**
+- [x] **Step 4: Run the focused regression suite and record GREEN**
 
 ```bash
 node --test test/helpers/trayPlacement.test.js test/helpers/trayQuickActions.test.js test/helpers/trayActionPolicy.test.js test/helpers/dockPolicy.test.js
@@ -283,7 +289,7 @@ node --test test/helpers/trayPlacement.test.js test/helpers/trayQuickActions.tes
 
 Expected: all new and existing tests pass. Inspect any failure against the original eight-test passing baseline. Existing module-type warnings are not new failures.
 
-- [ ] **Step 5: Format the named files and run the required quality checks**
+- [x] **Step 5: Format the named files and run the required quality checks**
 
 Use the already installed dependencies; do not run installation or regenerate the lockfile.
 
@@ -322,7 +328,7 @@ For the changed application, use the existing `openwhispr-dev-build` skill if th
 
 If native application testing is unavailable, record the exact gap and hand it back to the parent. Do not convert a mocked test or standalone probe into a claim that user-drag persistence or an official installer was verified. Initial adoption may use the new default because the prior tray had an automatically generated identity; this is specified behavior, not a reason to mutate guessed legacy keys.
 
-- [ ] **Step 7: Hand the completed task to the requested independent review stages**
+- [x] **Step 7: Hand the completed task to the requested independent review stages**
 
 Report changed paths, RED/GREEN evidence, quality results, native evidence, and remaining limitations to the parent. The parent must then dispatch the separate deep-review agent against the complete branch diff and the separate fix agent for actionable findings. Review specifically for UUID stability/case, registration order, absence of persistent position writes, platform isolation, failure recovery, first-adoption wording, and honest native evidence. Do not commit or push from the planning agent; the parent owns the final commit/push decision after the requested review stages.
 

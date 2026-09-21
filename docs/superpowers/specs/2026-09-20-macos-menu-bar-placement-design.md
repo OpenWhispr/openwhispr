@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-20
 
-**Status:** Implementation authorized; planning complete.
+**Status (2026-09-21):** Implemented and independently reviewed in draft [PR #2267](https://github.com/OpenWhispr/openwhispr/pull/2267). Josh confirmed the macOS dev build works. The detailed Command-drag/relaunch sequence and official-installer acceptance remain unrecorded; see the implementation plan's execution status. Windows feasibility is the next requested investigation, outside this macOS design.
 
 **Branch:** `feat/macos-menu-bar-placement`
 
@@ -14,7 +14,7 @@ The [Slack request](https://openwhispr.slack.com/archives/C0AQXA4C03V/p178982698
 
 Give the macOS menu-bar icon a rightward starting preference, then let macOS retain the position the user chooses by Command-dragging it. Exact adjacency to Wi-Fi or Search is not a supported promise: system-item order, available space, displays, and menu-bar managers affect the result.
 
-## Current implementation
+## Baseline before this change
 
 `TrayManager.createTray()` in `src/helpers/tray.js` loads an icon and calls `new Tray(trayIcon)` on every platform. On macOS it disables double-click handling; all platforms then build the existing menu and attach the existing handlers. The application initializes this manager in `main.js` after Electron is ready.
 
