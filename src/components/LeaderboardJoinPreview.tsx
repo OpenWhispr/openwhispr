@@ -1,4 +1,4 @@
-import { UserPlus } from "lucide-react";
+import { UserPlus } from "./icons";
 import { useTranslation } from "react-i18next";
 import LeaderboardPreview from "./LeaderboardPreview";
 

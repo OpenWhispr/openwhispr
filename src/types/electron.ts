@@ -10,6 +10,15 @@ import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 
+export interface MainWindowInputRegion {
+  viewportWidth: number;
+  viewportHeight: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcribed";
 
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
@@ -79,8 +88,7 @@ export type TranscriptionErrorCode =
 
 export type MeetingPromptVariant = "detected" | "starting" | "underway";
 
-export interface MeetingDetectionNotificationData {
-  kind: "detection";
+export interface MeetingNotificationData {
   detectionId: string;
   source: string;
   key: string;
@@ -92,31 +100,9 @@ export interface MeetingDetectionNotificationData {
 /** Why auto-end concluded the meeting is over. */
 export type MeetingAutoEndReason = "mic-released" | "silence" | "process-exit";
 
-export interface MeetingAutoEndNotificationData {
-  kind: "auto-end";
-  sessionId: string;
-  expiresAt: number;
-  reason?: MeetingAutoEndReason;
-}
-
-export type MeetingNotificationData =
-  MeetingDetectionNotificationData | MeetingAutoEndNotificationData;
-
 export interface MeetingAutoEndRequest {
   sessionId: string;
   reason?: MeetingAutoEndReason;
-}
-
-export type MeetingAutoEndAction = "restart" | "dismiss";
-
-export interface MeetingAutoEndRestartRequest {
-  sessionId: string;
-}
-
-export interface MeetingAutoEndLifecycleResult {
-  success: boolean;
-  reason?: "invalid-session" | "invalid-action" | "stale-session";
-  error?: string;
 }
 
 /**
@@ -213,6 +199,7 @@ export interface AnalyticsSummary {
   longestStreakDays: number;
   wpmCoveragePercent: number;
   daily: AnalyticsDailyBucket[];
+  historyBackfillRetryRequired?: boolean;
 }
 
 export type LeaderboardMetric =
@@ -493,9 +480,13 @@ export interface SpaceItem {
   name: string;
   emoji: string | null;
   sort_order: number;
-  // Server-computed max effective role across assigned teams (ws owner/admin ⇒ admin).
+  // Server-computed effective role: direct grant or best role across assigned
+  // teams (ws owner/admin ⇒ admin).
   my_role: "admin" | "member" | null;
-  // Server-computed deduped union of assigned team rosters.
+  // Direct space_members grant, null when access comes only via teams or the
+  // workspace role. Absent on mirrors written before the API shipped it.
+  my_direct_role?: TeamRole | null;
+  // Server-computed deduped union of direct members and assigned team rosters.
   member_count: number | null;
   teams: SpaceTeamRef[];
   sync_status: "synced" | "pending" | "error";
@@ -638,6 +629,8 @@ export interface InvitationPreview {
   email: string;
   workspace_role: WorkspaceRole;
   team_ids: string[];
+  /** Live spaces the invite grants directly; absent from APIs that predate space grants. */
+  space_names?: string[];
   expires_at: string;
   workspace_id: string;
   workspace_name: string;
@@ -808,6 +801,8 @@ export interface ScreenRecordingAccessResult {
   needsRelaunch?: boolean;
 }
 
+export type CloudReasonPurpose = "cleanup" | "assistant" | "translation" | "noteFormatting";
+
 export interface ScreenContextImage {
   mediaType: string;
   /** Base64 image bytes, no data-URL prefix. */
@@ -827,6 +822,7 @@ export interface UpdateStatusResult {
   updateAvailable: boolean;
   updateDownloaded: boolean;
   isDevelopment: boolean;
+  isSupported: boolean;
 }
 
 export interface UpdateInfoResult {
@@ -1052,13 +1048,23 @@ export interface ConversationCreateAckResult {
 }
 
 export type OnboardingDemoKind = "dictation" | "assistant";
-export type OnboardingDemoStatus = "listening" | "processing" | "partial" | "success" | "error";
+/**
+ * "partial" streams the transcript, "processing" carries the final transcript,
+ * "replying" streams the assistant demo's reply, and "level" mirrors the
+ * microphone level while listening.
+ */
+export type OnboardingDemoStatus =
+  "listening" | "level" | "processing" | "partial" | "replying" | "success" | "error";
 export interface OnboardingDemoEvent {
   demoId: string;
   kind: OnboardingDemoKind;
   status: OnboardingDemoStatus;
   text?: string;
   message?: string;
+  /** Tool the assistant is running while it replies (a tool registry name). */
+  tool?: string;
+  /** Microphone input level, 0..1, on "level" events. */
+  level?: number;
 }
 
 export interface ReferralItem {
@@ -1154,6 +1160,7 @@ declare global {
       onToggleDictation: (callback: () => void) => () => void;
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
+      onOpenAssistantPanel?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (
@@ -1161,6 +1168,9 @@ declare global {
       ) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
       onCancelDictation?: (callback: () => void) => () => void;
+      onDictationForceStopped?: (
+        callback: (payload?: { reason?: "timeout" | "reset" | "manual" }) => void
+      ) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (
         state: "idle" | "preparing" | "recording" | "processing",
@@ -1258,6 +1268,7 @@ declare global {
           errorMessage?: string | null;
           errorCode?: TranscriptionErrorCode;
           clientTranscriptionId?: string;
+          analyticsOccurredAt?: string;
         }
       ) => Promise<{ id: number; success: boolean; transcription?: TranscriptionItem }>;
       getTranscriptions: (
@@ -1322,6 +1333,8 @@ declare global {
       syncRetentionSettings?: (settings: {
         audioRetentionDays: number;
         transcriptRetentionDays: number;
+        dataRetentionEnabled: boolean;
+        localHistoryPolicyResolved: boolean;
       }) => void;
       retryTranscription: (
         id: number,
@@ -1822,7 +1835,13 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+        code?: string;
+        details?: Record<string, unknown>;
+      }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
 
       // Anthropic reasoning
@@ -1831,7 +1850,7 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{ success: boolean; text?: string; error?: string; messageKey?: string }>;
 
       // Enterprise reasoning (Bedrock, Azure, Vertex)
       processEnterpriseReasoning: (
@@ -1921,6 +1940,8 @@ declare global {
       startControlPanelDrag: () => Promise<void>;
       stopControlPanelDrag: () => Promise<void>;
       setMainWindowInteractivity: (interactive: boolean) => Promise<void>;
+      setMainWindowInputRegion: (region: MainWindowInputRegion | null) => Promise<boolean>;
+      onMainWindowVisibilityChanged: (callback: (visible: boolean) => void) => () => void;
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
       resizeMainWindow: (
         sizeKey:
@@ -1952,6 +1973,7 @@ declare global {
 
       // App management
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
+      relaunchApp: () => Promise<void>;
 
       // Update operations
       checkForUpdates: () => Promise<UpdateCheckResult>;
@@ -1965,6 +1987,7 @@ declare global {
       markBundleMigrationDismissed: () => Promise<void>;
       getUpdateStatus: () => Promise<UpdateStatusResult>;
       getUpdateInfo: () => Promise<UpdateInfoResult | null>;
+      setAutoUpdatesEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
 
       // Update event listeners
       onUpdateAvailable: (callback: (event: any, info: any) => void) => () => void;
@@ -2026,6 +2049,7 @@ declare global {
       onShowSettings?: (callback: () => void) => () => void;
 
       // Accessibility permission events (macOS)
+      markMacAccessibilityFeaturesReady?: (expectedAccountScope?: ActiveAccountScope) => void;
       onAccessibilityMissing?: (callback: () => void) => () => void;
       checkAccessibilityTrusted?: () => Promise<boolean>;
 
@@ -2244,7 +2268,6 @@ declare global {
       requestScreenRecordingAccess?: () => Promise<ScreenRecordingAccessResult>;
       captureScreenContext?: () => Promise<ScreenContextImage | null>;
       setScreenContextEnabled?: (enabled: boolean) => Promise<{ success: boolean }>;
-      showEmojiPanel?: () => Promise<boolean>;
       toggleMediaPlayback?: () => Promise<boolean>;
       pauseMediaPlayback?: () => Promise<boolean>;
       resumeMediaPlayback?: () => Promise<boolean>;
@@ -2325,6 +2348,7 @@ declare global {
           systemPrompt?: string;
           requestPurpose?: "agent";
           promptMode?: "cleanup" | "agent";
+          purpose?: CloudReasonPurpose;
           screenContext?: ScreenContextImage;
           language?: string;
           locale?: string;
@@ -3122,14 +3146,6 @@ declare global {
       onMeetingAutoEndRequested?: (
         callback: (request: MeetingAutoEndRequest) => void
       ) => () => void;
-      meetingAutoEndCompleted?: (sessionId: string) => Promise<MeetingAutoEndLifecycleResult>;
-      meetingAutoEndRespond?: (
-        sessionId: string,
-        action: MeetingAutoEndAction
-      ) => Promise<MeetingAutoEndLifecycleResult>;
-      onMeetingAutoEndRestartRequested?: (
-        callback: (request: MeetingAutoEndRestartRequest) => void
-      ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (
@@ -3137,6 +3153,7 @@ declare global {
         action: string
       ) => Promise<{ success: boolean }>;
       joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
+      startManualMeeting?: () => Promise<void>;
       getPendingMeetingNoteNavigation?: () => Promise<{
         noteId: number;
         folderId: number;
@@ -3149,15 +3166,6 @@ declare global {
         folderId: number | null;
       } | null>;
       onNoteNavigationPending?: (callback: () => void) => () => void;
-      onUpdateNotificationData?: (
-        callback: (data: { version: string; releaseDate?: string }) => void
-      ) => () => void;
-      getUpdateNotificationData?: () => Promise<{
-        version: string;
-        releaseDate?: string;
-      } | null>;
-      updateNotificationReady?: () => Promise<void>;
-      updateNotificationRespond?: (action: string) => Promise<{ success: boolean }>;
       onPreviewText?: (callback: (text: string) => void) => () => void;
       onPreviewAppend?: (callback: (text: string) => void) => () => void;
       onPreviewHold?: (callback: (payload: { showCleanup: boolean }) => void) => () => void;

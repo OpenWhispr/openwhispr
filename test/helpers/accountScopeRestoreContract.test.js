@@ -47,6 +47,21 @@ test("boot restores the validated scope before any main-process consumer constru
   assert.ok(bootWindow[1].includes("databaseManager.setActiveAccountId(bootAccountId)"));
 });
 
+test("account-scoped accessibility readiness is revalidated before opening the sticky gate", () => {
+  const source = read("main.js");
+  const handler = source.match(
+    /ipcMain\.on\("mac-accessibility-features-ready"([\s\S]*?)\/\/ Listen for usage limit/
+  );
+  assert.ok(handler, "macOS accessibility readiness handler is present");
+  assert.ok(handler[1].includes("resolveActiveAccountScope"));
+  assert.ok(handler[1].includes("matchesActiveAccountScope"));
+  assert.ok(
+    handler[1].indexOf("matchesActiveAccountScope") <
+      handler[1].indexOf("macAccessibilityFeaturesReady = true"),
+    "the current scope is checked before the readiness gate opens"
+  );
+});
+
 test("clearing the bearer token broadcasts the cleared account scope to every window", () => {
   const source = read("src/helpers/ipcHandlers.js");
   const subscription = source.match(

@@ -47,6 +47,8 @@ function textContent(node) {
   if (Array.isArray(node)) return node.map(textContent).join("");
   if (typeof node === "string") return node;
   if (!node || typeof node !== "object") return "";
+  // Hook-free presentational wrapper: expand it so its interpolated text is visible.
+  if (node.type?.name === "BidiInterpolatedText") return textContent(node.type(node.props));
   return textContent(node.props?.children);
 }
 
@@ -86,7 +88,7 @@ test("email authentication discovers accounts, restores drafts, and persists the
 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-authentication-step-",
-    noExternal: ["react", "react-dom", "react-i18next", "lucide-react"],
+    noExternal: ["react", "react-dom", "react-i18next"],
     mockModules: {
       // A minimal renderer rather than react-dom: it returns the element tree so
       // the assertions can read rendered output, and it collects effects so the
@@ -183,7 +185,7 @@ test("email authentication discovers accounts, restores drafts, and persists the
       `,
       "/ui/button": `export function Button() { return null; }`,
       "/ui/input": `export function Input() { return null; }`,
-      "lucide-react": `
+      "/components/icons": `
         const Icon = () => null;
         export { Icon as AlertCircle, Icon as ArrowRight, Icon as Building2, Icon as Check,
           Icon as Loader2, Icon as ChevronLeft };

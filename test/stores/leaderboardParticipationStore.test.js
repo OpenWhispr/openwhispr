@@ -223,7 +223,13 @@ test("a join retires the queued leave before its own request goes out", async (t
     {
       method: "PATCH",
       path: "/api/analytics/participation",
-      body: { enabled: true },
+      // The zone rides along with the join because that is what starts the
+      // account's history reconciliation, and only this device knows which
+      // calendar day its dictations belong to.
+      body: {
+        enabled: true,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      },
       public: false,
       expectedAuthGeneration: 7,
     },
@@ -236,6 +242,18 @@ test("a join retires the queued leave before its own request goes out", async (t
   assert.equal(store.getState().enabled, true);
   assert.equal(store.getState().configured, true);
   assert.equal(store.getState().error, null);
+});
+
+test("a join sends UTC when the runtime exposes no timezone", async (t) => {
+  const { context, requests, store } = await loadStore(t, {
+    cloudApiRequest: async () => participation(true),
+  });
+  t.mock.method(Intl, "DateTimeFormat", () => ({
+    resolvedOptions: () => ({ timeZone: "" }),
+  }));
+
+  assert.equal(await store.getState().join(context), true);
+  assert.deepEqual(requests[0].body, { enabled: true, timeZone: "UTC" });
 });
 
 test("a failed join reports that participation did not change", async (t) => {

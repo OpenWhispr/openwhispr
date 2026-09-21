@@ -146,3 +146,19 @@ test("resolveActiveAccountScope pairs the restorable account with the current cr
     null
   );
 });
+
+test("matchesActiveAccountScope rejects a stale readiness generation", () => {
+  const expected = { accountId: "account-a", authGeneration: 3 };
+
+  assert.equal(binding.matchesActiveAccountScope(expected, { ...expected }), true);
+  assert.equal(
+    binding.matchesActiveAccountScope(expected, { accountId: "account-a", authGeneration: 4 }),
+    false
+  );
+  assert.equal(
+    binding.matchesActiveAccountScope(expected, { accountId: "account-b", authGeneration: 3 }),
+    false
+  );
+  assert.equal(binding.matchesActiveAccountScope(expected, null), false);
+  assert.equal(binding.matchesActiveAccountScope(null, expected), false);
+});

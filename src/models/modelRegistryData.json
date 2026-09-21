@@ -2,6 +2,7 @@
   "parakeetModels": {
     "parakeet-tdt-0.6b-v3": {
       "name": "Parakeet TDT 0.6B",
+      "sherpaModelType": "nemo_transducer",
       "description": "Fast multilingual ASR with auto language detection",
       "size": "680MB",
       "sizeMb": 680,
@@ -115,6 +116,54 @@
       "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01.tar.bz2",
       "extractDir": "sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01",
       "descriptionKey": "models.descriptions.cohere.cohere_transcribe_03_2026"
+    },
+    "orukeet-v0.1.0": {
+      "name": "Orukeet",
+      "description": "Multilingual Parakeet fine-tune with frozen Gabor kernels",
+      "descriptionKey": "models.descriptions.parakeet.orukeet",
+      "size": "672MB",
+      "sizeMb": 671.6198,
+      "expectedSizeBytes": 486807585,
+      "language": "multilingual",
+      "supportedLanguages": [
+        "bg",
+        "hr",
+        "cs",
+        "da",
+        "nl",
+        "en",
+        "et",
+        "fi",
+        "fr",
+        "de",
+        "el",
+        "hu",
+        "it",
+        "lv",
+        "lt",
+        "mt",
+        "pl",
+        "pt",
+        "ro",
+        "sk",
+        "sl",
+        "es",
+        "sv",
+        "ru",
+        "uk"
+      ],
+      "runtime": "offline",
+      "sherpaModelType": "nemo_transducer",
+      "recommended": true,
+      "extractDir": "sherpa-onnx-orukeet-v0.1.0-int8",
+      "downloadUrl": "https://huggingface.co/oruk/orukeet/resolve/55a984d46f68323301837194ce647c702f55facc/onnx/sherpa-onnx-orukeet-v0.1.0-int8.tar.bz2",
+      "manifestUrl": "https://huggingface.co/oruk/orukeet/resolve/55a984d46f68323301837194ce647c702f55facc/onnx/manifest.json",
+      "license": "CC-BY-SA-4.0",
+      "organization": {
+        "id": "oruk",
+        "name": "Oruk"
+      },
+      "modelCardUrl": "https://huggingface.co/oruk/orukeet"
     }
   },
   "diarizationModels": {
@@ -206,6 +255,12 @@
       "name": "OpenAI",
       "baseUrl": "https://api.openai.com/v1",
       "models": [
+        {
+          "id": "gpt-transcribe",
+          "name": "GPT Transcribe",
+          "description": "Newest, most accurate transcription",
+          "descriptionKey": "models.descriptions.transcription.openai_gpt_transcribe"
+        },
         {
           "id": "gpt-4o-mini-transcribe",
           "name": "GPT-4o Mini Transcribe",
@@ -372,6 +427,15 @@
       "name": "OpenAI",
       "models": [
         {
+          "id": "gpt-6-astra",
+          "name": "GPT-6 Astra",
+          "description": "OpenAI's most capable model for coding, computer use, and research, 1M context",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_6_astra",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false,
+          "supportsVision": true
+        },
+        {
           "id": "gpt-5.6-sol",
           "name": "GPT-5.6 Sol",
           "description": "Flagship GPT-5.6 for complex coding, research, and agentic work, 1M context",
@@ -468,9 +532,17 @@
       "name": "Anthropic",
       "models": [
         {
+          "id": "claude-fable-5-1",
+          "name": "Claude Fable 5.1",
+          "description": "Anthropic's most capable model, Mythos-class, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5_1",
+          "supportsTemperature": false,
+          "supportsVision": true
+        },
+        {
           "id": "claude-fable-5",
           "name": "Claude Fable 5",
-          "description": "Anthropic's most capable model, Mythos-class, 1M context",
+          "description": "Previous Mythos-class flagship, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5",
           "supportsTemperature": false,
           "supportsVision": true

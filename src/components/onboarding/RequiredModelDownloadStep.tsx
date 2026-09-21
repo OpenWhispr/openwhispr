@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { AlertCircle, Check } from "lucide-react";
+import { AlertCircle, Check } from "../icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { useModelDownload } from "../../hooks/useModelDownload";
+import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { getParakeetModels, getWhisperModels } from "../../models/ModelRegistry";
 import { SETUP_CARD_CLASS } from "./ProviderSetupStep";
 
@@ -108,12 +109,15 @@ export function RequiredModelDownloadStep({
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
                 <ProviderIcon
-                  provider={family === "parakeet" ? "nvidia" : "openai"}
+                  provider={family === "parakeet" ? getASRModelOrganization(modelId) : "openai"}
                   className="size-5"
                 />
               </span>
-              <div className="min-w-0 flex-1 text-left">
-                <span className="block truncate text-sm font-medium text-[var(--onboarding-text-primary)]">
+              <div className="min-w-0 flex-1 text-start">
+                <span
+                  dir="ltr"
+                  className="block truncate text-sm font-medium text-[var(--onboarding-text-primary)]"
+                >
                   {info?.name ?? modelId}
                 </span>
                 {failure ? (
@@ -126,9 +130,9 @@ export function RequiredModelDownloadStep({
               </div>
 
               {isDownloading ? (
-                <span className="relative -mr-2 flex shrink-0 items-center gap-2 overflow-hidden rounded-[38px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 py-1.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                <span className="relative -me-2 flex shrink-0 items-center gap-2 overflow-hidden rounded-[38px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 py-1.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-secondary)]">
                   <span
-                    className="absolute inset-y-0 left-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
+                    className="absolute inset-y-0 start-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
                     style={{ width: `${percentage}%` }}
                     aria-hidden="true"
                   />
@@ -143,17 +147,17 @@ export function RequiredModelDownloadStep({
                 <Button
                   type="button"
                   onClick={() => startDownload(modelId)}
-                  className="-mr-2 h-7 gap-1.5 rounded-full border-0! bg-[var(--onboarding-accent)] px-2.5 text-xs font-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none!"
+                  className="-me-2 h-7 gap-1.5 px-2.5 text-xs"
                 >
                   {t("common.retry")}
                 </Button>
               ) : installed ? (
-                <span className="-mr-2 flex h-7 shrink-0 items-center gap-1 rounded-full bg-[var(--onboarding-accent)] px-3 text-xs text-[var(--onboarding-accent-foreground)]">
+                <span className="-me-2 flex h-7 shrink-0 items-center gap-1 rounded-full bg-[var(--onboarding-accent)] px-3 text-xs text-[var(--onboarding-accent-foreground)]">
                   <Check className="size-3.5" />
                   {t("onboarding.requiredModels.installed")}
                 </span>
               ) : (
-                <span className="-mr-2 shrink-0 text-xs text-[var(--onboarding-text-secondary)]">
+                <span className="-me-2 shrink-0 text-xs text-[var(--onboarding-text-secondary)]">
                   {t("onboarding.requiredModels.queued")}
                 </span>
               )}

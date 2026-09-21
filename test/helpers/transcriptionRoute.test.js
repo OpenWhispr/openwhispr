@@ -293,8 +293,15 @@ test("openai and groq route to fixed endpoints with provider-validated models", 
   const openai = await resolve({});
   assert.equal(openai.provider, "openai");
   assert.equal(openai.endpoint, "https://api.openai.com/v1/audio/transcriptions");
-  assert.equal(openai.model, "gpt-4o-mini-transcribe");
+  assert.equal(openai.model, "gpt-transcribe");
   assert.equal(openai.sizeCapBytes, 25 * 1024 * 1024);
+
+  // The deprecated OpenAI ids stay selectable and must reach the API untouched;
+  // only an empty or foreign selection takes the new default.
+  for (const legacy of ["gpt-4o-mini-transcribe", "gpt-4o-transcribe", "whisper-1"]) {
+    const route = await resolve({ cloudTranscriptionModel: legacy });
+    assert.equal(route.model, legacy);
+  }
 
   const groqStale = await resolve({
     cloudTranscriptionProvider: "groq",

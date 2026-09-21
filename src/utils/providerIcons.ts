@@ -1,3 +1,4 @@
+import orukIcon from "@/assets/icons/providers/oruk.webp";
 import openaiIcon from "@/assets/icons/providers/openai.svg";
 import anthropicIcon from "@/assets/icons/providers/anthropic.svg";
 import geminiIcon from "@/assets/icons/providers/gemini.svg";
@@ -24,6 +25,7 @@ import deepgramIcon from "@/assets/icons/providers/deepgram.svg";
 import assemblyaiIcon from "@/assets/icons/providers/assemblyai.svg";
 
 export const PROVIDER_ICONS: Record<string, string> = {
+  oruk: orukIcon,
   openai: openaiIcon,
   whisper: openaiIcon,
   anthropic: anthropicIcon,

@@ -1,4 +1,4 @@
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2 } from "./icons";
 import { useTranslation } from "react-i18next";
 import LeaderboardPreview from "./LeaderboardPreview";
 

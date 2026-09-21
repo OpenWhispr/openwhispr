@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Check, Download, Loader2, Share2 } from "lucide-react";
+import { Check, Download, Loader2, Share2 } from "./icons";
 import { useTranslation } from "react-i18next";
 import type { Leaderboard, LeaderboardMetric } from "../types/electron";
 import { Button } from "./ui/button";

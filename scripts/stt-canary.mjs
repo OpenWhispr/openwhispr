@@ -7,7 +7,9 @@
  * (#1624 sat in shipped builds for three days as a swallowed warmup warning).
  * Providers whose request shape is theirs alone rather than the shared
  * OpenAI-compatible multipart (Gemini, batch and Live) send a real
- * transcription through the shipped module for the same reason.
+ * transcription through the shipped module for the same reason, and OpenAI's
+ * batch default is posted the way the app builds it so a retired model or
+ * field surfaces here too.
  *
  * Run: node scripts/stt-canary.mjs
  * Keys come from STT_CANARY_<PROVIDER>_KEY env vars; providers without a key
@@ -27,6 +29,7 @@ import audioUtils from "../src/utils/audioUtils.js";
 import geminiTranscription from "../src/helpers/geminiTranscription.js";
 import geminiLive from "../src/helpers/geminiLiveStreaming.js";
 import AssemblyAiStreaming from "../src/helpers/assemblyAiStreaming.js";
+import DeepgramStreaming from "../src/helpers/deepgramStreaming.js";
 import modelRegistryData from "../src/models/modelRegistryData.json" with { type: "json" };
 
 const { fetchRealtimeTokenForProvider } = tokenProviders;
@@ -46,19 +49,25 @@ const HANDSHAKE_TIMEOUT_MS = 15000;
 const SILENT_WAV = () => pcm16ToWav(Buffer.alloc(16000));
 
 // Mirrors the app's dial: openaiRealtimeStreaming.js connects with a bare
-// Bearer header; deepgramStreaming.js passes the key as the bearer token; a
-// null token means the credential already rides in the URL (AssemblyAI).
+// Bearer header; a null token means the credential already rides in the URL
+// (AssemblyAI). `authorization` overrides both, for a provider whose scheme is
+// not Bearer; passing the client's own header keeps the probe from drifting.
 // `awaitServerEvent` is for providers that authenticate AFTER the upgrade:
 // OpenAI opens the socket for any key and only then sends an `error` event
 // for a bad one, so resolving on `open` validates nothing (#1624 class).
 // `verifyServerEvent` inspects that first event and returns a failure detail,
 // or null to accept — for servers that acknowledge the requested configuration
 // rather than reject a bad one.
-function probeWebSocket(url, token, { awaitServerEvent = false, verifyServerEvent = null } = {}) {
+function probeWebSocket(
+  url,
+  token,
+  { awaitServerEvent = false, verifyServerEvent = null, authorization = null } = {}
+) {
   return new Promise((resolve) => {
+    const credential = authorization ?? (token ? `Bearer ${token}` : null);
     const ws = new WebSocket(
       url,
-      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      credential ? { headers: { Authorization: credential } } : undefined
     );
     const timer = setTimeout(() => {
       ws.terminate();
@@ -204,6 +213,23 @@ async function probeGeminiLive(key) {
   }
 }
 
+// gpt-transcribe is the BYOK batch default and takes the custom dictionary on
+// its `keywords[]` channel, so one rides along: the request fails here first if
+// OpenAI retires either. Silence transcribes to empty text, so only acceptance
+// is asserted.
+async function probeOpenAiBatch(key, audio) {
+  const body = new FormData();
+  body.append("file", new Blob([audio], { type: "audio/wav" }), "audio.wav");
+  body.append("model", "gpt-transcribe");
+  body.append("keywords[]", "OpenWhispr");
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}` },
+    body,
+  });
+  return response.ok ? { ok: true } : { ok: false, detail: `HTTP ${response.status}` };
+}
+
 const tokenDeps = (key) => ({
   environmentManager: {
     getOpenAIKey: () => key,
@@ -229,16 +255,24 @@ const PROBES = [
     },
   },
   {
+    id: "openai-batch",
+    keyEnv: "STT_CANARY_OPENAI_KEY",
+    run: (key) => probeOpenAiBatch(key, SILENT_WAV()),
+  },
+  {
     id: "deepgram-realtime",
     keyEnv: "STT_CANARY_DEEPGRAM_KEY",
     run: async (key) => {
       const token = await fetchRealtimeTokenForProvider("deepgram-realtime", tokenDeps(key), {
         mode: "byok",
       });
-      return probeWebSocket(
-        "wss://api.deepgram.com/v1/listen?model=nova-3&encoding=linear16&sample_rate=16000",
-        token
-      );
+      const url = new DeepgramStreaming().buildWebSocketUrl({
+        sampleRate: 16000,
+        keyterms: ["OpenWhispr"],
+      });
+      return probeWebSocket(url, null, {
+        authorization: DeepgramStreaming.authorizationHeader("byok", token),
+      });
     },
   },
   {

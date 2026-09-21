@@ -40,6 +40,10 @@ class LocalReasoningService {
         systemPrompt: config.systemPrompt || "",
         disableThinking: config.disableThinking !== false,
         requireCompleteOutput: config.requireCompleteOutput,
+        // A minimum context window for this request. Rebuilding this object
+        // field-by-field is what silently orphaned it before #2142: it was
+        // declared, written by selection editing, and never forwarded.
+        contextSize: config.contextSize,
       };
 
       debugLogger.logReasoning("LOCAL_BRIDGE_INFERENCE", {

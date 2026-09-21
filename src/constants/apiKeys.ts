@@ -1,7 +1,16 @@
 // Source of truth for the desktop side of the public API key UI.
 // Keep API_SCOPES and MAX_API_KEYS in sync with openwhispr-api/lib/api-keys.ts.
 
-export const API_SCOPES = ["notes:read", "notes:write", "transcriptions:read"] as const;
+export const API_SCOPES = [
+  "notes:read",
+  "notes:write",
+  "transcriptions:read",
+  "dictionary:read",
+  "dictionary:write",
+  "snippets:read",
+  "snippets:write",
+  "transcriptions:write",
+] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
 
@@ -20,6 +29,11 @@ export const API_SCOPE_I18N_KEY: Record<ApiScope, string> = {
   "notes:read": "notesRead",
   "notes:write": "notesWrite",
   "transcriptions:read": "transcriptionsRead",
+  "dictionary:read": "dictionaryRead",
+  "dictionary:write": "dictionaryWrite",
+  "snippets:read": "snippetsRead",
+  "snippets:write": "snippetsWrite",
+  "transcriptions:write": "transcriptionsWrite",
 };
 
 export interface ApiKeyExpiryOption {

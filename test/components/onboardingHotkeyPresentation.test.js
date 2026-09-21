@@ -33,7 +33,9 @@ test("macOS recommends Right Option first, followed by Globe/Fn and Ctrl + R", a
     ["Right Option", "Globe/Fn", "Ctrl + R"]
   );
   assert.deepEqual(getRecommendedDictationHotkeys("linux", "Control+Super"), ["Control+Super"]);
+  // Right Ctrl leads on Windows: right Alt is AltGr on many layouts.
   assert.deepEqual(getRecommendedDictationHotkeys("win32", "Control+Shift+Space"), [
+    "RightControl",
     "Control+Shift+Space",
   ]);
   assert.equal(DEFAULT_ASSISTANT_ONBOARDING_HOTKEY, "CommandOrControl+Shift+Space");
