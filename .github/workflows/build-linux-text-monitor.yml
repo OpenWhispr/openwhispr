@@ -52,7 +52,7 @@ jobs:
           path: linux-text-monitor-linux-x64.tar.gz
 
       - name: Create or update release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: linux-text-monitor-v${{ inputs.version || '1.0.0' }}
           name: Linux Text Monitor v${{ inputs.version || '1.0.0' }}

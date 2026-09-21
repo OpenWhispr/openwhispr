@@ -58,7 +58,7 @@ jobs:
           path: windows-text-monitor-win32-x64.zip
 
       - name: Create or update release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: windows-text-monitor-v${{ inputs.version || '1.0.0' }}
           name: Windows Text Monitor v${{ inputs.version || '1.0.0' }}
