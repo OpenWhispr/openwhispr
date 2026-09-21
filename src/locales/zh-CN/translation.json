@@ -1727,6 +1727,11 @@
       "planUnavailable": {
         "title": "无法获取方案",
         "description": "暂时无法加载你的方案，你的使用权限不受影响。"
+      },
+      "usageReturn": {
+        "day_other": "{{count}} 天后恢复可用字数",
+        "hour_other": "{{count}} 小时后恢复可用字数",
+        "minute_other": "{{count}} 分钟后恢复可用字数"
       }
     },
     "agentConfig": {

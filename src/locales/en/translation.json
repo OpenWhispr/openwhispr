@@ -2020,6 +2020,14 @@
       "planUnavailable": {
         "title": "Plan unavailable",
         "description": "We couldn't load your plan right now. Your access is unchanged."
+      },
+      "usageReturn": {
+        "day_one": "Words return in {{count}} day",
+        "day_other": "Words return in {{count}} days",
+        "hour_one": "Words return in {{count}} hour",
+        "hour_other": "Words return in {{count}} hours",
+        "minute_one": "Words return in {{count}} minute",
+        "minute_other": "Words return in {{count}} minutes"
       }
     },
     "agentConfig": {

@@ -2020,6 +2020,14 @@
       "planUnavailable": {
         "title": "Forfait indisponible",
         "description": "Nous n'avons pas pu charger votre forfait pour le moment. Votre accès reste inchangé."
+      },
+      "usageReturn": {
+        "day_one": "Les mots seront à nouveau disponibles dans {{count}} jour",
+        "day_other": "Les mots seront à nouveau disponibles dans {{count}} jours",
+        "hour_one": "Les mots seront à nouveau disponibles dans {{count}} heure",
+        "hour_other": "Les mots seront à nouveau disponibles dans {{count}} heures",
+        "minute_one": "Les mots seront à nouveau disponibles dans {{count}} minute",
+        "minute_other": "Les mots seront à nouveau disponibles dans {{count}} minutes"
       }
     },
     "agentConfig": {

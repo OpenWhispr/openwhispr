@@ -1780,6 +1780,14 @@
       "planUnavailable": {
         "title": "Plan no disponible",
         "description": "No pudimos cargar tu plan ahora mismo. Tu acceso no ha cambiado."
+      },
+      "usageReturn": {
+        "day_one": "Las palabras vuelven a estar disponibles en {{count}} día",
+        "day_other": "Las palabras vuelven a estar disponibles en {{count}} días",
+        "hour_one": "Las palabras vuelven a estar disponibles en {{count}} hora",
+        "hour_other": "Las palabras vuelven a estar disponibles en {{count}} horas",
+        "minute_one": "Las palabras vuelven a estar disponibles en {{count}} minuto",
+        "minute_other": "Las palabras vuelven a estar disponibles en {{count}} minutos"
       }
     },
     "agentConfig": {

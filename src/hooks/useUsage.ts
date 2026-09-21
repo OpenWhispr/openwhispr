@@ -44,6 +44,7 @@ export interface UseUsageResult {
   isOverLimit: boolean;
   isApproachingLimit: boolean;
   resetAt: string | null;
+  nextWordsAvailableAt: string | null;
   /** Any Stripe action — checkout, switch-plan or portal — is in flight; they share one guard. */
   checkoutLoading: boolean;
   openCheckout: (opts?: {
@@ -252,6 +253,7 @@ export function useUsage(): UseUsageResult | null {
     isOverLimit,
     isApproachingLimit,
     resetAt: data?.resetAt ?? null,
+    nextWordsAvailableAt: data?.nextWordsAvailableAt ?? null,
     checkoutLoading,
     openCheckout,
     openBillingPortal,

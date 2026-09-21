@@ -2020,6 +2020,14 @@
       "planUnavailable": {
         "title": "Tarif nicht verfügbar",
         "description": "Ihr Tarif konnte gerade nicht geladen werden. Ihr Zugriff bleibt unverändert."
+      },
+      "usageReturn": {
+        "day_one": "Wörter werden in {{count}} Tag wieder verfügbar",
+        "day_other": "Wörter werden in {{count}} Tagen wieder verfügbar",
+        "hour_one": "Wörter werden in {{count}} Stunde wieder verfügbar",
+        "hour_other": "Wörter werden in {{count}} Stunden wieder verfügbar",
+        "minute_one": "Wörter werden in {{count}} Minute wieder verfügbar",
+        "minute_other": "Wörter werden in {{count}} Minuten wieder verfügbar"
       }
     },
     "agentConfig": {

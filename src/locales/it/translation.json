@@ -1727,6 +1727,14 @@
       "planUnavailable": {
         "title": "Piano non disponibile",
         "description": "Non siamo riusciti a caricare il tuo piano. Il tuo accesso resta invariato."
+      },
+      "usageReturn": {
+        "day_one": "Le parole tornano disponibili tra {{count}} giorno",
+        "day_other": "Le parole tornano disponibili tra {{count}} giorni",
+        "hour_one": "Le parole tornano disponibili tra {{count}} ora",
+        "hour_other": "Le parole tornano disponibili tra {{count}} ore",
+        "minute_one": "Le parole tornano disponibili tra {{count}} minuto",
+        "minute_other": "Le parole tornano disponibili tra {{count}} minuti"
       }
     },
     "agentConfig": {
