@@ -7,7 +7,7 @@ Branch: `feat/windows-tray-identity`
 
 Give the signed production Windows tray icon one permanent identifier so Windows can associate the user's visibility and ordering choices with the same icon after relaunches and updates. This improves identity; Windows and the user still control visibility and ordering. The first release adopting this identity may require the user to arrange the icon once again.
 
-This is independent of macOS PR #2267 and does not reuse its GUID. Do not programmatically promote the Windows icon out of overflow or position it beside system controls.
+macOS has its own tray GUID from #2267; this change does not reuse it. Do not programmatically promote the Windows icon out of overflow or position it beside system controls.
 
 ## Decision
 
@@ -17,7 +17,7 @@ Use Electron's supported `new Tray(image, guid)` only when all three conditions 
 2. The channel already resolved by `main.js` is `process.env.OPENWHISPR_CHANNEL === "production"`.
 3. The packaged `package.json` contains `windowsTrayIdentity: true`.
 
-Use the permanent Windows production GUID **`9afd9bd5-53da-42ef-8334-6e2b494c66fe`**. Keep it unchanged across versions and executable paths. All other cases continue to call `new Tray(image)` with exactly one argument.
+Use the permanent Windows production GUID **`9afd9bd5-53da-42ef-8334-6e2b494c66fe`**. Keep it unchanged across versions and executable paths. Every other Windows case, and Linux, keeps calling `new Tray(image)` with exactly one argument.
 
 `main.js` resolves and sets the channel before loading `TrayManager`, so the tray reuses that value instead of inferring a second one. Development and staging have their own profile and single-instance lock, so they can run beside production. They receive no GUID, even when packaged and signed, so they cannot claim the production identifier.
 
@@ -59,7 +59,7 @@ No retry with a different GUID is added. Electron 41.10.5 logs a failed native `
 
 ## Validation and acceptance
 
-Automated tests (`test/helpers/windowsTrayIdentity.test.js`) pin the GUID for marked production Windows builds and check that macOS, Linux, development, staging, and a missing or `false` marker keep the one-argument constructor. They cannot prove the signature of a build artifact.
+Automated tests (`test/helpers/trayPlacement.test.js`, shared with the macOS GUID) pin the GUID for marked production Windows builds and check that Linux, development, staging, and a missing or `false` marker keep the one-argument constructor. They cannot prove the signature of a build artifact.
 
 Native evidence, for each Windows version:
 
