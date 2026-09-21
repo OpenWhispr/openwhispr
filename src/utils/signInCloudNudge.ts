@@ -26,7 +26,10 @@ export function decideSignInCloudNudge({
   transcriptionMode,
 }: SignInCloudNudgeInputs): SignInCloudNudgeDecision {
   if (Number.isNaN(promptedAt) || now - promptedAt > SIGN_IN_CLOUD_NUDGE_WINDOW_MS) return "skip";
-  if (!isSignedIn || policy.status === "idle" || policy.status === "loading") return "wait";
+  // A failed load is retried on the next identity refresh, inside the prompt window.
+  if (!isSignedIn || (policy.status !== "managed" && policy.status !== "unmanaged")) {
+    return "wait";
+  }
   if (transcriptionMode === "openwhispr") return "skip";
   return isModeAllowedByPolicy(policy, "transcription", "openwhispr") ? "nudge" : "skip";
 }

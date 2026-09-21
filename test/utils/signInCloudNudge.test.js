@@ -48,15 +48,16 @@ test("dictation already on Cloud needs no nudge", async () => {
 
 test("it waits for the sign-in and for the account's policy to settle", async () => {
   assert.equal(await decide({ isSignedIn: false }), "wait");
-  for (const status of ["idle", "loading"]) {
+  // A failed load is retried on the next identity refresh, and the prompt window
+  // absorbs that; dropping the marker here would lose the nudge to a flaky connection.
+  for (const status of ["idle", "loading", "error"]) {
     assert.equal(await decide({ policy: { ...UNMANAGED, status } }), "wait", status);
   }
 });
 
-test("a policy that forbids Cloud, or failed to load, gets no nudge", async () => {
+test("a policy that forbids Cloud gets no nudge", async () => {
   assert.equal(await decide({ policy: managedPolicy(["local", "providers"]) }), "skip");
   assert.equal(await decide({ policy: managedPolicy(["openwhispr", "providers"]) }), "nudge");
-  assert.equal(await decide({ policy: { ...UNMANAGED, status: "error" } }), "skip");
 });
 
 test("a prompt that is too old or unreadable is dropped", async () => {
