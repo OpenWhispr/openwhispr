@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   timestampRequestFields,
   mapVerboseSegments,
+  mapWhisperSegments,
 } = require("../../src/helpers/uploadTimestamps");
 
 test("timestamp fields are requested only from providers/models that accept them", () => {
@@ -88,4 +89,30 @@ test("responses without usable segments map to null", () => {
   assert.equal(mapVerboseSegments({ segments: [{ start: NaN, text: "" }] }), null);
   assert.equal(mapVerboseSegments(null), null);
   assert.equal(mapVerboseSegments(undefined), null);
+});
+
+test("whisper.cpp CLI offsets become second-based segments", () => {
+  assert.deepEqual(
+    mapWhisperSegments({
+      transcription: [
+        { text: " Hello", offsets: { from: 0, to: 1500 } },
+        { text: " world", offsets: { from: 1500, to: 3200 } },
+      ],
+    }),
+    [
+      { text: "Hello", start: 0, end: 1.5 },
+      { text: "world", start: 1.5, end: 3.2 },
+    ]
+  );
+});
+
+test("verbose_json segments win over an empty transcription list", () => {
+  assert.deepEqual(
+    mapWhisperSegments({
+      text: "hello",
+      transcription: [],
+      segments: [{ text: "hello", start: 0, end: 1 }],
+    }),
+    [{ text: "hello", start: 0, end: 1 }]
+  );
 });

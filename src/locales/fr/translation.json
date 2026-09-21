@@ -3281,6 +3281,8 @@
       "saving": "Enregistrement",
       "transcriptEmptyTitle": "Rien d'enregistré pour l'instant",
       "transcriptEmptyDescription": "Lancez l'enregistrement pour commencer la transcription. Tout ce qui est dit s'affiche ici en direct.",
+      "transcriptUntimedTitle": "Pas de transcription minutée",
+      "transcriptUntimedDescription": "Ce fichier a été transcrit en texte brut, donc les sous-titres ne sont pas disponibles. Un fournisseur qui renvoie des temps par segment active l'export SRT ici.",
       "startRecording": "Démarrer l'enregistrement",
       "generateSummary": "Générer un résumé IA",
       "startWriting": "Commencez à écrire...",

@@ -13,6 +13,7 @@ const {
 const WhisperServerManager = require("./whisperServer");
 const { createAbortError } = require("./abortError");
 const { getModelsDirForService } = require("./modelDirUtils");
+const { mapWhisperSegments } = require("./uploadTimestamps");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 
@@ -30,6 +31,11 @@ function getWhisperModelConfig(modelName) {
 
 function getValidModelNames() {
   return Object.keys(modelRegistryData.whisperModels);
+}
+
+function withWhisperSegments(result) {
+  const segments = mapWhisperSegments(result);
+  return segments ? { segments } : {};
 }
 
 // WHISPER_GPU_FAILED holds a comma-separated list of backends that fell back
@@ -468,6 +474,7 @@ class WhisperManager {
       initialPrompt,
       signal: options.signal,
       skipDecoderThresholds: options.skipDecoderThresholds,
+      timestamps: options.timestamps === true,
     });
     const elapsed = Date.now() - startTime;
 
@@ -558,7 +565,7 @@ class WhisperManager {
       if (!text || this.isBlankAudioMarker(text)) {
         return { success: false, message: "No audio detected" };
       }
-      return { success: true, text };
+      return { success: true, text, ...withWhisperSegments(result) };
     }
 
     // Handle whisper-server format (has "text" field directly)
@@ -567,7 +574,7 @@ class WhisperManager {
       if (!text || this.isBlankAudioMarker(text)) {
         return { success: false, message: "No audio detected" };
       }
-      return { success: true, text };
+      return { success: true, text, ...withWhisperSegments(result) };
     }
 
     // A response with neither shape is a broken backend, not silence. Reporting it

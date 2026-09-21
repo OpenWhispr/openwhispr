@@ -2991,6 +2991,8 @@
       "saving": "Guardando",
       "transcriptEmptyTitle": "Aún no hay grabaciones",
       "transcriptEmptyDescription": "Pulsa grabar para empezar a transcribir. Todo lo que se diga aparecerá aquí en tiempo real.",
+      "transcriptUntimedTitle": "No hay transcripción con tiempos",
+      "transcriptUntimedDescription": "Esta carga se transcribió como texto plano, así que los subtítulos no están disponibles. Un proveedor que devuelva tiempos por segmento activa la exportación SRT aquí.",
       "startRecording": "Empezar a grabar",
       "generateSummary": "Generar resumen con IA",
       "startWriting": "Comienza a escribir...",

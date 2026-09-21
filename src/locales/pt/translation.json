@@ -2938,6 +2938,8 @@
       "saving": "Salvando",
       "transcriptEmptyTitle": "Nada gravado ainda",
       "transcriptEmptyDescription": "Toque em gravar para começar a transcrever. Tudo o que for dito aparece aqui em tempo real.",
+      "transcriptUntimedTitle": "Sem transcrição com tempos",
+      "transcriptUntimedDescription": "Este envio foi transcrito como texto simples, por isso as legendas não estão disponíveis. Um provedor que devolva tempos por segmento disponibiliza a exportação SRT aqui.",
       "startRecording": "Começar a gravar",
       "generateSummary": "Gerar resumo com IA",
       "startWriting": "Comece a escrever...",

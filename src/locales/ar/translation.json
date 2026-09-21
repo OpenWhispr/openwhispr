@@ -1618,6 +1618,8 @@
       "saving": "جاري الحفظ",
       "transcriptEmptyTitle": "لم يتم تسجيل أي شيء بعد",
       "transcriptEmptyDescription": "اضغط على تسجيل لبدء النسخ. كل ما يُقال يظهر هنا لحظيًا.",
+      "transcriptUntimedTitle": "لا يوجد تفريغ زمني",
+      "transcriptUntimedDescription": "نُسخ هذا الرفع كنص عادي، لذا الترجمة غير متاحة. المزود الذي يعيد أوقات المقاطع يتيح تصدير SRT من هنا.",
       "startRecording": "بدء التسجيل",
       "generateSummary": "إنشاء ملخص بالذكاء الاصطناعي",
       "startWriting": "ابدأ الكتابة...",

@@ -2938,6 +2938,8 @@
       "saving": "保存中",
       "transcriptEmptyTitle": "尚未录制任何内容",
       "transcriptEmptyDescription": "点击录制开始转写。所说的内容会实时显示在这里。",
+      "transcriptUntimedTitle": "没有带时间的转写",
+      "transcriptUntimedDescription": "这次上传只返回了纯文本，所以无法导出字幕。提供分段时间的引擎会在这里开放 SRT 导出。",
       "startRecording": "开始录制",
       "generateSummary": "生成 AI 摘要",
       "startWriting": "开始书写...",
