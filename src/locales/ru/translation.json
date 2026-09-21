@@ -1302,6 +1302,7 @@
     "listening": "Ожидание...",
     "pressAnyKey": "Нажмите любую клавишу или Ctrl+Shift+K",
     "pressAnyKeyMac": "Нажмите любую клавишу или ⌘⇧K",
+    "captureMac": "Нажмите клавишу или кнопку мыши, которую хотите использовать",
     "recording": "Запись",
     "tryShortcut": "Попробуйте Ctrl+Shift+K",
     "tryShortcutMac": "Попробуйте ⌘⇧K",

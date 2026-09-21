@@ -994,6 +994,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("globe-key-released", listener);
   },
 
+  onMouseShortcutCaptured: (callback) => {
+    const listener = (_event, button) => callback?.(button);
+    ipcRenderer.on("mouse-shortcut-captured", listener);
+    return () => ipcRenderer.removeListener("mouse-shortcut-captured", listener);
+  },
+
   // Hotkey registration events (for notifying user when hotkey fails)
   onHotkeyFallbackUsed: (callback) => {
     const listener = (_event, data) => callback?.(data);

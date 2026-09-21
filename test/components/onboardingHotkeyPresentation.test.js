@@ -116,3 +116,15 @@ test("a mouse binding gets a glyph instead of printing its label into the symbol
     { id: "Mouse Button 4-0", label: "mouse 4", symbol: "\u21f1" },
   ]);
 });
+
+test("middle and higher numbered mouse bindings stay readable in onboarding", async () => {
+  const { formatHotkeyInstruction, getHotkeyKeycaps } = await load();
+
+  assert.equal(formatHotkeyInstruction("MouseButton3"), "Middle mouse button");
+  assert.deepEqual(getHotkeyKeycaps("MouseButton3"), [
+    { id: "Middle mouse button-0", label: "middle mouse button", symbol: "●" },
+  ]);
+  assert.deepEqual(getHotkeyKeycaps("MouseButton32"), [
+    { id: "Mouse Button 32-0", label: "mouse button 32", symbol: "●" },
+  ]);
+});
