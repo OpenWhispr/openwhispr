@@ -43,8 +43,8 @@ export function UploadTranscriptionPanel() {
     setEnterpriseTranscriptionSetupMode,
     uploadRemoteTranscriptionUrl,
     setUploadRemoteTranscriptionUrl,
-    remoteTranscriptionModel,
-    setRemoteTranscriptionModel,
+    uploadRemoteTranscriptionModel,
+    setUploadRemoteTranscriptionModel,
   } = useSettingsStore();
   const {
     modes: transcriptionModes,
@@ -169,8 +169,8 @@ export function UploadTranscriptionPanel() {
           service="transcription"
           url={uploadRemoteTranscriptionUrl}
           onUrlChange={setUploadRemoteTranscriptionUrl}
-          model={remoteTranscriptionModel}
-          onModelChange={setRemoteTranscriptionModel}
+          model={uploadRemoteTranscriptionModel}
+          onModelChange={setUploadRemoteTranscriptionModel}
         />
       )}
     </div>

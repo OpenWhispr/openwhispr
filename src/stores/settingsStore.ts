@@ -495,7 +495,6 @@ const UPLOAD_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
   ["cloudTranscriptionBaseUrl", "uploadCloudTranscriptionBaseUrl"],
   ["cloudTranscriptionMode", "uploadCloudTranscriptionMode"],
   ["transcriptionMode", "uploadTranscriptionMode"],
-  ["remoteTranscriptionUrl", "uploadRemoteTranscriptionUrl"],
 ];
 
 function migrateUploadTranscription() {
@@ -509,6 +508,29 @@ function migrateUploadTranscription() {
 }
 
 migrateUploadTranscription();
+
+// One-time seed of the upload self-hosted server. These keys arrived after
+// migrateUploadTranscription() had latched (1.7.3), and until then the Upload
+// tab edited dictation's server (#2049), so copy the values a profile has been
+// uploading with; the tab then shows the server it actually uses. Fresh installs
+// have nothing to copy, and an upload key the user already set is kept.
+const UPLOAD_SELF_HOSTED_PAIRS: ReadonlyArray<[string, string]> = [
+  ["remoteTranscriptionUrl", "uploadRemoteTranscriptionUrl"],
+  ["remoteTranscriptionModel", "uploadRemoteTranscriptionModel"],
+];
+
+function migrateUploadSelfHosted() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("uploadSelfHostedMigrated") === "true") return;
+  for (const [src, dst] of UPLOAD_SELF_HOSTED_PAIRS) {
+    if (localStorage.getItem(dst) !== null) continue;
+    const v = localStorage.getItem(src);
+    if (v !== null) localStorage.setItem(dst, v);
+  }
+  localStorage.setItem("uploadSelfHostedMigrated", "true");
+}
+
+migrateUploadSelfHosted();
 
 // Dictation and upload render `*TranscriptionMode` in their picker but route on
 // `*UseLocalWhisper` (audioManager, fileTranscription) and `*CloudTranscriptionMode`
@@ -923,6 +945,7 @@ export interface SettingsState
   uploadCloudTranscriptionBaseUrl: string;
   uploadCloudTranscriptionMode: string;
   uploadRemoteTranscriptionUrl: string;
+  uploadRemoteTranscriptionModel: string;
 
   /** Last model used per scope+provider (`"<context>:<providerId>"`), so switching providers restores it. */
   transcriptionModelByProvider: Record<string, string>;
@@ -1027,6 +1050,7 @@ export interface SettingsState
   setUploadCloudTranscriptionBaseUrl: (value: string) => void;
   setUploadCloudTranscriptionMode: (value: string) => void;
   setUploadRemoteTranscriptionUrl: (value: string) => void;
+  setUploadRemoteTranscriptionModel: (value: string) => void;
 
   setNoteFormattingMode: (mode: InferenceMode) => void;
   setNoteFormattingProvider: (value: string) => void;
@@ -1729,6 +1753,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uploadCloudTranscriptionBaseUrl: readString("uploadCloudTranscriptionBaseUrl", ""),
   uploadCloudTranscriptionMode: readString("uploadCloudTranscriptionMode", ""),
   uploadRemoteTranscriptionUrl: readString("uploadRemoteTranscriptionUrl", ""),
+  uploadRemoteTranscriptionModel: readString("uploadRemoteTranscriptionModel", ""),
 
   noteFormattingMode: (() => {
     const v = readString("noteFormattingMode", "openwhispr");
@@ -1824,6 +1849,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setUploadCloudTranscriptionBaseUrl: createStringSetter("uploadCloudTranscriptionBaseUrl"),
   setUploadCloudTranscriptionMode: createStringSetter("uploadCloudTranscriptionMode"),
   setUploadRemoteTranscriptionUrl: createStringSetter("uploadRemoteTranscriptionUrl"),
+  setUploadRemoteTranscriptionModel: createStringSetter("uploadRemoteTranscriptionModel"),
 
   setNoteFormattingMode: createStringSetter("noteFormattingMode") as (mode: InferenceMode) => void,
   setNoteFormattingProvider: createStringSetter("noteFormattingProvider"),
@@ -2759,6 +2785,7 @@ export interface ResolvedUploadTranscription {
   cloudTranscriptionMode: string;
   transcriptionMode: InferenceMode;
   remoteTranscriptionUrl: string;
+  remoteTranscriptionModel: string;
 }
 
 // Audio upload is batch (not streaming), so unset values fall back to the base
@@ -2766,6 +2793,9 @@ export interface ResolvedUploadTranscription {
 // A realtime-only dictation provider is the exception: it has no batch route, so
 // inheriting it would fail every upload closed. Uploads take the default provider
 // instead, and the dictation model stays behind with the provider it belongs to.
+// The self-hosted server inherits the same way; migrateUploadSelfHosted() seeds it
+// once for profiles from before the Upload tab had its own, so the tab shows the
+// server uploads already use.
 export const selectResolvedUploadTranscription = (
   state: SettingsState
 ): ResolvedUploadTranscription => {
@@ -2789,6 +2819,8 @@ export const selectResolvedUploadTranscription = (
     cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
     transcriptionMode: state.uploadTranscriptionMode,
     remoteTranscriptionUrl: state.uploadRemoteTranscriptionUrl || state.remoteTranscriptionUrl,
+    remoteTranscriptionModel:
+      state.uploadRemoteTranscriptionModel || state.remoteTranscriptionModel,
   };
 };
 
