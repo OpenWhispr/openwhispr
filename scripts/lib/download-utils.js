@@ -1,7 +1,7 @@
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execFileSync } = require("child_process");
 
 const REQUEST_TIMEOUT = 30000;
 const MAX_RETRIES = 3;
@@ -248,12 +248,15 @@ async function extractZip(zipPath, destDir) {
       .pipe(unzipper.Extract({ path: destDir }))
       .promise();
   } else {
-    execSync(`unzip -o "${zipPath}" -d "${destDir}"`, { stdio: "inherit" });
+    // argv form: shell-form `"${destDir}"` expands $VARS / backticks inside
+    // double quotes (macOS/Linux), so paths like cache_$HOME_bin extract to
+    // the wrong directory. Same class as Windows Expand-Archive quoting.
+    execFileSync("unzip", ["-o", zipPath, "-d", destDir], { stdio: "inherit" });
   }
 }
 
 function extractTarGz(tarPath, destDir) {
-  execSync(`tar -xzf "${tarPath}" -C "${destDir}"`, { stdio: "inherit" });
+  execFileSync("tar", ["-xzf", tarPath, "-C", destDir], { stdio: "inherit" });
 }
 
 async function extractArchive(archivePath, destDir) {
