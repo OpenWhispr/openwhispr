@@ -1,5 +1,6 @@
 import ReasoningService from "../services/ReasoningService";
 import logger from "../utils/logger";
+import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
@@ -2916,13 +2917,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async runTranslationChain({ text, settings, agentName, route, cleanup }) {
     const runCleanup = async (currentText) => {
       if (cleanup.mode === "cloudReason") {
+        const customPrompt = this.getCustomPrompt();
         const reasonResult = await withSessionRefresh(async () => {
           const res = await window.electronAPI.cloudReason(currentText, {
             agentName,
             promptMode: "cleanup",
             purpose: "cleanup",
             customDictionary: getDictionaryHintWords(settings),
-            customPrompt: this.getCustomPrompt(),
+            customPrompt,
             language: this.getCleanupLanguage(settings),
             locale: settings.uiLanguage || "en",
             ...(cleanup.meta || {}),
@@ -2934,6 +2936,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           return res;
         });
+        if (!customPrompt && hasTextContent(reasonResult.text)) {
+          assertValidCleanupOutput(currentText, reasonResult.text);
+        }
         return reasonResult.success && reasonResult.text ? reasonResult.text : null;
       }
       const cleanupModel = cleanup.model;
@@ -3398,13 +3403,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
           if (hasTextContent(reasoned)) processedText = reasoned;
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
+          const customPrompt = this.getCustomPrompt();
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(processedText, {
               agentName,
               promptMode: "cleanup",
               purpose: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
-              customPrompt: this.getCustomPrompt(),
+              customPrompt,
               language: this.getCleanupLanguage(settings),
               locale: settings.uiLanguage || "en",
               sttProvider: result.sttProvider,
@@ -3426,6 +3432,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
           // Cloud cleanup can return success with empty text; keep the raw transcription instead of wiping it.
           if (reasonResult.success && hasTextContent(reasonResult.text)) {
+            if (!customPrompt) assertValidCleanupOutput(processedText, reasonResult.text);
             processedText = reasonResult.text;
           }
         } else if (route.kind === "cleanup") {
@@ -5127,13 +5134,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "streaming"
           );
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
+          const customPrompt = this.getCustomPrompt();
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(finalText, {
               agentName,
               promptMode: "cleanup",
               purpose: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
-              customPrompt: this.getCustomPrompt(),
+              customPrompt,
               language: this.getCleanupLanguage(stSettings),
               locale: stSettings.uiLanguage || "en",
               sttProvider: this.getStreamingProviderName(),
@@ -5154,6 +5162,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           });
 
           if (reasonResult.success && hasTextContent(reasonResult.text)) {
+            if (!customPrompt) assertValidCleanupOutput(finalText, reasonResult.text);
             finalText = reasonResult.text;
           }
           usedCloudReasoning = true;
