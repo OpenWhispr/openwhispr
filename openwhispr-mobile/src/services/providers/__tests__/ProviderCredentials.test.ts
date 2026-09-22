@@ -244,11 +244,30 @@ it('binds local-network endpoint credentials to the port and strips supported AP
   );
 });
 
-it('leaves app data available for retry when secure credential reset fails', async () => {
+it('clears local data and the auth token even when secure credential reset fails', async () => {
   const clear = jest.fn();
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { clear } });
   await setProviderCredential(openaiReference, { apiKey: 'fixture' });
+  // First deleteItemAsync call is the auth token clear, which must still succeed;
+  // the second is the provider-credential deletion, which fails.
+  deleteItem.mockImplementationOnce(async (key): Promise<void> => {
+    stored.delete(key);
+  });
   deleteItem.mockRejectedValueOnce(new Error('native unavailable'));
   await expect(StorageService.clearAll()).rejects.toThrow('Unable to clear provider credentials');
-  expect(clear).not.toHaveBeenCalled();
+  expect(clear).toHaveBeenCalledTimes(1);
+});
+
+it('treats an unreadable registry as empty so save and reset still work', async () => {
+  await SecureStore.setItemAsync('openwhispr.provider-credentials.registry.v1', '{not json');
+  await expect(getProviderCredential('provider.openai')).resolves.toBeNull();
+  await expect(
+    setProviderCredential('provider.openai', { apiKey: 'fresh-key' }),
+  ).resolves.toBeUndefined();
+  await expect(getProviderCredential('provider.openai')).resolves.toEqual({ apiKey: 'fresh-key' });
+  await SecureStore.setItemAsync('openwhispr.provider-credentials.registry.v1', '{not json');
+  await expect(clearProviderCredentials()).resolves.toBeUndefined();
+  await expect(
+    SecureStore.getItemAsync('openwhispr.provider-credentials.registry.v1'),
+  ).resolves.toBeNull();
 });

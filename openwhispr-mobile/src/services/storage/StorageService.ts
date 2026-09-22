@@ -100,8 +100,8 @@ export class StorageService {
   }
 
   static async clearAll(): Promise<void> {
-    await clearProviderCredentials();
     localStorage.clear();
     await SecureStorageService.clearAuthToken();
+    await clearProviderCredentials();
   }
 }

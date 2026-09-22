@@ -59,17 +59,20 @@ export function subscribeProviderCredentialChanges(listener: CredentialChangeLis
 async function readRegistry(): Promise<CredentialRegistry> {
   const raw = await SecureStore.getItemAsync(REGISTRY_KEY, SECURE_OPTIONS);
   if (raw === null) return {};
-  const parsed: unknown = JSON.parse(raw);
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('Invalid credential registry');
-  }
-  for (const [reference, state] of Object.entries(parsed)) {
-    validateReference(reference);
-    if (state !== 'pending' && state !== 'active' && state !== 'removed') {
-      throw new Error('Invalid credential registry');
+  // A registry we cannot trust must not lock the user out of saving or
+  // resetting; entries it referenced are simply re-entered by the user.
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const registry = objectValue(parsed);
+    if (!registry) return {};
+    for (const [reference, state] of Object.entries(registry)) {
+      validateReference(reference);
+      if (state !== 'pending' && state !== 'active' && state !== 'removed') return {};
     }
+    return registry as CredentialRegistry;
+  } catch {
+    return {};
   }
-  return parsed as CredentialRegistry;
 }
 
 async function writeRegistry(registry: CredentialRegistry): Promise<void> {
