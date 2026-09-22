@@ -1,7 +1,6 @@
 import {
   snapshotKeyboardInferenceRoute,
   readKeyboardInferenceRoute,
-  readKeyboardOrphanInferenceRoute,
   readKeyboardProviderResult,
   clearKeyboardProviderRecovery,
 } from '@/lib/keyboardInferenceRoute';
@@ -289,9 +288,21 @@ export function useKeyboardHandoff() {
       const providerJobId = readActiveJobId();
       let providerResult: ReturnType<typeof readKeyboardProviderResult>;
       if (providerJobId) {
+        if (readKeyboardAgentJob(providerJobId)) {
+          // An agent job's provider result is the spoken instruction, never text
+          // to insert. The composer did not finish; clear both and let the user retry.
+          clearKeyboardProviderRecovery(providerJobId);
+          clearKeyboardAgentJob();
+          setKeyboardStatus(
+            'agent_error',
+            'The agent request was interrupted. Try again from the keyboard.',
+          );
+          return;
+        }
         try {
           providerResult = readKeyboardProviderResult(providerJobId);
         } catch {
+          clearKeyboardProviderRecovery(providerJobId);
           setKeyboardStatus(
             'error',
             'The original provider result is unavailable. Retry the recording.',
@@ -345,6 +356,7 @@ export function useKeyboardHandoff() {
             `[keyboard-handoff] ignoring stale orphan raw transcript trigger=${trigger} jobId=${rawJobId} active=${activeJobId}`,
           );
         }
+        clearKeyboardProviderRecovery(rawJobId);
         AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT);
         AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID);
         return;
@@ -365,7 +377,7 @@ export function useKeyboardHandoff() {
         let recoveredRoute: ReturnType<typeof readKeyboardInferenceRoute>;
         let cleanupWarning: string | undefined;
         try {
-          recoveredRoute = providerResult?.route ?? readKeyboardOrphanInferenceRoute(rawJobId);
+          recoveredRoute = providerResult?.route ?? readKeyboardInferenceRoute(rawJobId);
         } catch {
           recoveredRoute = undefined;
         }
@@ -403,6 +415,8 @@ export function useKeyboardHandoff() {
           if (__DEV__) {
             console.warn(`[keyboard-handoff] dropping stale orphan cleanup jobId=${rawJobId}`);
           }
+          recoverySaved = true;
+          clearKeyboardProviderRecovery(rawJobId);
           return;
         }
 
@@ -454,7 +468,6 @@ export function useKeyboardHandoff() {
         if (recoverySaved) {
           AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT);
           AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID);
-          AppGroupStorage.removeItem('keyboard_orphaned_inference_route');
         }
         orphanCleanupInFlightRef.current = false;
         cleanup({ resetStatus: false });
@@ -744,6 +757,7 @@ export function useKeyboardHandoff() {
             });
             writeTranscriptionMetrics(transcription);
             markTiming('agent_transcribe_done');
+            clearKeyboardProviderRecovery(jobId);
 
             // Cancelled while transcribing: discard and return to idle.
             // consumeCancelDuringProcessing() already ran cleanup().
@@ -785,6 +799,7 @@ export function useKeyboardHandoff() {
             if (readKeyboardAgentJob(jobId)) clearKeyboardAgentJob();
             cleanup({ resetStatus: false });
           } catch (error) {
+            clearKeyboardProviderRecovery(jobId);
             if (isNoSpeechError(error)) {
               if (readKeyboardAgentJob(jobId)) clearKeyboardAgentJob();
               flagNoSpeech();
@@ -1043,7 +1058,13 @@ export function useKeyboardHandoff() {
       const bgJobId = readActiveJobId();
       begin(bgJobId);
       if (bgJobId) {
-        if (!readKeyboardInferenceRoute(bgJobId)) snapshotKeyboardInferenceRoute(bgJobId);
+        try {
+          if (!readKeyboardInferenceRoute(bgJobId)) snapshotKeyboardInferenceRoute(bgJobId);
+        } catch {
+          setKeyboardStatus('error', 'Complete provider setup in AI Models.');
+          cleanup({ resetStatus: false });
+          return;
+        }
         snapshotKeyboardTone(bgJobId);
         // Mirror the tone snapshot: capture a pending agent request for this
         // job. No-op (null) when none is pending; idempotent per jobId.
