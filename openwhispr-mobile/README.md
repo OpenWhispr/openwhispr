@@ -42,6 +42,10 @@ For Android:
 npm run android
 ```
 
+The npm script above uses POSIX environment-variable syntax. On Windows, add
+`OPENWHISPR_APP_ENV=development` to `.env.local`, then run `npx expo run:android` from
+PowerShell or Command Prompt.
+
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for platform prerequisites, configuration details, and the signing steps required to build on a physical iOS device.
 
 ## Project layout

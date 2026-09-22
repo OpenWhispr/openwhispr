@@ -24,7 +24,7 @@ For Android development:
 - Android Studio with Android SDK 36
 - An Android emulator or physical device
 
-Android development does not require Xcode or an Apple Developer account. The EAS CLI is only required for maintainers working with EAS builds or submissions; it is not needed for normal local development.
+Android development does not require Xcode or an Apple Developer account. The EAS CLI is only required when working with EAS builds or submissions; it is not needed for normal local development.
 
 ## First-Time Setup
 
@@ -62,6 +62,8 @@ npm run clean          # format + lint + typecheck
 `npm run ios` runs `expo run:ios`, which executes `expo prebuild` and compiles the native project. The keyboard extension is wired in by the config plugin at `plugins/keyboard-extension/withKeyboardExtension.js` during prebuild.
 
 OpenWhispr uses custom native modules, so Expo Go is not a supported development environment. Use `npm run ios` or `npm run android` to create a development build.
+
+The `android`, `ios`, and `prebuild` npm scripts use POSIX environment-variable syntax. On Windows, put `OPENWHISPR_APP_ENV=development` in `.env.local` and run `npx expo run:android` or `npx expo prebuild` directly. iOS builds still require macOS.
 
 ## Environment Variables
 
