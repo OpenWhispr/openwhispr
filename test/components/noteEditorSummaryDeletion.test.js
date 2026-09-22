@@ -8,34 +8,34 @@ const {
   installHookDom,
 } = require("../lib/rendererTestHarness");
 
-// Walk the element tree the component returned and collect the segmented-control
-// buttons by their data-segment-value, with the className that decides the pill.
-function collectSegments(node, out = new Map()) {
-  if (node === null || node === undefined || typeof node !== "object") return out;
+// Visit every element in the tree the component returned.
+function walk(node, visit) {
+  if (node === null || node === undefined || typeof node !== "object") return;
   if (Array.isArray(node)) {
-    for (const child of node) collectSegments(child, out);
-    return out;
+    for (const child of node) walk(child, visit);
+    return;
   }
-  const props = node.props;
-  if (!props) return out;
-  if (props["data-segment-value"]) {
-    out.set(props["data-segment-value"], String(props.className ?? ""));
-  }
-  collectSegments(props.children, out);
+  if (!node.props) return;
+  visit(node);
+  walk(node.props.children, visit);
+}
+
+// The segmented-control buttons by their data-segment-value.
+function collectSegments(tree) {
+  const out = new Map();
+  walk(tree, (node) => {
+    const value = node.props["data-segment-value"];
+    if (value) out.set(value, node);
+  });
   return out;
 }
 
 // Every `value` a rich-text editor in the tree was handed — the body content.
-function collectEditorValues(node, out = []) {
-  if (node === null || node === undefined || typeof node !== "object") return out;
-  if (Array.isArray(node)) {
-    for (const child of node) collectEditorValues(child, out);
-    return out;
-  }
-  const props = node.props;
-  if (!props) return out;
-  if (typeof props.value === "string") out.push(props.value);
-  collectEditorValues(props.children, out);
+function collectEditorValues(tree) {
+  const out = [];
+  walk(tree, (node) => {
+    if (typeof node.props.value === "string") out.push(node.props.value);
+  });
   return out;
 }
 
@@ -43,10 +43,46 @@ function activeSegment(segments) {
   // The active tab is the one rendered with the full-strength label colour;
   // the inactive ones get text-foreground/60.
   const active = [];
-  for (const [value, className] of segments) {
+  for (const [value, node] of segments) {
+    const className = String(node.props.className ?? "");
     if (/(^|\s)text-foreground($|\s)/.test(className)) active.push(value);
   }
   return active;
+}
+
+// The strip is the element the component measures through its ref; its first
+// child is the sliding highlight, positioned through its inline style.
+function findSegmentStrip(tree) {
+  let strip = null;
+  walk(tree, (node) => {
+    if (strip) return;
+    const children = React.Children.toArray(node.props.children);
+    if (children.some((child) => child.props?.["data-segment-button"])) strip = node;
+  });
+  return strip;
+}
+
+function highlightStyle(tree) {
+  return React.Children.toArray(findSegmentStrip(tree).props.children)[0].props.style;
+}
+
+// The harness DOM has no layout, so the tests hand the component a strip it can
+// measure: tabs laid out left to right from the strip's left edge.
+const TAB_BOXES = {
+  transcript: { left: 2, width: 100, height: 26 },
+  raw: { left: 102, width: 90, height: 26 },
+  enhanced: { left: 192, width: 110, height: 26 },
+};
+
+function measurableStrip(values) {
+  const buttons = values.map((value) => ({
+    dataset: { segmentValue: value },
+    getBoundingClientRect: () => ({ top: 0, ...TAB_BOXES[value] }),
+  }));
+  return {
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 310, height: 30 }),
+    querySelectorAll: () => buttons,
+  };
 }
 
 const NOTE = {
@@ -62,6 +98,8 @@ const NOTE = {
   space_id: null,
   folder_id: null,
 };
+
+const ENHANCEMENT = { content: NOTE.enhanced_content, isStale: false, onChange() {} };
 
 function baseProps(enhancement) {
   return {
@@ -85,15 +123,14 @@ async function loadNoteEditor(t) {
         getSpeakerMappings: async () => [],
         updateNote: async () => ({}),
       },
-      requestAnimationFrame: (cb) => {
-        cb();
-        return 1;
-      },
-      cancelAnimationFrame() {},
     },
   });
   const container = installHookDom(t);
+  const resizeCallbacks = [];
   globalThis.ResizeObserver = class {
+    constructor(callback) {
+      resizeCallbacks.push(callback);
+    }
     observe() {}
     unobserve() {}
     disconnect() {}
@@ -123,10 +160,18 @@ async function loadNoteEditor(t) {
       "/hooks/useAuth": `export function useAuth() { return { isSignedIn: false, user: null }; }`,
       "/hooks/useEmbeddedChat": `
         export function useEmbeddedChat() {
-          return { messages: [], send() {}, reset() {}, isStreaming: false, containerRef: { current: null } };
+          return {
+            messages: [],
+            send() {},
+            reset() {},
+            isStreaming: false,
+            containerRef: { current: null },
+          };
         }
       `,
-      "/services/NoteSharingService": `export const NoteSharingService = { fetchAcl: async () => null };`,
+      "/services/NoteSharingService": `
+        export const NoteSharingService = { fetchAcl: async () => null };
+      `,
       "/hooks/useSpaceRoster": `export async function fetchSpaceRoster() { return []; }`,
     },
   });
@@ -144,36 +189,39 @@ async function loadNoteEditor(t) {
   }
 
   const root = createRoot(container);
-  return { root, renders, Harness };
+  const render = (enhancement) =>
+    React.act(async () => {
+      root.render(React.createElement(Harness, { enhancement }));
+    });
+  const click = (value) =>
+    React.act(async () => {
+      collectSegments(renders.at(-1)).get(value).props.onClick();
+    });
+  const latest = () => renders.at(-1);
+  const unmount = () => React.act(async () => root.unmount());
+  return { render, click, latest, unmount, resizeCallbacks };
 }
 
 test("deleting the AI summary leaves an orphaned selected tab", async (t) => {
-  const { root, renders, Harness } = await loadNoteEditor(t);
-  const enhancement = { content: "AI summary body", isStale: false, onChange() {} };
+  const { render, latest, unmount } = await loadNoteEditor(t);
 
-  await React.act(async () => {
-    root.render(React.createElement(Harness, { enhancement }));
-  });
-
-  const withSummary = collectSegments(renders.at(-1));
+  await render(ENHANCEMENT);
+  const withSummary = collectSegments(latest());
   assert.deepEqual([...withSummary.keys()].sort(), ["enhanced", "raw", "transcript"]);
   assert.deepEqual(activeSegment(withSummary), ["enhanced"], "AI Summary starts selected");
 
   // The user clears the summary text: RichTextEditor emits "", the draft stores
   // "", and PersonalNotesView stops passing an enhancement at all.
-  await React.act(async () => {
-    root.render(React.createElement(Harness, { enhancement: undefined }));
-  });
-
-  const afterDelete = collectSegments(renders.at(-1));
+  await render(undefined);
+  const afterDelete = collectSegments(latest());
   assert.deepEqual(
     [...afterDelete.keys()].sort(),
     ["raw", "transcript"],
     "the AI Summary button is gone"
   );
-  // The body already falls back — only the tab strip disagrees with it.
+  // The body already falls back — only the tab strip disagreed with it.
   assert.ok(
-    collectEditorValues(renders.at(-1)).includes(NOTE.content),
+    collectEditorValues(latest()).includes(NOTE.content),
     "the body renders the plain notes content"
   );
   assert.deepEqual(
@@ -182,5 +230,56 @@ test("deleting the AI summary leaves an orphaned selected tab", async (t) => {
     "selection falls back to Your notes instead of pointing at a tab that no longer exists"
   );
 
-  await React.act(async () => root.unmount());
+  await unmount();
+});
+
+test("the highlight slides onto Your notes when the summary is deleted", async (t) => {
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+
+  await render(ENHANCEMENT);
+  const strip = findSegmentStrip(latest());
+  strip.props.ref.current = measurableStrip(["transcript", "raw", "enhanced"]);
+  // Take a real measurement over the AI Summary tab, as the app has by the time
+  // the user starts deleting.
+  await click("transcript");
+  await click("enhanced");
+  assert.deepEqual(highlightStyle(latest()), {
+    width: 110,
+    height: 26,
+    transform: "translateX(192px)",
+    opacity: 1,
+  });
+
+  strip.props.ref.current = measurableStrip(["transcript", "raw"]);
+  await render(undefined);
+  assert.deepEqual(
+    highlightStyle(latest()),
+    { width: 90, height: 26, transform: "translateX(102px)", opacity: 1 },
+    "the highlight moved onto Your notes instead of freezing over the removed tab"
+  );
+
+  await unmount();
+});
+
+test("hides the highlight instead of freezing it when no tab matches the selection", async (t) => {
+  const { render, click, latest, unmount, resizeCallbacks } = await loadNoteEditor(t);
+
+  await render(undefined);
+  const strip = findSegmentStrip(latest());
+  strip.props.ref.current = measurableStrip(["transcript", "raw"]);
+  await click("transcript");
+  await click("raw");
+  assert.equal(highlightStyle(latest()).opacity, 1);
+
+  // The strip lost the selected tab's button: the net under the whole bug class,
+  // reached through the same resize measurement the app performs.
+  strip.props.ref.current = measurableStrip(["transcript"]);
+  await React.act(async () => resizeCallbacks.at(-1)());
+  assert.deepEqual(
+    highlightStyle(latest()),
+    { width: 90, height: 26, transform: "translateX(102px)", opacity: 0 },
+    "the highlight fades in place rather than staying lit over nothing"
+  );
+
+  await unmount();
 });
