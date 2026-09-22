@@ -13,10 +13,12 @@
  * cocoapods-spm).
  *
  * SwiftPM keys packages by identity (the URL's last path component), so the graph can hold only one
- * FluidAudio: OrukeetCoreML depends on Oruk AI's fork (upstream 0.15.5 plus one decoder performance
- * patch), and the diarization and ASR modules share that same declaration. Bump FLUIDAUDIO_VERSION
- * together with Orukeet's own Package.swift pin, and re-verify both Swift wrappers' API when you do.
- * Orukeet is pinned to a reviewed commit; swap `:commit` for `:version` once Oruk tags a release.
+ * FluidAudio: OrukeetCoreML depends on Oruk AI's fork (upstream 0.15.5 plus a Core ML buffer-reset
+ * performance patch), and the diarization and ASR modules share that same declaration. Both
+ * packages are pinned to reviewed commits: a tag can be moved, and with ios/ generated on every
+ * build nothing else would notice. A root commit pin overrides Orukeet's own `exact:` requirement,
+ * so FLUIDAUDIO_COMMIT must stay the commit of the tag Orukeet's Package.swift names; move both
+ * together and re-verify both Swift wrappers' API when you do.
  *
  * Needs the `cocoapods-spm` gem (root Gemfile; EAS installs it via Bundler). We emit an explicit
  * `plugin 'cocoapods-spm'` directive so the DSL loads under EAS's `bundle exec pod install` — implicit
@@ -28,14 +30,15 @@ const fs = require('fs');
 const path = require('path');
 
 const FLUIDAUDIO_GIT = 'https://github.com/Oruk-AI/FluidAudio.git';
-const FLUIDAUDIO_VERSION = '0.15.5-orukeet.1';
+// Tag 0.15.5-orukeet.1, the version Orukeet's Package.swift requires.
+const FLUIDAUDIO_COMMIT = 'ddc95f4d03d5be12bf84eeb6e4bde5b724356d88';
 const ORUKEET_GIT = 'https://github.com/Oruk-AI/orukeet.git';
 // Head of Oruk-AI/orukeet PR #10 (codex/openwhispr-ios-20260920), reviewed 2026-09-22.
 const ORUKEET_COMMIT = 'db30e0b1c27ea0c88ae789473fff6704fc3b4445';
 
 const SPM_PLUGIN_LINE = `plugin 'cocoapods-spm'`;
 const SPM_PKG_LINES = [
-  `spm_pkg "FluidAudio", :git => "${FLUIDAUDIO_GIT}", :version => "${FLUIDAUDIO_VERSION}"`,
+  `spm_pkg "FluidAudio", :git => "${FLUIDAUDIO_GIT}", :commit => "${FLUIDAUDIO_COMMIT}"`,
   `spm_pkg "Orukeet", :git => "${ORUKEET_GIT}", :commit => "${ORUKEET_COMMIT}", :products => ["OrukeetCoreML"]`,
 ];
 const SPM_PKG_PATTERN = /^\s*spm_pkg\s/m;

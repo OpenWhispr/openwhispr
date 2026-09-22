@@ -24,11 +24,11 @@ describe('addSwiftPackages', () => {
     );
   });
 
-  it("takes FluidAudio from Oruk's fork, the single FluidAudio source the whole package graph resolves", () => {
+  it("takes FluidAudio from Oruk's fork at a commit, so a moved tag can't change the build", () => {
     const podfile = addSwiftPackages(PODFILE);
 
-    expect(podfile).toContain(
-      'spm_pkg "FluidAudio", :git => "https://github.com/Oruk-AI/FluidAudio.git", :version => "0.15.5-orukeet.1"',
+    expect(podfile).toMatch(
+      /spm_pkg "FluidAudio", :git => "https:\/\/github\.com\/Oruk-AI\/FluidAudio\.git", :commit => "[0-9a-f]{40}"\n/,
     );
     expect(podfile).not.toContain('FluidInference/FluidAudio');
   });

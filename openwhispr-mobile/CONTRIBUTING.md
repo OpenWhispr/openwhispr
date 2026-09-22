@@ -59,9 +59,9 @@ npm run check          # format + lint + typecheck + Expo Doctor
 npm run clean          # format + lint + typecheck
 ```
 
-`npm run ios` runs `expo run:ios`, which executes `expo prebuild` and compiles the native project. The keyboard extension is wired in by the config plugin at `plugins/keyboard-extension/withKeyboardExtension.js` during prebuild.
+`npm run ios` runs `expo run:ios`, which runs `expo prebuild` only when there is no `ios/` folder yet, then compiles the native project. The keyboard extension is wired in by the config plugin at `plugins/keyboard-extension/withKeyboardExtension.js` during prebuild. An existing `ios/` folder is reused as is, so after pulling a change to a config plugin or a native package pin, regenerate it with `OPENWHISPR_APP_ENV=development npx expo prebuild -p ios --clean`.
 
-The on-device transcription and diarization modules build FluidAudio and OrukeetCoreML from source as Swift packages. `plugins/swift-packages/withSwiftPackages.js` declares both in the generated `ios/Podfile` (`cocoapods-spm`, installed by `bundle install`). After changing a package pin, regenerate the native project with `OPENWHISPR_APP_ENV=development npx expo prebuild -p ios --clean`; the plugin refuses to patch a Podfile left by an earlier prebuild. If `pod install` fails with `Unicode Normalization not appropriate for ASCII-8BIT`, set `LANG=en_US.UTF-8` in your shell.
+The on-device transcription and diarization modules build FluidAudio and OrukeetCoreML from source as Swift packages. `plugins/swift-packages/withSwiftPackages.js` declares both in the generated `ios/Podfile` (`cocoapods-spm`, installed by `bundle install`); it refuses to patch a Podfile an earlier prebuild already declared packages in, so a pin change needs the clean prebuild above. If `pod install` fails with `Unicode Normalization not appropriate for ASCII-8BIT`, set `LANG=en_US.UTF-8` in your shell.
 
 OpenWhispr uses custom native modules, so Expo Go is not a supported development environment. Use `npm run ios` or `npm run android` to create a development build.
 
