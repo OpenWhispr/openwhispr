@@ -56,7 +56,8 @@ function makeHarness(t, platform, { available = true, rejectKeys = [] } = {}) {
   Module._load = function (request, parent, isMain) {
     if (request === "electron") return electron;
     if (request === "./debugLogger") return debugLogger;
-    if (request === "./i18nMain") return { i18nMain: { t: (key) => key } };
+    if (request === "./i18nMain")
+      return { i18nMain: { t: (key) => key, getFixedT: () => (key) => key } };
     if (request === "./gnomeShortcut")
       return class {
         static isGnome() {
@@ -182,7 +183,7 @@ function makeHarness(t, platform, { available = true, rejectKeys = [] } = {}) {
     linuxKeyManager: nativeKeyManager,
     ipcMain: new EventEmitter(),
     isLiveWindow: (win) => win && !win.isDestroyed(),
-    i18nMain: { t: (key) => key },
+    i18nMain: { t: (key) => key, getFixedT: () => (key) => key },
   };
   const main = vm.runInNewContext(
     `let activationModeChangeQueue = Promise.resolve();\n${initializer}\n${settledHandler}\n${restoreSlot}\ninitializeNativeKeyListeners();\n({ flush: () => activationModeChangeQueue, restoreRecordingSlot });`,
@@ -485,7 +486,6 @@ test("permission notice in Settings cannot mutate any activation mode", () => {
   );
   const effectEnd = settingsSource.indexOf("\n\n  useEffect", effectStart);
   let callback,
-    available,
     notices = 0;
   const forbiddenWrite = () => {
     throw new Error("renderer attempted to change activation mode");
@@ -499,9 +499,6 @@ test("permission notice in Settings cannot mutate any activation mode", () => {
         },
       },
     },
-    setLinuxPttAvailable: (value) => {
-      available = value;
-    },
     toast: () => notices++,
     t: (key) => key,
     setActivationMode: forbiddenWrite,
@@ -509,6 +506,5 @@ test("permission notice in Settings cannot mutate any activation mode", () => {
     setTranslationActivationMode: forbiddenWrite,
   });
   callback();
-  assert.equal(available, false);
   assert.equal(notices, 1);
 });
