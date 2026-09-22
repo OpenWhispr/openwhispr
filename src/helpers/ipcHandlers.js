@@ -3891,17 +3891,9 @@ class IPCHandlers {
         argv: process.argv,
         protocol: this.oauthProtocol,
         appImagePath: process.env.APPIMAGE,
-        portableExecutablePath: process.env.PORTABLE_EXECUTABLE_FILE,
       });
       if (launcherPath) {
-        const waiter = getRelaunchWaiter({
-          platform: process.platform,
-          launcherPath,
-          args,
-          pid: process.pid,
-          ppid: process.ppid,
-          systemRoot: process.env.SystemRoot,
-        });
+        const waiter = getRelaunchWaiter({ launcherPath, args, pid: process.pid });
         require("child_process")
           .spawn(waiter.file, waiter.args, {
             detached: true,
