@@ -3,8 +3,9 @@ import { OnboardingService } from '@/utils/onboarding';
 import { logTutorialCompletion } from '@/lib/appsflyer';
 
 jest.mock('@/lib/appsflyer', () => ({ logTutorialCompletion: jest.fn() }));
+let mockConfig = { defaultMode: 'cloud' };
 jest.mock('@/store/useConfigStore', () => ({
-  useConfigStore: { getState: () => ({ config: { defaultMode: 'cloud' } }) },
+  useConfigStore: { getState: () => ({ config: mockConfig }) },
 }));
 jest.mock('@/utils/onboarding', () => ({
   FIRST_ONBOARDING_STEP: 'get-started',
@@ -23,6 +24,7 @@ const service = jest.mocked(OnboardingService);
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockConfig = { defaultMode: 'cloud' };
   service.setProgress.mockResolvedValue();
   service.completeOnboarding.mockResolvedValue();
   service.isOnboardingComplete.mockResolvedValue(false);
@@ -119,22 +121,71 @@ it('resumes a download-to-Cloud paywall at notifications after relaunch', async 
   expect(useOnboardingStore.getState().currentStep).toBe('notifications');
 });
 
-it.each(['graduation', 'paywall'] as const)(
-  'migrates legacy %s past the relocated offer',
-  async (step) => {
-    service.getProgress.mockResolvedValue({
-      step,
-      keyboardInstalled: true,
-      permissionsGranted: { microphone: true, notifications: false },
-    });
+const legacyProgress = (step: string) => ({
+  step,
+  keyboardInstalled: true,
+  permissionsGranted: { microphone: true, notifications: false },
+});
+
+// Main offered the paywall and logged the tutorial after graduation, so installs that update
+// before reaching it still owe both.
+it.each([
+  ['language', 'paywall', 'language', false, false],
+  ['notifications', 'paywall', 'notifications', false, false],
+  ['graduation', 'paywall', 'create-account', false, false],
+  ['paywall', 'paywall', 'create-account', false, true],
+  ['create-account', 'create-account', 'language', true, true],
+  ['tracking-permission', 'tracking-permission', 'language', true, true],
+] as const)(
+  'resumes a legacy Cloud install at %s on %s, next %s',
+  async (step, currentStep, paywallNextStep, paywallHandled, tutorialCompleted) => {
+    service.getProgress.mockResolvedValue(legacyProgress(step));
     await useOnboardingStore.getState().hydrate();
     expect(useOnboardingStore.getState()).toMatchObject({
-      currentStep: 'create-account',
-      paywallHandled: true,
-      tutorialCompleted: true,
+      currentStep,
+      selectedMode: 'cloud',
+      paywallNextStep,
+      paywallHandled,
+      tutorialCompleted,
     });
   },
 );
+
+it.each([
+  ['language', 'language', false],
+  ['notifications', 'notifications', false],
+  ['graduation', 'create-account', false],
+  ['paywall', 'create-account', true],
+] as const)(
+  'resumes a legacy Local install at %s on %s without an offer',
+  async (step, currentStep, tutorialCompleted) => {
+    mockConfig = { defaultMode: 'private' };
+    service.getProgress.mockResolvedValue(legacyProgress(step));
+    await useOnboardingStore.getState().hydrate();
+    expect(useOnboardingStore.getState()).toMatchObject({
+      currentStep,
+      selectedMode: 'private',
+      tutorialCompleted,
+    });
+  },
+);
+
+it('sends a legacy install from its owed offer on to the account step, logging the tutorial once', async () => {
+  service.getProgress.mockResolvedValue(legacyProgress('graduation'));
+  await useOnboardingStore.getState().hydrate();
+  await useOnboardingStore.getState().goNext('paywall');
+  await useOnboardingStore.getState().goNext('create-account');
+  expect(useOnboardingStore.getState().currentStep).toBe('tracking-permission');
+  expect(logTutorialCompletion).toHaveBeenCalledTimes(1);
+});
+
+it('logs the tutorial for a legacy install that resumes past the tone preview', async () => {
+  service.getProgress.mockResolvedValue(legacyProgress('privacy-mode'));
+  await useOnboardingStore.getState().hydrate();
+  await useOnboardingStore.getState().chooseMode('private', 'privacy-mode');
+  await useOnboardingStore.getState().goNext('language');
+  expect(logTutorialCompletion).toHaveBeenCalledTimes(1);
+});
 
 it('preserves a legacy local download and does not replay earlier steps', async () => {
   service.getProgress.mockResolvedValue({
@@ -146,8 +197,22 @@ it('preserves a legacy local download and does not replay earlier steps', async 
   expect(useOnboardingStore.getState()).toMatchObject({
     currentStep: 'private-download',
     selectedMode: 'private',
-    paywallHandled: true,
+    paywallHandled: false,
   });
+});
+
+it('resumes an owed offer that leads to the account step after a relaunch', async () => {
+  service.getProgress.mockResolvedValue({
+    version: 3,
+    step: 'paywall',
+    selectedMode: 'cloud',
+    paywallNextStep: 'create-account',
+    keyboardInstalled: true,
+    permissionsGranted: { microphone: true, notifications: false },
+  });
+  await useOnboardingStore.getState().hydrate();
+  await useOnboardingStore.getState().goNext('paywall');
+  expect(useOnboardingStore.getState().currentStep).toBe('create-account');
 });
 
 it('does not restart completed installs', async () => {
@@ -157,14 +222,15 @@ it('does not restart completed installs', async () => {
   expect(service.getProgress).not.toHaveBeenCalled();
 });
 
-it('counts only teaching screens and counts the local download once', () => {
-  expect(getStepProgress('voice-agent', 'cloud')).toEqual({ current: 5, total: 9 });
-  expect(getStepProgress('tone', 'cloud')).toEqual({ current: 6, total: 9 });
-  expect(getStepProgress('microphone', 'cloud')).toEqual({ current: 1, total: 9 });
-  expect(getStepProgress('notifications', 'cloud')).toEqual({ current: 9, total: 9 });
-  expect(getStepProgress('private-download', 'private')).toEqual({ current: 9, total: 10 });
-  expect(getStepProgress('notifications', 'private')).toEqual({ current: 10, total: 10 });
-  expect(getStepProgress('paywall', 'cloud')).toBeUndefined();
+// The optional download shares the language step's number, so choosing Local never grows the total.
+it('counts only teaching screens and gives the local download the language step number', () => {
+  expect(getStepProgress('microphone')).toEqual({ current: 1, total: 9 });
+  expect(getStepProgress('voice-agent')).toEqual({ current: 5, total: 9 });
+  expect(getStepProgress('tone')).toEqual({ current: 6, total: 9 });
+  expect(getStepProgress('language')).toEqual({ current: 8, total: 9 });
+  expect(getStepProgress('private-download')).toEqual({ current: 8, total: 9 });
+  expect(getStepProgress('notifications')).toEqual({ current: 9, total: 9 });
+  expect(getStepProgress('paywall')).toBeUndefined();
 });
 
 it.each([

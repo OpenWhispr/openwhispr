@@ -12,10 +12,9 @@ export function useOnboardingStep(step: OnboardingStepId): {
 } {
   const next = useOnboardingStore((state) => state.goNext);
   const back = useOnboardingStore((state) => state.goBack);
-  const mode = useOnboardingStore((state) => state.selectedMode);
   return {
     goNext: useCallback(() => next(step), [next, step]),
     goBack: useCallback(() => back(step), [back, step]),
-    progress: getStepProgress(step, mode),
+    progress: getStepProgress(step),
   };
 }

@@ -71,13 +71,53 @@ export function getOnboardingRoute(mode: ProcessingMode | null): OnboardingStepI
   );
 }
 
+// The optional download shares the language step's number so choosing Local doesn't grow the total.
+const COUNTED_STEPS = STEP_ORDER.filter(
+  (step) => !UNCOUNTED_STEPS.has(step) && step !== 'private-download',
+);
+
 export function getStepProgress(
   stepId: OnboardingStepId,
-  mode: ProcessingMode | null = null,
 ): { current: number; total: number } | undefined {
-  const steps = getOnboardingRoute(mode).filter((step) => !UNCOUNTED_STEPS.has(step));
-  const index = steps.indexOf(stepId);
-  return index < 0 ? undefined : { current: index + 1, total: steps.length };
+  const index = COUNTED_STEPS.indexOf(stepId === 'private-download' ? 'language' : stepId);
+  return index < 0 ? undefined : { current: index + 1, total: COUNTED_STEPS.length };
+}
+
+const PAYWALL_NEXT_STEPS = ['language', 'notifications', 'create-account'] as const;
+export type PaywallNextStep = (typeof PAYWALL_NEXT_STEPS)[number];
+
+function isPaywallNextStep(step: string | undefined): step is PaywallNextStep {
+  return (PAYWALL_NEXT_STEPS as readonly (string | undefined)[]).includes(step);
+}
+
+// Main ran privacy-mode → language → [private-download] → notifications → graduation → paywall →
+// create-account → tracking-permission, and logged the tutorial and offered the paywall only after
+// graduation. Installs that update partway resume on the new route still owed both.
+const LEGACY_POST_CHOICE_STEPS: readonly OnboardingStepId[] = [
+  'language',
+  'private-download',
+  'notifications',
+  'graduation',
+  'paywall',
+  'create-account',
+  'tracking-permission',
+];
+
+function resumeLegacyChoice(
+  step: OnboardingStepId,
+  mode: ProcessingMode,
+): Pick<
+  OnboardingStore,
+  'currentStep' | 'paywallHandled' | 'paywallNextStep' | 'tutorialCompleted'
+> {
+  const tutorialCompleted =
+    step === 'paywall' || step === 'create-account' || step === 'tracking-permission';
+  const paywallHandled = tutorialCompleted && step !== 'paywall';
+  const resume = step === 'graduation' || step === 'paywall' ? 'create-account' : step;
+  if (mode === 'cloud' && !paywallHandled && isPaywallNextStep(resume)) {
+    return { currentStep: 'paywall', paywallNextStep: resume, paywallHandled, tutorialCompleted };
+  }
+  return { currentStep: resume, paywallNextStep: 'language', paywallHandled, tutorialCompleted };
 }
 
 interface OnboardingStore {
@@ -87,7 +127,7 @@ interface OnboardingStore {
   currentStep: OnboardingStepId;
   selectedMode: ProcessingMode | null;
   paywallHandled: boolean;
-  paywallNextStep: 'language' | 'notifications';
+  paywallNextStep: PaywallNextStep;
   tutorialCompleted: boolean;
   keyboardInstalled: boolean;
   trackingAuthorizationRequestAttempted: boolean;
@@ -166,37 +206,30 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
       const legacy = (progress.version ?? 1) < 2;
       // Version 2 used this identifier for the combined agent/tone preview.
       if (progress.version === 2 && step === 'voice-agent') step = 'tone';
-      const pastChoice =
-        legacy &&
-        [
-          'language',
-          'private-download',
-          'notifications',
-          'graduation',
-          'paywall',
-          'create-account',
-          'tracking-permission',
-        ].includes(step);
-      if (legacy && (step === 'graduation' || step === 'paywall')) step = 'create-account';
-      if (pastChoice && !useConfigStore.getState().config)
-        await useConfigStore.getState().loadConfig();
-      set({
+      const resumed = {
         hydrated: true,
         finished: false,
         currentStep: step,
-        selectedMode: pastChoice
-          ? progress.step === 'private-download'
-            ? 'private'
-            : (useConfigStore.getState().config?.defaultMode ?? 'cloud')
-          : (progress.selectedMode ?? null),
-        paywallHandled: pastChoice || progress.paywallHandled === true,
-        paywallNextStep:
-          progress.paywallNextStep === 'notifications' ? 'notifications' : 'language',
-        tutorialCompleted: pastChoice || progress.tutorialCompleted === true,
+        selectedMode: progress.selectedMode ?? null,
+        paywallHandled: progress.paywallHandled === true,
+        paywallNextStep: isPaywallNextStep(progress.paywallNextStep)
+          ? progress.paywallNextStep
+          : 'language',
+        tutorialCompleted: progress.tutorialCompleted === true,
         keyboardInstalled: progress.keyboardInstalled,
         trackingAuthorizationRequestAttempted,
         permissionsGranted: progress.permissionsGranted,
-      });
+      };
+      if (legacy && LEGACY_POST_CHOICE_STEPS.includes(step)) {
+        if (!useConfigStore.getState().config) await useConfigStore.getState().loadConfig();
+        const mode =
+          step === 'private-download'
+            ? 'private'
+            : (useConfigStore.getState().config?.defaultMode ?? 'cloud');
+        set({ ...resumed, selectedMode: mode, ...resumeLegacyChoice(step, mode) });
+        return;
+      }
+      set(resumed);
     },
 
     goToStep: async (step) => transition(get().currentStep, { currentStep: step }),
@@ -207,7 +240,9 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
       const route = getOnboardingRoute(state.selectedMode);
       const next = from === 'paywall' ? state.paywallNextStep : route[route.indexOf(from) + 1];
       if (!next || from === 'graduation') return;
-      const completesTutorial = from === 'tone' && !state.tutorialCompleted;
+      // Legacy installs can resume past the tone preview, so leaving it or any later step counts.
+      const completesTutorial =
+        !state.tutorialCompleted && STEP_ORDER.indexOf(from) >= STEP_ORDER.indexOf('tone');
       await transition(from, {
         currentStep: next,
         paywallHandled: state.paywallHandled || from === 'paywall',
