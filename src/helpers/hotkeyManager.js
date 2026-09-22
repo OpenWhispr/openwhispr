@@ -274,7 +274,11 @@ class HotkeyManager extends EventEmitter {
   _queueSlotUpdate(slotName, update) {
     this._slotUpdates ??= new Map();
     const previous = this._slotUpdates.get(slotName);
-    const pending = previous ? previous.then(update, update) : Promise.resolve().then(update);
+    // An idle slot starts its update synchronously so native backends see the
+    // call in the same tick; later updates for the slot chain behind it.
+    const pending = previous
+      ? previous.then(update, update)
+      : new Promise((resolve) => resolve(update()));
     this._slotUpdates.set(slotName, pending);
     return pending.finally(() => {
       if (this._slotUpdates.get(slotName) === pending) this._slotUpdates.delete(slotName);
