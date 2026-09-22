@@ -31,8 +31,9 @@ jest.mock('@/store/useConfigStore', () => ({
 // store (for final-text expansion) and dictationHints imports both stores. Mock
 // them so importing the unit under test doesn't pull in the native expo-sqlite db.
 // Empty entries → expansion is a no-op, keeping these tests focused on tone.
+let mockUser = { id: 'u', isAnonymous: false };
 jest.mock('@/store/useAuthStore', () => ({
-  useAuthStore: { getState: () => ({ user: { id: 'u', isAnonymous: false } }) },
+  useAuthStore: { getState: () => ({ user: mockUser }) },
 }));
 
 jest.mock('@/store/useSnippetsStore', () => ({
@@ -64,6 +65,7 @@ const mockCleanup = cleanupTranscript as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUser = { id: 'u', isAnonymous: false };
   mockTranscribe.mockResolvedValue({ text: 'hello world', provider: 'cloud', duration: 1 });
 });
 
@@ -83,6 +85,30 @@ describe('transcribeAndCleanup tone', () => {
       context: 'keyboard',
     });
     expect(result.text).toBe('cleaned:hello world');
+  });
+
+  // /api/reason refuses anonymous sessions, so forcing the serial path would drop cleanup
+  // entirely. The fused pass still cleans; the tone waits for a real account.
+  it('keeps fused cleanup for an anonymous session with a non-default tone', async () => {
+    mockUser = { id: 'anon', isAnonymous: true };
+    mockFused.mockResolvedValue({
+      text: 'Hello world.',
+      originalText: 'hello world',
+      provider: 'cloud',
+      duration: 1,
+      cleanupApplied: true,
+      fusedCleanup: true,
+    });
+
+    const result = await transcribeAndCleanup({
+      audioUri: 'file://a.wav',
+      provider: 'cloud',
+      requestContext: 'keyboard',
+      keyboardTone: 'formal',
+    });
+
+    expect(mockFused).toHaveBeenCalled();
+    expect(result.text).toBe('Hello world.');
   });
 
   it('does not pass tone for the default keyboard tone and may use fused', async () => {
