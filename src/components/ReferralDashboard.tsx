@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Send, Mail, Copy, Check, Link, UserPlus, Gift, CheckCircle2, User } from "lucide-react";
+import { Send, Mail, Copy, Check, Link, UserPlus, Gift, CheckCircle2, User } from "./icons";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useToast } from "./ui/useToast";
@@ -188,7 +188,7 @@ function StatGauge({
       >
         <AnimatedCounter value={value} delay={delay} />
       </div>
-      <div className="text-xs text-foreground/30 mt-1 leading-tight">{label}</div>
+      <div className="text-xs text-foreground/45 mt-1 leading-tight">{label}</div>
     </div>
   );
 }
@@ -320,7 +320,7 @@ export function ReferralDashboard() {
   if (error || !stats) {
     return (
       <div className="flex flex-col items-center justify-center h-85 bg-card text-center px-6">
-        <p className="text-xs text-foreground/40 mb-3">
+        <p className="text-xs text-foreground/45 mb-3">
           {error || t("referral.errors.unableToLoad")}
         </p>
         <button
@@ -354,19 +354,19 @@ export function ReferralDashboard() {
         <h2 className="text-xl font-bold tracking-tight leading-tight text-foreground">
           {t("referral.title")}
         </h2>
-        <p className="text-xs text-foreground/30 mt-1">{t("referral.subtitle")}</p>
+        <p className="text-xs text-foreground/45 mt-1">{t("referral.subtitle")}</p>
 
         <Tabs defaultValue="refer" className="mt-4">
           <TabsList className="w-full justify-start bg-transparent! p-0! h-auto! gap-4 rounded-none! border-b border-foreground/6">
             <TabsTrigger
               value="refer"
-              className="rounded-none! bg-transparent! shadow-none! px-0! pb-2! pt-0! text-xs border-b-2 border-transparent text-foreground/30 hover:text-foreground/50 data-[state=active]:bg-transparent! data-[state=active]:shadow-none! data-[state=active]:border-foreground/50 data-[state=active]:text-foreground"
+              className="rounded-none! bg-transparent! shadow-none! px-0! pb-2! pt-0! text-xs border-b-2 border-transparent text-foreground/45 hover:text-foreground/50 data-[state=active]:bg-transparent! data-[state=active]:shadow-none! data-[state=active]:border-foreground/50 data-[state=active]:text-foreground"
             >
               {t("referral.tabs.refer")}
             </TabsTrigger>
             <TabsTrigger
               value="history"
-              className="rounded-none! bg-transparent! shadow-none! px-0! pb-2! pt-0! text-xs border-b-2 border-transparent text-foreground/30 hover:text-foreground/50 data-[state=active]:bg-transparent! data-[state=active]:shadow-none! data-[state=active]:border-foreground/50 data-[state=active]:text-foreground"
+              className="rounded-none! bg-transparent! shadow-none! px-0! pb-2! pt-0! text-xs border-b-2 border-transparent text-foreground/45 hover:text-foreground/50 data-[state=active]:bg-transparent! data-[state=active]:shadow-none! data-[state=active]:border-foreground/50 data-[state=active]:text-foreground"
             >
               {t("referral.tabs.pastInvites")} ({invites.length})
             </TabsTrigger>
@@ -381,17 +381,17 @@ export function ReferralDashboard() {
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2.5">
                   <div className="w-5 h-5 rounded bg-foreground/4 flex items-center justify-center shrink-0">
-                    <Link className="w-2.5 h-2.5 text-foreground/30" />
+                    <Link className="w-2.5 h-2.5 text-foreground/45" />
                   </div>
-                  <span className="text-xs text-foreground/40">
+                  <span className="text-xs text-foreground/45">
                     {t("referral.howItWorks.shareLink")}
                   </span>
                 </div>
                 <div className="flex items-center gap-2.5">
                   <div className="w-5 h-5 rounded bg-foreground/4 flex items-center justify-center shrink-0">
-                    <UserPlus className="w-2.5 h-2.5 text-foreground/30" />
+                    <UserPlus className="w-2.5 h-2.5 text-foreground/45" />
                   </div>
-                  <span className="text-xs text-foreground/40">
+                  <span className="text-xs text-foreground/45">
                     {t("referral.howItWorks.theySignUp")}
                     <strong className="text-foreground/60">
                       {t("referral.howItWorks.freeMonthOfPro")}
@@ -400,9 +400,9 @@ export function ReferralDashboard() {
                 </div>
                 <div className="flex items-center gap-2.5">
                   <div className="w-5 h-5 rounded bg-foreground/4 flex items-center justify-center shrink-0">
-                    <Gift className="w-2.5 h-2.5 text-foreground/30" />
+                    <Gift className="w-2.5 h-2.5 text-foreground/45" />
                   </div>
-                  <span className="text-xs text-foreground/40">
+                  <span className="text-xs text-foreground/45">
                     {t("referral.howItWorks.youGet")}
                     <strong className="text-foreground/60">
                       {t("referral.howItWorks.freeMonth")}
@@ -413,13 +413,16 @@ export function ReferralDashboard() {
               </div>
 
               <div className="space-y-2">
-                <h4 className="text-xs font-medium text-foreground/25 uppercase tracking-wider">
+                <h4 className="text-xs font-medium text-foreground/45 uppercase tracking-wider">
                   {t("referral.inviteLink.title")}
                 </h4>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 flex items-center gap-2 h-8 px-3 rounded-md bg-foreground/4 border border-foreground/7 overflow-hidden">
-                    <Link className="w-3 h-3 text-foreground/20 shrink-0" />
-                    <span className="text-xs text-foreground/50 font-mono truncate select-all">
+                    <Link className="w-3 h-3 text-foreground/45 shrink-0" />
+                    <span
+                      dir="ltr"
+                      className="text-xs text-foreground/50 font-mono truncate select-all"
+                    >
                       {stats.referralLink}
                     </span>
                   </div>
@@ -440,18 +443,19 @@ export function ReferralDashboard() {
               </div>
 
               <div className="space-y-2">
-                <h4 className="text-xs font-medium text-foreground/25 uppercase tracking-wider">
+                <h4 className="text-xs font-medium text-foreground/45 uppercase tracking-wider">
                   {t("referral.sendInvites.title")}
                 </h4>
                 <div className="flex items-center gap-2">
                   <input
+                    dir="ltr"
                     type="email"
                     placeholder={t("referral.sendInvites.placeholder")}
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     disabled={sendingInvite}
-                    className="flex-1 h-8 px-3 text-xs rounded-md bg-foreground/4 border border-foreground/7 text-foreground/70 placeholder:text-foreground/20 focus:outline-none focus:border-foreground/15 focus:ring-1 focus:ring-foreground/10 disabled:opacity-50"
+                    className="flex-1 h-8 px-3 text-xs rounded-md bg-foreground/4 border border-foreground/7 text-foreground/70 placeholder:text-foreground/45 focus:outline-none focus:border-foreground/15 focus:ring-1 focus:ring-foreground/10 disabled:opacity-50"
                   />
                   <button
                     onClick={sendInvite}
@@ -496,7 +500,7 @@ export function ReferralDashboard() {
             {/* Friends section — actual signups with word progress */}
             {stats.referrals.length > 0 && (
               <div className="mt-5">
-                <h4 className="text-xs font-medium text-foreground/25 uppercase tracking-wider mb-2">
+                <h4 className="text-xs font-medium text-foreground/45 uppercase tracking-wider mb-2">
                   {t("referral.friends.title")}
                 </h4>
                 <div className="space-y-1.5">
@@ -513,20 +517,20 @@ export function ReferralDashboard() {
                       >
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <User className="w-3 h-3 text-foreground/20 shrink-0" />
-                            <span className="text-xs text-foreground/60 truncate">
+                            <User className="w-3 h-3 text-foreground/45 shrink-0" />
+                            <span dir="auto" className="text-xs text-foreground/60 truncate">
                               {displayName}
                             </span>
                           </div>
                           {isComplete ? (
-                            <div className="flex items-center gap-1 ml-2 shrink-0">
+                            <div className="flex items-center gap-1 ms-2 shrink-0">
                               <CheckCircle2 className="w-3 h-3 text-emerald-400/80" />
                               <span className="text-xs text-emerald-400/80 font-medium">
                                 {t("referral.friends.completed")}
                               </span>
                             </div>
                           ) : (
-                            <span className="text-xs text-foreground/30 tabular-nums ml-2 shrink-0">
+                            <span className="text-xs text-foreground/45 tabular-nums ms-2 shrink-0">
                               {wordsUsed.toLocaleString()} / {REFERRAL_WORD_GOAL.toLocaleString()}
                             </span>
                           )}
@@ -550,7 +554,7 @@ export function ReferralDashboard() {
             {/* Sent Invites section */}
             {invites.length > 0 ? (
               <div className="mt-5">
-                <h4 className="text-xs font-medium text-foreground/25 uppercase tracking-wider mb-2">
+                <h4 className="text-xs font-medium text-foreground/45 uppercase tracking-wider mb-2">
                   {t("referral.friends.sentInvites")}
                 </h4>
                 <div className="space-y-1">
@@ -563,15 +567,15 @@ export function ReferralDashboard() {
                         className="flex items-center justify-between py-1.5 px-2.5 rounded-md bg-foreground/3 border border-foreground/5 hover:border-foreground/8 transition-colors"
                       >
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <Mail className="w-3 h-3 text-foreground/20 shrink-0" />
-                          <span className="text-xs text-foreground/60 truncate">
+                          <Mail className="w-3 h-3 text-foreground/45 shrink-0" />
+                          <span dir="ltr" className="text-xs text-foreground/60 truncate">
                             {invite.recipientEmail}
                           </span>
-                          <span className="text-xs text-foreground/15 shrink-0">
+                          <span className="text-xs text-foreground/45 shrink-0">
                             {formatDate(invite.sentAt)}
                           </span>
                         </div>
-                        <Badge variant={variant} className="ml-2 text-xs shrink-0">
+                        <Badge variant={variant} className="ms-2 text-xs shrink-0">
                           {label}
                         </Badge>
                       </div>
@@ -581,9 +585,9 @@ export function ReferralDashboard() {
               </div>
             ) : !stats.referrals?.length ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Mail className="w-5 h-5 text-foreground/10 mb-2" />
-                <p className="text-xs text-foreground/25">{t("referral.empty.title")}</p>
-                <p className="text-xs text-foreground/15 mt-0.5">
+                <Mail className="w-5 h-5 text-foreground/45 mb-2" />
+                <p className="text-xs text-foreground/45">{t("referral.empty.title")}</p>
+                <p className="text-xs text-foreground/45 mt-0.5">
                   {t("referral.empty.description")}
                 </p>
               </div>

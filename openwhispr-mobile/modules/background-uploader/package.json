@@ -1,0 +1,20 @@
+{
+  "name": "background-uploader",
+  "version": "1.0.0",
+  "description": "Background URLSession multipart upload for transcription that survives app backgrounding",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "expo-module build",
+    "clean": "expo-module clean",
+    "lint": "expo-module lint",
+    "test": "expo-module test"
+  },
+  "devDependencies": {
+    "expo-module-scripts": "^3.0.0"
+  },
+  "peerDependencies": {
+    "expo": "*"
+  },
+  "private": true
+}

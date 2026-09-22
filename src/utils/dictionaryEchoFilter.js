@@ -126,6 +126,18 @@ export function isLikelyDictionaryPromptFragment(text, dictionaryPrompt) {
   return analyzeDictionaryPromptFragment(text, dictionaryPrompt).isPromptFragment;
 }
 
+// A provider that never received the dictionary can't echo it back: the echo
+// check only applies when the outgoing payload actually carried dictionary
+// bias (Tinfoil's `prompt`, Mistral's `contextBias`, xAI/Gemini's `keyterms`).
+// Corti's payload has none of these, so the check is skipped there (#1759).
+export function payloadSendsDictionaryBias(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  if (typeof payload.prompt === "string" && payload.prompt.trim()) return true;
+  if (Array.isArray(payload.contextBias) && payload.contextBias.length > 0) return true;
+  if (Array.isArray(payload.keyterms) && payload.keyterms.length > 0) return true;
+  return false;
+}
+
 export const DICTIONARY_ECHO_CODE = "DICTIONARY_ECHO";
 
 // Keeps the "No audio detected" message so the existing message comparisons and

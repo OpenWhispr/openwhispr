@@ -11,7 +11,14 @@ test("errors without a status retry, since they mean the request never got an an
   const { shouldRetry } = createApiRetryStrategy();
 
   assert.equal(shouldRetry(new Error("fetch failed")), true);
-  assert.equal(shouldRetry(new Error("Request timed out after 30s")), true);
+});
+
+test("a client-side deadline does not retry, since the same request expires again and every attempt is billed", async () => {
+  const { createApiRetryStrategy } = await load();
+  const { llmRequestTimeoutError } = await import("../../src/helpers/llmRequestTimeout.js");
+  const { shouldRetry } = createApiRetryStrategy();
+
+  assert.equal(shouldRetry(llmRequestTimeoutError(30)), false);
 });
 
 test("4xx rejections do not retry, because the same request will be refused again", async () => {
@@ -96,4 +103,21 @@ test("withRetry keeps retrying a 5xx up to maxRetries", async () => {
     withRetry(failWith503, { ...createApiRetryStrategy(), maxRetries: 2, initialDelay: 1 })
   );
   assert.equal(attempts, 3, "initial attempt plus two retries");
+});
+
+test("withRetry makes exactly one attempt for a client-side deadline", async () => {
+  const { withRetry, createApiRetryStrategy } = await load();
+  const { llmRequestTimeoutError } = await import("../../src/helpers/llmRequestTimeout.js");
+
+  let attempts = 0;
+  const expire = async () => {
+    attempts += 1;
+    throw llmRequestTimeoutError(600);
+  };
+
+  await assert.rejects(
+    () => withRetry(expire, { ...createApiRetryStrategy(), initialDelay: 1 }),
+    /Request timed out after 600s/
+  );
+  assert.equal(attempts, 1, "each retry of an expired deadline is another billed request");
 });

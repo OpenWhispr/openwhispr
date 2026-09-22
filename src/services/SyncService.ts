@@ -11,11 +11,14 @@ import { ConversationsService } from "./ConversationsService.js";
 import { FoldersService } from "./FoldersService.js";
 import { SpacesService, type MySpace } from "./SpacesService.js";
 import { TranscriptionsService } from "./TranscriptionsService.js";
+import { syncPendingAnalytics } from "./AnalyticsService.js";
 import { DictionaryService } from "./DictionaryService.js";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError, isAuthContextError } from "./cloudApi.js";
+import { LeaderboardService } from "./LeaderboardService";
 import {
   assertAuthGenerationCurrent,
+  getAuthRequestContextSnapshot,
   getValidatedAuthGeneration,
   hasValidatedAuthContext,
 } from "../lib/authRequestContext";
@@ -27,7 +30,12 @@ import {
 } from "../lib/teamSpacesCapability";
 import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag";
 import { readNoteConflictIds } from "../lib/noteConflictRegistry";
-import { cloudBackupResumed, isCloudBackupAllowed } from "../stores/policyRules";
+import { pendingLeaderboardLeaveDeservesPriority } from "../lib/pendingLeaderboardLeave";
+import {
+  cloudBackupResumed,
+  effectiveLocalHistoryEnabled,
+  isCloudBackupAllowed,
+} from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import {
   buildNoteCreatePayload,
@@ -41,6 +49,7 @@ import {
   isPermissionDenialCode,
   isSpaceAccessErrorCode,
   keepPurgedSpaceEntry,
+  nextAmbientEmptyStreak,
   normalizePurgedSpaceEntries,
   prunePurgedSpaceEntries,
   recordUpdate404,
@@ -123,9 +132,16 @@ const TEAM_SPACES_MAX_RETRY_MS = AUTO_SYNC_INTERVAL_MS;
 // Web Lock name serializing syncAll() across windows (each renderer has its
 // own SyncService instance, but localStorage and the local DB are shared).
 const SYNC_ALL_LOCK = "openwhispr-sync-all";
-// localStorage keys gating canSync(); a change in another window means sync
-// may have just become possible (sign-in, subscription, backup enabled).
-const CAN_SYNC_KEYS = ["isSignedIn", "cloudBackupEnabled", "isSubscribed"];
+// localStorage keys gating what a pass may sync; a change in another window
+// means sync may have just become possible (sign-in, subscription, backup
+// enabled, Insights opt-in).
+const CAN_SYNC_KEYS = [
+  "isSignedIn",
+  "cloudBackupEnabled",
+  "isSubscribed",
+  "insightsSyncEnabled",
+  "dataRetentionEnabled",
+];
 
 // Cross-window guard against a space purge racing an in-flight pull: every
 // purge initiator records the cloud space id here, and pull/upsert paths park
@@ -242,14 +258,23 @@ export class SyncService {
   // Set by any pass that actually moves team or shared content; drives the
   // ambient team-only backoff (see shouldRunAmbientTeamOnlyPass).
   private teamPassMovedWork = false;
+  // The same, for Insights counters. Kept separate so neither kind of work is
+  // ever inferred from the other (see nextAmbientEmptyStreak).
+  private analyticsPassMovedWork = false;
 
   private consent(): SyncConsent {
+    const policyState = usePolicyStore.getState();
     return resolveSyncConsent({
       authValidated: hasValidatedAuthContext(),
       signedIn: localStorage.getItem("isSignedIn") === "true",
       backupEnabled: localStorage.getItem("cloudBackupEnabled") === "true",
       subscribed: readIsSubscribed(),
-      backupAllowedByPolicy: isCloudBackupAllowed(usePolicyStore.getState()),
+      backupAllowedByPolicy: isCloudBackupAllowed(policyState),
+      dataRetentionEnabled: effectiveLocalHistoryEnabled(
+        policyState,
+        localStorage.getItem("dataRetentionEnabled") !== "false"
+      ),
+      insightsSyncEnabled: localStorage.getItem("insightsSyncEnabled") === "true",
     });
   }
 
@@ -287,7 +312,12 @@ export class SyncService {
     const streak = Number(localStorage.getItem("teamOnlyPass.emptyStreak") ?? 0);
     localStorage.setItem(
       "teamOnlyPass.emptyStreak",
-      String(this.teamPassMovedWork ? 0 : streak + 1)
+      String(
+        nextAmbientEmptyStreak(streak, {
+          team: this.teamPassMovedWork,
+          analytics: this.analyticsPassMovedWork,
+        })
+      )
     );
     localStorage.setItem("teamOnlyPass.lastAt", String(Date.now()));
   }
@@ -460,6 +490,7 @@ export class SyncService {
     }
     this.syncing = true;
     this.teamPassMovedWork = false;
+    this.analyticsPassMovedWork = false;
     let teamSpacesReady = false;
     try {
       // Ambient passes skip when another window holds the lock — that pass
@@ -495,8 +526,17 @@ export class SyncService {
           await this.syncFolders(true);
           if (!hasValidatedAuthContext()) return;
           await this.syncNotes(true);
-          this.recordTeamOnlyPass();
         }
+        if (!hasValidatedAuthContext()) return;
+        // Outside the branch above: Insights uploads ride their own opt-in,
+        // while queued erasures run for every authenticated account.
+        await this.syncAnalytics();
+        // Stamped after the push, so a pass that moved counters is recorded as
+        // work rather than as another empty one. A pass that loses auth before
+        // reaching here now leaves the streak unstamped where it used to stamp
+        // it, which only makes the next pass due immediately -- the right answer
+        // after an interruption.
+        if (!full) this.recordTeamOnlyPass();
         if (!hasValidatedAuthContext()) return;
         if (teamSpacesReady) {
           if (this.teamSpacesRetryTimer) {
@@ -540,7 +580,16 @@ export class SyncService {
       reason === "start" &&
       this.canSyncTeamSpaces() &&
       localStorage.getItem("teamSpacesCapability.probedAt") == null;
-    const bypassThrottle = waitForLock || firstTeamSpacesProbe;
+    // A leaderboard opt-out is a user-requested account mutation, not ambient
+    // sync work. Retry it on the next trigger even when an otherwise idle
+    // collaboration-only pass has backed off. That priority is spent after a
+    // few undelivered attempts: an opt-out that can never land keeps being
+    // retried, but stops disabling the throttle, the in-flight guard and the
+    // ambient backoff for the life of the install.
+    const sessionUserId = getAuthRequestContextSnapshot().sessionUserId;
+    const pendingLeaderboardLeave =
+      sessionUserId != null && pendingLeaderboardLeaveDeservesPriority(sessionUserId);
+    const bypassThrottle = waitForLock || firstTeamSpacesProbe || pendingLeaderboardLeave;
     if (
       !bypassThrottle &&
       (this.syncing || Date.now() - this.lastCompletedSyncAt() < AUTO_SYNC_THROTTLE_MS)
@@ -2154,6 +2203,77 @@ export class SyncService {
     } catch (err) {
       console.error("Conversation pull failed:", err);
     }
+  }
+
+  // The Insights view uses this same guarded path before reading the account
+  // summary, so queued uploads and foreground refreshes use one consent gate.
+  async syncAnalyticsNow(): Promise<boolean> {
+    return this.syncAnalytics();
+  }
+
+  // Push-only: the account summary is read live by the Insights view, so there
+  // is nothing to pull back into the device's own counters.
+  private async syncAnalytics(): Promise<boolean> {
+    const consent = this.consent();
+    if (!consent.shared) return false;
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) return false;
+    const participationContext = { userId: accountId, authGeneration };
+    // A leaderboard opt-out outlives the window that made it, so every pass
+    // retries the one this account is still waiting for. It only ever leaves,
+    // and nothing below depends on whether it has landed, so it runs beside
+    // the pass rather than ahead of it: this method executes under
+    // SYNC_ALL_LOCK and cloud requests carry no timeout, so awaiting it here
+    // let one hung PATCH hold every window's sync behind the lock.
+    void LeaderboardService.flushPendingLeave(participationContext).catch((error: unknown) => {
+      // The account changing mid-queue is expected; the gate below sees it too.
+      if (!isAuthContextError(error)) {
+        console.error("Retrying the leaderboard leave failed:", error);
+      }
+    });
+    // Participation controls roster visibility, not analytics consent. A
+    // missing or failed participation route must never interrupt Insights Sync.
+    const uploadRequested = consent.analytics;
+    let uploadAllowed = false;
+    const verifyUploadAllowed = async (): Promise<boolean> => {
+      await assertAuthGenerationCurrent(authGeneration);
+      const current = getAuthRequestContextSnapshot();
+      if (
+        current.sessionUserId !== accountId ||
+        current.sessionGeneration !== authGeneration ||
+        current.validatedGeneration !== authGeneration
+      ) {
+        throw Object.assign(new Error("Authentication context changed during analytics sync"), {
+          code: "AUTH_CONTEXT_CHANGED",
+        });
+      }
+      // A pass requested while local sync was off may run erasures, but must
+      // never gain upload authority merely because a later setting changed.
+      uploadAllowed = uploadRequested && this.consent().analytics;
+      return uploadAllowed;
+    };
+    try {
+      // Revoking retention/Insights consent blocks new uploads, never deletion
+      // of rows that may already exist in the account. The gate itself reaches
+      // the head of AnalyticsService's queue before it resolves, so a local
+      // opt-out while another pass runs still wins before rows are read.
+      if (
+        (await syncPendingAnalytics({
+          uploadAllowed: verifyUploadAllowed,
+          context: { accountId, authGeneration },
+        })) > 0
+      ) {
+        this.analyticsPassMovedWork = true;
+      }
+    } catch (err) {
+      if (isAuthContextError(err)) throw err;
+      // A rejected batch stays pending for the next pass; the rest of this one
+      // still has folders, notes, and transcriptions to finish.
+      console.error("Analytics sync failed:", err);
+      return false;
+    }
+    return uploadAllowed && this.consent().analytics;
   }
 
   private async syncTranscriptions(): Promise<void> {

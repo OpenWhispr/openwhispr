@@ -2,6 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const {
+  copyLibraries,
   downloadFile,
   extractZip,
   fetchLatestRelease,
@@ -10,13 +11,16 @@ const {
   setExecutable,
   cleanupFiles,
 } = require("./lib/download-utils");
+const {
+  WHISPER_CPP_TAG,
+  WINDOWS_MSVC_RUNTIME_LIBRARIES,
+} = require("../src/helpers/whisperCppRelease");
 
 const WHISPER_CPP_REPO = "OpenWhispr/whisper.cpp";
 
 // Pinned to a tested build. Tracking the latest release let an upstream whisper.cpp bump
 // change transcription output between app releases with no diff to review. See #1348.
-const WHISPER_CPP_TAG = process.env.WHISPER_CPP_VERSION || "0.0.8";
-
+// 0.0.10 is the first release whose win32 zips bundle the MSVC runtime DLLs (CUS-113).
 const BINARIES = {
   "darwin-arm64": {
     zipName: "whisper-server-darwin-arm64.zip",
@@ -32,6 +36,10 @@ const BINARIES = {
     zipName: "whisper-server-win32-x64-cpu.zip",
     binaryName: "whisper-server-win32-x64-cpu.exe",
     outputName: "whisper-server-win32-x64.exe",
+    // MSVC runtime DLLs the exe links dynamically; without them beside the exe,
+    // machines lacking the VC++ redistributable die at load with 0xC0000135 (CUS-113)
+    libPattern: "*.dll",
+    requiredLibraries: WINDOWS_MSVC_RUNTIME_LIBRARIES,
   },
   "linux-x64": {
     zipName: "whisper-server-linux-x64-cpu.zip",
@@ -57,6 +65,27 @@ function getDownloadUrl(release, zipName) {
   return asset?.url || null;
 }
 
+function isCompleteInstall(markerPath, binaryPath, config) {
+  if (!fs.existsSync(binaryPath)) return false;
+
+  try {
+    const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+    if (marker.version !== WHISPER_CPP_TAG || !Array.isArray(marker.libraries)) return false;
+
+    const binDir = path.dirname(markerPath);
+    if (marker.libraries.some((library) => !fs.existsSync(path.join(binDir, library)))) {
+      return false;
+    }
+
+    const installedLibraries = new Set(marker.libraries.map((library) => library.toLowerCase()));
+    return (config.requiredLibraries || []).every((library) =>
+      installedLibraries.has(library.toLowerCase())
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function downloadBinary(platformArch, config, release, isForce = false) {
   if (!config) {
     console.log(`  [server] ${platformArch}: Not supported`);
@@ -64,11 +93,13 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
   }
 
   const outputPath = path.join(BIN_DIR, config.outputName);
+  const installMarkerPath = path.join(BIN_DIR, `.whisper-cpp-${platformArch}.json`);
 
-  if (fs.existsSync(outputPath) && !isForce) {
+  if (!isForce && isCompleteInstall(installMarkerPath, outputPath, config)) {
     console.log(`  [server] ${platformArch}: Already exists (use --force to re-download)`);
     return true;
   }
+  if (isForce && fs.existsSync(installMarkerPath)) fs.unlinkSync(installMarkerPath);
 
   const url = getDownloadUrl(release, config.zipName);
   if (!url) {
@@ -91,6 +122,27 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
       fs.copyFileSync(binaryPath, outputPath);
       setExecutable(outputPath);
       console.log(`  [server] ${platformArch}: Extracted to ${config.outputName}`);
+
+      let copiedLibraries = [];
+      if (config.libPattern) {
+        copiedLibraries = copyLibraries(extractDir, BIN_DIR, config.libPattern);
+        for (const libName of copiedLibraries) {
+          console.log(`  [server] ${platformArch}: Copied library ${libName}`);
+        }
+      }
+
+      const copiedLibraryNames = new Set(copiedLibraries.map((library) => library.toLowerCase()));
+      const missingLibraries = (config.requiredLibraries || []).filter(
+        (library) => !copiedLibraryNames.has(library.toLowerCase())
+      );
+      if (missingLibraries.length > 0) {
+        throw new Error(`Archive missing required libraries: ${missingLibraries.join(", ")}`);
+      }
+
+      fs.writeFileSync(
+        installMarkerPath,
+        JSON.stringify({ version: WHISPER_CPP_TAG, libraries: copiedLibraries })
+      );
     } else {
       console.error(
         `  [server] ${platformArch}: Binary "${config.binaryName}" not found in archive`
@@ -106,6 +158,17 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
     if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
     return false;
   }
+}
+
+async function downloadAllBinaries(release, isForce, download = downloadBinary) {
+  let allSucceeded = true;
+
+  for (const platformArch of Object.keys(BINARIES)) {
+    const succeeded = await download(platformArch, BINARIES[platformArch], release, isForce);
+    if (!succeeded) allSucceeded = false;
+  }
+
+  return allSucceeded;
 }
 
 async function main() {
@@ -150,9 +213,8 @@ async function main() {
     }
   } else {
     console.log("Downloading binaries for all platforms:");
-    for (const platformArch of Object.keys(BINARIES)) {
-      await downloadBinary(platformArch, BINARIES[platformArch], release, args.isForce);
-    }
+    const allSucceeded = await downloadAllBinaries(release, args.isForce);
+    if (!allSucceeded) process.exitCode = 1;
   }
 
   console.log("\n---");
@@ -170,4 +232,8 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+if (require.main === module) {
+  main().catch(console.error);
+}
+
+module.exports = { BINARIES, WHISPER_CPP_TAG, downloadAllBinaries, isCompleteInstall };

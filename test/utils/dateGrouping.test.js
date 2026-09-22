@@ -84,3 +84,26 @@ test("SQLite zoneless timestamps are grouped like their UTC instant", async (t2)
   assert.equal(groups.length, 1);
   assert.equal(groups[0].label, "Today");
 });
+
+test("consolidates non-consecutive items into single canonical groups without duplicate headers", async (t2) => {
+  const { groupItemsByDate } = await load();
+  t2.mock.timers.enable({ apis: ["Date"], now: NOON_JUNE_15 });
+
+  const items = [
+    { id: 1, updated_at: localIsoDate(2024, 5, 15, 10) }, // Today
+    { id: 2, updated_at: localIsoDate(2024, 5, 14, 22) }, // Yesterday
+    { id: 3, updated_at: localIsoDate(2024, 5, 15, 8) },  // Today
+    { id: 4, updated_at: localIsoDate(2024, 0, 1, 12) },  // Older
+    { id: 5, updated_at: localIsoDate(2024, 5, 10, 12) }, // Previous 7 days
+  ];
+  const groups = groupItemsByDate(items, (i) => i.updated_at, t);
+
+  assert.deepEqual(
+    groups.map((g) => g.label),
+    ["Today", "Yesterday", "Previous 7 days", "Older"]
+  );
+  assert.deepEqual(
+    groups.map((g) => g.items.map((i) => i.id)),
+    [[1, 3], [2], [5], [4]]
+  );
+});

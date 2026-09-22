@@ -511,6 +511,41 @@ test("canSync gating: sign-out blocks every call; plan and backup gates protect 
   );
 });
 
+test("retention opt-out still drains analytics deletes without uploading counters", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { api, service } = ctx;
+  localStorageStub.setItem("insightsSyncEnabled", "true");
+  localStorageStub.setItem("dataRetentionEnabled", "false");
+
+  let deleteReads = 0;
+  let localDeletes = 0;
+  let uploadReads = 0;
+  api.getPendingAnalyticsDeletes = async () =>
+    deleteReads++ === 0 ? [{ event_id: "deleted-event" }] : [];
+  api.hardDeleteAnalyticsEvents = async (eventIds) => {
+    localDeletes += eventIds.length;
+    return { success: true, deleted: eventIds.length };
+  };
+  api.getPendingAnalyticsEvents = async () => {
+    uploadReads += 1;
+    return [];
+  };
+  api.markAnalyticsEventsSynced = async () => ({ success: true, updated: 0 });
+  const request = api.cloudApiRequest;
+  api.cloudApiRequest = async (options) => {
+    if (options.path === "/api/analytics/events/delete") {
+      return { success: true, data: { deleted: options.body.eventIds } };
+    }
+    return request(options);
+  };
+
+  await service.syncAll(true);
+
+  assert.equal(localDeletes, 1, "the acknowledged privacy tombstone is retired locally");
+  assert.equal(uploadReads, 0, "retention opt-out must not inspect or send pending counters");
+});
+
 test("an ambient pass bows out when another window holds the lock, a manual pass waits", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

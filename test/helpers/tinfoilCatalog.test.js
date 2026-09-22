@@ -30,8 +30,8 @@ function okResponse(data) {
 }
 
 const CHAT_MODEL = {
-  id: "glm-5-2",
-  name: "GLM-5.2",
+  id: "glm-5-3",
+  name: "GLM-5.3",
   description: "d",
   type: "chat",
   reasoning: true,
@@ -49,7 +49,7 @@ test("keeps only chat models reachable at /v1/chat/completions", async () => {
   );
 
   assert.deepEqual(await getTinfoilChatModels(), [
-    { id: "glm-5-2", name: "GLM-5.2", description: "d", supportsThinking: true },
+    { id: "glm-5-3", name: "GLM-5.3", description: "d", supportsThinking: true },
   ]);
 });
 

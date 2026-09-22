@@ -10,9 +10,10 @@ import {
   Plus,
   Settings,
   Link2,
-} from "lucide-react";
+} from "../icons";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "../ui/button";
+import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { cn } from "../lib/utils";
 import {
   Select,
@@ -39,6 +40,7 @@ import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
+  getParakeetModelInfo,
   getTranscriptionProviders,
   isSherpaLocalProvider,
 } from "../../models/ModelRegistry";
@@ -53,6 +55,7 @@ import { useBatchQueue } from "../../stores/batchQueueStore";
 import type { TranscribeOptions } from "../../stores/batchQueueStore";
 import {
   transcribeFileWithSpeakers,
+  resolveDiarizationSettings,
   shouldUseByokDiarize,
   getTranscriptionApiKey,
 } from "../../services/fileTranscription";
@@ -70,10 +73,12 @@ import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
 import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
+import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
+import { isManagedTranscriptionActive } from "../../services/managedTranscription";
+import { UploadCompleteWarnings, UploadModelSettingsButton } from "./UploadAudioFeedback";
+import { isSupportedUploadFile, uploadFileUrlPattern } from "../../utils/uploadAudioFormats";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
-
-const SUPPORTED_EXTENSIONS = ["mp3", "wav", "m4a", "webm", "ogg", "oga", "flac", "aac", "opus"];
 
 const CLOUD_FREE_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB — free plan cloud limit
 const CLOUD_PRO_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB — pro plan cloud limit
@@ -83,8 +88,8 @@ const MAX_BATCH_URLS = 50;
 const uploadFieldClass = cn(
   "rounded-lg text-xs",
   "bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm",
-  "border border-foreground/6 dark:border-white/6",
-  "text-foreground/70 placeholder:text-foreground/20",
+  "border border-foreground/6 dark:border-white/10",
+  "text-foreground/70 placeholder:text-foreground/45",
   "focus:outline-none focus:border-foreground/12 dark:focus:border-white/10",
   "transition-colors"
 );
@@ -148,6 +153,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const [partialWarning, setPartialWarning] = useState<{ failed: number; total: number } | null>(
     null
   );
+  const [diarizationWarning, setDiarizationWarning] = useState(false);
   const [noteId, setNoteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -175,7 +181,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     downloadedTempPathRef.current = downloadedTempPath;
   }, [downloadedTempPath]);
   const [urlExpanded, setUrlExpanded] = useState(false);
-  const [batchUrlNotice, setBatchUrlNotice] = useState<string | null>(null);
+  const [skippedNotice, setSkippedNotice] = useState<string | null>(null);
   const singleDownloadIdRef = useRef<string | null>(null);
 
   const batch = useBatchQueue();
@@ -197,22 +203,37 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     localStorage.setItem("uploadDiarizationNumSpeakers", diarizationNumSpeakers);
   }, [diarizationNumSpeakers]);
 
-  const diarizationDownloadRef = useRef(false);
-  const ensureDiarizationModels = async (): Promise<boolean> => {
-    if (diarizationDownloadRef.current) return false;
-    diarizationDownloadRef.current = true;
+  const diarizationDownloadRef = useRef<Promise<boolean> | null>(null);
+  // Callers share one in-flight download: a transcribe started while the
+  // mount-time heal is still fetching has to wait for it, not give up and
+  // report that speaker detection couldn't be applied.
+  const ensureDiarizationModels = (): Promise<boolean> => {
+    if (diarizationDownloadRef.current) return diarizationDownloadRef.current;
     setDiarizationDownloading(true);
-    try {
-      await window.electronAPI.downloadDiarizationModels?.();
-      const status = await window.electronAPI.getDiarizationModelStatus?.();
-      const ready = status?.modelsDownloaded ?? false;
-      setDiarizationModelsReady(ready);
-      return ready;
-    } finally {
-      diarizationDownloadRef.current = false;
-      setDiarizationDownloading(false);
-    }
+    const pending = (async () => {
+      try {
+        await window.electronAPI.downloadDiarizationModels?.();
+        const status = await window.electronAPI.getDiarizationModelStatus?.();
+        const ready = status?.modelsDownloaded ?? false;
+        setDiarizationModelsReady(ready);
+        return ready;
+      } finally {
+        diarizationDownloadRef.current = null;
+        setDiarizationDownloading(false);
+      }
+    })();
+    diarizationDownloadRef.current = pending;
+    return pending;
   };
+
+  const buildDiarizationSettings = (): Promise<DiarizationSettings> =>
+    resolveDiarizationSettings({
+      enabled: diarizationEnabled,
+      modelsReady: !!diarizationModelsReady,
+      numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
+      config: buildTranscriptionConfig(),
+      ensureModels: ensureDiarizationModels,
+    });
 
   useEffect(() => {
     window.electronAPI.getDiarizationModelStatus?.().then((status) => {
@@ -255,6 +276,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     mistralApiKey,
     geminiApiKey,
     tinfoilApiKey,
+    deepgramApiKey,
+    assemblyaiApiKey,
     customTranscriptionApiKey,
   } = apiKeys;
   const policyState = usePolicySnapshot();
@@ -299,6 +322,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     return selectIsCloudCleanupMode(effectiveSettings) ? "" : effectiveSettings.cleanupModel;
   });
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
+  const enterpriseTranscriptionSetupMode = useSettingsStore(
+    (s) => s.enterpriseTranscriptionSetupMode
+  );
+  const managedActive =
+    useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode).kind === "managed";
 
   const isOpenWhisprCloud =
     isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
@@ -387,6 +415,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   useEffect(() => {
     let cancelled = false;
     const checkProviderReady = async () => {
+      if (managedActive) {
+        setProviderReady(true);
+        return;
+      }
       if (isOpenWhisprCloud) {
         setProviderReady(true);
         return;
@@ -412,6 +444,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 mistralApiKey,
                 geminiApiKey,
                 tinfoilApiKey,
+                deepgramApiKey,
+                assemblyaiApiKey,
                 customTranscriptionApiKey,
               })
             );
@@ -437,6 +471,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       cancelled = true;
     };
   }, [
+    managedActive,
     isOpenWhisprCloud,
     isSelfHosted,
     remoteTranscriptionUrl,
@@ -450,6 +485,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     mistralApiKey,
     geminiApiKey,
     tinfoilApiKey,
+    deepgramApiKey,
+    assemblyaiApiKey,
     customTranscriptionApiKey,
     cortiClientId,
     cortiClientSecret,
@@ -459,7 +496,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (isOpenWhisprCloud) return t("notes.upload.openwhisprCloud");
     if (useLocalWhisper) {
       if (localTranscriptionProvider === "nvidia")
-        return `Parakeet · ${parakeetModel || "default"}`;
+        return getParakeetModelInfo(parakeetModel)?.name ?? parakeetModel;
       if (localTranscriptionProvider === "cohere") return `Cohere · ${cohereModel || "default"}`;
       return `Whisper · ${whisperModel || "base"}`;
     }
@@ -546,17 +583,24 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (!files || files.length === 0) return;
 
     const validFiles: Array<{ name: string; path: string; sizeBytes: number }> = [];
+    const skippedNames: string[] = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      const ext = f.name.split(".").pop()?.toLowerCase() || "";
-      if (SUPPORTED_EXTENSIONS.includes(ext)) {
-        const filePath = window.electronAPI.getPathForFile(f);
-        if (filePath) {
-          validFiles.push({ name: f.name, path: filePath, sizeBytes: f.size });
-        }
+      if (!isSupportedUploadFile(f.name)) {
+        skippedNames.push(f.name);
+        continue;
+      }
+      const filePath = window.electronAPI.getPathForFile(f);
+      if (filePath) {
+        validFiles.push({ name: f.name, path: filePath, sizeBytes: f.size });
       }
     }
 
+    setSkippedNotice(
+      skippedNames.length > 0
+        ? t("notes.upload.unsupportedFiles", { names: skippedNames.join(", ") })
+        : null
+    );
     if (validFiles.length === 0) return;
 
     if (validFiles.length === 1 && !batch.isProcessing && !batch.hasQueue) {
@@ -586,13 +630,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setFile(null);
     setResult(null);
     setPartialWarning(null);
+    setDiarizationWarning(false);
     setNoteId(null);
     setError(null);
     setProgress(0);
     setChunkProgress(null);
     setUrlInput("");
     setDownloadProgress(null);
-    setBatchUrlNotice(null);
+    setSkippedNotice(null);
     const personal = findDefaultFolder(folders);
     if (personal) setSelectedFolderId(String(personal.id));
   };
@@ -609,7 +654,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
   const handleTranscribe = async () => {
     if (!file || batch.isProcessing) return;
-    if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) {
+    if (
+      !isManagedTranscriptionActive() &&
+      !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
+    ) {
       setError(t("common.managedByOrg"));
       return;
     }
@@ -622,6 +670,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setError(null);
     setProgress(0);
     setChunkProgress(null);
+    setDiarizationWarning(false);
 
     const useChunkProgress = isOpenWhisprCloud && isLargeFile;
 
@@ -649,11 +698,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
 
     try {
-      const diarization: DiarizationSettings = {
-        enabled: diarizationEnabled,
-        localModelsReady: !!diarizationModelsReady,
-        numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
-      };
+      const diarization = await buildDiarizationSettings();
       const res: FileTranscriptionResult = await transcribeFileWithSpeakers(
         currentFile.path,
         buildTranscriptionConfig(),
@@ -678,6 +723,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             ? { failed: res.failedChunks, total: res.totalChunks }
             : null
         );
+        setDiarizationWarning(!!res.diarizationWarning);
 
         let title: string;
         if (currentFile.fromUrl) {
@@ -710,7 +756,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setError(
           errorKey
             ? t(`notes.upload.${errorKey}`)
-            : res.error || t("notes.upload.transcriptionFailed")
+            : res.messageKey
+              ? t(res.messageKey)
+              : res.error || t("notes.upload.transcriptionFailed")
         );
         setState("error");
       }
@@ -842,16 +890,19 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       setUrlInput("");
       setUrlExpanded(false);
     }
-    setBatchUrlNotice(skipped > 0 ? t("notes.upload.urlsSkipped", { n: skipped }) : null);
+    setSkippedNotice(skipped > 0 ? t("notes.upload.urlsSkipped", { n: skipped }) : null);
   };
 
-  const startBatchProcessing = () => {
+  const startBatchProcessing = async () => {
     if (state === "downloading" || state === "transcribing") return;
-    if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) {
-      setBatchUrlNotice(t("common.managedByOrg"));
+    if (
+      !isManagedTranscriptionActive() &&
+      !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
+    ) {
+      setSkippedNotice(t("common.managedByOrg"));
       return;
     }
-    setBatchUrlNotice(null);
+    setSkippedNotice(null);
 
     const transcribeOpts: TranscribeOptions = {
       transcription: buildTranscriptionConfig(),
@@ -860,13 +911,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       generateTitle: async (text) => (await generateTitle(text)) || null,
     };
 
-    const diarization: DiarizationSettings = {
-      enabled: diarizationEnabled,
-      localModelsReady: !!diarizationModelsReady,
-      numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
-    };
-
-    batch.processQueue(transcribeOpts, diarization);
+    batch.processQueue(transcribeOpts, await buildDiarizationSettings());
   };
 
   const handleCreateFolder = async () => {
@@ -916,306 +961,307 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   return (
-    <div className="flex flex-col items-center h-full overflow-y-auto px-6">
+    <div className="flex flex-col items-center h-full overflow-y-auto">
       <div
-        className="w-full max-w-md shrink-0 my-auto"
+        className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 shrink-0 my-auto")}
         style={{ animation: "float-up 0.4s ease-out" }}
       >
-        <div className="max-w-[320px] mx-auto">
-          {state === "idle" && providerReady === false && (
-            <NoProviderView t={t} onOpenSettings={() => onOpenSettings?.("uploadTranscription")} />
-          )}
+        {state === "idle" && providerReady === false && (
+          <NoProviderView t={t} onOpenSettings={() => onOpenSettings?.("uploadTranscription")} />
+        )}
 
-          {state === "idle" && providerReady !== false && (
-            <>
-              <IdleView
-                t={t}
-                getActiveModelLabel={getActiveModelLabel}
-                handleDrop={handleDrop}
-                handleBrowse={handleBrowse}
-                isDragOver={isDragOver}
-                setIsDragOver={setIsDragOver}
-              />
-
-              <div className="flex items-center gap-3 my-3">
-                <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
-                <span className="text-[10px] text-foreground/20 uppercase tracking-wider">
-                  {t("notes.upload.orDivider")}
-                </span>
-                <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
-              </div>
-
-              {urlExpanded ? (
-                <div>
-                  <textarea
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    placeholder={t("notes.upload.pasteUrls")}
-                    rows={4}
-                    className={cn(uploadFieldClass, "w-full px-3 py-2 resize-none")}
-                    autoFocus
-                  />
-                  <div className="flex items-center gap-2 mt-2 justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setUrlExpanded(false);
-                        setUrlInput("");
-                      }}
-                      className="h-7 text-xs text-foreground/30"
-                    >
-                      {t("notes.upload.cancel")}
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={handleBatchUrlSubmit}
-                      disabled={!urlInput.trim()}
-                      className="h-7 text-xs"
-                    >
-                      {t("notes.upload.addToQueue")}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="relative">
-                  {isYouTubeUrl(urlInput) ? (
-                    <svg
-                      viewBox="0 0 28 20"
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[18px] h-[13px] z-10 pointer-events-none"
-                    >
-                      <rect width="28" height="20" rx="4" fill="#FF0000" />
-                      <polygon points="11,4 11,16 21,10" fill="white" />
-                    </svg>
-                  ) : /\.(mp3|wav|m4a|ogg|flac|aac|webm|opus)(\?|$)/i.test(urlInput) ? (
-                    <FileAudio
-                      size={13}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/20 z-10 pointer-events-none"
-                    />
-                  ) : (
-                    <Link2
-                      size={13}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/20 z-10 pointer-events-none"
-                    />
-                  )}
-                  <input
-                    type="url"
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleUrlSubmit();
-                      }
-                    }}
-                    onFocus={() => {
-                      if (urlInput.includes("\n")) setUrlExpanded(true);
-                    }}
-                    onPaste={(e) => {
-                      const pasted = e.clipboardData.getData("text");
-                      if (pasted.includes("\n")) {
-                        e.preventDefault();
-                        setUrlInput(pasted);
-                        setUrlExpanded(true);
-                      }
-                    }}
-                    placeholder={t("notes.upload.urlPlaceholder")}
-                    className={cn(uploadFieldClass, "w-full h-8 pl-8 pr-9")}
-                  />
-                  <button
-                    onClick={handleUrlSubmit}
-                    disabled={!urlInput.trim()}
-                    aria-label={t("notes.upload.urlSubmit")}
-                    className={cn(
-                      "absolute right-px top-px bottom-px w-7 rounded-r-[7px] flex items-center justify-center transition-colors",
-                      "border-l border-foreground/6 dark:border-white/6",
-                      urlInput.trim()
-                        ? "text-foreground/40 hover:text-foreground/60 hover:bg-foreground/[0.03] dark:hover:bg-white/[0.03]"
-                        : "text-foreground/10"
-                    )}
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
-          {batchUrlNotice && (
-            <p className="text-[10px] text-amber-500/60 mt-2 text-center">{batchUrlNotice}</p>
-          )}
-
-          {batch.hasQueue && (
-            <div className="mt-3">
-              <BatchQueueView
-                queue={batch.queue}
-                byokMaxFileSizeMb={byokMaxFileSizeMb}
-                completedCount={batch.completedCount}
-                failedCount={batch.failedCount}
-                totalCount={batch.totalCount}
-                isProcessing={batch.isProcessing}
-                onRemoveItem={batch.removeItem}
-                onCancelAll={batch.cancelAll}
-                onClearQueue={() => {
-                  setBatchUrlNotice(null);
-                  batch.clearQueue();
-                }}
-                onOpenNote={(noteId) =>
-                  onNoteCreated?.(noteId, batchFolderId ? Number(batchFolderId) : null)
-                }
-              />
-
-              {!batch.isProcessing && batch.queue.some((i) => i.status === "queued") && (
-                <div className="mt-3 space-y-2">
-                  {folders.length > 0 && (
-                    <FolderSelect
-                      t={t}
-                      folders={folders}
-                      value={batchFolderId}
-                      onChange={setBatchFolderId}
-                    />
-                  )}
-                  <div className="flex justify-center">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={startBatchProcessing}
-                      disabled={
-                        !uploadAllowedByPolicy ||
-                        state === "downloading" ||
-                        state === "transcribing"
-                      }
-                      className="h-8 text-xs px-5"
-                    >
-                      {t("notes.upload.transcribe")}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {state === "selected" && file && (
-            <SelectedView
+        {state === "idle" && providerReady !== false && (
+          <>
+            <IdleView
               t={t}
-              file={file}
               getActiveModelLabel={getActiveModelLabel}
-              reset={reset}
-              handleTranscribe={handleTranscribe}
-              transcribeDisabled={batch.isProcessing || !uploadAllowedByPolicy}
-              requiresUpgrade={!!requiresUpgrade}
-              fileTooLarge={fileTooLarge}
-              isLargeFile={isLargeFile}
-              isOpenWhisprCloud={isOpenWhisprCloud}
-              byokTooLarge={byokTooLarge}
-              byokMaxFileSizeMb={byokMaxFileSizeMb}
-              requiresAccount={requiresAccount}
-              isProUser={!!isProUser}
-              onUpgrade={() => usage?.openCheckout()}
-              onCreateAccount={handleCreateAccount}
-              onSwitchToCloud={switchToCloud}
+              handleDrop={handleDrop}
+              handleBrowse={handleBrowse}
+              isDragOver={isDragOver}
+              setIsDragOver={setIsDragOver}
+              onOpenSettings={onOpenSettings}
             />
-          )}
 
-          {state === "downloading" && downloadProgress && (
-            <div
-              className="flex flex-col items-center"
-              style={{ animation: "float-up 0.3s ease-out" }}
-            >
-              <div className="flex items-end justify-center gap-[3px] h-10 mb-5">
-                {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                  <div
-                    key={i}
-                    className="w-[3px] rounded-full bg-primary/40 dark:bg-primary/50 origin-bottom"
-                    style={{
-                      height: "100%",
-                      animation: `waveform-bar ${0.8 + i * 0.12}s ease-in-out infinite`,
-                      animationDelay: `${i * 0.08}s`,
+            <div className="flex items-center gap-3 my-3">
+              <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
+              <span className="text-[10px] text-foreground/45 uppercase tracking-wider">
+                {t("notes.upload.orDivider")}
+              </span>
+              <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
+            </div>
+
+            {urlExpanded ? (
+              <div>
+                <textarea
+                  dir="ltr"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder={t("notes.upload.pasteUrls")}
+                  rows={4}
+                  className={cn(uploadFieldClass, "w-full px-3 py-2 resize-none")}
+                  autoFocus
+                />
+                <div className="flex items-center gap-2 mt-2 justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setUrlExpanded(false);
+                      setUrlInput("");
                     }}
-                  />
-                ))}
+                    className="h-7 text-xs text-foreground/45"
+                  >
+                    {t("notes.upload.cancel")}
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleBatchUrlSubmit}
+                    disabled={!urlInput.trim()}
+                    className="h-7 text-xs"
+                  >
+                    {t("notes.upload.addToQueue")}
+                  </Button>
+                </div>
               </div>
-
-              <div className="w-full max-w-[200px] h-[3px] rounded-full bg-foreground/5 dark:bg-white/5 overflow-hidden mb-3">
-                <div
+            ) : (
+              <div dir="ltr" className="relative">
+                {isYouTubeUrl(urlInput) ? (
+                  <svg
+                    viewBox="0 0 28 20"
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[18px] h-[13px] z-10 pointer-events-none"
+                  >
+                    <rect width="28" height="20" rx="4" fill="#FF0000" />
+                    <polygon points="11,4 11,16 21,10" fill="white" />
+                  </svg>
+                ) : uploadFileUrlPattern.test(urlInput) ? (
+                  <FileAudio
+                    size={13}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
+                  />
+                ) : (
+                  <Link2
+                    size={13}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
+                  />
+                )}
+                <input
+                  dir="ltr"
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleUrlSubmit();
+                    }
+                  }}
+                  onFocus={() => {
+                    if (urlInput.includes("\n")) setUrlExpanded(true);
+                  }}
+                  onPaste={(e) => {
+                    const pasted = e.clipboardData.getData("text");
+                    if (pasted.includes("\n")) {
+                      e.preventDefault();
+                      setUrlInput(pasted);
+                      setUrlExpanded(true);
+                    }
+                  }}
+                  placeholder={t("notes.upload.urlPlaceholder")}
+                  className={cn(uploadFieldClass, "w-full h-8 pl-8 pr-9")}
+                />
+                <button
+                  onClick={handleUrlSubmit}
+                  disabled={!urlInput.trim()}
+                  aria-label={t("notes.upload.urlSubmit")}
                   className={cn(
-                    "h-full rounded-full bg-primary/50 transition-[width] duration-500 ease-out",
-                    // Percent 0 = size unknown (no content-length): pulse instead
-                    // of sitting on an empty bar.
-                    (downloadProgress.stage !== "downloading" || !downloadProgress.percent) &&
-                      "animate-pulse"
+                    "absolute right-px top-px bottom-px w-7 rounded-r-[7px] flex items-center justify-center transition-colors",
+                    "border-l border-foreground/6 dark:border-white/10",
+                    urlInput.trim()
+                      ? "text-foreground/45 hover:text-foreground/60 hover:bg-foreground/[0.03] dark:hover:bg-white/[0.03]"
+                      : "text-foreground/45"
                   )}
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {skippedNotice && (
+          <p className="text-[10px] text-amber-500/60 mt-2 text-center">{skippedNotice}</p>
+        )}
+
+        {batch.hasQueue && (
+          <div className="mt-3">
+            <BatchQueueView
+              queue={batch.queue}
+              byokMaxFileSizeMb={byokMaxFileSizeMb}
+              completedCount={batch.completedCount}
+              failedCount={batch.failedCount}
+              totalCount={batch.totalCount}
+              isProcessing={batch.isProcessing}
+              onRemoveItem={batch.removeItem}
+              onCancelAll={batch.cancelAll}
+              onClearQueue={() => {
+                setSkippedNotice(null);
+                batch.clearQueue();
+              }}
+              onOpenNote={(noteId) =>
+                onNoteCreated?.(noteId, batchFolderId ? Number(batchFolderId) : null)
+              }
+            />
+
+            {!batch.isProcessing && batch.queue.some((i) => i.status === "queued") && (
+              <div className="mt-3 space-y-2">
+                {folders.length > 0 && (
+                  <FolderSelect
+                    t={t}
+                    folders={folders}
+                    value={batchFolderId}
+                    onChange={setBatchFolderId}
+                  />
+                )}
+                <div className="flex justify-center">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={startBatchProcessing}
+                    disabled={
+                      !uploadAllowedByPolicy || state === "downloading" || state === "transcribing"
+                    }
+                    className="h-8 text-xs px-5"
+                  >
+                    {t("notes.upload.transcribe")}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {state === "selected" && file && (
+          <SelectedView
+            t={t}
+            file={file}
+            getActiveModelLabel={getActiveModelLabel}
+            reset={reset}
+            handleTranscribe={handleTranscribe}
+            transcribeDisabled={batch.isProcessing || !uploadAllowedByPolicy}
+            requiresUpgrade={!!requiresUpgrade}
+            fileTooLarge={fileTooLarge}
+            isLargeFile={isLargeFile}
+            isOpenWhisprCloud={isOpenWhisprCloud}
+            byokTooLarge={byokTooLarge}
+            byokMaxFileSizeMb={byokMaxFileSizeMb}
+            requiresAccount={requiresAccount}
+            isProUser={!!isProUser}
+            onUpgrade={() => usage?.openCheckout()}
+            onCreateAccount={handleCreateAccount}
+            onSwitchToCloud={switchToCloud}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
+
+        {state === "downloading" && downloadProgress && (
+          <div
+            className="flex flex-col items-center"
+            style={{ animation: "float-up 0.3s ease-out" }}
+          >
+            <div className="flex items-end justify-center gap-[3px] h-10 mb-5">
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className="w-[3px] rounded-full bg-primary/40 dark:bg-primary/50 origin-bottom"
                   style={{
-                    width:
-                      downloadProgress.stage === "downloading" && downloadProgress.percent
-                        ? `${Math.min(downloadProgress.percent, 100)}%`
-                        : "100%",
+                    height: "100%",
+                    animation: `waveform-bar ${0.8 + i * 0.12}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.08}s`,
                   }}
                 />
-              </div>
-
-              <p className="text-xs text-foreground/50 font-medium">
-                {downloadProgress.stage === "resolving"
-                  ? t("notes.upload.urlResolving")
-                  : t("notes.upload.urlDownloading")}
-              </p>
-
-              {downloadProgress.title && (
-                <p className="text-xs text-foreground/20 mt-1 truncate max-w-50">
-                  {downloadProgress.title}
-                </p>
-              )}
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCancelDownload}
-                className="mt-3 h-7 text-xs text-foreground/30"
-              >
-                {t("notes.upload.urlCancelDownload")}
-              </Button>
+              ))}
             </div>
-          )}
 
-          {state === "transcribing" && (
-            <TranscribingView
-              t={t}
-              progress={progress}
-              getTranscribingLabel={getTranscribingLabel}
-              file={file}
-              chunkProgress={chunkProgress}
-              onCancel={cancelTranscription}
-            />
-          )}
+            <div className="w-full max-w-[200px] h-[3px] rounded-full bg-foreground/5 dark:bg-white/5 overflow-hidden mb-3">
+              <div
+                className={cn(
+                  "h-full rounded-full bg-primary/50 transition-[width] duration-500 ease-out",
+                  // Percent 0 = size unknown (no content-length): pulse instead
+                  // of sitting on an empty bar.
+                  (downloadProgress.stage !== "downloading" || !downloadProgress.percent) &&
+                    "animate-pulse"
+                )}
+                style={{
+                  width:
+                    downloadProgress.stage === "downloading" && downloadProgress.percent
+                      ? `${Math.min(downloadProgress.percent, 100)}%`
+                      : "100%",
+                }}
+              />
+            </div>
 
-          {state === "complete" && result && (
-            <CompleteView
-              t={t}
-              result={result}
-              partialWarning={partialWarning}
-              folders={folders}
-              selectedFolderId={selectedFolderId}
-              handleFolderChange={handleFolderChange}
-              noteId={noteId}
-              onNoteCreated={onNoteCreated}
-              reset={reset}
-            />
-          )}
+            <p className="text-xs text-foreground/50 font-medium">
+              {downloadProgress.stage === "resolving"
+                ? t("notes.upload.urlResolving")
+                : t("notes.upload.urlDownloading")}
+            </p>
 
-          {state === "error" && error && (
-            <ErrorView t={t} error={error} reset={reset} onRetry={handleRetry} />
-          )}
-        </div>
+            {downloadProgress.title && (
+              <p dir="auto" className="text-xs text-foreground/45 mt-1 truncate max-w-50">
+                {downloadProgress.title}
+              </p>
+            )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCancelDownload}
+              className="mt-3 h-7 text-xs text-foreground/45"
+            >
+              {t("notes.upload.urlCancelDownload")}
+            </Button>
+          </div>
+        )}
+
+        {state === "transcribing" && (
+          <TranscribingView
+            t={t}
+            progress={progress}
+            getTranscribingLabel={getTranscribingLabel}
+            file={file}
+            chunkProgress={chunkProgress}
+            onCancel={cancelTranscription}
+          />
+        )}
+
+        {state === "complete" && result && (
+          <CompleteView
+            t={t}
+            result={result}
+            partialWarning={partialWarning}
+            diarizationWarning={diarizationWarning}
+            folders={folders}
+            selectedFolderId={selectedFolderId}
+            handleFolderChange={handleFolderChange}
+            noteId={noteId}
+            onNoteCreated={onNoteCreated}
+            reset={reset}
+          />
+        )}
+
+        {state === "error" && error && (
+          <ErrorView t={t} error={error} reset={reset} onRetry={handleRetry} />
+        )}
 
         {(state === "idle" || state === "selected") && (
-          <div className="max-w-[320px] mx-auto mt-4">
+          <div className="mt-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-foreground/40 font-medium">
+                <p className="text-xs text-foreground/45 font-medium">
                   {t("notes.upload.speakerDetection")}
                 </p>
-                <p className="text-[10px] text-foreground/20 mt-0.5">
+                <p className="text-[10px] text-foreground/45 mt-0.5">
                   {t("notes.upload.speakerDetectionDescription")}
                 </p>
               </div>
@@ -1249,8 +1295,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               >
                 <div
                   className={cn(
-                    "absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform",
-                    diarizationEnabled ? "translate-x-3" : ""
+                    "absolute top-0.5 start-0.5 w-3 h-3 rounded-full bg-white transition-transform",
+                    diarizationEnabled ? "translate-x-3 rtl:-translate-x-3" : ""
                   )}
                 />
               </button>
@@ -1261,7 +1307,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               !isOpenWhisprCloud &&
               !isSelfHosted &&
               cloudTranscriptionProvider === "openai" && (
-                <p className="text-[10px] text-foreground/25 mt-1.5">
+                <p className="text-[10px] text-foreground/45 mt-1.5">
                   {t("notes.upload.openaiDiarizeNote")}
                 </p>
               )}
@@ -1270,7 +1316,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               !isOpenWhisprCloud &&
               !isSelfHosted &&
               cloudTranscriptionProvider === "mistral" && (
-                <p className="text-[10px] text-foreground/25 mt-1.5">
+                <p className="text-[10px] text-foreground/45 mt-1.5">
                   {t("notes.upload.mistralDiarizeNote")}
                 </p>
               )}
@@ -1291,7 +1337,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             )}
 
             {diarizationEnabled && isOpenWhisprCloud && (
-              <p className="text-[10px] text-foreground/25 mt-1.5">
+              <p className="text-[10px] text-foreground/45 mt-1.5">
                 {t("notes.upload.diarizationRunsLocally")}
               </p>
             )}
@@ -1325,7 +1371,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     "mt-1 w-full h-8 px-2.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   )}
                 />
-                <p className="text-[10px] text-foreground/25 mt-1.5">
+                <p className="text-[10px] text-foreground/45 mt-1.5">
                   {t("notes.upload.numSpeakersHint")}
                 </p>
               </div>
@@ -1344,6 +1390,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               {t("notes.upload.folderName")}
             </label>
             <Input
+              dir="auto"
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
               placeholder={t("notes.folders.folderName")}
@@ -1384,18 +1431,18 @@ function NoProviderView({ t, onOpenSettings }: NoProviderViewProps) {
       className="flex flex-col items-center gap-4 py-2"
       style={{ animation: "float-up 0.4s ease-out" }}
     >
-      <div className="w-10 h-10 rounded-[10px] bg-linear-to-b from-foreground/5 to-foreground/2 dark:from-white/8 dark:to-white/3 border border-foreground/8 dark:border-white/8 flex items-center justify-center">
+      <div className="w-10 h-10 rounded-[10px] bg-linear-to-b from-foreground/5 to-foreground/2 dark:from-white/8 dark:to-white/3 border border-foreground/8 dark:border-white/10 flex items-center justify-center">
         <Settings
           size={17}
           strokeWidth={1.5}
-          className="text-foreground/25 dark:text-foreground/35"
+          className="text-foreground/45 dark:text-foreground/45"
         />
       </div>
       <div className="text-center">
         <h2 className="text-xs font-semibold text-foreground mb-1">
           {t("notes.upload.noProviderTitle")}
         </h2>
-        <p className="text-xs text-foreground/30 leading-relaxed max-w-60">
+        <p className="text-xs text-foreground/45 leading-relaxed max-w-60">
           {t("notes.upload.noProviderDescription")}
         </p>
       </div>
@@ -1413,6 +1460,7 @@ interface IdleViewProps {
   handleBrowse: () => void;
   isDragOver: boolean;
   setIsDragOver: (v: boolean) => void;
+  onOpenSettings?: (section: string) => void;
 }
 
 function IdleView({
@@ -1422,19 +1470,8 @@ function IdleView({
   handleBrowse,
   isDragOver,
   setIsDragOver,
+  onOpenSettings,
 }: IdleViewProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    // Delegate to handleBrowse which uses Electron's file dialog;
-    // the hidden input is for keyboard-triggered file selection only.
-    handleBrowse();
-    // Reset input so the same file can be re-selected
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -1445,28 +1482,21 @@ function IdleView({
   return (
     <>
       <div className="flex flex-col items-center mb-5">
-        <div className="w-10 h-10 rounded-[10px] bg-linear-to-b from-foreground/5 to-foreground/[0.02] dark:from-white/8 dark:to-white/3 border border-foreground/8 dark:border-white/8 flex items-center justify-center mb-4">
+        <div className="w-10 h-10 rounded-[10px] bg-linear-to-b from-foreground/5 to-foreground/[0.02] dark:from-white/8 dark:to-white/3 border border-foreground/8 dark:border-white/10 flex items-center justify-center mb-4">
           <Upload
             size={17}
             strokeWidth={1.5}
-            className="text-foreground/25 dark:text-foreground/35"
+            className="text-foreground/45 dark:text-foreground/45"
           />
         </div>
         <h2 className="text-xs font-semibold text-foreground mb-1">{t("notes.upload.title")}</h2>
-        <p className="text-xs text-foreground/25">
-          {t("notes.upload.using", { model: getActiveModelLabel() })}
-        </p>
+        <UploadModelSettingsButton
+          label={t("notes.upload.using", { model: getActiveModelLabel() })}
+          actionLabel={t("notes.upload.noProviderAction")}
+          onOpenSettings={onOpenSettings}
+          className="text-xs text-foreground/70"
+        />
       </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".mp3,.wav,.m4a,.webm,.ogg,.oga,.flac,.aac,.opus"
-        onChange={handleFileInputChange}
-        className="sr-only"
-        tabIndex={-1}
-        aria-hidden="true"
-      />
 
       <div
         role="button"
@@ -1486,7 +1516,7 @@ function IdleView({
         className={cn(
           "relative rounded-lg p-8 text-center cursor-pointer transition-[background-color,border-color,transform] duration-300 group",
           "bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm",
-          "border border-foreground/6 dark:border-white/6",
+          "border border-foreground/6 dark:border-white/10",
           "hover:bg-surface-1/60 dark:hover:bg-white/[0.05] hover:border-foreground/12 dark:hover:border-white/10",
           "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
           isDragOver && "border-primary/30 bg-primary/[0.04] dark:bg-primary/[0.06] scale-[1.01]"
@@ -1505,13 +1535,13 @@ function IdleView({
             <div className="w-8 h-8 rounded-full bg-foreground/[0.03] dark:bg-white/[0.04] flex items-center justify-center mb-1">
               <Upload
                 size={14}
-                className="text-foreground/20 dark:text-foreground/30 group-hover:text-foreground/40 transition-colors"
+                className="text-foreground/45 dark:text-foreground/45 transition-colors"
               />
             </div>
-            <p className="text-xs text-foreground/35 group-hover:text-foreground/50 transition-colors">
+            <p className="text-xs text-foreground/45 group-hover:text-foreground/50 transition-colors">
               {t("notes.upload.dropOrBrowse")}
             </p>
-            <p className="text-xs text-foreground/15 tracking-wide">
+            <p className="text-xs text-foreground/45 tracking-wide">
               {t("notes.upload.supportedFormats")}
             </p>
           </div>
@@ -1544,6 +1574,7 @@ interface SelectedViewProps {
   onUpgrade: () => void;
   onCreateAccount: () => void;
   onSwitchToCloud: () => void;
+  onOpenSettings?: (section: string) => void;
 }
 
 function SelectedView({
@@ -1564,25 +1595,30 @@ function SelectedView({
   onUpgrade,
   onCreateAccount,
   onSwitchToCloud,
+  onOpenSettings,
 }: SelectedViewProps) {
   const canTranscribe = !fileTooLarge && !requiresUpgrade && !byokTooLarge;
 
   return (
     <div style={{ animation: "float-up 0.3s ease-out" }}>
-      <div className="rounded-lg border border-foreground/8 dark:border-white/6 bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm p-4 mb-3">
+      <div className="rounded-lg border border-foreground/8 dark:border-white/10 bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm p-4 mb-3">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-[8px] bg-primary/8 dark:bg-primary/12 border border-primary/10 dark:border-primary/15 flex items-center justify-center shrink-0">
             <FileAudio size={15} className="text-primary/60" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-foreground/70 truncate font-medium">{file.name}</p>
-            {file.size && <p className="text-xs text-foreground/25 mt-0.5">{file.size}</p>}
-            <p className="text-xs text-foreground/20 mt-0.5">{getActiveModelLabel()}</p>
+            <p dir="ltr" className="text-xs text-foreground/70 truncate font-medium">
+              {file.name}
+            </p>
+            {file.size && <p className="text-xs text-foreground/45 mt-0.5">{file.size}</p>}
+            <UploadModelSettingsButton
+              label={getActiveModelLabel()}
+              actionLabel={t("notes.upload.noProviderAction")}
+              onOpenSettings={onOpenSettings}
+              className="block max-w-full truncate text-start text-xs text-foreground/70 mt-0.5"
+            />
           </div>
-          <button
-            onClick={reset}
-            className="text-foreground/15 hover:text-foreground/40 transition-colors p-1 rounded"
-          >
+          <button onClick={reset} className="text-foreground/45 transition-colors p-1 rounded">
             <X size={12} />
           </button>
         </div>
@@ -1603,7 +1639,7 @@ function SelectedView({
           <p className="text-xs text-foreground/50 leading-relaxed">
             {t("notes.upload.byokTooLarge", { size: byokMaxFileSizeMb })}
           </p>
-          <p className="text-xs text-foreground/35 leading-relaxed mt-1.5">
+          <p className="text-xs text-foreground/45 leading-relaxed mt-1.5">
             {t("notes.upload.byokTooLargeDetail", { size: byokMaxFileSizeMb })}
           </p>
           <p className="text-xs text-foreground/50 leading-relaxed mt-1.5 font-medium">
@@ -1627,7 +1663,7 @@ function SelectedView({
 
       {/* Cloud large file info (Pro user, will be chunked) */}
       {isLargeFile && !requiresUpgrade && !fileTooLarge && isOpenWhisprCloud && (
-        <p className="text-xs text-foreground/20 text-center mb-3">
+        <p className="text-xs text-foreground/45 text-center mb-3">
           {t("notes.upload.largeFileNote")}
         </p>
       )}
@@ -1689,7 +1725,7 @@ function SelectedView({
           variant="ghost"
           size="sm"
           onClick={reset}
-          className="h-8 text-xs text-foreground/35"
+          className="h-8 text-xs text-foreground/45"
         >
           {t("notes.upload.cancel")}
         </Button>
@@ -1742,7 +1778,7 @@ function TranscribingView({
 
       <p className="text-xs text-foreground/50 font-medium">{getTranscribingLabel()}</p>
       {hasChunkInfo ? (
-        <p className="text-xs text-foreground/20 mt-1">
+        <p className="text-xs text-foreground/45 mt-1">
           {t("notes.upload.chunkProgress", {
             completed: chunkProgress.chunksCompleted,
             total: chunkProgress.chunksTotal,
@@ -1750,13 +1786,15 @@ function TranscribingView({
         </p>
       ) : null}
       {!hasChunkInfo && file ? (
-        <p className="text-xs text-foreground/20 mt-1 truncate max-w-50">{file.name}</p>
+        <p dir="ltr" className="text-xs text-foreground/45 mt-1 truncate max-w-50">
+          {file.name}
+        </p>
       ) : null}
       <Button
         variant="ghost"
         size="sm"
         onClick={onCancel}
-        className="h-7 text-xs text-foreground/30 mt-4"
+        className="h-7 text-xs text-foreground/45 mt-4"
       >
         {t("notes.upload.cancelTranscription")}
       </Button>
@@ -1783,7 +1821,7 @@ function FolderSelect({
 }: FolderSelectProps) {
   return (
     <div className={cn("flex items-center justify-center gap-2", className)}>
-      <FolderOpen size={12} className="text-foreground/20 shrink-0" />
+      <FolderOpen size={12} className="text-foreground/45 shrink-0" />
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger className="h-7 w-44 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
           <SelectValue placeholder={t("notes.upload.selectFolder")} />
@@ -1796,12 +1834,12 @@ function FolderSelect({
                 key={f.id}
                 value={String(f.id)}
                 disabled={isMeetings}
-                className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
+                className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
               >
                 <span className="flex items-center gap-1.5">
-                  {f.name}
+                  <span dir="auto">{f.name}</span>
                   {isMeetings && (
-                    <span className="text-[8px] uppercase tracking-wider text-foreground/25 font-medium">
+                    <span className="text-[8px] uppercase tracking-wider text-foreground/45 font-medium">
                       {t("notes.folders.soon")}
                     </span>
                   )}
@@ -1812,7 +1850,7 @@ function FolderSelect({
           {includeCreateNew && (
             <>
               <SelectSeparator />
-              <SelectItem value="__create_new__" className="text-xs py-1.5 pl-2.5 pr-7 rounded-md">
+              <SelectItem value="__create_new__" className="text-xs py-1.5 ps-2.5 pe-7 rounded-md">
                 <span className="flex items-center gap-1.5 text-primary/60">
                   <Plus size={11} />
                   {t("notes.upload.newFolder")}
@@ -1830,6 +1868,7 @@ interface CompleteViewProps {
   t: (key: string, options?: Record<string, unknown>) => string;
   result: string;
   partialWarning: { failed: number; total: number } | null;
+  diarizationWarning: boolean;
   folders: FolderItem[];
   selectedFolderId: string;
   handleFolderChange: (val: string) => void;
@@ -1842,6 +1881,7 @@ function CompleteView({
   t,
   result,
   partialWarning,
+  diarizationWarning,
   folders,
   selectedFolderId,
   handleFolderChange,
@@ -1892,18 +1932,15 @@ function CompleteView({
       <p className="text-xs text-foreground/60 font-medium mb-1">
         {t("notes.upload.transcriptionComplete")}
       </p>
-      <p className="text-xs text-foreground/25 max-w-[240px] text-center line-clamp-2 mb-4">
+      <p className="text-xs text-foreground/45 max-w-[240px] text-center line-clamp-2 mb-4">
         {result.slice(0, 150)}
       </p>
 
-      {partialWarning && (
-        <p className="text-xs text-destructive/50 max-w-[240px] text-center mb-4 -mt-2">
-          {t("notes.upload.partialWarningCount", {
-            failed: partialWarning.failed,
-            total: partialWarning.total,
-          })}
-        </p>
-      )}
+      <UploadCompleteWarnings
+        partialWarning={partialWarning}
+        diarizationWarning={diarizationWarning}
+        t={t}
+      />
 
       {folders.length > 0 && (
         <FolderSelect
@@ -1933,7 +1970,7 @@ function CompleteView({
           variant="ghost"
           size="sm"
           onClick={reset}
-          className="h-8 text-xs text-foreground/35"
+          className="h-8 text-xs text-foreground/45"
         >
           {t("notes.upload.uploadAnother")}
         </Button>
@@ -1958,7 +1995,7 @@ function ErrorView({ t, error, reset, onRetry }: ErrorViewProps) {
           <p className="flex-1 text-xs text-destructive/70 leading-relaxed">{error}</p>
           <button
             onClick={reset}
-            className="text-foreground/15 hover:text-foreground/30 transition-colors shrink-0 p-0.5 rounded"
+            className="text-foreground/45 transition-colors shrink-0 p-0.5 rounded"
           >
             <X size={11} />
           </button>
@@ -1970,7 +2007,7 @@ function ErrorView({ t, error, reset, onRetry }: ErrorViewProps) {
           variant="ghost"
           size="sm"
           onClick={onRetry}
-          className="h-7 text-xs text-foreground/40"
+          className="h-7 text-xs text-foreground/45"
         >
           {t("notes.upload.retry")}
         </Button>
@@ -1978,7 +2015,7 @@ function ErrorView({ t, error, reset, onRetry }: ErrorViewProps) {
           variant="ghost"
           size="sm"
           onClick={reset}
-          className="h-7 text-xs text-foreground/25"
+          className="h-7 text-xs text-foreground/45"
         >
           {t("notes.upload.startOver")}
         </Button>
