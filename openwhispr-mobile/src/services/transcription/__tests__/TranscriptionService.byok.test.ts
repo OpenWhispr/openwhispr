@@ -113,7 +113,6 @@ test('BYOK recovery snapshot preserves the pinned text stages and client job ID'
   });
 
   const providerInput = mockTranscribeWithProvider.mock.calls[0]?.[0];
-  expect(providerInput?.jobId).toBe('client-job-42');
   expect(JSON.parse(providerInput?.routeSnapshot ?? '')).toEqual({
     version: 1,
     jobId: 'client-job-42',
@@ -150,4 +149,51 @@ test('BYOK omits the prompt when the dictionary is empty', async (): Promise<voi
     inferenceRoute: mockProviderRoute,
   });
   expect(mockTranscribeWithProvider.mock.calls[0]?.[0]?.prompt).toBeUndefined();
+});
+
+test('BYOK trims an oversized dictionary to the Groq prompt budget at an entry boundary', async (): Promise<void> => {
+  const entries = Array.from({ length: 120 }, (_, index) => `Vocabulary${index}`);
+  mockHints.mockReturnValue(entries);
+  expect(entries.join(', ').length).toBeGreaterThan(890);
+
+  await TranscriptionService.transcribe({
+    audioUri: 'file:///recording.wav',
+    provider: 'byok',
+    requestContext: 'recording',
+    inferenceRoute: mockProviderRoute,
+  });
+
+  const prompt = mockTranscribeWithProvider.mock.calls[0]?.[0]?.prompt ?? '';
+  expect(prompt.length).toBeGreaterThan(0);
+  expect(prompt.length).toBeLessThanOrEqual(890);
+  const sent = prompt.split(', ');
+  expect(sent).toEqual(entries.slice(0, sent.length));
+});
+
+test('BYOK keeps a 2000-char dictionary intact for gpt-4o-transcribe', async (): Promise<void> => {
+  mockResolvedProviderRoute = {
+    mode: 'providers',
+    scope: 'dictation',
+    providerId: 'openai',
+    modelId: 'gpt-4o-transcribe',
+    endpoint: 'https://api.openai.com/v1',
+    credentialRef: 'provider.openai',
+  };
+  const entries = Array.from(
+    { length: 200 },
+    (_, index) => `Term${String(index).padStart(4, '0')}`,
+  );
+  const full = entries.join(', ');
+  const padded = `${full}, ${'x'.repeat(2000 - full.length - 2)}`;
+  expect(padded.length).toBe(2000);
+  mockHints.mockReturnValue(padded.split(', '));
+
+  await TranscriptionService.transcribe({
+    audioUri: 'file:///recording.wav',
+    provider: 'byok',
+    requestContext: 'recording',
+    inferenceRoute: mockResolvedProviderRoute,
+  });
+
+  expect(mockTranscribeWithProvider.mock.calls[0]?.[0]?.prompt).toBe(padded);
 });

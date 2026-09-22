@@ -12,6 +12,7 @@ import { LocalTranscriptionService } from './LocalTranscriptionService';
 import { useAuthStore } from '../../store/useAuthStore';
 import { getClientVersionHeader } from '../../lib/apiClient';
 import { buildDictationHints, isDictationContext } from '../../lib/dictationHints';
+import { dictionaryPromptLimit, trimDictionaryPrompt } from '../../lib/transcriptionPromptCap';
 import { BackgroundUploader } from '../../../modules/background-uploader/src';
 import { AudioTools } from '../../../modules/audio-tools/src';
 import { AppGroupStorage, APP_GROUP_KEYS } from '../../../modules/app-group-storage/src';
@@ -982,15 +983,15 @@ export class TranscriptionService {
             })
           : undefined;
         const promptHints = buildDictationHints(isDictationContext(request.requestContext));
+        const prompt = trimDictionaryPrompt(promptHints.join(', '), dictionaryPromptLimit(route));
         const result = await transcribeWithProvider({
           route,
           audioUri,
           fileName: request.fileName,
           mimeType: request.mimeType,
           language,
-          prompt: promptHints.length > 0 ? promptHints.join(', ') : undefined,
+          prompt: prompt || undefined,
           routeSnapshot,
-          jobId: recoveryJobId,
         });
         return { ...result, provider: 'byok', inferenceRoute: route, endpoint: route.providerId };
       }
