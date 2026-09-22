@@ -7,6 +7,7 @@ import {
   removeProviderCredential,
   setProviderCredential,
   subscribeProviderCredentialChanges,
+  type ProviderCredential,
 } from '../ProviderCredentials';
 import { SecureStorageService, StorageService } from '../../storage/StorageService';
 
@@ -54,21 +55,15 @@ it('stores and rotates credentials with device-local background access and no bi
   }
 });
 
-it('returns only non-secret presence metadata and supports Corti client credentials', async () => {
-  expect(await getProviderCredentialStatus('provider.corti')).toEqual({
-    reference: 'provider.corti',
+it('stores and reads back an API key', async () => {
+  expect(await getProviderCredentialStatus('provider.groq')).toEqual({
+    reference: 'provider.groq',
     isConfigured: false,
   });
-  await setProviderCredential('provider.corti', {
-    clientId: 'fixture-id',
-    clientSecret: 'fixture-secret',
-  });
-  expect(await getProviderCredential('provider.corti')).toEqual({
-    clientId: 'fixture-id',
-    clientSecret: 'fixture-secret',
-  });
-  expect(await getProviderCredentialStatus('provider.corti')).toEqual({
-    reference: 'provider.corti',
+  await setProviderCredential('provider.groq', { apiKey: 'fixture-key' });
+  expect(await getProviderCredential('provider.groq')).toEqual({ apiKey: 'fixture-key' });
+  expect(await getProviderCredentialStatus('provider.groq')).toEqual({
+    reference: 'provider.groq',
     isConfigured: true,
   });
 });
@@ -225,12 +220,13 @@ it('sanitizes corrupt persisted credentials and does not return their contents',
   );
 });
 
-it.each([{}, { apiKey: ' ' }, { clientId: 'fixture-id' }])(
+it.each<unknown>([{}, { apiKey: ' ' }, { apiKey: 42 }])(
   'rejects incomplete credentials before storage: %j',
   async (credential) => {
-    await expect(setProviderCredential(openaiReference, credential)).rejects.toThrow(
-      'Invalid provider credential',
-    );
+    // Persisted or bridged values are untyped at runtime; the parser must reject them anyway.
+    await expect(
+      setProviderCredential(openaiReference, credential as ProviderCredential),
+    ).rejects.toThrow('Invalid provider credential');
     expect(stored.size).toBe(0);
   },
 );

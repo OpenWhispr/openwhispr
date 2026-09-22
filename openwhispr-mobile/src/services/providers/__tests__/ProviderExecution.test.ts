@@ -34,24 +34,35 @@ const route = (overrides: Partial<ProviderRoute> = {}): ProviderRoute => ({
   ...overrides,
 });
 
-const jsonResponse = (body: unknown, status = 200, url = ''): Response =>
+const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
 
+type FileRequest = Parameters<ProviderExecutionDependencies['requestFile']>[0];
+
 function makeDependencies(
   responses: Response[],
   requests: Array<{ url: string; init: RequestInit }>,
+  fileRequests: FileRequest[] = [],
+  fileSize = 1024,
 ): ProviderExecutionDependencies {
+  const next = (): Response => {
+    const response = responses.shift();
+    if (!response) throw new Error('Unexpected request');
+    return response;
+  };
   return {
     getCredential: async () => ({ apiKey: 'fixture-key' }),
-    readAudio: async () => new Blob(['audio-fixture'], { type: 'audio/m4a' }),
+    fileSize: async () => fileSize,
     request: async (url, init) => {
       requests.push({ url, init });
-      const response = responses.shift();
-      if (!response) throw new Error('Unexpected request');
-      return response;
+      return next();
+    },
+    requestFile: async (input) => {
+      fileRequests.push(input);
+      return next();
     },
   };
 }
@@ -108,57 +119,6 @@ describe('ProviderExecution text adapters', () => {
     expect(body).not.toHaveProperty('max_tokens');
   });
 
-  test('Anthropic and Gemini use their native protocols', async () => {
-    const requests: Array<{ url: string; init: RequestInit }> = [];
-    const execution = createProviderExecution(
-      makeDependencies(
-        [
-          jsonResponse({ content: [{ type: 'text', text: 'Claude answer' }] }),
-          jsonResponse({
-            candidates: [
-              {
-                finishReason: 'STOP',
-                content: { parts: [{ text: 'thought', thought: true }, { text: 'Gemini answer' }] },
-              },
-            ],
-          }),
-        ],
-        requests,
-      ),
-    );
-
-    await expect(
-      execution.processProviderText({
-        route: route({
-          providerId: 'anthropic',
-          modelId: 'claude-sonnet-4-6',
-          endpoint: 'https://api.anthropic.com/v1',
-          credentialRef: 'provider.anthropic',
-        }),
-        text: 'input',
-        systemPrompt: 'system',
-      }),
-    ).resolves.toEqual({ text: 'Claude answer', model: 'claude-sonnet-4-6' });
-
-    await expect(
-      execution.processProviderText({
-        route: route({
-          providerId: 'gemini',
-          modelId: 'gemini-3.5-flash',
-          endpoint: 'https://generativelanguage.googleapis.com/v1beta',
-          credentialRef: 'provider.gemini',
-        }),
-        text: 'input',
-        systemPrompt: 'system',
-      }),
-    ).resolves.toEqual({ text: 'Gemini answer', model: 'gemini-3.5-flash' });
-
-    expect(requests.map(({ url }) => url)).toEqual([
-      'https://api.anthropic.com/v1/messages',
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent',
-    ]);
-  });
-
   test('preserves conversation roles before the latest user text', async () => {
     const requests: Array<{ url: string; init: RequestInit }> = [];
     const execution = createProviderExecution(
@@ -191,9 +151,13 @@ describe('ProviderExecution batch transcription adapters', () => {
   test.each(['openai', 'groq', 'custom'])(
     '%s uploads an OpenAI-compatible multipart request',
     async (providerId) => {
-      const requests: Array<{ url: string; init: RequestInit }> = [];
+      const fileRequests: FileRequest[] = [];
       const execution = createProviderExecution(
-        makeDependencies([jsonResponse({ text: 'fixture transcript', duration: 4.25 })], requests),
+        makeDependencies(
+          [jsonResponse({ text: 'fixture transcript', duration: 4.25 })],
+          [],
+          fileRequests,
+        ),
       );
 
       await expect(
@@ -213,95 +177,23 @@ describe('ProviderExecution batch transcription adapters', () => {
         }),
       ).resolves.toEqual({ text: 'fixture transcript', duration: 4.25 });
 
-      const form = requests[0]?.init.body as FormData;
-      expect(form.get('model')).toBe('whisper-large-v3');
-      expect(form.get('language')).toBe('en');
-      expect(requests[0]?.url).toBe(
+      expect(fileRequests[0]?.url).toBe(
         `${providerId === 'custom' ? 'https://lan.example/v1' : `https://${providerId}.example/v1`}/audio/transcriptions`,
       );
+      expect(fileRequests[0]?.parameters).toEqual({ model: 'whisper-large-v3', language: 'en' });
+      expect(fileRequests[0]?.headers.Authorization).toBe('Bearer fixture-key');
     },
   );
 
-  test('xAI omits model and Mistral uses x-api-key', async () => {
-    const requests: Array<{ url: string; init: RequestInit }> = [];
-    const execution = createProviderExecution(
-      makeDependencies(
-        [jsonResponse({ text: 'xAI result' }), jsonResponse({ text: 'Mistral result' })],
-        requests,
-      ),
-    );
-
-    await execution.transcribeWithProvider({
-      route: route({
-        scope: 'dictation',
-        providerId: 'xai',
-        modelId: 'grok-stt',
-        endpoint: 'https://api.x.ai/v1',
-      }),
-      audioUri: 'file:///audio.m4a',
-      language: 'en',
-    });
-    await execution.transcribeWithProvider({
-      route: route({
-        scope: 'dictation',
-        providerId: 'mistral',
-        modelId: 'voxtral-mini-latest',
-        endpoint: 'https://api.mistral.ai/v1',
-      }),
-      audioUri: 'file:///audio.m4a',
-    });
-
-    expect((requests[0]?.init.body as FormData).get('model')).toBeNull();
-    expect((requests[0]?.init.body as FormData).get('format')).toBe('true');
-    expect(requests[1]?.init.headers).toEqual(
-      expect.objectContaining({ 'x-api-key': 'fixture-key' }),
-    );
-  });
-
-  test('Gemini embeds audio in an Interactions request and accepts step fallback text', async () => {
-    const requests: Array<{ url: string; init: RequestInit }> = [];
-    const execution = createProviderExecution(
-      makeDependencies(
-        [
-          jsonResponse({
-            status: 'completed',
-            steps: [{ content: [{ type: 'text', text: 'Gemini transcript' }] }],
-          }),
-        ],
-        requests,
-      ),
-    );
-
-    await expect(
-      execution.transcribeWithProvider({
-        route: route({
-          scope: 'dictation',
-          providerId: 'gemini',
-          modelId: 'gemini-3.5-transcribe',
-          endpoint: 'https://generativelanguage.googleapis.com/v1beta',
-        }),
-        audioUri: 'file:///audio.m4a',
-        mimeType: 'audio/mp4',
-      }),
-    ).resolves.toEqual({ text: 'Gemini transcript', duration: 0 });
-
-    expect(requests[0]?.url).toBe('https://generativelanguage.googleapis.com/v1beta/interactions');
-    expect(JSON.parse(String(requests[0]?.init.body))).toEqual({
-      model: 'gemini-3.5-transcribe',
-      input: [{ type: 'audio', data: 'YXVkaW8tZml4dHVyZQ==', mime_type: 'audio/aac' }],
-    });
-  });
-
   test.each(['deepgram', 'assemblyai'])(
-    '%s rejects batch audio before reading the file',
+    '%s rejects batch audio before touching the file',
     async (providerId) => {
-      let audioRead = false;
+      const fileSize = jest.fn(async () => 1024);
+      const requestFile = jest.fn();
       const execution = createProviderExecution({
         ...makeDependencies([], []),
-        readAudio: async () => {
-          audioRead = true;
-          return new Blob();
-        },
+        fileSize,
+        requestFile,
       });
 
       await expect(
@@ -314,40 +206,95 @@ describe('ProviderExecution batch transcription adapters', () => {
           }),
           audioUri: 'file:///audio.m4a',
         }),
-      ).rejects.toMatchObject({ code: 'STREAMING_ONLY_PROVIDER' });
-      expect(audioRead).toBe(false);
+      ).rejects.toMatchObject({ code: 'PROVIDER_UNSUPPORTED' });
+      expect(fileSize).not.toHaveBeenCalled();
+      expect(requestFile).not.toHaveBeenCalled();
     },
   );
 
-  test('Tinfoil rejects plain HTTPS before credentials or audio are accessed', async () => {
-    let boundaryAccessed = false;
+  test('refuses a provider outside the mobile allowlist before touching credentials', async () => {
+    const getCredential = jest.fn();
     const execution = createProviderExecution({
-      getCredential: async () => {
-        boundaryAccessed = true;
-        return { apiKey: 'unused' };
-      },
-      readAudio: async () => {
-        boundaryAccessed = true;
-        return new Blob();
-      },
-      request: async () => {
-        boundaryAccessed = true;
-        return jsonResponse({});
-      },
+      ...makeDependencies([], []),
+      getCredential,
     });
-
     await expect(
       execution.transcribeWithProvider({
-        route: route({
-          scope: 'upload',
-          providerId: 'tinfoil',
-          modelId: 'voxtral-small-24b',
-          endpoint: 'https://inference.tinfoil.sh/v1',
-        }),
+        route: route({ providerId: 'xai', endpoint: 'https://api.x.ai/v1', scope: 'dictation' }),
         audioUri: 'file:///audio.m4a',
       }),
-    ).rejects.toMatchObject({ code: 'NATIVE_TRANSPORT_REQUIRED' });
-    expect(boundaryAccessed).toBe(false);
+    ).rejects.toMatchObject({ code: 'PROVIDER_UNSUPPORTED' });
+    await expect(
+      execution.processProviderText({
+        route: route({ providerId: 'anthropic', endpoint: 'https://api.anthropic.com/v1' }),
+        text: 'hi',
+        systemPrompt: 'test',
+      }),
+    ).rejects.toMatchObject({ code: 'PROVIDER_UNSUPPORTED' });
+    expect(getCredential).not.toHaveBeenCalled();
+  });
+
+  test('refuses audio over the provider limit before uploading', async () => {
+    const fileRequests: FileRequest[] = [];
+    const execution = createProviderExecution(
+      makeDependencies([], [], fileRequests, 25 * 1024 * 1024 + 1),
+    );
+    await expect(
+      execution.transcribeWithProvider({
+        route: route({ scope: 'dictation' }),
+        audioUri: 'file:///audio.m4a',
+      }),
+    ).rejects.toMatchObject({ code: 'AUDIO_TOO_LARGE' });
+    expect(fileRequests).toHaveLength(0);
+  });
+
+  test('sends the dictionary prompt and omits it when absent', async () => {
+    const fileRequests: FileRequest[] = [];
+    const execution = createProviderExecution(
+      makeDependencies(
+        [jsonResponse({ text: 'a' }), jsonResponse({ text: 'b' })],
+        [],
+        fileRequests,
+      ),
+    );
+    await execution.transcribeWithProvider({
+      route: route({ scope: 'dictation' }),
+      audioUri: 'file:///audio.m4a',
+      prompt: 'OpenWhispr, Gizmo',
+    });
+    await execution.transcribeWithProvider({
+      route: route({ scope: 'dictation' }),
+      audioUri: 'file:///audio.m4a',
+    });
+    expect(fileRequests[0]?.parameters.prompt).toBe('OpenWhispr, Gizmo');
+    expect(fileRequests[1]?.parameters.prompt).toBeUndefined();
+  });
+
+  test('a redirect returned by the native transport is reported as blocked', async () => {
+    const execution = createProviderExecution(
+      makeDependencies(
+        [new Response('', { status: 307, headers: { Location: 'https://elsewhere.example' } })],
+        [],
+      ),
+    );
+    await expect(
+      execution.transcribeWithProvider({
+        route: route({ scope: 'dictation' }),
+        audioUri: 'file:///audio.m4a',
+      }),
+    ).rejects.toMatchObject({ code: 'REDIRECT_BLOCKED' });
+  });
+
+  test('maps quota and missing-model statuses to actionable codes', async () => {
+    const execution = createProviderExecution(
+      makeDependencies([jsonResponse({}, 402), jsonResponse({}, 404)], []),
+    );
+    await expect(
+      execution.processProviderText({ route: route(), text: 'hi', systemPrompt: 'test' }),
+    ).rejects.toMatchObject({ code: 'PROVIDER_QUOTA_EXCEEDED' });
+    await expect(
+      execution.processProviderText({ route: route(), text: 'hi', systemPrompt: 'test' }),
+    ).rejects.toMatchObject({ code: 'MODEL_NOT_FOUND' });
   });
 });
 
@@ -487,35 +434,10 @@ describe('ProviderExecution setup checks', () => {
   });
 });
 
-test('Tinfoil uses only attested transport for inference and never regular HTTP', async () => {
-  const requests: Array<{ url: string; init: RequestInit }> = [];
-  const dependencies = makeDependencies([], requests);
-  const attested = jest.fn(async () => ({
-    status: 200,
-    body: JSON.stringify({ choices: [{ message: { content: 'verified output' } }] }),
-  }));
-  const execution = createProviderExecution({ ...dependencies, requestAttested: attested });
-  const result = await execution.processProviderText({
-    route: route({
-      providerId: 'tinfoil',
-      modelId: 'llama3-3-70b',
-      endpoint: 'https://inference.tinfoil.sh/v1',
-      credentialRef: 'provider.tinfoil',
-    }),
-    text: 'input',
-    systemPrompt: 'Clean.',
-  });
-  expect(result.text).toBe('verified output');
-  expect(attested).toHaveBeenCalledWith(
-    expect.objectContaining({ path: '/v1/chat/completions', apiKey: 'fixture-key' }),
-  );
-  expect(requests).toHaveLength(0);
-});
-
 describe('ProviderExecutionError retry metadata', () => {
   test.each([
     [401, 'INVALID_CREDENTIAL'],
-    [404, 'PROVIDER_REQUEST_FAILED'],
+    [404, 'MODEL_NOT_FOUND'],
     [429, 'PROVIDER_RATE_LIMITED'],
   ])('marks deterministic HTTP %i failures as non-retryable', async (status, code) => {
     const execution = createProviderExecution(

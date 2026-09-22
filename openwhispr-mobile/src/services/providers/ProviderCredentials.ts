@@ -3,9 +3,7 @@ import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
 import { isSecureHttpEndpoint, normalizeBaseUrl } from '@shared/ai/endpoints';
 
 export interface ProviderCredential {
-  apiKey?: string;
-  clientId?: string;
-  clientSecret?: string;
+  apiKey: string;
 }
 
 export interface ProviderCredentialStatus {
@@ -79,22 +77,15 @@ async function writeRegistry(registry: CredentialRegistry): Promise<void> {
 }
 
 function parseCredential(value: unknown): ProviderCredential {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error('Invalid provider credential');
-  }
-  const credential = value as Record<string, unknown>;
-  if (typeof credential.apiKey === 'string' && credential.apiKey.trim()) {
-    return { apiKey: credential.apiKey.trim() };
-  }
-  if (
-    typeof credential.clientId === 'string' &&
-    credential.clientId.trim() &&
-    typeof credential.clientSecret === 'string' &&
-    credential.clientSecret.trim()
-  ) {
-    return { clientId: credential.clientId.trim(), clientSecret: credential.clientSecret.trim() };
-  }
+  const apiKey = objectValue(value)?.apiKey;
+  if (typeof apiKey === 'string' && apiKey.trim()) return { apiKey: apiKey.trim() };
   throw new Error('Invalid provider credential');
+}
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 export async function getProviderCredentialReference(
