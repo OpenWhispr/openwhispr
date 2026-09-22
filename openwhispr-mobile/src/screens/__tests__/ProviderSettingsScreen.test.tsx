@@ -142,7 +142,7 @@ it('removes an existing credential and requires a replacement before saving', as
   expect(mockUpdateConfig).not.toHaveBeenCalled();
 });
 
-it('lists only the supported providers and no Live Meetings workflow', () => {
+it('lists only the supported providers and no Live Meetings workflow', async () => {
   render(<ProviderSettingsScreen />);
   enableProviders();
   fireEvent.press(screen.getByText('Provider'));
@@ -154,6 +154,7 @@ it('lists only the supported providers and no Live Meetings workflow', () => {
   expect(screen.queryByText('Tinfoil')).toBeNull();
   fireEvent.press(screen.getByText('Workflow'));
   expect(screen.queryByText('Live Meetings')).toBeNull();
+  await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
 });
 
 it('saves text workflow selection independently from the dictation mode', async () => {

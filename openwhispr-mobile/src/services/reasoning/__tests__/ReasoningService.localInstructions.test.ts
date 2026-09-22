@@ -34,6 +34,11 @@ const { buildLocalReasoningInstructions } = jest.requireActual(
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Implementations set by one test must not leak into the next; each test
+  // establishes the selection, local answer and API reply it relies on.
+  jest.mocked(LocalReasoningService.processText).mockReset();
+  jest.mocked(getInferenceSelection).mockReset();
+  jest.mocked(api.post).mockReset();
 });
 
 it('adds language, tone and dictionary instructions exactly once on the On-Device path', async () => {
