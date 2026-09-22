@@ -92,6 +92,27 @@ describe('ModelDownloadScreen — Orukeet', () => {
     expect(screen.getAllByText('Recommended')).toHaveLength(1);
   });
 
+  it('marks the one model dictation runs on as in use', async () => {
+    withAvailability({ orukeetDownloaded: true });
+    render(<ModelDownloadScreen />);
+
+    await screen.findByText('Orukeet');
+    expect(screen.getAllByText('In use')).toHaveLength(1);
+  });
+
+  it('cancels an Orukeet download that is still in flight', async () => {
+    render(<ModelDownloadScreen />);
+    await screen.findByText('Orukeet');
+
+    act(() => setOrukeetEntry({ status: 'downloading', progress: 0.4 }));
+    fireEvent.press(screen.getByLabelText('Cancel Orukeet download'));
+
+    await waitFor(() => expect(mockParakeet.cancelModelDownload).toHaveBeenCalledWith('orukeet'));
+    await waitFor(() =>
+      expect(useModelDownloadStore.getState().downloads.orukeet.status).toBe('idle'),
+    );
+  });
+
   it('deletes Orukeet itself, never the Parakeet v3 it shares a runtime with', async () => {
     withAvailability({ orukeetDownloaded: true });
     render(<ModelDownloadScreen />);

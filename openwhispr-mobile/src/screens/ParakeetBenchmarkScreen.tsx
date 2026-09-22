@@ -491,6 +491,9 @@ function ResultCard({
         <Metric label="Peak memory" value={mb(result.peakBytes)} highlight />
         <Metric label="Warm infer" value={ms(result.warmMedianInferMs)} />
         <Metric label="Cold infer" value={ms(result.coldInferMs)} />
+        {result.installMs !== undefined ? (
+          <Metric label="Install" value={ms(result.installMs)} />
+        ) : null}
         <Metric label="Model load" value={ms(result.loadMs)} />
         <Metric label="Model size" value={mb(result.modelSizeBytes)} />
         <Metric label="Clip length" value={secs(result.audioSeconds)} />

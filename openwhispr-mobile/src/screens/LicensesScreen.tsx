@@ -34,8 +34,22 @@ const ENTRIES: LicenseEntry[] = [
     name: 'FluidAudio',
     license: 'Apache-2.0',
     copyright: '© FluidInference',
-    note: "On-device ASR and speaker-diarization runtime, built from Oruk AI's fork with a decoder performance patch.",
+    note: "On-device ASR and speaker-diarization runtime, built from Oruk AI's fork with a Core ML buffer performance patch.",
     url: 'https://github.com/Oruk-AI/FluidAudio',
+  },
+  {
+    name: 'fastcluster',
+    license: 'BSD-2-Clause',
+    copyright: '© Daniel Müllner, © Google Inc.',
+    note: 'Hierarchical clustering used by FluidAudio for speaker diarization.',
+    url: 'https://danifold.net/fastcluster.html',
+  },
+  {
+    name: 'VBx',
+    license: 'Apache-2.0',
+    copyright: '© Brno University of Technology',
+    note: 'Speaker clustering used by FluidAudio for speaker diarization.',
+    url: 'https://github.com/BUTSpeechFIT/VBx',
   },
   {
     name: 'OrukeetCoreML',

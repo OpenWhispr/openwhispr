@@ -108,6 +108,21 @@ export default function ModelDownloadScreen() {
     [loadCatalog],
   );
 
+  const handleCancel = useCallback(
+    (entry: LocalModelCatalogEntry) => {
+      confirmDestructive(
+        'Cancel Download',
+        `Stop downloading "${entry.title}"? The next download starts from the beginning.`,
+        async () => {
+          await cancelDownload(entry.key);
+          safeHaptics('warning');
+        },
+        { destructiveLabel: 'Stop' },
+      );
+    },
+    [cancelDownload],
+  );
+
   // The delete button only exists for installed models; this is the only way to get the storage
   // back once the user gives up on a Parakeet download.
   const handleClearPartial = useCallback(
@@ -201,6 +216,14 @@ export default function ModelDownloadScreen() {
                           </Text>
                         </View>
                       ) : null}
+                      {model.inUse ? (
+                        <View
+                          style={{ borderCurve: 'continuous' }}
+                          className="rounded-md bg-systemBlue/15 px-2 py-0.5"
+                        >
+                          <Text className="text-[11px] font-semibold text-systemBlue">In use</Text>
+                        </View>
+                      ) : null}
                     </View>
                     <Text className="text-sm text-secondaryLabel">{model.description}</Text>
                     <Text className="mt-0.5 text-xs text-tertiaryLabel">
@@ -230,6 +253,19 @@ export default function ModelDownloadScreen() {
                             : 'Preparing model for your device… (one time)'}
                         </Text>
                       </View>
+                    ) : null}
+
+                    {isDownloading || isPreparing ? (
+                      <Pressable
+                        onPress={() => handleCancel(model)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Cancel ${model.title} download`}
+                        hitSlop={8}
+                        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                        className="mt-2 self-start"
+                      >
+                        <Text className="text-xs font-medium text-systemRed">Cancel download</Text>
+                      </Pressable>
                     ) : null}
 
                     {download.status === 'error' && download.error ? (
