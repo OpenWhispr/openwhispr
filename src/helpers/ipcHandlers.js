@@ -2777,18 +2777,18 @@ class IPCHandlers {
 
         const { dialog } = require("electron");
         const fs = require("fs");
-        const extMap = { srt: "srt", json: "json", md: "md" };
-        const ext = extMap[format] || "txt";
+        const exportFormats = {
+          txt: { name: "Text", extension: "txt" },
+          srt: { name: "SubRip Subtitles", extension: "srt" },
+          json: { name: "JSON", extension: "json" },
+          md: { name: "Markdown", extension: "md" },
+        };
+        const exportFormat = exportFormats[format] || exportFormats.txt;
         const safeName = (note.title || "Untitled").replace(/[/\\?%*:|"<>]/g, "-");
 
         const result = await dialog.showSaveDialog({
-          defaultPath: `${safeName}.${ext}`,
-          filters: [
-            { name: "Text", extensions: ["txt"] },
-            { name: "SubRip Subtitles", extensions: ["srt"] },
-            { name: "JSON", extensions: ["json"] },
-            { name: "Markdown", extensions: ["md"] },
-          ],
+          defaultPath: `${safeName}.${exportFormat.extension}`,
+          filters: [{ name: exportFormat.name, extensions: [exportFormat.extension] }],
         });
 
         if (result.canceled || !result.filePath) return { success: false };
