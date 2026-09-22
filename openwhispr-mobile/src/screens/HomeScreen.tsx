@@ -1,4 +1,5 @@
 import { getTranscriptionProvider } from '@/lib/inferenceRouting';
+import { dictationModeConfig } from '@/lib/inferenceModes';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Pressable, ScrollView, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/Text';
@@ -342,6 +343,7 @@ export default function HomeScreen() {
 
   const handleTogglePrivateMode = () => {
     safeHaptics('light');
+    if (isRecording) return;
 
     if (activeMode === 'providers') {
       router.push('/(account)/speech-to-text');
@@ -358,7 +360,7 @@ export default function HomeScreen() {
         return;
       }
       setActiveMode('cloud', true);
-      updateConfig({ defaultMode: 'cloud' });
+      updateConfig(dictationModeConfig(useConfigStore.getState().config, 'cloud'));
       showModeToast({
         name: 'cloud.fill',
         mdName: 'Cloud',
@@ -382,7 +384,7 @@ export default function HomeScreen() {
     }
 
     setActiveMode('private', true);
-    updateConfig({ defaultMode: 'private' });
+    updateConfig(dictationModeConfig(useConfigStore.getState().config, 'private'));
     showModeToast({
       name: 'cloud.slash.fill',
       mdName: 'CloudOff',
@@ -545,8 +547,9 @@ export default function HomeScreen() {
         <View className="min-h-[44px] flex-row items-center justify-between">
           <Pressable
             onPress={handleTogglePrivateMode}
+            disabled={isRecording}
             accessibilityRole="switch"
-            accessibilityState={{ checked: !isPrivateMode }}
+            accessibilityState={{ checked: !isPrivateMode, disabled: isRecording }}
             accessibilityLabel={
               activeMode === 'providers' ? 'Provider transcription settings' : 'Cloud transcription'
             }

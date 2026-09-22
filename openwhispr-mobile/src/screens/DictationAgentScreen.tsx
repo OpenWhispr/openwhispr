@@ -19,7 +19,7 @@ export function DictationAgentScreen(): React.JSX.Element {
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
 
-  const isCloudMode = activeMode === 'cloud';
+  const isCloudMode = activeMode !== 'private';
   const enabled = config ? isDictationAgentEnabled(config) : true;
   const shareContext = config?.dictationAgentShareContext ?? false;
   const currentName = config ? getDictationAgentName(config) : DEFAULT_AGENT_NAME;
@@ -45,7 +45,8 @@ export function DictationAgentScreen(): React.JSX.Element {
         <View className="mx-4 mb-2 px-4">
           <Text className="text-[13px] text-secondaryLabel">
             When you say your agent name while dictating, OpenWhispr rewrites what you said into
-            polished, ready-to-use text instead of inserting it word for word. Requires Cloud mode.
+            polished, ready-to-use text instead of inserting it word for word. Requires Cloud or
+            Providers mode.
           </Text>
         </View>
 

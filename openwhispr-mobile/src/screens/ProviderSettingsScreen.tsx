@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import type { UserConfig } from '@/types';
 import {
   getProviderCredentialReference,
   getProviderCredentialStatus,
@@ -47,6 +48,10 @@ const PROVIDER_SETUP_URLS: Record<string, string> = {
   openrouter: 'https://openrouter.ai/keys',
 };
 
+function legacyMode(config: UserConfig | null | undefined): InferenceSelection {
+  return { mode: config?.defaultMode === 'private' ? 'local' : 'openwhispr' };
+}
+
 export function ProviderSettingsScreen(): React.JSX.Element {
   const config = useConfigStore((state) => state.config);
   const updateConfig = useConfigStore((state) => state.updateConfig);
@@ -54,14 +59,8 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   const activeMode = useProcessingModeStore((state) => state.activeMode);
   const [scope, setScope] = useState<MobileInferenceScope>('dictation');
   const [selection, setSelection] = useState<InferenceSelection>(
-    config?.inference?.dictation ?? {
-      mode:
-        config?.defaultMode === 'private'
-          ? 'local'
-          : config?.defaultMode === 'providers'
-            ? 'providers'
-            : 'openwhispr',
-    },
+    config?.inference?.dictation ??
+      (config?.defaultMode === 'providers' ? { mode: 'providers' } : legacyMode(config)),
   );
   const remembered = useRef<Record<string, InferenceSelection>>({});
   const [picker, setPicker] = useState<Picker | null>(null);
@@ -117,7 +116,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     remembered.current[scope] = selection;
     setScope(next);
     setDiscoveredModels([]);
-    setSelection(remembered.current[next] ?? config?.inference?.[next] ?? { mode: 'openwhispr' });
+    setSelection(remembered.current[next] ?? config?.inference?.[next] ?? legacyMode(config));
     setPicker(null);
     clearInputs();
   }
@@ -205,7 +204,15 @@ export function ProviderSettingsScreen(): React.JSX.Element {
               },
             }
           : {}),
-        inference: { ...useConfigStore.getState().config?.inference, [scope]: saved },
+        inference: {
+          ...currentConfig?.inference,
+          ...(scope === 'dictation' &&
+          saved.mode === 'providers' &&
+          !currentConfig?.inference?.upload
+            ? { upload: currentConfig?.inference?.dictation ?? legacyMode(currentConfig) }
+            : {}),
+          [scope]: saved,
+        },
         ...(scope === 'dictation' ? { defaultMode: processingMode } : {}),
       });
       if (useConfigStore.getState().error) {

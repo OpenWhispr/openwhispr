@@ -248,3 +248,27 @@ it('discovers custom models before choosing a model, without silently selecting 
   expect(screen.getByLabelText('Model ID').props.value).toBe('server-model');
   expect(mockUpdateConfig).not.toHaveBeenCalled();
 });
+
+it('defaults an unselected workflow to On-Device for a private-mode user', () => {
+  mockConfig = { defaultMode: 'private' };
+  mockActiveMode = 'private';
+  render(<ProviderSettingsScreen />);
+  fireEvent.press(screen.getByText('Workflow'));
+  fireEvent.press(screen.getByText('Uploads'));
+  expect(screen.getByText('On-Device')).toBeTruthy();
+});
+
+it('keeps uploads on the previous mode when dictation switches to Providers', async () => {
+  mockConfig = { defaultMode: 'private' };
+  mockActiveMode = 'private';
+  mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+  render(<ProviderSettingsScreen />);
+  enableProviders();
+  fireEvent.press(screen.getByText('Save selection'));
+  await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
+  const saved = mockUpdateConfig.mock.calls[0][0] as {
+    inference: Record<string, { mode: string }>;
+  };
+  expect(saved.inference.dictation.mode).toBe('providers');
+  expect(saved.inference.upload).toEqual({ mode: 'local' });
+});

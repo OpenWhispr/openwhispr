@@ -8,6 +8,7 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
+import { dictationModeConfig } from '@/lib/inferenceModes';
 import { getPrivateModeReadiness, getPrivateModeUnavailableMessage } from '@/lib/privateMode';
 import { safeHaptics } from '@/lib/utils';
 import { type InferenceMode, inferenceToProcessingMode, processingToInferenceMode } from '@/types';
@@ -59,12 +60,11 @@ export default function SpeechToTextScreen() {
       }
 
       setActiveMode(nextProcessing, true);
-      updateConfig({
-        defaultMode: nextProcessing,
-        inference: { ...config?.inference, dictation: { mode } },
-      });
+      updateConfig(
+        dictationModeConfig(config ?? null, nextProcessing === 'private' ? 'private' : 'cloud'),
+      );
     },
-    [config?.inference, selectedMode, setActiveMode, updateConfig, user],
+    [config, selectedMode, setActiveMode, updateConfig, user],
   );
 
   return (

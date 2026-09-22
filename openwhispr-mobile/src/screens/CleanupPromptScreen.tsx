@@ -35,7 +35,7 @@ export default function CleanupPromptScreen() {
   const baseline = override ?? DEFAULT_CLEANUP_PROMPT;
   const [draft, setDraft] = useState(baseline);
 
-  const isActive = activeMode === 'cloud' && cleanupEnabled;
+  const isActive = activeMode !== 'private' && cleanupEnabled;
   const isDirty = draft !== baseline;
   const missingPlaceholder = !hasAgentNamePlaceholder(draft);
 

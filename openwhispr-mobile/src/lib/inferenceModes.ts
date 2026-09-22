@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import type { LucideIconName } from '@/components/ui/SystemIcon';
-import type { InferenceMode } from '@/types';
+import type { InferenceMode, UserConfig } from '@/types';
 
 export type ModeDescriptor = {
   mode: InferenceMode;
@@ -60,3 +60,18 @@ export const MODE_LABELS: Record<InferenceMode, string> = {
   openwhispr: 'OpenWhispr Cloud',
   local: 'On-Device',
 };
+
+// The Home toggle and the Speech-to-Text picker both own the dictation mode;
+// writing the scope selection alongside defaultMode keeps routing and UI in step.
+export function dictationModeConfig(
+  config: UserConfig | null,
+  mode: 'cloud' | 'private',
+): Pick<UserConfig, 'defaultMode' | 'inference'> {
+  return {
+    defaultMode: mode,
+    inference: {
+      ...config?.inference,
+      dictation: { mode: mode === 'private' ? 'local' : 'openwhispr' },
+    },
+  };
+}
