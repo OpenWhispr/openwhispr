@@ -26,6 +26,7 @@ export function PrivateDownloadStep() {
   const downloads = useModelDownloadStore((s) => s.downloads);
   const startDownload = useModelDownloadStore((s) => s.startDownload);
   const cancelDownload = useModelDownloadStore((s) => s.cancelDownload);
+  const cancelActiveDownloads = useModelDownloadStore((s) => s.cancelActiveDownloads);
 
   const available = LocalTranscriptionService.isAvailable();
   // The language step just ran, so the selection is settled; pick the model it routes to.
@@ -33,6 +34,7 @@ export function PrivateDownloadStep() {
   const [recommended, setRecommended] = useState<LocalModelCatalogEntry | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
   const startedRef = useRef(false);
+  const mountedRef = useRef(true);
   const [discoveryAttempt, setDiscoveryAttempt] = useState(0);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
 
@@ -65,17 +67,22 @@ export function PrivateDownloadStep() {
   const error = download?.error;
 
   useEffect(() => {
-    if (
-      available &&
-      modelKey &&
-      !recommended?.downloaded &&
-      !startedRef.current &&
-      status === 'idle'
-    ) {
-      startedRef.current = true;
-      startDownload(modelKey);
-    }
-  }, [available, modelKey, recommended?.downloaded, status, startDownload]);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!available || !modelKey || startedRef.current) return;
+    startedRef.current = true;
+    const needsDownload = !recommended?.downloaded && status === 'idle';
+    // Going back to change languages can leave the previous recommendation transferring. It's no
+    // longer needed, and startDownload refuses to run beside it.
+    cancelActiveDownloads(modelKey).then(() => {
+      if (needsDownload && mountedRef.current) startDownload(modelKey);
+    });
+  }, [available, modelKey, recommended?.downloaded, status, startDownload, cancelActiveDownloads]);
 
   useEffect(() => {
     if (!available || !modelKey) return;

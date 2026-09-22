@@ -57,8 +57,9 @@ jest.mock('@/components/onboarding/OnboardingShell', () => {
 });
 jest.mock('@/lib/onboardingMode', () => ({ chooseOnboardingMode: jest.fn(async () => undefined) }));
 jest.mock('@/lib/privateMode', () => ({ getPrivateModeUnavailableMessage: () => '' }));
+let mockLanguages = ['en'];
 jest.mock('@/lib/transcriptionLanguage', () => ({
-  getPreferredTranscriptionLanguages: () => ['en'],
+  getPreferredTranscriptionLanguages: () => mockLanguages,
 }));
 jest.mock('@/store/useOnboardingStore', () => ({
   useOnboardingStore: (selector: (s: { goNext: () => Promise<void> }) => unknown) =>
@@ -108,6 +109,7 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
 }));
 
 import { chooseOnboardingMode } from '@/lib/onboardingMode';
+import { LocalParakeetService } from '@/services/transcription/LocalParakeetService';
 import { LocalTranscriptionService } from '@/services/transcription/LocalTranscriptionService';
 import {
   useModelDownloadStore,
@@ -117,6 +119,10 @@ import {
 import { PrivateDownloadStep } from '../PrivateDownloadStep';
 
 const mockChooseMode = jest.mocked(chooseOnboardingMode);
+const realDownloadActions = {
+  startDownload: useModelDownloadStore.getState().startDownload,
+  cancelDownload: useModelDownloadStore.getState().cancelDownload,
+};
 const mockStartDownload = jest.fn(async () => undefined);
 const mockCancelDownload = jest.fn(async () => undefined);
 
@@ -127,6 +133,7 @@ const setDownload = (key: LocalModelKey, entry: ModelDownloadEntry): void =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockLanguages = ['en'];
   jest.mocked(LocalTranscriptionService.isAvailable).mockReturnValue(true);
   useModelDownloadStore.getState().reset();
   useModelDownloadStore.setState({
@@ -228,4 +235,59 @@ it('offers retry when model discovery fails instead of spinning forever', async 
   render(<PrivateDownloadStep />);
   fireEvent.press(await screen.findByText('Retry model selection'));
   expect(await screen.findByText('Parakeet v2')).toBeTruthy();
+});
+
+// Back → a language change → Continue re-enters with a different recommendation while the old
+// one is still transferring. startDownload refuses to run beside it, which used to leave the
+// step on a download that never started.
+it('replaces a stale download when going back changed the recommended model', async () => {
+  useModelDownloadStore.setState(realDownloadActions);
+  setDownload('parakeet-v2', { status: 'downloading', progress: 0.3 });
+  mockLanguages = ['en', 'es'];
+
+  render(<PrivateDownloadStep />);
+
+  await screen.findByText('Parakeet v3');
+  await waitFor(() =>
+    expect(LocalParakeetService.downloadModel).toHaveBeenCalledWith('v3', expect.any(Function)),
+  );
+  expect(LocalParakeetService.cancelModelDownload).toHaveBeenCalledWith('v2');
+  expect(useModelDownloadStore.getState().downloads['parakeet-v2'].status).toBe('idle');
+});
+
+it('stops a stale download even when the new recommendation is already installed', async () => {
+  useModelDownloadStore.setState(realDownloadActions);
+  setDownload('parakeet-v2', { status: 'downloading', progress: 0.3 });
+  mockLanguages = ['en', 'es'];
+  jest.mocked(LocalTranscriptionService.getAvailability).mockResolvedValueOnce({
+    parakeetSupported: true,
+    parakeetV2Downloaded: false,
+    parakeetV3Downloaded: true,
+    whisperDownloaded: false,
+  });
+
+  render(<PrivateDownloadStep />);
+
+  await screen.findByText('Continue with Private');
+  await waitFor(() =>
+    expect(useModelDownloadStore.getState().downloads['parakeet-v2'].status).toBe('idle'),
+  );
+  expect(LocalParakeetService.downloadModel).not.toHaveBeenCalled();
+});
+
+it('does not start the new download once the user has left the step', async () => {
+  useModelDownloadStore.setState(realDownloadActions);
+  setDownload('parakeet-v2', { status: 'downloading', progress: 0.3 });
+  mockLanguages = ['en', 'es'];
+  let finishCancel!: () => void;
+  jest
+    .mocked(LocalParakeetService.cancelModelDownload)
+    .mockImplementationOnce(() => new Promise<void>((resolve) => (finishCancel = resolve)));
+
+  const view = render(<PrivateDownloadStep />);
+  await waitFor(() => expect(LocalParakeetService.cancelModelDownload).toHaveBeenCalledWith('v2'));
+  view.unmount();
+  await act(async () => finishCancel());
+
+  expect(LocalParakeetService.downloadModel).not.toHaveBeenCalled();
 });
