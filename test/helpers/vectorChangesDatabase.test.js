@@ -179,3 +179,16 @@ test("pending deletions and acknowledged revisions survive database restart", (t
   assert.equal(reopened.clearPendingVectorChange(1, originalRevision).changes, 0);
   reopened.db.close();
 });
+
+test("pending changes can be paged by revision cursor so parked rows are skipped", (t) => {
+  const manager = createDatabase(t);
+  manager.db.exec("INSERT INTO notes (id, title) VALUES (1, 'A'), (2, 'B'), (3, 'C')");
+  const [first, second, third] = manager.getPendingVectorChanges();
+  assert.deepEqual(manager.getPendingVectorChanges(50, first.revision), [second, third]);
+  assert.deepEqual(manager.getPendingVectorChanges(1, first.revision), [second]);
+  assert.deepEqual(manager.getPendingVectorChanges(50, third.revision), []);
+  manager.db.exec("UPDATE notes SET title = 'A2' WHERE id = 1");
+  const [edited] = manager.getPendingVectorChanges(50, third.revision);
+  assert.equal(edited.note_id, 1);
+  assert.ok(edited.revision > third.revision);
+});

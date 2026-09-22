@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const SemanticSearchLifecycle = require("../../src/helpers/semanticSearchLifecycle");
 
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
 function deferred() {
   let resolve;
   const promise = new Promise((done) => {
@@ -11,8 +13,9 @@ function deferred() {
   return { promise, resolve };
 }
 
-function harness() {
+function harness({ realTimers = false } = {}) {
   const calls = [];
+  const logs = [];
   const pending = new Map();
   const notes = new Map();
   const purges = new Set();
@@ -81,8 +84,12 @@ function harness() {
     },
   };
   const database = {
-    getPendingVectorChanges(limit = 50) {
-      return [...pending].slice(0, limit).map(([note_id, revision]) => ({ note_id, revision }));
+    getPendingVectorChanges(limit = 50, afterRevision = 0) {
+      return [...pending]
+        .filter(([, revision]) => revision > afterRevision)
+        .sort(([, a], [, b]) => a - b)
+        .slice(0, limit)
+        .map(([note_id, revision]) => ({ note_id, revision }));
     },
     clearPendingVectorChange(id, revision) {
       if (pending.get(id) === revision) pending.delete(id);
@@ -107,15 +114,26 @@ function harness() {
     embeddings,
     database,
     noteEmbedText: (title, content, enhanced) => `${title}\n${enhanced || content}`.slice(0, 1500),
-    logger: { debug() {}, warn() {} },
+    logger: {
+      debug(message, meta) {
+        logs.push(["debug", message, meta]);
+      },
+      warn(message, meta) {
+        logs.push(["warn", message, meta]);
+      },
+    },
     now: () => now,
-    setTimeout(callback, delay) {
-      timers.set(++nextTimer, { callback, delay });
-      return nextTimer;
-    },
-    clearTimeout(id) {
-      timers.delete(id);
-    },
+    ...(realTimers
+      ? {}
+      : {
+          setTimeout(callback, delay) {
+            timers.set(++nextTimer, { callback, delay });
+            return nextTimer;
+          },
+          clearTimeout(id) {
+            timers.delete(id);
+          },
+        }),
   });
   return {
     lifecycle,
@@ -127,7 +145,13 @@ function harness() {
     notes,
     purges,
     calls,
+    logs,
     timers,
+    fireTimer(delay) {
+      const [id, timer] = [...timers].find(([, entry]) => entry.delay === delay);
+      timers.delete(id);
+      return timer.callback();
+    },
     setNow(value) {
       now = value;
     },
@@ -141,20 +165,54 @@ test("construction and background note changes do not start resources", () => {
   assert.equal(h.lifecycle.isReady(), false);
 });
 
-test("cold searches return fallback and share one activation", async () => {
-  const h = harness();
+function gateStart(h) {
   const gate = deferred();
   h.qdrant.start = async () => {
     h.calls.push("start");
     await gate.promise;
     h.qdrant.ready = true;
   };
-  assert.equal(await h.lifecycle.search("first"), null);
-  assert.equal(await h.lifecycle.search("second"), null);
+  return gate;
+}
+
+test("cold searches wait for one shared activation and return vector results in time", async () => {
+  const h = harness();
+  const gate = gateStart(h);
+  const first = h.lifecycle.search("first");
+  const second = h.lifecycle.search("second");
+  assert.equal([...h.timers.values()].filter((timer) => timer.delay === 2500).length, 2);
   gate.resolve();
-  await h.lifecycle.warmUp();
+  assert.deepEqual(await first, [{ noteId: 1, score: 0.9 }]);
+  assert.deepEqual(await second, [{ noteId: 1, score: 0.9 }]);
   assert.equal(h.calls.filter((call) => call === "start").length, 1);
-  assert.deepEqual(await h.lifecycle.search("third"), [{ noteId: 1, score: 0.9 }]);
+  assert.equal(
+    [...h.timers.values()].some((timer) => timer.delay === 2500),
+    false
+  );
+});
+
+test("a cold search falls back to keywords when activation outlasts the wait, and activation continues", async () => {
+  const h = harness();
+  const gate = gateStart(h);
+  const search = h.lifecycle.search("slow start");
+  await h.fireTimer(2500);
+  assert.equal(await search, null);
+  gate.resolve();
+  assert.equal(await h.lifecycle.warmUp(), true);
+  assert.equal(h.lifecycle.isReady(), true);
+  assert.equal(h.calls.filter((call) => call === "start").length, 1);
+});
+
+test("an in-flight bounded wait still prevents idle teardown", async () => {
+  const h = harness({ realTimers: true });
+  const gate = gateStart(h);
+  const search = h.lifecycle.search("cold");
+  h.setNow(IDLE_TIMEOUT_MS + 1);
+  gate.resolve();
+  assert.deepEqual(await search, [{ noteId: 1, score: 0.9 }]);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(h.calls.includes("stop"), false);
+  assert.equal(h.calls.includes("unload"), false);
 });
 
 test("activation drains purges, live updates and deletions before readiness", async () => {
@@ -205,16 +263,78 @@ test("an update arriving during indexing cannot be acknowledged by an older revi
   assert.equal(h.pending.size, 0);
 });
 
-test("failed indexing retains work, releases resources and returns fallback", async () => {
+function failUpsertFor(h, noteId) {
+  const original = h.index.upsertNote;
+  h.index.upsertNote = async (id, ...rest) => {
+    await original(id, ...rest);
+    return id !== noteId;
+  };
+}
+
+function upsertsFor(h, noteId) {
+  return h.calls.filter((call) => Array.isArray(call) && call[0] === "upsert" && call[1] === noteId)
+    .length;
+}
+
+test("a row that keeps failing is skipped: later rows index, search works and Qdrant stays up", async () => {
   const h = harness();
   h.pending.set(1, 1);
-  h.notes.set(1, { title: "Note", content: "" });
-  h.index.upsertNote = async () => false;
-  assert.equal(await h.lifecycle.warmUp(), false);
-  assert.equal(h.pending.size, 1);
-  assert.equal(await h.lifecycle.search("query"), null);
-  assert.ok(h.calls.includes("stop"));
-  assert.ok(h.calls.includes("unload"));
+  h.pending.set(2, 2);
+  h.notes.set(1, { title: "Poison", content: "" });
+  h.notes.set(2, { title: "Healthy", content: "" });
+  failUpsertFor(h, 1);
+  assert.equal(await h.lifecycle.warmUp(), true);
+  assert.equal(upsertsFor(h, 2), 1);
+  assert.equal(h.pending.has(1), true);
+  assert.equal(h.pending.has(2), false);
+  assert.equal(h.lifecycle.isReady(), true);
+  assert.deepEqual(await h.lifecycle.search("query"), [{ noteId: 1, score: 0.9 }]);
+  assert.equal(h.calls.includes("stop"), false);
+  assert.equal(h.calls.includes("unload"), false);
+  assert.ok(h.logs.some(([level, message]) => level === "debug" && /failed/i.test(message)));
+});
+
+test("a failing row is retried after the delay, parked after three failures, and re-walked after release", async () => {
+  const h = harness();
+  h.pending.set(1, 1);
+  h.notes.set(1, { title: "Poison", content: "" });
+  failUpsertFor(h, 1);
+  assert.equal(await h.lifecycle.warmUp(), true);
+  assert.equal(upsertsFor(h, 1), 1);
+  await h.fireTimer(30000);
+  assert.equal(upsertsFor(h, 1), 2);
+  await h.fireTimer(30000);
+  assert.equal(upsertsFor(h, 1), 3);
+  assert.equal(
+    [...h.timers.values()].some((timer) => timer.delay === 30000),
+    false
+  );
+  assert.equal(h.lifecycle.isReady(), true);
+  assert.equal(h.pending.has(1), true);
+  await h.fireTimer(300000);
+  assert.equal(await h.lifecycle.warmUp(), true);
+  assert.equal(upsertsFor(h, 1), 4);
+});
+
+test("a new revision for a parked note is processed", async () => {
+  const h = harness();
+  h.pending.set(1, 1);
+  h.notes.set(1, { title: "Poison", content: "" });
+  failUpsertFor(h, 1);
+  await h.lifecycle.warmUp();
+  await h.fireTimer(30000);
+  await h.fireTimer(30000);
+  assert.equal(upsertsFor(h, 1), 3);
+  h.pending.set(1, 2);
+  h.notes.set(1, { title: "Fixed", content: "" });
+  h.index.upsertNote = async (...args) => {
+    h.calls.push(["upsert", ...args]);
+    return true;
+  };
+  assert.equal(h.lifecycle.isReady(), false);
+  assert.equal(await h.lifecycle.warmUp(), true);
+  assert.equal(upsertsFor(h, 1), 4);
+  assert.equal(h.pending.size, 0);
 });
 
 test("five minutes of idle releases resources and later search can wake them", async () => {
@@ -225,8 +345,7 @@ test("five minutes of idle releases resources and later search can wake them", a
   await timer.callback();
   assert.equal(h.lifecycle.isReady(), false);
   assert.ok(h.calls.includes("unload"));
-  assert.equal(await h.lifecycle.search("wake"), null);
-  await h.lifecycle.warmUp();
+  assert.deepEqual(await h.lifecycle.search("wake"), [{ noteId: 1, score: 0.9 }]);
   assert.equal(h.lifecycle.isReady(), true);
 });
 
@@ -252,10 +371,10 @@ test("a search during idle shutdown waits for teardown before warming", async ()
     h.qdrant.ready = false;
   };
   const stopping = [...h.timers.values()][0].callback();
-  assert.equal(await h.lifecycle.search("wake"), null);
+  const wake = h.lifecycle.search("wake");
   gate.resolve();
   await stopping;
-  await h.lifecycle.warmUp();
+  assert.deepEqual(await wake, [{ noteId: 1, score: 0.9 }]);
   assert.equal(h.lifecycle.isReady(), true);
 });
 
@@ -273,14 +392,15 @@ test("quit during model preparation prevents a late child spawn", async () => {
   assert.equal(await h.lifecycle.warmUp(), false);
 });
 
-test("missing binary remains dormant and explicit reindex can retry after recovery", async () => {
+test("missing binary remains dormant and retries once the retry window passes", async () => {
   const h = harness();
   h.qdrant.available = false;
   assert.equal(await h.lifecycle.warmUp(), false);
   assert.equal(h.calls.includes("start"), false);
   h.qdrant.available = true;
-  const result = await h.lifecycle.reindex();
-  assert.equal(result.success, true);
+  assert.equal(await h.lifecycle.warmUp(), false);
+  h.setNow(30000);
+  assert.equal(await h.lifecycle.warmUp(), true);
 });
 
 test("Qdrant recovery rewires the new port and drains updates", async () => {
@@ -320,7 +440,7 @@ test("restart event recovers after the manager finishes its restarting critical 
   assert.ok(h.calls.some((call) => Array.isArray(call) && call[0] === "init" && call[1] === 6335));
 });
 
-test("failed model preparation is retried by an explicit request without losing queued notes", async () => {
+test("failed model preparation releases resources and is retried without losing queued notes", async () => {
   const h = harness();
   h.pending.set(1, 1);
   h.notes.set(1, { title: "Queued", content: "" });
@@ -330,18 +450,28 @@ test("failed model preparation is retried by an explicit request without losing 
   };
   assert.equal(await h.lifecycle.warmUp(), false);
   assert.equal(h.pending.size, 1);
+  assert.ok(h.calls.includes("unload"));
   h.embeddings.isAvailable = () => true;
-  assert.equal((await h.lifecycle.reindex()).success, true);
+  h.setNow(30000);
+  assert.equal(await h.lifecycle.warmUp(), true);
   assert.equal(h.pending.size, 0);
 });
 
-test("a failed space purge is retained and prevents semantic readiness", async () => {
+test("a failed space purge is retried after the delay without blocking semantic search", async () => {
   const h = harness();
   h.purges.add(4);
-  h.index.deleteBySpace = async () => false;
-  assert.equal(await h.lifecycle.warmUp(), false);
+  let purgeAttempts = 0;
+  h.index.deleteBySpace = async () => {
+    purgeAttempts++;
+    return purgeAttempts > 1;
+  };
+  assert.equal(await h.lifecycle.warmUp(), true);
   assert.equal(h.purges.has(4), true);
-  assert.equal(h.lifecycle.isReady(), false);
+  assert.equal(h.lifecycle.isReady(), true);
+  assert.deepEqual(await h.lifecycle.search("query"), [{ noteId: 1, score: 0.9 }]);
+  await h.fireTimer(30000);
+  assert.equal(purgeAttempts, 2);
+  assert.equal(h.purges.has(4), false);
 });
 
 test("collection recreation queues unchanged notes for embedding again", async () => {
@@ -372,4 +502,42 @@ test("indexing during recovery starts a new idle window", async () => {
   h.qdrant.emit("restarted", 6333);
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal([...h.timers.values()][0].delay, 300000);
+});
+
+test("stop releases without a second Qdrant stop and swallows cleanup errors", async () => {
+  const h = harness();
+  await h.lifecycle.warmUp();
+  h.embeddings.unload = async () => {
+    throw new Error("worker gone");
+  };
+  await h.lifecycle.stop();
+  assert.equal(h.calls.filter((call) => call === "stop").length, 1);
+  assert.ok(h.calls.includes("reset"));
+  assert.ok(h.logs.some(([level]) => level === "warn"));
+});
+
+test("idle stop defers while Qdrant is restarting and lands after the restart settles", async () => {
+  const h = harness();
+  await h.lifecycle.warmUp();
+  h.qdrant.restarting = true;
+  await h.fireTimer(IDLE_TIMEOUT_MS);
+  assert.equal(h.calls.includes("stop"), false);
+  assert.equal(h.calls.includes("unload"), false);
+  h.qdrant.restarting = false;
+  await h.fireTimer(30000);
+  assert.ok(h.calls.includes("stop"));
+  assert.ok(h.calls.includes("unload"));
+});
+
+test("a change notification with a closed database logs instead of throwing", async () => {
+  const h = harness();
+  await h.lifecycle.warmUp();
+  h.database.getPendingVectorChanges = () => {
+    throw new Error("database closed");
+  };
+  assert.doesNotThrow(() => h.lifecycle.notifyChanges());
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(
+    h.logs.some(([level, , meta]) => level === "warn" && meta?.error === "database closed")
+  );
 });

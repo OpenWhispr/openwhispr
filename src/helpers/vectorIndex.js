@@ -1,6 +1,5 @@
 const { QdrantClient } = require("@qdrant/js-client-rest");
 const localEmbeddings = require("./localEmbeddings");
-const { LocalEmbeddings } = localEmbeddings;
 const debugLogger = require("./debugLogger");
 const { chunkConversation } = require("./conversationChunker");
 
@@ -87,32 +86,6 @@ class VectorIndex {
       debugLogger.debug("Vector search failed", { error: err.message });
       return [];
     }
-  }
-
-  async reindexAll(notes, onProgress) {
-    if (!this.client) return { failed: notes.length };
-    const BATCH_SIZE = 50;
-    let failed = 0;
-    for (let i = 0; i < notes.length; i += BATCH_SIZE) {
-      const batch = notes.slice(i, i + BATCH_SIZE);
-      const texts = batch.map((n) =>
-        LocalEmbeddings.noteEmbedText(n.title, n.content, n.enhanced_content)
-      );
-      try {
-        const vectors = await localEmbeddings.embedTexts(texts);
-        const points = batch.map((n, j) => ({
-          id: n.id,
-          vector: Array.from(vectors[j]),
-          payload: { space_id: n.space_id, folder_id: n.folder_id ?? null },
-        }));
-        await this.client.upsert(this.collectionName, { points });
-      } catch (err) {
-        failed += batch.length;
-        debugLogger.debug("Vector reindex batch failed", { offset: i, error: err.message });
-      }
-      if (onProgress) onProgress(Math.min(i + BATCH_SIZE, notes.length), notes.length);
-    }
-    return { failed };
   }
 
   async ensureConversationChunksCollection() {

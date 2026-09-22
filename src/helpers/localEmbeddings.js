@@ -111,6 +111,7 @@ class LocalEmbeddings {
         this.loadPromise = null;
         this.loadedGeneration = null;
       }
+      await onnxWorkerClient.releaseIfIdle();
     });
   }
 

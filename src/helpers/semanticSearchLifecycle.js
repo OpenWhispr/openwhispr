@@ -1,5 +1,11 @@
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const RETRY_DELAY_MS = 30 * 1000;
+// A cold search waits this long for activation before settling for keyword results.
+const SEARCH_WARMUP_WAIT_MS = 2500;
+const DRAIN_PAGE_SIZE = 50;
+// A row that fails this many passes is parked until the next activation, so one
+// poison note never disables semantic search for the rest.
+const MAX_ROW_FAILURES = 3;
 
 // Owns all note-vector work so idle teardown cannot race a query or an index write.
 class SemanticSearchLifecycle {
@@ -29,17 +35,22 @@ class SemanticSearchLifecycle {
     this.stoppingPromise = null;
     this.searches = new Set();
     this.idleTimer = null;
+    this.retryTimer = null;
     this.retryAfter = 0;
-    this.indexedCount = 0;
     this.indexPort = null;
+    this.drainedThroughRevision = 0;
+    this.retryDue = false;
+    this.rowFailures = new Map();
     this.lastActivity = now();
     this.onRestart = () => {
       this.ready = false;
       // Qdrant emits before leaving its restart critical section. Also wait
       // for any old-port indexing attempt before preparing the replacement.
-      void Promise.resolve(this.activationPromise).then(() => {
-        if (!this.closed) void this.warmUp({ recovery: true });
-      });
+      Promise.resolve(this.activationPromise)
+        .then(() => (this.closed ? false : this.warmUp({ recovery: true })))
+        .catch((error) =>
+          this.logger.warn("Semantic search recovery failed", { error: error.message })
+        );
     };
     qdrant.on("restarted", this.onRestart);
   }
@@ -52,14 +63,40 @@ class SemanticSearchLifecycle {
       !this.stoppingPromise &&
       this.qdrant.isReady() &&
       this.indexPort === this.qdrant.getPort() &&
-      this.database.getPendingVectorChanges(1).length === 0 &&
-      this.database.getPendingVectorPurges().length === 0
+      !this.retryDue &&
+      this.database.getPendingVectorChanges(1, this.drainedThroughRevision).length === 0
     );
   }
 
   _clearIdleTimer() {
     if (this.idleTimer !== null) this.clearTimeout(this.idleTimer);
     this.idleTimer = null;
+  }
+
+  _clearRetryTimer() {
+    if (this.retryTimer !== null) this.clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    this.retryDue = false;
+  }
+
+  // One timer per pass. Indexed rows leave the journal, so a retry pass re-walks
+  // it from the start and only revisits the rows that failed.
+  _scheduleRetry() {
+    if (this.retryTimer !== null) return;
+    this.retryTimer = this.setTimeout(() => {
+      this.retryTimer = null;
+      // Wait for an in-flight pass so it cannot overwrite the rewound cursor.
+      return Promise.resolve(this.activationPromise)
+        .then(() => {
+          this.retryDue = true;
+          this.drainedThroughRevision = 0;
+          return this.closed ? false : this.warmUp({ recovery: true });
+        })
+        .catch((error) =>
+          this.logger.warn("Semantic search retry failed", { error: error.message })
+        );
+    }, RETRY_DELAY_MS);
+    this.retryTimer?.unref?.();
   }
 
   _scheduleIdle() {
@@ -70,10 +107,18 @@ class SemanticSearchLifecycle {
     this.idleTimer?.unref?.();
   }
 
-  async _releaseResources() {
+  // Forget the index so the next activation re-walks the whole journal.
+  _resetIndexState() {
     this.ready = false;
     this.vectorIndex.reset();
     this.indexPort = null;
+    this.drainedThroughRevision = 0;
+    this.rowFailures.clear();
+    this._clearRetryTimer();
+  }
+
+  async _releaseResources() {
+    this._resetIndexState();
     try {
       await this.qdrant.stop();
     } finally {
@@ -84,6 +129,12 @@ class SemanticSearchLifecycle {
   _stopIdle() {
     this._clearIdleTimer();
     if (this.closed || this.activationPromise || this.searches.size) return Promise.resolve();
+    if (this.qdrant.restarting) {
+      // Stopping inside _restartUnhealthy would burn a restart attempt; look again later.
+      this.idleTimer = this.setTimeout(() => this._stopIdle(), RETRY_DELAY_MS);
+      this.idleTimer?.unref?.();
+      return Promise.resolve();
+    }
     this.stoppingPromise = this._releaseResources()
       .catch((error) =>
         this.logger.warn("Semantic search idle cleanup failed", { error: error.message })
@@ -97,22 +148,24 @@ class SemanticSearchLifecycle {
   // Database triggers retain changes while asleep; notifications only wake an already-used index.
   notifyChanges() {
     if (!this.ready && !this.activationPromise) return;
-    void this.warmUp();
+    this.warmUp().catch((error) =>
+      this.logger.warn("Semantic search wake failed", { error: error.message })
+    );
   }
 
-  warmUp({ recovery = false } = {}) {
-    if (this.closed) return Promise.resolve(false);
+  async warmUp({ recovery = false } = {}) {
+    if (this.closed) return false;
     if (this.activationPromise) return this.activationPromise;
-    if (this.isReady()) return Promise.resolve(true);
-    if (this.now() < this.retryAfter) return Promise.resolve(false);
+    if (this.isReady()) return true;
+    if (this.now() < this.retryAfter) return false;
     // Let the existing health supervisor own unhealthy restarts and their retry budget.
     if (
       !this.stoppingPromise &&
       (this.qdrant.restarting || (this.qdrant.process && !this.qdrant.isReady()))
     ) {
-      return Promise.resolve(false);
+      return false;
     }
-    if (this.qdrant.restartBlocked) return Promise.resolve(false);
+    if (this.qdrant.restartBlocked) return false;
 
     if (!recovery) this.lastActivity = this.now();
     this.ready = false;
@@ -155,41 +208,85 @@ class SemanticSearchLifecycle {
     return true;
   }
 
-  async _drainPending() {
-    while (!this.closed) {
-      for (const { space_id } of this.database.getPendingVectorPurges()) {
-        if (!(await this.vectorIndex.deleteBySpace(space_id)))
-          throw new Error("Vector space purge failed");
+  // Returns whether the row is still worth retrying after this failure.
+  _recordRowFailure(key, meta) {
+    const failures = (this.rowFailures.get(key) ?? 0) + 1;
+    this.rowFailures.set(key, failures);
+    this.logger.debug("Vector update failed; skipping row for this pass", { ...meta, failures });
+    return failures < MAX_ROW_FAILURES;
+  }
+
+  _isParked(key) {
+    return (this.rowFailures.get(key) ?? 0) >= MAX_ROW_FAILURES;
+  }
+
+  async _applyChange(noteId) {
+    const note = this.database.getNoteForVectorIndex(noteId);
+    if (!note || note.deleted_at) return this.vectorIndex.deleteNote(noteId);
+    return this.vectorIndex.upsertNote(
+      noteId,
+      this.noteEmbedText(note.title, note.content, note.enhanced_content),
+      { space_id: note.space_id, folder_id: note.folder_id ?? null }
+    );
+  }
+
+  // Purged notes are also journaled by the delete triggers and filtered by scope
+  // on read, so a failed purge is retried without blocking readiness.
+  async _drainPurges() {
+    let retry = false;
+    for (const { space_id } of this.database.getPendingVectorPurges()) {
+      if (this.closed) return retry;
+      const key = `space:${space_id}`;
+      if (this._isParked(key)) continue;
+      if (await this.vectorIndex.deleteBySpace(space_id)) {
         this.database.clearPendingVectorPurge(space_id);
-        this.lastActivity = this.now();
-        if (this.closed) return;
+      } else if (this._recordRowFailure(key, { spaceId: space_id })) {
+        retry = true;
       }
-      const changes = this.database.getPendingVectorChanges();
-      if (changes.length === 0) return;
+      this.lastActivity = this.now();
+    }
+    return retry;
+  }
+
+  async _drainPending() {
+    this.retryDue = false;
+    let retry = await this._drainPurges();
+    let cursor = this.drainedThroughRevision;
+    while (!this.closed) {
+      const changes = this.database.getPendingVectorChanges(DRAIN_PAGE_SIZE, cursor);
+      if (changes.length === 0) break;
       for (const { note_id, revision } of changes) {
         if (this.closed) return;
-        const note = this.database.getNoteForVectorIndex(note_id);
-        const live = note && !note.deleted_at;
-        const succeeded = live
-          ? await this.vectorIndex.upsertNote(
-              note_id,
-              this.noteEmbedText(note.title, note.content, note.enhanced_content),
-              { space_id: note.space_id, folder_id: note.folder_id ?? null }
-            )
-          : await this.vectorIndex.deleteNote(note_id);
-        if (!succeeded) throw new Error(`Vector update failed for note ${note_id}`);
-        this.database.clearPendingVectorChange(note_id, revision);
+        cursor = revision;
+        const key = `${note_id}:${revision}`;
+        if (this._isParked(key)) continue;
+        if (await this._applyChange(note_id)) {
+          this.database.clearPendingVectorChange(note_id, revision);
+        } else if (this._recordRowFailure(key, { noteId: note_id, revision })) {
+          retry = true;
+        }
         this.lastActivity = this.now();
-        if (live) this.indexedCount++;
       }
     }
+    if (this.closed) return;
+    this.drainedThroughRevision = cursor;
+    if (retry) this._scheduleRetry();
+  }
+
+  // Resolves once activation settles or the wait window elapses, whichever is first.
+  _awaitWarmUp() {
+    let timer = null;
+    const window = new Promise((resolve) => {
+      timer = this.setTimeout(resolve, SEARCH_WARMUP_WAIT_MS);
+    });
+    return Promise.race([this.warmUp(), window]).finally(() => this.clearTimeout(timer));
   }
 
   async search(query, limit, filter) {
     this.lastActivity = this.now();
     if (!this.isReady()) {
-      void this.warmUp();
-      return null;
+      await this._awaitWarmUp();
+      if (!this.isReady()) return null;
     }
     this._clearIdleTimer();
     const search = this.vectorIndex.search(query, limit, filter);
@@ -203,28 +300,21 @@ class SemanticSearchLifecycle {
     }
   }
 
-  async reindex() {
-    if (this.closed) return { success: false, error: "Semantic search is stopped" };
-    this.database.enqueueAllVectorChanges();
-    this.retryAfter = 0;
-    const before = this.indexedCount;
-    const success = await this.warmUp();
-    return {
-      success,
-      indexed: this.indexedCount - before,
-      ...(!success && { error: "Vector index not ready" }),
-    };
-  }
-
   async stop() {
     this.closed = true;
     this.ready = false;
     this._clearIdleTimer();
+    this._clearRetryTimer();
     this.qdrant.removeListener("restarted", this.onRestart);
-    // Cancel a port scan immediately; _activate checks closed after each preparation step.
-    await this.qdrant.stop();
-    await Promise.allSettled([this.activationPromise, this.stoppingPromise, ...this.searches]);
-    await this._releaseResources();
+    try {
+      // Cancel a port scan immediately; _activate checks closed after each preparation step.
+      await this.qdrant.stop();
+      await Promise.allSettled([this.activationPromise, this.stoppingPromise, ...this.searches]);
+      this._resetIndexState();
+      await this.embeddings.unload();
+    } catch (error) {
+      this.logger.warn("Semantic search shutdown cleanup failed", { error: error.message });
+    }
   }
 }
 

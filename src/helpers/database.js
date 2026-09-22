@@ -1274,7 +1274,7 @@ class DatabaseManager {
       }
 
       // Space vector purges owed to Qdrant while the sidecar was down/booting;
-      // drained once the vector index is ready.
+      // drained on the next semantic search activation.
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS pending_vector_purges (
           space_id   INTEGER PRIMARY KEY,
@@ -3987,11 +3987,13 @@ class DatabaseManager {
     })();
   }
 
-  getPendingVectorChanges(limit = 50) {
+  getPendingVectorChanges(limit = 50, afterRevision = 0) {
     if (!this.db) throw new Error("Database not initialized");
     return this.db
-      .prepare("SELECT note_id, revision FROM pending_vector_changes ORDER BY revision LIMIT ?")
-      .all(limit);
+      .prepare(
+        "SELECT note_id, revision FROM pending_vector_changes WHERE revision > ? ORDER BY revision LIMIT ?"
+      )
+      .all(afterRevision, limit);
   }
 
   clearPendingVectorChange(noteId, revision) {
