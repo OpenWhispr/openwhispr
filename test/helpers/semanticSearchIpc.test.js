@@ -1,112 +1,138 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const vm = require("node:vm");
+const Module = require("node:module");
 
-function handlersFor(lifecycle) {
-  const source = fs.readFileSync(require.resolve("../../src/helpers/ipcHandlers"), "utf8");
-  const start = source.indexOf('    ipcMain.handle(\n      "db-semantic-search-notes"');
-  const end = source.indexOf('    ipcMain.handle("db-update-note-cloud-id"', start);
-  assert.ok(start !== -1 && end > start);
-  const handlers = new Map();
-  const context = {
-    getSemanticSearch: () => lifecycle,
-    databaseManager: {
-      searchNotes: () => [{ id: 1, title: "Keyword" }],
-      getNoteIdsInScope: () => [1, 2],
-      getNote: (id) => ({ id, title: "Semantic" }),
+// Registers the real handler closures against a fake `this` (the scaffolding
+// from granolaImportIpc.test.js) so the semantic-search handlers run their real
+// code paths against a scripted lifecycle owner and database.
+const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
+const originalLoad = Module._load;
+const handlers = new Map();
+
+const electronStub = {
+  app: {
+    getPath: () => "/tmp",
+    getName: () => "test",
+    getVersion: () => "0.0.0",
+    isPackaged: false,
+    on: () => {},
+    requestSingleInstanceLock: () => true,
+  },
+  ipcMain: {
+    handle: (channel, handler) => handlers.set(channel, handler),
+    on: () => {},
+    removeHandler: () => {},
+  },
+  net: { fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }) },
+  BrowserWindow: class BrowserWindow {
+    static getAllWindows() {
+      return [];
+    }
+
+    static fromWebContents() {
+      return null;
+    }
+  },
+  shell: {},
+  dialog: {},
+  screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
+  systemPreferences: { getMediaAccessStatus: () => "granted" },
+  session: { fromPartition: () => ({}) },
+  clipboard: {},
+  nativeImage: {},
+  globalShortcut: {},
+  utilityProcess: {},
+  MessageChannelMain: class {},
+};
+
+Module._load = function loadWithElectronStub(request, parent, isMain) {
+  if (request === "electron") return electronStub;
+  if (parent?.filename === handlersModulePath && request === "./debugLogger") {
+    return new Proxy({}, { get: () => () => {} });
+  }
+  return originalLoad.call(this, request, parent, isMain);
+};
+
+function anything() {
+  return new Proxy(function () {}, {
+    get: (_target, property) => {
+      if (property === Symbol.toPrimitive || property === "toString") return () => "";
+      if (property === "then") return undefined;
+      return anything();
     },
-  };
-  vm.runInNewContext(`(function() { ${source.slice(start, end)} }).call(context)`, {
-    context,
-    ipcMain: { handle: (name, callback) => handlers.set(name, callback) },
-    broadcastToWindows() {},
-    debugLogger: { error() {} },
-    require() {
-      throw new Error("Search bypassed lifecycle owner");
-    },
+    apply: () => anything(),
   });
-  return handlers;
 }
 
-test("cold semantic search delegates warmup and returns keyword results", async () => {
+const KEYWORD_NOTE = { id: 1, title: "Keyword" };
+let lifecycle = null;
+let target;
+
+test.before(() => {
+  delete require.cache[handlersModulePath];
+  const IPCHandlers = require(handlersModulePath);
+  const Ctor = IPCHandlers.default || IPCHandlers;
+  target = {
+    getSemanticSearch: () => lifecycle,
+    notifyVectorChanges: Ctor.prototype.notifyVectorChanges,
+    databaseManager: {
+      searchNotes: () => [KEYWORD_NOTE],
+      getNoteIdsInScope: () => [1, 2],
+      getNote: (id) => ({ id, title: "Semantic" }),
+      saveNote: () => ({ success: true, note: { id: 7, title: "Saved" } }),
+    },
+  };
+  Ctor.prototype.setupHandlers.call(
+    new Proxy(target, {
+      get: (value, property) => (property in value ? value[property] : anything()),
+    })
+  );
+});
+
+test.after(() => {
+  Module._load = originalLoad;
+});
+
+const search = () => handlers.get("db-semantic-search-notes")(null, "query", 5, 4);
+
+test("keyword results serve while no semantic search owner is composed", async () => {
+  lifecycle = null;
+  assert.deepEqual(await search(), [KEYWORD_NOTE]);
+});
+
+test("a cold index answers with keyword results after delegating warmup", async () => {
   let requests = 0;
-  const handlers = handlersFor({
+  lifecycle = {
     search: async () => {
       requests++;
       return null;
     },
-  });
-  const result = await handlers.get("db-semantic-search-notes")(null, "query", 5, 4);
+  };
+  assert.deepEqual(await search(), [KEYWORD_NOTE]);
   assert.equal(requests, 1);
-  assert.equal(result[0].title, "Keyword");
 });
 
-test("warm search preserves fusion and excludes vectors outside SQLite scope", async () => {
-  const handlers = handlersFor({
+test("a warm index fuses vector hits and drops vectors outside the SQLite scope", async () => {
+  lifecycle = {
     search: async () => [
       { noteId: 9, score: 0.99 },
       { noteId: 2, score: 0.9 },
     ],
-  });
-  const results = await handlers.get("db-semantic-search-notes")(null, "query", 5, 4);
-  assert.equal(results.length, 2);
-  assert.ok(results.some((note) => note.id === 2));
-  assert.ok(results.every((note) => note.id !== 9));
-});
-
-test("explicit reindex delegates lifecycle and preserves response", async () => {
-  const expected = { success: true, indexed: 2 };
-  const handlers = handlersFor({ reindex: async () => expected });
-  assert.equal(await handlers.get("db-semantic-reindex-all")(), expected);
-});
-
-test("control panel mount cannot implicitly request a semantic reindex", () => {
-  const source = fs.readFileSync(require.resolve("../../src/components/ControlPanel.tsx"), "utf8");
-  assert.equal(source.includes("semanticReindexAll"), false);
-});
-
-test("application composition registers dormant semantic resources", () => {
-  const source = fs.readFileSync(require.resolve("../../main.js"), "utf8");
-  const start = source.indexOf('  const QdrantManager = require("./src/helpers/qdrantManager");');
-  const end = source.indexOf('  if (process.platform === "win32")', start);
-  const calls = [];
-  const context = {
-    databaseManager: {},
-    debugLogger: {},
-    sidecarRegistry: { register: (name, stop) => calls.push([name, stop]) },
-    require(name) {
-      if (name.endsWith("qdrantManager"))
-        return class {
-          start() {
-            throw new Error("Eager Qdrant startup");
-          }
-        };
-      if (name.endsWith("localEmbeddings"))
-        return {
-          LocalEmbeddings: { noteEmbedText() {} },
-          downloadModel() {
-            throw new Error("Eager model download");
-          },
-        };
-      if (name.endsWith("vectorIndex")) return {};
-      if (name.endsWith("semanticSearchLifecycle"))
-        return require("../../src/helpers/semanticSearchLifecycle");
-      throw new Error(`Unexpected dependency: ${name}`);
-    },
   };
-  // The real owner binds the restart listener, but never starts the manager at construction.
-  const originalRequire = context.require;
-  context.require = (name) =>
-    name.endsWith("qdrantManager")
-      ? class extends require("node:events").EventEmitter {
-          start() {
-            throw new Error("Eager Qdrant startup");
-          }
-        }
-      : originalRequire(name);
-  vm.runInNewContext(source.slice(start, end), context);
-  assert.equal(context.semanticSearch.ready, false);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0][0], "qdrant");
+  const results = await search();
+  assert.deepEqual(results.map((note) => note.id).sort(), [1, 2]);
+});
+
+test("a note save wakes the semantic index through the single poke", async () => {
+  let pokes = 0;
+  lifecycle = { notifyChanges: () => pokes++ };
+  const result = await handlers.get("db-save-note")(null, "Saved", "body");
+  assert.equal(result.success, true);
+  assert.equal(pokes, 1);
+});
+
+test("a note save with no semantic search owner composed is harmless", async () => {
+  lifecycle = null;
+  const result = await handlers.get("db-save-note")(null, "Saved", "body");
+  assert.equal(result.success, true);
 });

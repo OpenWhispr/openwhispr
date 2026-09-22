@@ -23,9 +23,6 @@ test("initial notification snapshot is atomic and precedes secret hydration", as
         syncNotificationPreferences: async (prefs) => {
           snapshots.push(prefs);
         },
-        meetingDetectionSetPreferences: () => {
-          assert.fail("startup must send one atomic snapshot");
-        },
       },
     },
   });

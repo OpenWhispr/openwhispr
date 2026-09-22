@@ -3340,6 +3340,8 @@ export async function initializeSettings(): Promise<void> {
       for (const key of STALE_SECRET_LOCALSTORAGE_KEYS) {
         localStorage.removeItem(key);
       }
+      // Latch for the one-time semantic reindex that no longer exists (#2143).
+      localStorage.removeItem("semanticReindexVersion");
 
       // Users who configured OpenRouter through the Custom tab keep their key
       // in the shared custom slot — seed the dedicated slot from it once.

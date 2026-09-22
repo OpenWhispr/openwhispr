@@ -1457,10 +1457,6 @@ declare global {
         spaceId?: number | null,
         folderId?: number | null
       ) => Promise<NoteItem[]>;
-      semanticReindexAll: () => Promise<{ success: boolean; indexed?: number; error?: string }>;
-      onSemanticReindexProgress: (
-        callback: (data: { done: number; total: number }) => void
-      ) => () => void;
       updateNoteCloudId: (id: number, cloudId: string) => Promise<NoteItem>;
       updateNoteShareState: (
         id: number,
@@ -3095,10 +3091,6 @@ declare global {
       ) => () => void;
       onAcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
-      meetingDetectionGetPreferences?: () => Promise<{ success: boolean; preferences?: any }>;
-      meetingDetectionSetPreferences?: (
-        prefs: Record<string, boolean>
-      ) => Promise<{ success: boolean }>;
       syncNotificationPreferences?: (prefs: {
         notificationsEnabled: boolean;
         notifyMeetingDetection: boolean;

@@ -2,8 +2,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
-const fs = require("node:fs");
-const vm = require("node:vm");
 
 const enginePath = require.resolve("../../src/helpers/meetingDetectionEngine");
 const originalLoad = Module._load;
@@ -164,30 +162,21 @@ test("a live recording with no note id still blocks a second manual meeting", as
   assert.deepEqual(noteNavigations, []);
 });
 
-function notificationPreferencesHarness() {
-  const harness = createEngine();
-  const handlers = new Map();
-  const source = fs.readFileSync(require.resolve("../../src/helpers/ipcHandlers"), "utf8");
-  const start = source.indexOf('    ipcMain.handle("meeting-detection-get-preferences"');
-  const end = source.indexOf('    ipcMain.handle("meeting-set-speaker-diarization-enabled"', start);
-  vm.runInNewContext(source.slice(start, end), {
-    ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
-    meetingDetectionEngine: harness.engine,
-    windowManager: harness.windowManager,
-  });
-  return {
-    ...harness,
-    sync: (prefs) => handlers.get("sync-notification-preferences")({}, prefs),
-    setLegacy: (prefs) => handlers.get("meeting-detection-set-preferences")({}, prefs),
-  };
-}
+// The IPC adapter derives detector preferences through this policy; the engine
+// only has to honour whatever it is handed (adapter coverage lives in
+// meetingDetectionPreferencesIpc.test.js).
+const { deriveDetectorPreferences } = require("../../src/helpers/meetingDetectionPreferencePolicy");
 
 const ENABLED_SNAPSHOT = {
+  initialized: true,
   notificationsEnabled: true,
   notifyMeetingDetection: true,
-  notifyCalendarReminders: true,
   meetingProcessDetection: true,
 };
+
+function applySnapshot(engine, snapshot) {
+  engine.setPreferences(deriveDetectorPreferences(snapshot));
+}
 
 test("startup waits for saved notification preferences before starting prompt detectors", () => {
   const { engine, audioDetector, processDetector } = createEngine();
@@ -196,69 +185,52 @@ test("startup waits for saved notification preferences before starting prompt de
   assert.equal(processDetector.running, false);
 });
 
-test("disabled initial preferences and legacy process updates never start prompt detectors", async () => {
-  const { engine, audioDetector, processDetector, sync, setLegacy } =
-    notificationPreferencesHarness();
+test("a snapshot with meeting prompts disabled never starts prompt detectors", () => {
+  const { engine, audioDetector, processDetector } = createEngine();
   engine.start();
-  await setLegacy({ processDetection: true });
-  assert.equal(processDetector.running, false, "partial legacy sync cannot start before hydration");
-  await sync({ ...ENABLED_SNAPSHOT, notifyMeetingDetection: false });
-  await setLegacy({ processDetection: true });
+  applySnapshot(engine, { ...ENABLED_SNAPSHOT, initialized: false });
+  assert.equal(processDetector.running, false, "nothing starts before hydration");
+  applySnapshot(engine, { ...ENABLED_SNAPSHOT, notifyMeetingDetection: false });
   assert.equal(audioDetector.running, false);
   assert.equal(processDetector.running, false);
 });
 
-test("notification toggles gate both detectors and retain the process preference", async () => {
-  const { audioDetector, processDetector, sync } = notificationPreferencesHarness();
-  await sync(ENABLED_SNAPSHOT);
+test("notification toggles gate both detectors and retain the process preference", () => {
+  const { engine, audioDetector, processDetector } = createEngine();
+  applySnapshot(engine, ENABLED_SNAPSHOT);
   assert.equal(audioDetector.running, true);
   assert.equal(processDetector.running, true);
-  await sync({ ...ENABLED_SNAPSHOT, notificationsEnabled: false });
+  applySnapshot(engine, { ...ENABLED_SNAPSHOT, notificationsEnabled: false });
   assert.equal(audioDetector.running, false);
   assert.equal(processDetector.running, false);
-  await sync({ ...ENABLED_SNAPSHOT, meetingProcessDetection: false });
+  applySnapshot(engine, { ...ENABLED_SNAPSHOT, meetingProcessDetection: false });
   assert.equal(audioDetector.running, true);
   assert.equal(processDetector.running, false);
-  await sync({ ...ENABLED_SNAPSHOT, notifyMeetingDetection: false });
+  applySnapshot(engine, { ...ENABLED_SNAPSHOT, notifyMeetingDetection: false });
   assert.equal(audioDetector.running, false);
   assert.equal(processDetector.running, false);
-  await sync(ENABLED_SNAPSHOT);
+  applySnapshot(engine, ENABLED_SNAPSHOT);
   assert.equal(audioDetector.running, true);
   assert.equal(processDetector.running, true);
 });
 
-test("repeated preference snapshots preserve the detector listener registrations", async () => {
-  const { audioDetector, processDetector, sync } = notificationPreferencesHarness();
-  for (let index = 0; index < 3; index += 1) await sync(ENABLED_SNAPSHOT);
+test("repeated preference snapshots preserve the detector listener registrations", () => {
+  const { engine, audioDetector, processDetector } = createEngine();
+  for (let index = 0; index < 3; index += 1) applySnapshot(engine, ENABLED_SNAPSHOT);
   assert.equal(audioDetector.listenerCount("sustained-audio-detected"), 1);
   assert.equal(processDetector.listenerCount("meeting-process-detected"), 1);
 });
 
-test("partial initial notification sync keeps detectors stopped until the complete snapshot", async () => {
-  const { audioDetector, processDetector, sync, windowManager } = notificationPreferencesHarness();
-  await sync({
-    notificationsEnabled: true,
-    notifyMeetingDetection: true,
-    notifyCalendarReminders: true,
-  });
-  assert.equal(audioDetector.running, false);
-  assert.equal(processDetector.running, false);
-  assert.equal(windowManager.notificationPrefs.notifyCalendarReminders, true);
-  await sync({ ...ENABLED_SNAPSHOT, meetingProcessDetection: false });
-  assert.equal(audioDetector.running, true);
-  assert.equal(processDetector.running, false);
-});
-
 test("disabling notifications preserves active auto-end and releases both detectors at session end", async (t) => {
-  const { engine, audioDetector, processDetector, sync } = notificationPreferencesHarness();
+  const { engine, audioDetector, processDetector } = createEngine();
   t.after(() => engine.stop());
-  await sync(ENABLED_SNAPSHOT);
+  applySnapshot(engine, ENABLED_SNAPSHOT);
   await engine.beginRecordingSession({
     sessionId: "active-meeting",
     autoEndEligible: true,
     systemAudioAvailable: true,
   });
-  await sync({ ...ENABLED_SNAPSHOT, notificationsEnabled: false });
+  applySnapshot(engine, { ...ENABLED_SNAPSHOT, notificationsEnabled: false });
   assert.equal(audioDetector.running, true);
   assert.equal(processDetector.running, true);
   assert.equal(engine.endRecordingSession("active-meeting"), true);
