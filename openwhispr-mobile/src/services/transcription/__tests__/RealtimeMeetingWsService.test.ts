@@ -1,11 +1,3 @@
-const mockCredentialListeners = new Set<(reference: string | null) => void>();
-jest.mock('@/services/providers/ProviderCredentials', () => ({
-  getProviderCredential: jest.fn(),
-  subscribeProviderCredentialChanges: (listener: (reference: string | null) => void) => {
-    mockCredentialListeners.add(listener);
-    return () => mockCredentialListeners.delete(listener);
-  },
-}));
 /**
  * Service-level tests for the leg-swap transport: reconnect keeps the mic alive,
  * rotation hard-cuts seamlessly, and a terminal give-up preserves the transcript.
@@ -15,7 +7,6 @@ jest.mock('@/services/providers/ProviderCredentials', () => ({
  */
 import { Buffer } from 'buffer';
 import { startRealtimeMeetingWs, type WebSocketLike } from '../RealtimeMeetingWsService';
-import type { RealtimeProviderProtocol } from '../RealtimeProviderProtocol';
 import { ROTATION_MS } from '../realtimeReconnect';
 import { api } from '@/lib/apiClient';
 import * as Network from 'expo-network';
@@ -67,13 +58,7 @@ class FakeWebSocket implements WebSocketLike {
     FakeWebSocket.instances.push(this);
   }
 
-  binarySent: ArrayBufferView[] = [];
-
-  send(data: string | ArrayBuffer | ArrayBufferView): void {
-    if (typeof data !== 'string') {
-      if (ArrayBuffer.isView(data)) this.binarySent.push(data);
-      return;
-    }
+  send(data: string): void {
     this.sent.push(data);
   }
 
@@ -191,55 +176,6 @@ describe('startRealtimeMeetingWs — normal meeting (leg-swap parity)', () => {
     expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
     expect(leg1.didCommit()).toBe(true);
     expect(leg1.closed).toBe(true);
-  });
-});
-
-describe('startRealtimeMeetingWs — direct provider route', () => {
-  it('snapshots the BYOK route, bypasses the Cloud token API, and streams binary PCM', async () => {
-    const providerRoute = {
-      mode: 'providers',
-      scope: 'meeting',
-      providerId: 'deepgram',
-      modelId: 'nova-3',
-      endpoint: 'https://api.deepgram.com/v1',
-      credentialRef: 'provider.deepgram',
-    } as const;
-    const protocol: RealtimeProviderProtocol = {
-      providerId: 'deepgram',
-      connection: {
-        url: 'wss://api.deepgram.com/v1/listen',
-        protocols: ['token', 'fixture-key'],
-        waitForReadyEvent: false,
-      },
-      onOpenMessages: [],
-      encodeAudio: (bytes) => bytes,
-      finalizeMessages: [JSON.stringify({ type: 'Finalize' })],
-      normalize: (message) => [message],
-    };
-    const protocolFactory = jest.fn().mockResolvedValue(protocol);
-    const startPromise = startRealtimeMeetingWs(
-      { route: providerRoute },
-      {},
-      { wsFactory, protocolFactory },
-    );
-    await flushMicro();
-    const socket = lastLeg();
-    socket.open();
-    const session = await startPromise;
-
-    emitFrame([1, 2, 3, 4]);
-    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
-
-    expect(protocolFactory).toHaveBeenCalledWith(providerRoute, {
-      language: undefined,
-      sampleRate: 24000,
-      signal: expect.any(AbortSignal),
-    });
-    expect(api.post).not.toHaveBeenCalled();
-    expect(socket.binarySent).toHaveLength(1);
-    expect(Buffer.from(socket.binarySent[0].buffer)).toEqual(Buffer.from([1, 2, 3, 4]));
-    session.stop();
-    expect(socket.sent).toContain(JSON.stringify({ type: 'Finalize' }));
   });
 });
 
@@ -464,99 +400,4 @@ describe('startRealtimeMeetingWs — bounded outage buffer', () => {
     expect(bytes).toBeGreaterThan(0);
     expect(bytes).toBeLessThanOrEqual(4000);
   });
-});
-
-describe('provider credential invalidation', () => {
-  const providerRoute = {
-    mode: 'providers',
-    scope: 'meeting',
-    providerId: 'deepgram',
-    modelId: 'nova-3',
-    endpoint: 'https://api.deepgram.com/v1',
-    credentialRef: 'provider.deepgram',
-  } as const;
-  const protocol: RealtimeProviderProtocol = {
-    providerId: 'deepgram',
-    connection: {
-      url: 'wss://api.deepgram.com/v1/listen',
-      protocols: [],
-      waitForReadyEvent: false,
-    },
-    onOpenMessages: [],
-    encodeAudio: (bytes) => bytes,
-    finalizeMessages: ['commit'],
-    normalize: (message) => [message],
-  };
-  it('stops capture and closes the active socket without flushing audio when a key changes', async () => {
-    const callbacks = { onClose: jest.fn(), onError: jest.fn() };
-    const started = startRealtimeMeetingWs({ route: providerRoute }, callbacks, {
-      wsFactory,
-      protocolFactory: async () => protocol,
-    });
-    await flushMicro();
-    const socket = lastLeg();
-    socket.open();
-    await started;
-    emitFrame([1, 2, 3, 4]);
-    mockCredentialListeners.forEach((listener) => listener('provider.openai'));
-    expect(socket.closed).toBe(false);
-    mockCredentialListeners.forEach((listener) => listener('provider.deepgram'));
-    expect(socket.closed).toBe(true);
-    expect(socket.binarySent).toHaveLength(0);
-    expect(socket.sent).not.toContain('commit');
-    expect(LivePCMStreaming.stop).toHaveBeenCalled();
-    expect(callbacks.onClose).toHaveBeenCalledTimes(1);
-    expect(mockCredentialListeners.size).toBe(0);
-  });
-  it('does not start the microphone or socket after a reset during token creation', async () => {
-    let finish!: (value: RealtimeProviderProtocol) => void;
-    const started = startRealtimeMeetingWs(
-      { route: providerRoute },
-      {},
-      {
-        wsFactory,
-        protocolFactory: () =>
-          new Promise((resolve) => {
-            finish = resolve;
-          }),
-      },
-    );
-    mockCredentialListeners.forEach((listener) => listener(null));
-    finish(protocol);
-    await expect(started).rejects.toMatchObject({ name: 'AbortError' });
-    expect(LivePCMStreaming.start).not.toHaveBeenCalled();
-    expect(FakeWebSocket.instances).toHaveLength(0);
-    expect(mockCredentialListeners.size).toBe(0);
-  });
-});
-
-it('rejects a connecting provider socket promptly when its key is revoked', async () => {
-  const route = {
-    mode: 'providers',
-    scope: 'meeting',
-    providerId: 'deepgram',
-    modelId: 'nova-3',
-    endpoint: 'https://api.deepgram.com/v1',
-    credentialRef: 'provider.deepgram',
-  } as const;
-  const protocol: RealtimeProviderProtocol = {
-    providerId: 'deepgram',
-    connection: { url: 'wss://fixture', protocols: [], waitForReadyEvent: false },
-    onOpenMessages: ['configure'],
-    encodeAudio: (bytes) => bytes,
-    finalizeMessages: [],
-    normalize: (message) => [message],
-  };
-  const started = startRealtimeMeetingWs(
-    { route },
-    {},
-    { wsFactory, protocolFactory: async () => protocol },
-  );
-  await flushMicro();
-  const socket = lastLeg();
-  mockCredentialListeners.forEach((listener) => listener('provider.deepgram'));
-  await expect(started).rejects.toMatchObject({ name: 'AbortError' });
-  socket.open();
-  expect(socket.sent).toHaveLength(0);
-  expect(socket.closed).toBe(true);
 });

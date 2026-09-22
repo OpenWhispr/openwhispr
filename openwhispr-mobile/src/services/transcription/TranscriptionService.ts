@@ -981,49 +981,17 @@ export class TranscriptionService {
               },
             })
           : undefined;
-        const result =
-          route.providerId === 'deepgram' ||
-          route.providerId === 'assemblyai' ||
-          (route.providerId === 'tinfoil' && route.scope !== 'upload') ||
-          (route.providerId === 'gemini' && route.modelId.endsWith('-live'))
-            ? await (async () => {
-                if (recoveryJobId && routeSnapshot) {
-                  AppGroupStorage.setItem(`keyboard_upload_route.${recoveryJobId}`, routeSnapshot);
-                  AppGroupStorage.setItem(
-                    `keyboard_upload_audio.${recoveryJobId}`,
-                    request.audioUri,
-                  );
-                }
-                const { transcribeStreamingFile } =
-                  require('./StreamingFileTranscription') as typeof import('./StreamingFileTranscription');
-                const streamingResult = await transcribeStreamingFile({
-                  route,
-                  audioUri,
-                  language,
-                });
-                if (recoveryJobId) {
-                  AppGroupStorage.setItem(
-                    `keyboard_provider_result.${recoveryJobId}`,
-                    JSON.stringify({
-                      version: 1,
-                      jobId: recoveryJobId,
-                      requestContext: request.requestContext,
-                      text: streamingResult.text,
-                      route: routeSnapshot ? JSON.parse(routeSnapshot).route : undefined,
-                    }),
-                  );
-                }
-                return streamingResult;
-              })()
-            : await transcribeWithProvider({
-                route,
-                audioUri,
-                fileName: request.fileName,
-                mimeType: request.mimeType,
-                language,
-                routeSnapshot,
-                jobId: recoveryJobId,
-              });
+        const promptHints = buildDictationHints(isDictationContext(request.requestContext));
+        const result = await transcribeWithProvider({
+          route,
+          audioUri,
+          fileName: request.fileName,
+          mimeType: request.mimeType,
+          language,
+          prompt: promptHints.length > 0 ? promptHints.join(', ') : undefined,
+          routeSnapshot,
+          jobId: recoveryJobId,
+        });
         return { ...result, provider: 'byok', inferenceRoute: route, endpoint: route.providerId };
       }
 

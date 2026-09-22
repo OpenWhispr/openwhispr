@@ -1,6 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { BackgroundUploader } from '../../../../modules/background-uploader/src';
-import { AppGroupStorage } from '../../../../modules/app-group-storage/src';
 import { transcribeWithProvider } from '@/services/providers/ProviderExecution';
 import { TranscriptionService } from '../TranscriptionService';
 import type { TranscriptionRequest } from '../../../types';
@@ -21,8 +20,9 @@ jest.mock('expo-file-system/legacy', () => ({
 }));
 jest.mock('../LocalWhisperService', () => ({ LocalWhisperService: {} }));
 jest.mock('../LocalTranscriptionService', () => ({ LocalTranscriptionService: {} }));
+const mockHints = jest.fn((): string[] => []);
 jest.mock('@/lib/dictationHints', () => ({
-  buildDictationHints: () => [],
+  buildDictationHints: () => mockHints(),
   isDictationContext: () => true,
 }));
 jest.mock('@/lib/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));
@@ -61,9 +61,6 @@ jest.mock('@/lib/inferenceRouting', () => ({
   resolveMobileProviderRoute: jest.fn(async () => mockResolvedProviderRoute),
   getInferenceSelection: () => undefined,
 }));
-jest.mock('../StreamingFileTranscription', () => ({
-  transcribeStreamingFile: jest.fn(),
-}));
 jest.mock(
   '@/services/providers/ProviderExecution',
   () => ({
@@ -81,6 +78,7 @@ const mockTranscribeWithProvider = transcribeWithProvider as jest.MockedFunction
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockHints.mockReturnValue([]);
   mockResolvedProviderRoute = mockProviderRoute;
 });
 
@@ -131,74 +129,25 @@ test('BYOK recovery snapshot preserves the pinned text stages and client job ID'
   });
 });
 
-test('streaming BYOK retains the original audio and full route after interruption', async (): Promise<void> => {
-  const { transcribeStreamingFile } =
-    require('../StreamingFileTranscription') as typeof import('../StreamingFileTranscription');
-  const streamingRoute = {
-    ...mockProviderRoute,
-    providerId: 'assemblyai',
-    modelId: 'universal-streaming',
-    endpoint: 'https://streaming.assemblyai.com/v3',
-    credentialRef: 'provider.assemblyai',
-  } as const;
-  mockResolvedProviderRoute = streamingRoute;
-  jest.mocked(transcribeStreamingFile).mockRejectedValueOnce(new Error('connection interrupted'));
-
-  await expect(
-    TranscriptionService.transcribe({
-      audioUri: 'file:///retained-original.m4a',
-      provider: 'byok',
-      requestContext: 'recording',
-      jobId: 'stream-job-7',
-      inferenceRoute: streamingRoute,
-      cleanupRoute: mockCleanupRoute,
-      agentUnavailable: 'agent unavailable',
-    }),
-  ).rejects.toThrow('connection interrupted');
-
-  const setItem = jest.mocked(AppGroupStorage.setItem);
-  expect(setItem).toHaveBeenCalledWith(
-    'keyboard_upload_audio.stream-job-7',
-    'file:///retained-original.m4a',
-  );
-  const serializedRoute = setItem.mock.calls.find(
-    ([key]) => key === 'keyboard_upload_route.stream-job-7',
-  )?.[1];
-  expect(JSON.parse(serializedRoute ?? '')).toEqual({
-    version: 1,
-    jobId: 'stream-job-7',
+test('BYOK sends the custom dictionary as the transcription prompt', async (): Promise<void> => {
+  mockHints.mockReturnValue(['OpenWhispr', 'Gizmo']);
+  await TranscriptionService.transcribe({
+    audioUri: 'file:///recording.wav',
+    provider: 'byok',
     requestContext: 'recording',
-    route: {
-      provider: 'byok',
-      inferenceRoute: streamingRoute,
-      cleanupRoute: mockCleanupRoute,
-      agentUnavailable: 'agent unavailable',
-    },
+    inferenceRoute: mockProviderRoute,
   });
-  expect(setItem).not.toHaveBeenCalledWith(
-    'keyboard_provider_result.stream-job-7',
-    expect.any(String),
+  expect(mockTranscribeWithProvider).toHaveBeenCalledWith(
+    expect.objectContaining({ prompt: 'OpenWhispr, Gizmo' }),
   );
 });
 
-test('Tinfoil upload uses its batch adapter and never the realtime replay protocol', async (): Promise<void> => {
-  const { transcribeStreamingFile } = require('../StreamingFileTranscription');
-  mockResolvedProviderRoute = {
-    ...mockProviderRoute,
-    scope: 'upload',
-    providerId: 'tinfoil',
-    modelId: 'whisper-large-v3-turbo',
-    endpoint: 'https://inference.tinfoil.sh/v1',
-    credentialRef: 'provider.tinfoil',
-  };
+test('BYOK omits the prompt when the dictionary is empty', async (): Promise<void> => {
   await TranscriptionService.transcribe({
-    audioUri: 'file:///upload.wav',
+    audioUri: 'file:///recording.wav',
     provider: 'byok',
-    requestContext: 'file',
-    inferenceRoute: mockResolvedProviderRoute,
+    requestContext: 'recording',
+    inferenceRoute: mockProviderRoute,
   });
-  expect(mockTranscribeWithProvider).toHaveBeenCalledWith(
-    expect.objectContaining({ route: mockResolvedProviderRoute }),
-  );
-  expect(transcribeStreamingFile).not.toHaveBeenCalled();
+  expect(mockTranscribeWithProvider.mock.calls[0]?.[0]?.prompt).toBeUndefined();
 });
