@@ -7,11 +7,22 @@ import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { BRAND } from '@/config/colors';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { chooseOnboardingMode } from '@/lib/onboardingMode';
+import { useModelDownloadStore } from '@/store/useModelDownloadStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 
 export function PrivacyModeStep(): ReactElement {
   const { goBack, progress } = useOnboardingStep('privacy-mode');
   const selectedMode = useOnboardingStore((state) => state.selectedMode);
+  const cancelActiveDownloads = useModelDownloadStore((state) => state.cancelActiveDownloads);
+
+  const chooseCloud = async (): Promise<void> => {
+    const choseLocalEarlier = selectedMode === 'private';
+    await chooseOnboardingMode('cloud', 'privacy-mode');
+    // Back from the download step leaves its model transferring; Cloud has no use for it. Without
+    // an earlier Local choice, a running download was started from Settings and isn't ours to stop.
+    if (choseLocalEarlier) await cancelActiveDownloads();
+  };
+
   return (
     <OnboardingShell
       progress={progress}
@@ -20,7 +31,7 @@ export function PrivacyModeStep(): ReactElement {
       titleAccent="transcribe"
       subtitle="Pick a mode for everyday use. You can change it anytime."
       ctaLabel="Use Cloud"
-      onCta={() => chooseOnboardingMode('cloud', 'privacy-mode')}
+      onCta={chooseCloud}
       secondaryCtaLabel="Use Local"
       secondaryCtaVariant="card"
       onSecondaryCta={() => chooseOnboardingMode('private', 'privacy-mode')}
