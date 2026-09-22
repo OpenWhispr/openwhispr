@@ -279,7 +279,7 @@ class GnomeShortcutManager {
     const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
     if (!preferredTrigger) return false;
 
-    await this.unregisterKeybinding(slotName);
+    if (!(await this.unregisterKeybinding(slotName))) return false;
     const registered = await this.globalShortcutsPortal.registerKeybinding(
       preferredTrigger,
       callback,
@@ -295,7 +295,7 @@ class GnomeShortcutManager {
   }
 
   async unregisterPushToTalk(slotName = "dictation") {
-    await this.globalShortcutsPortal.unregisterKeybinding(slotName);
+    return await this.globalShortcutsPortal.unregisterKeybinding(slotName);
   }
 
   static isValidShortcut(shortcut) {

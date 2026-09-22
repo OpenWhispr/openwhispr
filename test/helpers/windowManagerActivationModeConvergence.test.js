@@ -128,8 +128,8 @@ test("updateHotkey follows a converged mode in both directions", async () => {
   untouched._cachedActivationMode = "tap";
   await untouched.updateHotkey("Command+Period");
   assert.equal(untouched.getActivationMode(), "tap");
-  // Nothing converged, so the native listeners must not be touched.
-  assert.deepEqual(untouched.nativeCalls, []);
+  // A candidate readiness probe can exist even without a mode change.
+  assert.deepEqual(untouched.nativeCalls, ["reconcile"]);
 });
 
 // A verdict settled after startup — the DE-native backend judging the hotkey

@@ -201,7 +201,7 @@ export default function EmailVerificationStep({
               size="sm"
               onClick={handleResend}
               disabled={resendCooldown > 0 || isResending}
-              className="rounded-full text-muted-foreground"
+              className="text-muted-foreground"
             >
               {isResending ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -217,7 +217,7 @@ export default function EmailVerificationStep({
               variant="ghost"
               size="sm"
               onClick={onBack}
-              className="rounded-full text-muted-foreground"
+              className="text-muted-foreground"
             >
               {t("emailVerification.backToSignIn")}
             </Button>

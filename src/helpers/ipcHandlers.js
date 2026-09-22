@@ -4227,9 +4227,15 @@ class IPCHandlers {
         // On Hyprland Wayland, unregister the keybinding during capture
         if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager) {
           debugLogger.log("[IPC] Unregistering Hyprland keybinding for hotkey capture mode");
-          await hotkeyManager.hyprlandManager.unregisterKeybinding().catch((err) => {
-            debugLogger.warn("[IPC] Failed to unregister Hyprland keybinding:", err.message);
-          });
+          const unregistered = await hotkeyManager.hyprlandManager
+            .unregisterKeybinding()
+            .catch((err) => {
+              debugLogger.warn("[IPC] Failed to unregister Hyprland keybinding:", err.message);
+              return false;
+            });
+          if (!unregistered) {
+            debugLogger.warn("[IPC] Hyprland keybinding remained active during capture");
+          }
         }
       } else {
         // Exiting capture mode - re-register globalShortcut if not already registered
@@ -4314,9 +4320,15 @@ class IPCHandlers {
           debugLogger.log(
             `[IPC] Re-registering slot "${slot}" ("${hotkeys.join(", ")}") after capture mode`
           );
-          await hotkeyManager.registerSlot(slot, hotkeys, info.callback).catch((err) => {
-            debugLogger.warn(`[IPC] Failed to re-register slot "${slot}":`, err.message);
-          });
+          const result = await hotkeyManager
+            .registerSlot(slot, hotkeys, info.callback)
+            .catch((err) => {
+              debugLogger.warn(`[IPC] Failed to re-register slot "${slot}":`, err.message);
+              return { success: false };
+            });
+          if (!result.success) {
+            debugLogger.warn(`[IPC] Slot "${slot}" was not restored after capture`);
+          }
         }
       }
 
@@ -6374,6 +6386,7 @@ class IPCHandlers {
             ? preferredLanguage.split("-")[0]
             : undefined;
         const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+        const { convertBufferToWav, isWavFormat } = require("./ffmpegUtils");
         // Renderer pre-flight owns policy; retry re-routes stored audio through
         // whatever is selected NOW.
         const route = resolveTranscriptionRoute({
@@ -6562,8 +6575,35 @@ class IPCHandlers {
             throw new Error(`${provider} API key not configured`);
           }
 
+          // The renderer re-encodes WebM before uploading to a Custom endpoint
+          // (src/utils/audioContainer.ts); retries re-upload stored audio from
+          // the main process, so without the same step here every retry of a
+          // dictation that failed for that reason fails again -- which is the
+          // exact recovery a user reaches for after hitting it.
+          let uploadBuffer = buffer;
+          let uploadType = "audio/webm";
+          let uploadName = "audio.webm";
+          if (provider === "custom" && buffer.length && !isWavFormat(buffer)) {
+            try {
+              const wavBuffer = await convertBufferToWav(buffer);
+              // Match fresh dictation: PCM expansion must not break an upload
+              // that the endpoint could accept in its original container.
+              if (wavBuffer.length <= route.sizeCapBytes) {
+                uploadBuffer = wavBuffer;
+                uploadType = "audio/wav";
+                uploadName = "audio.wav";
+              }
+            } catch (conversionError) {
+              // Fail open, matching the renderer: an unconverted retry is no
+              // worse than today's behaviour.
+              debugLogger.warn("WAV re-encode failed on retry; uploading stored container", {
+                error: conversionError?.message,
+              });
+            }
+          }
+
           const formData = new FormData();
-          formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
+          formData.append("file", new Blob([uploadBuffer], { type: uploadType }), uploadName);
           if (provider === "xai") {
             // xAI STT does not accept a model field; the route pre-filters language
             if (route.language) {
@@ -11173,61 +11213,89 @@ class IPCHandlers {
       return this.cortiStreaming.getStatus();
     });
 
-    // Agent mode handlers
-    // Hold is the only model, so a voiceAgent/translation slot's mode is a
-    // verdict about its hotkey, re-judged after every hotkey change: Hold
-    // when the (new) hotkey can deliver a release, Tap when it cannot or the
-    // slot is unbound. Cache, env and every renderer follow, silently.
-    const reconcileSlotActivationMode = async (slotName, settingKey) => {
+    // Resolve the replacement before touching its working binding. The cache,
+    // saved key and renderer mode follow only an accepted registration.
+    const updateOptionalHotkey = async (slotName, settingKey, hotkey, callback, saveKey) => {
       const windowManager = this.windowManager;
-      const hotkey = windowManager.hotkeyManager.getSlotHotkey?.(slotName);
-      const preferred =
-        hotkey && windowManager.hotkeyManager.supportsPushToTalk(hotkey, slotName) ? "push" : "tap";
-      if (windowManager.getSlotActivationMode(slotName) === preferred) return;
-      await windowManager.setSlotActivationModeCache(slotName, preferred, {
-        notifyFailure: false,
-      });
-      const effective = windowManager.getSlotActivationMode(slotName);
-      this.environmentManager.saveSlotActivationMode?.(slotName, effective);
-      for (const browserWindow of BrowserWindow.getAllWindows()) {
-        if (!browserWindow.isDestroyed()) {
-          browserWindow.webContents.send("setting-updated", { key: settingKey, value: effective });
+      const hotkeyManager = windowManager.hotkeyManager;
+      try {
+        const preferred = hotkey
+          ? await hotkeyManager.resolveActivationMode(hotkey, slotName)
+          : "tap";
+        const previousHotkeys = hotkeyManager.getSlotHotkeys(slotName);
+        const previousMode = windowManager.getSlotActivationMode(slotName);
+        const previousCallback = hotkeyManager.slots.get(slotName)?.callback || callback;
+        const result = hotkey
+          ? await hotkeyManager.registerSlot(slotName, hotkey, callback, {
+              atomic: true,
+              activationMode: preferred,
+            })
+          : {
+              success: (await hotkeyManager.unregisterSlot(slotName)) !== false,
+              activationMode: "tap",
+            };
+        if (!result.success) return result;
+        const effective = result.activationMode || preferred;
+        if (
+          previousMode !== effective &&
+          !(await windowManager.setSlotActivationModeCache(slotName, effective, {
+            notifyFailure: false,
+          }))
+        ) {
+          if (previousHotkeys.length) {
+            await hotkeyManager.registerSlot(slotName, previousHotkeys, previousCallback, {
+              atomic: true,
+              activationMode: previousMode,
+            });
+          } else {
+            await hotkeyManager.unregisterSlot(slotName);
+          }
+          return { success: false, error: "Failed to apply hotkey activation mode" };
         }
+        saveKey(hotkey || "");
+        if (previousMode !== effective) {
+          this.environmentManager.saveSlotActivationMode?.(slotName, effective);
+          for (const browserWindow of BrowserWindow.getAllWindows()) {
+            if (!browserWindow.isDestroyed()) {
+              browserWindow.webContents.send("setting-updated", {
+                key: settingKey,
+                value: effective,
+              });
+            }
+          }
+        }
+        this._notifyHotkeyChanged(hotkey || "");
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      } finally {
+        windowManager.reconcileNativeKeyListeners();
       }
-      windowManager.reconcileNativeKeyListeners();
     };
 
     ipcMain.handle("update-voice-agent-hotkey", async (_event, hotkey) => {
-      const hotkeyManager = this.windowManager.hotkeyManager;
-      const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
-      if (!voiceAgentCallback) {
+      const callback = this.windowManager._voiceAgentHotkeyCallback;
+      if (!callback) {
         return { success: false, message: "Voice agent hotkey callback not initialized" };
       }
-
-      if (!hotkey) {
-        hotkeyManager.unregisterSlot("voiceAgent");
-        this.environmentManager.saveVoiceAgentKey?.("");
-        this.windowManager.reconcileNativeKeyListeners();
-        await reconcileSlotActivationMode("voiceAgent", "voiceAgentActivationMode");
-        this._notifyHotkeyChanged("");
-        return { success: true, message: "Voice agent hotkey cleared" };
-      }
-
-      const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback, {
-        atomic: true,
-      });
-      this.windowManager.reconcileNativeKeyListeners();
-      if (result.success) {
-        this.environmentManager.saveVoiceAgentKey?.(hotkey);
-        await reconcileSlotActivationMode("voiceAgent", "voiceAgentActivationMode");
-        this._notifyHotkeyChanged(hotkey);
-        return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
-      }
-
-      return {
-        success: false,
-        message: result.error || `Failed to update voice agent hotkey to: ${hotkey}`,
-      };
+      const result = await updateOptionalHotkey(
+        "voiceAgent",
+        "voiceAgentActivationMode",
+        hotkey,
+        callback,
+        (key) => this.environmentManager.saveVoiceAgentKey?.(key)
+      );
+      return result.success
+        ? {
+            success: true,
+            message: hotkey
+              ? `Voice agent hotkey updated to: ${hotkey}`
+              : "Voice agent hotkey cleared",
+          }
+        : {
+            success: false,
+            message: result.error || `Failed to update voice agent hotkey to: ${hotkey}`,
+          };
     });
 
     ipcMain.handle("get-voice-agent-key", async () => {
@@ -11235,36 +11303,28 @@ class IPCHandlers {
     });
 
     ipcMain.handle("update-translation-hotkey", async (_event, hotkey) => {
-      const hotkeyManager = this.windowManager.hotkeyManager;
-      const translationCallback = this.windowManager._translationHotkeyCallback;
-      if (!translationCallback) {
+      const callback = this.windowManager._translationHotkeyCallback;
+      if (!callback) {
         return { success: false, message: "Translation hotkey callback not initialized" };
       }
-
-      if (!hotkey) {
-        hotkeyManager.unregisterSlot("translation");
-        this.environmentManager.saveTranslationKey?.("");
-        this.windowManager.reconcileNativeKeyListeners();
-        await reconcileSlotActivationMode("translation", "translationActivationMode");
-        this._notifyHotkeyChanged("");
-        return { success: true, message: "Translation hotkey cleared" };
-      }
-
-      const result = await hotkeyManager.registerSlot("translation", hotkey, translationCallback, {
-        atomic: true,
-      });
-      this.windowManager.reconcileNativeKeyListeners();
-      if (result.success) {
-        this.environmentManager.saveTranslationKey?.(hotkey);
-        await reconcileSlotActivationMode("translation", "translationActivationMode");
-        this._notifyHotkeyChanged(hotkey);
-        return { success: true, message: `Translation hotkey updated to: ${hotkey}` };
-      }
-
-      return {
-        success: false,
-        message: result.error || `Failed to update translation hotkey to: ${hotkey}`,
-      };
+      const result = await updateOptionalHotkey(
+        "translation",
+        "translationActivationMode",
+        hotkey,
+        callback,
+        (key) => this.environmentManager.saveTranslationKey?.(key)
+      );
+      return result.success
+        ? {
+            success: true,
+            message: hotkey
+              ? `Translation hotkey updated to: ${hotkey}`
+              : "Translation hotkey cleared",
+          }
+        : {
+            success: false,
+            message: result.error || `Failed to update translation hotkey to: ${hotkey}`,
+          };
     });
 
     ipcMain.handle("get-translation-key", async () => {

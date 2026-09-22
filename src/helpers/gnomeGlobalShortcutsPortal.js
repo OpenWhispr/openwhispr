@@ -116,6 +116,7 @@ class GnomeGlobalShortcutsPortal {
     return this._serialize(async () => {
       if (!(await this.init())) return false;
 
+      const previous = this.shortcuts.get(shortcutId);
       this.shortcuts.set(shortcutId, { trigger: preferredTrigger, callback });
       try {
         await this._bindAll();
@@ -126,9 +127,21 @@ class GnomeGlobalShortcutsPortal {
           `[GnomeGlobalShortcutsPortal] Failed to register "${shortcutId}" shortcut:`,
           err.message
         );
-        // Keep the slots that did bind; only the refused one is dropped.
-        this.shortcuts.delete(shortcutId);
-        await this._bindAll().catch(() => this._closeSession());
+        if (previous) this.shortcuts.set(shortcutId, previous);
+        else this.shortcuts.delete(shortcutId);
+        try {
+          await this._bindAll();
+        } catch (restoreError) {
+          await this._closeSession();
+          const failedShortcutIds = [...this.shortcuts.keys()];
+          this.shortcuts.clear();
+          throw Object.assign(
+            new Error(`Could not restore portal shortcuts: ${restoreError.message}`),
+            {
+              failedShortcutIds,
+            }
+          );
+        }
         return false;
       }
     });
@@ -140,17 +153,33 @@ class GnomeGlobalShortcutsPortal {
       if (shortcutId === undefined) {
         this.shortcuts.clear();
         await this._closeSession();
-        return;
+        return true;
       }
-      if (!this.shortcuts.delete(shortcutId)) return;
+      const previous = this.shortcuts.get(shortcutId);
+      if (!this.shortcuts.delete(shortcutId)) return true;
       try {
         await this._bindAll();
+        return true;
       } catch (err) {
         debugLogger.log(
           `[GnomeGlobalShortcutsPortal] Rebind after dropping "${shortcutId}" failed:`,
           err.message
         );
-        await this._closeSession();
+        this.shortcuts.set(shortcutId, previous);
+        try {
+          await this._bindAll();
+        } catch (restoreError) {
+          await this._closeSession();
+          const failedShortcutIds = [...this.shortcuts.keys()];
+          this.shortcuts.clear();
+          throw Object.assign(
+            new Error(`Could not restore portal shortcuts: ${restoreError.message}`),
+            {
+              failedShortcutIds,
+            }
+          );
+        }
+        return false;
       }
     });
   }

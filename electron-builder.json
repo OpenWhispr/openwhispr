@@ -1,6 +1,9 @@
 {
   "appId": "com.gizmolabs.openwhispr",
   "afterPack": "scripts/afterPack.js",
+  "extraMetadata": {
+    "windowsTrayIdentity": true
+  },
   "productName": "OpenWhispr",
   "protocols": {
     "name": "OpenWhispr Protocol",
@@ -176,6 +179,7 @@
   "win": {
     "target": ["nsis", "portable"],
     "icon": "src/assets/icon.ico",
+    "forceCodeSigning": true,
     "azureSignOptions": {
       "endpoint": "https://eus.codesigning.azure.net/",
       "certificateProfileName": "openwhispr-release",

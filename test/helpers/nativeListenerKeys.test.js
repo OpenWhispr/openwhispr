@@ -3,6 +3,14 @@ const assert = require("node:assert/strict");
 
 const HotkeyManager = require("../../src/helpers/hotkeyManager.js");
 
+// Low-level readers belong to Windows/Linux. Exercise their selection even
+// when the test runner is on macOS; the macOS configuration case sets Darwin.
+const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+test.beforeEach(() => {
+  Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+});
+test.afterEach(() => Object.defineProperty(process, "platform", originalPlatform));
+
 // Build a manager with an explicit set of slot hotkeys, independent of the
 // platform default so the assertions are deterministic everywhere. A slot value
 // may be a single hotkey string or an array (multi-hotkey, issue #936).
@@ -153,10 +161,8 @@ test("no native macOS hotkeys means nothing to configure", () => {
 // A plain key has no release source through globalShortcut on macOS (a Carbon
 // hot key hides both edges from every monitor), so a Hold slot's plain keys are
 // handed to the listener's event tap instead.
-test("a plain key on a Hold slot is watched by the macOS listener; Tap, combos and native keys are not", (t) => {
-  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+test("a plain key on a Hold slot is watched by the macOS listener; Tap, combos and native keys are not", () => {
   Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
-  t.after(() => Object.defineProperty(process, "platform", originalPlatform));
   const mgr = makeManager({
     dictation: ["F9", "Control+Shift+R"],
     voiceAgent: "F13",

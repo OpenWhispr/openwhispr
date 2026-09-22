@@ -170,7 +170,7 @@ const GLOBAL_SHORTCUTS_INTERFACE = "org.freedesktop.portal.GlobalShortcuts";
 // A portal session binds its shortcuts exactly once, so every slot that
 // wants Hold must ride the same session: adding or dropping one rebinds the
 // full set in a fresh session.
-function createMultiSlotPortal(bus, { refuse = [] } = {}) {
+function createMultiSlotPortal(bus, { refuse = [], refuseTriggers = [] } = {}) {
   const GnomeGlobalShortcutsPortal = loadPortal(() => bus);
   const portal = new GnomeGlobalShortcutsPortal();
   const bindBodies = [];
@@ -185,7 +185,13 @@ function createMultiSlotPortal(bus, { refuse = [] } = {}) {
       ];
     }
     bindBodies.push(body);
-    const bound = body[1].map(([id]) => id).filter((id) => !refuse.includes(id));
+    const bound = body[1]
+      .filter(
+        ([id, options]) =>
+          !refuse.includes(id) &&
+          !refuseTriggers.includes(options.find(([key]) => key === "preferred_trigger")[1][1])
+      )
+      .map(([id]) => id);
     return [["shortcuts", ["a(sa{sv})", [bound.map((id) => [id, []])]]]];
   };
   return { portal, bindBodies, sessions: () => sessionCount };
@@ -257,5 +263,74 @@ test("a slot the portal refuses to bind is dropped while the others stay bound",
     bindBodies.at(-1)[1].map(([id]) => id),
     ["dictation"]
   );
+  assert.notEqual(portal.sessionHandle, null);
+});
+
+test("a rejected replacement restores the previous trigger and all slot callbacks", async () => {
+  const bus = createBus();
+  const { portal, bindBodies } = createMultiSlotPortal(bus, { refuseTriggers: ["ALT+X"] });
+  const phases = [];
+  await portal.registerKeybinding("ALT+R", (_key, phase) => phases.push(["dictation", phase]));
+  await portal.registerKeybinding(
+    "ALT+A",
+    (_key, phase) => phases.push(["old", phase]),
+    "voiceAgent"
+  );
+  assert.equal(
+    await portal.registerKeybinding("ALT+X", () => phases.push(["wrong"]), "voiceAgent"),
+    false
+  );
+  assert.equal(portal.shortcuts.get("voiceAgent").trigger, "ALT+A");
+  assert.deepEqual(
+    bindBodies.at(-1)[1].map(([id]) => id),
+    ["dictation", "voiceAgent"]
+  );
+  const session = portal.sessionHandle;
+  const activated = bus.mangle(PORTAL_PATH, GLOBAL_SHORTCUTS_INTERFACE, "Activated");
+  const deactivated = bus.mangle(PORTAL_PATH, GLOBAL_SHORTCUTS_INTERFACE, "Deactivated");
+  bus.signals.emit(activated, [session, "voiceAgent"]);
+  bus.signals.emit(deactivated, [session, "voiceAgent"]);
+  bus.signals.emit(activated, [session, "dictation"]);
+  assert.deepEqual(phases, [
+    ["old", "down"],
+    ["old", "up"],
+    ["dictation", "down"],
+  ]);
+});
+
+test("failed portal restoration reports every lost slot and retains no false binding", async () => {
+  const bus = createBus();
+  const refused = [];
+  const { portal } = createMultiSlotPortal(bus, { refuse: refused });
+  await portal.registerKeybinding("ALT+R", () => undefined);
+  await portal.registerKeybinding("ALT+A", () => undefined, "voiceAgent");
+  refused.push("dictation", "voiceAgent");
+  await assert.rejects(
+    portal.registerKeybinding("ALT+X", () => undefined, "voiceAgent"),
+    (error) => {
+      assert.deepEqual(error.failedShortcutIds, ["dictation", "voiceAgent"]);
+      return true;
+    }
+  );
+  assert.equal(portal.sessionHandle, null);
+  assert.equal(portal.shortcuts.size, 0);
+});
+
+test("a rejected portal clear restores its previous set rather than claiming success", async () => {
+  const bus = createBus();
+  const { portal } = createMultiSlotPortal(bus);
+  await portal.registerKeybinding("ALT+R", () => undefined);
+  await portal.registerKeybinding("ALT+A", () => undefined, "voiceAgent");
+  const request = portal._request;
+  let refuseOnce = true;
+  portal._request = async (...args) => {
+    if (args[0] === "BindShortcuts" && refuseOnce) {
+      refuseOnce = false;
+      throw new Error("removal rebind refused");
+    }
+    return request(...args);
+  };
+  assert.equal(await portal.unregisterKeybinding("voiceAgent"), false);
+  assert.deepEqual([...portal.shortcuts.keys()], ["dictation", "voiceAgent"]);
   assert.notEqual(portal.sessionHandle, null);
 });

@@ -68,3 +68,51 @@ test("re-registering a slot replaces its previous accelerators", async () => {
   assert.equal(registered.has("F6"), true);
   assert.equal(registered.has("F5"), true);
 });
+
+test("non-atomic registration reports the first accepted key and keeps its callback", async () => {
+  const manager = new HotkeyManager();
+  const fired = [];
+  const result = await manager.registerSlot("meeting", "Control+BAD,F7", (key) => fired.push(key));
+  assert.equal(result.success, true);
+  assert.equal(result.hotkey, "F7");
+  assert.deepEqual(result.hotkeys, ["F7"]);
+  registered.get("F7")();
+  assert.deepEqual(fired, ["F7"]);
+});
+
+test("atomic rollback preserves the original callback", async () => {
+  const manager = new HotkeyManager();
+  const fired = [];
+  await manager.registerSlot("meeting", "F7", () => fired.push("original"), { atomic: true });
+  const result = await manager.registerSlot(
+    "meeting",
+    "Control+BAD",
+    () => fired.push("replacement"),
+    { atomic: true }
+  );
+  assert.equal(result.success, false);
+  registered.get("F7")();
+  assert.deepEqual(fired, ["original"]);
+});
+
+test("native-only Tap registrations await readiness while regular Tap keys stay independent", async (t) => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+  t.after(() => Object.defineProperty(process, "platform", originalPlatform));
+  const manager = new HotkeyManager();
+  const probes = [];
+  manager.nativeKeyManager = {
+    canWatch: () => false,
+    ensureReady: async (keys) => {
+      probes.push(keys);
+      return false;
+    },
+  };
+  assert.equal((await manager.registerSlot("meeting", "F7", noop, { atomic: true })).success, true);
+  assert.deepEqual(probes, []);
+  const result = await manager.registerSlot("meeting", "RightShift", noop, { atomic: true });
+  assert.equal(result.success, false);
+  assert.deepEqual(probes, [["RightShift"]]);
+  assert.deepEqual(manager.getSlotHotkeys("meeting"), ["F7"]);
+  assert.equal(registered.has("F7"), true);
+});

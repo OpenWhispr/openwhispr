@@ -430,7 +430,7 @@ export default function AuthenticationStep({
             {t("auth.cloudNotConfigured")}
           </div>
           {onContinueWithoutAccount && (
-            <Button onClick={onContinueWithoutAccount} className="mt-3 h-12 w-full rounded-full">
+            <Button onClick={onContinueWithoutAccount} className="mt-3 h-12 w-full">
               {t("auth.getStarted")}
               <ArrowRight className="size-4 rtl:rotate-180" />
             </Button>
@@ -457,7 +457,7 @@ export default function AuthenticationStep({
               if (user?.emailVerified === false) onNeedsVerification(user.email);
               else onAuthComplete();
             }}
-            className="mt-7 h-12 w-fit min-w-32 rounded-full px-6"
+            className="mt-7 h-12 w-fit min-w-32 px-6"
           >
             {t("auth.common.continue")}
             <ArrowRight className="size-4 rtl:rotate-180" />
@@ -594,7 +594,7 @@ export default function AuthenticationStep({
             type="button"
             onClick={handleSSOSignIn}
             disabled={isSSOLoading || !oauthProtocolRegistered}
-            className="h-12 w-full rounded-full"
+            className="h-12 w-full"
           >
             {isSSOLoading ? (
               <>

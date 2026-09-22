@@ -453,12 +453,12 @@ test("GNOME leaves a Hold-capable hotkey on Hold and announces nothing", async (
   );
 });
 
-test("GNOME promotes a stored Tap back to Hold once the hotkey can deliver a release", async () => {
+test("GNOME preserves stored Tap after the one-time migration has already settled", async () => {
   await withGnomeSession(
     ({ manager, announced, bindings }) => {
-      assert.equal(manager.activationMode, "push");
-      assert.deepEqual(announced, ["push"]);
-      assert.deepEqual(bindings, [["push", "F8"]]);
+      assert.equal(manager.activationMode, "tap");
+      assert.deepEqual(announced, []);
+      assert.deepEqual(bindings, [["tap", "F8"]]);
     },
     { savedHotkey: "F8", activationMode: "tap" }
   );

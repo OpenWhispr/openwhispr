@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 
-// reconcileSlotActivationMode (ipcHandlers.js) has no export of its own — it
+// Optional activation-mode adoption (ipcHandlers.js) has no export of its own — it
 // is a closure reached only through the update-voice-agent-hotkey and
 // update-translation-hotkey IPC handlers, registered by the same
 // setupHandlers() pass hotkeyModeInfoIpc.test.js already drives. Same stub
@@ -126,10 +126,16 @@ function setup({ slotState, slotHotkey, canHold, registerResult }) {
 
   const hotkeyManager = new Proxy(
     {
+      slots: new Map(),
       getSlotHotkey: () => slotHotkey,
+      getSlotHotkeys: () => (slotHotkey ? [slotHotkey] : []),
       supportsPushToTalk: () => canHold,
-      registerSlot: async () => registerResult,
-      unregisterSlot: () => undefined,
+      resolveActivationMode: async () => (canHold ? "push" : "tap"),
+      registerSlot: async (_slot, _key, _callback, options) => ({
+        ...registerResult,
+        activationMode: options.activationMode,
+      }),
+      unregisterSlot: () => true,
     },
     { get: (t, prop) => (prop in t ? t[prop] : anything()) }
   );
@@ -249,27 +255,18 @@ test("a slot already at the preferred mode is left alone: no persist, no broadca
   assert.deepEqual(broadcasts, []);
 });
 
-test("a refused cache write persists and broadcasts the effective read-back, never the attempted mode", async () => {
-  // Mirrors the GNOME-portal rollback in hotkeyActivationMode.test.js: the
-  // manager refuses "push", so the cache — and everything downstream of it —
-  // must stay on "tap". A regression that persisted/broadcast the attempted
-  // `preferred` value instead of the `effective` read-back would report
-  // "push" here and this assertion would catch it.
+test("a refused cache write rejects the edit without saving or broadcasting the attempted mode", async () => {
   const slotState = makeSlotModeState("tap", { accept: false });
-  const { voiceAgentHandler, savedSlotModes } = setup({
+  const { voiceAgentHandler, savedSlotModes, savedVoiceAgentKeys } = setup({
     slotState,
     slotHotkey: "F9",
     canHold: true,
     registerResult: { success: true },
   });
-
   const result = await voiceAgentHandler({ sender: {} }, "F9");
-
-  assert.equal(result.success, true);
-  // The attempt was for "push" ...
+  assert.equal(result.success, false);
   assert.deepEqual(slotState.setCalls, ["push"]);
-  // ... but the portal refused it, so "tap" is what actually landed, and
-  // "tap" — never "push" — is what gets persisted and broadcast.
-  assert.deepEqual(savedSlotModes, [["voiceAgent", "tap"]]);
-  assert.deepEqual(broadcasts, [{ key: "voiceAgentActivationMode", value: "tap" }]);
+  assert.deepEqual(savedSlotModes, []);
+  assert.deepEqual(savedVoiceAgentKeys, []);
+  assert.deepEqual(broadcasts, []);
 });

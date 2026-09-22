@@ -574,7 +574,7 @@ test("compact macOS onboarding shows the native traffic lights", () => {
   }
 });
 
-test("native Linux push-to-talk keeps only the dictation low-level listener", async () => {
+test("native Linux Hold honors the desktop backend's empty low-level reader set", async () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { value: "linux", configurable: true });
 
@@ -586,8 +586,7 @@ test("native Linux push-to-talk keeps only the dictation low-level listener", as
       setActivationMode: async () => true,
       isInListeningMode: () => false,
       isUsingNativeShortcut: () => true,
-      getNativeListenerKeys: () => ["Control+Space", "Control+Shift+Space"],
-      findSlotByHotkey: (key) => (key === "Control+Space" ? "dictation" : "voiceAgent"),
+      getNativeListenerKeys: () => [],
     };
     await manager.setActivationModeCache("push");
     manager.linuxKeyManager = {
@@ -598,7 +597,7 @@ test("native Linux push-to-talk keeps only the dictation low-level listener", as
 
     manager.reconcileNativeKeyListeners();
 
-    assert.deepEqual(reconciledKeys, ["Control+Space"]);
+    assert.deepEqual(reconciledKeys, []);
   } finally {
     Object.defineProperty(process, "platform", originalPlatform);
   }

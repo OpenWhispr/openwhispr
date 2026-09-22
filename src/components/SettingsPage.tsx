@@ -1197,11 +1197,8 @@ export default function SettingsPage({
     useCleanupModel,
     dictationKey,
     activationMode,
-    setActivationMode,
     voiceAgentActivationMode,
-    setVoiceAgentActivationMode,
     translationActivationMode,
-    setTranslationActivationMode,
     microphoneSelectionMode,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
@@ -1714,12 +1711,9 @@ export default function SettingsPage({
         variant: "destructive",
         duration: 15000,
       });
-      setActivationMode("tap");
-      setVoiceAgentActivationMode("tap");
-      setTranslationActivationMode("tap");
     });
     return () => cleanup?.();
-  }, [toast, t, setActivationMode, setVoiceAgentActivationMode, setTranslationActivationMode]);
+  }, [toast, t]);
 
   useEffect(() => {
     if (installInitiated) {
@@ -4113,9 +4107,19 @@ EOF`,
                   <HotkeyListInput
                     value={meetingKey}
                     onChange={(list) => registerMeetingHotkey(list)}
-                    onClear={async () => {
-                      await window.electronAPI?.registerMeetingHotkey?.("");
+                    onClear={async (): Promise<boolean> => {
+                      const result = await window.electronAPI?.registerMeetingHotkey?.("");
+                      if (!result?.success) {
+                        showAlertDialog({
+                          title: t("hooks.hotkeyRegistration.titles.notRegistered"),
+                          description:
+                            result?.message ||
+                            t("hooks.hotkeyRegistration.errors.couldNotRegister"),
+                        });
+                        return false;
+                      }
                       setMeetingKey("");
+                      return true;
                     }}
                     validate={validateMeetingHotkey}
                     disabled={isMeetingHotkeyRegistering}

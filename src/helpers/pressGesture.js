@@ -134,8 +134,9 @@ class PressGestureTracker {
     }
   }
 
-  reset() {
-    this._slots.clear();
+  reset(kind) {
+    if (kind) this._slots.delete(kind);
+    else this._slots.clear();
   }
 }
 

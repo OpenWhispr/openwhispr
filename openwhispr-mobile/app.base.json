@@ -1,0 +1,141 @@
+{
+  "expo": {
+    "name": "OpenWhispr",
+    "slug": "openwhispr-mobile",
+    "scheme": "openwhispr",
+    "owner": "gizmo-labs",
+    "version": "1.2.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#007AFF"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gizmolabs.openwhispr",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "This app needs access to the microphone to record audio for transcription.",
+        "CFBundleAllowMixedLocalizations": true,
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["audio"],
+        "NSSupportsLiveActivities": true,
+        "LSApplicationQueriesSchemes": ["whatsapp", "slack", "twitter", "x"]
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          }
+        ]
+      },
+      "appleTeamId": "T832773L2J"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.gizmolabs.openwhispr",
+      "permissions": ["android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "17.0"
+          }
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice recording and transcription.",
+          "enableBackgroundRecording": true
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "react-native",
+          "organization": "herotools-inc"
+        }
+      ],
+      "expo-apple-authentication",
+      "./plugins/ios-cxx-standard/withIosCxxStandard",
+      "./plugins/storekit/withStoreKitConfiguration",
+      "./plugins/keyboard-extension/withKeyboardExtension",
+      "./plugins/activity-extension/withActivityExtension",
+      "./plugins/settings-bundle/withSettingsBundle",
+      "./plugins/speaker-diarization/withSpeakerDiarization",
+      "expo-web-browser",
+      "expo-image",
+      "expo-video",
+      "expo-router",
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-sharing",
+      "expo-asset",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#007AFF"
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "Allow tracking to help us measure which ads lead to OpenWhispr installs and subscriptions. Your voice and text are never used for advertising."
+        }
+      ],
+      "react-native-appsflyer"
+    ],
+    "experiments": {
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8447d067-4553-472a-8783-554c3adc2352",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "OpenWhisprKeyboard",
+                  "bundleIdentifier": "com.gizmolabs.openwhispr.keyboard",
+                  "entitlements": {
+                    "com.apple.security.application-groups": ["group.com.gizmolabs.openwhispr"]
+                  }
+                },
+                {
+                  "targetName": "OpenWhisprActivity",
+                  "bundleIdentifier": "com.gizmolabs.openwhispr.activity",
+                  "entitlements": {
+                    "com.apple.security.application-groups": ["group.com.gizmolabs.openwhispr"]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/8447d067-4553-472a-8783-554c3adc2352"
+    }
+  }
+}

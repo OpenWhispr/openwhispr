@@ -3,6 +3,7 @@ import logger from "../utils/logger";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
+import { convertToWav, needsWavConversion } from "../utils/audioContainer";
 import {
   applyChineseScript,
   mergeWhisperPrompt,
@@ -64,6 +65,7 @@ import {
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import {
+  byokFileSizeLimit,
   resolveByokModel,
   resolveTranscriptionRoute,
   STREAMING_ONLY_PROVIDERS,
@@ -3603,9 +3605,45 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return { success: true, text, rawText: proxyText, source, timings };
       }
 
+      // Some Custom endpoints decode the upload and reject anything that isn't
+      // WAV/MP3/FLAC (Azure MAI-Transcribe via OpenRouter, for one), which
+      // Chromium's WebM/Opus recordings always are. Re-encode for those rather
+      // than failing the dictation; a conversion failure falls through to the
+      // original bytes so this can only widen what works.
+      let uploadAudio = optimizedAudio;
+      if (needsWavConversion(provider, optimizedAudio.type, optimizedAudio.size)) {
+        try {
+          const wavAudio = await convertToWav(optimizedAudio);
+          // Keep compressed recordings usable on endpoints that already accept
+          // them when PCM expansion would exceed the upload limit.
+          if (wavAudio.size <= byokFileSizeLimit(provider)) {
+            uploadAudio = wavAudio;
+          }
+          logger.debug(
+            "Prepared recording for custom endpoint",
+            {
+              fromType: optimizedAudio.type,
+              fromSize: optimizedAudio.size,
+              toType: uploadAudio.type,
+              toSize: uploadAudio.size,
+            },
+            "transcription"
+          );
+        } catch (conversionError) {
+          logger.warn(
+            "WAV re-encode failed; uploading original container",
+            { error: conversionError?.message, type: optimizedAudio.type },
+            "transcription"
+          );
+        }
+      }
+
+      // Decoding can outlive cancellation and a newer recording's request.
+      if (wasCancelled()) throw new DOMException("Transcription cancelled", "AbortError");
+
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
-      const mimeType = optimizedAudio.type || "audio/webm";
+      const mimeType = uploadAudio.type || "audio/webm";
       const extension = audioExtensionForMime(mimeType);
 
       logger.debug(
@@ -3613,13 +3651,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         {
           mimeType,
           extension,
-          optimizedSize: optimizedAudio.size,
+          optimizedSize: uploadAudio.size,
           hasApiKey: !!apiKey,
         },
         "transcription"
       );
 
-      formData.append("file", optimizedAudio, `audio.${extension}`);
+      formData.append("file", uploadAudio, `audio.${extension}`);
       formData.append("model", model);
 
       if (language) {

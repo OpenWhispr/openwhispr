@@ -652,13 +652,24 @@ class WindowManager {
     if (this.macCompoundPushState?.active || this.isDictationProcessing()) {
       return;
     }
-    if (this.handlePushGestureDown(inputKind) !== "proceed") return;
-    if (this._shouldBlockDictationInput(inputKind)) return;
-
     const requiredModifiers = this.getMacRequiredModifiers(hotkey);
     if (requiredModifiers.size === 0) {
       return;
     }
+
+    const verdict = this.handlePushGestureDown(inputKind);
+    if (verdict === "latch" || verdict === "stop-hands-free") {
+      // Carbon repeats the down callback while a chord is held. A latch or
+      // stop still owns that physical press until a required modifier lifts.
+      this.macCompoundPushState = {
+        active: true,
+        requiredModifiers,
+        inputKind,
+        gestureHandled: true,
+      };
+      return;
+    }
+    if (verdict !== "proceed" || this._shouldBlockDictationInput(inputKind)) return;
 
     const MIN_HOLD_DURATION_MS = 150;
     const MAX_PUSH_DURATION_MS = 300000; // 5 minutes max recording
@@ -709,8 +720,14 @@ class WindowManager {
       clearTimeout(this.macCompoundPushState.safetyTimeoutId);
     }
 
-    const { isRecording: wasRecording, inputKind, downTime } = this.macCompoundPushState;
+    const {
+      isRecording: wasRecording,
+      inputKind,
+      downTime,
+      gestureHandled,
+    } = this.macCompoundPushState;
     this.macCompoundPushState = null;
+    if (gestureHandled) return;
 
     if (wasRecording) {
       this.sendStopDictation();
@@ -739,8 +756,9 @@ class WindowManager {
       clearTimeout(this.macCompoundPushState.safetyTimeoutId);
     }
 
-    const wasRecording = this.macCompoundPushState.isRecording;
+    const { isRecording: wasRecording, gestureHandled } = this.macCompoundPushState;
     this.macCompoundPushState = null;
+    if (gestureHandled) return;
 
     this._notifyPushForceStopped(reason);
 
@@ -943,7 +961,43 @@ class WindowManager {
     this.sendStopDictation();
   }
 
+  async demoteFailedNativeHotkey(key) {
+    const slotName = this.hotkeyManager.findSlotByHotkey(key);
+    if (
+      !slotName ||
+      slotName === "meeting" ||
+      !this.hotkeyManager.requiresNativeKeyListener(key, slotName) ||
+      this.getSlotActivationMode(slotName) !== "push"
+    )
+      return null;
+    // A native-only key has no Electron toggle to fall back to. End its
+    // active gesture and report failure without claiming a working Tap mode.
+    const applied =
+      !this.hotkeyManager.isNativeOnlyHotkey(key) &&
+      (slotName === "dictation"
+        ? await this.setActivationModeCache("tap")
+        : await this.setSlotActivationModeCache(slotName, "tap", { notifyFailure: false }));
+
+    const inputKind = slotName === "voiceAgent" ? "assistant" : slotName;
+    const hadPreparation = this._pushPrepCancelTimers.has(inputKind);
+    this._clearPushPrepCancelTimer(inputKind);
+    if (this.nativePushState?.inputKind === inputKind) {
+      this.handleNativePushKeyUp(undefined, { reason: "listener-failed" });
+    } else if (
+      hadPreparation &&
+      (this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE ||
+        this._dictationInputKind === inputKind)
+    ) {
+      this.sendCancelDictationPreparation();
+      if (!this._isDictatingToggle) this.hideDictationPanel();
+    }
+    this.stopHandsFreeSession(inputKind);
+    this._pressGesture.reset(inputKind);
+    return { slotName, demoted: applied };
+  }
+
   resetNativePushState() {
+    if (this.macCompoundPushState?.gestureHandled) this.macCompoundPushState = null;
     // Flush what the gesture state governed before dropping it: a pending
     // quick-release still owns a warm preparation, and a latched hands-free
     // recording has no other stop path once the tracker forgets it.
@@ -1350,8 +1404,13 @@ class WindowManager {
     return this._cachedActivationMode;
   }
 
-  async setActivationModeCache(mode) {
+  async setActivationModeCache(mode, { deferCapabilityCheck = false } = {}) {
     const nextMode = mode === "push" ? "push" : "tap";
+    if (deferCapabilityCheck) {
+      this.hotkeyManager.activationMode = nextMode;
+      this._cachedActivationMode = nextMode;
+      return true;
+    }
     const success = await this.hotkeyManager.setActivationMode(nextMode);
     if (!success) return false;
     this._cachedActivationMode = nextMode;
@@ -1437,15 +1496,7 @@ class WindowManager {
     }
     const activationMode = this.getActivationMode();
     const slotModes = this._getSlotActivationModes();
-    const nativeListenerKeys = this.hotkeyManager.getNativeListenerKeys(activationMode, slotModes);
-    // Native desktop shortcuts replace the low-level listener in tap mode. In
-    // push mode, keep the slot's listener as a release-event fallback; the
-    // push state machine makes duplicate backend and low-level phases harmless.
-    const keys = this.hotkeyManager.isUsingNativeShortcut()
-      ? nativeListenerKeys.filter(
-          (key) => this.getSlotActivationMode(this.hotkeyManager.findSlotByHotkey?.(key)) === "push"
-        )
-      : nativeListenerKeys;
+    const keys = this.hotkeyManager.getNativeListenerKeys(activationMode, slotModes);
     if (process.platform === "win32" && this.windowsKeyManager) {
       this.windowsKeyManager.setKeys(keys);
     } else if (process.platform === "linux" && this.linuxKeyManager) {
@@ -1509,8 +1560,10 @@ class WindowManager {
     if (result?.activationMode && result.activationMode !== this._cachedActivationMode) {
       this._cachedActivationMode = result.activationMode;
       this.resetNativePushState();
-      this.reconcileNativeKeyListeners();
     }
+    // Even a rejected candidate may have started a readiness probe. Keep only
+    // the final bindings, without resetting a recording when the edit failed.
+    this.reconcileNativeKeyListeners();
     return result;
   }
 

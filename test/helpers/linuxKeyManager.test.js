@@ -62,6 +62,7 @@ function startWatching(key = "Control+Space") {
   const manager = new LinuxKeyManager();
   manager.setKeys([key]);
   assert.equal(spawnCalls.length, 1, "one listener process per watched key");
+  spawnCalls[0].child.stdout.emit("data", "READY\n");
 
   const events = [];
   manager.on("key-down", (k) => events.push(`down:${k}`));

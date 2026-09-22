@@ -34,6 +34,7 @@ struct ListenerConfig: Decodable {
 
 // The app's key names (HotkeyInput: "F9", "Space", "`", "A", "[" ...) mapped to
 // macOS virtual keycodes (ANSI layout, HIToolbox Events.h).
+// BEGIN watched-key-map
 let keyCodesByName: [String: Int64] = [
     "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,
     "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17,
@@ -44,19 +45,26 @@ let keyCodesByName: [String: Int64] = [
     ";": 41, "semicolon": 41, "\\": 42, "backslash": 42, ",": 43, "comma": 43,
     "/": 44, "slash": 44, "n": 45, "m": 46, ".": 47, "period": 47,
     "tab": 48, "space": 49, "`": 50, "backquote": 50,
-    "backspace": 51, "delete": 51, "esc": 53, "escape": 53,
+    "backspace": 51, "esc": 53, "escape": 53,
+    "numdec": 65, "nummult": 67, "numadd": 69, "numdiv": 75, "numsub": 78,
+    "num0": 82, "num1": 83, "num2": 84, "num3": 85, "num4": 86,
+    "num5": 87, "num6": 88, "num7": 89, "num8": 91, "num9": 92,
     "f17": 64, "f18": 79, "f19": 80, "f20": 90,
     "f5": 96, "f6": 97, "f7": 98, "f3": 99, "f8": 100, "f9": 101, "f11": 103,
     "f13": 105, "f16": 106, "f14": 107, "f10": 109, "f12": 111, "f15": 113,
-    "insert": 114, "help": 114, "home": 115, "pageup": 116, "forwarddelete": 117,
+    "insert": 114, "help": 114, "home": 115, "pageup": 116, "delete": 117, "forwarddelete": 117,
     "f4": 118, "end": 119, "f2": 120, "pagedown": 121, "f1": 122,
     "left": 123, "arrowleft": 123, "right": 124, "arrowright": 124,
     "down": 125, "arrowdown": 125, "up": 126, "arrowup": 126,
 ]
 
-func keyCode(forKeyName name: String) -> Int64? {
-    keyCodesByName[name.lowercased()]
+func keyCodes(forKeyName name: String) -> [Int64] {
+    let normalized = name.lowercased()
+    // KeyboardEvent.code emits the same Enter name for Return and keypad Enter.
+    if normalized == "enter" || normalized == "return" { return [36, 76] }
+    return keyCodesByName[normalized].map { [$0] } ?? []
 }
+// END watched-key-map
 
 func emit(_ message: String) {
     FileHandle.standardOutput.write((message + "\n").data(using: .utf8)!)
@@ -232,10 +240,44 @@ enum GlobeSystemAction {
 var keyEventTapPort: CFMachPort?
 var keyRunLoopSource: CFRunLoopSource?
 
-// The keyboard tap exists only while a key is watched: every keystroke on the
+// BEGIN watched-key-routing
+// Store the original name until release, even if configuration or modifiers
+// change while the physical key remains down.
+var ownedWatchedKeys: [Int64: String] = [:]
+
+func needsKeyboardTap() -> Bool {
+    !watchedKeyCodes.isEmpty || !ownedWatchedKeys.isEmpty
+}
+
+func routeWatchedKeyEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+    let code = event.getIntegerValueField(.keyboardEventKeycode)
+    if type == .keyUp {
+        guard let name = ownedWatchedKeys.removeValue(forKey: code) else {
+            return Unmanaged.passUnretained(event)
+        }
+        emit("KEY_UP:\(name)")
+        if !needsKeyboardTap() { updateKeyboardTap() }
+        return nil
+    }
+    guard type == .keyDown else { return Unmanaged.passUnretained(event) }
+    if ownedWatchedKeys[code] != nil { return nil }
+
+    let shortcutModifiers: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskShift]
+    guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0,
+          event.flags.intersection(shortcutModifiers).isEmpty,
+          let name = watchedKeyCodes[code] else {
+        return Unmanaged.passUnretained(event)
+    }
+    ownedWatchedKeys[code] = name
+    emit("KEY_DOWN:\(name)")
+    return nil
+}
+// END watched-key-routing
+
+// The keyboard tap exists while a key is watched or still held: every keystroke on the
 // system passes through it, so it is not worth holding open for nothing.
 func updateKeyboardTap() {
-    if watchedKeyCodes.isEmpty {
+    if !needsKeyboardTap() {
         if let keyEventTapPort {
             CGEvent.tapEnable(tap: keyEventTapPort, enable: false)
             if let keyRunLoopSource {
@@ -264,20 +306,7 @@ func updateKeyboardTap() {
                 return Unmanaged.passUnretained(event)
             }
 
-            let code = event.getIntegerValueField(.keyboardEventKeycode)
-            guard let name = watchedKeyCodes[code] else {
-                return Unmanaged.passUnretained(event)
-            }
-            if type == .keyDown {
-                // Auto-repeat is one physical press.
-                if event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
-                    emit("KEY_DOWN:\(name)")
-                }
-            } else if type == .keyUp {
-                emit("KEY_UP:\(name)")
-            }
-            // Swallowed: the key is a hotkey, never text.
-            return nil
+            return routeWatchedKeyEvent(type: type, event: event)
         },
         userInfo: nil
     ) else {
@@ -296,11 +325,11 @@ func applyConfiguration(_ config: ListenerConfig) {
     updateMouseEventTap()
     var codes: [Int64: String] = [:]
     for name in config.watchKeys {
-        if let code = keyCode(forKeyName: name) {
-            codes[code] = name
-        } else {
+        let resolvedCodes = keyCodes(forKeyName: name)
+        if resolvedCodes.isEmpty {
             emitWarning("Ignoring unknown watch key \"\(name)\"")
         }
+        for code in resolvedCodes { codes[code] = name }
     }
     watchedKeyCodes = codes
     updateKeyboardTap()
