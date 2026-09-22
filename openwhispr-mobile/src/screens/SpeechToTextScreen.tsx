@@ -22,6 +22,10 @@ export default function SpeechToTextScreen() {
 
   const handleSelectMode = useCallback(
     async (mode: InferenceMode) => {
+      if (mode === 'providers') {
+        router.push('/(account)/providers');
+        return;
+      }
       if (mode === selectedMode) return;
       safeHaptics('light');
       const nextProcessing = inferenceToProcessingMode(mode);
@@ -55,9 +59,12 @@ export default function SpeechToTextScreen() {
       }
 
       setActiveMode(nextProcessing, true);
-      updateConfig({ defaultMode: nextProcessing });
+      updateConfig({
+        defaultMode: nextProcessing,
+        inference: { ...config?.inference, dictation: { mode } },
+      });
     },
-    [selectedMode, setActiveMode, updateConfig, user],
+    [config?.inference, selectedMode, setActiveMode, updateConfig, user],
   );
 
   return (

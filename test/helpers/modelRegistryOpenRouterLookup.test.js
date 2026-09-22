@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const modelRegistryData = require("../../src/models/modelRegistryData.json");
+const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
 
 const load = () => import("../../src/models/ModelRegistry.ts");
 

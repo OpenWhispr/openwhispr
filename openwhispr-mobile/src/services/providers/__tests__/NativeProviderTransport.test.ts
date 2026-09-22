@@ -1,0 +1,35 @@
+import { requestProviderNative, requestProviderFileNative } from '../NativeProviderTransport';
+const mockRequest = jest.fn();
+const mockCancel = jest.fn();
+jest.mock('../../../../modules/background-uploader/src', () => ({
+  BackgroundUploader: {
+    requestProvider: (...args: unknown[]) => mockRequest(...args),
+    cancelProviderRequest: (...args: unknown[]) => mockCancel(...args),
+  },
+}));
+beforeEach(() => jest.clearAllMocks());
+it.each(['json', 'file'])(
+  'rejects a late successful %s response after cancellation',
+  async (kind) => {
+    const controller = new AbortController();
+    mockRequest.mockImplementation(async () => {
+      controller.abort();
+      return { status: 200, body: '{}', url: 'https://api.example.com', headers: {} };
+    });
+    const result =
+      kind === 'json'
+        ? requestProviderNative('https://api.example.com', { signal: controller.signal })
+        : requestProviderFileNative({
+            url: 'https://api.example.com',
+            fileUri: 'file://audio.wav',
+            fileFieldName: 'file',
+            fileMimeType: 'audio/wav',
+            fileName: 'audio.wav',
+            parameters: {},
+            headers: {},
+            signal: controller.signal,
+          });
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    expect(mockCancel).toHaveBeenCalled();
+  },
+);

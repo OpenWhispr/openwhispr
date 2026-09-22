@@ -131,3 +131,7 @@ describe('detectAgentMention — edge cases', () => {
     expect(detectAgentMention('hey do this', '')).toBe(false);
   });
 });
+
+it('supports Providers mode', () => {
+  expect(isDictationAgentApplicable('providers', { defaultMode: 'providers' })).toBe(true);
+});

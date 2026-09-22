@@ -5,7 +5,7 @@ const {
   resolveMeetingTranscriptionOptions,
 } = require("../../src/helpers/meetingTranscriptionRouting.js");
 const { buildNoteFormattingOverrides } = require("../../src/helpers/noteFormattingOverrides.js");
-const modelRegistryData = require("../../src/models/modelRegistryData.json");
+const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
 
 // migrateMeetingFollowFlags() copies the dictation keys into Note Recording once
 // and latches. Until 1.10.0 it ran before migrateProviderSettings() had created

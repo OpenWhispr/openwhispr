@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { LucideIconName } from '@/components/ui/SystemIcon';
 import type { InferenceMode } from '@/types';
 
@@ -12,6 +13,7 @@ export type ModeDescriptor = {
 export type InferenceScope = 'speech';
 
 const BASE: Record<InferenceMode, Omit<ModeDescriptor, 'description'>> = {
+  providers: { mode: 'providers', icon: 'key', mdIcon: 'KeyRound', title: 'Providers' },
   openwhispr: {
     mode: 'openwhispr',
     icon: 'cloud',
@@ -27,6 +29,7 @@ const BASE: Record<InferenceMode, Omit<ModeDescriptor, 'description'>> = {
 };
 
 const SPEECH_DESCRIPTIONS: Record<InferenceMode, string> = {
+  providers: 'Use your own provider key. Billed by your provider.',
   openwhispr: 'Hosted by OpenWhispr. Requires sign-in.',
   local: 'Audio never leaves this phone.',
 };
@@ -36,21 +39,24 @@ const SPEECH_TITLES: Partial<Record<InferenceMode, string>> = {
 };
 
 const SCOPE_MODES: Record<InferenceScope, InferenceMode[]> = {
-  speech: ['openwhispr', 'local'],
+  speech: ['openwhispr', 'local', 'providers'],
 };
 
 export function getInferenceModes(scope: InferenceScope): ModeDescriptor[] {
-  return SCOPE_MODES[scope].map((mode) => {
-    const base = BASE[mode];
-    return {
-      ...base,
-      title: SPEECH_TITLES[mode] || base.title,
-      description: SPEECH_DESCRIPTIONS[mode],
-    };
-  });
+  return SCOPE_MODES[scope]
+    .filter((mode) => mode !== 'providers' || Platform.OS === 'ios')
+    .map((mode) => {
+      const base = BASE[mode];
+      return {
+        ...base,
+        title: SPEECH_TITLES[mode] || base.title,
+        description: SPEECH_DESCRIPTIONS[mode],
+      };
+    });
 }
 
 export const MODE_LABELS: Record<InferenceMode, string> = {
+  providers: 'Providers',
   openwhispr: 'OpenWhispr Cloud',
   local: 'On-Device',
 };

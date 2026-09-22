@@ -1,4 +1,5 @@
 import type { ReasoningRequest, ReasoningResponse } from '../../types';
+import { buildProviderPrompt } from './buildProviderPrompt';
 import { api } from '../../lib/apiClient';
 import { buildChatOverNotePayload, type ChatOverNoteRequest } from '../../lib/notes/chatOverNote';
 import {
@@ -132,26 +133,43 @@ export class ReasoningService {
       agentName,
       routing,
     } = request;
-    // Only callers that pass a routing hint opt into local/privacy routing.
-    // Dictation cleanup and the dictation agent carry no hint and must keep
-    // using the cloud path they were built for, regardless of mode or auth.
+    const { getInferenceSelection, resolveMobileProviderRoute } =
+      require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+    const scope = request.inferenceScope ?? 'cleanup';
+    const configuredSelection = request.inferenceRoute ?? getInferenceSelection(scope);
+    const selection = configuredSelection ? { ...configuredSelection } : undefined;
+    const usesProviders = selection?.mode === 'providers';
+    const localSelected = selection?.mode === 'local';
     const allowCloudFallback = routing?.allowCloudFallback === true;
+    let privateContent = routing?.isPrivateNote === true;
+    if (usesProviders || localSelected) {
+      const { useProcessingModeStore } =
+        require('@/store/useProcessingModeStore') as typeof import('@/store/useProcessingModeStore');
+      privateContent ||= useProcessingModeStore.getState().activeMode === 'private';
+    }
+    const localRequired =
+      localSelected ||
+      (usesProviders ? privateContent : !!routing && isLocalReasoningRequired(routing));
+    const localRequest =
+      (usesProviders || localSelected) && !systemPrompt
+        ? { ...request, ...buildProviderPrompt(request) }
+        : request;
 
-    if (routing && isLocalReasoningRequired(routing)) {
-      if (!systemPrompt && !allowCloudFallback) {
+    if (localRequired) {
+      if (!localRequest.systemPrompt && !allowCloudFallback) {
         throw new LocalReasoningError(
           'LOCAL_REASONING_UNAVAILABLE',
           'This content cannot be sent to cloud AI without explicit confirmation.',
         );
       }
 
-      if (systemPrompt) {
+      if (localRequest.systemPrompt) {
         const readiness = await getLocalReasoningReadiness();
         if (readiness.status === 'ready') {
-          const instructions = buildLocalReasoningInstructions(request);
+          const instructions = buildLocalReasoningInstructions(localRequest);
           const fits = await fitsLocalReasoningBudget({
             instructions,
-            prompt: text,
+            prompt: localRequest.text,
             readiness,
           });
 
@@ -164,7 +182,7 @@ export class ReasoningService {
             }
           } else {
             try {
-              return await LocalReasoningService.processText(request);
+              return await LocalReasoningService.processText(localRequest);
             } catch (error) {
               if (!allowCloudFallback) throw error;
             }
@@ -177,6 +195,26 @@ export class ReasoningService {
           );
         }
       }
+    }
+
+    if (usesProviders) {
+      const route = await resolveMobileProviderRoute(
+        scope,
+        selection,
+        privateContent,
+        allowCloudFallback,
+      );
+      const { processProviderText } =
+        require('@/services/providers/ProviderExecution') as typeof import('@/services/providers/ProviderExecution');
+      const prompt = buildProviderPrompt(request);
+      const result = await processProviderText({
+        route,
+        ...prompt,
+        temperature: request.temperature ?? (request.systemPrompt ? undefined : 0),
+        maxTokens: request.maxTokens,
+        signal,
+      });
+      return { ...result, text: stripThinkingTags(result.text) };
     }
 
     return this.callApi(text, {
@@ -195,9 +233,13 @@ export class ReasoningService {
   static async chatOverNote(request: ChatOverNoteRequest): Promise<ReasoningResponse> {
     const payload = buildChatOverNotePayload(request);
 
-    return this.callApi(payload.text, {
+    return this.processText({
+      text: payload.text,
       systemPrompt: payload.systemPrompt,
       signal: request.signal,
+      inferenceScope: 'agent',
+      inferenceRoute: request.inferenceRoute,
+      routing: request.routing,
     });
   }
 }

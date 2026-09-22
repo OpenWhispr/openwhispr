@@ -42,6 +42,7 @@ export default function AccountLayout() {
       <Stack.Screen name="index" options={customHeaderStackOptions} />
       <Stack.Screen name="profile" options={{ title: 'Profile', headerLargeTitle: false }} />
       <Stack.Screen name="ai-models" options={{ title: 'AI Models', headerLargeTitle: false }} />
+      <Stack.Screen name="providers" options={{ title: 'Providers', headerLargeTitle: false }} />
       <Stack.Screen
         name="dictation-agent"
         options={{ title: 'Dictation Agent', headerLargeTitle: false }}

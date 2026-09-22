@@ -1,5 +1,6 @@
 const js = require("@eslint/js");
 const globals = require("globals");
+const tseslint = require("typescript-eslint");
 
 module.exports = [
   {
@@ -12,6 +13,19 @@ module.exports = [
       "openwhispr-mobile/**", // mobile has its own ESLint configuration
       "src/**", // src has its own config
     ],
+  },
+  {
+    files: ["shared/**/*.ts"],
+    languageOptions: {
+      parser: tseslint.parser,
+      sourceType: "module",
+      ecmaVersion: "latest",
+    },
+    plugins: { "@typescript-eslint": tseslint.plugin },
+    rules: {
+      ...tseslint.plugin.configs.recommended.rules,
+      "@typescript-eslint/explicit-function-return-type": "error",
+    },
   },
   // Main process files (CommonJS)
   {

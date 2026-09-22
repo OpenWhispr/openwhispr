@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const registry = require("../../src/models/modelRegistryData.json");
+const registry = require("../../shared/ai/modelRegistryData.json");
 const load = () => import("../../src/helpers/transcriptionRoute.ts");
 
 // resolveByokModel validates by prefix so it can run in the packaged main process

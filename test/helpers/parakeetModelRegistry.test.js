@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const modelData = require("../../src/models/modelRegistryData.json");
+const modelData = require("../../shared/ai/modelRegistryData.json");
 const { BINARIES } = require("../../scripts/download-sherpa-onnx");
 const {
   getModelRuntime,

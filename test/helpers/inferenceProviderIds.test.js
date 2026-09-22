@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 
-const modelData = require("../../src/models/modelRegistryData.json");
+const modelData = require("../../shared/ai/modelRegistryData.json");
 
 // PROVIDER_REGISTRY is TypeScript, so node --test can't require it. Parse its
 // keys from source the way secretKeys.test.js mirrors preload's inlined list.

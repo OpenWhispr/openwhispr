@@ -958,6 +958,75 @@ export class TranscriptionService {
       );
 
     switch (provider) {
+      case 'byok': {
+        const { resolveMobileProviderRoute } =
+          require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+        const { transcribeWithProvider } =
+          require('@/services/providers/ProviderExecution') as typeof import('@/services/providers/ProviderExecution');
+        const scope = request.requestContext === 'file' ? 'upload' : 'dictation';
+        const route = await resolveMobileProviderRoute(scope, request.inferenceRoute);
+        const recoveryJobId = request.jobId ?? request.clientTranscriptionId;
+        const routeSnapshot = recoveryJobId
+          ? JSON.stringify({
+              version: 1,
+              jobId: recoveryJobId,
+              requestContext: request.requestContext,
+              route: {
+                provider: 'byok',
+                inferenceRoute: route,
+                cleanupRoute: request.cleanupRoute,
+                agentRoute: request.agentRoute,
+                cleanupUnavailable: request.cleanupUnavailable,
+                agentUnavailable: request.agentUnavailable,
+              },
+            })
+          : undefined;
+        const result =
+          route.providerId === 'deepgram' ||
+          route.providerId === 'assemblyai' ||
+          (route.providerId === 'tinfoil' && route.scope !== 'upload') ||
+          (route.providerId === 'gemini' && route.modelId.endsWith('-live'))
+            ? await (async () => {
+                if (recoveryJobId && routeSnapshot) {
+                  AppGroupStorage.setItem(`keyboard_upload_route.${recoveryJobId}`, routeSnapshot);
+                  AppGroupStorage.setItem(
+                    `keyboard_upload_audio.${recoveryJobId}`,
+                    request.audioUri,
+                  );
+                }
+                const { transcribeStreamingFile } =
+                  require('./StreamingFileTranscription') as typeof import('./StreamingFileTranscription');
+                const streamingResult = await transcribeStreamingFile({
+                  route,
+                  audioUri,
+                  language,
+                });
+                if (recoveryJobId) {
+                  AppGroupStorage.setItem(
+                    `keyboard_provider_result.${recoveryJobId}`,
+                    JSON.stringify({
+                      version: 1,
+                      jobId: recoveryJobId,
+                      requestContext: request.requestContext,
+                      text: streamingResult.text,
+                      route: routeSnapshot ? JSON.parse(routeSnapshot).route : undefined,
+                    }),
+                  );
+                }
+                return streamingResult;
+              })()
+            : await transcribeWithProvider({
+                route,
+                audioUri,
+                fileName: request.fileName,
+                mimeType: request.mimeType,
+                language,
+                routeSnapshot,
+                jobId: recoveryJobId,
+              });
+        return { ...result, provider: 'byok', inferenceRoute: route, endpoint: route.providerId };
+      }
+
       case 'local':
         // Private mode must never silently leave the device. If the on-device
         // model is unavailable we surface the error so the caller can ask the

@@ -1,3 +1,4 @@
+import sharedPrompts from "../../../shared/ai/prompts.json";
 import { en as enPrompts, type PromptBundle } from "../../locales/prompts";
 
 // When changing this text, move its old hash to the retired set in
@@ -14,7 +15,7 @@ export const PROMPT_KINDS = {
   },
   dictationAgent: {
     i18nKey: "fullPrompt" as const,
-    fallback: enPrompts.fullPrompt,
+    fallback: sharedPrompts.actionPrompt,
   },
   translate: {
     i18nKey: "translatePrompt" as const,

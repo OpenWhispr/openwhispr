@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-const modelRegistryData = require("../../src/models/modelRegistryData.json");
+const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
 
 // The one-shot byok → mode migrations decide "local" from a provider list. That
 // list used to be hand-maintained and missed `liquidai` when LFM landed

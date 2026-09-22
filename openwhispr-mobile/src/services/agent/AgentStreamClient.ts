@@ -1,3 +1,5 @@
+import type { InferenceSelection } from '@shared/ai/routing';
+import sharedPrompts from '@shared/ai/prompts.json';
 import { fetch } from 'expo/fetch';
 import {
   BASE_URL,
@@ -21,6 +23,7 @@ export interface AgentMessage {
 }
 
 export interface StreamAgentTextOptions {
+  inferenceRoute?: InferenceSelection;
   messages: AgentMessage[];
   systemPrompt?: string;
   sessionId?: string;
@@ -158,6 +161,38 @@ async function readNdjsonStream(reader: ReadableStreamDefaultReader<Uint8Array>)
  */
 export async function streamAgentText(options: StreamAgentTextOptions): Promise<string> {
   const { messages, systemPrompt, sessionId, signal: externalSignal, maxRetries } = options;
+  const { getInferenceSelection, resolveMobileProviderRoute } =
+    require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+  const selection = options.inferenceRoute ?? getInferenceSelection('agent');
+  if (selection?.mode === 'local')
+    throw new Error(
+      'On-device keyboard composition is not available. Choose a provider or OpenWhispr Cloud.',
+    );
+  if (selection?.mode === 'providers') {
+    const route = await resolveMobileProviderRoute('agent', options.inferenceRoute);
+    const { processProviderText } =
+      require('@/services/providers/ProviderExecution') as typeof import('@/services/providers/ProviderExecution');
+    const latest = messages.at(-1);
+    if (!latest || latest.role !== 'user')
+      throw new Error('An agent request requires a user instruction.');
+    const controller = new AbortController();
+    const timeout = setTimeout((): void => controller.abort(), AGENT_STREAM_TIMEOUT_MS);
+    try {
+      const result = await processProviderText({
+        route,
+        systemPrompt:
+          systemPrompt ?? sharedPrompts.actionPrompt.replace(/\{\{agentName\}\}/g, 'OpenWhispr'),
+        messages: messages.slice(0, -1),
+        text: latest.content,
+        signal: externalSignal
+          ? combineSignals(externalSignal, controller.signal)
+          : controller.signal,
+      });
+      return result.text;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 
   const shouldRetry = (error: unknown): boolean => {
     // Never retry a cancelled/superseded call — the abort was intentional

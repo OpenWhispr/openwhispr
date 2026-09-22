@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { createTranscriptId, useTranscriptStore } from '../store/useTranscriptStore';
-import { useProcessingModeStore } from '../store/useProcessingModeStore';
+import { snapshotTranscriptionJob, type TranscriptionJobRoute } from '../lib/inferenceRouting';
 import { transcribeAndCleanup } from '../lib/transcribeAndCleanup';
 import { isLocalModelMissingError } from '../services/transcription/TranscriptionService';
 import { analyzeSpeechActivity, createNoSpeechError } from '../lib/speechActivity';
@@ -67,8 +67,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const expoAudio = getExpoAudioModule();
   const addTranscript = useTranscriptStore((state) => state.addTranscript);
   const addFailedTranscript = useTranscriptStore((state) => state.addFailedTranscript);
-  const activeMode = useProcessingModeStore((state) => state.activeMode);
-  const transcriptionProvider = activeMode === 'private' ? 'local' : 'cloud';
+  const jobRouteRef = useRef<TranscriptionJobRoute>({ provider: 'cloud' });
 
   const recorderOptions = getDefaultRecorderOptions();
   const audioRecorder = useAudioRecorder(recorderOptions);
@@ -138,6 +137,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         } catch {}
       }
 
+      jobRouteRef.current = snapshotTranscriptionJob('dictation');
       await recorder.prepareToRecordAsync(recorderOptions);
       await recorder.record();
 
@@ -200,6 +200,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       const clientTranscriptionId = `recording-${randomUUID()}`;
 
       const retained = await retainRecording(uri);
+      const transcriptionProvider = jobRouteRef.current.provider;
       try {
         await finalizeRecording(retained, transcriptionProvider, clientTranscriptionId);
       } catch (transcribeError) {
@@ -265,7 +266,13 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         audioFileName: retained.audioFileName,
         audioMimeType: retained.audioMimeType,
         provider,
+        inferenceRoute: provider === 'byok' ? jobRouteRef.current.inferenceRoute : undefined,
+        cleanupRoute: jobRouteRef.current.cleanupRoute,
+        agentRoute: jobRouteRef.current.agentRoute,
+        cleanupUnavailable: jobRouteRef.current.cleanupUnavailable,
+        agentUnavailable: jobRouteRef.current.agentUnavailable,
         requestContext: 'recording',
+        jobId: retained.id,
         errorMessage: toFriendlyTranscriptionErrorMessage(error),
       });
     } catch (failedRowError) {
@@ -282,12 +289,19 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   ) => {
     const processedResult = await transcribeAndCleanup(
       {
+        ...jobRouteRef.current,
         audioUri: retained.audioUrl,
         provider,
+        inferenceRoute: provider === 'byok' ? jobRouteRef.current.inferenceRoute : undefined,
+        cleanupRoute: jobRouteRef.current.cleanupRoute,
+        agentRoute: jobRouteRef.current.agentRoute,
+        cleanupUnavailable: jobRouteRef.current.cleanupUnavailable,
+        agentUnavailable: jobRouteRef.current.agentUnavailable,
         language: getPreferredTranscriptionLanguage(),
         fileName: retained.audioFileName,
         mimeType: retained.audioMimeType,
         requestContext: 'recording',
+        jobId: retained.id,
         clientTranscriptionId,
       },
       {
@@ -310,7 +324,14 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       audioMimeType: retained.audioMimeType,
       duration: processedResult.transcription.duration,
       provider: processedResult.transcription.provider,
+      inferenceRoute: processedResult.transcription.inferenceRoute,
+      cleanupRoute: processedResult.transcription.cleanupRoute,
+      agentRoute: processedResult.transcription.agentRoute,
+      cleanupUnavailable: processedResult.transcription.cleanupUnavailable,
+      agentUnavailable: processedResult.transcription.agentUnavailable,
+      cleanupWarning: processedResult.transcription.cleanupWarning,
       requestContext: 'recording',
+      jobId: retained.id,
     });
 
     setCurrentText(finalText);

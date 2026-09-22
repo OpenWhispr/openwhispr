@@ -6,7 +6,7 @@ const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 
-const modelRegistryData = require("../../src/models/modelRegistryData.json");
+const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
 const { buildGguf, LLAMA_3_2_3B_ENTRIES } = require("./harness/ggufFixtures");
 
 // Drives modelManagerBridge.runInference against a stub llama-server, to pin

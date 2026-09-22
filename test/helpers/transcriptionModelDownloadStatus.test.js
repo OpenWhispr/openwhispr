@@ -7,7 +7,7 @@ const path = require("node:path");
 
 const ParakeetManager = require("../../src/helpers/parakeet");
 const WhisperManager = require("../../src/helpers/whisper");
-const modelRegistryData = require("../../src/models/modelRegistryData.json");
+const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
 const downloadUtils = require("../../src/helpers/downloadUtils");
 const whisperModulePath = require.resolve("../../src/helpers/whisper");
 

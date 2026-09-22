@@ -4,6 +4,7 @@ import {
   type RealtimeSession,
   type RealtimeUtterance,
 } from '@/services/transcription/RealtimeMeetingWsService';
+import { getTranscriptionProvider, resolveMobileProviderRoute } from '@/lib/inferenceRouting';
 
 export type CloudMeetingStatus = 'connecting' | 'live' | 'reconnecting' | 'error';
 
@@ -45,51 +46,55 @@ export function useCloudMeeting({
     if (!enabled) return;
     let cancelled = false;
     setStatus('connecting');
-    startRealtimeMeetingWs(
-      { language },
-      {
-        onPartial: (text) => setPartialText(text),
-        onUtterance: (utterance) => {
-          setUtterances((prev) => [...prev, utterance]);
-          setPartialText('');
-        },
-        onError: (e) => {
-          if (stoppedRef.current) return;
-          const message = (e as { error?: { message?: string } })?.error?.message;
-          setError(typeof message === 'string' ? message : 'Transcription error');
-          setStatus('error');
-        },
-        onClose: () => {
-          // A close we didn't initiate (server/network drop) is an error.
-          if (!stoppedRef.current) setStatus('error');
-        },
-        onReconnecting: () => {
-          // Safe to clear a transient 'error' here: a terminal failure sets `terminated`
-          // in the service, so no reconnect fires to override it.
-          if (!stoppedRef.current) {
+    const start = async (): Promise<void> => {
+      const route =
+        getTranscriptionProvider('meeting') === 'byok'
+          ? await resolveMobileProviderRoute('meeting')
+          : undefined;
+      const session = await startRealtimeMeetingWs(
+        { language, route },
+        {
+          onPartial: (text) => setPartialText(text),
+          onUtterance: (utterance) => {
+            setUtterances((prev) => [...prev, utterance]);
             setPartialText('');
-            setStatus('reconnecting');
-          }
+          },
+          onError: (e) => {
+            if (stoppedRef.current) return;
+            const message = (e as { error?: { message?: string } })?.error?.message;
+            setError(typeof message === 'string' ? message : 'Transcription error');
+            setStatus('error');
+          },
+          onClose: () => {
+            // A close we didn't initiate (server/network drop) is an error.
+            if (!stoppedRef.current) setStatus('error');
+          },
+          onReconnecting: () => {
+            // Safe to clear a transient 'error' here: a terminal failure sets `terminated`
+            // in the service, so no reconnect fires to override it.
+            if (!stoppedRef.current) {
+              setPartialText('');
+              setStatus('reconnecting');
+            }
+          },
+          onReconnected: () => {
+            if (!stoppedRef.current) setStatus('live');
+          },
         },
-        onReconnected: () => {
-          if (!stoppedRef.current) setStatus('live');
-        },
-      },
-    )
-      .then((session) => {
-        if (cancelled) {
-          session.stop();
-          return;
-        }
-        sessionRef.current = session;
-        startedAtRef.current = Date.now();
-        setStatus('live');
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : String(e));
-        setStatus('error');
-      });
+      );
+      if (cancelled) {
+        session.stop();
+        return;
+      }
+      sessionRef.current = session;
+      startedAtRef.current = Date.now();
+      setStatus('live');
+    };
+    void start().catch((e) => {
+      if (cancelled) return;
+      setError(e instanceof Error ? e.message : String(e));
+      setStatus('error');
+    });
 
     return () => {
       cancelled = true;

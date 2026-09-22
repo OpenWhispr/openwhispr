@@ -19,6 +19,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+  "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "../shared/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

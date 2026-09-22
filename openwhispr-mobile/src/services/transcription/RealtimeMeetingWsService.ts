@@ -1,3 +1,4 @@
+import { createProviderCredentialScope } from '@/services/providers/ProviderCredentialScope';
 /**
  * GPT-4o Realtime meeting transcription over a WebSocket with raw native PCM.
  *
@@ -12,6 +13,7 @@
  * Auth rides in the WS subprotocol, not a header — RN mangles custom WS headers on iOS.
  */
 import { Buffer } from 'buffer';
+import type { InferenceRoute } from '@shared/ai/routing';
 import * as Network from 'expo-network';
 import { api } from '@/lib/apiClient';
 import { withRetry, createApiRetryStrategy } from '@/lib/retry';
@@ -35,6 +37,14 @@ import {
   RECONNECT_MAX_DELAY_MS,
   CONNECT_TIMEOUT_MS,
 } from './realtimeReconnect';
+import {
+  createRealtimeProviderProtocol,
+  type RealtimeProviderOptions,
+  type RealtimeProviderProtocol,
+  type RealtimeWireData,
+} from './RealtimeProviderProtocol';
+import { getProviderCredential } from '@/services/providers/ProviderCredentials';
+import { requestProviderNative } from '@/services/providers/NativeProviderTransport';
 
 export type { RealtimeCallbacks, RealtimeSession, RealtimeUtterance } from './realtimeEvents';
 
@@ -52,7 +62,7 @@ interface TokenResponse {
 /** Minimal WebSocket surface the leg-swap plumbing depends on (injectable for tests). */
 export interface WebSocketLike {
   readyState: number;
-  send: (data: string) => void;
+  send: (data: RealtimeWireData) => void;
   close: (code?: number, reason?: string) => void;
   onopen: ((event?: unknown) => void) | null;
   onmessage: ((event: { data: string }) => void) | null;
@@ -62,18 +72,36 @@ export interface WebSocketLike {
 
 export interface RealtimeMeetingDeps {
   wsFactory?: (url: string, protocols: string[]) => WebSocketLike;
+  protocolFactory?: (
+    route: Extract<InferenceRoute, { mode: 'providers' }>,
+    options: RealtimeProviderOptions,
+  ) => Promise<RealtimeProviderProtocol>;
 }
 
 const defaultWsFactory = (url: string, protocols: string[]): WebSocketLike =>
   new WebSocket(url, protocols) as unknown as WebSocketLike;
 
 export async function startRealtimeMeetingWs(
-  opts: { language?: string; model?: string; sampleRate?: number } = {},
+  opts: {
+    language?: string;
+    model?: string;
+    sampleRate?: number;
+    route?: Extract<InferenceRoute, { mode: 'providers' }>;
+  } = {},
   callbacks: RealtimeCallbacks = {},
   deps: RealtimeMeetingDeps = {},
 ): Promise<RealtimeSession> {
   const sampleRate = opts.sampleRate ?? DEFAULT_SAMPLE_RATE;
   const wsFactory = deps.wsFactory ?? defaultWsFactory;
+  const routeSnapshot = opts.route ? { ...opts.route } : undefined;
+  const credentialScope = createProviderCredentialScope(routeSnapshot?.credentialRef);
+  const protocolFactory =
+    deps.protocolFactory ??
+    ((route, options) =>
+      createRealtimeProviderProtocol(route, options, {
+        getCredential: getProviderCredential,
+        request: requestProviderNative,
+      }));
 
   const tokenBody = (): Record<string, unknown> => ({
     streams: 1,
@@ -89,12 +117,44 @@ export async function startRealtimeMeetingWs(
     return clientSecret;
   };
 
+  const prepareProtocol = async (): Promise<RealtimeProviderProtocol> => {
+    if (routeSnapshot) {
+      return credentialScope.run(() =>
+        protocolFactory(routeSnapshot, {
+          language: opts.language,
+          sampleRate,
+          signal: credentialScope.signal,
+        }),
+      );
+    }
+    const clientSecret = await fetchClientSecret();
+    return {
+      providerId: 'openwhispr',
+      connection: {
+        url: OPENAI_REALTIME_WS_URL,
+        protocols: ['realtime', `openai-insecure-api-key.${clientSecret}`],
+        waitForReadyEvent: false,
+      },
+      onOpenMessages: [],
+      encodeAudio: (bytes) =>
+        JSON.stringify({
+          type: 'input_audio_buffer.append',
+          audio: Buffer.from(bytes).toString('base64'),
+        }),
+      finalizeMessages: [JSON.stringify({ type: 'input_audio_buffer.commit' })],
+      normalize: (message) => [message],
+    };
+  };
+
   // One reducer per session — this is why utterances survive every leg swap.
   const reducer = createRealtimeEventReducer(callbacks);
   const pcmRing = new PcmRingBuffer(pcmTailCapBytes(sampleRate));
   // Per-leg index + offset, keyed by socket so a replaced leg's late messages keep
   // their own leg's namespace/offset during a swap.
-  const legMeta = new WeakMap<WebSocketLike, { legIndex: number; offsetMs: number }>();
+  const legMeta = new WeakMap<
+    WebSocketLike,
+    { legIndex: number; offsetMs: number; protocol: RealtimeProviderProtocol }
+  >();
 
   let currentWs: WebSocketLike | null = null;
   // Leg mid-connect; tracked so a terminal stop closes it instead of leaking until timeout.
@@ -133,9 +193,9 @@ export async function startRealtimeMeetingWs(
     // Merge by bytes; base64 concatenation is only valid on 3-byte-aligned chunks.
     const merged = Buffer.concat(chunks);
     try {
-      ws.send(
-        JSON.stringify({ type: 'input_audio_buffer.append', audio: merged.toString('base64') }),
-      );
+      const protocol = legMeta.get(ws)?.protocol;
+      if (!protocol) return;
+      ws.send(protocol.encodeAudio(new Uint8Array(merged)));
     } catch {
       // Socket may have closed between the readyState check and send; drop the chunk.
     }
@@ -144,9 +204,9 @@ export async function startRealtimeMeetingWs(
   const closeWs = (ws: WebSocketLike | null, options?: { commit?: boolean }): void => {
     if (!ws) return;
     try {
-      // Optional final commit so the leg's last turn finalizes (empty buffer → benign commit_empty).
+      const protocol = legMeta.get(ws)?.protocol;
       if (options?.commit && ws.readyState === WS_OPEN) {
-        ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+        for (const message of protocol?.finalizeMessages ?? []) ws.send(message);
       }
       ws.close();
     } catch {
@@ -156,6 +216,8 @@ export async function startRealtimeMeetingWs(
 
   // Mic + timers only, never the socket — a reconnectable close must not stop capture.
   const teardownCapture = (): void => {
+    credentialScope.dispose();
+    credentialScope.signal.removeEventListener('abort', handleCredentialChange);
     frameSub?.remove();
     frameSub = null;
     LivePCMStreaming.stop().catch(() => {});
@@ -175,35 +237,52 @@ export async function startRealtimeMeetingWs(
   };
 
   const handleMessage = (ws: WebSocketLike, event: { data: string }): void => {
+    if (terminated) return;
     let parsed: unknown;
     try {
       parsed = JSON.parse(event.data);
     } catch {
       return;
     }
-    const evt = parsed as { type?: string; error?: { code?: string } };
-    if (evt.type === 'error' && evt.error?.code === 'input_audio_buffer_commit_empty') {
-      return; // benign: our commit hit an already-drained buffer
+    const meta = legMeta.get(ws);
+    if (!meta) return;
+    for (const normalized of meta.protocol.normalize(parsed)) {
+      const evt = normalized as {
+        type?: string;
+        item_id?: string;
+        transcript?: string;
+        error?: { code?: string };
+      };
+      if (evt.type === 'provider.ready') continue;
+      if (evt.type === 'provider.partial') {
+        callbacks.onDebug?.(normalized);
+        callbacks.onPartial?.(
+          evt.transcript ?? '',
+          namespaceItemId(meta.legIndex, evt.item_id ?? 'active'),
+        );
+        continue;
+      }
+      if (evt.type === 'error' && evt.error?.code === 'input_audio_buffer_commit_empty') continue;
+      const rewritten = applyLegOffset(normalized as object, meta.offsetMs) as {
+        item_id?: unknown;
+      };
+      if (typeof rewritten.item_id === 'string') {
+        rewritten.item_id = namespaceItemId(meta.legIndex, rewritten.item_id);
+      }
+      reducer.handleEvent(rewritten);
     }
-    const meta = legMeta.get(ws) ?? { legIndex: 0, offsetMs: 0 };
-    const rewritten = applyLegOffset(parsed as object, meta.offsetMs) as { item_id?: unknown };
-    if (typeof rewritten.item_id === 'string') {
-      rewritten.item_id = namespaceItemId(meta.legIndex, rewritten.item_id);
-    }
-    reducer.handleEvent(rewritten);
   };
 
   // Opens one leg; resolves on open, rejects on pre-open close/error/timeout. Does NOT
   // tear down capture on close — a post-open close routes to handleLegClosed.
   const connectLeg = (
-    clientSecret: string,
-    meta: { legIndex: number; offsetMs: number },
+    protocol: RealtimeProviderProtocol,
+    meta: { legIndex: number; offsetMs: number; protocol: RealtimeProviderProtocol },
   ): Promise<WebSocketLike> =>
     new Promise<WebSocketLike>((resolve, reject) => {
-      const ws = wsFactory(OPENAI_REALTIME_WS_URL, [
-        'realtime',
-        `openai-insecure-api-key.${clientSecret}`,
-      ]);
+      const ws = protocol.connection.socketFactory
+        ? protocol.connection.socketFactory()
+        : wsFactory(protocol.connection.url, protocol.connection.protocols);
       legMeta.set(ws, meta);
       connectingWs = ws;
       let settled = false;
@@ -211,8 +290,16 @@ export async function startRealtimeMeetingWs(
       const settle = (): void => {
         settled = true;
         clearTimeout(timer);
+        credentialScope.signal.removeEventListener('abort', abortConnect);
         if (connectingWs === ws) connectingWs = null;
       };
+      const abortConnect = (): void => {
+        if (settled) return;
+        settle();
+        closeWs(ws);
+        reject(new DOMException('Provider credential changed.', 'AbortError'));
+      };
+      credentialScope.signal.addEventListener('abort', abortConnect, { once: true });
       timer = setTimeout(() => {
         if (settled) return;
         settle();
@@ -226,10 +313,34 @@ export async function startRealtimeMeetingWs(
 
       ws.onopen = () => {
         if (settled) return;
-        settle();
-        resolve(ws);
+        try {
+          for (const message of protocol.onOpenMessages) ws.send(message);
+          if (!protocol.connection.waitForReadyEvent) {
+            settle();
+            resolve(ws);
+          }
+        } catch {
+          settle();
+          reject(new Error('Realtime provider configuration failed'));
+        }
       };
-      ws.onmessage = (e) => handleMessage(ws, e);
+      ws.onmessage = (e) => {
+        if (!settled && protocol.connection.waitForReadyEvent) {
+          try {
+            const normalized = protocol.normalize(JSON.parse(e.data));
+            if (
+              normalized.some((event) => (event as { type?: string }).type === 'provider.ready')
+            ) {
+              settle();
+              resolve(ws);
+              return;
+            }
+          } catch {
+            // Let the normal handler ignore malformed provider messages.
+          }
+        }
+        handleMessage(ws, e);
+      };
       ws.onerror = () => {
         // A post-open error is always followed by onclose (which drives the reconnect/
         // terminal decision), so we don't surface it here as onError.
@@ -253,9 +364,13 @@ export async function startRealtimeMeetingWs(
       };
     });
 
-  const openLeg = (clientSecret: string): Promise<WebSocketLike> => {
+  const openLeg = async (preparedProtocol?: RealtimeProviderProtocol): Promise<WebSocketLike> => {
+    credentialScope.assertActive();
+    const protocol = preparedProtocol ?? (await prepareProtocol());
+    credentialScope.assertActive();
+    if (terminated) throw Object.assign(new Error('session stopped'), { status: 499 });
     legIndex += 1;
-    return connectLeg(clientSecret, { legIndex, offsetMs: cumulativeOffsetMs });
+    return connectLeg(protocol, { legIndex, offsetMs: cumulativeOffsetMs, protocol });
   };
 
   const scheduleRotation = (): void => {
@@ -287,10 +402,15 @@ export async function startRealtimeMeetingWs(
     if (terminated) return;
     terminated = true;
     teardownCapture();
+    closeWs(currentWs);
     currentWs = null;
     const message = error instanceof Error ? error.message : 'Realtime session ended';
     callbacks.onError?.({ error: { message } });
     notifyClose();
+  };
+
+  const handleCredentialChange = (): void => {
+    goTerminal(new DOMException('Provider credential changed. Start a new session.', 'AbortError'));
   };
 
   // Replace a dead leg with a fresh one (bounded backoff), mic never stopping. Keeps
@@ -308,8 +428,7 @@ export async function startRealtimeMeetingWs(
         const state = await Network.getNetworkStateAsync();
         // Status-less error → retryable, so the loop waits for connectivity to return.
         if (state.isConnected === false) throw new Error('offline');
-        const clientSecret = await fetchClientSecret();
-        return openLeg(clientSecret);
+        return openLeg();
       },
       {
         maxRetries: RECONNECT_MAX_RETRIES,
@@ -341,8 +460,7 @@ export async function startRealtimeMeetingWs(
     // fresh-clock messages stamp continuously.
     cumulativeOffsetMs += Date.now() - legStartedAt;
     try {
-      const clientSecret = await fetchClientSecret();
-      const newWs = await openLeg(clientSecret);
+      const newWs = await openLeg();
       rotating = false;
       if (terminated) {
         closeWs(newWs);
@@ -388,7 +506,16 @@ export async function startRealtimeMeetingWs(
     teardownCapture();
   };
 
-  const firstSecret = await fetchClientSecret();
+  credentialScope.signal.addEventListener('abort', handleCredentialChange, { once: true });
+  let firstProtocol: RealtimeProviderProtocol;
+  try {
+    firstProtocol = await prepareProtocol();
+    credentialScope.assertActive();
+  } catch (error) {
+    credentialScope.dispose();
+    credentialScope.signal.removeEventListener('abort', handleCredentialChange);
+    throw error;
+  }
 
   // Start capture before opening the socket so speech during connect is buffered and
   // flushed on open. If the mic fails, abort before any socket exists.
@@ -398,8 +525,14 @@ export async function startRealtimeMeetingWs(
   try {
     await LivePCMStreaming.start(sampleRate);
   } catch (error) {
-    frameSub?.remove();
-    frameSub = null;
+    teardownCapture();
+    throw error;
+  }
+
+  try {
+    credentialScope.assertActive();
+  } catch (error) {
+    teardownCapture();
     throw error;
   }
 
@@ -407,8 +540,16 @@ export async function startRealtimeMeetingWs(
   flushTimer = setInterval(flush, FLUSH_INTERVAL_MS);
 
   try {
-    currentWs = await openLeg(firstSecret);
+    currentWs = await openLeg(firstProtocol);
   } catch (error) {
+    teardownCapture();
+    throw error;
+  }
+
+  try {
+    credentialScope.assertActive();
+  } catch (error) {
+    closeWs(currentWs);
     teardownCapture();
     throw error;
   }

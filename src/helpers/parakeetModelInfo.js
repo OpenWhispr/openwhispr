@@ -1,4 +1,4 @@
-const modelRegistryData = require("../models/modelRegistryData.json");
+const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
 
 const TRANSDUCER_MODEL_FILES = [
   "encoder.int8.onnx",

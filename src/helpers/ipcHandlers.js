@@ -34,7 +34,7 @@ const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
 // The renderer's ModelRegistry is not main-loadable; the raw registry data is
 // packaged, and the route resolver only needs {id, baseUrl} per provider.
 const transcriptionProviderBaseUrls = () =>
-  require("../models/modelRegistryData.json").transcriptionProviders;
+  require("../../shared/ai/modelRegistryData.json").transcriptionProviders;
 // ipcMain.handle keeps only the message when a promise rejects, dropping custom
 // props — proxy handlers return {error, code, messageKey} so the renderer can
 // rebuild the error.

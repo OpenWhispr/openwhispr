@@ -11,12 +11,30 @@ private struct UploadRequest: Record {
   @Field var parameters: [String: String] = [:]
   @Field var headers: [String: String] = [:]
   @Field var timeoutSeconds: Double?
+  @Field var routeSnapshot: String?
+}
+
+private struct ProviderRequest: Record {
+  @Field var requestId: String = ""
+  @Field var routeSnapshot: String?
+  @Field var recoveryAudioUri: String?
+  @Field var url: String = ""
+  @Field var method: String = "POST"
+  @Field var headers: [String: String] = [:]
+  @Field var body: String?
+  @Field var fileUri: String?
+  @Field var fileFieldName: String = "file"
+  @Field var fileMimeType: String = "application/octet-stream"
+  @Field var fileName: String?
+  @Field var parameters: [String: String] = [:]
+  @Field var timeoutSeconds: Double = 60
 }
 
 private enum BackgroundUploaderConstants {
   static let sessionIdentifier = "com.openwhispr.background-uploader"
   static let pendingTranscriptKey = "keyboard_pending_transcript"
   static let pendingTranscriptJobIdKey = "keyboard_pending_transcript_job_id"
+  static let orphanedRouteKey = "keyboard_orphaned_inference_route"
   static let orphanedRawTranscriptKey = "keyboard_orphaned_raw_transcript"
   static let orphanedRawTranscriptJobIdKey = "keyboard_orphaned_raw_transcript_job_id"
   static let recordingJobIdKey = "keyboard_recording_job_id"
@@ -93,8 +111,10 @@ private final class UploadDelegate: NSObject, URLSessionDataDelegate, URLSession
 
     if let upload {
       handleAlive(upload: upload, task: task, error: error)
-    } else if error == nil {
-      handleOrphaned(responseData: orphanData, jobId: task.taskDescription)
+    } else if error == nil, let response = task.response as? HTTPURLResponse, (200..<300).contains(response.statusCode) {
+      handleOrphaned(responseData: orphanData, taskDescription: task.taskDescription)
+    } else if let metadata = ProviderJobMetadata.decode(task.taskDescription) {
+      handleOrphanedFailure(metadata: metadata)
     }
   }
 
@@ -109,11 +129,14 @@ private final class UploadDelegate: NSObject, URLSessionDataDelegate, URLSession
       try? FileManager.default.removeItem(at: bodyFileUrl)
     }
     if let error {
-      upload.promise.reject("BG_UPLOAD_ERROR", error.localizedDescription)
+      let providerRequest = ProviderJobMetadata.decode(task.taskDescription)?.route.provider == "byok"
+      upload.promise.reject("BG_UPLOAD_ERROR", providerRequest ? "Provider upload failed. Check the connection and retry the original recording." : error.localizedDescription)
       return
     }
     let httpResponse = task.response as? HTTPURLResponse
-    let body = String(data: upload.responseData, encoding: .utf8) ?? ""
+    let providerRequest = ProviderJobMetadata.decode(task.taskDescription)?.route.provider == "byok"
+    let isSuccess = (200..<300).contains(httpResponse?.statusCode ?? 0)
+    let body = providerRequest && !isSuccess ? "" : String(data: upload.responseData, encoding: .utf8) ?? ""
     let uploadMs = Int(Date().timeIntervalSince1970 * 1000) - upload.startedAtMs
     upload.promise.resolve([
       "status": httpResponse?.statusCode ?? 0,
@@ -123,7 +146,21 @@ private final class UploadDelegate: NSObject, URLSessionDataDelegate, URLSession
     ])
   }
 
-  private func handleOrphaned(responseData: Data, jobId: String?) {
+  private func handleOrphanedFailure(metadata: ProviderJobMetadata) {
+    guard let defaults = UserDefaults(suiteName: BackgroundUploaderConstants.appGroupId),
+          defaults.string(forKey: BackgroundUploaderConstants.recordingJobIdKey) == metadata.jobId else { return }
+    defaults.set(metadata.encoded, forKey: BackgroundUploaderConstants.orphanedRouteKey)
+    defaults.set("error", forKey: BackgroundUploaderConstants.transcriptionStatusKey)
+    defaults.set("provider_request_failed", forKey: BackgroundUploaderConstants.transcriptionErrorKey)
+    defaults.set(String(Int(Date().timeIntervalSince1970 * 1000)), forKey: BackgroundUploaderConstants.transcriptionStatusUpdatedAtMsKey)
+    defaults.synchronize()
+    BackgroundUploaderConstants.postDarwinNotification(BackgroundUploaderConstants.darwinStatusNotificationName)
+  }
+
+  private func handleOrphaned(responseData: Data, taskDescription: String?) {
+    let metadata = ProviderJobMetadata.decode(taskDescription)
+    if taskDescription?.hasPrefix("{") == true && metadata == nil { return }
+    let jobId = metadata?.jobId ?? taskDescription
     guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
           let defaults = UserDefaults(suiteName: BackgroundUploaderConstants.appGroupId)
     else {
@@ -133,7 +170,17 @@ private final class UploadDelegate: NSObject, URLSessionDataDelegate, URLSession
       return
     }
 
-    let textCandidates = [
+    let providerId = metadata?.route.inferenceRoute?.providerId
+    let providerText: Any? = {
+      if providerId == "gemini" {
+        if let text = json["output_text"] as? String { return text }
+        let steps = json["steps"] as? [[String: Any]] ?? []
+        return steps.flatMap { $0["content"] as? [[String: Any]] ?? [] }
+          .filter { $0["type"] as? String == "text" }.compactMap { $0["text"] as? String }.joined(separator: " ")
+      }
+      return json["text"] ?? json["transcript"]
+    }()
+    let textCandidates = metadata?.route.provider == "byok" ? [providerText] : [
       json["text"],
       json["cleanedText"],
       json["cleaned_text"],
@@ -147,10 +194,10 @@ private final class UploadDelegate: NSObject, URLSessionDataDelegate, URLSession
       return
     }
 
-    let cleanupApplied =
-      (json["cleanupApplied"] as? Bool)
-      ?? (json["cleanup_applied"] as? Bool)
-      ?? false
+    let cleanupApplied = metadata?.route.provider == "byok" ? false :
+      ((json["cleanupApplied"] as? Bool) ?? (json["cleanup_applied"] as? Bool) ?? false)
+    if let metadata { defaults.set(metadata.encoded, forKey: BackgroundUploaderConstants.orphanedRouteKey) }
+    else { defaults.removeObject(forKey: BackgroundUploaderConstants.orphanedRouteKey) }
 
     func writeJobId(_ jobId: String?, forKey key: String) {
       if let jobId, !jobId.isEmpty {
@@ -270,6 +317,7 @@ public class BackgroundUploaderAppDelegate: ExpoAppDelegateSubscriber {
 
 public class BackgroundUploaderModule: Module {
   private var session: URLSession!
+  private let providerTransport = ProviderRequestTransport()
 
   public func definition() -> ModuleDefinition {
     Name("BackgroundUploader")
@@ -294,9 +342,117 @@ public class BackgroundUploaderModule: Module {
     AsyncFunction("upload") { (request: UploadRequest, promise: Promise) in
       self.startUpload(request: request, promise: promise)
     }
+
+    AsyncFunction("requestProvider") { (request: ProviderRequest, promise: Promise) in
+      self.startProviderRequest(request: request, promise: promise)
+    }
+
+    Function("listProviderRecoveryJobIds") { () throws -> [String] in
+      try ProviderRecoveryStore.listPendingJobIds()
+    }
+
+    Function("clearProviderRecovery") { (jobId: String) throws in
+      try ProviderRecoveryStore.clear(jobId: jobId)
+    }
+
+    Function("cancelProviderRequest") { (requestId: String) in
+      self.providerTransport.cancel(requestId: requestId)
+    }
+  }
+
+  private func startProviderRequest(request: ProviderRequest, promise: Promise) {
+    guard let url = URL(string: request.url), ProviderRequestTransport.isAllowedURL(url) else {
+      promise.reject(ProviderTransportError.invalidURL.code, ProviderTransportError.invalidURL.message)
+      return
+    }
+    let snapshotJSON = request.routeSnapshot
+    let metadata = ProviderJobMetadata.decode(snapshotJSON)
+    if let snapshotJSON {
+      guard let metadata, metadata.route.provider == "byok", metadata.matchesDestination(url),
+            ["dictation", "upload"].contains(metadata.route.inferenceRoute?.scope ?? ""),
+            let audioUri = request.recoveryAudioUri ?? request.fileUri,
+            let audioURL = audioUri.hasPrefix("file://") ? URL(string: audioUri) : (audioUri.hasPrefix("/") ? URL(fileURLWithPath: audioUri) : nil),
+            audioURL.isFileURL, FileManager.default.fileExists(atPath: audioURL.path) else {
+        promise.reject("PROVIDER_INVALID_RECOVERY_ROUTE", "The original recording and provider route are required for recovery.")
+        return
+      }
+      do { try ProviderRecoveryStore.savePending(snapshotJSON: snapshotJSON, audioUri: audioUri) }
+      catch {
+        promise.reject("PROVIDER_RECOVERY_UNAVAILABLE", "Unable to preserve the original recording for recovery.")
+        return
+      }
+    }
+    var headers = request.headers
+    var bodyFileURL: URL?
+    if let fileUri = request.fileUri {
+      let fileURL = fileUri.hasPrefix("file://") ? URL(string: fileUri) : (fileUri.hasPrefix("/") ? URL(fileURLWithPath: fileUri) : nil)
+      guard request.body == nil, let fileURL, fileURL.isFileURL,
+            FileManager.default.fileExists(atPath: fileURL.path) else {
+        promise.reject("PROVIDER_AUDIO_UNAVAILABLE", "The recorded audio file is unavailable.")
+        return
+      }
+      let fileName = request.fileName ?? fileURL.lastPathComponent
+      let headerValues = [request.fileFieldName, request.fileMimeType, fileName] + Array(request.parameters.keys)
+      guard headerValues.allSatisfy({ !$0.contains("\r") && !$0.contains("\n") && !$0.contains("\"") && !$0.contains("\\") }) else {
+        promise.reject(ProviderTransportError.invalidRequest.code, ProviderTransportError.invalidRequest.message)
+        return
+      }
+      let boundary = "----OpenWhisprProviderBoundary\(UUID().uuidString)"
+      do {
+        bodyFileURL = try buildMultipartBodyFile(boundary: boundary, parameters: request.parameters, fileFieldName: request.fileFieldName, fileName: fileName, fileMimeType: request.fileMimeType, fileUrl: fileURL)
+      } catch {
+        promise.reject("PROVIDER_AUDIO_UNAVAILABLE", "Unable to prepare the recorded audio for upload.")
+        return
+      }
+      headers = headers.filter { $0.key.lowercased() != "content-type" }
+      headers["Content-Type"] = "multipart/form-data; boundary=\(boundary)"
+    }
+    DispatchQueue.main.async {
+      var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+      backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Provider request") {
+        self.providerTransport.cancel(requestId: request.requestId)
+      }
+      self.providerTransport.request(requestId: request.requestId, url: url, method: request.method, headers: headers, body: request.body.map { Data($0.utf8) }, bodyFileURL: bodyFileURL, timeout: request.timeoutSeconds) { result in
+        DispatchQueue.main.async {
+          if backgroundTask != .invalid {
+            UIApplication.shared.endBackgroundTask(backgroundTask)
+            backgroundTask = .invalid
+          }
+        }
+        switch result {
+        case .success(let response):
+          if (200..<300).contains(response.status), let snapshotJSON, let metadata, let text = metadata.transcript(from: response.body) {
+            do { try ProviderRecoveryStore.saveResult(snapshotJSON: snapshotJSON, text: text) }
+            catch {
+              promise.reject("PROVIDER_RECOVERY_UNAVAILABLE", "The transcript could not be saved for recovery. The original audio is retained.")
+              return
+            }
+          }
+          promise.resolve(["status": response.status, "body": response.body, "url": response.url, "headers": response.headers])
+        case .failure(let error):
+          promise.reject(error.code, error.message)
+        }
+      }
+    }
   }
 
   private func startUpload(request: UploadRequest, promise: Promise) {
+    let metadata = ProviderJobMetadata.decode(request.routeSnapshot)
+    if request.routeSnapshot != nil && metadata == nil {
+      promise.reject("BG_UPLOAD_INVALID_ROUTE", "Invalid upload route snapshot.")
+      return
+    }
+    if let metadata, let jobId = request.parameters["jobId"], metadata.jobId != jobId {
+      promise.reject("BG_UPLOAD_INVALID_ROUTE", "Upload route does not match this recording.")
+      return
+    }
+    if metadata?.route.provider == "byok" {
+      guard let url = URL(string: request.url), ProviderRequestTransport.isAllowedURL(url),
+            metadata?.matchesDestination(url) == true else {
+        promise.reject("BG_UPLOAD_BAD_URL", "The upload destination does not match the original provider route.")
+        return
+      }
+    }
     guard let url = URL(string: request.url) else {
       promise.reject("BG_UPLOAD_BAD_URL", "Invalid URL: \(request.url)")
       return
@@ -315,6 +471,26 @@ public class BackgroundUploaderModule: Module {
 
     guard FileManager.default.fileExists(atPath: fileUrl.path) else {
       promise.reject("BG_UPLOAD_MISSING_FILE", "File does not exist: \(fileUrl.path)")
+      return
+    }
+
+    if let metadata, metadata.route.provider == "byok" {
+      // Background URLSession always follows redirects, ignoring its delegate.
+      // Keep BYOK transfers in a redirect-safe session with finite background time;
+      // JS can retry retained audio with this exact snapshot after interruption.
+      var providerRequest = ProviderRequest()
+      providerRequest.requestId = "provider-upload-\(UUID().uuidString)"
+      providerRequest.routeSnapshot = metadata.encoded
+      providerRequest.recoveryAudioUri = request.fileUri
+      providerRequest.url = request.url
+      providerRequest.fileUri = request.fileUri
+      providerRequest.fileFieldName = request.fileFieldName
+      providerRequest.fileMimeType = request.fileMimeType
+      providerRequest.fileName = request.fileName
+      providerRequest.parameters = request.parameters
+      providerRequest.headers = request.headers
+      providerRequest.timeoutSeconds = request.timeoutSeconds ?? 60
+      startProviderRequest(request: providerRequest, promise: promise)
       return
     }
 
@@ -347,7 +523,7 @@ public class BackgroundUploaderModule: Module {
     }
 
     let task = session.uploadTask(with: urlRequest, fromFile: bodyFileUrl)
-    task.taskDescription = request.parameters["jobId"]
+    task.taskDescription = metadata?.encoded ?? request.parameters["jobId"]
     let pending = PendingUpload(promise: promise)
     pending.bodyFileUrl = bodyFileUrl
     pending.bodyBuildMs = bodyBuildMs
@@ -356,7 +532,7 @@ public class BackgroundUploaderModule: Module {
     NSLog(
       "[BackgroundUploader] upload task=%ld file=%@ bodyBuildMs=%d",
       task.taskIdentifier,
-      resolvedFileName,
+      metadata?.route.provider == "byok" ? "provider-audio" : resolvedFileName,
       bodyBuildMs
     )
     #endif
@@ -374,6 +550,8 @@ public class BackgroundUploaderModule: Module {
     let tmpUrl = FileManager.default.temporaryDirectory
       .appendingPathComponent("bg-upload-\(UUID().uuidString).tmp")
     FileManager.default.createFile(atPath: tmpUrl.path, contents: nil)
+    var completed = false
+    defer { if !completed { try? FileManager.default.removeItem(at: tmpUrl) } }
 
     let handle = try FileHandle(forWritingTo: tmpUrl)
     defer { try? handle.close() }
@@ -403,6 +581,7 @@ public class BackgroundUploaderModule: Module {
     let trailer = "\(crlf)--\(boundary)--\(crlf)"
     handle.write(Data(trailer.utf8))
 
+    completed = true
     return tmpUrl
   }
 }

@@ -6,7 +6,7 @@ import {
   isLocalModelMissingError,
 } from '../services/transcription/TranscriptionService';
 import { createTranscriptId, useTranscriptStore } from '../store/useTranscriptStore';
-import { useProcessingModeStore } from '../store/useProcessingModeStore';
+import { snapshotTranscriptionJob } from '../lib/inferenceRouting';
 import { transcribeAndCleanup } from '../lib/transcribeAndCleanup';
 import { getPreferredTranscriptionLanguage } from '../lib/transcriptionLanguage';
 import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors';
@@ -49,8 +49,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
   const [currentText, setCurrentText] = useState('');
   const addTranscript = useTranscriptStore((state) => state.addTranscript);
   const addFailedTranscript = useTranscriptStore((state) => state.addFailedTranscript);
-  const activeMode = useProcessingModeStore((state) => state.activeMode);
-  const transcriptionProvider = activeMode === 'private' ? 'local' : 'cloud';
 
   const pickAndTranscribeFile = async () => {
     try {
@@ -78,6 +76,8 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
         return;
       }
 
+      const jobRoute = snapshotTranscriptionJob('upload');
+      const transcriptionProvider = jobRoute.provider;
       const file = result.assets[0];
 
       const extension = file.name?.includes('.')
@@ -131,7 +131,13 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
             audioFileName: file.name,
             audioMimeType: file.mimeType,
             provider,
+            inferenceRoute: provider === 'byok' ? jobRoute.inferenceRoute : undefined,
+            cleanupRoute: jobRoute.cleanupRoute,
+            agentRoute: jobRoute.agentRoute,
+            cleanupUnavailable: jobRoute.cleanupUnavailable,
+            agentUnavailable: jobRoute.agentUnavailable,
             requestContext: 'file',
+            jobId: transcriptId,
             errorMessage: toFriendlyTranscriptionErrorMessage(error),
           });
         } catch (failedRowError) {
@@ -155,12 +161,19 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
 
           const processedResult = await transcribeAndCleanup(
             {
+              ...jobRoute,
               audioUri,
               provider,
+              inferenceRoute: provider === 'byok' ? jobRoute.inferenceRoute : undefined,
+              cleanupRoute: jobRoute.cleanupRoute,
+              agentRoute: jobRoute.agentRoute,
+              cleanupUnavailable: jobRoute.cleanupUnavailable,
+              agentUnavailable: jobRoute.agentUnavailable,
               fileName: file.name,
               mimeType: file.mimeType,
               language: getPreferredTranscriptionLanguage(),
               requestContext: 'file',
+              jobId: transcriptId,
               clientTranscriptionId,
             },
             {
@@ -178,7 +191,14 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
             audioMimeType: file.mimeType,
             duration: processedResult.transcription.duration,
             provider: processedResult.transcription.provider,
+            inferenceRoute: processedResult.transcription.inferenceRoute,
+            cleanupRoute: processedResult.transcription.cleanupRoute,
+            agentRoute: processedResult.transcription.agentRoute,
+            cleanupUnavailable: processedResult.transcription.cleanupUnavailable,
+            agentUnavailable: processedResult.transcription.agentUnavailable,
+            cleanupWarning: processedResult.transcription.cleanupWarning,
             requestContext: 'file',
+            jobId: transcriptId,
           });
 
           setCurrentText(finalText);

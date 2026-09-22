@@ -1,3 +1,13 @@
+const mockListPendingProviderRecoveryJobs = jest.fn((): unknown[] => []);
+const mockClearKeyboardProviderRecovery = jest.fn();
+jest.mock('@/lib/keyboardInferenceRoute', () => ({
+  listPendingProviderRecoveryJobs: mockListPendingProviderRecoveryJobs,
+  clearKeyboardProviderRecovery: mockClearKeyboardProviderRecovery,
+}));
+const mockAppGroupGetItem = jest.fn((_key: string): string | null => null);
+jest.mock('../../../modules/app-group-storage/src', () => ({
+  AppGroupStorage: { getItem: mockAppGroupGetItem },
+}));
 const mockSaveTranscripts = jest.fn();
 const mockGetTranscripts = jest.fn();
 const mockClearTranscripts = jest.fn();
@@ -60,6 +70,7 @@ jest.mock('../../../modules/audio-tools/src', () => ({
 }));
 
 import type { Transcript } from '@/types';
+import { withActiveProviderJob } from '@/lib/providerJobActivity';
 
 const { useTranscriptStore } =
   require('../useTranscriptStore') as typeof import('../useTranscriptStore');
@@ -84,6 +95,8 @@ const failedTranscript = (overrides: Partial<Transcript> = {}): Transcript => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockListPendingProviderRecoveryJobs.mockReturnValue([]);
+  mockAppGroupGetItem.mockReturnValue(null);
   mockProcessingModeState.activeMode = 'cloud';
   mockTranscribeAndCleanup.mockResolvedValue({
     text: 'clean transcript',
@@ -264,7 +277,9 @@ describe('useTranscriptStore retry support', () => {
 
   it('transcodes compressed audio before local retry and cleans up the temp wav', async () => {
     mockProcessingModeState.activeMode = 'private';
-    useTranscriptStore.setState({ transcripts: [failedTranscript({ requestContext: 'file' })] });
+    useTranscriptStore.setState({
+      transcripts: [failedTranscript({ requestContext: 'file', provider: 'local' })],
+    });
     mockTranscribeAndCleanup.mockResolvedValueOnce({
       text: 'clean transcript',
       originalText: 'raw transcript',
@@ -334,12 +349,14 @@ describe('useTranscriptStore first-pass AppsFlyer events', () => {
   it('does not log when completed transcript persistence fails', async () => {
     mockSaveTranscripts.mockRejectedValueOnce(new Error('storage unavailable'));
 
-    await useTranscriptStore.getState().addTranscript({
-      id: 'not-persisted',
-      text: 'accepted transcript',
-      provider: 'cloud',
-      requestContext: 'recording',
-    });
+    await expect(
+      useTranscriptStore.getState().addTranscript({
+        id: 'not-persisted',
+        text: 'accepted transcript',
+        provider: 'cloud',
+        requestContext: 'recording',
+      }),
+    ).rejects.toThrow('storage unavailable');
 
     expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
   });
@@ -405,4 +422,189 @@ describe('useTranscriptStore audio retention on load', () => {
 
     expect(mockGarbageCollectTranscriptAudio).toHaveBeenCalledWith([]);
   });
+});
+
+describe('BYOK retry destination', () => {
+  const route = {
+    mode: 'providers',
+    scope: 'dictation',
+    providerId: 'groq',
+    modelId: 'whisper-large-v3-turbo',
+    endpoint: 'https://api.groq.com/openai/v1',
+    credentialRef: 'provider.groq',
+  } as const;
+  it('keeps the original provider route when current mode is Cloud', async () => {
+    useTranscriptStore.setState({
+      transcripts: [failedTranscript({ provider: 'byok', inferenceRoute: route })],
+    });
+    await useTranscriptStore.getState().retryTranscript('t1');
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'byok', inferenceRoute: route }),
+    );
+  });
+  it('refuses a BYOK retry without its original route', async () => {
+    useTranscriptStore.setState({ transcripts: [failedTranscript({ provider: 'byok' })] });
+    await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toThrow(
+      'original provider',
+    );
+    expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
+  });
+});
+
+it('retains text-stage routes on failed rows and passes them unchanged to retry', async () => {
+  const cleanupRoute = { mode: 'openwhispr' as const, scope: 'cleanup' as const };
+  const agentRoute = { mode: 'local' as const, scope: 'agent' as const };
+  await useTranscriptStore.getState().addFailedTranscript({
+    id: 'stage-retry',
+    errorMessage: 'failed',
+    audioUrl: 'file://docs/transcript-audio/stage-retry.m4a',
+    provider: 'cloud',
+    cleanupRoute,
+    agentRoute,
+    agentUnavailable: 'Agent unavailable.',
+  });
+  await useTranscriptStore.getState().retryTranscript('stage-retry');
+  expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+    expect.objectContaining({ cleanupRoute, agentRoute, agentUnavailable: 'Agent unavailable.' }),
+  );
+});
+
+it('does not reroute an existing Cloud recording after switching to private mode', async () => {
+  mockProcessingModeState.activeMode = 'private';
+  useTranscriptStore.setState({ transcripts: [failedTranscript()] });
+  await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toThrow(
+    'original route',
+  );
+  expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
+});
+
+it('reports a failed durable history write so keyboard recovery keeps its data', async () => {
+  mockSaveTranscripts.mockRejectedValueOnce(new Error('disk unavailable'));
+  await expect(
+    useTranscriptStore.getState().addTranscript({ id: 'recovery', text: 'raw', provider: 'byok' }),
+  ).rejects.toThrow('disk unavailable');
+  expect(mockDeleteManagedTranscriptAudio).not.toHaveBeenCalled();
+});
+it('keeps native provider recovery audio during startup garbage collection', async () => {
+  mockGetTranscripts.mockResolvedValueOnce([]);
+  mockAppGroupGetItem.mockImplementation((key: string) =>
+    key === 'keyboard_recording_job_id'
+      ? 'interrupted'
+      : key === 'keyboard_upload_audio.interrupted'
+        ? 'file://docs/transcript-audio/pending.m4a'
+        : null,
+  );
+  await useTranscriptStore.getState().loadTranscripts();
+  expect(mockGarbageCollectTranscriptAudio).toHaveBeenCalledWith([
+    'file://docs/transcript-audio/pending.m4a',
+  ]);
+});
+
+describe('durable provider recovery across all jobs', () => {
+  const route = {
+    provider: 'byok',
+    inferenceRoute: {
+      mode: 'providers',
+      scope: 'upload',
+      providerId: 'groq',
+      modelId: 'whisper-large-v3-turbo',
+      endpoint: 'https://api.groq.com/openai/v1',
+      credentialRef: 'provider.groq',
+    },
+    cleanupRoute: { mode: 'local', scope: 'cleanup' },
+  } as const;
+
+  it('recovers superseded raw results and interrupted uploads using original routes', async () => {
+    mockGetTranscripts.mockResolvedValueOnce([]);
+    mockListPendingProviderRecoveryJobs.mockReturnValue([
+      { jobId: 'raw-job', route, requestContext: 'file', result: { text: 'durable raw', route } },
+      {
+        jobId: 'pending-job',
+        route,
+        requestContext: 'file',
+        audioUri: 'file://docs/transcript-audio/pending.m4a',
+      },
+    ]);
+    await useTranscriptStore.getState().loadTranscripts();
+    expect(useTranscriptStore.getState().transcripts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'raw-job',
+          status: 'completed',
+          text: 'durable raw',
+          ...route,
+          cleanupWarning: expect.any(String),
+        }),
+        expect.objectContaining({
+          id: 'pending-job',
+          status: 'failed',
+          ...route,
+          requestContext: 'file',
+          audioUrl: 'file://docs/transcript-audio/pending.m4a',
+        }),
+      ]),
+    );
+    expect(mockClearKeyboardProviderRecovery).toHaveBeenCalledTimes(2);
+    expect(mockSaveTranscripts.mock.invocationCallOrder[0]).toBeLessThan(
+      mockClearKeyboardProviderRecovery.mock.invocationCallOrder[0],
+    );
+    expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
+  });
+
+  it('keeps pending recovery data if saving history fails', async () => {
+    mockGetTranscripts.mockResolvedValueOnce([]);
+    mockListPendingProviderRecoveryJobs.mockReturnValue([
+      { jobId: 'raw-job', route, result: { text: 'durable raw', route } },
+    ]);
+    mockSaveTranscripts.mockRejectedValueOnce(new Error('disk full'));
+    await useTranscriptStore.getState().loadTranscripts();
+    expect(mockClearKeyboardProviderRecovery).not.toHaveBeenCalled();
+    expect(mockGarbageCollectTranscriptAudio).not.toHaveBeenCalled();
+  });
+
+  it('preserves corrupt and active keyboard jobs without inserting duplicate history', async () => {
+    mockGetTranscripts.mockResolvedValueOnce([]);
+    mockAppGroupGetItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? 'active' : null,
+    );
+    mockListPendingProviderRecoveryJobs.mockReturnValue([
+      {
+        jobId: 'active',
+        route,
+        result: { text: 'keyboard raw', route },
+        audioUri: 'file://docs/transcript-audio/active.m4a',
+      },
+      {
+        jobId: 'corrupt',
+        error: 'Invalid route',
+        audioUri: 'file://docs/transcript-audio/corrupt.m4a',
+      },
+    ]);
+    await useTranscriptStore.getState().loadTranscripts();
+    expect(useTranscriptStore.getState().transcripts).toEqual([]);
+    expect(mockClearKeyboardProviderRecovery).not.toHaveBeenCalled();
+    expect(mockGarbageCollectTranscriptAudio).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        'file://docs/transcript-audio/active.m4a',
+        'file://docs/transcript-audio/corrupt.m4a',
+      ]),
+    );
+  });
+});
+
+it('does not recover or clear a provider job still running during startup hydration', async () => {
+  mockGetTranscripts.mockResolvedValueOnce([]);
+  mockListPendingProviderRecoveryJobs.mockReturnValue([
+    {
+      jobId: 'running',
+      route: { provider: 'byok' },
+      audioUri: 'file://docs/transcript-audio/running.m4a',
+    },
+  ]);
+  await withActiveProviderJob('running', () => useTranscriptStore.getState().loadTranscripts());
+  expect(useTranscriptStore.getState().transcripts).toEqual([]);
+  expect(mockClearKeyboardProviderRecovery).not.toHaveBeenCalled();
+  expect(mockGarbageCollectTranscriptAudio).toHaveBeenCalledWith([
+    'file://docs/transcript-audio/running.m4a',
+  ]);
 });

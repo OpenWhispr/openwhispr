@@ -1,4 +1,10 @@
+import { isProviderJobActive } from '@/lib/providerJobActivity';
+import { AppGroupStorage } from '../../modules/app-group-storage/src';
 import { create } from 'zustand';
+import {
+  listPendingProviderRecoveryJobs,
+  clearKeyboardProviderRecovery,
+} from '@/lib/keyboardInferenceRoute';
 import { AudioTools } from '../../modules/audio-tools/src';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
@@ -28,6 +34,11 @@ export type FailedTranscriptInput = {
   audioMimeType?: string;
   duration?: number;
   provider: TranscriptionProvider;
+  inferenceRoute?: Transcript['inferenceRoute'];
+  cleanupRoute?: Transcript['cleanupRoute'];
+  agentRoute?: Transcript['agentRoute'];
+  cleanupUnavailable?: string;
+  agentUnavailable?: string;
   requestContext?: Transcript['requestContext'];
   keyboardTone?: KeyboardTone;
   jobId?: string;
@@ -82,10 +93,46 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     try {
       const now = Date.now();
       const loaded = (await StorageService.getTranscripts()).map(normalizeTranscript);
+      const pendingJobs = listPendingProviderRecoveryJobs();
+      const activeKeyboardJobId = AppGroupStorage.getItem('keyboard_recording_job_id');
+      const recoveredJobIds: string[] = [];
+      for (const job of pendingJobs) {
+        // The keyboard handoff owns insertion and cleanup for its active job.
+        if (
+          job.jobId === activeKeyboardJobId ||
+          isProviderJobActive(job.jobId) ||
+          job.error ||
+          !job.route
+        )
+          continue;
+        if (!loaded.some((row) => row.id === job.jobId || row.jobId === job.jobId)) {
+          if (!job.result && !job.audioUri) continue;
+          loaded.push({
+            ...job.route,
+            id: job.jobId,
+            jobId: job.jobId,
+            text: job.result?.text ?? '',
+            originalText: job.result?.text,
+            createdAt: now,
+            updatedAt: now,
+            requestContext: job.requestContext,
+            status: job.result ? 'completed' : 'failed',
+            audioUrl: job.result ? undefined : job.audioUri,
+            cleanupWarning: job.result
+              ? 'Recovered the raw transcript after an interruption. Cleanup was not repeated.'
+              : undefined,
+            errorMessage: job.result
+              ? undefined
+              : 'The provider upload was interrupted. Retry uses the original provider.',
+            retryCount: 0,
+          });
+        }
+        recoveredJobIds.push(job.jobId);
+      }
 
       // Expire retained audio for failed rows past the retention window: drop the
       // uri so the row becomes non-retryable, and let the GC below delete the file.
-      let mutated = false;
+      let mutated = recoveredJobIds.length > 0;
       const transcripts = loaded.map((transcript) => {
         if (
           transcript.status === 'failed' &&
@@ -101,12 +148,27 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         await StorageService.saveTranscripts(transcripts);
       }
       set({ transcripts, isLoading: false });
+      for (const jobId of recoveredJobIds) clearKeyboardProviderRecovery(jobId);
 
       // Reclaim every managed file no surviving row still points at — expired
       // audio (cleared above) plus orphans from interrupted captures.
       const keepUris = transcripts
         .map((transcript) => transcript.audioUrl)
         .filter((uri): uri is string => isManagedTranscriptAudioUri(uri));
+      for (const job of pendingJobs) {
+        if (!recoveredJobIds.includes(job.jobId) && isManagedTranscriptAudioUri(job.audioUri)) {
+          keepUris.push(job.audioUri!);
+        }
+      }
+      const pendingJobId = activeKeyboardJobId;
+      const pendingAudio =
+        pendingJobId && AppGroupStorage.getItem(`keyboard_upload_audio.${pendingJobId}`);
+      if (
+        pendingAudio &&
+        isManagedTranscriptAudioUri(pendingAudio) &&
+        !keepUris.includes(pendingAudio)
+      )
+        keepUris.push(pendingAudio);
       await garbageCollectTranscriptAudio(keepUris).catch((error) => {
         if (__DEV__) {
           console.warn('[transcripts] audio garbage collection failed:', error);
@@ -140,6 +202,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       ];
       await StorageService.saveTranscripts(transcripts);
       set({ transcripts, isLoading: false });
+      if (newTranscript.jobId) clearKeyboardProviderRecovery(newTranscript.jobId);
       if (newTranscript.text.trim()) {
         logTranscriptionCompleted({
           source: newTranscript.requestContext ?? 'recording',
@@ -156,6 +219,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       });
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false });
+      throw error;
     }
   },
 
@@ -182,6 +246,11 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       audioMimeType: transcript.audioMimeType,
       duration: transcript.duration,
       provider: transcript.provider,
+      inferenceRoute: transcript.inferenceRoute,
+      cleanupRoute: transcript.cleanupRoute,
+      agentRoute: transcript.agentRoute,
+      cleanupUnavailable: transcript.cleanupUnavailable,
+      agentUnavailable: transcript.agentUnavailable,
       status: 'failed',
       errorMessage: transcript.errorMessage,
       requestContext: transcript.requestContext,
@@ -198,6 +267,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       ];
       await StorageService.saveTranscripts(transcripts);
       set({ transcripts, isLoading: false });
+      if (failedTranscript.jobId) clearKeyboardProviderRecovery(failedTranscript.jobId);
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false });
       throw error;
@@ -219,7 +289,15 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       throw new Error(message);
     }
 
-    const provider = useProcessingModeStore.getState().activeMode === 'private' ? 'local' : 'cloud';
+    if (current.provider === 'byok' && !current.inferenceRoute) {
+      throw new Error('The original provider route is unavailable. Start a new transcription.');
+    }
+    const provider = current.provider;
+    if (provider !== 'local' && useProcessingModeStore.getState().activeMode === 'private') {
+      throw new Error(
+        'This recording used a remote provider. Leave private mode to retry its original route.',
+      );
+    }
     const retryCount = (current.retryCount ?? 0) + 1;
     const startedAt = Date.now();
     const tempUris: string[] = [];
@@ -240,6 +318,27 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       const processed = await transcribeAndCleanup({
         audioUri,
         provider,
+        inferenceRoute: current.inferenceRoute,
+        cleanupRoute:
+          current.cleanupRoute ??
+          (provider !== 'byok'
+            ? { mode: provider === 'local' ? 'local' : 'openwhispr', scope: 'cleanup' }
+            : undefined),
+        agentRoute:
+          current.agentRoute ??
+          (provider !== 'byok'
+            ? { mode: provider === 'local' ? 'local' : 'openwhispr', scope: 'agent' }
+            : undefined),
+        cleanupUnavailable:
+          current.cleanupUnavailable ??
+          (provider === 'byok' && !current.cleanupRoute
+            ? 'The original cleanup route is unavailable. Your raw transcript is saved.'
+            : undefined),
+        agentUnavailable:
+          current.agentUnavailable ??
+          (provider === 'byok' && !current.agentRoute
+            ? 'The original agent route is unavailable. Your raw transcript is saved.'
+            : undefined),
         language: getPreferredTranscriptionLanguage(),
         fileName,
         mimeType,
@@ -254,6 +353,12 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         originalText: processed.originalText,
         duration: processed.transcription.duration,
         provider: processed.transcription.provider,
+        inferenceRoute: processed.transcription.inferenceRoute,
+        cleanupRoute: processed.transcription.cleanupRoute,
+        agentRoute: processed.transcription.agentRoute,
+        cleanupUnavailable: processed.transcription.cleanupUnavailable,
+        agentUnavailable: processed.transcription.agentUnavailable,
+        cleanupWarning: processed.transcription.cleanupWarning,
         // Retry succeeded: the row is completed and no longer retryable.
         audioUrl: undefined,
         status: 'completed',

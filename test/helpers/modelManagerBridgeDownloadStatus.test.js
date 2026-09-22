@@ -6,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const modelRegistryData = require("../../src/models/modelRegistryData.json");
+const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
 const downloadUtils = require("../../src/helpers/downloadUtils");
 const LocalModelDownloadStatus = require("../../src/helpers/localModelDownloadStatus");
 

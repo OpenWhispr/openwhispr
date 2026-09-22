@@ -1,4 +1,4 @@
-import modelData from "../models/modelRegistryData.json";
+import modelData from "../../shared/ai/modelRegistryData.json";
 
 const catalog = modelData.parakeetModels as Record<
   string,

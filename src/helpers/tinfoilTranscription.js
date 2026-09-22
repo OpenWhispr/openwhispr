@@ -1,5 +1,5 @@
 const debugLogger = require("./debugLogger");
-const modelRegistryData = require("../models/modelRegistryData.json");
+const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
 const { tinfoilSecureFetch } = require("./tinfoilSecureClient");
 
 const TINFOIL_TRANSCRIPTION_PATH = "/v1/audio/transcriptions";

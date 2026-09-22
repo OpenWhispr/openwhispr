@@ -71,7 +71,7 @@ jobs:
         with:
           languages: javascript-typescript
           build-mode: none
-          config: '{"paths":["openwhispr-mobile"]}'
+          config: '{"paths":["openwhispr-mobile","shared/ai"]}'
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@ed1a0fa18ac745d017ca370dd4ef08bba3b4f504 # v3

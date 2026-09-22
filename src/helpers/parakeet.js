@@ -16,7 +16,7 @@ const ParakeetServerManager = require("./parakeetServer");
 const { getModelsDirForService } = require("./modelDirUtils");
 const { assertParakeetSupported, getParakeetCapability } = require("./parakeetCapability");
 
-const modelRegistryData = require("../models/modelRegistryData.json");
+const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
 const {
   getModelRuntime,
   getRequiredModelFiles,

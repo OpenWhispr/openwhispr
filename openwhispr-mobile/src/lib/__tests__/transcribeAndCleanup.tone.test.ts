@@ -77,11 +77,14 @@ describe('transcribeAndCleanup tone', () => {
     });
 
     expect(mockFused).not.toHaveBeenCalled();
-    expect(mockCleanup).toHaveBeenCalledWith('hello world', {
-      tone: 'formal',
-      includeSnippetTriggers: true,
-      context: 'keyboard',
-    });
+    expect(mockCleanup).toHaveBeenCalledWith(
+      'hello world',
+      expect.objectContaining({
+        tone: 'formal',
+        includeSnippetTriggers: true,
+        context: 'keyboard',
+      }),
+    );
     expect(result.text).toBe('cleaned:hello world');
   });
 
@@ -129,11 +132,14 @@ describe('transcribeAndCleanup tone', () => {
       expect(mockTranscribe).not.toHaveBeenCalled();
       // Tone stays undefined for non-keyboard contexts; snippet expansion still
       // applies to dictation (recording) but not to file uploads.
-      expect(mockCleanup).toHaveBeenCalledWith('raw words', {
-        tone: undefined,
-        includeSnippetTriggers: requestContext === 'recording',
-        context: requestContext === 'recording' ? 'recording' : undefined,
-      });
+      expect(mockCleanup).toHaveBeenCalledWith(
+        'raw words',
+        expect.objectContaining({
+          tone: undefined,
+          includeSnippetTriggers: requestContext === 'recording',
+          context: requestContext === 'recording' ? 'recording' : undefined,
+        }),
+      );
     },
   );
 });

@@ -1,10 +1,11 @@
+import { resolveInferenceRoute } from '@shared/ai/routing';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { requiresRealAccount } from './accountAccess';
-import type { KeyboardTone } from '@/types';
+import type { KeyboardTone, ReasoningRequest, TextInferenceSnapshot } from '@/types';
 import {
   getDictationAgentName,
   isDictationAgentApplicable,
@@ -17,7 +18,10 @@ import { withRetry, createApiRetryStrategy } from './retry';
 type DictationCleanupContext = 'keyboard' | 'recording';
 type CleanupContext = DictationCleanupContext | 'notes' | 'meeting';
 
-interface CleanupOptions {
+interface CleanupOptions extends TextInferenceSnapshot {
+  inferenceRoute?: ReasoningRequest['inferenceRoute'];
+  requireProvider?: boolean;
+  onSkipped?: (reason: string) => void;
   tone?: KeyboardTone;
   includeSnippetTriggers?: boolean;
   context?: CleanupContext;
@@ -54,7 +58,6 @@ export async function cleanupTranscript(
   // onboarding session (the fused pass inside /api/transcribe does not). Skip
   // the doomed round trip and hand the transcript back as is — exactly what
   // the failure path would have done after the 403.
-  if (requiresRealAccount(useAuthStore.getState().user)) return rawText;
   // Nothing to clean. Sending empty text to the reasoning model invites it to
   // echo its own instructions ("Transcribed speech to clean…") as the result,
   // which would then be inserted as a phantom transcript.
@@ -77,6 +80,38 @@ export async function cleanupTranscript(
   // wait longer on a slow network just because the feature is on.
   const mentionDetected = agentName !== undefined && detectAgentMention(rawText, agentName);
   const timeoutMs = mentionDetected ? AGENT_ACTION_TIMEOUT_MS : CLEANUP_TIMEOUT_MS;
+  const scope = mentionDetected ? 'agent' : 'cleanup';
+  const snapshottedRoute = mentionDetected
+    ? options.agentRoute
+    : (options.inferenceRoute ?? options.cleanupRoute);
+  const unavailable = mentionDetected ? options.agentUnavailable : options.cleanupUnavailable;
+  if (unavailable) {
+    options.onSkipped?.(unavailable);
+    return rawText;
+  }
+  const configuredRoute = snapshottedRoute ?? cfg?.inference?.[scope];
+  if (options.requireProvider && !snapshottedRoute && configuredRoute?.mode !== 'providers') {
+    options.onSkipped?.(`Choose a ${scope} provider in AI Models. Your raw transcript is saved.`);
+    return rawText;
+  }
+  if (
+    (configuredRoute?.mode === 'openwhispr' || !configuredRoute) &&
+    requiresRealAccount(useAuthStore.getState().user)
+  ) {
+    options.onSkipped?.('Sign in to use OpenWhispr cleanup. Your raw transcript is saved.');
+    return rawText;
+  }
+  const resolved = resolveInferenceRoute({
+    scope,
+    selection: configuredRoute ?? { mode: 'openwhispr' },
+    privateContent: false,
+    policy: { status: 'unmanaged' },
+  });
+  if (!resolved.ok) {
+    options.onSkipped?.(`The ${scope} route is unavailable. Your raw transcript is saved.`);
+    return rawText;
+  }
+  const inferenceRoute = resolved.route;
 
   // A custom prompt goes out with promptMode "cleanup", which turns off the
   // server's agent-name detection that the dictation agent relies on. When our
@@ -94,6 +129,9 @@ export async function cleanupTranscript(
         try {
           return await ReasoningService.processText({
             text: rawText,
+            inferenceRoute,
+            inferenceScope: scope,
+            routing: { isPrivateNote: useProcessingModeStore.getState().activeMode === 'private' },
             language: lang,
             locale: lang,
             customDictionary,
@@ -116,7 +154,11 @@ export async function cleanupTranscript(
           if (__DEV__) {
             console.log(
               `[cleanup] retry=${attempt} delayMs=${delayMs} error=${
-                error instanceof Error ? error.message : String(error)
+                configuredRoute?.mode === 'providers'
+                  ? 'provider request failed'
+                  : error instanceof Error
+                    ? error.message
+                    : String(error)
               }`,
             );
           }
@@ -128,7 +170,9 @@ export async function cleanupTranscript(
     }
     return result.text;
   } catch (err) {
-    console.warn('Reasoning failed after retries, using original transcription:', err);
+    options.onSkipped?.('Cleanup failed. Your raw transcript is saved.');
+    if (configuredRoute?.mode !== 'providers')
+      console.warn('Reasoning failed after retries, using original transcription:', err);
     return rawText;
   }
 }

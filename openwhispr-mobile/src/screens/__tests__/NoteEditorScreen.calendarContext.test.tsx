@@ -8,6 +8,7 @@ import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { makeContentHash } from '@/lib/utils';
 import type { Action, Note, Segment, Speaker } from '@/data/types';
+import type { UserConfig } from '@/types';
 
 const mockUpdateNote = jest.fn();
 const mockDeleteNote = jest.fn();
@@ -50,7 +51,7 @@ const mockActionsState = {
   initialize: mockInitializeActions,
 };
 
-const mockAuthState = {
+const mockAuthState: { user: { id: string; email: string; emailVerified: boolean } | null } = {
   user: { id: 'user-1', email: 'user@example.com', emailVerified: true },
 };
 
@@ -58,7 +59,7 @@ const mockProcessingModeState = {
   activeMode: 'cloud',
 };
 
-const mockConfigState = {
+const mockConfigState: { config: Partial<UserConfig>; updateConfig: typeof mockUpdateConfig } = {
   config: { autoGenerateNoteTitle: false, appleLocalIntelligenceEnabled: true },
   updateConfig: mockUpdateConfig,
 };
@@ -376,6 +377,9 @@ const calendarContextInputForCurrentNote = (): string =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAuthState.user = { id: 'user-1', email: 'user@example.com', emailVerified: true };
+  mockConfigState.config.inference = undefined;
+  mockProcessingModeState.activeMode = 'cloud';
   mockActions = [defaultAction()];
   mockActionsState.actions = mockActions;
   mockNote = note();
@@ -543,4 +547,25 @@ describe('NoteEditorScreen generated titles', () => {
     await waitFor(() => expect(mockUpdateNote).toHaveBeenCalledTimes(1));
     expect(mockUpdateNote.mock.calls[0][1]).not.toHaveProperty('title');
   });
+});
+
+it('runs signed-out note formatting through Providers without requiring a Cloud account', async () => {
+  mockAuthState.user = null;
+  mockConfigState.config.inference = {
+    notes: {
+      mode: 'providers',
+      providerId: 'openai',
+      modelId: 'gpt-4o-mini',
+      credentialRef: 'provider.openai',
+    },
+  };
+  const { getByTestId } = render(<NoteEditorScreen />);
+  await act(async () => {
+    fireEvent.press(getByTestId('run-action-1'));
+  });
+  await waitFor(() =>
+    expect(ReasoningService.processText).toHaveBeenCalledWith(
+      expect.objectContaining({ inferenceScope: 'notes' }),
+    ),
+  );
 });

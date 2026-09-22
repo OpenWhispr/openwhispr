@@ -1,3 +1,4 @@
+import type { InferenceSelection } from '@shared/ai/routing';
 import { ApiError } from '@/lib/apiClient';
 import { isAccountRequiredError } from '@/lib/accountRequiredError';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -46,6 +47,7 @@ const REGENERATE_INSTRUCTION = 'Write a different version of the same request.';
  * (requestId).
  */
 export interface AgentSession {
+  inferenceRoute?: InferenceSelection;
   sessionId: string;
   messages: AgentMessage[];
   versions: string[];
@@ -65,6 +67,7 @@ export interface AgentSession {
  * regenerate survives an app kill; rehydrated lazily on access.
  */
 export interface PersistedAgentSession {
+  inferenceRoute?: InferenceSelection;
   sessionId: string;
   messages: AgentMessage[];
   versions: string[];
@@ -107,6 +110,7 @@ let rehydrated = false;
 function toPersisted(session: AgentSession): PersistedAgentSession {
   return {
     sessionId: session.sessionId,
+    inferenceRoute: session.inferenceRoute,
     messages: session.messages,
     versions: session.versions,
     lastActivityAtMs: session.lastActivityAtMs,
@@ -141,7 +145,11 @@ function ensureRehydrated(): void {
   for (const persisted of stored) {
     if (sessions.has(persisted.sessionId)) continue;
     if (Date.now() - persisted.lastActivityAtMs > SESSION_TTL_MS) continue;
-    sessions.set(persisted.sessionId, { ...persisted, inFlightController: null });
+    sessions.set(persisted.sessionId, {
+      ...persisted,
+      inferenceRoute: persisted.inferenceRoute ?? { mode: 'openwhispr' },
+      inFlightController: null,
+    });
   }
 }
 
@@ -165,8 +173,12 @@ function getSession(sessionId: string): AgentSession | null {
 }
 
 function createSession(sessionId: string): AgentSession {
+  const { getInferenceSelection } =
+    require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+  const selection = getInferenceSelection('agent');
   const session: AgentSession = {
     sessionId,
+    inferenceRoute: selection ? { ...selection } : { mode: 'openwhispr' },
     messages: [],
     versions: [],
     lastActivityAtMs: Date.now(),
@@ -292,7 +304,15 @@ async function runGeneration(params: {
 
   let generatedText: string;
   try {
+    if (session.inferenceRoute?.mode === 'providers') {
+      const { resolveMobileProviderRoute } =
+        require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+      const route = await resolveMobileProviderRoute('agent', session.inferenceRoute);
+      if (controller.signal.aborted) return;
+      session.inferenceRoute = route;
+    }
     generatedText = await streamAgentText({
+      inferenceRoute: session.inferenceRoute,
       messages: windowMessages(messages),
       systemPrompt,
       sessionId: session.sessionId,

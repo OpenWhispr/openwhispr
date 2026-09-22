@@ -1,0 +1,7 @@
+{
+  "name": "tinfoil-transport",
+  "version": "1.0.0",
+  "description": "Attested Tinfoil HTTP and WebSocket transport",
+  "main": "src/index.ts",
+  "private": true
+}

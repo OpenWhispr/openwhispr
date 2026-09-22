@@ -1,7 +1,9 @@
+import type { InferenceSelection } from '@shared/ai/routing';
 import 'expo-sqlite/localStorage/install';
 import * as SecureStore from 'expo-secure-store';
 import { UserConfig, Transcript } from '../../types';
 import { STORAGE_KEYS } from '../../config/constants';
+import { clearProviderCredentials } from '../providers/ProviderCredentials';
 
 /**
  * Serialized agent session (structural, so StorageService stays decoupled from
@@ -9,6 +11,7 @@ import { STORAGE_KEYS } from '../../config/constants';
  * AgentComposerService.
  */
 export interface StoredAgentSession {
+  inferenceRoute?: InferenceSelection;
   sessionId: string;
   messages: { role: 'user' | 'assistant'; content: string }[];
   versions: string[];
@@ -97,6 +100,7 @@ export class StorageService {
   }
 
   static async clearAll(): Promise<void> {
+    await clearProviderCredentials();
     localStorage.clear();
     await SecureStorageService.clearAuthToken();
   }

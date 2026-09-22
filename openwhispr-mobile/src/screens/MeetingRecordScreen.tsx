@@ -23,6 +23,7 @@ import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { canRunCloudMeeting } from '@/lib/accountAccess';
+import { getTranscriptionProvider } from '@/lib/inferenceRouting';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useCloudMeeting } from '@/hooks/useCloudMeeting';
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording';
@@ -283,6 +284,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   };
 
   const isCloudMeeting = (): boolean =>
+    getTranscriptionProvider('meeting') === 'byok' ||
     canRunCloudMeeting(useAuthStore.getState().user, useProcessingModeStore.getState().activeMode);
 
   // Cloud meetings don't pre-check the mic (the realtime session requests it); the note is

@@ -12,7 +12,7 @@ export function isDictationAgentEnabled(config: UserConfig): boolean {
 }
 
 export function isDictationAgentApplicable(mode: ProcessingMode, config: UserConfig): boolean {
-  return mode === 'cloud' && isDictationAgentEnabled(config);
+  return (mode === 'cloud' || mode === 'providers') && isDictationAgentEnabled(config);
 }
 
 function levenshteinDistance(a: string, b: string): number {

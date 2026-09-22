@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const modelData = require("../../src/models/modelRegistryData.json");
+const modelData = require("../../shared/ai/modelRegistryData.json");
 
 // Exact expected entries per ai.google.dev/gemini-api/docs/models.
 // gemini-3.1-flash-lite has no thinking support, so it must never carry

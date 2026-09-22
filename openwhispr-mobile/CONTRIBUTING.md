@@ -15,11 +15,10 @@ Thanks for your interest in contributing. This guide covers everything you need 
 ```bash
 git clone https://github.com/<your-fork>/openwhispr.git
 cd openwhispr/openwhispr-mobile
-npm install
-cp .env.example .env
+npm ci
 ```
 
-Edit `.env` and fill in the values described in [Environment Variables](#environment-variables) below.
+For hosted-service development, optionally copy `.env.example` to `.env` and configure the values described in [Environment Variables](#environment-variables). Personal provider and on-device development require no OpenWhispr production credentials. Enter provider keys only in the app, never in source, fixtures, or `EXPO_PUBLIC_` variables.
 
 If you plan to build on a real iOS device, you must rebrand the bundle identifiers and App Group — see [Rebranding for Forks](#rebranding-for-forks).
 
@@ -40,7 +39,7 @@ npm run clean          # format + lint + typecheck
 
 ## Environment Variables
 
-All client-facing variables must be prefixed with `EXPO_PUBLIC_`. See `.env.example` for the full list:
+Only non-secret client configuration belongs in `EXPO_PUBLIC_` variables. Provider credentials must never use this prefix. See `.env.example` for the full list:
 
 | Variable                         | Purpose                                          |
 | -------------------------------- | ------------------------------------------------ |
@@ -86,3 +85,26 @@ The mobile test suite uses Jest. Run it locally with `npm test -- --runInBand`; 
 ## Reporting Bugs and Requesting Features
 
 Use the GitHub issue templates. For security issues, follow [SECURITY.md](./SECURITY.md) instead of opening a public issue.
+
+## Shared provider development
+
+Keep the repository checkout intact: mobile imports dependency-free TypeScript and JSON from `../shared/ai`. Metro watches that explicit directory and resolves React dependencies from the mobile app. Install mobile dependencies in `openwhispr-mobile`; no npm workspace or root dependency installation is needed to bundle mobile. Shared changes trigger both desktop and mobile validation in CI.
+
+From `openwhispr-mobile`, run:
+
+```bash
+npm test -- --runInBand
+npm run typecheck
+npm run lint
+npm run format
+EXPO_NO_DOTENV=1 SENTRY_DISABLE_AUTO_UPLOAD=true OPENWHISPR_APP_ENV=production npx expo export --platform ios --output-dir /tmp/openwhispr-mobile-export
+python3 modules/background-uploader/tests/run-provider-transport-tests.py
+```
+
+The native transport regression requires macOS, Python 3, and Xcode Command Line Tools. It compiles Foundation-only Swift and uses local HTTP servers with synthetic credentials to check redirect refusal, response redaction, private-host rules, and secret-free recovery metadata. It does not replace compiling the Expo module for iOS or testing background URLSession on a device.
+
+For desktop regression checks, install root dependencies separately and run the root test/typecheck/renderer-build commands. Run `node --test .github/scripts/ci-scope.test.cjs` from the repository root to check application CI classification.
+
+Before shipping, inspect an EAS archive from the mobile directory and verify it includes `shared/ai` beside `openwhispr-mobile`; builds must preserve those relative paths. Build a fresh native iOS app after changing any native module or config plugin. Do not use a JavaScript-only update to introduce the provider request transport.
+
+Provider diagnostics are explicit user actions and may incur provider charges. Tests use mocks and synthetic credentials. Complete the [maintainer smoke-test matrix](./docs/BYOK_SMOKE_TESTS.md) using your own provider accounts and a physical device. Never paste keys, tokens, transcript content, or raw provider responses into test artifacts or logs.

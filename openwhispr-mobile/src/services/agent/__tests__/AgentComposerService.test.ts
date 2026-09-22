@@ -1,3 +1,8 @@
+jest.mock('@/lib/inferenceRouting', () => ({
+  getInferenceSelection: jest.fn(() => undefined),
+  resolveMobileProviderRoute: jest.fn(),
+}));
+
 // apiClient imports expo/fetch at module level; mock it so the import chain works.
 jest.mock('expo/fetch', () => ({
   __esModule: true,
@@ -919,4 +924,31 @@ describe('clearAllSessions', () => {
     await handleAgentAction(makeAction({ sessionId }), config);
     expect(setKeyboardStatus).toHaveBeenCalledWith('agent_error', 'session_expired');
   });
+});
+
+it('persists the provider route so regenerate cannot switch destinations with settings', async () => {
+  const { getInferenceSelection, resolveMobileProviderRoute } = jest.requireMock(
+    '@/lib/inferenceRouting',
+  ) as {
+    getInferenceSelection: jest.Mock;
+    resolveMobileProviderRoute: jest.Mock;
+  };
+  const route = {
+    mode: 'providers',
+    scope: 'agent',
+    providerId: 'openai',
+    modelId: 'gpt-4o-mini',
+    endpoint: 'https://api.openai.com/v1',
+    credentialRef: 'provider.openai',
+  };
+  getInferenceSelection.mockReturnValueOnce(route);
+  resolveMobileProviderRoute.mockResolvedValue(route);
+  const job = makeComposeJob({ jobId: makeRequestId(Date.now(), 'compose') });
+  mockReadKeyboardAgentJob.mockReturnValue(job);
+  mockStreamAgentText.mockResolvedValue('draft');
+  await generateForJob(job, 'Write an email.', makeConfig().config);
+  expect(mockSaveAgentSessions.mock.calls.at(-1)?.[0][0].inferenceRoute).toEqual(route);
+  await handleAgentAction(makeAction(), makeConfig().config);
+  expect(mockStreamAgentText).toHaveBeenCalledTimes(2);
+  expect(mockStreamAgentText.mock.calls.at(-1)?.[0].inferenceRoute).toEqual(route);
 });

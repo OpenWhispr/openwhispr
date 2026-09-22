@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const vm = require("node:vm");
-const modelData = require("../../src/models/modelRegistryData.json");
+const modelData = require("../../shared/ai/modelRegistryData.json");
 
 function loadHelper(name, mocks) {
   const filename = require.resolve(`../../src/helpers/${name}`);
@@ -32,7 +32,7 @@ function loadHelper(name, mocks) {
 async function startupArgs(modelName, runtime = "offline", language = null, registry = modelData) {
   const calls = [];
   const modelInfo = loadHelper("parakeetModelInfo", {
-    "../models/modelRegistryData.json": registry,
+    "../../shared/ai/modelRegistryData.json": registry,
   });
   const Server = loadHelper("parakeetWsServer", {
     child_process: {
