@@ -152,3 +152,14 @@ it('marks text stages unavailable for an unsupported provider instead of falling
     'Complete cleanup provider setup in AI Models. Your raw transcript is saved.',
   );
 });
+
+it('re-snapshots Cloud text stages for a consented cloud fallback', () => {
+  mockProcessing.activeMode = 'private';
+  mockState.config.inference = {};
+  const { snapshotTextInference } =
+    require('../inferenceRouting') as typeof import('../inferenceRouting');
+  expect(snapshotTextInference('cloud')).toEqual({
+    cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+    agentRoute: { mode: 'openwhispr', scope: 'agent' },
+  });
+});

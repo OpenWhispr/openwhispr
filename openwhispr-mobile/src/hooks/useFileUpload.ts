@@ -6,7 +6,7 @@ import {
   isLocalModelMissingError,
 } from '../services/transcription/TranscriptionService';
 import { createTranscriptId, useTranscriptStore } from '../store/useTranscriptStore';
-import { snapshotTranscriptionJob } from '../lib/inferenceRouting';
+import { snapshotTextInference, snapshotTranscriptionJob } from '../lib/inferenceRouting';
 import { transcribeAndCleanup } from '../lib/transcribeAndCleanup';
 import { getPreferredTranscriptionLanguage } from '../lib/transcriptionLanguage';
 import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors';
@@ -76,7 +76,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
         return;
       }
 
-      const jobRoute = snapshotTranscriptionJob('upload');
+      let jobRoute = snapshotTranscriptionJob('upload');
       const transcriptionProvider = jobRoute.provider;
       const file = result.assets[0];
 
@@ -211,6 +211,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
       const retryWithCloud = async () => {
         setIsProcessing(true);
         try {
+          jobRoute = { provider: 'cloud', ...snapshotTextInference('cloud') };
           await runTranscription('cloud');
         } catch (retryError) {
           if (isUsageLimitError(retryError) && options.onUsageLimitReached) {

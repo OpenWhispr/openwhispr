@@ -2,7 +2,11 @@ import { useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { createTranscriptId, useTranscriptStore } from '../store/useTranscriptStore';
-import { snapshotTranscriptionJob, type TranscriptionJobRoute } from '../lib/inferenceRouting';
+import {
+  snapshotTextInference,
+  snapshotTranscriptionJob,
+  type TranscriptionJobRoute,
+} from '../lib/inferenceRouting';
 import { transcribeAndCleanup } from '../lib/transcribeAndCleanup';
 import { isLocalModelMissingError } from '../services/transcription/TranscriptionService';
 import { analyzeSpeechActivity, createNoSpeechError } from '../lib/speechActivity';
@@ -345,6 +349,9 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   ) => {
     setIsProcessing(true);
     try {
+      // The private-mode snapshot pinned local text stages; a consented Cloud
+      // upload should clean the way a Cloud recording would.
+      jobRouteRef.current = { provider: 'cloud', ...snapshotTextInference('cloud') };
       await finalizeRecording(retained, 'cloud', clientTranscriptionId);
     } catch (error) {
       if (isUsageLimitError(error) && options.onUsageLimitReached) {
