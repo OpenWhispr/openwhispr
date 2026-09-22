@@ -108,9 +108,6 @@ struct ProviderRequestTransportTests {
     precondition(ProviderJobMetadata.decode(snapshot.replacingOccurrences(of: "\"version\":1", with: "\"version\":2")) == nil)
     let contextSnapshot = snapshot.replacingOccurrences(of: "\"jobId\":\"original-job\"", with: "\"jobId\":\"original-job\",\"requestContext\":\"recording\"")
     precondition(ProviderJobMetadata.decode(contextSnapshot)?.resultEnvelope(text: "raw")?.contains("recording") == true)
-    let cortiSnapshot = snapshot.replacingOccurrences(of: "\"providerId\":\"openai\"", with: "\"providerId\":\"corti\",\"cortiEnvironment\":\"eu\",\"cortiTenant\":\"original-tenant\"")
-    precondition(ProviderJobMetadata.decode(cortiSnapshot)?.encoded?.contains("original-tenant") == true)
-    precondition(ProviderJobMetadata.decode(cortiSnapshot)?.route.inferenceRoute?.cortiEnvironment == "eu")
     let suiteName = "ProviderRecoveryTests.\(UUID().uuidString)"
     let storage = UserDefaults(suiteName: suiteName)!
     defer { storage.removePersistentDomain(forName: suiteName) }

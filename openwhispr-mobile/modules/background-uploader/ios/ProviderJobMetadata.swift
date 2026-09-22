@@ -8,14 +8,11 @@ struct ProviderJobMetadata: Codable {
     var modelId: String?
     var endpoint: String?
     var credentialRef: String?
-    var cortiEnvironment: String?
-    var cortiTenant: String?
 
     mutating func validate() -> Bool {
       guard ["dictation", "upload", "meeting", "cleanup", "notes", "agent"].contains(scope) else { return false }
       if ["local", "openwhispr"].contains(mode) {
         providerId = nil; modelId = nil; endpoint = nil; credentialRef = nil
-        cortiEnvironment = nil; cortiTenant = nil
         return true
       }
       guard mode == "providers", let providerId, !providerId.isEmpty,
@@ -24,8 +21,6 @@ struct ProviderJobMetadata: Codable {
             ProviderRequestTransport.isAllowedURL(url), url.query == nil else { return false }
       if let credentialRef,
          credentialRef.range(of: "^(provider\\.[a-z][a-z0-9-]*|custom\\.[a-f0-9]{64})$", options: .regularExpression) == nil { return false }
-      if let cortiEnvironment, !["us", "eu"].contains(cortiEnvironment) { return false }
-      if let cortiTenant, cortiTenant.range(of: "^[a-zA-Z0-9_-]+$", options: .regularExpression) == nil { return false }
       return true
     }
   }
@@ -71,17 +66,9 @@ struct ProviderJobMetadata: Codable {
 
   func transcript(from body: String) -> String? {
     guard let data = body.data(using: .utf8),
-          let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-    let text: String?
-    if route.inferenceRoute?.providerId == "gemini" {
-      if let output = payload["output_text"] as? String { text = output }
-      else {
-        let steps = payload["steps"] as? [[String: Any]] ?? []
-        text = steps.flatMap { $0["content"] as? [[String: Any]] ?? [] }
-          .filter { $0["type"] as? String == "text" }.compactMap { $0["text"] as? String }.joined(separator: " ")
-      }
-    } else { text = payload["text"] as? String }
-    guard let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+          let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let trimmed = (payload["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !trimmed.isEmpty else { return nil }
     return trimmed
   }
 

@@ -33,3 +33,18 @@ it.each(['json', 'file'])(
     expect(mockCancel).toHaveBeenCalled();
   },
 );
+it.each(['json', 'file'])('sends the 300 second provider timeout for %s requests', async (kind) => {
+  mockRequest.mockResolvedValue({ status: 200, body: '{}', url: 'https://api.example.com', headers: {} });
+  if (kind === 'json') await requestProviderNative('https://api.example.com', { method: 'GET' });
+  else
+    await requestProviderFileNative({
+      url: 'https://api.example.com',
+      fileUri: 'file://audio.wav',
+      fileFieldName: 'file',
+      fileMimeType: 'audio/wav',
+      fileName: 'audio.wav',
+      parameters: {},
+      headers: {},
+    });
+  expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({ timeoutSeconds: 300 }));
+});

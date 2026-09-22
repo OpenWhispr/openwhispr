@@ -1,5 +1,9 @@
 import type { BackgroundUploader as BackgroundUploaderType } from '../../../modules/background-uploader/src';
 
+// The native transport's timeout is idle-based; whisper decodes of a 25 MB file
+// and long chat completions can stay silent for minutes. Swift clamps to 300.
+const PROVIDER_REQUEST_TIMEOUT_SECONDS = 300;
+
 let requestSequence = 0;
 
 function backgroundUploader(): typeof BackgroundUploaderType {
@@ -55,6 +59,7 @@ export async function requestProviderNative(
       ...(typeof init.body === 'string' ? { body: init.body } : {}),
       routeSnapshot: recovery?.routeSnapshot,
       recoveryAudioUri: recovery?.recoveryAudioUri,
+      timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
     });
     if (init.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     return nativeResponse(result);
@@ -95,6 +100,7 @@ export async function requestProviderFileNative(input: {
       parameters: input.parameters,
       routeSnapshot: input.routeSnapshot,
       recoveryAudioUri: input.recoveryAudioUri,
+      timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
     });
     if (input.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     return nativeResponse(result);

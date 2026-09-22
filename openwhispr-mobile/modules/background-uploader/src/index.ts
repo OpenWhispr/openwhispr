@@ -10,7 +10,6 @@ export interface BackgroundUploadOptions {
   parameters?: Record<string, string>;
   headers?: Record<string, string>;
   timeoutSeconds?: number;
-  routeSnapshot?: string;
 }
 
 export interface BackgroundUploadResult {
@@ -57,7 +56,6 @@ interface NativeBackgroundUploader {
     parameters: Record<string, string>;
     headers: Record<string, string>;
     timeoutSeconds?: number;
-    routeSnapshot?: string;
   }): Promise<BackgroundUploadResult>;
 }
 
@@ -102,7 +100,6 @@ export const BackgroundUploader = {
       parameters: options.parameters ?? {},
       headers: options.headers ?? {},
       timeoutSeconds: options.timeoutSeconds,
-      routeSnapshot: options.routeSnapshot,
     });
   },
 };

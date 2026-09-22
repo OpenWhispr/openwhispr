@@ -98,10 +98,6 @@ export function readKeyboardInferenceRoute(jobId: string): TranscriptionJobRoute
   return readRoute(jobId, `keyboard_upload_route.${jobId}`) ?? readRoute(jobId, STORAGE_KEY);
 }
 
-export function readKeyboardOrphanInferenceRoute(jobId: string): TranscriptionJobRoute | undefined {
-  return readRoute(jobId, 'keyboard_orphaned_inference_route');
-}
-
 export function readKeyboardProviderResult(
   jobId: string,
 ): { text: string; route: TranscriptionJobRoute } | undefined {

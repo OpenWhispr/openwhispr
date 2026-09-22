@@ -1,7 +1,6 @@
 import {
   snapshotKeyboardInferenceRoute,
   readKeyboardInferenceRoute,
-  readKeyboardOrphanInferenceRoute,
   readKeyboardProviderResult,
   listPendingProviderRecoveryJobs,
   clearKeyboardProviderRecovery,
@@ -65,20 +64,6 @@ it('recovers the original per-job route when the latest recording changed', () =
   );
   expect(readKeyboardInferenceRoute('old')).toEqual(mockRoute);
 });
-it('orphan recovery only trusts metadata stored with that completed job', () => {
-  snapshotKeyboardInferenceRoute('new');
-  mockStorage.set(
-    'keyboard_orphaned_inference_route',
-    JSON.stringify({ version: 1, jobId: 'old', route: { provider: 'cloud' } }),
-  );
-  expect(readKeyboardOrphanInferenceRoute('old')).toEqual({
-    provider: 'cloud',
-    cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
-    agentRoute: { mode: 'openwhispr', scope: 'agent' },
-  });
-  expect(readKeyboardOrphanInferenceRoute('new')).toBeUndefined();
-});
-
 it('recovers a completed provider response with its original route only', () => {
   mockStorage.set(
     'keyboard_provider_result.old',
