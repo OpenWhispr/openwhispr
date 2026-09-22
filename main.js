@@ -1753,24 +1753,12 @@ async function startApp() {
 
     nativeKeyManager.on("error", (error) => {
       debugLogger.warn("[Push-to-Talk] Native key listener error", { error: error.message });
-      if (isWindows && isLiveWindow(windowManager.mainWindow)) {
-        windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
-          reason: "error",
-          message: error.message,
-        });
-      }
     });
 
     nativeKeyManager.on("unavailable", () => {
       debugLogger.debug(
         "[Push-to-Talk] Native key listener unavailable - falling back to toggle mode"
       );
-      if (isWindows && isLiveWindow(windowManager.mainWindow)) {
-        windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
-          reason: "binary_not_found",
-          message: i18nMain.t("windows.pttUnavailable"),
-        });
-      }
     });
 
     nativeKeyManager.on("ready", () => {
