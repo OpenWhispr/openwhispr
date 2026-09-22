@@ -7,22 +7,34 @@ on:
       - "**.md"
       - "LICENSE"
       - ".github/ISSUE_TEMPLATE/**"
+      - "openwhispr-mobile/**"
   pull_request:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "LICENSE"
-      - ".github/ISSUE_TEMPLATE/**"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+    permissions:
+      contents: read
+
   quality:
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      build: ${{ github.event_name != 'pull_request' || (github.base_ref == 'main' && needs.changes.outputs.build == 'true') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: "npm"
       - name: Install dependencies
         run: npm ci --ignore-scripts
       - name: Run quality checks
@@ -52,6 +64,7 @@ jobs:
 
   build-linux:
     needs: quality
+    if: needs.quality.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +119,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/electron
-          key: linux-electron-${{ hashFiles('**/package-lock.json') }}
+          key: linux-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: linux-electron-
 
       - name: Install Linux build and packaging dependencies
@@ -137,6 +150,7 @@ jobs:
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
 
       - name: Upload Artifacts
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
@@ -145,6 +159,7 @@ jobs:
 
   build-windows:
     needs: quality
+    if: needs.quality.outputs.build == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -225,7 +240,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/AppData/Local/electron/Cache
-          key: windows-electron-${{ hashFiles('**/package-lock.json') }}
+          key: windows-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: windows-electron-
 
       - name: Create runtime env
@@ -253,6 +268,7 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
 
       - name: Upload Artifacts
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
@@ -261,6 +277,7 @@ jobs:
 
   build-macos:
     needs: quality
+    if: needs.quality.outputs.build == 'true'
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -295,6 +312,9 @@ jobs:
 
       - name: Compile macos-fast-paste binary
         run: npm run compile:fast-paste -- --arch ${{ matrix.arch }}
+
+      - name: Test macOS copy and paste keyboard layouts
+        run: node --test test/helpers/macosPasteLayout.test.js
 
       - name: Compile macos-media-remote binary
         run: npm run compile:media-remote -- --arch ${{ matrix.arch }}
@@ -334,7 +354,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/electron
-          key: macos-${{ matrix.arch }}-electron-${{ hashFiles('**/package-lock.json') }}
+          key: macos-${{ matrix.arch }}-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: macos-${{ matrix.arch }}-electron-
 
       - name: Setup macOS Code Signing
@@ -395,6 +415,7 @@ jobs:
           node scripts/verify-macos-parakeet.js "$APP_PATH"
 
       - name: Upload Artifacts
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}-build
@@ -407,3 +428,31 @@ jobs:
           security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
           rm -f $RUNNER_TEMP/build_certificate.p12
           rm -f $RUNNER_TEMP/api_key.p8
+
+  desktop-status:
+    name: Desktop CI
+    needs: [changes, quality, build-linux, build-windows, build-macos]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require all selected desktop checks
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          DESKTOP: ${{ needs.changes.outputs.desktop }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          BUILD: ${{ needs.quality.outputs.build }}
+          LINUX_RESULT: ${{ needs.build-linux.result }}
+          WINDOWS_RESULT: ${{ needs.build-windows.result }}
+          MACOS_RESULT: ${{ needs.build-macos.result }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          if [ "$DESKTOP" = true ]; then
+            test "$QUALITY_RESULT" = success
+            if [ "$BUILD" = true ]; then
+              test "$LINUX_RESULT" = success
+              test "$WINDOWS_RESULT" = success
+              test "$MACOS_RESULT" = success
+            fi
+          fi

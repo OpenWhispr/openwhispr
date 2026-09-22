@@ -544,6 +544,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ackMainWindowResizeMask: (token) => ipcRenderer.send("main-window-resize-mask-ready", token),
   setMainWindowInteractivity: (interactive) =>
     ipcRenderer.invoke("set-main-window-interactivity", interactive),
+  setMainWindowInputRegion: (region) => ipcRenderer.invoke("set-main-window-input-region", region),
+  onMainWindowVisibilityChanged: registerListener(
+    "main-window-visibility-changed",
+    (callback) => (_event, visible) => callback(visible)
+  ),
   setNotificationInteractivity: (interactive) =>
     ipcRenderer.invoke("set-notification-interactivity", interactive),
   resizeMainWindow: (sizeKey) => ipcRenderer.invoke("resize-main-window", sizeKey),
@@ -1327,14 +1332,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onMeetingAutoEndRequested: registerListener(
     "meeting-auto-end-requested",
-    (callback) => (_event, data) => callback(data)
-  ),
-  meetingAutoEndCompleted: (sessionId) =>
-    ipcRenderer.invoke("meeting-auto-end-completed", sessionId),
-  meetingAutoEndRespond: (sessionId, action) =>
-    ipcRenderer.invoke("meeting-auto-end-respond", sessionId, action),
-  onMeetingAutoEndRestartRequested: registerListener(
-    "meeting-auto-end-restart-requested",
     (callback) => (_event, data) => callback(data)
   ),
   getMeetingNotificationData: () => ipcRenderer.invoke("get-meeting-notification-data"),

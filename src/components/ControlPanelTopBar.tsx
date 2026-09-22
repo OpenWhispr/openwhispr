@@ -24,8 +24,8 @@ interface ControlPanelTopBarProps {
   /** Meeting mode or a narrow window with an open note: sidebar hidden, back button shown. */
   isSidePanelLayout: boolean;
   onExitSidePanel: () => void;
-  /** Receives the slot, right of the search bar, that the active page portals its actions into. */
-  actionsSlotRef?: React.Ref<HTMLDivElement>;
+  /** Global actions, right of the search bar; hidden with it in the side-panel layout. */
+  actions?: React.ReactNode;
 }
 
 export default function ControlPanelTopBar({
@@ -37,7 +37,7 @@ export default function ControlPanelTopBar({
   onOpenSearch,
   isSidePanelLayout,
   onExitSidePanel,
-  actionsSlotRef,
+  actions,
 }: ControlPanelTopBarProps) {
   const { t } = useTranslation();
   // With the sidebar out of the way the container's start edge sits under the
@@ -115,15 +115,16 @@ export default function ControlPanelTopBar({
       )}
 
       <div className="col-start-3 flex items-center gap-2">
-        {!isSidePanelLayout && (
+        {!isSidePanelLayout && actions && (
           <div
-            ref={actionsSlotRef}
             data-no-window-drag=""
             style={noDragStyle}
-            // macOS keeps no window controls here, so page actions take the far
+            // macOS keeps no window controls here, so the actions take the far
             // end; elsewhere they sit beside the search, left of the controls.
             className={cn("flex items-center", platform === "darwin" && "ms-auto")}
-          />
+          >
+            {actions}
+          </div>
         )}
         {platform !== "darwin" && (
           <div data-no-window-drag="" style={noDragStyle} className="ms-auto">

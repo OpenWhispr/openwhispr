@@ -208,3 +208,49 @@ test("safePaste returns true only when the preload reports a completed paste", a
 
   assert.equal(await manager.safePaste("completed transcript"), true);
 });
+
+test("translation cleanup failures survive successful and skipped translation for post-paste warnings", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-translation-cleanup-warning-",
+    settingsKey: "__translationCleanupWarningSettings",
+  });
+  const rawText = "Full first sentence. Full final sentence.";
+  const failure = new Error("Gemini returned incomplete output (MAX_TOKENS)");
+
+  for (const targetLanguage of ["en", "es"]) {
+    const manager = createManager({
+      pendingCleanupFailure: null,
+      processWithReasoningModel: async (text, model) => {
+        assert.equal(text, rawText);
+        if (model === "cleanup-model") throw failure;
+        assert.equal(model, "translation-model");
+        assert.equal(targetLanguage, "es");
+        return "Primera frase completa. Última frase completa.";
+      },
+      notifyTranslationFallback: () => assert.fail("translation did not fail"),
+    });
+
+    const result = await manager.runTranslationChain({
+      text: rawText,
+      settings: { translationSourceLanguage: "en", translationTargetLanguage: targetLanguage },
+      agentName: null,
+      route: {
+        model: "translation-model",
+        cleanupReachable: true,
+        cleanupConfig: {},
+        config: {},
+      },
+      cleanup: { mode: "model", model: "cleanup-model" },
+    });
+
+    assert.equal(
+      result.text,
+      targetLanguage === "en" ? rawText : "Primera frase completa. Última frase completa."
+    );
+    assert.equal(result.translated, targetLanguage === "es");
+    assert.deepEqual(manager._takePendingResultExtras(), {
+      cleanupFailure: { message: failure.message },
+    });
+    assert.deepEqual(manager._takePendingResultExtras(), {});
+  }
+});

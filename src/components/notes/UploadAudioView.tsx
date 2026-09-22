@@ -13,6 +13,7 @@ import {
 } from "../icons";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "../ui/button";
+import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { cn } from "../lib/utils";
 import {
   Select,
@@ -75,10 +76,9 @@ import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes"
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
 import { isManagedTranscriptionActive } from "../../services/managedTranscription";
 import { UploadCompleteWarnings, UploadModelSettingsButton } from "./UploadAudioFeedback";
+import { isSupportedUploadFile, uploadFileUrlPattern } from "../../utils/uploadAudioFormats";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
-
-const SUPPORTED_EXTENSIONS = ["mp3", "wav", "m4a", "webm", "ogg", "oga", "flac", "aac", "opus"];
 
 const CLOUD_FREE_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB — free plan cloud limit
 const CLOUD_PRO_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB — pro plan cloud limit
@@ -181,7 +181,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     downloadedTempPathRef.current = downloadedTempPath;
   }, [downloadedTempPath]);
   const [urlExpanded, setUrlExpanded] = useState(false);
-  const [batchUrlNotice, setBatchUrlNotice] = useState<string | null>(null);
+  const [skippedNotice, setSkippedNotice] = useState<string | null>(null);
   const singleDownloadIdRef = useRef<string | null>(null);
 
   const batch = useBatchQueue();
@@ -583,17 +583,24 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (!files || files.length === 0) return;
 
     const validFiles: Array<{ name: string; path: string; sizeBytes: number }> = [];
+    const skippedNames: string[] = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      const ext = f.name.split(".").pop()?.toLowerCase() || "";
-      if (SUPPORTED_EXTENSIONS.includes(ext)) {
-        const filePath = window.electronAPI.getPathForFile(f);
-        if (filePath) {
-          validFiles.push({ name: f.name, path: filePath, sizeBytes: f.size });
-        }
+      if (!isSupportedUploadFile(f.name)) {
+        skippedNames.push(f.name);
+        continue;
+      }
+      const filePath = window.electronAPI.getPathForFile(f);
+      if (filePath) {
+        validFiles.push({ name: f.name, path: filePath, sizeBytes: f.size });
       }
     }
 
+    setSkippedNotice(
+      skippedNames.length > 0
+        ? t("notes.upload.unsupportedFiles", { names: skippedNames.join(", ") })
+        : null
+    );
     if (validFiles.length === 0) return;
 
     if (validFiles.length === 1 && !batch.isProcessing && !batch.hasQueue) {
@@ -630,7 +637,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setChunkProgress(null);
     setUrlInput("");
     setDownloadProgress(null);
-    setBatchUrlNotice(null);
+    setSkippedNotice(null);
     const personal = findDefaultFolder(folders);
     if (personal) setSelectedFolderId(String(personal.id));
   };
@@ -883,7 +890,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       setUrlInput("");
       setUrlExpanded(false);
     }
-    setBatchUrlNotice(skipped > 0 ? t("notes.upload.urlsSkipped", { n: skipped }) : null);
+    setSkippedNotice(skipped > 0 ? t("notes.upload.urlsSkipped", { n: skipped }) : null);
   };
 
   const startBatchProcessing = async () => {
@@ -892,10 +899,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       !isManagedTranscriptionActive() &&
       !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
     ) {
-      setBatchUrlNotice(t("common.managedByOrg"));
+      setSkippedNotice(t("common.managedByOrg"));
       return;
     }
-    setBatchUrlNotice(null);
+    setSkippedNotice(null);
 
     const transcribeOpts: TranscribeOptions = {
       transcription: buildTranscriptionConfig(),
@@ -954,305 +961,301 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   return (
-    <div className="flex flex-col items-center h-full overflow-y-auto px-6">
+    <div className="flex flex-col items-center h-full overflow-y-auto">
       <div
-        className="w-full max-w-md shrink-0 my-auto"
+        className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 shrink-0 my-auto")}
         style={{ animation: "float-up 0.4s ease-out" }}
       >
-        <div className="max-w-[320px] mx-auto">
-          {state === "idle" && providerReady === false && (
-            <NoProviderView t={t} onOpenSettings={() => onOpenSettings?.("uploadTranscription")} />
-          )}
+        {state === "idle" && providerReady === false && (
+          <NoProviderView t={t} onOpenSettings={() => onOpenSettings?.("uploadTranscription")} />
+        )}
 
-          {state === "idle" && providerReady !== false && (
-            <>
-              <IdleView
-                t={t}
-                getActiveModelLabel={getActiveModelLabel}
-                handleDrop={handleDrop}
-                handleBrowse={handleBrowse}
-                isDragOver={isDragOver}
-                setIsDragOver={setIsDragOver}
-                onOpenSettings={onOpenSettings}
-              />
-
-              <div className="flex items-center gap-3 my-3">
-                <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
-                <span className="text-[10px] text-foreground/45 uppercase tracking-wider">
-                  {t("notes.upload.orDivider")}
-                </span>
-                <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
-              </div>
-
-              {urlExpanded ? (
-                <div>
-                  <textarea
-                    dir="ltr"
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    placeholder={t("notes.upload.pasteUrls")}
-                    rows={4}
-                    className={cn(uploadFieldClass, "w-full px-3 py-2 resize-none")}
-                    autoFocus
-                  />
-                  <div className="flex items-center gap-2 mt-2 justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setUrlExpanded(false);
-                        setUrlInput("");
-                      }}
-                      className="h-7 text-xs text-foreground/45"
-                    >
-                      {t("notes.upload.cancel")}
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={handleBatchUrlSubmit}
-                      disabled={!urlInput.trim()}
-                      className="h-7 text-xs"
-                    >
-                      {t("notes.upload.addToQueue")}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div dir="ltr" className="relative">
-                  {isYouTubeUrl(urlInput) ? (
-                    <svg
-                      viewBox="0 0 28 20"
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[18px] h-[13px] z-10 pointer-events-none"
-                    >
-                      <rect width="28" height="20" rx="4" fill="#FF0000" />
-                      <polygon points="11,4 11,16 21,10" fill="white" />
-                    </svg>
-                  ) : /\.(mp3|wav|m4a|ogg|flac|aac|webm|opus)(\?|$)/i.test(urlInput) ? (
-                    <FileAudio
-                      size={13}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
-                    />
-                  ) : (
-                    <Link2
-                      size={13}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
-                    />
-                  )}
-                  <input
-                    dir="ltr"
-                    type="url"
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleUrlSubmit();
-                      }
-                    }}
-                    onFocus={() => {
-                      if (urlInput.includes("\n")) setUrlExpanded(true);
-                    }}
-                    onPaste={(e) => {
-                      const pasted = e.clipboardData.getData("text");
-                      if (pasted.includes("\n")) {
-                        e.preventDefault();
-                        setUrlInput(pasted);
-                        setUrlExpanded(true);
-                      }
-                    }}
-                    placeholder={t("notes.upload.urlPlaceholder")}
-                    className={cn(uploadFieldClass, "w-full h-8 pl-8 pr-9")}
-                  />
-                  <button
-                    onClick={handleUrlSubmit}
-                    disabled={!urlInput.trim()}
-                    aria-label={t("notes.upload.urlSubmit")}
-                    className={cn(
-                      "absolute right-px top-px bottom-px w-7 rounded-r-[7px] flex items-center justify-center transition-colors",
-                      "border-l border-foreground/6 dark:border-white/10",
-                      urlInput.trim()
-                        ? "text-foreground/45 hover:text-foreground/60 hover:bg-foreground/[0.03] dark:hover:bg-white/[0.03]"
-                        : "text-foreground/45"
-                    )}
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
-          {batchUrlNotice && (
-            <p className="text-[10px] text-amber-500/60 mt-2 text-center">{batchUrlNotice}</p>
-          )}
-
-          {batch.hasQueue && (
-            <div className="mt-3">
-              <BatchQueueView
-                queue={batch.queue}
-                byokMaxFileSizeMb={byokMaxFileSizeMb}
-                completedCount={batch.completedCount}
-                failedCount={batch.failedCount}
-                totalCount={batch.totalCount}
-                isProcessing={batch.isProcessing}
-                onRemoveItem={batch.removeItem}
-                onCancelAll={batch.cancelAll}
-                onClearQueue={() => {
-                  setBatchUrlNotice(null);
-                  batch.clearQueue();
-                }}
-                onOpenNote={(noteId) =>
-                  onNoteCreated?.(noteId, batchFolderId ? Number(batchFolderId) : null)
-                }
-              />
-
-              {!batch.isProcessing && batch.queue.some((i) => i.status === "queued") && (
-                <div className="mt-3 space-y-2">
-                  {folders.length > 0 && (
-                    <FolderSelect
-                      t={t}
-                      folders={folders}
-                      value={batchFolderId}
-                      onChange={setBatchFolderId}
-                    />
-                  )}
-                  <div className="flex justify-center">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={startBatchProcessing}
-                      disabled={
-                        !uploadAllowedByPolicy ||
-                        state === "downloading" ||
-                        state === "transcribing"
-                      }
-                      className="h-8 text-xs px-5"
-                    >
-                      {t("notes.upload.transcribe")}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {state === "selected" && file && (
-            <SelectedView
+        {state === "idle" && providerReady !== false && (
+          <>
+            <IdleView
               t={t}
-              file={file}
               getActiveModelLabel={getActiveModelLabel}
-              reset={reset}
-              handleTranscribe={handleTranscribe}
-              transcribeDisabled={batch.isProcessing || !uploadAllowedByPolicy}
-              requiresUpgrade={!!requiresUpgrade}
-              fileTooLarge={fileTooLarge}
-              isLargeFile={isLargeFile}
-              isOpenWhisprCloud={isOpenWhisprCloud}
-              byokTooLarge={byokTooLarge}
-              byokMaxFileSizeMb={byokMaxFileSizeMb}
-              requiresAccount={requiresAccount}
-              isProUser={!!isProUser}
-              onUpgrade={() => usage?.openCheckout()}
-              onCreateAccount={handleCreateAccount}
-              onSwitchToCloud={switchToCloud}
+              handleDrop={handleDrop}
+              handleBrowse={handleBrowse}
+              isDragOver={isDragOver}
+              setIsDragOver={setIsDragOver}
               onOpenSettings={onOpenSettings}
             />
-          )}
 
-          {state === "downloading" && downloadProgress && (
-            <div
-              className="flex flex-col items-center"
-              style={{ animation: "float-up 0.3s ease-out" }}
-            >
-              <div className="flex items-end justify-center gap-[3px] h-10 mb-5">
-                {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                  <div
-                    key={i}
-                    className="w-[3px] rounded-full bg-primary/40 dark:bg-primary/50 origin-bottom"
-                    style={{
-                      height: "100%",
-                      animation: `waveform-bar ${0.8 + i * 0.12}s ease-in-out infinite`,
-                      animationDelay: `${i * 0.08}s`,
+            <div className="flex items-center gap-3 my-3">
+              <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
+              <span className="text-[10px] text-foreground/45 uppercase tracking-wider">
+                {t("notes.upload.orDivider")}
+              </span>
+              <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
+            </div>
+
+            {urlExpanded ? (
+              <div>
+                <textarea
+                  dir="ltr"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder={t("notes.upload.pasteUrls")}
+                  rows={4}
+                  className={cn(uploadFieldClass, "w-full px-3 py-2 resize-none")}
+                  autoFocus
+                />
+                <div className="flex items-center gap-2 mt-2 justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setUrlExpanded(false);
+                      setUrlInput("");
                     }}
-                  />
-                ))}
+                    className="h-7 text-xs text-foreground/45"
+                  >
+                    {t("notes.upload.cancel")}
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleBatchUrlSubmit}
+                    disabled={!urlInput.trim()}
+                    className="h-7 text-xs"
+                  >
+                    {t("notes.upload.addToQueue")}
+                  </Button>
+                </div>
               </div>
-
-              <div className="w-full max-w-[200px] h-[3px] rounded-full bg-foreground/5 dark:bg-white/5 overflow-hidden mb-3">
-                <div
+            ) : (
+              <div dir="ltr" className="relative">
+                {isYouTubeUrl(urlInput) ? (
+                  <svg
+                    viewBox="0 0 28 20"
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[18px] h-[13px] z-10 pointer-events-none"
+                  >
+                    <rect width="28" height="20" rx="4" fill="#FF0000" />
+                    <polygon points="11,4 11,16 21,10" fill="white" />
+                  </svg>
+                ) : uploadFileUrlPattern.test(urlInput) ? (
+                  <FileAudio
+                    size={13}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
+                  />
+                ) : (
+                  <Link2
+                    size={13}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
+                  />
+                )}
+                <input
+                  dir="ltr"
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleUrlSubmit();
+                    }
+                  }}
+                  onFocus={() => {
+                    if (urlInput.includes("\n")) setUrlExpanded(true);
+                  }}
+                  onPaste={(e) => {
+                    const pasted = e.clipboardData.getData("text");
+                    if (pasted.includes("\n")) {
+                      e.preventDefault();
+                      setUrlInput(pasted);
+                      setUrlExpanded(true);
+                    }
+                  }}
+                  placeholder={t("notes.upload.urlPlaceholder")}
+                  className={cn(uploadFieldClass, "w-full h-8 pl-8 pr-9")}
+                />
+                <button
+                  onClick={handleUrlSubmit}
+                  disabled={!urlInput.trim()}
+                  aria-label={t("notes.upload.urlSubmit")}
                   className={cn(
-                    "h-full rounded-full bg-primary/50 transition-[width] duration-500 ease-out",
-                    // Percent 0 = size unknown (no content-length): pulse instead
-                    // of sitting on an empty bar.
-                    (downloadProgress.stage !== "downloading" || !downloadProgress.percent) &&
-                      "animate-pulse"
+                    "absolute right-px top-px bottom-px w-7 rounded-r-[7px] flex items-center justify-center transition-colors",
+                    "border-l border-foreground/6 dark:border-white/10",
+                    urlInput.trim()
+                      ? "text-foreground/45 hover:text-foreground/60 hover:bg-foreground/[0.03] dark:hover:bg-white/[0.03]"
+                      : "text-foreground/45"
                   )}
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {skippedNotice && (
+          <p className="text-[10px] text-amber-500/60 mt-2 text-center">{skippedNotice}</p>
+        )}
+
+        {batch.hasQueue && (
+          <div className="mt-3">
+            <BatchQueueView
+              queue={batch.queue}
+              byokMaxFileSizeMb={byokMaxFileSizeMb}
+              completedCount={batch.completedCount}
+              failedCount={batch.failedCount}
+              totalCount={batch.totalCount}
+              isProcessing={batch.isProcessing}
+              onRemoveItem={batch.removeItem}
+              onCancelAll={batch.cancelAll}
+              onClearQueue={() => {
+                setSkippedNotice(null);
+                batch.clearQueue();
+              }}
+              onOpenNote={(noteId) =>
+                onNoteCreated?.(noteId, batchFolderId ? Number(batchFolderId) : null)
+              }
+            />
+
+            {!batch.isProcessing && batch.queue.some((i) => i.status === "queued") && (
+              <div className="mt-3 space-y-2">
+                {folders.length > 0 && (
+                  <FolderSelect
+                    t={t}
+                    folders={folders}
+                    value={batchFolderId}
+                    onChange={setBatchFolderId}
+                  />
+                )}
+                <div className="flex justify-center">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={startBatchProcessing}
+                    disabled={
+                      !uploadAllowedByPolicy || state === "downloading" || state === "transcribing"
+                    }
+                    className="h-8 text-xs px-5"
+                  >
+                    {t("notes.upload.transcribe")}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {state === "selected" && file && (
+          <SelectedView
+            t={t}
+            file={file}
+            getActiveModelLabel={getActiveModelLabel}
+            reset={reset}
+            handleTranscribe={handleTranscribe}
+            transcribeDisabled={batch.isProcessing || !uploadAllowedByPolicy}
+            requiresUpgrade={!!requiresUpgrade}
+            fileTooLarge={fileTooLarge}
+            isLargeFile={isLargeFile}
+            isOpenWhisprCloud={isOpenWhisprCloud}
+            byokTooLarge={byokTooLarge}
+            byokMaxFileSizeMb={byokMaxFileSizeMb}
+            requiresAccount={requiresAccount}
+            isProUser={!!isProUser}
+            onUpgrade={() => usage?.openCheckout()}
+            onCreateAccount={handleCreateAccount}
+            onSwitchToCloud={switchToCloud}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
+
+        {state === "downloading" && downloadProgress && (
+          <div
+            className="flex flex-col items-center"
+            style={{ animation: "float-up 0.3s ease-out" }}
+          >
+            <div className="flex items-end justify-center gap-[3px] h-10 mb-5">
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className="w-[3px] rounded-full bg-primary/40 dark:bg-primary/50 origin-bottom"
                   style={{
-                    width:
-                      downloadProgress.stage === "downloading" && downloadProgress.percent
-                        ? `${Math.min(downloadProgress.percent, 100)}%`
-                        : "100%",
+                    height: "100%",
+                    animation: `waveform-bar ${0.8 + i * 0.12}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.08}s`,
                   }}
                 />
-              </div>
-
-              <p className="text-xs text-foreground/50 font-medium">
-                {downloadProgress.stage === "resolving"
-                  ? t("notes.upload.urlResolving")
-                  : t("notes.upload.urlDownloading")}
-              </p>
-
-              {downloadProgress.title && (
-                <p dir="auto" className="text-xs text-foreground/45 mt-1 truncate max-w-50">
-                  {downloadProgress.title}
-                </p>
-              )}
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCancelDownload}
-                className="mt-3 h-7 text-xs text-foreground/45"
-              >
-                {t("notes.upload.urlCancelDownload")}
-              </Button>
+              ))}
             </div>
-          )}
 
-          {state === "transcribing" && (
-            <TranscribingView
-              t={t}
-              progress={progress}
-              getTranscribingLabel={getTranscribingLabel}
-              file={file}
-              chunkProgress={chunkProgress}
-              onCancel={cancelTranscription}
-            />
-          )}
+            <div className="w-full max-w-[200px] h-[3px] rounded-full bg-foreground/5 dark:bg-white/5 overflow-hidden mb-3">
+              <div
+                className={cn(
+                  "h-full rounded-full bg-primary/50 transition-[width] duration-500 ease-out",
+                  // Percent 0 = size unknown (no content-length): pulse instead
+                  // of sitting on an empty bar.
+                  (downloadProgress.stage !== "downloading" || !downloadProgress.percent) &&
+                    "animate-pulse"
+                )}
+                style={{
+                  width:
+                    downloadProgress.stage === "downloading" && downloadProgress.percent
+                      ? `${Math.min(downloadProgress.percent, 100)}%`
+                      : "100%",
+                }}
+              />
+            </div>
 
-          {state === "complete" && result && (
-            <CompleteView
-              t={t}
-              result={result}
-              partialWarning={partialWarning}
-              diarizationWarning={diarizationWarning}
-              folders={folders}
-              selectedFolderId={selectedFolderId}
-              handleFolderChange={handleFolderChange}
-              noteId={noteId}
-              onNoteCreated={onNoteCreated}
-              reset={reset}
-            />
-          )}
+            <p className="text-xs text-foreground/50 font-medium">
+              {downloadProgress.stage === "resolving"
+                ? t("notes.upload.urlResolving")
+                : t("notes.upload.urlDownloading")}
+            </p>
 
-          {state === "error" && error && (
-            <ErrorView t={t} error={error} reset={reset} onRetry={handleRetry} />
-          )}
-        </div>
+            {downloadProgress.title && (
+              <p dir="auto" className="text-xs text-foreground/45 mt-1 truncate max-w-50">
+                {downloadProgress.title}
+              </p>
+            )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCancelDownload}
+              className="mt-3 h-7 text-xs text-foreground/45"
+            >
+              {t("notes.upload.urlCancelDownload")}
+            </Button>
+          </div>
+        )}
+
+        {state === "transcribing" && (
+          <TranscribingView
+            t={t}
+            progress={progress}
+            getTranscribingLabel={getTranscribingLabel}
+            file={file}
+            chunkProgress={chunkProgress}
+            onCancel={cancelTranscription}
+          />
+        )}
+
+        {state === "complete" && result && (
+          <CompleteView
+            t={t}
+            result={result}
+            partialWarning={partialWarning}
+            diarizationWarning={diarizationWarning}
+            folders={folders}
+            selectedFolderId={selectedFolderId}
+            handleFolderChange={handleFolderChange}
+            noteId={noteId}
+            onNoteCreated={onNoteCreated}
+            reset={reset}
+          />
+        )}
+
+        {state === "error" && error && (
+          <ErrorView t={t} error={error} reset={reset} onRetry={handleRetry} />
+        )}
 
         {(state === "idle" || state === "selected") && (
-          <div className="max-w-[320px] mx-auto mt-4">
+          <div className="mt-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-foreground/45 font-medium">
@@ -1469,18 +1472,6 @@ function IdleView({
   setIsDragOver,
   onOpenSettings,
 }: IdleViewProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    // Delegate to handleBrowse which uses Electron's file dialog;
-    // the hidden input is for keyboard-triggered file selection only.
-    handleBrowse();
-    // Reset input so the same file can be re-selected
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -1506,16 +1497,6 @@ function IdleView({
           className="text-xs text-foreground/70"
         />
       </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".mp3,.wav,.m4a,.webm,.ogg,.oga,.flac,.aac,.opus"
-        onChange={handleFileInputChange}
-        className="sr-only"
-        tabIndex={-1}
-        aria-hidden="true"
-      />
 
       <div
         role="button"

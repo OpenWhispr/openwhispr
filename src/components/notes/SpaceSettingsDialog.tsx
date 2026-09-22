@@ -7,9 +7,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { useToast } from "../ui/useToast";
 import { useAuth } from "../../hooks/useAuth";
 import { useDialogs } from "../../hooks/useDialogs";
-import { canManageSpace, canManageWorkspace, teamsUserCanLeave } from "../../lib/spacePermissions";
+import {
+  canLeaveSpace,
+  canManageSpace,
+  canManageWorkspace,
+  teamsUserCanLeave,
+} from "../../lib/spacePermissions";
+import { formatList } from "../../lib/formatList";
 import { localMutationErrorKey } from "../../lib/localMutationError";
-import { leaveTeam, renameSpace } from "../../services/spaceActions";
+import { leaveSpace, leaveTeam, renameSpace } from "../../services/spaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import SpaceMembersPanel from "./SpaceMembersPanel";
@@ -128,26 +134,44 @@ export default function SpaceSettingsDialog({
 
   const leaveTeams = teamsUserCanLeave(space);
   const canLeave =
-    Boolean(space.cloud_space_id) &&
-    !isWorkspaceAdmin &&
-    leaveTeams.length > 0 &&
-    Boolean(user?.id);
+    Boolean(space.cloud_space_id) && !isWorkspaceAdmin && canLeaveSpace(space) && Boolean(user?.id);
 
+  // A direct grant is dropped on its own and access through groups is left
+  // where it is: groups are managed in the group. Leaving through groups is
+  // offered only when they are the sole grant, with its own warning.
   const confirmLeave = () => {
     if (!canLeave || !user?.id) return;
     const userId = user.id;
-    const teamNames = new Intl.ListFormat(i18n.language, { type: "conjunction" }).format(
-      leaveTeams.map((team) => team.name)
-    );
+    const direct = space.my_direct_role != null;
+    const groupNames = (names: string[]) => formatList(i18n.language, names);
+    const groups = groupNames(leaveTeams.map((team) => team.name));
+    const description = !direct
+      ? t("notes.spaces.leaveConfirmDescription", { teams: groups })
+      : leaveTeams.length > 0
+        ? t("notes.spaces.leaveKeepsGroupAccess", { groups })
+        : t("notes.spaces.leaveDirectDescription");
     showConfirmDialog({
       title: t("notes.spaces.leaveConfirmTitle", { space: space.name }),
-      description: t("notes.spaces.leaveConfirmDescription", { teams: teamNames }),
+      description,
       confirmText: t("notes.spaces.leave"),
       variant: "destructive",
       onConfirm: async () => {
         setLeaving(true);
         try {
-          for (const team of leaveTeams) await leaveTeam(team.id, userId);
+          if (direct) {
+            const { still_via_teams } = await leaveSpace(space, userId);
+            if (still_via_teams.length > 0) {
+              toast({
+                title: t("notes.spaces.stillViaGroups", {
+                  space: space.name,
+                  groups: groupNames(still_via_teams.map((team) => team.name)),
+                }),
+              });
+              return;
+            }
+          } else {
+            for (const team of leaveTeams) await leaveTeam(team.id, userId);
+          }
           toast({ title: t("notes.spaces.left", { space: space.name }) });
           onOpenChange(false);
         } catch (err) {

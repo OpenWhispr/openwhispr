@@ -3030,7 +3030,10 @@ export function selectPolicyEffectiveSettings(
   ) as Record<InferenceScope, ResolvedLLMConfig>;
 
   for (const scope of Object.keys(INFERENCE_SCOPES) as InferenceScope[]) {
-    const definition = INFERENCE_SCOPES[scope];
+    const definition: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
+    // An optional override with no model of its own is not a choice to clamp.
+    const rawModel = state[definition.storeKeys.model] as string | undefined;
+    if (definition.optional && !rawModel?.trim()) continue;
     const config = resolvedConfigs[scope];
     const selection = resolveEffectivePolicySelection(
       policyState,
@@ -3039,6 +3042,12 @@ export function selectPolicyEffectiveSettings(
       LLM_POLICY_CATALOG
     );
     if (!selection) continue;
+
+    if (definition.optional && selection.mode !== config.mode) {
+      // A forbidden override goes inert; Cloud would count as chosen even without a model.
+      writable[definition.storeKeys.model] = "";
+      continue;
+    }
 
     writable[definition.storeKeys.mode] = selection.mode;
     if (definition.storeKeys.cloudMode) {
@@ -3069,10 +3078,15 @@ export function selectPolicyEffectiveSettings(
       selection.mode === "local"
     ) {
       const providerChanged = selection.mode !== config.mode || provider !== config.provider;
-      writable[definition.storeKeys.model] =
-        !providerChanged && config.model
-          ? config.model
-          : defaultLlmModel(selection.mode, provider, state.bedrockRegion);
+      if (providerChanged && definition.optional) {
+        // A repointed override is no longer the user's choice: inert until they pick again.
+        writable[definition.storeKeys.model] = "";
+      } else {
+        writable[definition.storeKeys.model] =
+          !providerChanged && config.model
+            ? config.model
+            : defaultLlmModel(selection.mode, provider, state.bedrockRegion);
+      }
     }
   }
 

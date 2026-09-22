@@ -9,7 +9,10 @@ import {
   truncatedOutputError,
 } from "../chatRequestBody";
 import { getTinfoilChatClient } from "../tinfoilClient";
-import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
+import {
+  getLlmRequestTimeoutSeconds,
+  llmRequestTimeoutError,
+} from "../../../helpers/llmRequestTimeout.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 
 export const tinfoilProvider: InferenceProvider = {
@@ -45,15 +48,22 @@ export const tinfoilProvider: InferenceProvider = {
     applyChatCompletionsParams(requestBody, { model, provider: "tinfoil", config, maxTokens });
 
     // Keep SDK-internal retries off so withRetry stays the single retry layer.
-    const timeoutMs = getLlmRequestTimeoutSeconds() * 1000;
-    const response = await withRetry(
-      () =>
-        client.chat.completions.create(requestBody as any, {
-          timeout: timeoutMs,
+    const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
+    const response = await withRetry(async () => {
+      try {
+        return await client.chat.completions.create(requestBody as any, {
+          timeout: timeoutSeconds * 1000,
           maxRetries: 0,
-        }),
-      createApiRetryStrategy()
-    );
+        });
+      } catch (error) {
+        // The SDK reports an expired deadline as a connection error, which
+        // withRetry would otherwise treat as a network drop and re-send.
+        if ((error as Error).name === "APIConnectionTimeoutError") {
+          throw llmRequestTimeoutError(timeoutSeconds);
+        }
+        throw error;
+      }
+    }, createApiRetryStrategy());
 
     const responseText =
       response.choices

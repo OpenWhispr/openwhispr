@@ -6,10 +6,10 @@ const {
   installMicCaptureGlobals,
 } = require("../lib/rendererTestHarness");
 
-// `stopped` is what gates the auto-end restart card: true means this call ended
-// a live recording, so resuming its note is safe. It must not be conditioned on
-// main's teardown result — the transcript is written from the renderer before
-// that IPC is even awaited, so a teardown error still leaves a resumable note.
+// `stopped` is true only when this call ended a live recording. It must not be
+// conditioned on main's teardown result — the transcript is written from the
+// renderer before that IPC is even awaited, so a teardown error still leaves a
+// persisted note.
 
 const START_ARGS = {
   noteId: 11,
@@ -22,7 +22,6 @@ function createElectronAPI({ stopResult }) {
   const noopListener = () => () => {};
   const notes = new Map([[11, { id: 11, transcript: "", deleted_at: null }]]);
   return {
-    updatedTranscripts: [],
     api: {
       checkSystemAudioAccess: async () => ({
         granted: true,
@@ -93,8 +92,8 @@ test("a session stamps its start time and clears it on stop", async (t) => {
 });
 
 // The renderer has already run cleanup and written the transcript by the time
-// main's result is read, so a teardown failure must not cost the user their
-// restart offer.
+// main's result is read, so a teardown failure must not be reported as a
+// recording that never stopped.
 test("a stop whose main-side teardown fails still reports the recording ended", async (t) => {
   const { api } = createElectronAPI({
     stopResult: () => ({ success: false, error: "audio tap teardown failed" }),

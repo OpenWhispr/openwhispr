@@ -3,6 +3,7 @@ import logger from "../utils/logger";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
+import { convertToWav, needsWavConversion } from "../utils/audioContainer";
 import {
   applyChineseScript,
   mergeWhisperPrompt,
@@ -64,6 +65,7 @@ import {
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import {
+  byokFileSizeLimit,
   resolveByokModel,
   resolveTranscriptionRoute,
   STREAMING_ONLY_PROVIDERS,
@@ -204,6 +206,11 @@ function resolveReasoningRoute(
 ) {
   const wakeWordLanguage = resolveWakeWordLanguage(settings, detectedLanguage, text);
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
+  // Pin cleanup to 0 where supported; bridges otherwise default to 0.7 (local)
+  // or 0.3 (Anthropic/enterprise). Zero does not guarantee determinism.
+  // Direct Gemini owns its defaults (3: 1.0, older: 0); check mode to ignore stale providers.
+  const cleanupTemperature =
+    cleanup.mode === "providers" && cleanup.provider === "gemini" ? undefined : 0;
   const cleanupReachable =
     !!settings.useCleanupModel && (!!cleanup.model?.trim() || isCloudCleanupMode());
   const agent = resolveDictationAgentInference(settings, {
@@ -246,16 +253,14 @@ function resolveReasoningRoute(
       "transcription"
     );
   }
-  // Shared by the cleanup route and the translation chain's cleanup step. Cleanup is a
-  // deterministic transform: pass temperature 0 explicitly, because the IPC-bridged
-  // providers (local bridge, Anthropic, enterprise) otherwise apply their own default.
+  // Shared by ordinary cleanup and the translation chain's cleanup step.
   // A truncated reply must fail rather than replace the dictation with its first part:
   // the cleanup route pastes the raw transcript and the chain translates it, and both
   // raise the cleanup-failed toast (#2091).
   const cleanupConfig = {
     inferenceScope: /** @type {const} */ ("dictationCleanup"),
     disableThinking: settings.cleanupDisableThinking,
-    temperature: 0,
+    temperature: cleanupTemperature,
     requireCompleteOutput: true,
   };
   if (kind === "translation") {
@@ -285,7 +290,7 @@ function resolveReasoningRoute(
       visionProviderImageWired: providerSupportsImages(vision.config.provider),
       baseProviderImageWired: providerSupportsImages(agent.config.provider),
       isCloudAgent: isCloudDictationAgentMode(),
-      baseModelSupportsVision: !!getCloudModel(agent.model)?.supportsVision,
+      baseModelSupportsVision: !!getCloudModel(agent.model, agent.config.provider)?.supportsVision,
     });
     const target = useVisionOverride ? vision : agent;
     logger.logReasoning("AGENT_IMAGE_TARGET", {
@@ -3600,9 +3605,45 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return { success: true, text, rawText: proxyText, source, timings };
       }
 
+      // Some Custom endpoints decode the upload and reject anything that isn't
+      // WAV/MP3/FLAC (Azure MAI-Transcribe via OpenRouter, for one), which
+      // Chromium's WebM/Opus recordings always are. Re-encode for those rather
+      // than failing the dictation; a conversion failure falls through to the
+      // original bytes so this can only widen what works.
+      let uploadAudio = optimizedAudio;
+      if (needsWavConversion(provider, optimizedAudio.type, optimizedAudio.size)) {
+        try {
+          const wavAudio = await convertToWav(optimizedAudio);
+          // Keep compressed recordings usable on endpoints that already accept
+          // them when PCM expansion would exceed the upload limit.
+          if (wavAudio.size <= byokFileSizeLimit(provider)) {
+            uploadAudio = wavAudio;
+          }
+          logger.debug(
+            "Prepared recording for custom endpoint",
+            {
+              fromType: optimizedAudio.type,
+              fromSize: optimizedAudio.size,
+              toType: uploadAudio.type,
+              toSize: uploadAudio.size,
+            },
+            "transcription"
+          );
+        } catch (conversionError) {
+          logger.warn(
+            "WAV re-encode failed; uploading original container",
+            { error: conversionError?.message, type: optimizedAudio.type },
+            "transcription"
+          );
+        }
+      }
+
+      // Decoding can outlive cancellation and a newer recording's request.
+      if (wasCancelled()) throw new DOMException("Transcription cancelled", "AbortError");
+
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
-      const mimeType = optimizedAudio.type || "audio/webm";
+      const mimeType = uploadAudio.type || "audio/webm";
       const extension = audioExtensionForMime(mimeType);
 
       logger.debug(
@@ -3610,13 +3651,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         {
           mimeType,
           extension,
-          optimizedSize: optimizedAudio.size,
+          optimizedSize: uploadAudio.size,
           hasApiKey: !!apiKey,
         },
         "transcription"
       );
 
-      formData.append("file", optimizedAudio, `audio.${extension}`);
+      formData.append("file", uploadAudio, `audio.${extension}`);
       formData.append("model", model);
 
       if (language) {

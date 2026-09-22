@@ -10,6 +10,15 @@ import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 
+export interface MainWindowInputRegion {
+  viewportWidth: number;
+  viewportHeight: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcribed";
 
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
@@ -78,8 +87,7 @@ export type TranscriptionErrorCode =
 
 export type MeetingPromptVariant = "detected" | "starting" | "underway";
 
-export interface MeetingDetectionNotificationData {
-  kind: "detection";
+export interface MeetingNotificationData {
   detectionId: string;
   source: string;
   key: string;
@@ -91,34 +99,9 @@ export interface MeetingDetectionNotificationData {
 /** Why auto-end concluded the meeting is over. */
 export type MeetingAutoEndReason = "mic-released" | "silence" | "process-exit";
 
-export interface MeetingAutoEndNotificationData {
-  kind: "auto-end";
-  sessionId: string;
-  expiresAt: number;
-  reason?: MeetingAutoEndReason;
-  /** True when the auto-ended note has a transcript and no AI summary yet, which
-   * is when the card also offers to generate one. */
-  canSummarize?: boolean;
-}
-
-export type MeetingNotificationData =
-  MeetingDetectionNotificationData | MeetingAutoEndNotificationData;
-
 export interface MeetingAutoEndRequest {
   sessionId: string;
   reason?: MeetingAutoEndReason;
-}
-
-export type MeetingAutoEndAction = "restart" | "summary" | "dismiss";
-
-export interface MeetingAutoEndRestartRequest {
-  sessionId: string;
-}
-
-export interface MeetingAutoEndLifecycleResult {
-  success: boolean;
-  reason?: "invalid-session" | "invalid-action" | "stale-session";
-  error?: string;
 }
 
 /**
@@ -496,9 +479,13 @@ export interface SpaceItem {
   name: string;
   emoji: string | null;
   sort_order: number;
-  // Server-computed max effective role across assigned teams (ws owner/admin ⇒ admin).
+  // Server-computed effective role: direct grant or best role across assigned
+  // teams (ws owner/admin ⇒ admin).
   my_role: "admin" | "member" | null;
-  // Server-computed deduped union of assigned team rosters.
+  // Direct space_members grant, null when access comes only via teams or the
+  // workspace role. Absent on mirrors written before the API shipped it.
+  my_direct_role?: TeamRole | null;
+  // Server-computed deduped union of direct members and assigned team rosters.
   member_count: number | null;
   teams: SpaceTeamRef[];
   sync_status: "synced" | "pending" | "error";
@@ -641,6 +628,8 @@ export interface InvitationPreview {
   email: string;
   workspace_role: WorkspaceRole;
   team_ids: string[];
+  /** Live spaces the invite grants directly; absent from APIs that predate space grants. */
+  space_names?: string[];
   expires_at: string;
   workspace_id: string;
   workspace_name: string;
@@ -1961,6 +1950,8 @@ declare global {
       startControlPanelDrag: () => Promise<void>;
       stopControlPanelDrag: () => Promise<void>;
       setMainWindowInteractivity: (interactive: boolean) => Promise<void>;
+      setMainWindowInputRegion: (region: MainWindowInputRegion | null) => Promise<boolean>;
+      onMainWindowVisibilityChanged: (callback: (visible: boolean) => void) => () => void;
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
       resizeMainWindow: (
         sizeKey:
@@ -3160,14 +3151,6 @@ declare global {
       onMeetingAutoEndRequested?: (
         callback: (request: MeetingAutoEndRequest) => void
       ) => () => void;
-      meetingAutoEndCompleted?: (sessionId: string) => Promise<MeetingAutoEndLifecycleResult>;
-      meetingAutoEndRespond?: (
-        sessionId: string,
-        action: MeetingAutoEndAction
-      ) => Promise<MeetingAutoEndLifecycleResult>;
-      onMeetingAutoEndRestartRequested?: (
-        callback: (request: MeetingAutoEndRestartRequest) => void
-      ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (
@@ -3186,8 +3169,6 @@ declare global {
       getPendingNoteNavigation?: () => Promise<{
         noteId: number;
         folderId: number | null;
-        /** Set by the auto-end card's summary action: open the note and run its AI summary. */
-        generateSummary?: boolean;
       } | null>;
       onNoteNavigationPending?: (callback: () => void) => () => void;
       onPreviewText?: (callback: (text: string) => void) => () => void;

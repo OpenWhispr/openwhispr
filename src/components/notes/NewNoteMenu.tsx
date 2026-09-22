@@ -32,7 +32,7 @@ interface NewNoteMenuProps {
   onNewChat?: () => void;
 }
 
-/** The Notes topbar's split "New note" button; the chevron offers the other things to create. */
+/** The topbar's split "New note" button; the chevron offers the other things to create. */
 export default function NewNoteMenu({ onNewNote, onNewChat }: NewNoteMenuProps) {
   const { t } = useTranslation();
   const canCreateTeamSpace = useCanCreateTeamSpace();
