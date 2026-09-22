@@ -844,8 +844,7 @@ export class LocalNotesRepository implements NotesRepository {
     if (local.pendingSync === 1) return;
 
     if (remote.deleted_at) {
-      this.deleteNoteChildrenAndAudio(local.id);
-      this.database.delete(notes).where(eq(notes.id, local.id)).run();
+      this.hardDeleteNote(local.id);
       return;
     }
 
@@ -1140,10 +1139,8 @@ export class LocalNotesRepository implements NotesRepository {
       // "Use server's copy" must mean accepting that, not resurrecting a
       // zombie local row that still points remoteId at a gone server note —
       // the delta-cursor pull may never re-deliver that tombstone once our
-      // watermark has moved past it. Mirrors applyRemoteNote's own tombstone
-      // path (deleteNoteChildrenAndAudio + hard delete).
-      this.deleteNoteChildrenAndAudio(local.id);
-      this.database.delete(notes).where(eq(notes.id, local.id)).run();
+      // watermark has moved past it. Mirrors applyRemoteNote's tombstone path.
+      this.hardDeleteNote(local.id);
       return;
     }
     // Bypasses applyRemoteNote's pendingSync/conflict guards on purpose — the

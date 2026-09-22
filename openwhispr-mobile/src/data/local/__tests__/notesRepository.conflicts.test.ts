@@ -667,3 +667,31 @@ describe('LocalNotesRepository.resolveConflictUseServer — dirty transcript (fi
     expect(repo.getPendingNotes().map((n) => n.id)).not.toContain(note.id);
   });
 });
+
+describe('LocalNotesRepository — server tombstones clear a push rejection', () => {
+  it('when a pull deletes a note whose last upload was rejected', () => {
+    const { repo } = createMemoryRepository();
+    const local = repo.createNote('Title', 'Content');
+    repo.setNoteClientId(local.id, 'client-1');
+    repo.markNotePushed(repo.getNoteById(local.id)!, 'srv-1', '2026-08-24T09:00:00.000Z');
+    repo.markNoteTerminal(local.id);
+
+    repo.applyRemoteNote(remoteNote({ deleted_at: '2026-08-24T10:00:00.000Z' }), noFolder);
+
+    expect(repo.getNoteById(local.id)).toBeNull();
+    expect(repo.getSyncState(`note.pushRejected.${local.id}`)).toBeNull();
+  });
+
+  it('when using the server copy accepts a deletion', () => {
+    const { repo } = createMemoryRepository();
+    const local = repo.createNote('Title', 'Content');
+    repo.setNoteClientId(local.id, 'client-1');
+    repo.markNoteTerminal(local.id);
+    repo.parkNoteConflict(local.id, remoteNote({ deleted_at: '2026-08-24T10:00:00.000Z' }));
+
+    repo.resolveConflictUseServer(local.id);
+
+    expect(repo.getNoteById(local.id)).toBeNull();
+    expect(repo.getSyncState(`note.pushRejected.${local.id}`)).toBeNull();
+  });
+});

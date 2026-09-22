@@ -193,6 +193,22 @@ it('rejects terminally dropped edits instead of sharing stale cloud content', as
   complete();
   await expect(pending).rejects.toThrow(/rejected/i);
 });
+it('rejects a never-synced note whose upload was terminally rejected', async (): Promise<void> => {
+  const pending = ensureNoteSynced(1, { signal: controller.signal });
+  note = { ...note, pendingSync: 0 };
+  jest.mocked(notesRepository.getSyncState).mockReturnValue('1');
+  complete();
+  await expect(pending).rejects.toThrow(/rejected/i);
+});
+it('explains a note held back because its space cannot sync', async (): Promise<void> => {
+  note = { ...note, spaceId: 5 };
+  jest
+    .mocked(notesRepository.getSyncState)
+    .mockImplementation((key) => (key === 'team_spaces_capability' ? 'true' : null));
+  const pending = ensureNoteSynced(1, { signal: controller.signal });
+  complete();
+  await expect(pending).rejects.toThrow(/space/i);
+});
 it('waits for the queued manual pass before using an earlier pass’s gate', async (): Promise<void> => {
   const pending = ensureNoteSynced(1, { signal: controller.signal });
   useSyncStore.getState().set({ subscriptionRequired: true });
@@ -204,7 +220,7 @@ it('waits for the queued manual pass before using an earlier pass’s gate', asy
 });
 
 it('resolves an acknowledged note even if a queued pass never reports back', async (): Promise<void> => {
-  // A queued foreground trigger can be dropped by the sync throttle without notifying listeners.
+  // Acknowledgement is repository state, so it never waits on a later pass.
   const pending = ensureNoteSynced(1, { signal: controller.signal });
   note = { ...note, remoteId: 'remote', pendingSync: 0 };
   complete(true);

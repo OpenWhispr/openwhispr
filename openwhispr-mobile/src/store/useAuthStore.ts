@@ -69,7 +69,6 @@ export const useAuthStore = create<AuthStore>((set) => ({
     await anonymousSignInInFlight?.catch(() => undefined);
     try {
       const user = await getSession();
-      await clearPreviousNoteShareTokens(user?.id);
       if (user) {
         const sessionCookie = await getStoredSession();
         set({ user, sessionCookie, isGuest: false, isInitialized: true, isLoading: false });

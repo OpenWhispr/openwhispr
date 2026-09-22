@@ -2,6 +2,7 @@ import { notesRepository, spacesRepository, type Note } from '@/data';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useNotesStore } from '@/store/useNotesStore';
+import { createPushScopeResolver } from './pushScope';
 import { requestSync, subscribeSyncCompletion } from './syncEngine';
 import { useSyncStore } from './useSyncStore';
 
@@ -79,14 +80,17 @@ export async function ensureNoteSynced(
         // Acknowledgement is repository state: a push clears pendingSync only when the server
         // accepted this exact snapshot, terminal rejections leave a flag, and conflicts or privacy
         // changes are rejected above. It needs no completed pass to observe.
-        if (note.remoteId && !note.pendingSync && !notesRepository.hasDirtyTranscript(noteId)) {
+        if (!note.pendingSync && !notesRepository.hasDirtyTranscript(noteId)) {
+          // A rejected create settles with no remote ID, so check before requiring one.
           if (notesRepository.getSyncState(`note.pushRejected.${noteId}`)) {
             throw new Error(
               'The latest changes were rejected by sync. Edit the note and retry before sharing.',
             );
           }
-          finish(note.remoteId);
-          return;
+          if (note.remoteId) {
+            finish(note.remoteId);
+            return;
+          }
         }
         // Sync status only reflects this request once a pass has finished with nothing queued.
         if (!completedPass) return;
@@ -97,6 +101,10 @@ export async function ensureNoteSynced(
         }
         if (sync.lastError)
           throw new Error('Unable to sync this note. Check your connection and try again.');
+        // The same test pushNotes uses to leave a row queued until its space resolves.
+        if (!createPushScopeResolver()(note.spaceId)) {
+          throw new Error('This note’s space is not available to sync yet. Try again later.');
+        }
       } catch (error) {
         finish(error instanceof Error ? error : new Error('Unable to sync this note.'));
       }

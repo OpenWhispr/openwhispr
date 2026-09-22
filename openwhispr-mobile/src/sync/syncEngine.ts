@@ -35,6 +35,16 @@ import { ApiError, isPolicyCloudBackupBlockedError } from '@/lib/apiClient';
 
 export type SyncReason = 'after-write' | 'foreground' | 'sign-in' | 'manual';
 
+// Triggers that arrive mid-run coalesce into one queued run, which keeps the
+// strongest reason asked for: a foreground run can be throttled away, and only
+// manual and sign-in runs force a fresh subscription check.
+const QUEUE_PRIORITY: Record<SyncReason, number> = {
+  foreground: 0,
+  'after-write': 1,
+  manual: 2,
+  'sign-in': 2,
+};
+
 let inFlight = false;
 let pendingTrigger: SyncReason | null = null;
 let postWriteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -101,6 +111,10 @@ const SUBSCRIPTION_CACHE_TTL_MS = 60_000;
 const FOREGROUND_THROTTLE_MS = 30_000;
 
 let lastForegroundSyncAt = 0;
+
+function isForegroundThrottled(): boolean {
+  return Date.now() - lastForegroundSyncAt < FOREGROUND_THROTTLE_MS;
+}
 
 let subscriptionCachedAt = 0;
 let subscriptionCached = false;
@@ -210,7 +224,9 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
   const auth = useAuthStore.getState();
   if (!auth.user || auth.isGuest) return;
   if (inFlight) {
-    pendingTrigger = reason;
+    if (!pendingTrigger || QUEUE_PRIORITY[reason] > QUEUE_PRIORITY[pendingTrigger]) {
+      pendingTrigger = reason;
+    }
     return;
   }
 
@@ -219,9 +235,7 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
   // Foreground triggers fire on every AppState→active transition, which can
   // be noisy (window focus, sim re-focus). Skip if we synced very recently.
   // Applies to every run below, personal or team-only.
-  if (reason === 'foreground' && Date.now() - lastForegroundSyncAt < FOREGROUND_THROTTLE_MS) {
-    return;
-  }
+  if (reason === 'foreground' && isForegroundThrottled()) return;
 
   // Claimed before the paygate's network round trip, not after it. A run that
   // parks on that request while the user signs up would otherwise overlap the
@@ -466,7 +480,17 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
   } finally {
     dispose();
     inFlight = false;
-    syncCompletionListeners.forEach((listener) => listener(pendingTrigger !== null));
+    // Replaying it would return before reaching this block, so listeners told
+    // a run was queued would never hear back.
+    if (pendingTrigger === 'foreground' && isForegroundThrottled()) pendingTrigger = null;
+    const hasQueuedRun = pendingTrigger !== null;
+    syncCompletionListeners.forEach((listener) => {
+      try {
+        listener(hasQueuedRun);
+      } catch (err) {
+        Sentry.captureException(err, { tags: { sync: 'completionListener' } });
+      }
+    });
     if (pendingTrigger) {
       const next = pendingTrigger;
       pendingTrigger = null;
