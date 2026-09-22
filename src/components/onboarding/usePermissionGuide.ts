@@ -29,13 +29,13 @@ export function usePermissionGuide(options: Options): {
       save: (progress) => latest.current.save(progress),
       publish: async (state) => {
         try {
-          const opened = await api.openPermissionGuide?.(state);
-          if (!disposed && !opened) setError(true);
-          return opened ?? false;
+          return (await api.openPermissionGuide?.(state)) ?? false;
         } catch {
-          if (!disposed) setError(true);
           return false;
         }
+      },
+      unavailable: () => {
+        if (!disposed) setError(true);
       },
       close: () => {
         void api.closePermissionGuide?.().catch(() => {});

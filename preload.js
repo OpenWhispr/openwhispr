@@ -66,7 +66,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
   openPermissionGuide: (state) => ipcRenderer.invoke("permission-guide-open", state),
-  updatePermissionGuide: (state) => ipcRenderer.invoke("permission-guide-update", state),
   closePermissionGuide: () => ipcRenderer.invoke("permission-guide-close"),
   getPermissionGuideState: () => ipcRenderer.invoke("permission-guide-state"),
   permissionGuideAction: (action) => ipcRenderer.send("permission-guide-action", action),

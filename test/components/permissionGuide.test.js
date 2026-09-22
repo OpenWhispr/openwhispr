@@ -12,14 +12,7 @@ test("saved sessions default to no helper and preserve explicit pending permissi
   assert.equal(parse(undefined), null);
   assert.deepEqual(parse({ current: "screen-context" }), { current: "screen-context" });
   assert.equal(parse({ current: "files" }), null);
-  assert.equal(parse({ current: "accessibility", attempted: [] }), null);
-  assert.deepEqual(
-    parse({
-      current: "accessibility",
-      attempted: ["accessibility"],
-      history: ["microphone"],
-      skipped: [],
-    }),
-    { current: "accessibility" }
-  );
+  assert.deepEqual(parse({ current: "accessibility", history: ["microphone"] }), {
+    current: "accessibility",
+  });
 });

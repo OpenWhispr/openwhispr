@@ -45,15 +45,13 @@ test("permission guide bridge uses narrow channels and strips IPC events", async
   const { api, invocations, listeners, sends } = loadPreloadApi();
   const state = { sessionId: "guide-1", permission: "accessibility" };
   await api.openPermissionGuide(state);
-  await api.updatePermissionGuide(state);
   await api.getPermissionGuideState();
   await api.closePermissionGuide();
-  const action = { ...state, action: "enable" };
+  const action = { ...state, action: "check" };
   api.permissionGuideAction(action);
   api.startPermissionGuideDrag(state);
   assert.deepEqual(invocations, [
     ["permission-guide-open", state],
-    ["permission-guide-update", state],
     ["permission-guide-state"],
     ["permission-guide-close"],
   ]);
@@ -68,6 +66,7 @@ test("permission guide bridge uses narrow channels and strips IPC events", async
   listeners.get("permission-guide-state-changed")({ sender: "native" }, state);
   assert.equal(received, state);
   stop();
+  assert.equal(api.updatePermissionGuide, undefined);
   assert.equal(listeners.has("permission-guide-state-changed"), false);
 });
 

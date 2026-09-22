@@ -24,8 +24,29 @@ interface ControllerOptions {
   rows: () => GuidePermission[];
   save: (progress: PermissionGuideProgress | null) => void;
   publish: (state: PermissionGuideState) => Promise<boolean>;
+  // The helper could not be opened for a request that is still live; a false
+  // publish for a superseded request is expected and not reported.
+  unavailable: () => void;
   close: () => void;
   restart: () => Promise<unknown>;
+}
+
+interface MicrophoneAccess {
+  requestAccess: () => Promise<unknown>;
+  checkAccess: () => Promise<{ granted: boolean; status: string }>;
+  openSettings: () => Promise<unknown>;
+}
+
+// The native prompt is the request. Settings only helps after a denial: until
+// the user has answered a prompt the Privacy pane does not list the app, and
+// the in-app alert that getUserMedia raises would stack under the overlay.
+export async function requestMicrophoneForGuide(
+  access: MicrophoneAccess
+): Promise<{ granted: boolean; status: string }> {
+  await access.requestAccess();
+  const result = await access.checkAccess();
+  if (result.status === "denied") await access.openSettings();
+  return result;
 }
 
 export function createPermissionGuideController(options: ControllerOptions): {
@@ -67,14 +88,20 @@ export function createPermissionGuideController(options: ControllerOptions): {
       busy,
       error,
     });
-    if (!opened && valid(expected)) close();
+    if (!opened && valid(expected)) {
+      close();
+      options.unavailable();
+    }
   };
 
   const accept = (result: GuideAccess, expected: number): void => {
     if (!valid(expected)) return;
+    const consented = access.granted;
     access = result;
-    // Apply feature consent only while this explicit request is still active and eligible.
-    if (result.granted) row()?.onGranted?.();
+    // Apply feature consent once, on the grant, and only while this explicit
+    // request is still active and eligible: a grant that needs a relaunch keeps
+    // the helper open, so later checks report granted again.
+    if (result.granted && !consented) row()?.onGranted?.();
   };
 
   const reconcile = async (): Promise<void> => {
@@ -125,6 +152,9 @@ export function createPermissionGuideController(options: ControllerOptions): {
       if (!saved) await permission.request();
       if (!valid(expected)) return;
       accept(await row()!.check(), expected);
+      // A resume only has to recognize a grant that landed before a relaunch;
+      // without one there is no System Settings window to anchor a helper to.
+      if (saved && !access.granted && valid(expected)) close();
     } catch {
       if (valid(expected)) error = true;
     } finally {

@@ -1083,7 +1083,6 @@ declare global {
       setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
       setOnboardingActive?: (active: boolean) => Promise<boolean>;
       openPermissionGuide?: (state: PermissionGuideState) => Promise<boolean>;
-      updatePermissionGuide?: (state: PermissionGuideState) => Promise<boolean>;
       closePermissionGuide?: () => Promise<boolean>;
       getPermissionGuideState?: () => Promise<PermissionGuideState | null>;
       permissionGuideAction?: (action: PermissionGuideAction) => void;

@@ -6,13 +6,14 @@ const vm = require("node:vm");
 
 function load({ platform = "darwin", binary = "/bin/macos-window-bounds", execFile } = {}) {
   const calls = [];
+  const resolves = [];
   const module = { exports: {} };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, "../../src/helpers/settingsWindowState.js"), "utf8"),
     {
       module,
       exports: module.exports,
-      process: { platform },
+      process: { platform, pid: 4242 },
       require: (name) => {
         if (name === "child_process")
           return {
@@ -21,12 +22,18 @@ function load({ platform = "darwin", binary = "/bin/macos-window-bounds", execFi
               execFile(callback);
             },
           };
-        if (name === "./binaryResolver") return { resolveBundledBinary: () => binary };
+        if (name === "./binaryResolver")
+          return {
+            resolveBundledBinary: () => {
+              resolves.push(binary);
+              return binary;
+            },
+          };
         return require(name);
       },
     }
   );
-  return { readSettingsWindowState: module.exports.readSettingsWindowState, calls };
+  return { ...module.exports, calls, resolves };
 }
 
 const succeed = (stdout) => (callback) => callback(null, stdout, "");
@@ -105,4 +112,68 @@ test("reports nothing when the helper binary is missing from the bundle", async 
 
   assert.equal(await readSettingsWindowState(), null);
   assert.equal(calls.length, 0);
+});
+
+test("hands the helper the app's own pid so it can tell self from other apps", async () => {
+  // Window owner names are localized ("Systemeinstellungen" on a German Mac), so
+  // the helper classifies by process instead; it needs to know which one we are.
+  const { readSettingsWindowState, calls } = load({
+    execFile: report({ settings: null, authPrompt: false, frontmost: "self" }),
+  });
+
+  await readSettingsWindowState();
+
+  // The args array is built inside the vm context, so compare contents only.
+  assert.deepEqual([...calls[0].args], ["4242"]);
+});
+
+test("reads the front app as a classification, never as a window title", async () => {
+  const front = async (frontmost) =>
+    (
+      await load({
+        execFile: report({ settings: null, authPrompt: false, frontmost }),
+      }).readSettingsWindowState()
+    ).frontmost;
+
+  assert.equal(await front("settings"), "settings");
+  assert.equal(await front("self"), "self");
+  assert.equal(await front("other"), "other");
+  assert.equal(await front("Safari"), null);
+});
+
+test("resolves the helper binary once, not on every poll", async () => {
+  // The resolver logs each lookup; at two polls a second that is 120 log lines
+  // a minute for the whole time the overlay is open.
+  const { readSettingsWindowState, resolves } = load({
+    execFile: report({ settings: null, authPrompt: false }),
+  });
+
+  await readSettingsWindowState();
+  await readSettingsWindowState();
+
+  assert.equal(resolves.length, 1);
+});
+
+test("reports whether the helper is available so the guide can fall back up front", () => {
+  assert.equal(load({ execFile: report({}) }).isSettingsWindowStateAvailable(), true);
+  assert.equal(
+    load({ binary: null, execFile: report({}) }).isSettingsWindowStateAvailable(),
+    false
+  );
+  assert.equal(
+    load({ platform: "win32", execFile: report({}) }).isSettingsWindowStateAvailable(),
+    false
+  );
+});
+
+test("reads whether System Settings is still running while its window is off screen", async () => {
+  const running = await load({
+    execFile: report({ settings: null, authPrompt: false, settingsRunning: true }),
+  }).readSettingsWindowState();
+  const closed = await load({
+    execFile: report({ settings: null, authPrompt: false }),
+  }).readSettingsWindowState();
+
+  assert.equal(running.settingsRunning, true);
+  assert.equal(closed.settingsRunning, false);
 });

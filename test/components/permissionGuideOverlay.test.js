@@ -19,13 +19,9 @@ test("guide exposes native drag only for supported steps and keeps a keyboard al
   const state = {
     sessionId: "guide",
     permission: "accessibility",
-    position: 2,
-    total: 4,
     granted: false,
     needsRelaunch: false,
     busy: false,
-    attempted: true,
-    canGoBack: true,
     error: false,
     canDrag: true,
   };
@@ -51,6 +47,8 @@ test("guide exposes native drag only for supported steps and keeps a keyboard al
   const restart = render({ permission: "screen-context", granted: true, needsRelaunch: true });
   assert.match(restart, /onboarding.permissionGuide.restart/);
   assert.match(restart, /onboarding.permissionGuide.return/);
-  const cachedAudio = render({ permission: "system-audio", granted: true, attempted: false });
+  const cachedAudio = render({ permission: "system-audio", granted: true });
   assert.match(cachedAudio, /onboarding.permissionGuide.check/);
+  assert.match(drag, /aria-label="onboarding.permissionGuide.label"/);
+  assert.doesNotMatch(drag, /title=/);
 });

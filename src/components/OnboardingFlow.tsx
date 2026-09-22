@@ -65,7 +65,10 @@ import {
 } from "./onboarding/flow";
 import { useOnboardingSession } from "./onboarding/useOnboardingSession";
 import { usePermissionGuide } from "./onboarding/usePermissionGuide";
-import type { GuidePermission } from "./onboarding/permissionGuideController";
+import {
+  requestMicrophoneForGuide,
+  type GuidePermission,
+} from "./onboarding/permissionGuideController";
 import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
 import { resolveAssistantDemoScenario } from "./onboarding/assistantDemoScenario";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
@@ -349,8 +352,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   );
   const openMicrophoneSettings = async (): Promise<void> => {
-    const result = await window.electronAPI.openMicrophoneSettings?.();
-    if (!result?.success) throw new Error(result?.error ?? "Microphone settings unavailable");
+    const result = await window.electronAPI.openMicrophoneSettings();
+    if (!result.success) throw new Error(result.error);
   };
   const openAccessibilitySettings = async (): Promise<void> => {
     const result = await window.electronAPI.openAccessibilitySettings();
@@ -361,9 +364,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       id: "microphone",
       granted: permissions.micPermissionGranted,
       request: async () => {
-        await permissions.requestMicPermission();
-        const result = await window.electronAPI.checkMicrophoneAccess();
-        if (!result.granted) await openMicrophoneSettings();
+        const result = await requestMicrophoneForGuide({
+          requestAccess: window.electronAPI.requestMicrophoneAccess,
+          checkAccess: window.electronAPI.checkMicrophoneAccess,
+          openSettings: openMicrophoneSettings,
+        });
+        permissions.setMicPermissionGranted(result.granted);
       },
       check: async () => {
         const result = await window.electronAPI.checkMicrophoneAccess();

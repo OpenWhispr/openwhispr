@@ -558,6 +558,7 @@
       }
     },
     "permissionGuide": {
+      "label": "Guia de permissões",
       "return": "Voltar à configuração",
       "missingApp": "Ou selecione o app com +",
       "failed": "Não foi possível verificar o acesso.",

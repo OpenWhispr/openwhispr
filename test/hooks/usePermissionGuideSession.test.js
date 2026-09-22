@@ -38,10 +38,12 @@ test("permission intent persists before React commits and explicit dismissal cle
     assert.equal(saved.screenContextRequested, true);
     assert.deepEqual(saved.permissionGuide, progress);
   });
+  // Enabling another permission while Screen Context is still pending does not
+  // withdraw the opt-in; only dismissing the guide does.
   await React.act(async () => {
     session.setPermissionGuide({ current: "accessibility" });
   });
-  assert.equal(JSON.parse(storage.getItem("onboardingSessionV2")).screenContextRequested, false);
+  assert.equal(JSON.parse(storage.getItem("onboardingSessionV2")).screenContextRequested, true);
   await React.act(async () => {
     session.setPermissionGuide(progress);
     session.setScreenContextRequested(true);

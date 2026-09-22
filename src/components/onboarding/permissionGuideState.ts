@@ -10,11 +10,5 @@ export function isPermissionGuideId(value: unknown): value is PermissionGuideId 
 export function parsePermissionGuideProgress(value: unknown): PermissionGuideProgress | null {
   if (!value || typeof value !== "object" || !("current" in value)) return null;
   if (!isPermissionGuideId(value.current)) return null;
-  // Old wizard sessions may describe a step the user never chose to enable.
-  if (
-    "attempted" in value &&
-    (!Array.isArray(value.attempted) || !value.attempted.includes(value.current))
-  )
-    return null;
   return { current: value.current };
 }

@@ -1771,6 +1771,9 @@ class WindowManager {
     // A demo left running when the panel hides would keep swallowing normal
     // dictations (paste suppressed, transcripts rerouted to the demo session).
     this.endOnboardingDemo();
+    // The guide cannot watch the panel's hide event (occlusion fires it too),
+    // so the one real hide path tells it.
+    this.permissionGuide?.close(false, true);
     this.controlPanelWindow.hide();
     dockManager.setControlPanelVisible(false);
   }

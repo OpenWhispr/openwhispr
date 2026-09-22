@@ -46,11 +46,12 @@ export function useOnboardingSession() {
   }, []);
   const setPermissionGuide = useCallback(
     (permissionGuide: PermissionGuideProgress | null): void => {
+      // Dismissing the guide withdraws the Screen Context opt-in; enabling
+      // another permission while it is still pending does not.
       setSession((current) => ({
         ...current,
         permissionGuide,
-        screenContextRequested:
-          permissionGuide?.current === "screen-context" ? current.screenContextRequested : false,
+        screenContextRequested: permissionGuide ? current.screenContextRequested : false,
       }));
     },
     [setSession]

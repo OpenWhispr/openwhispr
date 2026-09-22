@@ -4,13 +4,15 @@ const fs = require("fs");
 const DevServerManager = require("./devServerManager");
 const debugLogger = require("./debugLogger");
 const { computeGuideBounds } = require("./permissionGuidePlacement");
-const { readSettingsWindowState } = require("./settingsWindowState");
+const {
+  isSettingsWindowStateAvailable,
+  readSettingsWindowState,
+} = require("./settingsWindowState");
 
 const PERMISSIONS = new Set(["microphone", "accessibility", "system-audio", "screen-context"]);
 const ACTIONS = new Set(["check", "settings", "close", "restart"]);
 const GUIDE_SIZE = { width: 560, height: 124 };
 const POLL_MS = 500;
-const SETTINGS_OWNERS = new Set(["System Settings", "System Preferences"]);
 // Dragging the dialog between displays drops it out of the window list for a
 // moment, so only a sustained disappearance counts as closed.
 const SETTINGS_MISSES_BEFORE_CLOSE = 2;
@@ -43,6 +45,9 @@ class PermissionGuideManager {
     this.windowManager = windowManager;
     this.window = null;
     this.owner = null;
+    // The owner's contents, held separately: once a BrowserWindow has closed,
+    // reading its webContents throws, and the listeners still have to come off.
+    this.ownerContents = null;
     this.state = null;
     this.bundlePath = null;
     this.icon = null;
@@ -51,28 +56,22 @@ class PermissionGuideManager {
     this.missedSettings = 0;
     this.steppedAside = false;
     this.pollTimer = null;
-    // macOS fires hide on occlusion as well as on a real hide, so the event
-    // alone cannot be trusted — the same trap documented for the Dock icon.
-    this.ownerGone = () => {
-      if (this.owner && !this.owner.isDestroyed() && this.owner.isVisible?.()) return;
-      this.close(false, true);
+    // The onboarding document that owns this guide is gone: closed, crashed, or
+    // navigated away (log out reloads it, the OAuth refresh loads a new URL).
+    // Not wired to hide: on macOS that fires on occlusion too, and isVisible()
+    // folds occlusion in as well, so neither can tell a covered window from one
+    // sent to the tray. hideControlPanelToTray() closes the guide explicitly.
+    this.ownerGone = () => this.close(false, true);
+    this.ownerNavigated = (navigation) => {
+      if (navigation.isMainFrame && !navigation.isSameDocument) this.ownerGone();
     };
 
     ipcMain.handle("permission-guide-open", (event, state) => this.open(event, state));
-    ipcMain.handle("permission-guide-update", (event, state) => {
-      if (
-        !this.isOwner(event) ||
-        !this.window ||
-        !validState(state) ||
-        state.sessionId !== this.state?.sessionId
-      )
-        return false;
-      this.setState(state);
-      return true;
-    });
+    // Not restoring focus: the renderer closes on a grant, and the user may
+    // still be in System Settings for the next permission.
     ipcMain.handle("permission-guide-close", (event) => {
       if (!this.isOwner(event)) return false;
-      this.close(true);
+      this.close();
       return true;
     });
     ipcMain.handle("permission-guide-state", (event) =>
@@ -81,7 +80,10 @@ class PermissionGuideManager {
     ipcMain.on("permission-guide-action", (event, action) => {
       if (!fromWindow(event, this.window) || !this.matches(action) || !ACTIONS.has(action.action))
         return;
-      this.sendAction(action.action);
+      // Closing is done here, not echoed back through the owner: the owner may
+      // no longer be listening, and the guide must never outlive its controls.
+      if (action.action === "close") this.close(true, true);
+      else this.sendAction(action.action);
     });
     ipcMain.on("permission-guide-drag", (event, target) => {
       if (!fromWindow(event, this.window) || !this.matches(target) || !this.snapshot()?.canDrag)
@@ -185,7 +187,11 @@ class PermissionGuideManager {
       this.missedSettings = 0;
       this.sawSettings = true;
       this.applyBounds(window, state.settings);
-    } else if (this.sawSettings && ++this.missedSettings >= SETTINGS_MISSES_BEFORE_CLOSE) {
+    } else if (
+      this.sawSettings &&
+      !state.settingsRunning &&
+      ++this.missedSettings >= SETTINGS_MISSES_BEFORE_CLOSE
+    ) {
       this.close(true, true);
       return;
     }
@@ -198,21 +204,28 @@ class PermissionGuideManager {
   }
 
   // The overlay belongs to the settings dialog: it steps aside for an
-  // authorization prompt, and for any other app the user brings to the front.
+  // authorization prompt, for any other app the user brings to the front, and
+  // while the dialog is on another Space.
   shouldStepAside(state) {
-    if (state.authPrompt) return true;
-    if (!state.frontmost) return false;
-    return !SETTINGS_OWNERS.has(state.frontmost) && state.frontmost !== app.getName();
+    return (
+      state.authPrompt || state.frontmost === "other" || (!state.settings && state.settingsRunning)
+    );
   }
 
+  // One read at a time: an interval would keep firing while a slow helper is
+  // still running, and two ticks in flight double-count a miss.
   startPolling() {
     this.stopPolling();
-    this.pollTimer = setInterval(() => void this.poll(), POLL_MS);
+    const tick = async () => {
+      await this.poll();
+      if (this.pollTimer !== null) this.pollTimer = setTimeout(tick, POLL_MS);
+    };
+    this.pollTimer = setTimeout(tick, POLL_MS);
   }
 
   stopPolling() {
-    if (!this.pollTimer) return;
-    clearInterval(this.pollTimer);
+    if (this.pollTimer === null) return;
+    clearTimeout(this.pollTimer);
     this.pollTimer = null;
   }
 
@@ -233,6 +246,9 @@ class PermissionGuideManager {
 
   async open(event, state) {
     if (!this.isOwner(event) || !validState(state)) return false;
+    // Without the helper the overlay could neither follow the dialog nor close
+    // with it; refusing lets Enable fall back to the plain Settings flow.
+    if (!isSettingsWindowStateAvailable()) return false;
     if (this.window && !this.window.isDestroyed() && state.sessionId === this.state?.sessionId) {
       this.setState(state);
       return true;
@@ -240,6 +256,7 @@ class PermissionGuideManager {
     this.close();
     const owner = this.windowManager.controlPanelWindow;
     this.owner = owner;
+    this.ownerContents = owner.webContents;
     const window = new BrowserWindow({
       // Created at the fallback spot with no await between here and the
       // this.window assignment below, so a second publish takes the early
@@ -273,9 +290,8 @@ class PermissionGuideManager {
     this.window = window;
     this.setState(state);
     owner.on("closed", this.ownerGone);
-    owner.on("hide", this.ownerGone);
-    owner.webContents.on("render-process-gone", this.ownerGone);
-    owner.webContents.on("did-start-navigation", this.ownerGone);
+    this.ownerContents.on("render-process-gone", this.ownerGone);
+    this.ownerContents.on("did-start-navigation", this.ownerNavigated);
     window.on("closed", () => {
       if (this.window === window) this.close(false, true);
     });
@@ -344,21 +360,22 @@ class PermissionGuideManager {
   close(restore = false, notify = false) {
     const window = this.window;
     const owner = this.owner;
+    const ownerContents = this.ownerContents;
     this.stopPolling();
     if (notify) this.sendAction("close");
     this.window = null;
     this.state = null;
     this.owner = null;
+    this.ownerContents = null;
     this.bundlePath = null;
     this.icon = null;
     this.sawSettings = false;
     this.missedSettings = 0;
     this.steppedAside = false;
-    if (owner) {
-      owner.removeListener("closed", this.ownerGone);
-      owner.removeListener("hide", this.ownerGone);
-      owner.webContents.removeListener("render-process-gone", this.ownerGone);
-      owner.webContents.removeListener("did-start-navigation", this.ownerGone);
+    if (owner) owner.removeListener("closed", this.ownerGone);
+    if (ownerContents) {
+      ownerContents.removeListener("render-process-gone", this.ownerGone);
+      ownerContents.removeListener("did-start-navigation", this.ownerNavigated);
     }
     if (window && !window.isDestroyed()) window.close();
     if (restore && owner && !owner.isDestroyed()) {

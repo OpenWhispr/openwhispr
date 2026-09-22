@@ -28,7 +28,7 @@ export function PermissionGuideCard({ state, onAction, onDrag }: CardProps): Rea
     <section
       className="permission-settings-overlay onboarding-canvas flex h-screen items-center gap-3 overflow-y-auto rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-3 text-[var(--onboarding-text-primary)]"
       style={{ WebkitAppRegion: "drag" } as CSSProperties}
-      aria-label="OpenWhispr"
+      aria-label={t("onboarding.permissionGuide.label")}
     >
       <button
         type="button"
@@ -64,7 +64,6 @@ export function PermissionGuideCard({ state, onAction, onDrag }: CardProps): Rea
             }}
             style={interactive}
             aria-disabled={!state.canDrag}
-            title={t("onboarding.permissionGuide.missingApp")}
             className={`mt-2 flex items-center gap-2.5 rounded-lg border border-[var(--onboarding-control-border)] px-3 py-2 ${state.canDrag ? "cursor-grab active:cursor-grabbing" : "opacity-60"}`}
           >
             {state.appIcon && (
@@ -130,19 +129,17 @@ export function PermissionGuideOverlay(): ReactElement | null {
     };
   }, []);
 
+  const sessionId = state?.sessionId;
+  const permission = state?.permission;
   useEffect(() => {
-    if (!state) return;
+    if (!sessionId || !permission) return;
     const keydown = (event: KeyboardEvent): void => {
       if (event.key === "Escape")
-        window.electronAPI.permissionGuideAction?.({
-          sessionId: state.sessionId,
-          permission: state.permission,
-          action: "close",
-        });
+        window.electronAPI.permissionGuideAction?.({ sessionId, permission, action: "close" });
     };
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [state]);
+  }, [sessionId, permission]);
 
   if (!state) return null;
   const target = { sessionId: state.sessionId, permission: state.permission };
