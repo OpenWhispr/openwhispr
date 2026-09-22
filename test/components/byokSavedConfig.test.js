@@ -578,7 +578,7 @@ test("the saved key still matches an endpoint typed with a differently cased hos
   assert.equal(step.value(PLACEHOLDER.selfHostedKey), "sk-custom-key");
 });
 
-test("a hosted save clears the Settings self-hosted server so it cannot resurface", async (t) => {
+test("a hosted save keeps the Settings self-hosted server for the Upload tab", async (t) => {
   const step = await mountByokStep(t, {
     selfHostedRequested: true,
     settings: SETTINGS_SELF_HOSTED,
@@ -590,10 +590,16 @@ test("a hosted save clears the Settings self-hosted server so it cannot resurfac
   await step.proceed();
 
   assert.equal(step.state().cloudTranscriptionProvider, "groq");
-  assert.equal(step.state().remoteTranscriptionUrl, "");
+  // remoteTranscriptionUrl is shared with Upload's Self-hosted panel; the mode the
+  // fan-out derives is what keeps the server out of dictation's route and out of
+  // the card a later restart reopens on.
+  assert.equal(step.state().remoteTranscriptionUrl, "http://192.168.1.5:8178");
 
   const route = await routeAfterOnboardingSave(step);
   assert.equal(route.provider, "groq");
+  const { resolveSavedByokConfig } =
+    await import("../../src/components/onboarding/savedByokConfig.ts");
+  assert.equal(resolveSavedByokConfig("byok-dictation", step.state()).draft.baseUrl, "");
 });
 
 test("switching modes keeps both halves of the form and swaps only the key", async (t) => {

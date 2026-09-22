@@ -561,8 +561,6 @@ export function ByokProviderStep({
       store.setCloudTranscriptionMode("byok");
       store.switchCloudTranscriptionProvider("dictation", selectedProvider);
       store.setCloudTranscriptionModel(selectedModel);
-      // A Settings server left behind would reopen the Self-hosted card on it later.
-      store.setRemoteTranscriptionUrl("");
     }
     onProceed();
   };
