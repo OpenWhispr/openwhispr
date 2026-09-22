@@ -48,17 +48,18 @@ const SPM_PKG_PATTERN = /^\s*spm_pkg\s/m;
 // one generation pass. That breaks here: @generated_uuids is empty at injection time,
 // so the counter restarts at 0 and re-emits <prefix>00000000 — the PBXProject's own
 // UUID — overwriting the PBXProject block and leaving a project with no root object.
-// Restore the collision check that stock Xcodeproj already performs.
+// Restore the collision check that stock Xcodeproj already performs, but keep the counter
+// advancing past taken UUIDs: generate_uuid calls this until one is available, so a window that
+// collides entirely (as the first packages' refs do) must still move on or it loops forever.
 // See https://github.com/maplibre/maplibre-react-native/issues/1499.
 const UUID_FIX_BLOCK =
   "require 'cocoapods'\n" +
   'Pod::Project.class_eval do\n' +
   '  def generate_available_uuid_list(count = 100)\n' +
   '    start = @generated_uuids.size\n' +
-  "    uniques = Array.new(count) { |i| format('%.6s%07X0', @uuid_prefix, start + i) }\n" +
-  '    uniques -= (@generated_uuids + uuids)\n' +
-  '    @generated_uuids += uniques\n' +
-  '    @available_uuids += uniques\n' +
+  "    candidates = Array.new(count) { |i| format('%.6s%07X0', @uuid_prefix, start + i) }\n" +
+  '    @generated_uuids += candidates\n' +
+  '    @available_uuids += candidates - uuids\n' +
   '  end\n' +
   'end\n';
 
