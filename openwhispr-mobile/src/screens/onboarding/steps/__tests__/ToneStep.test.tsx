@@ -59,9 +59,9 @@ beforeEach(() => {
 it('shows illustrative examples and saves a selected tone only on Continue', async () => {
   const screen = render(<ToneStep />);
   expect(screen.getAllByRole('radio')).toHaveLength(5);
-  expect(screen.getByRole('radio', { name: 'Default' })).toBeSelected();
-  fireEvent.press(screen.getByRole('radio', { name: 'Formal' }));
-  expect(screen.getByRole('radio', { name: 'Formal' })).toBeSelected();
+  expect(screen.getByRole('radio', { name: /^Default\./ })).toBeSelected();
+  fireEvent.press(screen.getByRole('radio', { name: /^Formal\./ }));
+  expect(screen.getByRole('radio', { name: /^Formal\./ })).toBeSelected();
   expect(mockUpdateConfig).not.toHaveBeenCalled();
   fireEvent.press(screen.getByText('Continue'));
   await waitFor(() => expect(mockGoNext).toHaveBeenCalledWith('tone'));
@@ -71,8 +71,8 @@ it('shows illustrative examples and saves a selected tone only on Continue', asy
 it('preserves the saved tone when skipping', async () => {
   mockConfigState.config.keyboardTone = 'casual';
   const screen = render(<ToneStep />);
-  expect(screen.getByRole('radio', { name: 'Casual' })).toBeSelected();
-  fireEvent.press(screen.getByRole('radio', { name: 'Excited' }));
+  expect(screen.getByRole('radio', { name: /^Casual\./ })).toBeSelected();
+  fireEvent.press(screen.getByRole('radio', { name: /^Excited\./ }));
   fireEvent.press(screen.getByText('Skip'));
   await waitFor(() => expect(mockGoNext).toHaveBeenCalledWith('tone'));
   expect(mockUpdateConfig).not.toHaveBeenCalled();
@@ -87,8 +87,23 @@ it('stays on the preview and allows retry when saving fails', async () => {
   expect(await screen.findByText('Could not save your progress. Try again.')).toBeTruthy();
   expect(mockGoNext).not.toHaveBeenCalled();
   mockConfigState.error = null;
-  fireEvent.press(screen.getByRole('radio', { name: 'Excited' }));
+  fireEvent.press(screen.getByRole('radio', { name: /^Excited\./ }));
   fireEvent.press(screen.getByText('Retry'));
   await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(1));
   expect(mockUpdateConfig).toHaveBeenLastCalledWith({ keyboardTone: 'excited' });
+});
+
+// Tones only change keyboard dictation; in-app recordings are never toned.
+it('says the tone applies to keyboard dictation', () => {
+  const screen = render(<ToneStep />);
+  expect(screen.getByText(/keyboard dictation/)).toBeTruthy();
+});
+
+it('reads each tone with its description and example to screen readers', () => {
+  const screen = render(<ToneStep />);
+  expect(
+    screen.getByRole('radio', {
+      name: 'Formal. Professional and polished. Example: Hi Sam, would you be available for lunch tomorrow at noon? Please let me know if that time is convenient.',
+    }),
+  ).toBeTruthy();
 });

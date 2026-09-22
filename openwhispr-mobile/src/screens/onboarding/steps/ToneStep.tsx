@@ -39,7 +39,7 @@ export function ToneStep(): ReactElement {
     <OnboardingShell
       title="Make it sound like you."
       titleAccent="you"
-      subtitle="Choose how your messages sound. You can change your tone anytime."
+      subtitle="Choose how your keyboard dictation sounds. You can change your tone anytime."
       progress={progress}
       onBack={goBack}
       onSkip={goNext}
@@ -64,7 +64,7 @@ export function ToneStep(): ReactElement {
           <Pressable
             key={tone.value}
             accessibilityRole="radio"
-            accessibilityLabel={tone.label}
+            accessibilityLabel={`${tone.label}. ${tone.description}. Example: ${EXAMPLES[tone.value]}`}
             accessibilityState={{ selected: selected === tone.value, disabled: saving }}
             disabled={saving}
             onPress={() => setSelected(tone.value)}
