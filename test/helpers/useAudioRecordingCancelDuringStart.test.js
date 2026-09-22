@@ -27,7 +27,7 @@ export default class FakeAudioManager {
       isStreamingStartInProgress: false,
     };
   }
-  setCallbacks() {}
+  setCallbacks(callbacks) { this.callbacks = callbacks; }
   setVoiceAgentRequested() {}
   setAssistantSelectionContext() {}
   setTranslationRequested() {}
@@ -41,24 +41,29 @@ export default class FakeAudioManager {
   cleanup() {}
   async startRecording() {
     globalThis.__cancelDuringStartCalls.push("startRecording");
-    await globalThis.__cancelDuringStartMicOpen;
+    const didStart = await globalThis.__cancelDuringStartMicOpen;
+    if (!didStart) return false;
     this.isRecording = true;
+    this.callbacks.onStateChange(this.getState());
     globalThis.__cancelDuringStartCalls.push("micOpened");
     return true;
   }
   cancelRecording() {
     globalThis.__cancelDuringStartCalls.push("cancelRecording");
     this.isRecording = false;
+    this.callbacks.onStateChange(this.getState());
     return true;
   }
   async cancelStreamingRecording() {
     globalThis.__cancelDuringStartCalls.push("cancelStreamingRecording");
     this.isRecording = false;
+    this.callbacks.onStateChange(this.getState());
     return true;
   }
   stopRecording() {
     globalThis.__cancelDuringStartCalls.push("stopRecording");
     this.isRecording = false;
+    this.callbacks.onStateChange(this.getState());
     return true;
   }
 }
@@ -70,7 +75,10 @@ export default class FakeAudioManager {
 // the start is still awaiting the device, so the cancel used to be dropped and
 // the mic opened seconds later into an unstoppable hands-free recording.
 // Testbook step B2; the warm-mic path (isRecording already true) always passed.
-test("a cancel that lands while the start is still awaiting the mic tears the recording down", async (t) => {
+async function runCancellationScenario(
+  t,
+  { path = "preparation", boundary = "mic", didStart = true } = {}
+) {
   // t.after hooks run in registration order, so this unmount must be
   // registered before installBrowserGlobals/installHookDom's own cleanup.
   let root = null;
@@ -80,13 +88,10 @@ test("a cancel that lands while the start is still awaiting the mic tears the re
 
   const calls = [];
   globalThis.__cancelDuringStartCalls = calls;
-  let openMic;
-  globalThis.__cancelDuringStartMicOpen = new Promise((resolve) => {
-    openMic = resolve;
-  });
   t.after(() => {
     delete globalThis.__cancelDuringStartCalls;
     delete globalThis.__cancelDuringStartMicOpen;
+    delete globalThis.__cancelDuringStartFrames;
   });
 
   const noopDispose = () => () => {};
@@ -119,13 +124,18 @@ test("a cancel that lands while the start is still awaiting the mic tears the re
     cachePrefix: "openwhispr-audio-recording-cancel-during-start-",
     mockModules: {
       "/helpers/audioManager": FAKE_AUDIO_MANAGER_SOURCE,
+      "/utils/visualFrame":
+        "export const waitForVisualFrames = () => globalThis.__cancelDuringStartFrames;",
     },
   });
   const { useAudioRecording } = await vite.ssrLoadModule("/hooks/useAudioRecording.js");
 
   let api;
+  const events = [];
+  const toast = () => {};
+  const onDemoEvent = (event) => events.push(event);
   function Harness() {
-    api = useAudioRecording(() => {}, { onDemoEvent: () => {} });
+    api = useAudioRecording(toast, { onDemoEvent });
     return null;
   }
 
@@ -136,28 +146,71 @@ test("a cancel that lands while the start is still awaiting the mic tears the re
 
   assert.equal(typeof cancelPreparation, "function");
 
-  let startPromise;
-  await React.act(async () => {
-    startPromise = api.startRecording();
-    // Let performStartRecording reach the parked startRecording() call.
-    await Promise.resolve();
-  });
-  assert.deepEqual(calls, ["startRecording"], "the start should be parked on the mic open");
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const mic = Promise.withResolvers();
+    const frames = Promise.withResolvers();
+    globalThis.__cancelDuringStartMicOpen = mic.promise;
+    globalThis.__cancelDuringStartFrames = frames.promise;
+    if (boundary === "mic") frames.resolve();
+    calls.length = 0;
+    events.length = 0;
+    let startPromise;
+    await React.act(async () => {
+      startPromise = api.startRecording();
+      await Promise.resolve();
+    });
+    assert.equal(calls.includes("startRecording"), boundary === "mic");
+    assert.deepEqual(
+      events.map((event) => event.status),
+      ["preparing"]
+    );
+    await React.act(async () => {
+      if (path === "recording") await api.cancelRecording();
+      else cancelPreparation();
+    });
+    assert.deepEqual(
+      events.map((event) => event.status),
+      ["preparing", "cancelled"],
+      "cancellation is prompt and singular"
+    );
+    let started;
+    await React.act(async () => {
+      frames.resolve();
+      mic.resolve(didStart);
+      started = await startPromise;
+    });
+    assert.equal(started, false, "a cancelled start must not report success");
+    assert.equal(
+      api.isRecording,
+      false,
+      "any microphone that opened after cancellation is torn down"
+    );
+    assert.deepEqual(
+      events.map((event) => event.status),
+      ["preparing", "cancelled"],
+      "deferred startup cannot republish listening or cancellation"
+    );
+    if (boundary === "mic" && didStart) {
+      assert.ok(
+        calls.indexOf("cancelRecording", calls.indexOf("micOpened")) > calls.indexOf("micOpened")
+      );
+    }
+  }
+}
 
-  await React.act(async () => {
-    cancelPreparation();
-  });
-
-  let started;
-  await React.act(async () => {
-    openMic();
-    started = await startPromise;
-  });
-
-  assert.equal(
-    calls.includes("cancelRecording") || calls.includes("cancelStreamingRecording"),
-    true,
-    "the recording that opened after the cancel must be torn down, not left live"
-  );
-  assert.equal(started, false, "the start must not report success once it has been cancelled");
+test("a cancel that lands while the start is still awaiting the mic tears the recording down", async (t) => {
+  await runCancellationScenario(t);
 });
+
+for (const path of ["recording", "preparation"]) {
+  for (const scenario of [
+    { boundary: "frames", didStart: false },
+    { boundary: "mic", didStart: false },
+    { boundary: "mic", didStart: true },
+  ]) {
+    if (path === "preparation" && scenario.boundary === "mic" && scenario.didStart) continue;
+    test(`${path} cancellation publishes once per attempt while ${scenario.boundary} is pending and startup ${scenario.didStart ? "succeeds" : "fails"}`, async (t) => {
+      await runCancellationScenario(t, { path, ...scenario });
+    });
+  }
+}

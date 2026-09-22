@@ -148,3 +148,70 @@ test("a mouse binding gets a glyph instead of printing its label into the symbol
     { id: "Mouse Button 4-0", label: "mouse 4", symbol: "\u21f1" },
   ]);
 });
+
+test("onboarding defaults a fresh slot to Hold only after capability is known", async () => {
+  const { resolveOnboardingActivationMode } = await load();
+
+  assert.equal(
+    resolveOnboardingActivationMode({
+      currentMode: "tap",
+      storedMode: null,
+      loaded: false,
+      supportsPushToTalk: true,
+    }),
+    "tap"
+  );
+  assert.equal(
+    resolveOnboardingActivationMode({
+      currentMode: "tap",
+      storedMode: null,
+      loaded: true,
+      supportsPushToTalk: true,
+    }),
+    "push"
+  );
+});
+
+test("onboarding preserves a saved mode but demotes Hold when this machine cannot deliver it", async () => {
+  const { resolveOnboardingActivationMode } = await load();
+
+  assert.equal(
+    resolveOnboardingActivationMode({
+      currentMode: "tap",
+      storedMode: "tap",
+      loaded: true,
+      supportsPushToTalk: true,
+    }),
+    "tap"
+  );
+  assert.equal(
+    resolveOnboardingActivationMode({
+      currentMode: "push",
+      storedMode: "push",
+      loaded: true,
+      supportsPushToTalk: false,
+    }),
+    "tap"
+  );
+});
+
+test("Hold demos for every slot teach the same hands-free gesture", async () => {
+  const { getOnboardingDemoDescriptionKeys } = await load();
+
+  for (const tapDescriptionKey of [
+    "onboarding.rehaul.dictationDemo.description",
+    "onboarding.rehaul.assistantDemo.scenarios.general.description",
+  ]) {
+    assert.deepEqual(getOnboardingDemoDescriptionKeys({ mode: "push", tapDescriptionKey }), [
+      "onboarding.activation.holdHotkey",
+      "app.holdMigrationCard.gesture",
+    ]);
+  }
+  assert.deepEqual(
+    getOnboardingDemoDescriptionKeys({
+      mode: "tap",
+      tapDescriptionKey: "onboarding.rehaul.assistantDemo.scenarios.general.description",
+    }),
+    ["onboarding.rehaul.assistantDemo.scenarios.general.description"]
+  );
+});

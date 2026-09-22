@@ -27,6 +27,7 @@ function createHarness() {
     signupResult: {},
     ssoResult: {},
     portalContainers: [],
+    auth: { isLoaded: true, isSignedIn: false, user: null },
   };
 }
 
@@ -138,7 +139,7 @@ test("email authentication discovers accounts, restores drafts, and persists the
       `,
       "/hooks/useAuth": `
         export function useAuth() {
-          return { isLoaded: true, isSignedIn: false, user: null };
+          return globalThis.__authenticationStepHarness.auth;
         }
       `,
       "/lib/auth": `
@@ -225,6 +226,27 @@ test("email authentication discovers accounts, restores drafts, and persists the
     await settleAsyncHandler();
     return render(harness, overrides);
   };
+
+  for (const emailVerified of [false, true]) {
+    const returning = createHarness();
+    returning.auth = {
+      isLoaded: true,
+      isSignedIn: true,
+      user: { id: "returning-user", email: "returning@example.com", emailVerified },
+    };
+    const completed = [];
+    const verification = [];
+    const welcome = render(returning, {
+      autoContinue: false,
+      onAuthComplete: () => completed.push(true),
+      onNeedsVerification: (email) => verification.push(email),
+    });
+    const proceed = findElement(welcome, (node) => node.type?.name === "Button");
+    assert.ok(proceed, "a restored signed-in session offers Continue");
+    proceed.props.onClick();
+    assert.deepEqual(completed, emailVerified ? [true] : []);
+    assert.deepEqual(verification, emailVerified ? [] : ["returning@example.com"]);
+  }
 
   const existingAccount = createHarness();
   existingAccount.discoveryResult = { exists: true };

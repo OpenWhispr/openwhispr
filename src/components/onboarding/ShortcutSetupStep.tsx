@@ -98,6 +98,7 @@ export default function ShortcutSetupStep({
   const clear = () => {
     setCandidate("");
     setConfirmed(false);
+    setHeldModifiers("");
     // HotkeyInput blurs after every completed capture. Remounting restores focus
     // so the box is listening again straight away.
     setCaptureKey((current) => current + 1);
@@ -108,15 +109,22 @@ export default function ShortcutSetupStep({
     setError(null);
     setCandidate(next);
     setIsConfirming(true);
-    const confirmationError = (await onConfirm?.(next)) ?? null;
-    setIsConfirming(false);
-    if (confirmationError) {
-      setError(confirmationError);
+    try {
+      const confirmationError = (await onConfirm?.(next)) ?? null;
+      if (confirmationError) {
+        setError(confirmationError);
+        clear();
+        return;
+      }
+      setHeldModifiers("");
+      setConfirmed(true);
+      onChange(next);
+    } catch {
+      setError(t("hooks.hotkeyRegistration.errors.failedToRegister"));
       clear();
-      return;
+    } finally {
+      setIsConfirming(false);
     }
-    setConfirmed(true);
-    onChange(next);
   };
 
   const handleCapture = (next: string) => {
@@ -124,7 +132,7 @@ export default function ShortcutSetupStep({
     void confirm(next);
   };
 
-  const captureInput = (
+  const captureInput = !confirmed && (
     <HotkeyInput
       key={captureKey}
       value={candidate}

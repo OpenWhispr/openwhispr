@@ -1984,6 +1984,7 @@ class WindowManager {
     this._onboardingDemoKind = kind;
     // A prior recording must not leak into a new correlated demo session.
     this.sendCancelDictation();
+    this.sendCancelActiveDictation();
     this.hideDictationPanel();
     return true;
   }
@@ -2008,6 +2009,7 @@ class WindowManager {
     // Leaving/retrying is cancellation, not a transcription request. The
     // overlay owns AudioManager, so route cleanup must be delivered there.
     this.sendCancelDictation();
+    this.sendCancelActiveDictation();
     this.hideDictationPanel();
     this._onboardingDemoKind = null;
     return true;

@@ -500,7 +500,7 @@
       "holdDescription": "Mantén pulsado mientras hablas",
       "test": "Prueba",
       "hotkeyToStartStop": "{{hotkey}} para iniciar/detener",
-      "holdHotkey": "Mantener {{hotkey}}",
+      "holdHotkey": "Mantén pulsado {{hotkey}} mientras hablas.",
       "textareaPlaceholder": "Haz clic aquí y usa tu atajo para dictar..."
     },
     "connectivity": {
@@ -1952,12 +1952,20 @@
         "hyprlandConfigWriteWarningTitle": "Los atajos de Hyprland no se conservarán",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr no puede escribir en {{path}}, así que los atajos no sobrevivirán a una recarga de la configuración de Hyprland. Asegúrate de que el archivo exista y se pueda escribir.",
         "hyprlandUnbindDescription": "En Hyprland, OpenWhispr reserva el atajo seleccionado. Cualquier atajo existente de Hyprland que use la misma combinación de teclas se desvinculará cuando OpenWhispr registre su atajo.",
+        "guide": {
+          "title": "Dos formas de hablar",
+          "scope": "Para {{shortcuts}}.",
+          "handsFreeStart": "Iniciar en manos libres",
+          "dictation": "Dictado",
+          "voiceAgent": "Asistente",
+          "translation": "Traducción"
+        },
         "gestures": {
           "holdTitle": "Mantén pulsado para hablar",
           "holdDetail": "Suelta para terminar",
           "handsFreeTitle": "Manos libres",
-          "handsFreeDetail": "Pulsa otra vez para detener",
-          "doublePress": "Pulsar dos veces",
+          "handsFreeDetail": "Pulsa una vez para detener",
+          "doublePress": "Pulsa dos veces",
           "tapOnlyTitle": "Pulsa para iniciar y otra vez para detener"
         }
       },
@@ -3641,7 +3649,7 @@
       "badge": "Novedad de esta actualización",
       "title": "Mantén pulsado para hablar, suelta para terminar",
       "description": "Hemos cambiado cómo funciona tu atajo: mantén pulsado {{hotkey}} mientras hablas.",
-      "gesture": "Púlsalo dos veces para el modo manos libres y pulsa otra vez para detener."
+      "gesture": "Pulsa dos veces para usar el modo manos libres y una vez para detener."
     }
   },
   "dictationAgent": {

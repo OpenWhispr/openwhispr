@@ -59,6 +59,20 @@ test("onboarding demo bridge invokes only its allowlisted channels", async () =>
   ]);
 });
 
+test("hotkey capability bridge forwards a requested language and accepts existing callers", async () => {
+  const { api, invocations } = loadPreloadApi();
+
+  await api.getHotkeyModeInfo("Control+Super", "translation", "de");
+  await api.getHotkeyModeInfo("F9", "voiceAgent");
+  await api.getHotkeyModeInfo();
+
+  assert.deepEqual(invocations, [
+    ["get-hotkey-mode-info", "Control+Super", "translation", "de"],
+    ["get-hotkey-mode-info", "F9", "voiceAgent", undefined],
+    ["get-hotkey-mode-info", undefined, undefined, undefined],
+  ]);
+});
+
 test("onboarding active bridge invokes only its allowlisted channel", async () => {
   const { api, invocations } = loadPreloadApi();
 

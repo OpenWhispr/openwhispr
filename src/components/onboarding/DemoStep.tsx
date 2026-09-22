@@ -4,6 +4,10 @@ import { useTranslation } from "react-i18next";
 import confetti from "canvas-confetti";
 import { ChevronDown, CornerDownLeft, Mic, RefreshCw, Sparkles } from "../icons";
 import { Button } from "../ui/button";
+import SignInDialog from "../SignInDialog";
+import { signOut } from "../../lib/auth";
+import type { DemoAuthStatus } from "../../utils/onboardingDemo";
+import type { OnboardingAuthDraft, OnboardingDemoDraft } from "./flow";
 import { toolIcons } from "../chat/toolIcons";
 import { VoicePill, type VoicePillState } from "../dictation/VoicePill";
 import { useListeningEntrancePhase } from "../../hooks/useListeningEntrancePhase";
@@ -172,7 +176,7 @@ function DemoVoicePill({
   onStop: () => void;
 }) {
   const listening = isListening(status);
-  const busy = status === "processing" || status === "replying";
+  const busy = status === "preparing" || status === "processing" || status === "replying";
   const phase = useListeningEntrancePhase(listening);
   const entrance = resolveListeningEntrancePresentation({ isRecording: listening, phase });
   // Processing collapses to the logo and lights the Signal glow, as the
@@ -259,6 +263,11 @@ interface DemoStepProps {
   retryLabel: string;
   onSuccessChange: (successful: boolean) => void;
   initialSuccessful?: boolean;
+  authStatus?: DemoAuthStatus;
+  initialDraft?: OnboardingDemoDraft;
+  onRecoveryDraft?: (draft: OnboardingDemoDraft) => void;
+  authResumeState?: OnboardingAuthDraft;
+  onAuthResumeStateChange?: (state: Partial<OnboardingAuthDraft>) => void;
 }
 
 export default function DemoStep({
@@ -272,19 +281,47 @@ export default function DemoStep({
   retryLabel,
   onSuccessChange,
   initialSuccessful = false,
+  authStatus = "ready",
+  initialDraft,
+  onRecoveryDraft,
+  authResumeState,
+  onAuthResumeStateChange,
 }: DemoStepProps) {
+  const { t } = useTranslation();
   const [messageCount, setMessageCount] = useState(0);
   const [event, setEvent] = useState<OnboardingDemoEvent | null>(null);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialDraft?.text ?? "");
   // Assistant demo only: what the user said, shown above the reply it produced.
-  const [transcript, setTranscript] = useState("");
+  const [transcript, setTranscript] = useState(initialDraft?.transcript ?? "");
   const [demoId, setDemoId] = useState(() => crypto.randomUUID());
   const [restoredSuccessful, setRestoredSuccessful] = useState(initialSuccessful);
+  const pendingVerificationEmail = authResumeState?.pendingVerificationEmail;
+  const [signInOpen, setSignInOpen] = useState(
+    () => authStatus !== "ready" && Boolean(pendingVerificationEmail)
+  );
+  const [recovering, setRecovering] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const authError = event?.code === "AUTH_REQUIRED" || event?.code === "AUTH_EXPIRED";
+  const needsSignIn = authStatus === "required" || authError;
+  const canRecord = authStatus === "ready" && !needsSignIn && !signInOpen;
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Sampled by the pill's waveform from a rAF loop; a ref keeps the ~12 level
   // events a second from re-rendering the step.
   const levelRef = useRef(0);
   const getLevel = useCallback(() => levelRef.current, []);
+
+  useEffect(() => {
+    if (authStatus === "ready" || !pendingVerificationEmail) return;
+    // A signup session can arrive before its callback. Checkpoint the recovered
+    // address so another policy replacement during Back can still restore it.
+    onAuthResumeStateChange?.({ pendingVerificationEmail });
+  }, [authStatus, onAuthResumeStateChange, pendingVerificationEmail]);
+
+  useEffect(() => {
+    if (authStatus === "ready") return;
+    setRestoredSuccessful(false);
+    onSuccessChange(false);
+  }, [authStatus, onSuccessChange]);
 
   useEffect(() => {
     const first = window.setTimeout(() => setMessageCount(1), 650);
@@ -298,16 +335,22 @@ export default function DemoStep({
   }, [demoId]);
 
   useEffect(() => {
-    void window.electronAPI?.beginOnboardingDemo?.({ id: demoId, kind });
+    if (!canRecord) return;
     const unsubscribe = window.electronAPI?.onOnboardingDemoEvent?.((payload) => {
       if (payload.demoId !== demoId || payload.kind !== kind) return;
       if (payload.status === "level") {
         levelRef.current = payload.level ?? 0;
         return;
       }
-      if (payload.status === "listening") levelRef.current = 0;
+      if (payload.status === "preparing" || payload.status === "listening") {
+        levelRef.current = 0;
+        if (kind === "assistant") {
+          setDraft("");
+          setTranscript("");
+        }
+      }
       setRestoredSuccessful(false);
-      setEvent(payload);
+      setEvent(payload.status === "cancelled" ? null : payload);
       if (payload.text) {
         // The assistant demo hears first and writes second: transcript text
         // (live partials, then the final handed to the model) stays out of the
@@ -316,13 +359,26 @@ export default function DemoStep({
         if (kind === "assistant" && heard) setTranscript(payload.text);
         else setDraft(payload.text);
       }
-      if (payload.status === "success") onSuccessChange(true);
+      onSuccessChange(payload.status === "success");
     });
+    let disposed = false;
+    const failedToBegin = () => {
+      if (disposed) return;
+      setEvent({ demoId, kind, status: "error", message: t("auth.errors.generic") });
+      onSuccessChange(false);
+    };
+    void window.electronAPI
+      ?.beginOnboardingDemo?.({ id: demoId, kind })
+      .then((started) => {
+        if (!started) failedToBegin();
+      })
+      .catch(failedToBegin);
     return () => {
+      disposed = true;
       unsubscribe?.();
       void window.electronAPI?.endOnboardingDemo?.(demoId);
     };
-  }, [demoId, kind, onSuccessChange]);
+  }, [canRecord, demoId, kind, onSuccessChange, t]);
 
   const retry = () => {
     setRestoredSuccessful(false);
@@ -334,12 +390,54 @@ export default function DemoStep({
     setDemoId(crypto.randomUUID());
   };
 
-  const effectiveEvent: OnboardingDemoEvent | null = restoredSuccessful
-    ? { demoId, kind, status: "success" }
-    : event;
+  const resumeAfterSignIn = () => {
+    setSignInOpen(false);
+    setRestoredSuccessful(false);
+    onSuccessChange(false);
+    setEvent(null);
+    setDemoId(crypto.randomUUID());
+  };
+
+  const effectiveEvent: OnboardingDemoEvent | null = needsSignIn
+    ? {
+        demoId,
+        kind,
+        status: "error",
+        code: "AUTH_REQUIRED",
+        message: recoveryError ?? t("onboarding.rehaul.setupChoice.cloud.signIn"),
+      }
+    : restoredSuccessful
+      ? { demoId, kind, status: "success" }
+      : event;
   const status = effectiveEvent?.status;
   const successful = status === "success";
   const stop = () => void window.electronAPI?.stopOnboardingDemo?.(demoId);
+  const recoveryLabel = recovering
+    ? t("auth.passwordForm.signingIn")
+    : needsSignIn
+      ? t("auth.passwordForm.signInLink")
+      : retryLabel;
+  const recover = async () => {
+    if (!needsSignIn) {
+      retry();
+      return;
+    }
+    if (recovering) return;
+    setRecovering(true);
+    setRecoveryError(null);
+    try {
+      onRecoveryDraft?.({ text: draft, transcript });
+      // A Cloud 401 need not invalidate the auth renderer's cached user. Only
+      // this explicit recovery action ends that session; opening a dialog over
+      // it would otherwise auto-complete without renewing the credentials.
+      if (authError) await signOut();
+      setSignInOpen(true);
+    } catch {
+      setRecoveryError(t("auth.errors.generic"));
+    } finally {
+      setRecovering(false);
+    }
+  };
 
   return (
     <div
@@ -392,8 +490,9 @@ export default function DemoStep({
               listeningLabel={listeningLabel}
               processingLabel={processingLabel}
               stopLabel={stopLabel}
-              retryLabel={retryLabel}
-              onRetry={retry}
+              retryLabel={recoveryLabel}
+              recoveryPending={recovering}
+              onRetry={recover}
               onStop={stop}
             />
           )}
@@ -412,13 +511,26 @@ export default function DemoStep({
             listeningLabel={listeningLabel}
             processingLabel={processingLabel}
             stopLabel={stopLabel}
-            retryLabel={retryLabel}
-            onRetry={retry}
+            retryLabel={recoveryLabel}
+            recoveryPending={recovering}
+            onRetry={recover}
             onStop={stop}
             embedded
           />
         </EmailThread>
       )}
+      {authStatus === "loading" && (
+        <p role="status" className="mt-3 text-center text-sm text-muted-foreground">
+          {t("common.loading")}
+        </p>
+      )}
+      <SignInDialog
+        open={signInOpen}
+        onOpenChange={setSignInOpen}
+        onAuthComplete={resumeAfterSignIn}
+        resumeState={authResumeState}
+        onResumeStateChange={onAuthResumeStateChange}
+      />
     </div>
   );
 }
@@ -500,6 +612,7 @@ function VoiceSurface({
   processingLabel,
   stopLabel,
   retryLabel,
+  recoveryPending = false,
   onRetry,
   onStop,
   embedded = false,
@@ -517,6 +630,7 @@ function VoiceSurface({
   processingLabel: string;
   stopLabel: string;
   retryLabel: string;
+  recoveryPending?: boolean;
   onRetry: () => void;
   onStop: () => void;
   embedded?: boolean;
@@ -532,7 +646,7 @@ function VoiceSurface({
     <div
       // The assistant variant runs taller so a few-sentence reply fits unscrolled.
       className={`relative flex flex-col rounded-[14px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-3 ${
-        embedded ? "h-52 min-w-0 flex-1" : "h-36"
+        embedded ? "min-h-52 min-w-0 flex-1" : "min-h-36"
       }`}
     >
       {transcript && (
@@ -555,7 +669,7 @@ function VoiceSurface({
         // Placeholder is text-tertiary at 38% — 16/140% in the mail card, 18/140%
         // in the dictation one. The caret takes the brand colour, which is what
         // Figma draws as the 3x18 bar.
-        className={`input-inline min-h-0 w-full flex-1 resize-none bg-transparent pe-12 leading-[1.4] text-[var(--onboarding-text-primary)] caret-[var(--onboarding-accent)] outline-none placeholder:text-[color-mix(in_srgb,var(--onboarding-text-tertiary)_38%,transparent)] ${
+        className={`input-inline min-h-14 w-full flex-1 resize-none bg-transparent pe-12 leading-[1.4] text-[var(--onboarding-text-primary)] caret-[var(--onboarding-accent)] outline-none placeholder:text-[color-mix(in_srgb,var(--onboarding-text-tertiary)_38%,transparent)] ${
           embedded ? "text-sm" : "text-base"
         }`}
       />
@@ -570,7 +684,7 @@ function VoiceSurface({
         />
       </div>
       <div
-        className="absolute bottom-3 start-3 max-w-[15rem] text-xs text-[var(--onboarding-text-secondary)]"
+        className="mt-2 min-h-6 pe-12 text-xs text-[var(--onboarding-text-secondary)]"
         aria-live="polite"
       >
         {isListening(status) && listeningLabel}
@@ -584,9 +698,16 @@ function VoiceSurface({
           </span>
         )}
         {status === "error" && (
-          <span className="inline-flex items-center gap-1 text-[var(--onboarding-danger)]">
-            {event.message}
-            <Button type="button" variant="ghost" size="sm" onClick={onRetry}>
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[var(--onboarding-danger)]">
+            <span className="min-w-0 break-words">{event.message}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
+              onClick={onRetry}
+              disabled={recoveryPending}
+            >
               <RefreshCw className="size-3" />
               {retryLabel}
             </Button>

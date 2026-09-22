@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 import {
   LEGACY_ONBOARDING_STEP_KEY,
   ONBOARDING_SESSION_KEY,
@@ -34,25 +34,46 @@ function readInitialSession(): OnboardingSession {
 }
 
 export function useOnboardingSession() {
-  const [session, setSession] = useState<OnboardingSession>(readInitialSession);
+  const [session, updateSession] = useState<OnboardingSession>(readInitialSession);
+  const sessionRef = useRef(session);
+  const clearedRef = useRef(false);
 
-  useEffect(() => {
+  const persistSession = useCallback((session: OnboardingSession) => {
+    if (clearedRef.current) return;
     localStorage.setItem(ONBOARDING_SESSION_KEY, JSON.stringify(session));
     // AppRouter uses presence of this legacy key to distinguish an OAuth
     // callback from a returning user. Keep it until finalization is atomic.
     localStorage.setItem(LEGACY_ONBOARDING_STEP_KEY, session.currentStepId);
-  }, [session]);
-
-  const goTo = useCallback((stepId: OnboardingStepId) => {
-    setSession((current) => {
-      if (current.currentStepId === stepId) return current;
-      return {
-        ...current,
-        currentStepId: stepId,
-        history: [...current.history, current.currentStepId],
-      };
-    });
   }, []);
+
+  useEffect(() => persistSession(sessionRef.current), [persistSession]);
+
+  // Auth can replace this tree before another render or effect commits. Keep
+  // each checkpoint synchronous and merge consecutive patches against it.
+  const setSession = useCallback(
+    (next: SetStateAction<OnboardingSession>) => {
+      const current = sessionRef.current;
+      const updated = typeof next === "function" ? next(current) : next;
+      sessionRef.current = updated;
+      persistSession(updated);
+      updateSession(updated);
+    },
+    [persistSession]
+  );
+
+  const goTo = useCallback(
+    (stepId: OnboardingStepId) => {
+      setSession((current) => {
+        if (current.currentStepId === stepId) return current;
+        return {
+          ...current,
+          currentStepId: stepId,
+          history: [...current.history, current.currentStepId],
+        };
+      });
+    },
+    [setSession]
+  );
 
   const goBack = useCallback(() => {
     setSession((current) => {
@@ -60,25 +81,38 @@ export function useOnboardingSession() {
       const previous = history.pop();
       return previous ? { ...current, currentStepId: previous, history } : current;
     });
-  }, []);
+  }, [setSession]);
 
-  const setAuthPath = useCallback((authPath: OnboardingAuthPath) => {
-    setSession((current) => ({ ...current, authPath }));
-  }, []);
+  const setAuthPath = useCallback(
+    (authPath: OnboardingAuthPath) => {
+      setSession((current) => ({ ...current, authPath }));
+    },
+    [setSession]
+  );
 
-  const setSetupMode = useCallback((setupMode: OnboardingSetupMode) => {
-    setSession((current) => ({ ...current, setupMode }));
-  }, []);
+  const setSetupMode = useCallback(
+    (setupMode: OnboardingSetupMode) => {
+      setSession((current) => ({ ...current, setupMode }));
+    },
+    [setSession]
+  );
 
-  const setSelfHostedRequested = useCallback((selfHostedRequested: boolean) => {
-    setSession((current) => ({ ...current, selfHostedRequested }));
-  }, []);
+  const setSelfHostedRequested = useCallback(
+    (selfHostedRequested: boolean) => {
+      setSession((current) => ({ ...current, selfHostedRequested }));
+    },
+    [setSession]
+  );
 
-  const setScreenContextRequested = useCallback((screenContextRequested: boolean) => {
-    setSession((current) => ({ ...current, screenContextRequested }));
-  }, []);
+  const setScreenContextRequested = useCallback(
+    (screenContextRequested: boolean) => {
+      setSession((current) => ({ ...current, screenContextRequested }));
+    },
+    [setSession]
+  );
 
   const clearSession = useCallback(() => {
+    clearedRef.current = true;
     localStorage.removeItem(ONBOARDING_SESSION_KEY);
     localStorage.removeItem(LEGACY_ONBOARDING_STEP_KEY);
   }, []);

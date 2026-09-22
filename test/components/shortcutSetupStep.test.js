@@ -161,9 +161,8 @@ test("a pressed key registers on the spot, and can be swapped out", async (t) =>
   // The caller's value never overrides a chord the user pressed.
   assert.equal(chord(render({ value: "Meta+J" })).props.value, "Control+Alt");
 
-  // Pressing the registered key again changes nothing.
-  input(confirmedTree).props.onChange("Control+Alt");
-  await settle();
+  // A confirmed chord no longer exposes the capture surface.
+  assert.equal(input(confirmedTree), null);
   assert.deepEqual(harness.confirmed, ["Control+Alt"]);
 
   // Choosing another empties the box, tells the caller, and brings the picks back.
@@ -172,6 +171,12 @@ test("a pressed key registers on the spot, and can be swapped out", async (t) =>
   const emptyTree = render();
   assert.equal(chord(emptyTree), null);
   assert.match(textContent(emptyTree), /RecommendedRight OptionGlobe\/FnCtrl \+ R/);
+
+  input(emptyTree).props.onChange("F8");
+  await settle();
+  assert.deepEqual(harness.confirmed, ["Control+Alt", "F8"]);
+  assert.equal(chord(render()).props.value, "F8");
+  assert.equal(input(render()), null);
 });
 
 test("a shortcut confirmed in an earlier session reopens confirmed", async (t) => {
@@ -186,8 +191,10 @@ test("a shortcut confirmed in an earlier session reopens confirmed", async (t) =
   assert.match(textContent(resumedTree), /Control \+ Alt/);
   assert.doesNotMatch(textContent(resumedTree), /Capture|Recommended/);
 
-  // A different key replaces it in one press.
-  input(resumedTree).props.onChange("F8");
+  // Replacing a confirmed chord requires the explicit change action.
+  assert.equal(input(resumedTree), null);
+  button(resumedTree, "Choose another shortcut").props.onClick();
+  input(render()).props.onChange("F8");
   await settle();
   assert.deepEqual(harness.confirmed, ["F8"]);
   assert.deepEqual(harness.changed, ["F8"]);

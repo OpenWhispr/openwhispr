@@ -561,7 +561,9 @@ function initializeNativeKeyListeners() {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"
         );
-        // Settings displays the notice; effective mode changes belong to main.
+        // Settings and onboarding both refresh their guidance from this event, so
+        // send to every window, not only the dictation overlay. Effective mode
+        // changes belong to main.
         for (const browserWindow of BrowserWindow.getAllWindows()) {
           if (!browserWindow.isDestroyed()) {
             browserWindow.webContents.send("linux-ptt-permission-denied");

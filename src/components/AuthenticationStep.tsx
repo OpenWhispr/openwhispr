@@ -452,7 +452,13 @@ export default function AuthenticationStep({
             <span className="block">{t("auth.signedIn.welcomeBack")}</span>
             {user?.name && <span className="mt-1 block">{user.name}</span>}
           </p>
-          <Button onClick={onAuthComplete} className="mt-7 h-12 w-fit min-w-32 px-6">
+          <Button
+            onClick={() => {
+              if (user?.emailVerified === false) onNeedsVerification(user.email);
+              else onAuthComplete();
+            }}
+            className="mt-7 h-12 w-fit min-w-32 px-6"
+          >
             {t("auth.common.continue")}
             <ArrowRight className="size-4 rtl:rotate-180" />
           </Button>

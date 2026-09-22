@@ -75,6 +75,9 @@ test("verification success completes auth and backing out signs out before retur
     noExternal: ["react"],
     mockModules: {
       react: `
+        export function useRef(value) { return { current: value }; }
+        export function useEffect(effect) { effect(); }
+        export function useCallback(callback) { return callback; }
         export function useState(initialValue) {
           const state = globalThis.__compactAuthTestState;
           const index = state.cursor++;
@@ -130,7 +133,8 @@ test("verification success completes auth and backing out signs out before retur
   assert.equal(verificationStep.props.email, "person@example.com");
 
   verificationStep.props.onBack();
-  await Promise.resolve();
+  render();
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(globalThis.__compactAuthTestState.signOutCount, 1);
   assert.equal(render().type.name, "AuthenticationStep");
 
@@ -151,6 +155,7 @@ test("a restored verification screen offers its recovery actions immediately", a
         }
       `,
       "/config/constants": `export const OPENWHISPR_API_URL = "";`,
+      "/hooks/useAuth": `export function useAuth() { return { isLoaded: true, isSignedIn: false, user: null, refetch: async () => {} }; }`,
       "/lib/auth": `export const authClient = { getSession: async () => ({}) };`,
       "/onboarding/OnboardingShell": `
         export function CompactOnboardingFrame({ children }) { return children; }
@@ -193,6 +198,9 @@ test("only an address restored from a saved session opens verification as resume
     noExternal: ["react"],
     mockModules: {
       react: `
+        export function useRef(value) { return { current: value }; }
+        export function useEffect(effect) { effect(); }
+        export function useCallback(callback) { return callback; }
         export function useState(initialValue) {
           const harness = globalThis.__compactAuthResumeState;
           const index = harness.cursor++;
@@ -238,6 +246,7 @@ test("only an address restored from a saved session opens verification as resume
   // to come back. Continues from the restored state above on purpose: rebuilding
   // the harness here would re-seed the flag and prove nothing.
   restored.props.onBack();
+  renderFlow({ resumeState: { pendingVerificationEmail: "person@example.com" } });
   await new Promise((resolve) => setImmediate(resolve));
   const afterBack = renderFlow({ resumeState: { pendingVerificationEmail: "person@example.com" } });
   assert.equal(afterBack.type.name, "AuthenticationStep");

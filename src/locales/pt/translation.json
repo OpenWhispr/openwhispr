@@ -479,7 +479,7 @@
       "holdDescription": "Segure enquanto fala",
       "test": "Teste",
       "hotkeyToStartStop": "{{hotkey}} para iniciar/parar",
-      "holdHotkey": "Segure {{hotkey}}",
+      "holdHotkey": "Mantenha {{hotkey}} pressionado enquanto fala.",
       "textareaPlaceholder": "Clique aqui e use seu atalho para ditar..."
     },
     "connectivity": {
@@ -1878,11 +1878,19 @@
         "hyprlandConfigWriteWarningTitle": "Os atalhos do Hyprland não serão mantidos",
         "hyprlandConfigWriteWarningDescription": "O OpenWhispr não consegue escrever em {{path}}, por isso os atalhos não serão mantidos após recarregar a configuração do Hyprland. Verifique se o ficheiro existe e permite escrita.",
         "hyprlandUnbindDescription": "No Hyprland, o OpenWhispr reserva o atalho selecionado. Qualquer atalho existente do Hyprland que use a mesma combinação de teclas será desvinculado quando o OpenWhispr registar o atalho.",
+        "guide": {
+          "title": "Duas formas de falar",
+          "scope": "Para {{shortcuts}}.",
+          "handsFreeStart": "Iniciar sem usar as mãos",
+          "dictation": "Ditado",
+          "voiceAgent": "Assistente",
+          "translation": "Tradução"
+        },
         "gestures": {
           "holdTitle": "Segure para falar",
           "holdDetail": "Solte para finalizar",
           "handsFreeTitle": "Mãos-livres",
-          "handsFreeDetail": "Pressione novamente para parar",
+          "handsFreeDetail": "Pressione uma vez para parar",
           "doublePress": "Toque duas vezes",
           "tapOnlyTitle": "Pressione para iniciar e novamente para parar"
         }
@@ -3588,7 +3596,7 @@
       "badge": "Novidade nesta atualização",
       "title": "Segure para falar, solte para finalizar",
       "description": "Mudamos a forma como seu atalho funciona: segure {{hotkey}} enquanto fala.",
-      "gesture": "Toque duas vezes para o modo mãos-livres e pressione novamente para parar."
+      "gesture": "Toque duas vezes para usar o modo mãos-livres e pressione uma vez para parar."
     }
   },
   "dictationAgent": {

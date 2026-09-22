@@ -25,7 +25,7 @@ function makeChild() {
 
 // Drives the real setKeys path with a stubbed listener binary, so the tests
 // exercise the same wiring production uses rather than poking listener state.
-function loadManager() {
+function loadManager({ available = true } = {}) {
   delete require.cache[managerModulePath];
   setPlatform("linux");
 
@@ -44,7 +44,7 @@ function loadManager() {
       return { ...childProcess, spawn };
     }
     if (request === "fs") {
-      return { statSync: () => ({ isFile: () => true }) };
+      return { statSync: () => ({ isFile: () => available }) };
     }
     return originalLoad(request, parent, isMain);
   };
@@ -133,4 +133,45 @@ test("dropping a key kills its listener process and stops tracking it", () => {
 
   assert.equal(child.killed, true);
   assert.equal(manager.listeners.size, 0);
+});
+
+test("a present helper does not imply permission denial", () => {
+  const { manager, child } = startWatching();
+  assert.equal(manager.isAvailable(), true);
+  assert.equal(manager.permissionDenied, false);
+  child.stdout.emit("data", "READY\n");
+  assert.equal(manager.permissionDenied, false);
+});
+
+test("a missing helper is unavailable without a permission diagnosis", () => {
+  const { LinuxKeyManager, spawnCalls } = loadManager({ available: false });
+  const manager = new LinuxKeyManager();
+  let denied = false;
+  manager.on("permission-denied", () => {
+    denied = true;
+  });
+  manager.setKeys(["Control+Space"]);
+  assert.equal(manager.isAvailable(), false);
+  assert.equal(manager.permissionDenied, false);
+  assert.equal(denied, false);
+  assert.equal(spawnCalls.length, 0);
+});
+
+test("permission denial survives READY, stopping, and re-registering until a new manager", () => {
+  const { LinuxKeyManager, spawnCalls } = loadManager();
+  const manager = new LinuxKeyManager();
+  manager.setKeys(["Control+Space"]);
+  const observed = [];
+  manager.on("permission-denied", () => observed.push(manager.permissionDenied));
+  // The native helper reports READY even immediately after NO_PERMISSION.
+  spawnCalls[0].child.stdout.emit("data", "NO_PER");
+  spawnCalls[0].child.stdout.emit("data", "MISSION\nREADY\n");
+  assert.deepEqual(observed, [true], "the denial is recorded before notifying renderers");
+  assert.equal(manager.permissionDenied, true);
+  manager.stop();
+  assert.equal(manager.permissionDenied, true);
+  manager.setKeys(["F9"]);
+  spawnCalls[1].child.stdout.emit("data", "READY\n");
+  assert.equal(manager.permissionDenied, true);
+  assert.equal(new LinuxKeyManager().permissionDenied, false);
 });

@@ -64,6 +64,11 @@ export interface OnboardingLocalModelDraft {
   modelId: string;
 }
 
+export interface OnboardingDemoDraft {
+  text: string;
+  transcript: string;
+}
+
 export interface OnboardingResumeState {
   dictationHotkeyConfirmed: boolean;
   assistantHotkeyConfirmed: boolean;
@@ -72,6 +77,8 @@ export interface OnboardingResumeState {
   auth: OnboardingAuthDraft;
   byok: Partial<Record<OnboardingByokStepId, OnboardingByokDraft>>;
   localModels: Partial<Record<OnboardingLocalStepId, OnboardingLocalModelDraft>>;
+  /** Written only when practice opens sign-in recovery; cleared with the session. */
+  demoRecoveryDrafts: Partial<Record<"dictation" | "assistant", OnboardingDemoDraft>>;
 }
 
 export interface OnboardingSession {
@@ -192,6 +199,7 @@ export function createOnboardingResumeState(): OnboardingResumeState {
     },
     byok: {},
     localModels: {},
+    demoRecoveryDrafts: {},
   };
 }
 
@@ -327,6 +335,14 @@ function parseLocalModelDraft(value: unknown): OnboardingLocalModelDraft | undef
   };
 }
 
+function parseDemoRecoveryDraft(value: unknown): OnboardingDemoDraft | undefined {
+  if (!isRecord(value)) return undefined;
+  return {
+    text: readDraftString(value.text).slice(0, 20000),
+    transcript: readDraftString(value.transcript).slice(0, 20000),
+  };
+}
+
 /**
  * Sessions written before `resume` existed carry no confirmation flags, and
  * reading them as "never confirmed" is not safe: the hotkey flags decide whether
@@ -361,10 +377,13 @@ function parseOnboardingResumeState(
   const authMode = authValue.authMode;
   const byokValue = isRecord(value.byok) ? value.byok : {};
   const localModelsValue = isRecord(value.localModels) ? value.localModels : {};
+  const demoRecoveryValue = isRecord(value.demoRecoveryDrafts) ? value.demoRecoveryDrafts : {};
   const byokDictation = parseByokDraft(byokValue["byok-dictation"]);
   const byokAssistant = parseByokDraft(byokValue["byok-assistant"]);
   const localDictation = parseLocalModelDraft(localModelsValue["local-dictation"]);
   const localAssistant = parseLocalModelDraft(localModelsValue["local-assistant"]);
+  const dictationRecovery = parseDemoRecoveryDraft(demoRecoveryValue.dictation);
+  const assistantRecovery = parseDemoRecoveryDraft(demoRecoveryValue.assistant);
 
   return {
     dictationHotkeyConfirmed: value.dictationHotkeyConfirmed === true,
@@ -388,6 +407,10 @@ function parseOnboardingResumeState(
     localModels: {
       ...(localDictation ? { "local-dictation": localDictation } : {}),
       ...(localAssistant ? { "local-assistant": localAssistant } : {}),
+    },
+    demoRecoveryDrafts: {
+      ...(dictationRecovery ? { dictation: dictationRecovery } : {}),
+      ...(assistantRecovery ? { assistant: assistantRecovery } : {}),
     },
   };
 }

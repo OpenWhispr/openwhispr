@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { OPENWHISPR_API_URL } from "../config/constants";
 import { authClient } from "../lib/auth";
+import { useAuth } from "../hooks/useAuth";
 import { Button } from "./ui/button";
 import { CircleCheck, Loader, Loader2, MailCheck, RefreshCw } from "./icons";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
@@ -32,9 +33,16 @@ export default function EmailVerificationStep({
   resumed = false,
 }: EmailVerificationStepProps) {
   const { t } = useTranslation();
+  const { isLoaded, isSignedIn, user, refetch } = useAuth();
   const [resendCooldown, setResendCooldown] = useState(resumed ? 0 : RESEND_COOLDOWN_SECONDS);
   const [isResending, setIsResending] = useState(false);
-  const [verified, setVerified] = useState(false);
+  const [sessionRefreshCompleted, setSessionRefreshCompleted] = useState(false);
+  const verified =
+    sessionRefreshCompleted &&
+    isLoaded &&
+    isSignedIn &&
+    user?.email.toLowerCase() === email.toLowerCase() &&
+    user.emailVerified === true;
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onVerifiedRef = useRef(onVerified);
@@ -54,17 +62,26 @@ export default function EmailVerificationStep({
 
     const url = `${OPENWHISPR_API_URL}/api/auth/verification-status?email=${encodeURIComponent(email)}`;
     let stopped = false;
+    let checking = false;
 
     const checkVerificationStatus = async () => {
+      if (checking) return;
+      checking = true;
       try {
         const res = await fetch(url, { credentials: "include" });
         if (stopped) return;
 
         if (res.ok) {
           const data = await res.json();
+          if (stopped) return;
           if (data.verified) {
-            setVerified(true);
-            if (pollRef.current) clearInterval(pollRef.current);
+            setSessionRefreshCompleted(false);
+            try {
+              await refetch();
+              if (!stopped) setSessionRefreshCompleted(true);
+            } catch {
+              if (!stopped) setError(t("emailVerification.errors.serverUnreachable"));
+            }
           }
         } else if (res.status === 401 || res.status === 400) {
           if (pollRef.current) clearInterval(pollRef.current);
@@ -72,6 +89,8 @@ export default function EmailVerificationStep({
         }
       } catch {
         // Network error — silently retry on next poll
+      } finally {
+        checking = false;
       }
     };
 
@@ -84,7 +103,23 @@ export default function EmailVerificationStep({
       stopped = true;
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [email, t]);
+  }, [email, refetch, t]);
+
+  useEffect(() => {
+    if (!sessionRefreshCompleted || !isLoaded) return;
+    // refetch resolves void even on failure. The refreshed current account,
+    // rather than its return value, must prove verification before advancing.
+    if (verified) {
+      setError(null);
+      if (pollRef.current) clearInterval(pollRef.current);
+    } else {
+      // Keep polling and Back available when refresh failed or the session
+      // expired; a successful endpoint response alone must not hide recovery.
+      setError(
+        t(isSignedIn ? "emailVerification.errors.serverUnreachable" : "auth.sessionExpired")
+      );
+    }
+  }, [isLoaded, isSignedIn, sessionRefreshCompleted, t, verified]);
 
   useEffect(() => {
     if (!verified) return;

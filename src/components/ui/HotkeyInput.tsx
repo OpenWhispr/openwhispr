@@ -685,7 +685,7 @@ export function HotkeyInput({
       <div className="px-4 py-3">
         {isCapturing ? (
           <>
-            <div className="flex items-center justify-center gap-3">
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
                 <span className="text-xs font-medium text-muted-foreground">
@@ -693,8 +693,8 @@ export function HotkeyInput({
                 </span>
               </div>
               {activeModifiers.length > 0 ? (
-                <div className="flex items-center gap-1">
-                  <span dir="ltr" className="inline-flex items-center gap-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-1">
+                  <span dir="ltr" className="inline-flex flex-wrap items-center gap-1">
                     {activeModifiers.map((token) => (
                       <kbd
                         key={token}
@@ -724,13 +724,13 @@ export function HotkeyInput({
             )}
           </>
         ) : value ? (
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-medium text-muted-foreground">
               {t("hotkeyInput.hotkeyLabel")}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
               {hotkeyParts.length > 0 ? (
-                <div dir="ltr" className="flex items-center gap-1">
+                <div dir="ltr" className="flex flex-wrap items-center gap-1">
                   {hotkeyParts.map((part, i) => (
                     <React.Fragment key={part}>
                       {i > 0 && <span className="text-muted-foreground/70 text-xs">+</span>}

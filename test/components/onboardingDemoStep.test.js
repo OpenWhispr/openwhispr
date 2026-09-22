@@ -20,6 +20,8 @@ async function loadDemoStep(t) {
       "canvas-confetti": `export default { create() { return Object.assign(() => {}, { reset() {} }); } };`,
       "onboarding-founder.webp": `export default "founder.webp";`,
       "icons/gmail.svg": `export default "gmail.svg";`,
+      "/SignInDialog": `export default function SignInDialog() { return null; }`,
+      "/lib/auth": `export async function signOut() {}`,
     },
   });
   const { default: DemoStep } = await vite.ssrLoadModule("/components/onboarding/DemoStep.tsx");

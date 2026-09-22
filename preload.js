@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ? ipcRenderer.send("mac-accessibility-features-ready", expectedAccountScope)
       : ipcRenderer.send("mac-accessibility-features-ready"),
   beginOnboardingDemo: (session) => ipcRenderer.invoke("onboarding-demo-begin", session),
+  getOnboardingDemoSession: () => ipcRenderer.invoke("onboarding-demo-session"),
   endOnboardingDemo: (id) => ipcRenderer.invoke("onboarding-demo-end", id),
   stopOnboardingDemo: (id) => ipcRenderer.invoke("onboarding-demo-stop", id),
   publishOnboardingDemoEvent: (event) => ipcRenderer.invoke("onboarding-demo-publish", event),
@@ -535,7 +536,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   relaunchApp: () => ipcRenderer.invoke("relaunch-app"),
   updateHotkey: (hotkey) => ipcRenderer.invoke("update-hotkey", hotkey),
   setHotkeyListeningMode: (enabled) => ipcRenderer.invoke("set-hotkey-listening-mode", enabled),
-  getHotkeyModeInfo: (hotkey, slot) => ipcRenderer.invoke("get-hotkey-mode-info", hotkey, slot),
+  getHotkeyModeInfo: (hotkey, slot, language) =>
+    ipcRenderer.invoke("get-hotkey-mode-info", hotkey, slot, language),
   getHyprlandConfigStatus: () => ipcRenderer.invoke("get-hyprland-config-status"),
   startWindowDrag: () => ipcRenderer.invoke("start-window-drag"),
   stopWindowDrag: () => ipcRenderer.invoke("stop-window-drag"),

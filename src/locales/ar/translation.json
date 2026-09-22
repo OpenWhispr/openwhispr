@@ -1371,7 +1371,7 @@
       "badge": "جديد في هذا التحديث",
       "title": "اضغط مع الاستمرار للتحدث، وأفلت المفتاح للإنهاء",
       "description": "غيّرنا طريقة عمل الاختصار لديك: اضغط مع الاستمرار على {{hotkey}} أثناء التحدث.",
-      "gesture": "اضغط عليه ضغطة مزدوجة لبدء الوضع بدون استخدام اليدين، واضغط مرة أخرى للإيقاف."
+      "gesture": "اضغط عليه مرتين لبدء الوضع بدون استخدام اليدين، واضغط مرة واحدة للإيقاف."
     }
   },
   "calendar": {
@@ -2239,7 +2239,7 @@
       "holdDescription": "استمر في الضغط أثناء التحدث",
       "test": "اختبار",
       "hotkeyToStartStop": "{{hotkey}} للبدء/الإيقاف",
-      "holdHotkey": "اضغط باستمرار على {{hotkey}}",
+      "holdHotkey": "اضغط باستمرار على {{hotkey}} أثناء التحدث.",
       "textareaPlaceholder": "انقر هنا واستخدم اختصار لوحة المفاتيح الخاص بك للإملاء..."
     },
     "connectivity": {
@@ -2964,12 +2964,20 @@
         "hyprlandConfigWriteWarningTitle": "لن يتم حفظ اختصارات Hyprland بشكل دائم",
         "hyprlandConfigWriteWarningDescription": "لا يمكن لـ OpenWhispr الكتابة إلى {{path}}، لذلك لن تبقى الاختصارات بعد إعادة تحميل تكوين Hyprland. تأكد من وجود الملف وقابليته للكتابة.",
         "hyprlandUnbindDescription": "في Hyprland، يستحوذ OpenWhispr على الاختصار المحدد. سيتم فك أي ارتباط Hyprland موجود يستخدم مجموعة المفاتيح نفسها عندما يسجل OpenWhispr اختصاره.",
+        "guide": {
+          "title": "طريقتان للتحدث",
+          "scope": "للاستخدام مع {{shortcuts}}.",
+          "handsFreeStart": "ابدأ دون استخدام اليدين",
+          "dictation": "الإملاء",
+          "voiceAgent": "المساعد",
+          "translation": "الترجمة"
+        },
         "gestures": {
           "holdTitle": "اضغط مع الاستمرار للتحدث",
           "holdDetail": "أفلت المفتاح للإنهاء",
           "handsFreeTitle": "بدون استخدام اليدين",
-          "handsFreeDetail": "اضغط مرة أخرى للإيقاف",
-          "doublePress": "ضغطة مزدوجة",
+          "handsFreeDetail": "اضغط مرة واحدة للإيقاف",
+          "doublePress": "اضغط مرتين",
           "tapOnlyTitle": "اضغط للبدء، واضغط مرة أخرى للإيقاف"
         }
       },

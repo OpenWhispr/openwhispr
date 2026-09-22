@@ -18,6 +18,8 @@ class LinuxKeyManager extends EventEmitter {
     this.isSupported = process.platform === "linux";
     this.hasReportedError = false;
     this.hasReportedUnavailable = false;
+    // READY is emitted even after denial; retain the diagnosis until app restart.
+    this.permissionDenied = false;
     this.listeners = new Map(); // key string -> current reader generation
     this.readiness = new Map();
     // Reader cleanup must not erase a failed capability verdict. Only a
@@ -171,6 +173,10 @@ class LinuxKeyManager extends EventEmitter {
   }
 
   handleOutputLine(line, key, entry = this.readiness.get(key)) {
+    // Permission is a property of this process, not of one reader generation:
+    // a denial from a stale or already-failed reader is still true, so record
+    // it before ignoring the reader's lifecycle output.
+    if (line === "NO_PERMISSION") this.permissionDenied = true;
     if (!entry || this.listeners.get(key) !== entry || entry.state === "failed") return;
     if (line === "READY") {
       if (entry.state === "ready") return;
