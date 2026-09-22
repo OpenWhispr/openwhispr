@@ -244,18 +244,13 @@ it('binds local-network endpoint credentials to the port and strips supported AP
   );
 });
 
-it('clears local data and the auth token even when secure credential reset fails', async () => {
+it('leaves app data available for retry when secure credential reset fails', async () => {
   const clear = jest.fn();
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { clear } });
   await setProviderCredential(openaiReference, { apiKey: 'fixture' });
-  // First deleteItemAsync call is the auth token clear, which must still succeed;
-  // the second is the provider-credential deletion, which fails.
-  deleteItem.mockImplementationOnce(async (key): Promise<void> => {
-    stored.delete(key);
-  });
   deleteItem.mockRejectedValueOnce(new Error('native unavailable'));
   await expect(StorageService.clearAll()).rejects.toThrow('Unable to clear provider credentials');
-  expect(clear).toHaveBeenCalledTimes(1);
+  expect(clear).not.toHaveBeenCalled();
 });
 
 it('treats an unreadable registry as empty so save and reset still work', async () => {
