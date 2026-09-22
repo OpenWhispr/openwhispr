@@ -2448,6 +2448,7 @@ export default function SettingsPage({
                             <WeeklyUsageMeter
                               wordsUsed={usage.wordsUsed}
                               limit={usage.limit}
+                              isOverLimit={usage.isOverLimit}
                               nextWordsAvailableAt={usage.nextWordsAvailableAt}
                               onRefresh={usage.refetch}
                             />

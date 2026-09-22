@@ -7,20 +7,21 @@ import { Progress } from "./ui/progress";
 interface WeeklyUsageMeterProps {
   wordsUsed: number;
   limit: number;
-  nextWordsAvailableAt: string | null;
+  isOverLimit: boolean;
+  nextWordsAvailableAt: number | null;
   onRefresh: () => Promise<void>;
 }
 
 export default function WeeklyUsageMeter({
   wordsUsed,
   limit,
+  isOverLimit,
   nextWordsAvailableAt,
   onRefresh,
 }: WeeklyUsageMeterProps) {
   const { t, i18n } = useTranslation();
   const percentage = getUsagePercentage(wordsUsed, limit);
-  const availableAt = wordsUsed > 0 && percentage !== null ? nextWordsAvailableAt : null;
-  const countdown = useUsageReturnCountdown(availableAt, onRefresh);
+  const countdown = useUsageReturnCountdown(nextWordsAvailableAt, onRefresh);
 
   if (percentage === null) return null;
 
@@ -38,10 +39,7 @@ export default function WeeklyUsageMeter({
         value={percentage}
         aria-label={usageLabel}
         aria-valuetext={usageLabel}
-        className={cn(
-          "h-1.5",
-          percentage === 100 ? "[&>div]:bg-destructive" : "[&>div]:bg-primary"
-        )}
+        className={cn("h-1.5", isOverLimit ? "[&>div]:bg-destructive" : "[&>div]:bg-primary")}
       />
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>{timing}</span>

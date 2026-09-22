@@ -28,7 +28,7 @@ export interface UsageData {
   currentPeriodEnd: string | null;
   billingInterval: "monthly" | "annual" | null;
   resetAt: string;
-  nextWordsAvailableAt: string | null;
+  nextWordsAvailableAt: number | null;
   entitlementSources: {
     personal: boolean;
     workspaceIds: string[];
@@ -48,7 +48,7 @@ export interface UsageResponse {
   currentPeriodEnd?: string | null;
   billingInterval?: "monthly" | "annual" | null;
   resetAt?: string;
-  nextWordsAvailableAt?: string | null;
+  nextWordsAvailableInMs?: number | null;
   entitlementSources?: {
     personal: boolean;
     workspaceIds: string[];
@@ -121,7 +121,10 @@ export function normalizeUsage(response: UsageResponse): UsageData {
     currentPeriodEnd: response.currentPeriodEnd ?? null,
     billingInterval: response.billingInterval ?? null,
     resetAt: response.resetAt ?? "rolling",
-    nextWordsAvailableAt: response.nextWordsAvailableAt ?? null,
+    // The API sends a wait rather than a timestamp, so anchoring it to this
+    // clock on receipt keeps a skewed local clock from moving the countdown.
+    nextWordsAvailableAt:
+      response.nextWordsAvailableInMs == null ? null : Date.now() + response.nextWordsAvailableInMs,
     // Pre-unified-billing API builds have no entitlementSources; infer a
     // personal source from the plan so those clients keep working.
     entitlementSources: response.entitlementSources ?? {

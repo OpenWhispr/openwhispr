@@ -63,12 +63,13 @@ test("a missing limit is unknown, not the free-tier allowance", () => {
   assert.equal(normalizeUsage({ plan: "business", limit: -1 }).limit, -1);
 });
 
-test("word-return timing remains optional for legacy usage responses", () => {
+test("the server's wait for words is anchored to the local clock on receipt", (t) => {
+  const now = Date.parse("2026-09-21T12:00:00Z");
+  t.mock.timers.enable({ apis: ["Date"], now });
   assert.equal(normalizeUsage({ resetAt: "rolling" }).nextWordsAvailableAt, null);
-  const nextWordsAvailableAt = "2026-09-22T12:00:00Z";
-  const usage = normalizeUsage({ resetAt: "rolling", nextWordsAvailableAt });
+  const usage = normalizeUsage({ resetAt: "rolling", nextWordsAvailableInMs: 90_000 });
   assert.equal(usage.resetAt, "rolling");
-  assert.equal(usage.nextWordsAvailableAt, nextWordsAvailableAt);
+  assert.equal(usage.nextWordsAvailableAt, now + 90_000);
 });
 
 test("an explicit entitlementSources block wins over the inferred one", () => {
