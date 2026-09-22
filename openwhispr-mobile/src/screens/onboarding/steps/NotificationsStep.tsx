@@ -6,6 +6,7 @@ import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { getNotificationStatus, requestNotifications } from '@/lib/notifications';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 type PermissionState = 'checking' | 'undetermined' | 'unavailable';
 
@@ -37,7 +38,7 @@ export function NotificationsStep() {
         await setPermissionGranted('notifications', granted);
         await goNext();
       } catch (error) {
-        setAdvanceError(error instanceof Error ? error.message : 'Could not save progress.');
+        setAdvanceError(describeOnboardingError(error, 'Could not save progress.'));
       }
     },
     [goNext, setPermissionGranted],

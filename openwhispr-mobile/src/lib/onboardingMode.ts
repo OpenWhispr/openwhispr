@@ -3,6 +3,7 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { ProcessingMode, UserConfig } from '@/types';
+import { OnboardingError } from './onboardingErrors';
 
 // updateConfig reports persistence errors in its store instead of rejecting.
 // Onboarding must not advance until the user's preference is actually saved.
@@ -17,13 +18,19 @@ export async function chooseOnboardingMode(
   from: 'privacy-mode' | 'private-download',
 ): Promise<void> {
   if (useOnboardingStore.getState().currentStep !== from) return;
-  if (mode === 'cloud' && !useAuthStore.getState().user) {
-    const auth = useAuthStore.getState();
+  const auth = useAuthStore.getState();
+  // Guests can't open a session during setup. On the download step Cloud is their only way past a
+  // download that can't finish, so it's saved for after sign-in instead of refused.
+  if (mode === 'cloud' && !auth.user && !(auth.isGuest && from === 'private-download')) {
     if (auth.isGuest)
-      throw new Error('Cloud needs an account. Use Local for now, or sign in after setup.');
+      throw new OnboardingError(
+        'Cloud needs an account. Use Local for now, or sign in after setup.',
+      );
     await auth.ensureAnonymousSession();
     if (!useAuthStore.getState().user) {
-      throw new Error('Cloud needs a connection to set up. Try again or use Local for now.');
+      throw new OnboardingError(
+        'Cloud needs a connection to set up. Try again or use Local for now.',
+      );
     }
   }
   if (useOnboardingStore.getState().currentStep !== from) return;

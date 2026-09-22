@@ -220,9 +220,13 @@ describe('TrackingPermissionStep', () => {
 
 it('offers continuation retry when auto-skipping ATT fails to save progress', async () => {
   mockGetTrackingAuthorizationStatus.mockResolvedValue('authorized');
-  mockGoNext.mockRejectedValueOnce(new Error('Keychain unavailable'));
+  mockGoNext.mockRejectedValueOnce(
+    new Error("Calling the 'setValueWithKeyAsync' function has failed"),
+  );
   const screen = render(<TrackingPermissionStep />);
-  fireEvent.press(await screen.findByText('Retry'));
+  expect(await screen.findByText('Could not save progress.')).toBeTruthy();
+  fireEvent.press(screen.getByText('Retry'));
+  expect(mockCaptureException).toHaveBeenCalledTimes(1);
   await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(2));
   expect(mockRequestTrackingAuthorization).not.toHaveBeenCalled();
 });

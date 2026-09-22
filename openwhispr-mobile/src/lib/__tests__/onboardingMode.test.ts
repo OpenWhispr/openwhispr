@@ -1,4 +1,7 @@
 import { chooseOnboardingMode } from '../onboardingMode';
+import { OnboardingError } from '../onboardingErrors';
+
+jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 const mockUpdateConfig = jest.fn();
 const mockChooseMode = jest.fn();
 const mockEnsureSession = jest.fn();
@@ -54,7 +57,9 @@ it('retries anonymous authentication before allowing Cloud', async () => {
 });
 it('rejects Cloud without a session from download fallbacks too', async () => {
   mockCurrentStep = 'private-download';
-  await expect(chooseOnboardingMode('cloud', 'private-download')).rejects.toThrow('connection');
+  const attempt = chooseOnboardingMode('cloud', 'private-download');
+  await expect(attempt).rejects.toThrow('connection');
+  await expect(attempt).rejects.toBeInstanceOf(OnboardingError);
   expect(mockUpdateConfig).not.toHaveBeenCalled();
   expect(mockChooseMode).not.toHaveBeenCalled();
 });
@@ -81,4 +86,23 @@ it('restores Local if a Cloud choice saves configuration but fails to save onboa
   );
   expect(mockUpdateConfig).toHaveBeenLastCalledWith({ defaultMode: 'private' });
   expect(mockResetMode).toHaveBeenLastCalledWith('private');
+});
+
+it('refuses Cloud for a guest at the mode choice with a message meant for them', async () => {
+  mockGuest = true;
+  await expect(chooseOnboardingMode('cloud', 'privacy-mode')).rejects.toBeInstanceOf(
+    OnboardingError,
+  );
+  expect(mockUpdateConfig).not.toHaveBeenCalled();
+});
+
+// Guests can't open a session during setup. Refusing Cloud here too would leave a guest whose
+// download failed with no way to finish, so the choice is saved for after sign-in, as before.
+it('lets a guest leave a stuck download for Cloud', async () => {
+  mockGuest = true;
+  mockCurrentStep = 'private-download';
+  await chooseOnboardingMode('cloud', 'private-download');
+  expect(mockEnsureSession).not.toHaveBeenCalled();
+  expect(mockUpdateConfig).toHaveBeenCalledWith({ defaultMode: 'cloud' });
+  expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download');
 });

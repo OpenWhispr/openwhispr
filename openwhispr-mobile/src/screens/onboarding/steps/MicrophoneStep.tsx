@@ -5,6 +5,7 @@ import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { getExpoAudioModule } from '@/utils/expoAudio';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 import { AppGroupStorage } from '../../../../modules/app-group-storage/src';
 
 type PermissionState = 'checking' | 'undetermined' | 'granted' | 'denied' | 'unavailable';
@@ -35,7 +36,7 @@ export function MicrophoneStep() {
       await goNext();
     } catch (error) {
       advancedRef.current = false;
-      setAdvanceError(error instanceof Error ? error.message : 'Could not save progress.');
+      setAdvanceError(describeOnboardingError(error, 'Could not save progress.'));
     }
   }, [goNext, setPermissionGranted]);
 
@@ -102,7 +103,17 @@ export function MicrophoneStep() {
           'Open Settings to grant OpenWhispr access. You can continue setup for now.',
           [
             { text: 'Open Settings', onPress: () => Linking.openSettings() },
-            { text: 'Continue', style: 'cancel', onPress: () => goNext() },
+            {
+              text: 'Continue',
+              style: 'cancel',
+              onPress: () =>
+                goNext().catch((error: unknown) =>
+                  Alert.alert(
+                    'Could not continue',
+                    describeOnboardingError(error, 'Could not save progress.'),
+                  ),
+                ),
+            },
           ],
         );
         return;

@@ -12,6 +12,7 @@ import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 interface AppTarget {
   key: string;
@@ -197,7 +198,7 @@ export function GraduationStep() {
         await finish();
         if (url) await Linking.openURL(url);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Could not finish setup. Try again.');
+        setError(describeOnboardingError(cause, 'Could not finish setup. Try again.'));
       } finally {
         completing.current = false;
         setBusy(false);

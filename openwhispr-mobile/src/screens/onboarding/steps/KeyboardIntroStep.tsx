@@ -8,6 +8,7 @@ import { InstructionOverlay } from '@/components/onboarding/InstructionOverlay';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { isKeyboardInstalled } from '@/lib/keyboardInstallation';
 import { startKeyboardPipTutorial, stopKeyboardPipTutorial } from '@/lib/keyboardPipTutorial';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 const STEPS = [
   'Tap Keyboards',
@@ -42,7 +43,7 @@ export function KeyboardIntroStep() {
     } catch (error) {
       advancingRef.current = false;
       setHasReturned(true);
-      Alert.alert('Could not continue', error instanceof Error ? error.message : 'Try again.');
+      Alert.alert('Could not continue', describeOnboardingError(error, 'Try again.'));
     }
   }, [goNext, setKeyboardInstalled, stopPipTutorial]);
 

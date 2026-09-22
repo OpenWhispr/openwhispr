@@ -1,8 +1,9 @@
 import { useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 interface OnboardingShellProps {
   progress?: { current: number; total: number };
@@ -51,7 +52,8 @@ export function OnboardingShell({
 }: OnboardingShellProps): ReactElement {
   const inFlight = useRef(false);
   const failedAction = useRef<OnboardingAction | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<OnboardingAction | null>(null);
+  const busy = busyAction !== null;
   const [error, setError] = useState<string | null>(null);
   const run = async (actionName: OnboardingAction): Promise<void> => {
     if (inFlight.current) return;
@@ -60,16 +62,16 @@ export function OnboardingShell({
     ];
     if (!action) return;
     inFlight.current = true;
-    setBusy(true);
+    setBusyAction(actionName);
     setError(null);
     try {
       await action();
     } catch (cause) {
       failedAction.current = actionName;
-      setError(cause instanceof Error ? cause.message : 'Could not save your progress. Try again.');
+      setError(describeOnboardingError(cause, 'Could not save your progress. Try again.'));
     } finally {
       inFlight.current = false;
-      setBusy(false);
+      setBusyAction(null);
     }
   };
   return (
@@ -147,7 +149,7 @@ export function OnboardingShell({
           <Button
             onPress={() => run('primary')}
             disabled={ctaDisabled || busy}
-            loading={ctaLoading || busy}
+            loading={ctaLoading || busyAction === 'primary'}
             size="lg"
           >
             {ctaLabel}
@@ -158,17 +160,21 @@ export function OnboardingShell({
                 onPress={() => run('secondary')}
                 disabled={busy}
                 accessibilityRole="button"
-                className="mt-3 items-center justify-center rounded-full border border-separator bg-secondarySystemGroupedBackground py-4 active:opacity-80"
+                accessibilityState={{ busy: busyAction === 'secondary', disabled: busy }}
+                className="mt-3 flex-row items-center justify-center gap-2 rounded-full border border-separator bg-secondarySystemGroupedBackground py-4 active:opacity-80"
               >
+                {busyAction === 'secondary' ? <ActivityIndicator size="small" /> : null}
                 <Text className="text-[16px] font-semibold text-label">{secondaryCtaLabel}</Text>
               </Pressable>
             ) : (
               <Pressable
                 onPress={() => run('secondary')}
                 disabled={busy}
-                className="mt-3 items-center justify-center py-2"
+                className="mt-3 flex-row items-center justify-center gap-2 py-2"
                 accessibilityRole="button"
+                accessibilityState={{ busy: busyAction === 'secondary', disabled: busy }}
               >
+                {busyAction === 'secondary' ? <ActivityIndicator size="small" /> : null}
                 <Text className="text-[15px] font-medium text-secondaryLabel">
                   {secondaryCtaLabel}
                 </Text>

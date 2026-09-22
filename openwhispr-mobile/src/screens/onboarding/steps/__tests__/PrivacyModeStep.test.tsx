@@ -1,7 +1,9 @@
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PrivacyModeStep } from '../PrivacyModeStep';
 import { chooseOnboardingMode } from '@/lib/onboardingMode';
+import { OnboardingError } from '@/lib/onboardingErrors';
 let mockSelectedMode: string | null = null;
+jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('@/store/useOnboardingStore', () => ({
   useOnboardingStore: (selector: (state: unknown) => unknown) =>
     selector({ selectedMode: mockSelectedMode }),
@@ -35,7 +37,9 @@ it.each([
   expect(screen.queryByText('Continue')).toBeNull();
 });
 it('keeps the choices available after a failed Cloud attempt', async () => {
-  jest.mocked(chooseOnboardingMode).mockRejectedValueOnce(new Error('Cloud is unavailable'));
+  jest
+    .mocked(chooseOnboardingMode)
+    .mockRejectedValueOnce(new OnboardingError('Cloud is unavailable'));
   const screen = render(<PrivacyModeStep />);
   fireEvent.press(screen.getByText('Use Cloud'));
   expect(await screen.findByText('Cloud is unavailable')).toBeTruthy();

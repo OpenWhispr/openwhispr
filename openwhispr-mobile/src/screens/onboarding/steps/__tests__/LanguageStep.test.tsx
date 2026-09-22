@@ -1,6 +1,7 @@
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { LanguageStep } from '../LanguageStep';
 
+jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: require('react-native').View,
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -44,7 +45,7 @@ it('stays on languages after a failed save and retries the selected values', asy
   const screen = render(<LanguageStep />);
   fireEvent.press(screen.getByLabelText('Remove French'));
   fireEvent.press(screen.getByText('Continue'));
-  expect(await screen.findByText('Storage unavailable')).toBeTruthy();
+  expect(await screen.findByText('Could not save your progress. Try again.')).toBeTruthy();
   expect(mockNext).not.toHaveBeenCalled();
   fireEvent.press(screen.getByText('Retry'));
   await waitFor(() => expect(mockNext).toHaveBeenCalledTimes(1));

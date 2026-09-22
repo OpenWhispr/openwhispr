@@ -3,6 +3,7 @@ import { Modal, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { SystemIcon } from '@/components/ui/SystemIcon';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 interface Props {
   visible: boolean;
@@ -26,7 +27,7 @@ export function SlowDownloadSheet({
     try {
       await onContinueCloud();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Cloud is unavailable. Try again.');
+      setError(describeOnboardingError(cause, 'Cloud is unavailable. Try again.'));
     } finally {
       inFlight.current = false;
       setBusy(false);

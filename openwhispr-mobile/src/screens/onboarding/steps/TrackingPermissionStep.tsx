@@ -12,6 +12,7 @@ import {
   requestTrackingAuthorization,
 } from '@/lib/trackingTransparency';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 type ScreenState = 'checking' | 'ready';
 
@@ -50,8 +51,7 @@ export function TrackingPermissionStep(): ReactElement {
       await goNext();
     } catch (error) {
       finishingRef.current = false;
-      setAdvanceError(error instanceof Error ? error.message : 'Could not save progress.');
-      Sentry.captureException(error);
+      setAdvanceError(describeOnboardingError(error, 'Could not save progress.'));
     }
   }, [goNext]);
 

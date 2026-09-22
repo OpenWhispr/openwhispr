@@ -1,5 +1,6 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
+jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: require('react-native').View,
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -199,9 +200,12 @@ describe('PaywallStep', () => {
 });
 
 it('allows retrying continuation after a progress save fails', async () => {
-  mockGoNext.mockRejectedValueOnce(new Error('Could not save progress'));
+  mockGoNext.mockRejectedValueOnce(
+    new Error("Calling the 'setValueWithKeyAsync' function has failed"),
+  );
   const screen = render(<PaywallStep />);
-  expect(await screen.findByText('Could not save progress')).toBeTruthy();
+  expect(await screen.findByText('Could not save progress. Try again.')).toBeTruthy();
+  expect(screen.queryByText(/setValueWithKeyAsync/)).toBeNull();
   fireEvent.press(screen.getByText('Continue'));
   await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(2));
   expect(mockRegister).toHaveBeenCalledTimes(1);

@@ -1,5 +1,8 @@
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
+jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
+jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
+
 const mockGoNext = jest.fn();
 const mockCaptureException = jest.fn();
 jest.mock('@/lib/sentry', () => ({
@@ -96,12 +99,38 @@ describe('CreateAccountStep', () => {
     mockAuthState = { user: { id: 'anon-user', isAnonymous: true }, isGuest: false };
     mockGoNext.mockRejectedValueOnce(new Error('keychain unavailable'));
 
-    const { getByText } = render(<CreateAccountStep />);
+    const { findByText, getByText } = render(<CreateAccountStep />);
     fireEvent.press(getByText('skip'));
     await waitFor(() => expect(mockCaptureException).toHaveBeenCalledTimes(1));
-    fireEvent.press(getByText('skip'));
+    fireEvent.press(await findByText('Retry'));
 
-    expect(mockGoNext).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(2));
+  });
+
+  // The sign-in that ends this step doesn't happen again, so a failed save needs its own retry.
+  it('offers a retry when saving progress fails after signing in', async () => {
+    mockAuthState = { user: { id: 'real-user', isAnonymous: false }, isGuest: false };
+    mockGoNext.mockRejectedValueOnce(new Error('keychain unavailable'));
+
+    const { findByText } = render(<CreateAccountStep />);
+    expect(await findByText('Could not save your progress. Try again.')).toBeTruthy();
+    fireEvent.press(await findByText('Retry'));
+
+    await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps the retry screen up while the retry is saving', async () => {
+    mockAuthState = { user: { id: 'real-user', isAnonymous: false }, isGuest: false };
+    mockGoNext
+      .mockRejectedValueOnce(new Error('keychain unavailable'))
+      .mockReturnValueOnce(new Promise<void>(() => undefined));
+
+    const { findByText, queryByText } = render(<CreateAccountStep />);
+    fireEvent.press(await findByText('Retry'));
+
+    await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(2));
+    expect(queryByText('skip')).toBeNull();
+    expect(queryByText('Could not save your progress. Try again.')).toBeTruthy();
   });
 
   it('advances only once when signup lands after a skip', () => {

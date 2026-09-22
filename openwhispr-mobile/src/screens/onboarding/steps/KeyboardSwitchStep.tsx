@@ -18,6 +18,7 @@ import { KeyboardDetectedToast } from '@/components/onboarding/KeyboardDetectedT
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { SpaceGrotesk } from '@/lib/fonts';
 import { useKeyboardHeartbeat } from '@/hooks/useKeyboardHeartbeat';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 // Worklet-safe color literals — `interpolateColor` runs on the UI thread, so
 // PlatformColor / iosColor() can't be used here. These match `systemBlue` and
@@ -37,7 +38,7 @@ export function KeyboardSwitchStep() {
   const [advanceError, setAdvanceError] = useState<string | null>(null);
   const advanceOnDetection = useCallback((): void => {
     goNext().catch((error: unknown) => {
-      setAdvanceError(error instanceof Error ? error.message : 'Could not save progress.');
+      setAdvanceError(describeOnboardingError(error, 'Could not save progress.'));
     });
   }, [goNext]);
   const detected = useKeyboardHeartbeat(advanceOnDetection);

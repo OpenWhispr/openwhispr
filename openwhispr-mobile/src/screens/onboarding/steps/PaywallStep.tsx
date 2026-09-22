@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 const HIGHLIGHTS: { icon: string; mdIcon: LucideIconName; label: string }[] = [
   { icon: 'cloud', mdIcon: 'Cloud', label: 'Cloud transcription with no word limit' },
@@ -54,9 +55,7 @@ export function PaywallStep() {
       await goNext();
     } catch (error) {
       hasAdvancedRef.current = false;
-      setAdvanceError(
-        error instanceof Error ? error.message : 'Could not save progress. Try again.',
-      );
+      setAdvanceError(describeOnboardingError(error, 'Could not save progress. Try again.'));
     }
   }, [goNext]);
 
