@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
 import { isSecureHttpEndpoint, normalizeBaseUrl } from '@shared/ai/endpoints';
+import modelCatalog from '@shared/ai/modelRegistryData.json';
 
 export interface ProviderCredential {
   apiKey: string;
@@ -21,6 +22,15 @@ const SECURE_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
   requireAuthentication: false,
 };
+// Every built-in slot a key could have been saved under. Reset deletes these
+// even when the registry is unreadable, since the registry is then no guide.
+const BUILT_IN_REFERENCES: readonly string[] = [
+  ...new Set([
+    ...modelCatalog.cloudProviders.map((provider) => provider.id),
+    ...modelCatalog.transcriptionProviders.map((provider) => provider.id),
+    'openrouter',
+  ]),
+].map((providerId) => `provider.${providerId}`);
 const changeListeners = new Set<CredentialChangeListener>();
 let pendingOperation: Promise<unknown> = Promise.resolve();
 
@@ -178,8 +188,9 @@ export async function clearProviderCredentials(): Promise<void> {
     for (const reference of references) registry[reference] = 'removed';
     if (references.length) await writeRegistry(registry);
     notifyCredentialChange(null);
+    const targets = [...new Set([...references, ...BUILT_IN_REFERENCES])];
     const results = await Promise.allSettled(
-      references.map((reference) =>
+      targets.map((reference) =>
         SecureStore.deleteItemAsync(`${CREDENTIAL_PREFIX}${reference}`, SECURE_OPTIONS),
       ),
     );

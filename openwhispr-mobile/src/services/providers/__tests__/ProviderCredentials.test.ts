@@ -266,3 +266,17 @@ it('treats an unreadable registry as empty so save and reset still work', async 
     SecureStore.getItemAsync('openwhispr.provider-credentials.registry.v1'),
   ).resolves.toBeNull();
 });
+
+it('reset deletes built-in provider keys even when the registry is corrupt', async () => {
+  await setProviderCredential(openaiReference, { apiKey: 'fixture-openai' });
+  await setProviderCredential('provider.openrouter', { apiKey: 'fixture-openrouter' });
+  await SecureStore.setItemAsync('openwhispr.provider-credentials.registry.v1', '{not json');
+  await expect(clearProviderCredentials()).resolves.toBeUndefined();
+  expect(
+    await SecureStore.getItemAsync(`openwhispr.provider-credentials.v1.${openaiReference}`),
+  ).toBeNull();
+  expect(
+    await SecureStore.getItemAsync('openwhispr.provider-credentials.v1.provider.openrouter'),
+  ).toBeNull();
+  expect([...stored.values()].join('')).not.toContain('fixture');
+});
