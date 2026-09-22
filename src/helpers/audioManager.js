@@ -5394,7 +5394,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   {
                     durationSeconds,
                     analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-                    streamingFallbackReason: "stream_no_final",
+                    // The tag feeds the Orukeet rollout's fallback rate; other
+                    // providers still fall back, just untagged.
+                    ...(this.getStreamingProviderName() === "orukeet"
+                      ? { streamingFallbackReason: "stream_no_final" }
+                      : {}),
                   },
                   wasCancelled
                 )

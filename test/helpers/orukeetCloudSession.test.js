@@ -8,6 +8,7 @@ const {
   ORUKEET_BASE_URL,
   validateSession,
 } = require("../../src/helpers/orukeetCloudSession");
+const { withPolicyRequestHeaders } = require("../../src/helpers/policyRequestHeaders");
 
 const session = () => ({
   baseUrl: ORUKEET_BASE_URL,
@@ -77,13 +78,15 @@ async function fixture(t, fetchImpl) {
     streaming,
     tokenStore,
     getApiUrl: () => "https://api.openwhispr.test",
-    withPolicyHeaders: (headers) => ({ ...headers, "x-openwhispr-policy-version": "1" }),
+    withPolicyHeaders: (headers) => withPolicyRequestHeaders(headers, "1.8.1"),
     proxyFetch:
       fetchImpl ||
       (async (url, options) => {
         assert.equal(url, "https://api.openwhispr.test/api/stt/orukeet/session");
         assert.equal(options.headers.Authorization, "Bearer account-a");
         assert.equal(options.headers["x-openwhispr-policy-version"], "1");
+        // The server mints only for builds that declare they can run Orukeet.
+        assert.equal(options.headers["x-openwhispr-capabilities"], "orukeet");
         assert.equal(options.useSessionCookies, false);
         assert.equal(options.redirect, "error");
         return Response.json(session());

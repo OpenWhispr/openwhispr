@@ -461,6 +461,33 @@ test("acknowledged streaming silence does not trigger another transcription", as
   assert.equal(fallbackCalls, 0);
 });
 
+test("a stream without a final falls back to batch for every provider, tagged only for Orukeet", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  globalThis.__streamingFinalizationSettings = {
+    ...globalThis.__streamingFinalizationSettings,
+    cloudTranscriptionMode: "openwhispr",
+    isSignedIn: true,
+  };
+  const uploads = [];
+  for (const providerName of ["orukeet", "openai-realtime", "deepgram"]) {
+    const { manager } = createFinalizingManager(AudioManager);
+    manager.recordingStartTime = Date.now() - 5000;
+    manager.mergeRecordedSegments = async () => new Blob([new Uint8Array(100)]);
+    manager.getStreamingProviderName = () => providerName;
+    manager.processWithOpenWhisprCloud = async (_blob, metadata) => {
+      uploads.push([providerName, metadata.streamingFallbackReason]);
+      return { text: "" };
+    };
+    await manager.stopStreamingRecording();
+  }
+
+  assert.deepEqual(uploads, [
+    ["orukeet", "stream_no_final"],
+    ["openai-realtime", undefined],
+    ["deepgram", undefined],
+  ]);
+});
+
 test("Orukeet uses the acknowledged final even if the transcript event is delayed", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager } = createFinalizingManager(AudioManager);
