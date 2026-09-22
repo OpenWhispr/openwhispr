@@ -11,6 +11,7 @@ const all = (overrides: Partial<LocalEngineAvailability> = {}): LocalEngineAvail
   parakeetV2Downloaded: true,
   parakeetV3Downloaded: true,
   whisperDownloaded: true,
+  orukeetSupported: true,
   // Orukeet is opt-in: absent unless a test downloads it.
   orukeetDownloaded: false,
   ...overrides,

@@ -228,3 +228,44 @@ describe('LocalParakeetService.modelNotices', () => {
     expect(mockNative.modelSpec).not.toHaveBeenCalled();
   });
 });
+
+describe('LocalParakeetService load failures', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockNative.isAvailable.mockReturnValue(true);
+    mockNative.isModelDownloaded.mockResolvedValue(true);
+  });
+
+  afterEach(async () => {
+    await LocalParakeetService.deleteModel('orukeet');
+  });
+
+  it('remembers a model that failed to load until it loads', async () => {
+    mockNative.prepare.mockRejectedValueOnce(new Error('Core ML could not load Encoder.mlmodelc'));
+    await expect(LocalParakeetService.prepare('orukeet')).rejects.toThrow('Core ML');
+    expect(LocalParakeetService.hasFailedToLoad('orukeet')).toBe(true);
+    expect(LocalParakeetService.hasFailedToLoad('v3')).toBe(false);
+
+    mockNative.prepare.mockResolvedValueOnce({ loadMs: 5, modelSizeBytes: 1 });
+    await LocalParakeetService.prepare('orukeet');
+    expect(LocalParakeetService.hasFailedToLoad('orukeet')).toBe(false);
+  });
+
+  it('records a load failure hit on the way to a transcription', async () => {
+    mockNative.prepare.mockRejectedValueOnce(new Error('Core ML could not load Encoder.mlmodelc'));
+    await expect(
+      LocalParakeetService.transcribe('file://a.wav', { version: 'orukeet' }),
+    ).rejects.toThrow('Core ML');
+    expect(LocalParakeetService.hasFailedToLoad('orukeet')).toBe(true);
+    expect(mockNative.transcribe).not.toHaveBeenCalled();
+  });
+
+  it('forgets the failure once the model is deleted, so a new download gets another try', async () => {
+    mockNative.prepare.mockRejectedValueOnce(new Error('load failed'));
+    await expect(LocalParakeetService.prepare('orukeet')).rejects.toThrow('load failed');
+
+    await LocalParakeetService.deleteModel('orukeet');
+
+    expect(LocalParakeetService.hasFailedToLoad('orukeet')).toBe(false);
+  });
+});

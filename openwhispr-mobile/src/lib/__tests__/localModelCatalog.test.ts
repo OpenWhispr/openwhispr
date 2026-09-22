@@ -14,6 +14,7 @@ const availability = (
   parakeetV2Downloaded: false,
   parakeetV3Downloaded: false,
   whisperDownloaded: false,
+  orukeetSupported: true,
   orukeetDownloaded: false,
   ...overrides,
 });
@@ -48,10 +49,45 @@ describe('getLocalModelCatalog — Orukeet (opt-in)', () => {
     expect(keysFor(['en'], { parakeetSupported: false })).toEqual(['whisper-base']);
   });
 
+  it('hides only Orukeet on a binary that cannot install it', () => {
+    expect(keysFor(['en'], { orukeetSupported: false })).toEqual([
+      'parakeet-v2',
+      'parakeet-v3',
+      'whisper-base',
+    ]);
+  });
+
   it('never makes Orukeet the recommended download', () => {
     for (const languages of [['en'], ['de'], [], ['ja']]) {
       expect(recommendedModelKey(languages)).not.toBe('orukeet');
     }
+  });
+});
+
+describe('getLocalModelCatalog — model in use', () => {
+  const inUseKeys = (languages: string[], overrides: Partial<LocalEngineAvailability>): string[] =>
+    getLocalModelCatalog(languages, availability(overrides))
+      .filter((entry) => entry.inUse)
+      .map((entry) => entry.key);
+
+  it('marks Orukeet, not the recommended Parakeet row, once Orukeet serves the selection', () => {
+    expect(inUseKeys(['en'], { parakeetV2Downloaded: true, orukeetDownloaded: true })).toEqual([
+      'orukeet',
+    ]);
+  });
+
+  it('marks the recommended Parakeet row when it is what dictation uses', () => {
+    expect(inUseKeys(['de'], { parakeetV3Downloaded: true })).toEqual(['parakeet-v3']);
+  });
+
+  it('marks Whisper for auto-detect even when Orukeet is downloaded', () => {
+    expect(inUseKeys([], { whisperDownloaded: true, orukeetDownloaded: true })).toEqual([
+      'whisper-base',
+    ]);
+  });
+
+  it('marks nothing when the selection has no installed model', () => {
+    expect(inUseKeys(['en'], {})).toEqual([]);
   });
 });
 
@@ -72,8 +108,13 @@ describe('LOCAL_MODEL_INSTALL_PEAK_BYTES', () => {
   });
 
   it('covers the archive, its extraction and the compiled model coexisting during install', () => {
-    expect(LOCAL_MODEL_INSTALL_PEAK_BYTES.orukeet).toBeGreaterThan(
-      2 * LOCAL_MODEL_SIZE_BYTES.orukeet,
+    // Measured from the pinned archive: the zip, its central-directory total and a compiled install.
+    const archiveBytes = 554_985_744;
+    const extractedBytes = 632_017_564;
+    const compiledBytes = 632_191_599;
+    expect(LOCAL_MODEL_SIZE_BYTES.orukeet).toBeGreaterThanOrEqual(compiledBytes);
+    expect(LOCAL_MODEL_INSTALL_PEAK_BYTES.orukeet).toBeGreaterThanOrEqual(
+      archiveBytes + extractedBytes + compiledBytes,
     );
   });
 });

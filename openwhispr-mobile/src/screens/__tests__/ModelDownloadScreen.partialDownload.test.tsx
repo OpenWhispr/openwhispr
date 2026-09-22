@@ -49,6 +49,8 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
       parakeetV2Downloaded: false,
       parakeetV3Downloaded: false,
       whisperDownloaded: true,
+      orukeetSupported: true,
+      orukeetDownloaded: false,
     })),
   },
 }));

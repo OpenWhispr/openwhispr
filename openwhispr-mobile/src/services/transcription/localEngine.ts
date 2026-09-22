@@ -11,6 +11,8 @@ export interface LocalEngineAvailability {
   parakeetV2Downloaded: boolean;
   parakeetV3Downloaded: boolean;
   whisperDownloaded: boolean;
+  /** False on a binary whose native module predates Orukeet (reachable through an OTA update). */
+  orukeetSupported: boolean;
   /** Opt-in: never recommended, but once downloaded it serves every in-set selection. */
   orukeetDownloaded: boolean;
 }

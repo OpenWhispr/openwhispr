@@ -20,9 +20,11 @@ jest.mock('@/services/transcription/LocalParakeetService', () => ({
 }));
 
 import { ParakeetASR } from '../../../../modules/parakeet-asr/src';
+import { LocalParakeetService } from '@/services/transcription/LocalParakeetService';
 import { ENGINE_LABEL, runBenchmark } from '../runParakeetBenchmark';
 
 const mockNative = ParakeetASR as jest.Mocked<typeof ParakeetASR>;
+const mockParakeet = LocalParakeetService as jest.Mocked<typeof LocalParakeetService>;
 
 describe('runBenchmark', () => {
   it('measures Orukeet on the Parakeet runtime under its own version', async () => {
@@ -34,5 +36,32 @@ describe('runBenchmark', () => {
     });
     expect(result).toMatchObject({ engine: 'orukeet', label: 'Orukeet r3 (int8)', ok: true });
     expect(ENGINE_LABEL.orukeet).toBe('Orukeet r3 (int8)');
+  });
+
+  it("times an archive model's on-device install apart from its download", async () => {
+    let now = 1_000;
+    const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+    mockNative.isModelDownloaded.mockResolvedValueOnce(false);
+    mockParakeet.downloadModel.mockImplementationOnce(async (_version, _onProgress, onPhase) => {
+      now = 4_000; // transfer done
+      onPhase?.('verifying');
+      now = 4_500;
+      onPhase?.('compiling');
+      now = 9_000; // install done
+    });
+
+    const [result] = await runBenchmark('file://clip.wav', ['orukeet'], { warmRuns: 1 });
+
+    expect(result.installMs).toBe(5_000);
+    clock.mockRestore();
+  });
+
+  it('reports no install time for a model downloaded straight into place', async () => {
+    mockNative.isModelDownloaded.mockResolvedValueOnce(false);
+
+    const [result] = await runBenchmark('file://clip.wav', ['parakeet-v3'], { warmRuns: 1 });
+
+    expect(mockParakeet.downloadModel).toHaveBeenCalledWith('v3', undefined, expect.any(Function));
+    expect(result.installMs).toBeUndefined();
   });
 });

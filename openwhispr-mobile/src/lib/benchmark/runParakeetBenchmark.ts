@@ -23,6 +23,8 @@ export interface EngineRunResult {
   ok: boolean;
   error?: string;
   modelSizeBytes?: number;
+  /** An archive model's on-device verify, extract and compile, when this run downloaded it. */
+  installMs?: number;
   /** Model load + engine build time (excluded from RTF). */
   loadMs?: number;
   coldInferMs?: number;
@@ -72,19 +74,29 @@ async function runParakeetEngine(
   // prepare() is load-only in production, so the download is a separate, separately-timed step —
   // this is what splits network cost from CoreML's one-time ANE compile (visible as a large
   // first-ever loadMs that collapses on subsequent prepares).
+  // An archive model installs on device once its transfer ends; its first install phase splits
+  // the two.
   let downloadMs: number | undefined;
+  let installMs: number | undefined;
   if (!(await ParakeetASR.isModelDownloaded(version))) {
     report(`${label} · downloading model…`);
     const downloadStart = Date.now();
-    await LocalParakeetService.downloadModel(version);
-    downloadMs = Date.now() - downloadStart;
+    let installStart: number | undefined;
+    await LocalParakeetService.downloadModel(version, undefined, () => {
+      if (installStart !== undefined) return;
+      installStart = Date.now();
+      report(`${label} · installing model…`);
+    });
+    const downloadEnd = Date.now();
+    downloadMs = (installStart ?? downloadEnd) - downloadStart;
+    installMs = installStart === undefined ? undefined : downloadEnd - installStart;
   }
 
   report(`${label} · loading model…`);
   const { loadMs, modelSizeBytes } = await ParakeetASR.prepare(version);
   if (__DEV__) {
     console.log(
-      `[parakeet-bench] ${label} downloadMs=${downloadMs ?? 0} loadMs=${Math.round(loadMs)}`,
+      `[parakeet-bench] ${label} downloadMs=${downloadMs ?? 0} installMs=${installMs ?? 0} loadMs=${Math.round(loadMs)}`,
     );
   }
 
@@ -105,6 +117,7 @@ async function runParakeetEngine(
     label,
     ok: true,
     modelSizeBytes,
+    installMs,
     loadMs,
     coldInferMs: cold.inferMs,
     warmMedianInferMs: warmMedian,

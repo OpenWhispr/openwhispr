@@ -284,8 +284,9 @@ describe('useModelDownloadStore', () => {
     });
 
     it('credits an archive a previous attempt already staged against that peak', async () => {
-      mockParakeet.stagedDownloadBytes.mockResolvedValue(530 * MB);
-      mockGetFreeDiskStorage.mockResolvedValue(1200 * MB);
+      // The whole pinned zip is staged, so only extraction + compile (~1.2 GB) still needs room.
+      mockParakeet.stagedDownloadBytes.mockResolvedValue(554_985_744);
+      mockGetFreeDiskStorage.mockResolvedValue(1400 * MB);
       await useModelDownloadStore.getState().startDownload('orukeet');
 
       expect(mockParakeet.stagedDownloadBytes).toHaveBeenCalledWith('orukeet');
@@ -313,5 +314,78 @@ describe('useModelDownloadStore', () => {
       await start;
       expect(useModelDownloadStore.getState().downloads.orukeet.status).toBe('idle');
     });
+
+    it('never loads a model whose download was cancelled as its install finished', async () => {
+      let finishInstall: (() => void) | undefined;
+      mockParakeet.downloadModel.mockImplementation(
+        () => new Promise<void>((resolve) => (finishInstall = resolve)),
+      );
+
+      const start = useModelDownloadStore.getState().startDownload('orukeet');
+      await untilCalled(mockParakeet.downloadModel);
+      await useModelDownloadStore.getState().cancelDownload('orukeet');
+      finishInstall?.();
+      await start;
+
+      expect(mockParakeet.prepare).not.toHaveBeenCalled();
+    });
+
+    it('drops the install phase when the install fails', async () => {
+      mockParakeet.downloadModel.mockImplementation(
+        async (_version, _onProgress, onInstallPhase) => {
+          onInstallPhase?.('compiling');
+          throw new Error('Orukeet couldn’t be set up on this device.');
+        },
+      );
+
+      await useModelDownloadStore.getState().startDownload('orukeet');
+
+      expect(useModelDownloadStore.getState().downloads.orukeet).toEqual({
+        status: 'error',
+        progress: 1,
+        error: 'Orukeet couldn’t be set up on this device.',
+        installPhase: undefined,
+      });
+    });
+
+    it('drops the install phase when the install is cancelled', async () => {
+      mockParakeet.downloadModel.mockImplementation(
+        (_version, _onProgress, onInstallPhase) =>
+          new Promise<void>(() => {
+            onInstallPhase?.('extracting');
+          }),
+      );
+
+      useModelDownloadStore.getState().startDownload('orukeet');
+      await untilCalled(mockParakeet.downloadModel);
+      await useModelDownloadStore.getState().cancelDownload('orukeet');
+
+      expect(useModelDownloadStore.getState().downloads.orukeet.installPhase).toBeUndefined();
+    });
+  });
+
+  it.each(['parakeet-v3', 'orukeet'] as const)(
+    'removes whatever a %s download installed when it is cancelled before any install phase',
+    async (key) => {
+      mockParakeet.downloadModel.mockImplementation(() => new Promise<void>(() => undefined));
+
+      useModelDownloadStore.getState().startDownload(key);
+      await untilCalled(mockParakeet.downloadModel);
+      expect(useModelDownloadStore.getState().downloads[key].status).toBe('downloading');
+      await useModelDownloadStore.getState().cancelDownload(key);
+
+      expect(mockParakeet.deleteModel).toHaveBeenCalledWith(key === 'orukeet' ? 'orukeet' : 'v3');
+    },
+  );
+
+  it('clearing what a failed download staged never deletes the model itself', async () => {
+    mockParakeet.downloadModel.mockRejectedValue(new Error('HTTP 500'));
+    await useModelDownloadStore.getState().startDownload('parakeet-v3');
+    expect(useModelDownloadStore.getState().downloads['parakeet-v3'].status).toBe('error');
+
+    await useModelDownloadStore.getState().cancelDownload('parakeet-v3');
+
+    expect(mockParakeet.cancelModelDownload).toHaveBeenCalledWith('v3');
+    expect(mockParakeet.deleteModel).not.toHaveBeenCalled();
   });
 });

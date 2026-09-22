@@ -23,7 +23,10 @@ export interface ModelNotice {
 
 export interface ParakeetTranscribeServiceOptions {
   version: ParakeetVersion;
-  /** Base ISO code hint for v3's language filter; omit for auto language ID. Ignored by v2. */
+  /**
+   * Base ISO code hint for v3's language filter; omit for auto language ID. Ignored by v2 and by
+   * Orukeet, which decodes unconditioned for every language.
+   */
   language?: string;
   wordTimestamps?: boolean;
 }
@@ -38,6 +41,8 @@ export interface ParakeetTranscribeServiceOptions {
  */
 export class LocalParakeetService {
   private static currentVersion: ParakeetVersion | null = null;
+  // Installed versions whose weights failed to load since they last loaded or were deleted.
+  private static failedToLoad = new Set<ParakeetVersion>();
   private static operationChain: Promise<unknown> = Promise.resolve();
 
   private static runExclusive<T>(operation: () => Promise<T>): Promise<T> {
@@ -51,6 +56,15 @@ export class LocalParakeetService {
 
   static isAvailable(): boolean {
     return ParakeetASR.isAvailable();
+  }
+
+  static supportsVersion(version: ParakeetVersion): boolean {
+    return ParakeetASR.supportsVersion(version);
+  }
+
+  /** True when this installed version's weights failed to load and haven't loaded since. */
+  static hasFailedToLoad(version: ParakeetVersion): boolean {
+    return this.failedToLoad.has(version);
   }
 
   static async isModelDownloaded(version: ParakeetVersion): Promise<boolean> {
@@ -107,6 +121,7 @@ export class LocalParakeetService {
         this.currentVersion = null;
       }
       await ParakeetASR.deleteModel(version);
+      this.failedToLoad.delete(version);
     });
   }
 
@@ -126,7 +141,13 @@ export class LocalParakeetService {
     // Native prepare releases the warm engine before loading (two ~600 MB models never share
     // memory), so nothing is warm if the load fails.
     this.currentVersion = null;
-    await ParakeetASR.prepare(version);
+    try {
+      await ParakeetASR.prepare(version);
+    } catch (error) {
+      this.failedToLoad.add(version);
+      throw error;
+    }
+    this.failedToLoad.delete(version);
     this.currentVersion = version;
   }
 

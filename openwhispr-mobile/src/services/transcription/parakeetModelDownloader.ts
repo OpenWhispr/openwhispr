@@ -473,6 +473,10 @@ async function downloadArchiveModel(
   const stagingDirectory = `file://${spec.stagingDirectory}`;
   const archive = `${stagingDirectory}/${ARCHIVE_FILE}`;
 
+  if (spec.installedDirectory !== null) {
+    options.onProgress?.(1);
+    return;
+  }
   if (run.cancelled) throw new DownloadCancelledError();
   // The checksum identifies the archive, so it stands in for the revision.
   await prepareStaging(stagingDirectory, spec.archiveSha256);
@@ -511,6 +515,8 @@ async function downloadArchiveModel(
   } finally {
     subscription?.remove();
   }
+  // The install finished before the cancel reached it; the canceller removes the model.
+  if (run.cancelled) throw new DownloadCancelledError();
   await FileSystem.deleteAsync(stagingDirectory, { idempotent: true });
 }
 

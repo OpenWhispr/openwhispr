@@ -35,7 +35,12 @@ interface ModelDownloadState {
   reset: (key?: LocalModelKey) => void;
 }
 
-const idleEntry = (): ModelDownloadEntry => ({ status: 'idle', progress: 0, error: undefined });
+const idleEntry = (): ModelDownloadEntry => ({
+  status: 'idle',
+  progress: 0,
+  error: undefined,
+  installPhase: undefined,
+});
 
 const idleDownloads = (): Record<LocalModelKey, ModelDownloadEntry> => ({
   'whisper-base': idleEntry(),
@@ -167,11 +172,17 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
         (installPhase) =>
           patchEntry(key, { status: 'preparing', progress: 1, installPhase }, requestId),
       );
+      // A cancel that landed as the install finished already removes the model; don't load it.
+      if (!isCurrentRequest(key, requestId)) return;
       patchEntry(key, { status: 'preparing', progress: 1, installPhase: undefined }, requestId);
       await LocalParakeetService.prepare(version);
       markCompleted(key, requestId);
     } catch (error) {
-      patchEntry(key, { status: 'error', error: (error as Error).message }, requestId);
+      patchEntry(
+        key,
+        { status: 'error', error: (error as Error).message, installPhase: undefined },
+        requestId,
+      );
     }
   };
 
@@ -205,9 +216,10 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
           await LocalWhisperService.cancelModelDownload('base');
         } else {
           await LocalParakeetService.cancelModelDownload(version);
-          // If the transfer already completed and installation or CoreML preparation started,
-          // remove the new model as well; choosing “Don't use Private” should reclaim that storage.
-          if (status === 'preparing') {
+          // An in-flight download may already have installed its model (the last transfer can
+          // finish, or an install start, before the row reports it); remove whatever it produced.
+          // Choosing “Don't use Private” should reclaim that storage.
+          if (status === 'downloading' || status === 'preparing') {
             await LocalParakeetService.deleteModel(version);
           }
         }

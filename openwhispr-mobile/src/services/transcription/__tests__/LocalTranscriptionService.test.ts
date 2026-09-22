@@ -12,7 +12,9 @@ jest.mock('../LocalWhisperService', () => ({
 jest.mock('../LocalParakeetService', () => ({
   LocalParakeetService: {
     isAvailable: jest.fn(() => true),
+    supportsVersion: jest.fn(() => true),
     isModelDownloaded: jest.fn(async () => true),
+    hasFailedToLoad: jest.fn(() => false),
     transcribe: jest.fn(async () => ({ text: 'parakeet text', duration: 2, provider: 'local' })),
     prepare: jest.fn(async () => undefined),
     cancelTranscription: jest.fn(async () => undefined),
@@ -52,6 +54,8 @@ describe('LocalTranscriptionService', () => {
       provider: 'local',
     });
     mockParakeet.isAvailable.mockReturnValue(true);
+    mockParakeet.supportsVersion.mockReturnValue(true);
+    mockParakeet.hasFailedToLoad.mockReturnValue(false);
     // Parakeet v2/v3 installed; Orukeet is opt-in and absent unless a test downloads it.
     mockParakeet.isModelDownloaded.mockImplementation(async (version) => version !== 'orukeet');
     mockParakeet.transcribe.mockResolvedValue({
@@ -109,9 +113,83 @@ describe('LocalTranscriptionService', () => {
     await expect(LocalTranscriptionService.getAvailability()).resolves.toMatchObject({
       parakeetV2Downloaded: true,
       parakeetV3Downloaded: true,
+      orukeetSupported: true,
       orukeetDownloaded: false,
     });
     expect(mockParakeet.isModelDownloaded).toHaveBeenCalledWith('orukeet');
+  });
+
+  it('reports Orukeet unsupported, and never asks for it, on a binary that predates it', async () => {
+    mockParakeet.supportsVersion.mockImplementation((version) => version !== 'orukeet');
+    await expect(LocalTranscriptionService.getAvailability()).resolves.toMatchObject({
+      parakeetV2Downloaded: true,
+      orukeetSupported: false,
+      orukeetDownloaded: false,
+    });
+    expect(mockParakeet.isModelDownloaded).not.toHaveBeenCalledWith('orukeet');
+  });
+
+  describe('when an installed Orukeet fails to load', () => {
+    beforeEach(() => {
+      mockParakeet.isModelDownloaded.mockResolvedValue(true);
+      setLanguages(['en']);
+    });
+
+    it('reroutes that dictation to the model it would otherwise use', async () => {
+      let failed = false;
+      mockParakeet.hasFailedToLoad.mockImplementation(() => failed);
+      mockParakeet.transcribe.mockImplementationOnce(async () => {
+        failed = true;
+        throw new Error('Core ML could not load Encoder.mlmodelc');
+      });
+
+      const response = await LocalTranscriptionService.transcribe('file://a.wav', {
+        language: 'en',
+      });
+
+      expect(mockParakeet.transcribe).toHaveBeenCalledTimes(2);
+      expect(mockParakeet.transcribe).toHaveBeenLastCalledWith('file://a.wav', {
+        version: 'v2',
+        language: 'en',
+        wordTimestamps: undefined,
+      });
+      expect(response.endpoint).toBe('parakeet-v2');
+    });
+
+    it('routes later dictations around it', async () => {
+      mockParakeet.hasFailedToLoad.mockImplementation((version) => version === 'orukeet');
+
+      await LocalTranscriptionService.transcribe('file://a.wav', {});
+
+      expect(mockParakeet.transcribe).toHaveBeenCalledTimes(1);
+      expect(mockParakeet.transcribe).toHaveBeenCalledWith(
+        'file://a.wav',
+        expect.objectContaining({ version: 'v2' }),
+      );
+    });
+
+    it('does not reroute a transcription that failed for another reason', async () => {
+      mockParakeet.transcribe.mockRejectedValueOnce(new Error('decode failed'));
+
+      await expect(LocalTranscriptionService.transcribe('file://a.wav', {})).rejects.toThrow(
+        'decode failed',
+      );
+      expect(mockParakeet.transcribe).toHaveBeenCalledTimes(1);
+    });
+
+    it('prepareForLanguage warms the model it would otherwise use', async () => {
+      let failed = false;
+      mockParakeet.hasFailedToLoad.mockImplementation(() => failed);
+      mockParakeet.prepare.mockImplementationOnce(async () => {
+        failed = true;
+        throw new Error('Core ML could not load Encoder.mlmodelc');
+      });
+
+      await LocalTranscriptionService.prepareForLanguage('en');
+
+      expect(mockParakeet.prepare).toHaveBeenCalledTimes(2);
+      expect(mockParakeet.prepare).toHaveBeenLastCalledWith('v2');
+    });
   });
 
   it('routes auto and mixed selections to Whisper, passing prompt + language through', async () => {

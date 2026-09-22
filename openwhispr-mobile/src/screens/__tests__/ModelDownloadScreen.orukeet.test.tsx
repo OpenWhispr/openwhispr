@@ -66,6 +66,7 @@ const withAvailability = (overrides: Partial<LocalEngineAvailability> = {}): voi
     parakeetV2Downloaded: true,
     parakeetV3Downloaded: true,
     whisperDownloaded: true,
+    orukeetSupported: true,
     orukeetDownloaded: false,
     ...overrides,
   });

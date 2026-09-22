@@ -38,6 +38,15 @@ function descriptorFor(
   return { engine: 'whisper', label: 'Whisper base' };
 }
 
+/** The routed engine was Orukeet and loading it just failed, so re-routing picks another model. */
+function orukeetFailedToLoad(choice: LocalEngineChoice): boolean {
+  return (
+    choice.engine === 'parakeet' &&
+    choice.version === 'orukeet' &&
+    LocalParakeetService.hasFailedToLoad('orukeet')
+  );
+}
+
 function missingModelError(choice: Extract<LocalEngineChoice, { engine: 'none' }>): Error {
   const label =
     choice.preferred === 'whisper'
@@ -62,11 +71,12 @@ export class LocalTranscriptionService {
 
   static async getAvailability(): Promise<LocalEngineAvailability> {
     const parakeetSupported = LocalParakeetService.isAvailable();
+    const orukeetSupported = parakeetSupported && LocalParakeetService.supportsVersion('orukeet');
     const [parakeetV2Downloaded, parakeetV3Downloaded, orukeetDownloaded] = parakeetSupported
       ? await Promise.all([
           LocalParakeetService.isModelDownloaded('v2'),
           LocalParakeetService.isModelDownloaded('v3'),
-          LocalParakeetService.isModelDownloaded('orukeet'),
+          orukeetSupported ? LocalParakeetService.isModelDownloaded('orukeet') : false,
         ])
       : [false, false, false];
 
@@ -81,6 +91,7 @@ export class LocalTranscriptionService {
       // The fallback tier is specifically multilingual Whisper base. English-only or smaller
       // legacy artifacts must not make unsupported-language routes appear ready.
       whisperDownloaded: whisperModels.some((model) => model.name === 'base' && model.downloaded),
+      orukeetSupported,
       orukeetDownloaded,
     };
   }
@@ -91,7 +102,12 @@ export class LocalTranscriptionService {
   }> {
     const languages = getPreferredTranscriptionLanguages();
     const availability = await this.getAvailability();
-    return { languages, choice: selectLocalEngine(languages, availability) };
+    // An installed Orukeet that can't load on this device must not strand every in-set
+    // dictation; route as if it weren't there until it loads again.
+    const usable = LocalParakeetService.hasFailedToLoad('orukeet')
+      ? { ...availability, orukeetDownloaded: false }
+      : availability;
+    return { languages, choice: selectLocalEngine(languages, usable) };
   }
 
   static async transcribe(
@@ -103,12 +119,18 @@ export class LocalTranscriptionService {
     if (choice.engine === 'parakeet') {
       // Don't keep both runtimes' weights resident (~600 MB + ~500 MB) — release the idle one.
       await LocalWhisperService.cleanup();
-      const response = await LocalParakeetService.transcribe(audioUri, {
-        version: choice.version,
-        // Exactly one selected language → pass the decoder hint; multi-in-v3 → auto language ID.
-        language: languages.length === 1 ? languages[0] : undefined,
-        wordTimestamps: options.wordTimestamps,
-      });
+      let response: TranscriptionResponse;
+      try {
+        response = await LocalParakeetService.transcribe(audioUri, {
+          version: choice.version,
+          // Exactly one selected language → pass the decoder hint; multi-in-v3 → auto language ID.
+          language: languages.length === 1 ? languages[0] : undefined,
+          wordTimestamps: options.wordTimestamps,
+        });
+      } catch (error) {
+        if (orukeetFailedToLoad(choice)) return this.transcribe(audioUri, options);
+        throw error;
+      }
       const endpoint = choice.version === 'orukeet' ? 'orukeet' : `parakeet-${choice.version}`;
       return { ...response, endpoint };
     }
@@ -135,7 +157,12 @@ export class LocalTranscriptionService {
   static async prepareForLanguage(language?: string): Promise<void> {
     const { choice } = await this.resolveEngine();
     if (choice.engine === 'parakeet') {
-      await LocalParakeetService.prepare(choice.version);
+      try {
+        await LocalParakeetService.prepare(choice.version);
+      } catch (error) {
+        if (orukeetFailedToLoad(choice)) return this.prepareForLanguage(language);
+        throw error;
+      }
       return;
     }
     if (choice.engine === 'whisper') {

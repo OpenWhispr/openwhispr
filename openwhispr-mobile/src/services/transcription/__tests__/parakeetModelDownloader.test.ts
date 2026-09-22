@@ -1222,6 +1222,41 @@ describe('parakeetModelDownloader', () => {
       await expect(download).rejects.toThrow(/cancelled/i);
     });
 
+    it('reports a cancellation when cancel lands while an installation is succeeding', async () => {
+      installResumableFactory();
+      let finishInstall: (() => void) | undefined;
+      mockInstallFromArchive.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            finishInstall = resolve;
+          }),
+      );
+
+      const download = downloadParakeetModel('orukeet', { httpClient: noListing() });
+      await flush();
+      expect(mockInstallFromArchive).toHaveBeenCalled();
+
+      await cancelParakeetDownload('orukeet');
+      finishInstall?.();
+
+      await expect(download).rejects.toThrow(/cancelled/i);
+    });
+
+    it('neither downloads nor installs a model that is already installed', async () => {
+      mockParakeetASR.modelSpec.mockResolvedValue({
+        ...ARCHIVE_SPEC,
+        installedDirectory: '/Library/Application Support/OpenWhispr/orukeet/models/int8-24df',
+      });
+      installResumableFactory();
+      const onProgress = jest.fn();
+
+      await downloadParakeetModel('orukeet', { onProgress, httpClient: noListing() });
+
+      expect(mockCreateDownloadResumable).not.toHaveBeenCalled();
+      expect(mockInstallFromArchive).not.toHaveBeenCalled();
+      expect(onProgress).toHaveBeenLastCalledWith(1);
+    });
+
     it('kicks a stalled archive transfer with pause/resume like any other file', async () => {
       jest.useFakeTimers();
       installResumableFactory({ hang: (destination) => destination === ARCHIVE_ZIP });
