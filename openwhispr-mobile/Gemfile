@@ -1,8 +1,8 @@
 source "https://rubygems.org"
 
 # CocoaPods + the cocoapods-spm plugin. cocoapods-spm lets the iOS Podfile consume FluidAudio
-# (speaker diarization) as a Swift Package compiled from source — see
-# plugins/speaker-diarization/withSpeakerDiarization.js.
+# (speaker diarization, Parakeet ASR) and OrukeetCoreML as Swift Packages compiled from source —
+# see plugins/swift-packages/withSwiftPackages.js.
 #
 # Setup:  bundle install
 # Then:   npx expo prebuild -p ios   (Expo runs `bundle exec pod install` when a Gemfile is present;

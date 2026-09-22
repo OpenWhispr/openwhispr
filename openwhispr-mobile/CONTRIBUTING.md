@@ -61,6 +61,8 @@ npm run clean          # format + lint + typecheck
 
 `npm run ios` runs `expo run:ios`, which executes `expo prebuild` and compiles the native project. The keyboard extension is wired in by the config plugin at `plugins/keyboard-extension/withKeyboardExtension.js` during prebuild.
 
+The on-device transcription and diarization modules build FluidAudio and OrukeetCoreML from source as Swift packages. `plugins/swift-packages/withSwiftPackages.js` declares both in the generated `ios/Podfile` (`cocoapods-spm`, installed by `bundle install`). After changing a package pin, regenerate the native project with `OPENWHISPR_APP_ENV=development npx expo prebuild -p ios --clean`; the plugin refuses to patch a Podfile left by an earlier prebuild. If `pod install` fails with `Unicode Normalization not appropriate for ASCII-8BIT`, set `LANG=en_US.UTF-8` in your shell.
+
 OpenWhispr uses custom native modules, so Expo Go is not a supported development environment. Use `npm run ios` or `npm run android` to create a development build.
 
 The `android`, `ios`, and `prebuild` npm scripts use POSIX environment-variable syntax. On Windows, put `OPENWHISPR_APP_ENV=development` in `.env.local` and run `npx expo run:android` or `npx expo prebuild` directly. iOS builds still require macOS.

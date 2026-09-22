@@ -22,8 +22,8 @@ Pod::Spec.new do |s|
 
   # FluidAudio (speaker diarization) is consumed as a Swift Package compiled from source via the
   # cocoapods-spm plugin — FluidAudio's recommended CocoaPods integration. The package SOURCE
-  # (git url + pinned version) is declared in the Podfile by plugins/speaker-diarization/
-  # withSpeakerDiarization.js; per cocoapods-spm, the podspec must NOT restate the source here.
+  # (git url + pinned version) is declared in the Podfile by plugins/swift-packages/
+  # withSwiftPackages.js; per cocoapods-spm, the podspec must NOT restate the source here.
   s.spm_dependency 'FluidAudio/FluidAudio'
 
   s.pod_target_xcconfig = {
