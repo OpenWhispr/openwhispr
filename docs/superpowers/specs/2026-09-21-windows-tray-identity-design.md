@@ -21,7 +21,7 @@ Use the permanent Windows production GUID **`9afd9bd5-53da-42ef-8334-6e2b494c66f
 
 `main.js` resolves and sets the channel before loading `TrayManager`, so the tray reuses that value instead of inferring a second one. Development and staging have their own profile and single-instance lock, so they can run beside production. They receive no GUID, even when packaged and signed, so they cannot claim the production identifier.
 
-Installed and portable production builds share this identity. Both use the production profile and the same single-instance lock, so they never run at the same time. Native acceptance must exercise the extracted portable executable, whose temporary path can change between builds. The portable target was removed in PR #2301; only installed production builds carry this identity now.
+Installed production builds carry this identity. Portable production builds shared it until the portable target was removed in PR #2301.
 
 ## Signing contract
 
@@ -67,7 +67,7 @@ Native evidence, for each Windows version:
 2. Manually promote/reorder the icon, quit normally, relaunch twice, reboot, then upgrade to a second candidate signed on a different day. Azure Trusted Signing issues short-lived certificates that rotate daily, so this pair checks that Windows keys the GUID to the publisher rather than to one certificate. Record visibility and order after each step.
 3. End the app from Task Manager, then relaunch. A failed icon add is only logged, so confirm the icon returns after a process that never removed it, not only after a normal quit.
 4. Put the icon back in overflow and repeat relaunch/update checks to prove the user's hidden choice is respected.
-5. Repeat at another installation path. Record each running inner executable's path, signature status, subject, version, and SHA. (The original step also covered two signed _portable_ versions; the portable target was removed in PR #2301, so that half no longer applies.)
+5. Repeat at another installation path. Record the running executable's path, signature status, subject, version, and SHA.
 6. Run unsigned production packages and development/staging variants from two paths. Their tray must remain usable, and a separately runnable channel must not take over production's identity.
 7. Check left-click toggle, right-click menu, quick actions, quit, and no extra icons. Record actual ordering without claiming guaranteed adjacency to Windows controls.
 

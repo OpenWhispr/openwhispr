@@ -57,8 +57,8 @@ function getRelaunchOptions({ argv, protocol, appImagePath }) {
   return appImagePath ? { launcherPath: appImagePath, args } : { args };
 }
 
-// Detached from this process: polls until the pid is gone (and the mount with it),
-// then execs the AppImage with the surviving args.
+// Polls until the pid exits (and the FUSE mount with it), then execs the AppImage
+// with the surviving args.
 function getRelaunchWaiter({ launcherPath, args, pid }) {
   return {
     file: "/bin/sh",
