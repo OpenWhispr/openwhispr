@@ -21,18 +21,16 @@ import {
 import { getProviderPolicy } from '@/services/providers/ProviderPolicy';
 import { isSecureHttpEndpoint, normalizeBaseUrl } from '@shared/ai/endpoints';
 import { pickDefaultModelId } from '@shared/ai/providerDefaultModel';
+import { type InferenceMode, type InferenceSelection } from '@shared/ai/routing';
 import {
-  getProvidersForScope,
-  resolveInferenceRoute,
-  type InferenceMode,
-  type InferenceScope,
-  type InferenceSelection,
-} from '@shared/ai/routing';
+  getMobileProvidersForScope,
+  resolveMobileInferenceRoute,
+  type MobileInferenceScope,
+} from '@/lib/mobileProviders';
 
-const SCOPES: Record<InferenceScope, string> = {
+const SCOPES: Record<MobileInferenceScope, string> = {
   dictation: 'Dictation & Keyboard',
   upload: 'Uploads',
-  meeting: 'Live Meetings',
   cleanup: 'Text Cleanup',
   notes: 'Note Formatting & Titles',
   agent: 'Chat & Agents',
@@ -45,15 +43,7 @@ const MODES: Record<InferenceMode, string> = {
 type Picker = 'scope' | 'mode' | 'provider' | 'model';
 const PROVIDER_SETUP_URLS: Record<string, string> = {
   openai: 'https://platform.openai.com/api-keys',
-  anthropic: 'https://console.anthropic.com/settings/keys',
   groq: 'https://console.groq.com/keys',
-  xai: 'https://console.x.ai',
-  mistral: 'https://console.mistral.ai/api-keys',
-  gemini: 'https://aistudio.google.com/apikey',
-  corti: 'https://www.corti.ai/',
-  tinfoil: 'https://tinfoil.sh/inference',
-  deepgram: 'https://console.deepgram.com/',
-  assemblyai: 'https://www.assemblyai.com/dashboard/api-keys',
   openrouter: 'https://openrouter.ai/keys',
 };
 
@@ -62,7 +52,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const setActiveMode = useProcessingModeStore((state) => state.setActiveMode);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
-  const [scope, setScope] = useState<InferenceScope>('dictation');
+  const [scope, setScope] = useState<MobileInferenceScope>('dictation');
   const [selection, setSelection] = useState<InferenceSelection>(
     config?.inference?.dictation ?? {
       mode:
@@ -76,8 +66,6 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   const remembered = useRef<Record<string, InferenceSelection>>({});
   const [picker, setPicker] = useState<Picker | null>(null);
   const [apiKey, setApiKey] = useState('');
-  const [clientId, setClientId] = useState('');
-  const [clientSecret, setClientSecret] = useState('');
   const [configured, setConfigured] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +78,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     },
     [],
   );
-  const providers = getProvidersForScope(scope);
+  const providers = getMobileProvidersForScope(scope);
   const provider =
     providers.find((candidate) => candidate.id === selection.providerId) ?? providers[0];
   const modelId = selection.modelId ?? pickDefaultModelId(provider);
@@ -99,8 +87,6 @@ export function ProviderSettingsScreen(): React.JSX.Element {
 
   function clearInputs(): void {
     setApiKey('');
-    setClientId('');
-    setClientSecret('');
     setError(null);
     setNotice(null);
   }
@@ -127,7 +113,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     setPicker(picker === next ? null : next);
   }
 
-  function chooseScope(next: InferenceScope): void {
+  function chooseScope(next: MobileInferenceScope): void {
     remembered.current[scope] = selection;
     setScope(next);
     setDiscoveredModels([]);
@@ -174,24 +160,10 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         }
       }
       const reference = await getProviderCredentialReference(provider.id, endpoint);
-      const hasNewCredential =
-        provider.id === 'corti' ? !!(clientId.trim() || clientSecret.trim()) : !!apiKey.trim();
-      if (
-        provider.id === 'corti' &&
-        hasNewCredential &&
-        !(clientId.trim() && clientSecret.trim())
-      ) {
-        setError('Enter both the Corti client ID and client secret.');
-        return null;
-      }
+      const hasNewCredential = !!apiKey.trim();
       let hasCredential = (await getProviderCredentialStatus(reference)).isConfigured;
       if (hasNewCredential) {
-        await setProviderCredential(
-          reference,
-          provider.id === 'corti'
-            ? { clientId: clientId.trim(), clientSecret: clientSecret.trim() }
-            : { apiKey: apiKey.trim() },
-        );
+        await setProviderCredential(reference, { apiKey: apiKey.trim() });
         hasCredential = true;
         clearInputs();
         setConfigured(true);
@@ -206,12 +178,6 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         modelId: modelId.trim() || 'catalog-probe',
         ...(provider.id === 'custom' ? { endpoint } : {}),
         ...(hasCredential ? { credentialRef: reference } : {}),
-        ...(provider.id === 'corti'
-          ? {
-              cortiEnvironment: selection.cortiEnvironment ?? 'us',
-              cortiTenant: selection.cortiTenant?.trim() || 'base',
-            }
-          : {}),
       };
     }
     return saved;
@@ -267,7 +233,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     try {
       const draft = await prepareSelection(action === 'test');
       if (!draft) return;
-      const resolved = resolveInferenceRoute({
+      const resolved = resolveMobileInferenceRoute({
         scope,
         selection: draft,
         policy: await getProviderPolicy(),
@@ -304,9 +270,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         setNotice(
           result.verification === 'inference'
             ? 'Text inference succeeded for this model.'
-            : result.verification === 'credentials'
-              ? 'Credentials accepted. Transcription access has not been verified.'
-              : 'Model catalog accessible. Transcription and inference access have not been verified.',
+            : 'Model catalog accessible. Transcription and inference access have not been verified.',
         );
       }
     } catch (failure: unknown) {
@@ -382,7 +346,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
           onPress={busy ? undefined : () => openPicker('scope')}
         />
         {picker === 'scope' &&
-          (Object.keys(SCOPES) as InferenceScope[]).map((item) =>
+          (Object.keys(SCOPES) as MobileInferenceScope[]).map((item) =>
             choice(SCOPES[item], item === scope, () => chooseScope(item)),
           )}
         <SettingsRow
@@ -482,69 +446,17 @@ export function ProviderSettingsScreen(): React.JSX.Element {
                   editable={!busy}
                 />
               ) : null}
-              {provider.id === 'corti' ? (
-                <>
-                  <Text className="text-[13px] text-secondaryLabel">Corti region</Text>
-                  <View className="flex-row gap-2">
-                    {(['us', 'eu'] as const).map((cortiEnvironment) => (
-                      <Button
-                        key={cortiEnvironment}
-                        variant={
-                          (selection.cortiEnvironment ?? 'us') === cortiEnvironment
-                            ? 'default'
-                            : 'outline'
-                        }
-                        disabled={busy}
-                        onPress={() => setSelection({ ...selection, cortiEnvironment })}
-                      >
-                        {cortiEnvironment.toUpperCase()}
-                      </Button>
-                    ))}
-                  </View>
-                  <Input
-                    label="Tenant"
-                    accessibilityLabel="Corti tenant"
-                    value={selection.cortiTenant ?? 'base'}
-                    onChangeText={(cortiTenant) => setSelection({ ...selection, cortiTenant })}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!busy}
-                  />
-                  <Input
-                    label="Client ID"
-                    accessibilityLabel="Client ID"
-                    value={clientId}
-                    onChangeText={setClientId}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!busy}
-                  />
-                  <Input
-                    label="Client secret"
-                    accessibilityLabel="Client secret"
-                    value={clientSecret}
-                    onChangeText={setClientSecret}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!busy}
-                  />
-                </>
-              ) : (
-                <Input
-                  label={provider.id === 'custom' ? 'API key (optional)' : 'API key'}
-                  accessibilityLabel="API key"
-                  value={apiKey}
-                  onChangeText={setApiKey}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder={
-                    configured ? 'Leave blank to keep saved credential' : 'Enter API key'
-                  }
-                  editable={!busy}
-                />
-              )}
+              <Input
+                label={provider.id === 'custom' ? 'API key (optional)' : 'API key'}
+                accessibilityLabel="API key"
+                value={apiKey}
+                onChangeText={setApiKey}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder={configured ? 'Leave blank to keep saved credential' : 'Enter API key'}
+                editable={!busy}
+              />
               {PROVIDER_SETUP_URLS[provider.id] ? (
                 <Button
                   variant="ghost"
@@ -571,8 +483,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
             <View className="gap-3 p-1">
               <Text className="text-[13px] text-secondaryLabel">
                 Checks save the credential entered above. Text checks send a short test prompt and
-                may incur provider charges; transcription checks verify credentials or catalog
-                access only.
+                may incur provider charges; transcription checks verify catalog access only.
               </Text>
               <Button variant="outline" disabled={busy} onPress={() => diagnose('test')}>
                 Check connection

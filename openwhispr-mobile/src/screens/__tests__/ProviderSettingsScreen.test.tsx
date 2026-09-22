@@ -142,23 +142,18 @@ it('removes an existing credential and requires a replacement before saving', as
   expect(mockUpdateConfig).not.toHaveBeenCalled();
 });
 
-it('stores Corti credentials as a pair in secure storage', async () => {
+it('lists only the supported providers and no Live Meetings workflow', () => {
   render(<ProviderSettingsScreen />);
   enableProviders();
-  chooseProvider('Corti');
-  fireEvent.changeText(screen.getByLabelText('Client ID'), 'test-client');
-  fireEvent.press(screen.getByText('Save selection'));
-  await screen.findByText('Enter both the Corti client ID and client secret.');
-  expect(mockSetCredential).not.toHaveBeenCalled();
-  fireEvent.changeText(screen.getByLabelText('Client secret'), 'test-secret');
-  fireEvent.press(screen.getByText('Save selection'));
-  await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
-  expect(mockSetCredential).toHaveBeenCalledWith('provider.corti', {
-    clientId: 'test-client',
-    clientSecret: 'test-secret',
-  });
-  expect(JSON.stringify(mockUpdateConfig.mock.calls)).not.toContain('test-secret');
-  expect(screen.getByLabelText('Client secret').props.value).toBe('');
+  fireEvent.press(screen.getByText('Provider'));
+  // OpenAI is both the selected row's subtitle and a picker choice.
+  expect(screen.getAllByText('OpenAI')).toHaveLength(2);
+  expect(screen.getByText('Groq')).toBeTruthy();
+  expect(screen.getByText('Custom')).toBeTruthy();
+  expect(screen.queryByText('Corti')).toBeNull();
+  expect(screen.queryByText('Tinfoil')).toBeNull();
+  fireEvent.press(screen.getByText('Workflow'));
+  expect(screen.queryByText('Live Meetings')).toBeNull();
 });
 
 it('saves text workflow selection independently from the dictation mode', async () => {
@@ -167,14 +162,14 @@ it('saves text workflow selection independently from the dictation mode', async 
   fireEvent.press(screen.getByText('Workflow'));
   fireEvent.press(screen.getByText('Text Cleanup'));
   enableProviders();
-  chooseProvider('Anthropic');
+  chooseProvider('Groq');
   fireEvent.changeText(screen.getByLabelText('API key'), 'test-text-key');
   fireEvent.press(screen.getByText('Save selection'));
   await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
   expect(mockUpdateConfig.mock.calls[0][0]).toMatchObject({
     inference: {
       dictation: { mode: 'local' },
-      cleanup: { mode: 'providers', providerId: 'anthropic' },
+      cleanup: { mode: 'providers', providerId: 'groq' },
     },
   });
   expect(mockUpdateConfig.mock.calls[0][0].defaultMode).toBeUndefined();
