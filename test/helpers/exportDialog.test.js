@@ -90,6 +90,10 @@ test.before(() => {
   );
 });
 
+test.beforeEach(() => {
+  saveDialogOptions = undefined;
+});
+
 test.after(() => {
   Module._load = originalLoad;
 });
@@ -103,3 +107,18 @@ test("Markdown transcript export limits the save dialog to Markdown files", asyn
   });
   assert.deepEqual(result, { success: false });
 });
+
+for (const [format, name] of [
+  ["md", "Markdown"],
+  ["txt", "Text"],
+]) {
+  test(`${name} note export limits the save dialog to ${name} files`, async () => {
+    const result = await handlers.get("export-note")({}, 1, format);
+
+    assert.deepEqual(saveDialogOptions, {
+      defaultPath: `Team sync.${format}`,
+      filters: [{ name, extensions: [format] }],
+    });
+    assert.deepEqual(result, { success: false });
+  });
+}
