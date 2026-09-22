@@ -11,6 +11,8 @@ export interface LocalEngineAvailability {
   parakeetV2Downloaded: boolean;
   parakeetV3Downloaded: boolean;
   whisperDownloaded: boolean;
+  /** Opt-in: never recommended, but once downloaded it serves every in-set selection. */
+  orukeetDownloaded: boolean;
 }
 
 export type LocalEngineChoice =
@@ -19,11 +21,12 @@ export type LocalEngineChoice =
   | { engine: 'none'; preferred: 'parakeet-v2' | 'parakeet-v3' | 'whisper' };
 
 /**
- * The 25 languages of NVIDIA parakeet-tdt-0.6b-v3 (per the official model card). FluidAudio
- * 0.15.4's `Language` enum (Sources/FluidAudio/Shared/TokenLanguageFilter.swift) is a superset —
- * every code here has an enum case, so the per-language decoder hint works for all of them.
+ * The 25 languages of NVIDIA parakeet-tdt-0.6b-v3 (per the official model card), which Orukeet —
+ * a v3 fine-tune — covers as well. FluidAudio's `Language` enum
+ * (Sources/FluidAudio/Shared/TokenLanguageFilter.swift) is a superset — every code here has an
+ * enum case, so the per-language decoder hint works for all of them.
  */
-export const PARAKEET_V3_LANGUAGES: ReadonlySet<string> = new Set([
+export const PARAKEET_FAMILY_LANGUAGES: ReadonlySet<string> = new Set([
   'bg',
   'hr',
   'cs',
@@ -51,6 +54,17 @@ export const PARAKEET_V3_LANGUAGES: ReadonlySet<string> = new Set([
   'uk',
 ]);
 
+const PARAKEET_MODEL_LABELS: Record<ParakeetVersion, string> = {
+  v2: 'Parakeet v2',
+  v3: 'Parakeet v3',
+  orukeet: 'Orukeet',
+};
+
+/** Display name of a Parakeet-runtime model, as used in labels and missing-model errors. */
+export function parakeetModelLabel(version: ParakeetVersion): string {
+  return PARAKEET_MODEL_LABELS[version];
+}
+
 /** Region-stripped, deduped base ISO codes with 'auto'/empties removed. */
 function normalizeLanguages(languages: readonly string[]): string[] {
   const normalized = languages
@@ -66,11 +80,12 @@ function normalizeLanguages(languages: readonly string[]): string[] {
  * - empty ('auto') or anything outside v3's coverage → Whisper (attempts all ~99 languages)
  *
  * Per-recording engine routing is impossible — the spoken language isn't known before
- * transcription — so a mixed selection like en+he must go to Whisper for everything.
+ * transcription — so a mixed selection like en+he must go to Whisper for everything. Orukeet is
+ * opt-in and never preferred; selectLocalEngine switches to it once it is downloaded.
  */
 export function preferredEngineForLanguages(
   languages: readonly string[],
-): { engine: 'parakeet'; version: ParakeetVersion } | { engine: 'whisper' } {
+): { engine: 'parakeet'; version: 'v2' | 'v3' } | { engine: 'whisper' } {
   const normalized = normalizeLanguages(languages);
   if (normalized.length === 0) {
     return { engine: 'whisper' };
@@ -78,16 +93,16 @@ export function preferredEngineForLanguages(
   if (normalized.length === 1 && normalized[0] === 'en') {
     return { engine: 'parakeet', version: 'v2' };
   }
-  if (normalized.every((code) => PARAKEET_V3_LANGUAGES.has(code))) {
+  if (normalized.every((code) => PARAKEET_FAMILY_LANGUAGES.has(code))) {
     return { engine: 'parakeet', version: 'v3' };
   }
   return { engine: 'whisper' };
 }
 
 /**
- * Resolve the preferred engine against what's actually installed. Fallback order: preferred
- * Parakeet → Whisper if downloaded → 'none' (caller surfaces a download prompt). Whisper-bound
- * selections never fall "up" to Parakeet — it can't cover them.
+ * Resolve the preferred engine against what's actually installed. Fallback order: Orukeet if the
+ * user downloaded it → preferred Parakeet → Whisper if downloaded → 'none' (caller surfaces a
+ * download prompt). Whisper-bound selections never fall "up" to Parakeet — it can't cover them.
  */
 export function selectLocalEngine(
   languages: readonly string[],
@@ -96,6 +111,10 @@ export function selectLocalEngine(
   const preferred = preferredEngineForLanguages(languages);
 
   if (preferred.engine === 'parakeet' && availability.parakeetSupported) {
+    // Downloading Orukeet is the opt-in; it shares v3's language set, so it takes over from both.
+    if (availability.orukeetDownloaded) {
+      return { engine: 'parakeet', version: 'orukeet' };
+    }
     const downloaded =
       preferred.version === 'v2'
         ? availability.parakeetV2Downloaded

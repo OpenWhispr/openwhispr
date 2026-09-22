@@ -1,7 +1,11 @@
+jest.mock('expo-file-system/legacy', () => ({
+  readAsStringAsync: jest.fn(async (uri: string) => `contents of ${uri}`),
+}));
 jest.mock('../../../../modules/parakeet-asr/src', () => ({
   ParakeetASR: {
     isAvailable: jest.fn(() => true),
     isModelDownloaded: jest.fn(async () => true),
+    modelSpec: jest.fn(),
     deleteModel: jest.fn(async () => undefined),
     modelSizeBytes: jest.fn(async () => 0),
     prepare: jest.fn(async () => ({ loadMs: 5, modelSizeBytes: 1 })),
@@ -108,6 +112,19 @@ describe('LocalParakeetService.transcribe', () => {
     });
   });
 
+  it('re-prepares the warm version after a failed switch, since native prepare releases it first', async () => {
+    await LocalParakeetService.transcribe('file://a.wav', { version: 'v3' });
+    mockNative.prepare.mockRejectedValueOnce(new Error('Orukeet failed to load'));
+    await expect(
+      LocalParakeetService.transcribe('file://b.wav', { version: 'orukeet' }),
+    ).rejects.toThrow('Orukeet failed to load');
+
+    await LocalParakeetService.transcribe('file://c.wav', { version: 'v3' });
+
+    expect(mockNative.prepare).toHaveBeenCalledTimes(3);
+    expect(mockNative.prepare).toHaveBeenLastCalledWith('v3');
+  });
+
   it('re-prepares after cancelTranscription released the engine', async () => {
     await LocalParakeetService.transcribe('file://a.wav', { version: 'v2' });
     await LocalParakeetService.cancelTranscription();
@@ -131,6 +148,26 @@ describe('LocalParakeetService.transcribe', () => {
     expect(mockDownloadParakeetModel).toHaveBeenCalledWith('v3', { onProgress });
   });
 
+  it('forwards install phases of an archive download to the caller', async () => {
+    const onProgress = jest.fn();
+    const onInstallPhase = jest.fn();
+    await LocalParakeetService.downloadModel('orukeet', onProgress, onInstallPhase);
+
+    expect(mockDownloadParakeetModel).toHaveBeenCalledWith('orukeet', {
+      onProgress,
+      onInstallPhase,
+    });
+  });
+
+  it('names Orukeet in its missing-model error', async () => {
+    mockNative.isModelDownloaded.mockResolvedValue(false);
+    const attempt = LocalParakeetService.transcribe('file://a.wav', { version: 'orukeet' });
+    await expect(attempt).rejects.toThrow(/"Orukeet"/);
+    await attempt.catch((error: Error) => {
+      expect(error.message).toMatch(LOCAL_MODEL_MISSING_PATTERN);
+    });
+  });
+
   it('forwards model-download cancellation to the downloader', async () => {
     await LocalParakeetService.cancelModelDownload('v3');
     expect(mockCancelParakeetDownload).toHaveBeenCalledWith('v3');
@@ -140,5 +177,54 @@ describe('LocalParakeetService.transcribe', () => {
     mockStagedParakeetBytes.mockResolvedValue(445);
     await expect(LocalParakeetService.stagedDownloadBytes('v2')).resolves.toBe(445);
     expect(mockStagedParakeetBytes).toHaveBeenCalledWith('v2');
+  });
+});
+
+describe('LocalParakeetService.modelNotices', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockNative.isAvailable.mockReturnValue(true);
+  });
+
+  it('reads the attribution notices shipped inside an installed archive model', async () => {
+    mockNative.modelSpec.mockResolvedValue({
+      kind: 'archive',
+      archiveUrl: 'https://example.test/model.zip',
+      archiveBytes: 10,
+      archiveSha256: 'abc',
+      stagingDirectory: '/AppSupport/OpenWhispr/orukeet.downloading',
+      installedDirectory: '/AppSupport/OpenWhispr/orukeet/int8-abc',
+    });
+
+    await expect(LocalParakeetService.modelNotices('orukeet')).resolves.toEqual([
+      {
+        fileName: 'NOTICE.md',
+        text: 'contents of file:///AppSupport/OpenWhispr/orukeet/int8-abc/NOTICE.md',
+      },
+      {
+        fileName: 'COREML-NOTICE.txt',
+        text: 'contents of file:///AppSupport/OpenWhispr/orukeet/int8-abc/COREML-NOTICE.txt',
+      },
+    ]);
+  });
+
+  it('returns nothing until the archive model is installed', async () => {
+    mockNative.modelSpec.mockResolvedValue({
+      kind: 'archive',
+      archiveUrl: 'https://example.test/model.zip',
+      archiveBytes: 10,
+      archiveSha256: 'abc',
+      stagingDirectory: '/AppSupport/OpenWhispr/orukeet.downloading',
+      installedDirectory: null,
+    });
+
+    await expect(LocalParakeetService.modelNotices('orukeet')).resolves.toEqual([]);
+  });
+
+  it('returns nothing without the native module', async () => {
+    mockNative.isAvailable.mockReturnValue(false);
+
+    await expect(LocalParakeetService.modelNotices('orukeet')).resolves.toEqual([]);
+    expect(mockNative.modelSpec).not.toHaveBeenCalled();
   });
 });

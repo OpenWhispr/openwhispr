@@ -8,6 +8,7 @@ const availability = (
   parakeetV2Downloaded: false,
   parakeetV3Downloaded: false,
   whisperDownloaded: true,
+  orukeetDownloaded: false,
   ...overrides,
 });
 

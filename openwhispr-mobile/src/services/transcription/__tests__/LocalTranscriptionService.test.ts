@@ -52,7 +52,8 @@ describe('LocalTranscriptionService', () => {
       provider: 'local',
     });
     mockParakeet.isAvailable.mockReturnValue(true);
-    mockParakeet.isModelDownloaded.mockResolvedValue(true);
+    // Parakeet v2/v3 installed; Orukeet is opt-in and absent unless a test downloads it.
+    mockParakeet.isModelDownloaded.mockImplementation(async (version) => version !== 'orukeet');
     mockParakeet.transcribe.mockResolvedValue({
       text: 'parakeet text',
       duration: 2,
@@ -86,6 +87,31 @@ describe('LocalTranscriptionService', () => {
       wordTimestamps: undefined,
     });
     expect(response.endpoint).toBe('parakeet-v3');
+  });
+
+  it('routes in-set selections to a downloaded Orukeet ahead of Parakeet v2/v3', async () => {
+    mockParakeet.isModelDownloaded.mockResolvedValue(true);
+    setLanguages(['en']);
+    const response = await LocalTranscriptionService.transcribe('file://a.wav', {
+      language: 'en',
+      wordTimestamps: true,
+    });
+    expect(mockParakeet.transcribe).toHaveBeenCalledWith('file://a.wav', {
+      version: 'orukeet',
+      language: 'en',
+      wordTimestamps: true,
+    });
+    expect(mockWhisper.cleanup).toHaveBeenCalled();
+    expect(response.endpoint).toBe('orukeet');
+  });
+
+  it('reports whether Orukeet is downloaded', async () => {
+    await expect(LocalTranscriptionService.getAvailability()).resolves.toMatchObject({
+      parakeetV2Downloaded: true,
+      parakeetV3Downloaded: true,
+      orukeetDownloaded: false,
+    });
+    expect(mockParakeet.isModelDownloaded).toHaveBeenCalledWith('orukeet');
   });
 
   it('routes auto and mixed selections to Whisper, passing prompt + language through', async () => {

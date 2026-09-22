@@ -6,7 +6,11 @@ import { LocalWhisperService } from '@/services/transcription/LocalWhisperServic
 import { LocalParakeetService } from '@/services/transcription/LocalParakeetService';
 import { LocalTranscriptionService } from '@/services/transcription/LocalTranscriptionService';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
-import { getLocalModelCatalog, type LocalModelCatalogEntry } from '@/lib/localModelCatalog';
+import {
+  getLocalModelCatalog,
+  parakeetVersionForKey,
+  type LocalModelCatalogEntry,
+} from '@/lib/localModelCatalog';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useModelDownloadStore, type LocalModelKey } from '@/store/useModelDownloadStore';
 import { confirmDestructive } from '@/lib/alerts';
@@ -61,9 +65,10 @@ export default function ModelDownloadScreen() {
     Promise.all([
       LocalParakeetService.stagedDownloadBytes('v2'),
       LocalParakeetService.stagedDownloadBytes('v3'),
+      LocalParakeetService.stagedDownloadBytes('orukeet'),
     ])
-      .then(([v2, v3]) => {
-        if (!stale) setStagedBytes({ 'parakeet-v2': v2, 'parakeet-v3': v3 });
+      .then(([v2, v3, orukeet]) => {
+        if (!stale) setStagedBytes({ 'parakeet-v2': v2, 'parakeet-v3': v3, orukeet });
       })
       .catch(() => undefined);
     return () => {
@@ -86,10 +91,11 @@ export default function ModelDownloadScreen() {
         `Are you sure you want to delete "${entry.title}"?`,
         async () => {
           try {
-            if (entry.key === 'whisper-base') {
+            const version = parakeetVersionForKey(entry.key);
+            if (version === null) {
               await LocalWhisperService.deleteModel('base');
             } else {
-              await LocalParakeetService.deleteModel(entry.key === 'parakeet-v2' ? 'v2' : 'v3');
+              await LocalParakeetService.deleteModel(version);
             }
             safeHaptics('warning');
             await loadCatalog();
@@ -219,7 +225,9 @@ export default function ModelDownloadScreen() {
                       <View className="mt-3 flex-row items-center gap-2">
                         <ActivityIndicator size="small" />
                         <Text className="text-xs text-secondaryLabel">
-                          Preparing model for your device… (one time)
+                          {download.installPhase === 'verifying'
+                            ? 'Verifying download…'
+                            : 'Preparing model for your device… (one time)'}
                         </Text>
                       </View>
                     ) : null}
@@ -250,6 +258,8 @@ export default function ModelDownloadScreen() {
                   {model.downloaded ? (
                     <Pressable
                       onPress={() => handleDelete(model)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${model.title}`}
                       style={({ pressed }) => ({
                         opacity: pressed ? 0.85 : 1,
                         transform: [{ scale: pressed ? 0.97 : 1 }],
@@ -263,6 +273,8 @@ export default function ModelDownloadScreen() {
                     <Pressable
                       onPress={() => handleDownload(model.key)}
                       disabled={anyBusy}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Download ${model.title}`}
                       style={({ pressed }) => ({
                         opacity: anyBusy ? 0.5 : pressed ? 0.85 : 1,
                         transform: [{ scale: pressed ? 0.97 : 1 }],
@@ -293,7 +305,9 @@ export default function ModelDownloadScreen() {
         <Text className="text-xs text-secondaryLabel leading-[18px]">
           One model is enough — private mode picks the right engine from your dictation language.
           Parakeet is the fastest and most accurate for English (v2) and 25 European languages (v3).
-          Whisper base covers everything else, including auto-detect. Downloads stay on your device.
+          Orukeet is an optional Parakeet fine-tune for the same 25 languages; once downloaded, it
+          is used instead of Parakeet. Whisper base covers everything else, including auto-detect.
+          Downloads stay on your device.
         </Text>
         <Pressable
           onPress={() => {

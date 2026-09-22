@@ -4,6 +4,7 @@ import { getPreferredTranscriptionLanguages } from '../../lib/transcriptionLangu
 import { LocalParakeetService } from './LocalParakeetService';
 import { LocalWhisperService } from './LocalWhisperService';
 import {
+  parakeetModelLabel,
   selectLocalEngine,
   preferredEngineForLanguages,
   type LocalEngineAvailability,
@@ -31,7 +32,7 @@ function descriptorFor(
     return {
       engine: 'parakeet',
       version: preferred.version,
-      label: preferred.version === 'v2' ? 'Parakeet v2' : 'Parakeet v3',
+      label: parakeetModelLabel(preferred.version),
     };
   }
   return { engine: 'whisper', label: 'Whisper base' };
@@ -50,9 +51,9 @@ function missingModelError(choice: Extract<LocalEngineChoice, { engine: 'none' }
 }
 
 /**
- * Single entry point for on-device transcription. Routes each request to Parakeet (v2/v3) or
- * Whisper based on the user's selected languages and which models are installed — callers never
- * pick an engine themselves. Routing policy lives in localEngine.ts.
+ * Single entry point for on-device transcription. Routes each request to Orukeet, Parakeet
+ * (v2/v3) or Whisper based on the user's selected languages and which models are installed —
+ * callers never pick an engine themselves. Routing policy lives in localEngine.ts.
  */
 export class LocalTranscriptionService {
   static isAvailable(): boolean {
@@ -61,12 +62,13 @@ export class LocalTranscriptionService {
 
   static async getAvailability(): Promise<LocalEngineAvailability> {
     const parakeetSupported = LocalParakeetService.isAvailable();
-    const [parakeetV2Downloaded, parakeetV3Downloaded] = parakeetSupported
+    const [parakeetV2Downloaded, parakeetV3Downloaded, orukeetDownloaded] = parakeetSupported
       ? await Promise.all([
           LocalParakeetService.isModelDownloaded('v2'),
           LocalParakeetService.isModelDownloaded('v3'),
+          LocalParakeetService.isModelDownloaded('orukeet'),
         ])
-      : [false, false];
+      : [false, false, false];
 
     const whisperModels = LocalWhisperService.isAvailable()
       ? await LocalWhisperService.getAvailableModels()
@@ -79,6 +81,7 @@ export class LocalTranscriptionService {
       // The fallback tier is specifically multilingual Whisper base. English-only or smaller
       // legacy artifacts must not make unsupported-language routes appear ready.
       whisperDownloaded: whisperModels.some((model) => model.name === 'base' && model.downloaded),
+      orukeetDownloaded,
     };
   }
 
@@ -106,7 +109,8 @@ export class LocalTranscriptionService {
         language: languages.length === 1 ? languages[0] : undefined,
         wordTimestamps: options.wordTimestamps,
       });
-      return { ...response, endpoint: `parakeet-${choice.version}` };
+      const endpoint = choice.version === 'orukeet' ? 'orukeet' : `parakeet-${choice.version}`;
+      return { ...response, endpoint };
     }
 
     if (choice.engine === 'whisper') {

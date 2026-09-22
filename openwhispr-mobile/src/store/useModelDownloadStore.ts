@@ -1,13 +1,20 @@
 import { create } from 'zustand';
 import * as FileSystem from 'expo-file-system/legacy';
+import type { ParakeetInstallPhase, ParakeetVersion } from '../../modules/parakeet-asr/src';
 import { LocalWhisperService } from '../services/transcription/LocalWhisperService';
 import { LocalParakeetService } from '../services/transcription/LocalParakeetService';
-import { LOCAL_MODEL_SIZE_BYTES, type LocalModelKey } from '../lib/localModelCatalog';
+import {
+  LOCAL_MODEL_INSTALL_PEAK_BYTES,
+  LOCAL_MODEL_SIZE_BYTES,
+  parakeetVersionForKey,
+  type LocalModelKey,
+} from '../lib/localModelCatalog';
 import { useConfigStore } from './useConfigStore';
 
 export type { LocalModelKey } from '../lib/localModelCatalog';
 
-// 'preparing' = Parakeet's post-download load, where CoreML's one-time ANE compile happens.
+// 'preparing' = everything after the transfer: an archive model's on-device install (verify,
+// extract, compile), then the post-download load where CoreML's one-time ANE compile happens.
 // It's part of the download flow on purpose so a dictation tap never pays that wait.
 export type ModelDownloadStatus = 'idle' | 'downloading' | 'preparing' | 'completed' | 'error';
 
@@ -15,6 +22,8 @@ export interface ModelDownloadEntry {
   status: ModelDownloadStatus;
   progress: number;
   error?: string;
+  /** While 'preparing' an archive model: the install step running; undefined during the load. */
+  installPhase?: ParakeetInstallPhase;
 }
 
 interface ModelDownloadState {
@@ -32,6 +41,7 @@ const idleDownloads = (): Record<LocalModelKey, ModelDownloadEntry> => ({
   'whisper-base': idleEntry(),
   'parakeet-v2': idleEntry(),
   'parakeet-v3': idleEntry(),
+  orukeet: idleEntry(),
 });
 
 // Downloads leave ~20% of the model size as headroom so finishing one doesn't wedge the device
@@ -43,6 +53,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
     'whisper-base': 0,
     'parakeet-v2': 0,
     'parakeet-v3': 0,
+    orukeet: 0,
   };
 
   const beginRequest = (key: LocalModelKey): number => {
@@ -109,7 +120,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
 
   const downloadParakeet = async (
     key: LocalModelKey,
-    version: 'v2' | 'v3',
+    version: ParakeetVersion,
     requestId: number,
   ): Promise<void> => {
     if (!LocalParakeetService.isAvailable()) {
@@ -131,7 +142,8 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
       // would lock a phone with, say, 600 MB free out of ever finishing.
       const stagedBytes = await LocalParakeetService.stagedDownloadBytes(version).catch(() => 0);
       const requiredBytes =
-        Math.max(nominalBytes - stagedBytes, 0) + nominalBytes * FREE_SPACE_HEADROOM;
+        Math.max(LOCAL_MODEL_INSTALL_PEAK_BYTES[key] - stagedBytes, 0) +
+        nominalBytes * FREE_SPACE_HEADROOM;
       const freeBytes = await FileSystem.getFreeDiskStorageAsync().catch(() => null);
       // A cancel that landed during those reads must not be followed by a 445 MB transfer plus
       // prepare() running behind an idle row.
@@ -149,10 +161,13 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
         return;
       }
 
-      await LocalParakeetService.downloadModel(version, (progress) =>
-        patchEntry(key, { progress }, requestId),
+      await LocalParakeetService.downloadModel(
+        version,
+        (progress) => patchEntry(key, { progress }, requestId),
+        (installPhase) =>
+          patchEntry(key, { status: 'preparing', progress: 1, installPhase }, requestId),
       );
-      patchEntry(key, { status: 'preparing', progress: 1 }, requestId);
+      patchEntry(key, { status: 'preparing', progress: 1, installPhase: undefined }, requestId);
       await LocalParakeetService.prepare(version);
       markCompleted(key, requestId);
     } catch (error) {
@@ -172,10 +187,11 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
         return;
       }
       const requestId = beginRequest(key);
-      if (key === 'whisper-base') {
+      const version = parakeetVersionForKey(key);
+      if (version === null) {
         await downloadWhisper(key, requestId);
       } else {
-        await downloadParakeet(key, key === 'parakeet-v2' ? 'v2' : 'v3', requestId);
+        await downloadParakeet(key, version, requestId);
       }
     },
 
@@ -184,14 +200,15 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
       // Invalidate first so progress/completion/error callbacks racing cancellation are ignored.
       beginRequest(key);
       try {
-        if (key === 'whisper-base') {
+        const version = parakeetVersionForKey(key);
+        if (version === null) {
           await LocalWhisperService.cancelModelDownload('base');
         } else {
-          await LocalParakeetService.cancelModelDownload(key === 'parakeet-v2' ? 'v2' : 'v3');
-          // If the transfer already completed and CoreML preparation started, remove the newly
-          // downloaded model as well; choosing “Don't use Private” should reclaim that storage.
+          await LocalParakeetService.cancelModelDownload(version);
+          // If the transfer already completed and installation or CoreML preparation started,
+          // remove the new model as well; choosing “Don't use Private” should reclaim that storage.
           if (status === 'preparing') {
-            await LocalParakeetService.deleteModel(key === 'parakeet-v2' ? 'v2' : 'v3');
+            await LocalParakeetService.deleteModel(version);
           }
         }
       } catch {

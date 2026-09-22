@@ -1,6 +1,13 @@
 import { AppState } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { ParakeetASR, type ParakeetVersion } from '../../../modules/parakeet-asr/src';
+import {
+  ARCHIVE_VERIFICATION_ERROR_CODE,
+  ParakeetASR,
+  type ArchiveModelSpec,
+  type HfTreeModelSpec,
+  type ParakeetInstallPhase,
+  type ParakeetVersion,
+} from '../../../modules/parakeet-asr/src';
 
 export interface ParakeetRemoteFile {
   /** Path relative to the HuggingFace repo root, e.g. "Encoder.mlmodelc/weights/weight.bin". */
@@ -12,6 +19,8 @@ export interface ParakeetRemoteFile {
 export interface DownloadParakeetModelOptions {
   /** Fraction complete in [0, 1], byte-weighted across every file of the model. */
   onProgress?: (progress: number) => void;
+  /** Phases of the on-device install that follows an archive download (verify, extract, compile). */
+  onInstallPhase?: (phase: ParakeetInstallPhase) => void;
   /** Injectable for tests; defaults to the global fetch. */
   httpClient?: typeof globalThis.fetch;
 }
@@ -41,8 +50,13 @@ export const STALL_WINDOW_MS = 120_000;
 /** Consecutive dead pause/resume kicks a stalled transfer gets before we give up with an error. */
 export const MAX_STALL_KICKS = 3;
 const WATCHDOG_TICK_MS = 10_000;
-/** File in staging that records the repo commit its contents were fetched from. */
+/**
+ * File in staging that records what its contents were fetched from: the repo commit of a tree
+ * model, the SHA-256 of an archive model.
+ */
 const REVISION_MARKER = '.revision';
+/** Name of an archive model's download inside its staging directory. */
+const ARCHIVE_FILE = 'model.zip';
 
 const RATE_LIMIT_MESSAGE =
   'Hugging Face is rate-limiting downloads right now. Please try again in a few minutes.';
@@ -371,15 +385,143 @@ async function downloadFile(download: OneFileDownload): Promise<void> {
 }
 
 /**
- * Download one Parakeet version into FluidAudio's install directory using background-session
- * resumable downloads, one file at a time. Completed files left in staging by an interrupted run
- * at the same revision are reused, so a relaunch only redoes the file that was in flight.
+ * Fetch a tree model into FluidAudio's install directory, one resumable file at a time. Completed
+ * files left in staging by an interrupted run at the same revision are reused, so a relaunch only
+ * redoes the file that was in flight.
+ */
+async function downloadTreeModel(
+  run: DownloadRun,
+  spec: HfTreeModelSpec,
+  options: DownloadParakeetModelOptions,
+): Promise<void> {
+  const httpClient = options.httpClient ?? globalThis.fetch;
+  const installDirectory = `file://${spec.directory}`;
+  const stagingDirectory = `file://${spec.stagingDirectory}`;
+  const revision = await fetchRevision(httpClient, spec.repo);
+  const files = await listParakeetRemoteFiles(spec.repo, revision, spec.entries, httpClient);
+
+  if (run.cancelled) throw new DownloadCancelledError();
+  await prepareStaging(stagingDirectory, revision);
+
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  let completedBytes = 0;
+  const report = (activeBytes: number): void => {
+    if (totalBytes > 0) {
+      options.onProgress?.(Math.min((completedBytes + activeBytes) / totalBytes, 1));
+    }
+  };
+
+  for (const file of files) {
+    if (run.cancelled) throw new DownloadCancelledError();
+
+    const destination = `${stagingDirectory}/${file.path}`;
+    const existing = await FileSystem.getInfoAsync(destination);
+    if (existing.exists && existing.size === file.size) {
+      completedBytes += file.size;
+      report(0);
+      continue;
+    }
+
+    await FileSystem.makeDirectoryAsync(parentDirectoryOf(destination), { intermediates: true });
+    if (file.size === 0) {
+      // HuggingFace answers 500 for zero-byte files; FluidAudio creates them locally as well.
+      await FileSystem.writeAsStringAsync(destination, '');
+      continue;
+    }
+
+    await downloadFile({
+      run,
+      remotePath: file.path,
+      url: `${HUGGINGFACE_BASE_URL}/${spec.repo}/resolve/${revision}/${encodeURI(file.path)}`,
+      destination,
+      expectedSize: file.size,
+      onBytes: report,
+    });
+    completedBytes += file.size;
+    report(0);
+  }
+
+  if (run.cancelled) throw new DownloadCancelledError();
+
+  // Only a complete, verified set ever lands where FluidAudio's modelsExist() looks; the move is a
+  // same-directory rename. Any leftover from FluidAudio's own (broken) downloader is replaced.
+  // The revision marker moves along: FluidAudio reads only the files it names, and keeping it
+  // means a failed move leaves staging reusable instead of forcing a full re-download.
+  await FileSystem.deleteAsync(installDirectory, { idempotent: true });
+  await FileSystem.moveAsync({ from: stagingDirectory, to: installDirectory });
+}
+
+function isArchiveVerificationError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as Error & { code?: unknown }).code === ARCHIVE_VERIFICATION_ERROR_CODE
+  );
+}
+
+/**
+ * Fetch an archive model's pinned zip with the same resumable transfer tree files get, then hand it
+ * to the native installer, which verifies its SHA-256, extracts it and compiles it on device. The
+ * zip survives a failed install so a retry skips the transfer — unless it failed verification,
+ * which reusing it could never get past.
+ */
+async function downloadArchiveModel(
+  run: DownloadRun,
+  version: ParakeetVersion,
+  spec: ArchiveModelSpec,
+  options: DownloadParakeetModelOptions,
+): Promise<void> {
+  const stagingDirectory = `file://${spec.stagingDirectory}`;
+  const archive = `${stagingDirectory}/${ARCHIVE_FILE}`;
+
+  if (run.cancelled) throw new DownloadCancelledError();
+  // The checksum identifies the archive, so it stands in for the revision.
+  await prepareStaging(stagingDirectory, spec.archiveSha256);
+
+  const staged = await FileSystem.getInfoAsync(archive);
+  if (!staged.exists || staged.size !== spec.archiveBytes) {
+    await downloadFile({
+      run,
+      remotePath: ARCHIVE_FILE,
+      url: spec.archiveUrl,
+      destination: archive,
+      expectedSize: spec.archiveBytes,
+      onBytes: (bytesWritten) =>
+        options.onProgress?.(Math.min(bytesWritten / spec.archiveBytes, 1)),
+    });
+  }
+  options.onProgress?.(1);
+  if (run.cancelled) throw new DownloadCancelledError();
+
+  // Extraction reports every chunk it writes; callers only need each phase change.
+  let lastPhase: ParakeetInstallPhase | null = null;
+  const subscription = ParakeetASR.addInstallProgressListener((event) => {
+    if (event.version !== version || event.phase === lastPhase) return;
+    lastPhase = event.phase;
+    options.onInstallPhase?.(event.phase);
+  });
+  try {
+    await ParakeetASR.installFromArchive(version, `${spec.stagingDirectory}/${ARCHIVE_FILE}`);
+  } catch (error) {
+    // A cancel deletes staging out from under the installer; the user asked for that.
+    if (run.cancelled) throw new DownloadCancelledError();
+    if (isArchiveVerificationError(error)) {
+      await FileSystem.deleteAsync(archive, { idempotent: true });
+    }
+    throw error;
+  } finally {
+    subscription?.remove();
+  }
+  await FileSystem.deleteAsync(stagingDirectory, { idempotent: true });
+}
+
+/**
+ * Download one Parakeet version using background-session resumable downloads (they survive the
+ * phone locking and app switches) and install it where the native module loads it from.
  */
 export async function downloadParakeetModel(
   version: ParakeetVersion,
   options: DownloadParakeetModelOptions = {},
 ): Promise<void> {
-  const httpClient = options.httpClient ?? globalThis.fetch;
   // Two live runs would race each other's staging and install; a second finisher could replace a
   // complete install with an incomplete tree.
   const current = activeRuns.get(version);
@@ -391,60 +533,11 @@ export async function downloadParakeetModel(
 
   try {
     const spec = await ParakeetASR.modelSpec(version);
-    const installDirectory = `file://${spec.directory}`;
-    const stagingDirectory = `file://${spec.stagingDirectory}`;
-    const revision = await fetchRevision(httpClient, spec.repo);
-    const files = await listParakeetRemoteFiles(spec.repo, revision, spec.entries, httpClient);
-
-    if (run.cancelled) throw new DownloadCancelledError();
-    await prepareStaging(stagingDirectory, revision);
-
-    const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
-    let completedBytes = 0;
-    const report = (activeBytes: number): void => {
-      if (totalBytes > 0) {
-        options.onProgress?.(Math.min((completedBytes + activeBytes) / totalBytes, 1));
-      }
-    };
-
-    for (const file of files) {
-      if (run.cancelled) throw new DownloadCancelledError();
-
-      const destination = `${stagingDirectory}/${file.path}`;
-      const existing = await FileSystem.getInfoAsync(destination);
-      if (existing.exists && existing.size === file.size) {
-        completedBytes += file.size;
-        report(0);
-        continue;
-      }
-
-      await FileSystem.makeDirectoryAsync(parentDirectoryOf(destination), { intermediates: true });
-      if (file.size === 0) {
-        // HuggingFace answers 500 for zero-byte files; FluidAudio creates them locally as well.
-        await FileSystem.writeAsStringAsync(destination, '');
-        continue;
-      }
-
-      await downloadFile({
-        run,
-        remotePath: file.path,
-        url: `${HUGGINGFACE_BASE_URL}/${spec.repo}/resolve/${revision}/${encodeURI(file.path)}`,
-        destination,
-        expectedSize: file.size,
-        onBytes: report,
-      });
-      completedBytes += file.size;
-      report(0);
+    if (spec.kind === 'archive') {
+      await downloadArchiveModel(run, version, spec, options);
+    } else {
+      await downloadTreeModel(run, spec, options);
     }
-
-    if (run.cancelled) throw new DownloadCancelledError();
-
-    // Only a complete, verified set ever lands where FluidAudio's modelsExist() looks; the move is a
-    // same-directory rename. Any leftover from FluidAudio's own (broken) downloader is replaced.
-    // The revision marker moves along: FluidAudio reads only the files it names, and keeping it
-    // means a failed move leaves staging reusable instead of forcing a full re-download.
-    await FileSystem.deleteAsync(installDirectory, { idempotent: true });
-    await FileSystem.moveAsync({ from: stagingDirectory, to: installDirectory });
   } finally {
     // Deregister only if a restart hasn't already claimed the slot for its own run.
     if (activeRuns.get(version) === run) activeRuns.delete(version);

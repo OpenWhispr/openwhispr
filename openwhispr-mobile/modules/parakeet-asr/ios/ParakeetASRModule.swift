@@ -1,6 +1,7 @@
 import AVFoundation
 import ExpoModulesCore
 import FluidAudio
+import OrukeetCoreML
 import UIKit
 
 /// Options for a single transcription run. Memory sampling is benchmark-only — the production
@@ -11,36 +12,71 @@ struct ParakeetTranscribeOptions: Record {
   @Field var sampleMemory: Bool = false
 }
 
+/// The models this module serves. Orukeet is a fine-tune of the v3 architecture, so it runs on the
+/// same AsrManager; only its install differs (a pinned archive through OrukeetModelStore instead of
+/// FluidAudio's HuggingFace tree).
+private enum ParakeetModel: String {
+  case v2, v3, orukeet
+
+  var displayName: String {
+    switch self {
+    case .v2: return "Parakeet v2"
+    case .v3: return "Parakeet v3"
+    case .orukeet: return "Orukeet"
+    }
+  }
+
+  /// FluidAudio's table version for the HuggingFace-tree models.
+  var asrVersion: AsrModelVersion { self == .v2 ? .v2 : .v3 }
+}
+
 // Production wrapper around FluidAudio's Parakeet TDT batch ASR (plus the dev-only benchmark
 // memory probes). JS-side callers (LocalParakeetService) serialize prepare/transcribe/release/
 // deleteModel on an operation chain, so the warm AsrManager is held as plain instance state.
 //
-// Verified against FluidAudio 0.15.4 (the version already pinned by the diarization plugin):
+// Verified against FluidAudio 0.15.5-orukeet.1 (the version pinned by plugins/swift-packages):
 //   Model download is owned by JS (parakeetModelDownloader.ts); this module only reports
-//   modelSpec/modelsExist/defaultCacheDirectory and loads what is already on disk.
+//   modelSpec/isModelDownloaded, installs an archive JS downloaded, and loads what is on disk.
 //   AsrModels.load(from:version:encoderPrecision:) — loads what JS installed (the ANE-compile
-//     half). Not offline by contract: 0.15.4's DownloadUtils.loadModels deletes the repo directory
-//     and re-downloads over its own foreground session if an MLModel fails to load, unless
-//     DownloadUtils.enforceOffline is set — process-global, so it would also stop the diarization
+//     half). Not offline by contract: ModelHub.loadModels deletes the repo directory and
+//     re-downloads over its own foreground session if an MLModel fails to load, unless
+//     ModelHub's offline mode is set — process-global, so it would also stop the diarization
 //     module's auto-download; left alone for now.
 //   AsrModels.modelsExist(at:version:encoderPrecision:) / defaultCacheDirectory(for:)
 //     -> ~/Library/Application Support/FluidAudio/Models/<repo.folderName> (repo-scoped; safe to
 //        delete per version; never purged by iOS)
 //   Repo.parakeetV2 / .parakeetV3 / .remotePath ; ModelNames.ASR.requiredModels /
 //     requiredModelsV3(precision:) / vocabularyFile — the manifest modelSpec hands to JS
-//   AsrManager() / loadModels(_:) / transcribe(_ url:, decoderState:, language:) / cleanup()
-//   TdtDecoderState.make() ; ASRResult { text, confidence, processingTime, tokenTimings }
+//   AsrManager() / loadModels(_:) / decoderLayerCount / transcribe(_ url:, decoderState:, language:)
+//     / cleanup()
+//   TdtDecoderState.make(decoderLayers:) ; ASRResult { text, confidence, processingTime, tokenTimings }
 //     (duration returns 0 on this path — clip length is read from the WAV instead)
 //   TokenTiming { token, tokenId, startTime, endTime, confidence } — seconds
 //   Language: String-raw enum of ISO codes; the hint drives the v3 decoder's token filter.
+//
+// Orukeet (OrukeetCoreML at the commit pinned by plugins/swift-packages): used only to install
+// and locate the model — OrukeetBundle.int8 (the pinned archive), OrukeetModelStore
+// install(fromArchive:progress:) / installedDirectory() and OrukeetLocalModels.load(from:) ->
+// AsrModels. Transcription stays on our AsrManager so meeting notes keep token timings.
 public class ParakeetASRModule: Module {
   // int8 is the only precision we ship (applies to v3 only; v2 ignores it). One constant so a
   // future int4 experiment is a one-line change across modelSpec/exists/load.
   private static let encoderPrecision: ParakeetEncoderPrecision = .int8
 
+  // Orukeet's cache lives in a root only this module writes to, so deleting the model can remove
+  // the root wholesale (including caches OrukeetModelStore keyed to an earlier iOS build).
+  private static let orukeetRoot = FileManager.default
+    .urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    .appendingPathComponent("OpenWhispr", isDirectory: true)
+    .appendingPathComponent("orukeet", isDirectory: true)
+  // One store per root: its busy guard only holds within a single instance.
+  private static let orukeetStore = OrukeetModelStore(rootDirectory: orukeetRoot)
+
   // Warm state: a loaded manager kept between runs so dictation pays load cost once, not per clip.
   private var asr: AsrManager?
-  private var loadedVersion: AsrModelVersion?
+  private var loadedModel: ParakeetModel?
+  // The running archive install, so deleting the model can cancel it before removing its files.
+  private var orukeetInstall: Task<Void, Never>?
   // Standalone sampler used to bracket the Whisper benchmark run (driven from JS) with the SAME
   // probe as Parakeet.
   private let externalSampler = PeakSampler()
@@ -48,50 +84,79 @@ public class ParakeetASRModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ParakeetASR")
 
+    Events("parakeetInstallProgress")
+
     // --- Model management (consent-gated in JS, mirroring the diarization module) ---
 
-    AsyncFunction("isModelDownloaded") { (version: String) -> Bool in
-      let v = try Self.parseVersion(version)
-      return AsrModels.modelsExist(
-        at: AsrModels.defaultCacheDirectory(for: v), version: v,
-        encoderPrecision: Self.encoderPrecision)
+    AsyncFunction("isModelDownloaded") { (version: String, promise: Promise) in
+      Task {
+        do {
+          let model = try Self.parseModel(version)
+          promise.resolve(await Self.isDownloaded(model))
+        } catch {
+          promise.reject("MODEL_CHECK_ERROR", error.localizedDescription)
+        }
+      }
     }
 
     // Everything the JS downloader (src/services/transcription/parakeetModelDownloader.ts) needs
-    // to fetch a version's weights into the exact layout AsrModels.load/modelsExist expect. The
-    // names come from FluidAudio's own tables so the manifest can never drift from the loader.
-    AsyncFunction("modelSpec") { (version: String) -> [String: Any] in
-      let v = try Self.parseVersion(version)
-      let repo: Repo = (v == .v3) ? .parakeetV3 : .parakeetV2
-      let bundles: Set<String> =
-        (v == .v3)
-        ? ModelNames.ASR.requiredModelsV3(precision: Self.encoderPrecision)
-        : ModelNames.ASR.requiredModels
-      return [
-        "repo": repo.remotePath,
-        "directory": AsrModels.defaultCacheDirectory(for: v).path,
-        "stagingDirectory": Self.stagingDirectory(for: v).path,
-        "entries": bundles.sorted() + [ModelNames.ASR.vocabularyFile],
-      ]
+    // to fetch a version. HuggingFace-tree names come from FluidAudio's own tables so the manifest
+    // can never drift from the loader; the archive pin comes from OrukeetBundle.
+    AsyncFunction("modelSpec") { (version: String, promise: Promise) in
+      Task {
+        do {
+          let model = try Self.parseModel(version)
+          promise.resolve(await Self.modelSpec(for: model))
+        } catch {
+          promise.reject("MODEL_SPEC_ERROR", error.localizedDescription)
+        }
+      }
+    }
+
+    // Verify (size + SHA-256), extract and compile an archive JS downloaded. The archive is never
+    // modified or deleted here; JS keeps it for a retry until an install succeeds.
+    AsyncFunction("installFromArchive") { (version: String, archivePath: String, promise: Promise) in
+      self.orukeetInstall = Task {
+        do {
+          guard try Self.parseModel(version) == .orukeet else {
+            throw NSError(
+              domain: "ParakeetASR", code: 4,
+              userInfo: [
+                NSLocalizedDescriptionKey: "Parakeet \(version) is not installed from an archive"
+              ])
+          }
+          try await self.installOrukeet(fromArchive: URL(fileURLWithPath: archivePath))
+          promise.resolve(nil)
+        } catch is OrukeetBundle.VerificationError {
+          // A distinct code: JS discards an archive that can never pass verification.
+          promise.reject(
+            "ARCHIVE_VERIFICATION_ERROR",
+            "The downloaded model failed verification. Please download it again.")
+        } catch {
+          promise.reject("INSTALL_ERROR", error.localizedDescription)
+        }
+      }
     }
 
     AsyncFunction("deleteModel") { (version: String, promise: Promise) in
       Task {
         do {
-          let v = try Self.parseVersion(version)
-          // Repo-scoped dir (…/Models/parakeet-tdt-0.6b-v{2,3}) — removing it frees only this
-          // version's weights and never touches the diarization models (a different repo folder).
-          let dir = AsrModels.defaultCacheDirectory(for: v)
-          if FileManager.default.fileExists(atPath: dir.path) {
+          let model = try Self.parseModel(version)
+          if model == .orukeet, let install = self.orukeetInstall {
+            // A cancelled install stops at its next checkpoint instead of publishing into the
+            // directory being removed below.
+            install.cancel()
+            await install.value
+          }
+          // Repo-scoped dirs (…/Models/parakeet-tdt-0.6b-v{2,3}) or Orukeet's own root — removing
+          // one frees only this version's weights and never touches the diarization models.
+          // A failed or cancelled download leaves partial weights (up to ~555 MB) in the JS staging
+          // sibling; "Delete model" is the only thing that reclaims them.
+          for dir in Self.storageDirectories(for: model)
+          where FileManager.default.fileExists(atPath: dir.path) {
             try FileManager.default.removeItem(at: dir)
           }
-          // A failed or cancelled download leaves partial weights (up to ~460 MB) in the JS staging
-          // sibling; "Delete model" is the only thing that reclaims them.
-          let staging = Self.stagingDirectory(for: v)
-          if FileManager.default.fileExists(atPath: staging.path) {
-            try FileManager.default.removeItem(at: staging)
-          }
-          if self.loadedVersion == v { await self.releaseManager() }
+          if self.loadedModel == model { await self.releaseManager() }
           promise.resolve(nil)
         } catch {
           promise.reject("MODEL_DELETE_ERROR", error.localizedDescription)
@@ -104,10 +169,8 @@ public class ParakeetASRModule: Module {
     // deleteModel reclaims. Bytes as a Double (safe: sizes are far under 2^53). Returns 0 if
     // nothing is downloaded or staged for this version.
     AsyncFunction("modelSizeBytes") { (version: String) -> Double in
-      let v = try Self.parseVersion(version)
-      return Double(
-        Self.directorySize(AsrModels.defaultCacheDirectory(for: v))
-          + Self.directorySize(Self.stagingDirectory(for: v)))
+      let model = try Self.parseModel(version)
+      return Double(Self.storageDirectories(for: model).reduce(0) { $0 + Self.directorySize($1) })
     }
 
     // Device context for the benchmark screen so results are interpretable across hardware.
@@ -128,29 +191,22 @@ public class ParakeetASRModule: Module {
     AsyncFunction("prepare") { (version: String, promise: Promise) in
       Task {
         do {
-          let v = try Self.parseVersion(version)
-          let dir = AsrModels.defaultCacheDirectory(for: v)
-          guard AsrModels.modelsExist(at: dir, version: v, encoderPrecision: Self.encoderPrecision)
-          else {
-            throw NSError(
-              domain: "ParakeetASR", code: 3,
-              userInfo: [
-                NSLocalizedDescriptionKey:
-                  "Parakeet \(version) model is not downloaded. Please download it first."
-              ])
-          }
+          let model = try Self.parseModel(version)
+          // Drop the previous engine first so two ~600 MB models are never resident together.
+          await self.releaseManager()
+
           let t0 = CFAbsoluteTimeGetCurrent()
-          let models = try await AsrModels.load(
-            from: dir, version: v, encoderPrecision: Self.encoderPrecision)
+          let (models, directory) = try await Self.loadModels(model)
           let manager = AsrManager()
           try await manager.loadModels(models)
           let loadMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
 
-          await self.releaseManager()  // drop any previous engine before holding the new one
           self.asr = manager
-          self.loadedVersion = v
+          self.loadedModel = model
 
-          promise.resolve(["loadMs": loadMs, "modelSizeBytes": Double(Self.directorySize(dir))])
+          promise.resolve([
+            "loadMs": loadMs, "modelSizeBytes": Double(Self.directorySize(directory)),
+          ])
         } catch {
           promise.reject("PREPARE_ERROR", error.localizedDescription)
         }
@@ -162,8 +218,8 @@ public class ParakeetASRModule: Module {
       (wavUri: String, version: String, options: ParakeetTranscribeOptions, promise: Promise) in
       Task {
         do {
-          let v = try Self.parseVersion(version)
-          guard let manager = self.asr, self.loadedVersion == v else {
+          let model = try Self.parseModel(version)
+          guard let manager = self.asr, self.loadedModel == model else {
             throw NSError(
               domain: "ParakeetASR", code: 1,
               userInfo: [
@@ -182,11 +238,13 @@ public class ParakeetASRModule: Module {
             sampler = PeakSampler()
             sampler?.start()
           }
-          var state = TdtDecoderState.make()  // v2/v3 both use 2 decoder layers (the default)
+          var state = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
           // The language hint feeds the v3 decoder's token filter; v2 is English-only and takes
-          // no hint. Unknown codes fall back to nil (auto language ID).
+          // no hint. Orukeet was validated with unconditioned decoding (its greedy joint exports no
+          // top-K for the filter to use), so it takes none either. Unknown codes fall back to nil
+          // (auto language ID).
           let language: Language? =
-            (v == .v3) ? options.language.flatMap { Language(rawValue: $0) } : nil
+            (model == .v3) ? options.language.flatMap { Language(rawValue: $0) } : nil
           let result = try await manager.transcribe(url, decoderState: &state, language: language)
           let mem = sampler?.stop()
 
@@ -251,18 +309,131 @@ public class ParakeetASRModule: Module {
   private func releaseManager() async {
     await asr?.cleanup()
     asr = nil
-    loadedVersion = nil
+    loadedModel = nil
   }
 
-  private static func parseVersion(_ s: String) throws -> AsrModelVersion {
-    switch s {
-    case "v2": return .v2
-    case "v3": return .v3
-    default:
+  private func installOrukeet(fromArchive archive: URL) async throws {
+    let progress: @Sendable (OrukeetModelStore.State) -> Void = { [weak self] state in
+      self?.sendEvent(
+        "parakeetInstallProgress",
+        [
+          "version": ParakeetModel.orukeet.rawValue,
+          "phase": state.phase.rawValue,
+          "fraction": state.fraction,
+        ])
+    }
+    let installed: URL
+    do {
+      installed = try await Self.orukeetStore.install(fromArchive: archive, progress: progress)
+    } catch OrukeetModelStore.StoreError.invalidInstallation(let detail) {
+      // The store reports an install it cannot validate instead of replacing it, which would
+      // leave a re-download failing forever. The root holds nothing but Orukeet caches.
+      NSLog("[ParakeetASR] Replacing an invalid Orukeet install: %@", detail)
+      try FileManager.default.removeItem(at: Self.orukeetRoot)
+      installed = try await Self.orukeetStore.install(fromArchive: archive, progress: progress)
+    }
+    // Caches keyed to an earlier iOS build are never reused; reclaim them.
+    let siblings = try FileManager.default.contentsOfDirectory(
+      at: Self.orukeetRoot, includingPropertiesForKeys: nil)
+    for stale in siblings where stale.lastPathComponent != installed.lastPathComponent {
+      try? FileManager.default.removeItem(at: stale)
+    }
+  }
+
+  private static func parseModel(_ s: String) throws -> ParakeetModel {
+    guard let model = ParakeetModel(rawValue: s) else {
       throw NSError(
         domain: "ParakeetASR", code: 2,
-        userInfo: [NSLocalizedDescriptionKey: "Unknown Parakeet version '\(s)' (expected v2 or v3)"])
+        userInfo: [
+          NSLocalizedDescriptionKey: "Unknown Parakeet version '\(s)' (expected v2, v3 or orukeet)"
+        ])
     }
+    return model
+  }
+
+  /// The verified Orukeet install, or nil. An install that fails validation reads as not
+  /// downloaded; installing again replaces it (see installOrukeet).
+  private static func orukeetInstalledDirectory() async -> URL? {
+    do {
+      return try await orukeetStore.installedDirectory()
+    } catch {
+      NSLog("[ParakeetASR] Orukeet install is not usable: %@", error.localizedDescription)
+      return nil
+    }
+  }
+
+  private static func isDownloaded(_ model: ParakeetModel) async -> Bool {
+    switch model {
+    case .v2, .v3:
+      return AsrModels.modelsExist(
+        at: AsrModels.defaultCacheDirectory(for: model.asrVersion), version: model.asrVersion,
+        encoderPrecision: encoderPrecision)
+    case .orukeet:
+      return await orukeetInstalledDirectory() != nil
+    }
+  }
+
+  private static func modelSpec(for model: ParakeetModel) async -> [String: Any] {
+    switch model {
+    case .v2, .v3:
+      let v = model.asrVersion
+      let bundles: Set<String> =
+        (v == .v3)
+        ? ModelNames.ASR.requiredModelsV3(precision: encoderPrecision)
+        : ModelNames.ASR.requiredModels
+      return [
+        "kind": "hf-tree",
+        "repo": (v == .v3 ? Repo.parakeetV3 : Repo.parakeetV2).remotePath,
+        "directory": AsrModels.defaultCacheDirectory(for: v).path,
+        "stagingDirectory": stagingDirectory(for: model).path,
+        "entries": bundles.sorted() + [ModelNames.ASR.vocabularyFile],
+      ]
+    case .orukeet:
+      let bundle = OrukeetBundle.int8
+      let installed = await orukeetInstalledDirectory()
+      return [
+        "kind": "archive",
+        "archiveUrl": bundle.url.absoluteString,
+        "archiveBytes": Double(bundle.bytes),
+        "archiveSha256": bundle.sha256,
+        "stagingDirectory": stagingDirectory(for: model).path,
+        "installedDirectory": installed.map { $0.path as Any } ?? NSNull(),
+      ]
+    }
+  }
+
+  /// Load a downloaded model's weights, plus the directory they came from (for its size).
+  private static func loadModels(_ model: ParakeetModel) async throws -> (AsrModels, URL) {
+    let notDownloaded = NSError(
+      domain: "ParakeetASR", code: 3,
+      userInfo: [
+        NSLocalizedDescriptionKey:
+          "\(model.displayName) model is not downloaded. Please download it first."
+      ])
+    switch model {
+    case .v2, .v3:
+      let v = model.asrVersion
+      let dir = AsrModels.defaultCacheDirectory(for: v)
+      guard AsrModels.modelsExist(at: dir, version: v, encoderPrecision: encoderPrecision) else {
+        throw notDownloaded
+      }
+      return (
+        try await AsrModels.load(from: dir, version: v, encoderPrecision: encoderPrecision), dir
+      )
+    case .orukeet:
+      guard let dir = await orukeetInstalledDirectory() else { throw notDownloaded }
+      return (try OrukeetLocalModels.load(from: dir), dir)
+    }
+  }
+
+  /// Where a model is installed: FluidAudio's repo-scoped directory, or Orukeet's own root.
+  private static func installRoot(for model: ParakeetModel) -> URL {
+    model == .orukeet ? orukeetRoot : AsrModels.defaultCacheDirectory(for: model.asrVersion)
+  }
+
+  /// Everything on disk for a model: its install root and the JS staging sibling.
+  private static func storageDirectories(for model: ParakeetModel) -> [URL] {
+    [installRoot(for: model), stagingDirectory(for: model)]
   }
 
   /// True audio length of the WAV in seconds, read from the file itself — used for RTF because
@@ -274,12 +445,12 @@ public class ParakeetASRModule: Module {
     return Double(file.length) / sampleRate
   }
 
-  /// Where the JS downloader stages an in-progress transfer: the install directory's path with
+  /// Where the JS downloader stages an in-progress transfer: the install root's path with
   /// ".downloading" appended. The only definition of that suffix — JS reads the path from
   /// `modelSpec` instead of rebuilding it. Staging is kept between attempts so completed files are
   /// reused, which also means a failed run leaves it behind.
-  private static func stagingDirectory(for v: AsrModelVersion) -> URL {
-    URL(fileURLWithPath: AsrModels.defaultCacheDirectory(for: v).path + ".downloading")
+  private static func stagingDirectory(for model: ParakeetModel) -> URL {
+    URL(fileURLWithPath: installRoot(for: model).path + ".downloading")
   }
 
   /// Recursive sum of file sizes under `dir` (`.mlmodelc` are directories of weight files). 0 if absent.

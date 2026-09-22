@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { safeHaptics } from '@/lib/utils';
 import { confirmDestructive } from '@/lib/alerts';
+import { parakeetVersionForKey } from '@/lib/localModelCatalog';
 import { Sentry } from '@/lib/sentry';
 import { getDefaultRecorderOptions, getExpoAudioModule } from '@/utils/expoAudio';
 import { LocalWhisperService } from '@/services/transcription/LocalWhisperService';
@@ -18,10 +19,11 @@ import {
   type EngineRunResult,
 } from '@/lib/benchmark/runParakeetBenchmark';
 
-// Dev-only spike screen: benchmark Parakeet (v3-int8, v2) vs Whisper base on this device. The two numbers
-// that decide the migration are warm RTF and peak memory — see docs/plans/PARAKEET-LOCAL-ASR.md.
+// Dev-only spike screen: benchmark Parakeet (v3-int8, v2) and Orukeet vs Whisper base on this device.
+// The two numbers that decide the migration are warm RTF and peak memory — see
+// docs/plans/PARAKEET-LOCAL-ASR.md.
 
-const ALL_ENGINES: BenchEngine[] = ['parakeet-v3', 'parakeet-v2', 'whisper-base'];
+const ALL_ENGINES: BenchEngine[] = ['parakeet-v3', 'parakeet-v2', 'orukeet', 'whisper-base'];
 const SAMPLE_PATH = `${FileSystem.documentDirectory}parakeet-bench/sample.wav`;
 
 const mb = (bytes?: number) => (bytes == null ? '—' : `${(bytes / 1024 / 1024).toFixed(0)} MB`);
@@ -47,6 +49,7 @@ export default function ParakeetBenchmarkScreen() {
   const [models, setModels] = useState<Record<BenchEngine, ModelState>>({
     'parakeet-v3': EMPTY_MODEL,
     'parakeet-v2': EMPTY_MODEL,
+    orukeet: EMPTY_MODEL,
     'whisper-base': EMPTY_MODEL,
   });
 
@@ -63,17 +66,20 @@ export default function ParakeetBenchmarkScreen() {
   const refreshModels = useCallback(async () => {
     if (!available) return;
     try {
-      const [v3, v3Size, v2, v2Size, whisperModels] = await Promise.all([
+      const [v3, v3Size, v2, v2Size, orukeet, orukeetSize, whisperModels] = await Promise.all([
         ParakeetASR.isModelDownloaded('v3'),
         ParakeetASR.modelSizeBytes('v3'),
         ParakeetASR.isModelDownloaded('v2'),
         ParakeetASR.modelSizeBytes('v2'),
+        ParakeetASR.isModelDownloaded('orukeet'),
+        ParakeetASR.modelSizeBytes('orukeet'),
         LocalWhisperService.getAvailableModels(),
       ]);
       const base = whisperModels.find((m) => m.name === 'base');
       setModels({
         'parakeet-v3': { downloaded: v3, sizeBytes: v3Size, busy: false },
         'parakeet-v2': { downloaded: v2, sizeBytes: v2Size, busy: false },
+        orukeet: { downloaded: orukeet, sizeBytes: orukeetSize, busy: false },
         'whisper-base': { downloaded: !!base, sizeBytes: base?.size, busy: false },
       });
     } catch (error) {
@@ -97,10 +103,11 @@ export default function ParakeetBenchmarkScreen() {
       safeHaptics('light');
       setBusy(engine, true);
       try {
-        if (engine === 'whisper-base') {
+        const version = parakeetVersionForKey(engine);
+        if (version === null) {
           await LocalWhisperService.downloadModel('base');
         } else {
-          await LocalParakeetService.downloadModel(engine === 'parakeet-v3' ? 'v3' : 'v2');
+          await LocalParakeetService.downloadModel(version);
         }
         safeHaptics('success');
       } catch (error) {
@@ -120,10 +127,11 @@ export default function ParakeetBenchmarkScreen() {
         async () => {
           setBusy(engine, true);
           try {
-            if (engine === 'whisper-base') {
+            const version = parakeetVersionForKey(engine);
+            if (version === null) {
               await LocalWhisperService.deleteModel('base');
             } else {
-              await ParakeetASR.deleteModel(engine === 'parakeet-v3' ? 'v3' : 'v2');
+              await ParakeetASR.deleteModel(version);
             }
             safeHaptics('warning');
           } catch (error) {

@@ -1,11 +1,25 @@
-import { ParakeetASR, type ParakeetVersion } from '../../../modules/parakeet-asr/src';
+import * as FileSystem from 'expo-file-system/legacy';
+import {
+  ParakeetASR,
+  type ParakeetInstallPhase,
+  type ParakeetVersion,
+} from '../../../modules/parakeet-asr/src';
 import type { TranscriptionResponse } from '../../types';
+import { parakeetModelLabel } from './localEngine';
 import {
   cancelParakeetDownload,
   downloadParakeetModel,
   stagedParakeetBytes,
 } from './parakeetModelDownloader';
 import { tokenTimingsToWhisperSegments } from './parakeetSegments';
+
+/** Attribution files an archive model ships inside its install directory. */
+const MODEL_NOTICE_FILES = ['NOTICE.md', 'COREML-NOTICE.txt'];
+
+export interface ModelNotice {
+  fileName: string;
+  text: string;
+}
 
 export interface ParakeetTranscribeServiceOptions {
   version: ParakeetVersion;
@@ -55,8 +69,9 @@ export class LocalParakeetService {
   static async downloadModel(
     version: ParakeetVersion,
     onProgress?: (progress: number) => void,
+    onInstallPhase?: (phase: ParakeetInstallPhase) => void,
   ): Promise<void> {
-    await downloadParakeetModel(version, { onProgress });
+    await downloadParakeetModel(version, { onProgress, onInstallPhase });
   }
 
   static async cancelModelDownload(version: ParakeetVersion): Promise<void> {
@@ -66,6 +81,23 @@ export class LocalParakeetService {
   /** Bytes an interrupted or failed download left staged for this version; 0 when nothing is staged. */
   static async stagedDownloadBytes(version: ParakeetVersion): Promise<number> {
     return stagedParakeetBytes(version);
+  }
+
+  /**
+   * The attribution notices an installed archive model carries (CC-BY-SA requires they stay
+   * reachable offline). Empty for HuggingFace-tree models and before installation.
+   */
+  static async modelNotices(version: ParakeetVersion): Promise<ModelNotice[]> {
+    if (!this.isAvailable()) return [];
+    const spec = await ParakeetASR.modelSpec(version);
+    if (spec.kind !== 'archive' || spec.installedDirectory === null) return [];
+    const directory = spec.installedDirectory;
+    return Promise.all(
+      MODEL_NOTICE_FILES.map(async (fileName) => ({
+        fileName,
+        text: await FileSystem.readAsStringAsync(`file://${directory}/${fileName}`),
+      })),
+    );
   }
 
   static async deleteModel(version: ParakeetVersion): Promise<void> {
@@ -91,6 +123,9 @@ export class LocalParakeetService {
     if (this.currentVersion === version) {
       return;
     }
+    // Native prepare releases the warm engine before loading (two ~600 MB models never share
+    // memory), so nothing is warm if the load fails.
+    this.currentVersion = null;
     await ParakeetASR.prepare(version);
     this.currentVersion = version;
   }
@@ -108,7 +143,7 @@ export class LocalParakeetService {
       // Message must satisfy isLocalModelMissingError so the Home screen's
       // download-or-cloud-once fallback prompt keeps working.
       throw new Error(
-        `Model "Parakeet ${options.version}" is not available. Please download it first from Settings.`,
+        `Model "${parakeetModelLabel(options.version)}" is not available. Please download it first from Settings.`,
       );
     }
 

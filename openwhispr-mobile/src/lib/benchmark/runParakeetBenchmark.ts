@@ -1,4 +1,9 @@
-import { ParakeetASR, type ParakeetTranscribeResult } from '../../../modules/parakeet-asr/src';
+import {
+  ParakeetASR,
+  type ParakeetTranscribeResult,
+  type ParakeetVersion,
+} from '../../../modules/parakeet-asr/src';
+import { parakeetVersionForKey, type LocalModelKey } from '@/lib/localModelCatalog';
 import { LocalWhisperService } from '@/services/transcription/LocalWhisperService';
 import { LocalParakeetService } from '@/services/transcription/LocalParakeetService';
 
@@ -9,7 +14,8 @@ import { LocalParakeetService } from '@/services/transcription/LocalParakeetServ
 //
 // The two numbers that decide the migration: warm-median RTF and peak memory on real iPhone hardware.
 
-export type BenchEngine = 'parakeet-v3' | 'parakeet-v2' | 'whisper-base';
+/** Every downloadable local model can be benchmarked. */
+export type BenchEngine = LocalModelKey;
 
 export interface EngineRunResult {
   engine: BenchEngine;
@@ -33,6 +39,7 @@ export interface EngineRunResult {
 export const ENGINE_LABEL: Record<BenchEngine, string> = {
   'parakeet-v3': 'Parakeet v3 (int8)',
   'parakeet-v2': 'Parakeet v2 (English)',
+  orukeet: 'Orukeet r3 (int8)',
   'whisper-base': 'Whisper base',
 };
 
@@ -54,13 +61,13 @@ interface RunOptions {
 }
 
 async function runParakeetEngine(
-  engine: 'parakeet-v3' | 'parakeet-v2',
+  engine: BenchEngine,
+  version: ParakeetVersion,
   wavUri: string,
   warmRuns: number,
   report: (message: string) => void,
 ): Promise<EngineRunResult> {
   const label = ENGINE_LABEL[engine];
-  const version = engine === 'parakeet-v3' ? 'v3' : 'v2';
 
   // prepare() is load-only in production, so the download is a separate, separately-timed step —
   // this is what splits network cost from CoreML's one-time ANE compile (visible as a large
@@ -183,10 +190,11 @@ export async function runBenchmark(
   let clipSeconds: number | undefined;
   for (const engine of ordered) {
     try {
+      const version = parakeetVersionForKey(engine);
       const result =
-        engine === 'whisper-base'
+        version === null
           ? await runWhisperBase(wavUri, warmRuns, clipSeconds, report)
-          : await runParakeetEngine(engine, wavUri, warmRuns, report);
+          : await runParakeetEngine(engine, version, wavUri, warmRuns, report);
       clipSeconds = clipSeconds ?? result.audioSeconds;
       results.push(result);
     } catch (error) {

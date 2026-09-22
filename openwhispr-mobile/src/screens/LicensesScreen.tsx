@@ -1,6 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Pressable, Linking } from 'react-native';
 import { Text } from '@/components/ui/Text';
+import {
+  LocalParakeetService,
+  type ModelNotice,
+} from '@/services/transcription/LocalParakeetService';
 
 interface LicenseEntry {
   name: string;
@@ -20,11 +24,32 @@ const ENTRIES: LicenseEntry[] = [
     url: 'https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2',
   },
   {
+    name: 'Orukeet r3',
+    license: 'CC-BY-SA-4.0',
+    copyright: '© Oruk AI — adaptation of NVIDIA Parakeet TDT 0.6B v3',
+    note: 'Optional on-device speech recognition model (INT8 Core ML build).',
+    url: 'https://huggingface.co/oruk/orukeet',
+  },
+  {
     name: 'FluidAudio',
     license: 'Apache-2.0',
     copyright: '© FluidInference',
-    note: 'On-device ASR and speaker-diarization runtime.',
-    url: 'https://github.com/FluidInference/FluidAudio',
+    note: "On-device ASR and speaker-diarization runtime, built from Oruk AI's fork with a decoder performance patch.",
+    url: 'https://github.com/Oruk-AI/FluidAudio',
+  },
+  {
+    name: 'OrukeetCoreML',
+    license: 'MIT',
+    copyright: '© Knuckles92, © Oruk AI',
+    note: 'Verifies, extracts and compiles the Orukeet model on device.',
+    url: 'https://github.com/Oruk-AI/orukeet',
+  },
+  {
+    name: 'ZIPFoundation',
+    license: 'MIT',
+    copyright: '© Thomas Zoechling',
+    note: 'Extracts the Orukeet model archive.',
+    url: 'https://github.com/weichsel/ZIPFoundation',
   },
   {
     name: 'whisper.cpp / whisper.rn',
@@ -36,6 +61,22 @@ const ENTRIES: LicenseEntry[] = [
 ];
 
 export default function LicensesScreen() {
+  // The notices ship inside the installed model, so they are only there once Orukeet is downloaded.
+  const [notices, setNotices] = useState<ModelNotice[]>([]);
+  const [showNotices, setShowNotices] = useState(false);
+
+  useEffect(() => {
+    let stale = false;
+    LocalParakeetService.modelNotices('orukeet')
+      .then((loaded) => {
+        if (!stale) setNotices(loaded);
+      })
+      .catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+  }, []);
+
   return (
     <ScrollView
       className="flex-1 bg-systemBackground"
@@ -74,6 +115,37 @@ export default function LicensesScreen() {
           </Pressable>
         ))}
       </View>
+
+      {notices.length > 0 ? (
+        <View className="mt-5 gap-3">
+          <Pressable
+            onPress={() => setShowNotices((shown) => !shown)}
+            accessibilityRole="button"
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            className="self-start px-1"
+          >
+            <Text className="text-sm font-medium text-brand">
+              {showNotices ? 'Hide model notices' : 'View model notices'}
+            </Text>
+          </Pressable>
+          {showNotices
+            ? notices.map((notice) => (
+                <View
+                  key={notice.fileName}
+                  style={{ borderCurve: 'continuous' }}
+                  className="rounded-[10px] bg-secondarySystemGroupedBackground p-4"
+                >
+                  <Text className="mb-2 text-[13px] font-semibold text-label">
+                    {notice.fileName}
+                  </Text>
+                  <Text selectable className="text-xs leading-[18px] text-secondaryLabel">
+                    {notice.text}
+                  </Text>
+                </View>
+              ))
+            : null}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
