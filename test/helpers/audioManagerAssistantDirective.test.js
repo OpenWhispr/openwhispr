@@ -56,6 +56,57 @@ test("a standalone command banks a panel directive and returns the transcript", 
   assert.equal(modelCalls.length, 0, "the dictation-agent model must not run");
 });
 
+test("a verified caret banks targeted response delivery when auto-paste is enabled", async (t) => {
+  const { createManager } = await loadAudioManagerHarness(t, {
+    cachePrefix: "openwhispr-assistant-caret-delivery-",
+    settingsKey: "__assistantCaretDeliverySettings",
+    settings: { autoPasteEnabled: true },
+    mockModules: {
+      "/services/ReasoningService": 'export default { processText: async () => "" };',
+    },
+  });
+  const { manager, modelCalls } = managerWithCapture(createManager, {
+    status: "editable",
+    sessionId: "caret-session",
+  });
+
+  const result = await manager.processAgentCommand("draft a reply", "gpt", "Aria", {
+    selectionEditReachable: true,
+  });
+
+  assert.equal(result, "draft a reply");
+  assert.deepEqual(manager.pendingAssistantConversation, {
+    transcript: "draft a reply",
+    screenContext: null,
+    deliverySessionId: "caret-session",
+  });
+  assert.equal(modelCalls.length, 0, "caret delivery must retain the chat Agent route");
+});
+
+test("a verified caret stays panel-first when auto-paste is disabled", async (t) => {
+  const { createManager } = await loadAudioManagerHarness(t, {
+    cachePrefix: "openwhispr-assistant-caret-panel-",
+    settingsKey: "__assistantCaretPanelSettings",
+    settings: { autoPasteEnabled: false },
+    mockModules: {
+      "/services/ReasoningService": 'export default { processText: async () => "" };',
+    },
+  });
+  const { manager } = managerWithCapture(createManager, {
+    status: "editable",
+    sessionId: "caret-session",
+  });
+
+  await manager.processAgentCommand("draft a reply", "gpt", "Aria", {
+    selectionEditReachable: true,
+  });
+
+  assert.deepEqual(manager.pendingAssistantConversation, {
+    transcript: "draft a reply",
+    screenContext: null,
+  });
+});
+
 test("a wake-word command is banked without the address", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-assistant-wakeword-",
@@ -188,7 +239,10 @@ test("a too-large selection with no dictation editor goes to the panel as a plai
     cachePrefix: "openwhispr-assistant-toolarge-",
     settingsKey: "__assistantTooLargeSettings",
   });
-  const { manager } = managerWithCapture(createManager, { status: "too_large", maxCharacters: 6000 });
+  const { manager } = managerWithCapture(createManager, {
+    status: "too_large",
+    maxCharacters: 6000,
+  });
   const result = await manager.processAgentCommand("summarize this", "gpt", "Aria", {
     selectionEditReachable: false,
   });

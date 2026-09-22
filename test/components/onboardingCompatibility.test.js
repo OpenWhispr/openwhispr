@@ -7,9 +7,9 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 const noop = () => {};
 const asyncNoop = async () => {};
 
-async function createOnboardingRenderer(t) {
+async function createOnboardingRenderer(t, platform = "linux") {
   installBrowserGlobals(t, {
-    window: { electronAPI: { getPlatform: () => "linux" } },
+    window: { electronAPI: { getPlatform: () => platform } },
   });
   return createRendererServer(t, {
     cachePrefix: "openwhispr-onboarding-compatibility-",
@@ -28,8 +28,16 @@ async function createOnboardingRenderer(t) {
       "onboarding-permission-accessibility.webp": `export default "accessibility.webp";`,
       "onboarding-permission-system-audio.webp": `export default "system-audio.webp";`,
       "/utils/platform": `
-        export function getPlatform() { return "linux"; }
-        export function getCachedPlatform() { return "linux"; }
+        export function getPlatform() { return "${platform}"; }
+        export function getCachedPlatform() { return "${platform}"; }
+      `,
+      "/stores/settingsStore": `
+        export function useSettingsStore() { return {}; }
+        useSettingsStore.getState = () => ({});
+      `,
+      "/ui/ProviderIcon": `
+        import React from "react";
+        export function ProviderIcon() { return React.createElement("span"); }
       `,
     },
   });
@@ -54,6 +62,16 @@ function permissions(overrides = {}) {
   };
 }
 
+// The action row carries mt-auto, so anything rendered after it rides down on
+// that auto margin and lands under the buttons — below the fold on the compact
+// frame. Contextual guidance has to precede it in the DOM, and so in tab order.
+function assertGuidancePrecedesActions(markup, guidance) {
+  assert.ok(
+    markup.indexOf(guidance) < markup.indexOf("common.continue"),
+    `${guidance} should render before the action row`
+  );
+}
+
 const systemAudio = {
   granted: false,
   mode: "portal",
@@ -61,33 +79,38 @@ const systemAudio = {
   request: async () => false,
 };
 
-test("compact Linux onboarding keeps minimize and close controls", async (t) => {
+const screenContext = {
+  enabled: false,
+  granted: false,
+  needsRelaunch: false,
+  request: async () => false,
+};
+
+test("Linux onboarding exposes labelled minimize, maximize, and close controls in both modes", async (t) => {
   const vite = await createOnboardingRenderer(t);
   const { default: OnboardingShell } = await vite.ssrLoadModule(
     "/components/onboarding/OnboardingShell.tsx"
   );
 
-  const markup = renderToStaticMarkup(
-    React.createElement(OnboardingShell, { compact: true }, React.createElement("div"))
-  );
+  for (const compact of [true, false]) {
+    const mode = compact ? "compact" : "expanded";
+    const markup = renderToStaticMarkup(
+      React.createElement(OnboardingShell, { compact }, React.createElement("div"))
+    );
 
-  assert.match(markup, /title="windowControls.minimize"/);
-  assert.match(markup, /title="windowControls.close"/);
-});
-
-test("expanded Linux onboarding keeps maximize alongside minimize and close", async (t) => {
-  const vite = await createOnboardingRenderer(t);
-  const { default: OnboardingShell } = await vite.ssrLoadModule(
-    "/components/onboarding/OnboardingShell.tsx"
-  );
-
-  const markup = renderToStaticMarkup(
-    React.createElement(OnboardingShell, null, React.createElement("div"))
-  );
-
-  assert.match(markup, /title="windowControls.minimize"/);
-  assert.match(markup, /title="windowControls.maximize"/);
-  assert.match(markup, /title="windowControls.close"/);
+    for (const control of ["minimize", "maximize", "close"]) {
+      assert.match(
+        markup,
+        new RegExp(`title="windowControls\\.${control}"`),
+        `${mode} ${control} title`
+      );
+      assert.match(
+        markup,
+        new RegExp(`aria-label="windowControls\\.${control}"`),
+        `${mode} ${control} aria-label`
+      );
+    }
+  }
 });
 
 test("a denied microphone exposes the existing Linux settings recovery", async (t) => {
@@ -106,6 +129,7 @@ test("a denied microphone exposes the existing Linux settings recovery", async (
 
   assert.match(markup, /Microphone blocked by the OS/);
   assert.match(markup, />hooks.permissions.warning.soundLabel<\/button>/);
+  assertGuidancePrecedesActions(markup, "Microphone blocked by the OS");
 });
 
 test("Linux onboarding shows paste-tool installation and recheck guidance", async (t) => {
@@ -135,4 +159,173 @@ test("Linux onboarding shows paste-tool installation and recheck guidance", asyn
 
   assert.match(markup, /sudo apt install xdotool/);
   assert.match(markup, />pasteToolsInfo.recheck<\/button>/);
+  assertGuidancePrecedesActions(markup, "sudo apt install xdotool");
+});
+
+test("permissions offers Back ahead of Continue and gates Continue on microphone access", async (t) => {
+  const vite = await createOnboardingRenderer(t, "darwin");
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const render = (micPermissionGranted, onBack) =>
+    renderToStaticMarkup(
+      React.createElement(CompactPermissionsStep, {
+        permissions: permissions({ micPermissionGranted }),
+        systemAudio,
+        screenContext,
+        onBack,
+        onContinue: noop,
+      })
+    );
+
+  const blocked = render(false, noop);
+  assert.doesNotMatch(blocked, /common\.logout/);
+  assert.ok(
+    blocked.indexOf("common.back") < blocked.indexOf("common.continue"),
+    "Back sits ahead of Continue"
+  );
+  // Continue is part of the step now rather than an overlay above it, so it
+  // follows the permission rows in the DOM, and so in tab order.
+  assert.ok(
+    blocked.indexOf("onboarding.permissions.microphoneTitle") < blocked.indexOf("common.continue"),
+    "Continue should render after the permission rows"
+  );
+  assert.match(blocked, /<button[^>]*\bdisabled=""[^>]*>common\.continue<\/button>/);
+
+  const ready = render(true, noop);
+  assert.match(ready, /<button[^>]*>common\.continue<\/button>/);
+  assert.doesNotMatch(ready, /\bdisabled=""[^>]*>common\.continue/);
+
+  // With nothing to return to (a resumed session with no history), Back is gone.
+  assert.doesNotMatch(render(true, undefined), /common\.back/);
+});
+test("macOS onboarding offers optional Screen Context setup", async (t) => {
+  const vite = await createOnboardingRenderer(t, "darwin");
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(CompactPermissionsStep, {
+      permissions: permissions(),
+      systemAudio,
+      screenContext,
+      onContinue: noop,
+    })
+  );
+
+  assert.match(markup, /dictationAgent\.screenContext\.title/);
+  assert.match(markup, /data-icon="laptop"/);
+  assert.doesNotMatch(markup, /onboarding\.permissions\.recommended/);
+  assert.equal(
+    markup.match(/onboarding\.permissions\.optional/g)?.length,
+    2,
+    "System Audio and Screen Context should be labelled Optional on macOS"
+  );
+  assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
+});
+
+test("macOS onboarding shows the Screen Context relaunch guidance when needed", async (t) => {
+  const vite = await createOnboardingRenderer(t, "darwin");
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(CompactPermissionsStep, {
+      permissions: permissions(),
+      systemAudio,
+      screenContext: {
+        ...screenContext,
+        enabled: true,
+        granted: true,
+        needsRelaunch: true,
+      },
+      onContinue: noop,
+    })
+  );
+
+  assert.match(markup, /dictationAgent\.screenContext\.relaunchHint/);
+  assert.match(markup, />onboarding\.rehaul\.permissions\.enabled<\/button>/);
+  assertGuidancePrecedesActions(markup, "dictationAgent.screenContext.relaunchHint");
+});
+
+test("macOS onboarding omits Screen Context when the flow does not offer it", async (t) => {
+  const vite = await createOnboardingRenderer(t, "darwin");
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(CompactPermissionsStep, {
+      permissions: permissions(),
+      systemAudio,
+      onContinue: noop,
+    })
+  );
+
+  assert.doesNotMatch(markup, /dictationAgent\.screenContext\.title/);
+});
+
+test("Windows onboarding offers Screen Context as a permissionless opt-in", async (t) => {
+  const vite = await createOnboardingRenderer(t, "win32");
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(CompactPermissionsStep, {
+      permissions: permissions(),
+      systemAudio,
+      screenContext: {
+        ...screenContext,
+        enabled: true,
+        granted: true,
+      },
+      onContinue: noop,
+    })
+  );
+
+  assert.match(markup, /dictationAgent\.screenContext\.title/);
+  assert.match(markup, /data-icon="laptop"/);
+  assert.equal(
+    markup.match(/onboarding\.permissions\.optional/g)?.length,
+    1,
+    "Screen Context should be labelled Optional on Windows"
+  );
+  assert.match(markup, />onboarding\.rehaul\.permissions\.enabled<\/button>/);
+  assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
+});
+
+test("Linux onboarding does not show Screen Context", async (t) => {
+  const vite = await createOnboardingRenderer(t);
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(CompactPermissionsStep, {
+      permissions: permissions(),
+      systemAudio,
+      screenContext,
+      onContinue: noop,
+    })
+  );
+
+  assert.doesNotMatch(markup, /dictationAgent\.screenContext\.title/);
+});
+
+test("provider setup stages mark dictation complete before Assistant", async (t) => {
+  const vite = await createOnboardingRenderer(t);
+  const { SetupStageStepper } = await vite.ssrLoadModule(
+    "/components/onboarding/ProviderSetupStep.tsx"
+  );
+
+  for (const stepId of ["byok-assistant", "local-assistant"]) {
+    const markup = renderToStaticMarkup(React.createElement(SetupStageStepper, { stepId }));
+
+    assert.match(markup, /data-icon="circle-check"/);
+    assert.doesNotMatch(markup, /data-icon="audio-lines"/);
+  }
 });

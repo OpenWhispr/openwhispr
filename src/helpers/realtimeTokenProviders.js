@@ -56,6 +56,24 @@ const REALTIME_TOKEN_PROVIDERS = {
     });
   },
 
+  "gemini-realtime": async ({ environmentManager, postServerToken }, options, streams) => {
+    if (options.mode === "byok") {
+      const apiKey = environmentManager.getGeminiKey();
+      if (!apiKey) {
+        throw new Error("No Gemini API key configured. Add your key in Settings.");
+      }
+      // The raw key opens the Live socket directly (BidiGenerateContent?key=)
+      // and is not consumed by a handshake, so both streams can share it.
+      return duplicate(streams, apiKey);
+    }
+    // Managed tokens are minted with uses:1, so N sockets need N mints.
+    return dual(streams, async () => {
+      const data = await postServerToken("/api/gemini-live-token");
+      if (!data.token) throw new Error("No Gemini token received");
+      return data.token;
+    });
+  },
+
   "corti-realtime": async ({ mintCortiToken }, options, streams) => {
     // One token covers both meeting streams; it's only used at the WSS handshake.
     const { token } = await mintCortiToken(options);

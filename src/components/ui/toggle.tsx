@@ -26,7 +26,7 @@ export const Toggle = ({ checked, onChange, disabled = false }: ToggleProps) => 
     >
       <span
         className={`inline-block h-4 w-4 transform rounded-full transition-transform duration-150 ${
-          checked ? "translate-x-6" : "translate-x-1"
+          checked ? "translate-x-6 rtl:-translate-x-6" : "translate-x-1 rtl:-translate-x-1"
         } ${disabled ? "bg-muted-foreground/50" : "bg-background shadow-sm"}`}
       />
     </button>

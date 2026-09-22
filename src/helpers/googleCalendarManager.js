@@ -11,8 +11,8 @@ const BUFFER_COVERAGE_MS = MAX_BUFFER_MINUTES * 60 * 1000;
 const ALL_DAY_TIMEZONE_PADDING_MS = 48 * 60 * 60 * 1000;
 
 // Sync tokens pin the full sync's timeMin/timeMax window, so discard them
-// after a day to keep the lookahead covering the 7-day availability horizon.
-const SYNC_LOOKAHEAD_MS = 9 * 24 * 60 * 60 * 1000;
+// after a day to keep the lookahead covering the 31-day availability horizon.
+const SYNC_LOOKAHEAD_MS = 33 * 24 * 60 * 60 * 1000;
 const SYNC_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const GOOGLE_RESPONSE_STATUSES = new Set(["accepted", "declined", "tentative", "needsAction"]);
 

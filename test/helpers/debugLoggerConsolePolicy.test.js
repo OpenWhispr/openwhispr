@@ -63,6 +63,7 @@ function loadLogger({
         app: {
           getAppPath: () => "/openwhispr",
           getPath: () => userDataPath,
+          getVersion: () => "9.9.9-test",
           isPackaged,
           isReady: () => isReady,
         },

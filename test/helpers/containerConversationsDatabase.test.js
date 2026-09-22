@@ -49,7 +49,9 @@ function createDb(t) {
   }
 
   try {
-    return new DatabaseManager();
+    const database = new DatabaseManager();
+    database.setActiveAccountId("test-account");
+    return database;
   } catch (error) {
     if (isNativeBindingUnavailable(error)) {
       t.skip("better-sqlite3 native binding is not available for this Node runtime");
@@ -73,6 +75,9 @@ function createTestTeamSpace(db, { name, emoji = null } = {}) {
       emoji,
       (maxOrder?.max_order ?? 0) + 1
     );
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(result.lastInsertRowid, "test-account");
   return { success: true, space: db.getSpace(result.lastInsertRowid) };
 }
 
@@ -300,7 +305,7 @@ test("getNoteIdsInScope validates vector candidates against the current SQLite s
   );
 });
 
-test("upsertNoteFromCloud round-trips updated_by_user_id", (t) => {
+test("upsertNoteFromCloud preserves omitted and clears explicit-null updated_by_user_id", (t) => {
   const db = createDb(t);
   if (!db) return;
   const privateId = db.getPrivateSpaceId();
@@ -324,13 +329,24 @@ test("upsertNoteFromCloud round-trips updated_by_user_id", (t) => {
   );
   assert.equal(updated.updated_by_user_id, "user-b");
 
-  // A pull without the field must keep the last known editor.
+  const cloudNoteWithoutUpdater = { ...cloudNote };
+  delete cloudNoteWithoutUpdater.updated_by_user_id;
+
+  // Older API responses that omit the field must keep the last known editor.
   const unchanged = db.upsertNoteFromCloud(
-    { ...cloudNote, updated_by_user_id: null, updated_at: "2026-07-03 10:00:00" },
+    { ...cloudNoteWithoutUpdater, updated_at: "2026-07-03 10:00:00" },
     null,
     privateId
   );
   assert.equal(unchanged.updated_by_user_id, "user-b");
+
+  // Explicit null clears attribution after the former user is deleted.
+  const cleared = db.upsertNoteFromCloud(
+    { ...cloudNote, updated_by_user_id: null, updated_at: "2026-07-04 10:00:00" },
+    null,
+    privateId
+  );
+  assert.equal(cleared.updated_by_user_id, null);
 });
 
 // Container conversations die with their container (space purge, folder
@@ -699,6 +715,7 @@ test("denied folder delete restores the same notes, speakers, and conversations 
 
   db.db.close();
   db = new DatabaseManager();
+  db.setActiveAccountId("test-account");
   const restored = db.restoreFolderAfterDeniedDelete(folder.id);
   assert.equal(restored.success, true);
   assert.equal(restored.folder.id, folder.id);

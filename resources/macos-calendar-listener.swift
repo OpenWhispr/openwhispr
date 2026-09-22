@@ -23,8 +23,8 @@ import Foundation
 
 let eventStore = EKEventStore()
 let requestAccess = CommandLine.arguments.contains("--request")
-// One extra day keeps the tool's 7-day horizon covered between snapshots.
-let CACHE_LOOKAHEAD_DAYS = 8.0
+// One extra day keeps the tool's 31-day horizon covered between snapshots.
+let CACHE_LOOKAHEAD_DAYS = 32.0
 let REFRESH_INTERVAL_SECONDS = 300.0
 // Keep events that may still block availability after the maximum two-hour
 // buffer, plus one snapshot interval of safety.

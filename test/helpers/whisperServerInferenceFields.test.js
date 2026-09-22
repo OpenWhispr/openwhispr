@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 
 const WhisperServerManager = require("../../src/helpers/whisperServer");
+const WhisperManager = require("../../src/helpers/whisper");
 const { INFERENCE_DECODER_FIELDS } = WhisperServerManager;
 
 function startCapturingServer() {
@@ -96,4 +97,45 @@ test("sends the decoder threshold fields even without an initial prompt", async 
   assert.equal(fieldValue(body, "language"), "en");
   assert.equal(fieldValue(body, "prompt"), null);
   assert.equal(fieldValue(body, "response_format"), "json");
+});
+
+test("skipDecoderThresholds omits the raised fields so the server keeps its defaults", async (t) => {
+  const { server, port, getBody } = await startCapturingServer();
+  t.after(() => server.close());
+
+  const manager = createManager(port);
+  const result = await manager.transcribe(Buffer.from("audio"), {
+    language: "en",
+    skipDecoderThresholds: true,
+  });
+  assert.equal(result.text, "ok");
+
+  const body = getBody();
+  for (const name of Object.keys(INFERENCE_DECODER_FIELDS)) {
+    assert.equal(fieldValue(body, name), null, `expected ${name} to be omitted`);
+  }
+  assert.equal(fieldValue(body, "language"), "en");
+  assert.equal(fieldValue(body, "response_format"), "json");
+});
+
+test("transcribeLocalWhisper plumbs skipDecoderThresholds to the server request (meeting chunks)", async () => {
+  const manager = new WhisperManager();
+  const captured = [];
+  manager.serverManager.isAvailable = () => true;
+  manager.serverManager.start = async () => {};
+  manager.serverManager.transcribe = async (_buffer, options) => {
+    captured.push(options);
+    return { text: "ok" };
+  };
+  manager.getModelPath = () => __filename;
+
+  await manager.transcribeLocalWhisper(Buffer.from("audio"), {
+    model: "base",
+    skipDecoderThresholds: true,
+  });
+  assert.equal(captured[0].skipDecoderThresholds, true);
+
+  // Every caller that does not opt out (dictation, note uploads) keeps the raised fields.
+  await manager.transcribeLocalWhisper(Buffer.from("audio"), { model: "base" });
+  assert.equal(captured[1].skipDecoderThresholds, false);
 });

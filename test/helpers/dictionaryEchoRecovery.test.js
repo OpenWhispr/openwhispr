@@ -54,19 +54,18 @@ test("a real failure still reports an error and saves for retry", () => {
   assert.deepEqual(manager.calls.saved, [{ message: "Groq returned 500", code: null }]);
 });
 
-test("every dictionary-echo discard is tagged, on local and remote paths alike", async () => {
+test("every remote dictionary-echo discard is tagged", async () => {
   const fs = require("fs");
   const source = fs.readFileSync("src/helpers/audioManager.js", "utf-8");
 
   // Each isDictionaryEcho guard must throw the tagged error; a plain
   // `new Error("No audio detected")` there would be swallowed again.
   //
-  // The floor is a canary on the regex, not a target: it must track the real
-  // guard count so a pattern that silently stops matching can't make the loop
-  // below vacuous. It dropped from 7 to 4 when PROXY_TRANSCRIPTION_PROVIDERS
-  // collapsed the tinfoil/mistral/xai/corti blocks into one dispatch.
+  // Local Whisper now separates detection from the tagged failure so it can
+  // attempt recovery first; its failure behavior is covered end-to-end by the
+  // AudioManager dictionary-prompt recovery suite.
   const guards = source.match(/isDictionaryEcho\([\s\S]{0,400}?throw [^;]+;/g) ?? [];
-  assert.ok(guards.length >= 4, `expected the known echo guards, found ${guards.length}`);
+  assert.ok(guards.length >= 3, `expected the known remote echo guards, found ${guards.length}`);
   for (const guard of guards) {
     assert.match(guard, /throw dictionaryEchoError\(\);/);
   }

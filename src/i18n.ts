@@ -5,6 +5,7 @@ import { TRANSLATIONS_BY_LOCALE } from "./locales/translations";
 
 export const SUPPORTED_UI_LANGUAGES = [
   "en",
+  "ar",
   "es",
   "fr",
   "de",
@@ -52,6 +53,10 @@ const resources = {
     translation: TRANSLATIONS_BY_LOCALE.en,
     prompts: PROMPTS_BY_LOCALE.en,
   },
+  ar: {
+    translation: TRANSLATIONS_BY_LOCALE.ar,
+    prompts: PROMPTS_BY_LOCALE.ar,
+  },
   es: {
     translation: TRANSLATIONS_BY_LOCALE.es,
     prompts: PROMPTS_BY_LOCALE.es,
@@ -94,7 +99,7 @@ const browserLanguage =
   typeof navigator !== "undefined" ? navigator.language || navigator.languages?.[0] : undefined;
 
 const storageLanguage =
-  typeof window !== "undefined" ? window.localStorage.getItem("uiLanguage") : undefined;
+  typeof window !== "undefined" ? window.localStorage?.getItem("uiLanguage") : undefined;
 
 const initialLanguage = normalizeUiLanguage(storageLanguage || browserLanguage || "en");
 

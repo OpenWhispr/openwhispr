@@ -1,6 +1,7 @@
 // Chromium picks the display backend before JS runs, so appendSwitch is too
 // late — the flag has to come from a relaunch.
 const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
+const { createHotkeyRepeatGate } = require("./src/helpers/hotkeyRepeatGate");
 
 if (shouldForceXWayland(process.argv)) {
   const { spawn } = require("child_process");
@@ -285,7 +286,8 @@ const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
-const { migrateLegacyBinDir } = require("./src/helpers/gpuBinaryManager");
+const { migrateLegacyBinDir, detectOrphanedGpuPacks } = require("./src/helpers/gpuBinaryManager");
+const { resetWhisperGpuFailureOnUpgrade } = require("./src/helpers/whisperGpuUpgradeReset");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MicrosoftCalendarManager = require("./src/helpers/microsoftCalendarManager");
 const AppleCalendarManager = require("./src/helpers/appleCalendarManager");
@@ -340,6 +342,8 @@ let qdrantManager = null;
 let ipcHandlers = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
+let macAccessibilityFeaturesReady = false;
+let startMacAccessibilityFeatures = null;
 let authBridgeServer = null;
 let pendingNoteCloudId = null;
 let pendingNoteRetryTimer = null;
@@ -432,6 +436,16 @@ function initializeCoreManagers() {
   windowManager = new WindowManager();
   hotkeyManager = windowManager.hotkeyManager;
   databaseManager = new DatabaseManager();
+  // Restore the last validated account scope before any window, IPC handler,
+  // or meeting flow can read or create notes. Offline launches keep the
+  // account's data visible; a stale or rotated credential fails the hash
+  // check and restores nothing.
+  const accountScopeBinding = require("./src/helpers/accountScopeBinding");
+  const bootAccountId = accountScopeBinding.resolveBootAccountScope({
+    token: require("./src/helpers/tokenStore").get(),
+    binding: accountScopeBinding.read(),
+  });
+  if (bootAccountId) databaseManager.setActiveAccountId(bootAccountId);
   clipboardManager = new ClipboardManager();
   whisperManager = new WhisperManager();
   if (process.platform !== "darwin") {
@@ -440,15 +454,28 @@ function initializeCoreManagers() {
     // Heal installs from before GPU packs got per-pack directories; must run
     // before startup pre-warm resolves any GPU binary path.
     const LlamaVulkanManager = require("./src/helpers/llamaVulkanManager");
+    const llamaVulkanManager = new LlamaVulkanManager();
     const clearedPacks = migrateLegacyBinDir([
       whisperCudaManager,
       whisperVulkanManager,
-      new LlamaVulkanManager(),
+      llamaVulkanManager,
     ]);
     if (clearedPacks.length > 0) {
       // No window exists yet — persist the notice; a control panel window
       // shows it as a toast and clears it. See #1606.
       require("./src/helpers/gpuPackMigrationNotice").record(clearedPacks);
+    }
+    // The 1.8.3 migration deleted lib-carrying packs without recording that
+    // notice, leaving those users on a silent CPU fallback: an enabled flag
+    // with no pack on disk only happens via such data loss. recordOnce gates
+    // each pack to one notice so a dismissed toast doesn't return every launch.
+    const orphanedPacks = detectOrphanedGpuPacks([
+      { manager: whisperCudaManager, enabledEnvVar: "WHISPER_CUDA_ENABLED" },
+      { manager: whisperVulkanManager, enabledEnvVar: "WHISPER_VULKAN_ENABLED" },
+      { manager: llamaVulkanManager, enabledEnvVar: "LLAMA_VULKAN_ENABLED" },
+    ]);
+    if (orphanedPacks.length > 0) {
+      require("./src/helpers/gpuPackMigrationNotice").recordOnce(orphanedPacks);
     }
     // Lets every server start resolve its GPU backend from installed packs
     whisperManager.setGpuBinaryManagers({ cuda: whisperCudaManager, vulkan: whisperVulkanManager });
@@ -466,9 +493,10 @@ function initializeCoreManagers() {
     calendarReminderScheduler
   );
   appleCalendarManager = new AppleCalendarManager(databaseManager, calendarReminderScheduler);
+  const meetingProcessDetector = new MeetingProcessDetector();
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
-    new MeetingProcessDetector(),
+    meetingProcessDetector,
     new AudioActivityDetector(
       // The capture-helper managers are created a few lines below; the provider
       // is only invoked on mic events, long after initialization completes.
@@ -478,7 +506,8 @@ function initializeCoreManagers() {
           linuxPortalAudioManager,
           windowsLoopbackAudioManager,
         ])
-      )
+      ),
+      () => meetingProcessDetector.getDetectedProcesses().length > 0
     ),
     windowManager,
     databaseManager
@@ -529,6 +558,7 @@ function initializeCoreManagers() {
     linuxPortalAudioManager,
     windowsLoopbackAudioManager,
     meetingAecManager,
+    getQdrantManager: () => qdrantManager,
     getTrayManager: () => trayManager,
     oauthProtocolRegistered: protocolRegistered,
     oauthProtocol: OAUTH_PROTOCOL,
@@ -556,7 +586,9 @@ function initializeDeferredManagers() {
       "clipboard"
     );
   });
-  clipboardManager.preWarmAccessibility();
+  if (process.platform !== "darwin") {
+    clipboardManager.preWarmAccessibility();
+  }
   trayManager = new TrayManager();
   globeKeyManager = new GlobeKeyManager({
     // Lets the listener put the user's macOS Globe action back after a crash.
@@ -963,6 +995,9 @@ async function startApp() {
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
   await environmentManager.init();
+  // After any upgrade the GPU gets one fresh attempt: clear the remembered
+  // failure before the whisper pre-warm below resolves its GPU backend.
+  resetWhisperGpuFailureOnUpgrade(environmentManager);
   registerSidecars();
   startAuthBridgeServer();
 
@@ -1039,6 +1074,20 @@ async function startApp() {
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
   await windowManager.createMainWindow();
+  // The activation mode was cached before the hotkey was registered, so a saved
+  // Hold could not be checked against its key until now.
+  if (
+    windowManager.getActivationMode() === "push" &&
+    !windowManager.hotkeyManager.supportsPushToTalk()
+  ) {
+    await windowManager.setActivationModeCache("tap");
+    environmentManager.saveActivationMode("tap");
+    for (const browserWindow of BrowserWindow.getAllWindows()) {
+      if (!browserWindow.isDestroyed()) {
+        browserWindow.webContents.send("setting-updated", { key: "activationMode", value: "tap" });
+      }
+    }
+  }
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
@@ -1061,9 +1110,14 @@ async function startApp() {
     await flushPendingNoteDeepLink();
   }
 
+  await hotkeyManager.hyprlandRegistrationReady;
+
   // Set up voice agent hotkey (dictation routed straight to the dictation
-  // agent, bypassing cleanup)
+  // agent, bypassing cleanup). Tap-only slots gate autorepeat like the
+  // dictation toggle does.
+  const isVoiceAgentPress = createHotkeyRepeatGate();
   const voiceAgentHotkeyCallback = () => {
+    if (!isVoiceAgentPress()) return;
     windowManager.sendToggleVoiceAgent();
   };
   windowManager._voiceAgentHotkeyCallback = voiceAgentHotkeyCallback;
@@ -1086,7 +1140,9 @@ async function startApp() {
 
   // Set up translation hotkey (dictation cleaned up and translated into the
   // configured target language before pasting)
+  const isTranslationPress = createHotkeyRepeatGate();
   const translationHotkeyCallback = () => {
+    if (!isTranslationPress()) return;
     windowManager.sendToggleTranslation();
   };
   windowManager._translationHotkeyCallback = translationHotkeyCallback;
@@ -1108,12 +1164,11 @@ async function startApp() {
   }
 
   // Set up meeting mode hotkey
+  const isMeetingPress = createHotkeyRepeatGate();
   const meetingHotkeyCallback = () => {
-    if (hotkeyManager.isInListeningMode()) return;
-    // Fail closed during onboarding, like every other hotkey slot.
-    if (!windowManager.isMeetingInputAllowed()) return;
+    if (!isMeetingPress()) return;
     debugLogger.info("Meeting hotkey triggered", {}, "meeting");
-    meetingDetectionEngine?.startManualMeeting();
+    windowManager.startManualMeeting();
   };
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
@@ -1142,7 +1197,8 @@ async function startApp() {
       }
       return { success: false, message: result.error };
     } else {
-      hotkeyManager.unregisterSlot("meeting");
+      const removed = await hotkeyManager.unregisterSlot("meeting");
+      if (removed === false) return { success: false };
       environmentManager.saveMeetingKey("");
       windowManager.reconcileNativeKeyListeners();
       return { success: true };
@@ -1245,6 +1301,11 @@ async function startApp() {
 
   // Phase 2: Initialize remaining managers after windows are visible
   initializeDeferredManagers();
+  if (process.platform === "darwin") {
+    // Restore a Globe preference marker left by a crash without starting any
+    // Accessibility-protected event monitors during onboarding.
+    await globeKeyManager.restoreLeftoverSystemPreference();
+  }
 
   app.on("browser-window-focus", () => {
     if (googleCalendarManager) googleCalendarManager.syncOnFocus();
@@ -1282,6 +1343,7 @@ async function startApp() {
   const parakeetSettings = {
     localTranscriptionProvider: process.env.LOCAL_TRANSCRIPTION_PROVIDER || "",
     parakeetModel: process.env.PARAKEET_MODEL,
+    language: process.env.DICTATION_LANGUAGE,
   };
   parakeetManager.initializeAtStartup(parakeetSettings).catch((err) => {
     debugLogger.debug("Parakeet startup init error (non-fatal)", { error: err.message });
@@ -1324,23 +1386,30 @@ async function startApp() {
 
   const QdrantManager = require("./src/helpers/qdrantManager");
   qdrantManager = new QdrantManager();
+  // Must not throw: this also runs inside the unhealthy-restart path, whose
+  // catch would stop the replacement sidecar.
+  const wireVectorIndex = (port) => {
+    try {
+      const vectorIndex = require("./src/helpers/vectorIndex");
+      vectorIndex.init(port);
+      vectorIndex
+        .ensureCollection()
+        .then(() => ipcHandlers?.drainPendingVectorPurges())
+        .catch((err) => {
+          debugLogger.debug("Qdrant collection setup error (non-fatal)", { error: err.message });
+        });
+    } catch (err) {
+      debugLogger.debug("Qdrant rewire error (non-fatal)", { error: err.message });
+    }
+  };
+  // A successful unhealthy-restart can bring the sidecar back on a new port.
+  qdrantManager.on("restarted", wireVectorIndex);
   sidecarRegistry.register("qdrant", () => qdrantManager.stop());
   if (qdrantManager.isAvailable()) {
     qdrantManager
       .start()
       .then(() => {
-        if (qdrantManager.isReady()) {
-          const vectorIndex = require("./src/helpers/vectorIndex");
-          vectorIndex.init(qdrantManager.getPort());
-          vectorIndex
-            .ensureCollection()
-            .then(() => ipcHandlers?.drainPendingVectorPurges())
-            .catch((err) => {
-              debugLogger.debug("Qdrant collection setup error (non-fatal)", {
-                error: err.message,
-              });
-            });
-        }
+        if (qdrantManager.isReady()) wireVectorIndex(qdrantManager.getPort());
       })
       .catch((err) => {
         debugLogger.debug("Qdrant startup error (non-fatal)", { error: err.message });
@@ -1362,6 +1431,9 @@ async function startApp() {
   trayManager.setWindows(windowManager.mainWindow, windowManager.controlPanelWindow);
   trayManager.setWindowManager(windowManager);
   trayManager.setDatabaseManager(databaseManager);
+  // The tray's listen item is a toggle, so it has to rebuild when dictation
+  // starts or stops.
+  windowManager.onDictationStateChanged = () => trayManager.updateTrayMenu();
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
   await trayManager.createTray();
 
@@ -1666,22 +1738,9 @@ async function startApp() {
       }
     });
 
-    syncMacNativeHotkeyConfiguration();
-    globeKeyManager.start();
-    hotkeyManager.on("hotkey-loaded", syncMacNativeHotkeyConfiguration);
-
-    ipcMain.on("hotkey-listening-mode-changed", (_event, enabled) => {
-      if (enabled) {
-        // Let mouse buttons through so they can be captured, but keep macOS's
-        // Globe action down so choosing Globe cannot flash the emoji viewer.
-        globeKeyManager.setConfiguration({ mouseButtons: [], suppressGlobeAction: true });
-      } else {
-        syncMacNativeHotkeyConfiguration();
-      }
-    });
-
-    // After starting globe-listener, check if accessibility is granted.
-    // If not, notify the control panel so it can prompt the user.
+    // If accessibility is missing, notify the normal control panel after the
+    // protected macOS features have started. During onboarding the permissions
+    // screen owns this guidance, so its event has no ControlPanel listener.
     const checkAndNotifyAccessibility = () => {
       if (!systemPreferences.isTrustedAccessibilityClient(false)) {
         debugLogger.info("[Accessibility] macOS accessibility not trusted — notifying renderers");
@@ -1691,8 +1750,32 @@ async function startApp() {
       }
     };
 
-    // Check shortly after startup (give windows time to load)
-    setTimeout(checkAndNotifyAccessibility, 3000);
+    let accessibilityFeaturesStarted = false;
+    startMacAccessibilityFeatures = () => {
+      if (accessibilityFeaturesStarted) return;
+      accessibilityFeaturesStarted = true;
+      clipboardManager.preWarmAccessibility();
+      syncMacNativeHotkeyConfiguration();
+      globeKeyManager.start();
+      setTimeout(checkAndNotifyAccessibility, 3000);
+    };
+
+    if (macAccessibilityFeaturesReady) {
+      startMacAccessibilityFeatures();
+    }
+
+    hotkeyManager.on("hotkey-loaded", syncMacNativeHotkeyConfiguration);
+
+    ipcMain.on("hotkey-listening-mode-changed", (_event, enabled) => {
+      if (enabled) {
+        startMacAccessibilityFeatures();
+        // Let mouse buttons through so they can be captured, but keep macOS's
+        // Globe action down so choosing Globe cannot flash the emoji viewer.
+        globeKeyManager.setConfiguration({ mouseButtons: [], suppressGlobeAction: true });
+      } else {
+        syncMacNativeHotkeyConfiguration();
+      }
+    });
 
     // Allow renderer to request an accessibility check (e.g. on sign-in).
     // Also sends accessibility-missing events if untrusted.
@@ -1745,9 +1828,7 @@ async function startApp() {
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        if (!hotkeyManager.isInListeningMode() && windowManager.isMeetingInputAllowed()) {
-          meetingDetectionEngine?.startManualMeeting();
-        }
+        windowManager.startManualMeeting();
       }
     };
 
@@ -1813,6 +1894,23 @@ async function startApp() {
     });
   }
 }
+
+ipcMain.on("mac-accessibility-features-ready", (_event, expectedAccountScope) => {
+  if (process.platform !== "darwin") return;
+  if (expectedAccountScope) {
+    const accountScopeBinding = require("./src/helpers/accountScopeBinding");
+    const currentAccountScope = accountScopeBinding.resolveActiveAccountScope({
+      ...require("./src/helpers/tokenStore").getState(),
+      binding: accountScopeBinding.read(),
+    });
+    if (!accountScopeBinding.matchesActiveAccountScope(expectedAccountScope, currentAccountScope)) {
+      debugLogger.info("[Accessibility] Ignoring stale account-scoped readiness signal");
+      return;
+    }
+  }
+  macAccessibilityFeaturesReady = true;
+  startMacAccessibilityFeatures?.();
+});
 
 // Listen for usage limit reached from dictation overlay, forward to control panel
 ipcMain.on("limit-reached", (_event, data) => {

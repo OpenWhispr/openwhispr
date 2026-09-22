@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore, MAX_TRANSLATION_TARGETS } from "../../stores/settingsStore";
 import registry from "../../config/languageRegistry.json";
@@ -93,7 +93,7 @@ export default function DictationTranslationSettings() {
                           <div
                             key={target}
                             className={cn(
-                              "inline-flex items-center gap-1 rounded-full py-0.5 pl-2 pr-1 text-xs font-medium transition-colors",
+                              "inline-flex items-center gap-1 rounded-full py-0.5 ps-2 pe-1 text-xs font-medium transition-colors",
                               isActive
                                 ? "bg-primary/10 text-primary ring-1 ring-primary/30"
                                 : "bg-muted text-muted-foreground"
@@ -147,7 +147,7 @@ export default function DictationTranslationSettings() {
 
           <InferenceConfigEditor scope="dictationTranslation" />
 
-          <div className="border-t border-border/40 pt-6">
+          <div className="border-t border-border/70 pt-6">
             <SectionHeader
               title={t("dictationTranslation.prompt.title")}
               description={t("dictationTranslation.prompt.description")}

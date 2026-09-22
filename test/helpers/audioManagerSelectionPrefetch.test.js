@@ -40,8 +40,8 @@ async function loadAudioManager(t, { cachePrefix, settingsKey }) {
 
 function countingCapture(window) {
   const calls = [];
-  window.electronAPI.captureSelectedText = async () => {
-    calls.push(true);
+  window.electronAPI.captureSelectedText = async (options) => {
+    calls.push(options);
     return { status: "selected", text: "selected body", sessionId: `s${calls.length}` };
   };
   return calls;
@@ -61,6 +61,24 @@ test("a prefetched selection is reused instead of read again", async (t) => {
   const capture = await manager.consumeSelectionCapture();
   assert.equal(capture.sessionId, "s1");
   assert.equal(calls.length, 1, "consuming must reuse the prefetch");
+});
+
+test("the caret probe request mirrors the auto-paste setting", async (t) => {
+  const { window, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-sel-probe-flag-test-",
+    settingsKey: "__selProbeFlagSettings",
+  });
+  const calls = countingCapture(window);
+  const manager = createManager();
+
+  globalThis.__selProbeFlagSettings = { autoPasteEnabled: true };
+  manager.beginSelectionCapture();
+  await manager.consumeSelectionCapture();
+
+  globalThis.__selProbeFlagSettings = { autoPasteEnabled: false };
+  await manager.consumeSelectionCapture();
+
+  assert.deepEqual(calls, [{ probeEditable: true }, { probeEditable: false }]);
 });
 
 test("consuming without a prefetch falls back to reading on demand", async (t) => {

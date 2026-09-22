@@ -698,18 +698,49 @@ test("an override toggled on but never configured falls back to the base rules",
 test("wake-word language follows the dictation language when it is explicit", async () => {
   const { resolveWakeWordLanguage } = await load();
 
-  assert.equal(
-    resolveWakeWordLanguage({ preferredLanguage: "it", uiLanguage: "en" }, "fr"),
-    "it"
-  );
+  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "it", uiLanguage: "en" }, "fr"), "it");
   assert.equal(resolveWakeWordLanguage({ preferredLanguage: "zh-CN", uiLanguage: "en" }), "zh-CN");
 });
 
 test("wake-word language uses detected speech before the UI language on auto", async () => {
   const { resolveWakeWordLanguage } = await load();
 
-  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "auto", uiLanguage: "it" }, "en"), "en");
+  assert.equal(
+    resolveWakeWordLanguage({ preferredLanguage: "auto", uiLanguage: "it" }, "en"),
+    "en"
+  );
   assert.equal(resolveWakeWordLanguage({ preferredLanguage: "", uiLanguage: "en" }, "it"), "it");
+});
+
+test("wake-word language infers Arabic script before the UI fallback on auto", async () => {
+  const { resolveWakeWordLanguage } = await load();
+
+  assert.equal(
+    resolveWakeWordLanguage(
+      { preferredLanguage: "auto", uiLanguage: "en" },
+      undefined,
+      "يا Max، لخّص هذه الملاحظة"
+    ),
+    "ar"
+  );
+  assert.equal(
+    resolveWakeWordLanguage(
+      { preferredLanguage: "en", uiLanguage: "ar" },
+      undefined,
+      "يا Max، summarize this note"
+    ),
+    "en",
+    "an explicit dictation language must remain authoritative"
+  );
+  assert.equal(
+    resolveWakeWordLanguage(
+      { preferredLanguage: "auto", uiLanguage: "ar" },
+      "en",
+      "يا Max، summarize this note"
+    ),
+    "en",
+    "provider detection must remain authoritative"
+  );
 });
 
 test("wake-word language falls back to the UI language on auto or unset", async () => {
@@ -729,4 +760,17 @@ test("wake-word language is undefined when no usable hint exists", async () => {
     undefined
   );
   assert.equal(resolveWakeWordLanguage({}), undefined);
+});
+
+test("lifecycle input kind prefers assistant, then translation, then dictation", async () => {
+  const { resolveLifecycleInputKind } = await load();
+  assert.equal(
+    resolveLifecycleInputKind({ voiceAgentRequested: true, translationRequested: true }),
+    "assistant"
+  );
+  assert.equal(
+    resolveLifecycleInputKind({ voiceAgentRequested: false, translationRequested: true }),
+    "translation"
+  );
+  assert.equal(resolveLifecycleInputKind({}), "dictation");
 });

@@ -30,6 +30,7 @@ test("builds a structured prompt that keeps instruction and selection separate",
   assert.equal(extractSelectionEditReplacement(`Improved text${marker}`, marker), "Improved text");
   assert.throws(() => extractSelectionEditReplacement("Truncated text", marker), /incomplete/);
 
+  assert.equal(getSelectionCaptureDisposition({ status: "editable" }), "caret");
   assert.equal(getSelectionCaptureDisposition({ status: "none" }), "standalone");
   assert.equal(
     getSelectionCaptureDisposition({ status: "unavailable", code: "copy_helper_unavailable" }),

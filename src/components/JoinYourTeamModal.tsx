@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2 } from "./icons";
 import {
   Dialog,
   DialogContent,
@@ -117,7 +117,7 @@ export default function JoinYourTeamModal({
             return (
               <div
                 key={entry.workspace_id}
-                className="flex items-center gap-3 rounded-md border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-3 py-2.5"
+                className="flex items-center gap-3 rounded-md border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-3 py-2.5"
               >
                 <span className="w-8 h-8 shrink-0 rounded-md bg-primary/10 text-primary text-[11px] font-semibold flex items-center justify-center">
                   {workspaceMonogram(entry.workspace_name)}
@@ -176,7 +176,7 @@ export default function JoinYourTeamModal({
                     }
                     disabled={busyId !== null}
                   >
-                    {busy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                    {busy && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                     {entry.mode === "join"
                       ? t("workspaces.join.join")
                       : t("workspaces.join.request")}

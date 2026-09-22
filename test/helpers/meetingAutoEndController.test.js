@@ -3,28 +3,21 @@ const assert = require("node:assert/strict");
 
 const createMeetingAutoEndController = require("../../src/helpers/meetingAutoEndController");
 const {
-  COUNTDOWN_MS,
   SILENCE_WINDOW_MS,
   FAST_SILENCE_MS,
-  KEEP_COOLDOWN_MS,
   OWNERSHIP_MIN_ACTIVE_MS,
+  OWNERSHIP_CONFIRM_MS,
   TICK_GAP_MS,
 } = createMeetingAutoEndController;
 
 const START_TIME = 1_000_000;
 const TICK_MS = 1_000;
 
-// The engine ticks the controller about once a second; runFor() mirrors that so
-// long spans never look like a sleep gap.
 const createHarness = () => {
   let now = START_TIME;
-  const countdowns = [];
-  const canceledCountdowns = [];
   const stops = [];
   const controller = createMeetingAutoEndController({
     now: () => now,
-    onCountdown: (countdown) => countdowns.push(countdown),
-    onCountdownCanceled: (sessionId) => canceledCountdowns.push(sessionId),
     onStop: (sessionId, reason) => stops.push({ sessionId, reason }),
   });
 
@@ -37,18 +30,14 @@ const createHarness = () => {
       controller.tick();
     }
   };
-  const jump = (ms) => {
-    now += ms;
-  };
 
   return {
     controller,
-    countdowns,
-    canceledCountdowns,
     stops,
     runFor,
-    jump,
-    now: () => now,
+    jump: (ms) => {
+      now += ms;
+    },
   };
 };
 
@@ -67,494 +56,351 @@ const micAcquired = (controller, sessionId = "s1") =>
 const audio = (controller, micActive, systemActive, sessionId = "s1") =>
   controller.handleAudioActivity({ sessionId, micActive, systemActive });
 
-// --------------------------------------------------------------------------
-// Ownership mode
-// --------------------------------------------------------------------------
+test("ownership: a qualifying mic release stops after the confirm window", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
 
-test("ownership: mic release with a quiet system channel starts a mic-released countdown", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  micReleased(harness.controller);
+  assert.deepEqual(harness.stops, []);
+  harness.runFor(OWNERSHIP_CONFIRM_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
 
-  micReleased(h.controller);
-
-  assert.deepEqual(h.countdowns, [
-    { sessionId: "s1", expiresAt: h.now() + COUNTDOWN_MS, reason: "mic-released" },
-  ]);
-  h.runFor(COUNTDOWN_MS - TICK_MS);
-  assert.deepEqual(h.stops, []);
-  h.runFor(TICK_MS);
-  assert.deepEqual(h.stops, [{ sessionId: "s1", reason: "mic-released" }]);
+  harness.runFor(TICK_MS);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });
 
-test("ownership: audible system audio defers the countdown until it goes quiet", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  audio(h.controller, false, true);
+// A device flap (Bluetooth reconnect, input-device switch, an app rebuilding
+// its input unit for screen share) emits MIC_STOP then MIC_START in the same
+// reconcile pass, with no time between them.
+test("ownership: a mic release immediately followed by a re-acquire keeps recording", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
 
-  micReleased(h.controller);
-  h.runFor(2 * COUNTDOWN_MS);
-  assert.deepEqual(h.countdowns, [], "remote voices still playing — call is live");
+  micReleased(harness.controller);
+  micAcquired(harness.controller);
 
-  audio(h.controller, false, false);
-  assert.equal(h.countdowns.length, 1);
-  assert.equal(h.countdowns[0].reason, "mic-released");
+  harness.runFor(4 * OWNERSHIP_CONFIRM_MS);
+  assert.deepEqual(harness.stops, []);
 });
 
-test("ownership: system audio resuming cancels the countdown and quiet restarts it from 60s", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
-  h.runFor(30_000);
+test("ownership: remote audio during the confirm window restarts it", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
 
-  audio(h.controller, false, true);
-  assert.deepEqual(h.canceledCountdowns, ["s1"]);
-  h.runFor(COUNTDOWN_MS);
-  assert.deepEqual(h.stops, []);
+  micReleased(harness.controller);
+  harness.runFor(OWNERSHIP_CONFIRM_MS - TICK_MS);
+  audio(harness.controller, false, true);
+  harness.runFor(4 * OWNERSHIP_CONFIRM_MS);
+  assert.deepEqual(harness.stops, []);
 
-  audio(h.controller, false, false);
-  assert.equal(h.countdowns.length, 2);
-  assert.equal(h.countdowns[1].expiresAt, h.now() + COUNTDOWN_MS, "full 60s again");
+  audio(harness.controller, false, false);
+  harness.runFor(OWNERSHIP_CONFIRM_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
+
+  harness.runFor(TICK_MS);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });
 
-test("ownership: a re-acquired external mic cancels the countdown and re-arms", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
-  h.runFor(30_000);
+test("ownership: remote audio defers stopping until the system channel goes quiet", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  audio(harness.controller, false, true);
 
-  micAcquired(h.controller);
-  assert.deepEqual(h.canceledCountdowns, ["s1"]);
-  h.runFor(2 * COUNTDOWN_MS);
-  assert.deepEqual(h.stops, []);
+  micReleased(harness.controller);
+  harness.runFor(2 * SILENCE_WINDOW_MS);
+  assert.deepEqual(harness.stops, []);
 
-  micReleased(h.controller);
-  assert.equal(h.countdowns.length, 2);
+  audio(harness.controller, false, false);
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });
 
-test("ownership: mic-channel activity does not cancel the countdown", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
+test("ownership: mic-channel activity does not mask a qualifying release", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  audio(harness.controller, true, false);
 
-  audio(h.controller, true, false);
-  h.runFor(COUNTDOWN_MS);
+  micReleased(harness.controller);
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
 
-  assert.deepEqual(h.canceledCountdowns, []);
-  assert.deepEqual(h.stops, [{ sessionId: "s1", reason: "mic-released" }]);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });
 
-test("ownership: a hold shorter than the minimum falls back to silence instead of arming", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
-  h.runFor(20_000);
-  audio(h.controller, true, false);
-  micAcquired(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS - TICK_MS);
+test("ownership: a brief external mic hold falls back to the silence window", () => {
+  const harness = createHarness();
+  beginFallback(harness.controller);
+  audio(harness.controller, true, false);
+  micAcquired(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS - TICK_MS);
 
-  micReleased(h.controller);
-  h.runFor(2 * COUNTDOWN_MS);
+  micReleased(harness.controller);
+  harness.runFor(SILENCE_WINDOW_MS);
+  assert.deepEqual(harness.stops, []);
 
-  assert.deepEqual(h.countdowns, [], "people are still talking in the room");
-  audio(h.controller, false, false);
-  h.runFor(SILENCE_WINDOW_MS);
-  assert.equal(h.countdowns.length, 1);
-  assert.equal(h.countdowns[0].reason, "silence");
+  audio(harness.controller, false, false);
+  harness.runFor(SILENCE_WINDOW_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
+  harness.runFor(TICK_MS);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
-test("ownership: a process exit is ignored", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+test("ownership: process exit is ignored while an app owns the mic", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
 
-  h.controller.handleMeetingProcessExit({ sessionId: "s1" });
-  h.runFor(2 * SILENCE_WINDOW_MS);
+  harness.controller.handleMeetingProcessExit({ sessionId: "s1" });
+  harness.runFor(2 * SILENCE_WINDOW_MS);
 
-  assert.deepEqual(h.countdowns, []);
+  assert.deepEqual(harness.stops, []);
 });
 
-test("ownership: keep suppresses prompts until fresh active ownership, and the cooldown still applies", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
+test("fallback: both channels staying quiet for 60 seconds stops immediately", () => {
+  const harness = createHarness();
+  beginFallback(harness.controller);
 
-  assert.equal(h.controller.keepRecording("s1"), true);
-  assert.deepEqual(h.canceledCountdowns, ["s1"]);
-  h.runFor(2 * KEEP_COOLDOWN_MS);
-  assert.equal(h.countdowns.length, 1, "no further call → never re-prompted");
+  harness.runFor(SILENCE_WINDOW_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
+  harness.runFor(TICK_MS);
 
-  micAcquired(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
-  assert.equal(h.countdowns.length, 2, "a new call is fresh evidence");
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
-test("ownership: a call rejoined and left again re-prompts at once, even inside the keep cooldown", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
-  h.controller.keepRecording("s1");
+test("fallback: activity on either channel restarts the silence window", () => {
+  const harness = createHarness();
+  beginFallback(harness.controller);
+  harness.runFor(SILENCE_WINDOW_MS - 5_000);
 
-  h.runFor(60_000);
-  micAcquired(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
+  audio(harness.controller, true, false);
+  harness.runFor(5_000);
+  audio(harness.controller, false, false);
+  harness.runFor(SILENCE_WINDOW_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
+  harness.runFor(TICK_MS);
 
-  assert.equal(h.countdowns.length, 2, "unambiguous evidence must not wait out the cooldown");
-  assert.equal(h.countdowns[1].reason, "mic-released");
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
-test("ownership: a brief rejoin inside the cooldown does not bypass it", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
-  h.controller.keepRecording("s1");
-  const keptAt = h.now();
+test("fallback: process exit shortens the quiet window to 10 seconds", () => {
+  const harness = createHarness();
+  beginFallback(harness.controller);
+  harness.runFor(20_000);
 
-  h.runFor(60_000);
-  micAcquired(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS - TICK_MS);
-  micReleased(h.controller);
-  h.runFor(2 * SILENCE_WINDOW_MS);
-  assert.equal(h.countdowns.length, 1, "an incidental hold is not fresh evidence");
+  harness.controller.handleMeetingProcessExit({ sessionId: "s1" });
+  harness.runFor(FAST_SILENCE_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
+  harness.runFor(TICK_MS);
 
-  h.runFor(keptAt + KEEP_COOLDOWN_MS - h.now());
-  h.runFor(SILENCE_WINDOW_MS);
-  assert.equal(h.countdowns.length, 2, "after the cooldown, silence prompts as fallback");
-  assert.equal(h.countdowns[1].reason, "silence");
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "process-exit" }]);
 });
 
-// --------------------------------------------------------------------------
-// Fallback mode
-// --------------------------------------------------------------------------
+test("fallback: activity after process exit restores the full silence window", () => {
+  const harness = createHarness();
+  beginFallback(harness.controller);
+  harness.controller.handleMeetingProcessExit({ sessionId: "s1" });
+  harness.runFor(5_000);
 
-test("fallback: 60s of both-channel silence prompts with reason silence", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
+  audio(harness.controller, false, true);
+  harness.runFor(5_000);
+  audio(harness.controller, false, false);
+  harness.runFor(FAST_SILENCE_MS);
+  assert.deepEqual(harness.stops, []);
 
-  h.runFor(SILENCE_WINDOW_MS - TICK_MS);
-  assert.deepEqual(h.countdowns, []);
-  h.runFor(TICK_MS);
-
-  assert.deepEqual(h.countdowns, [
-    { sessionId: "s1", expiresAt: h.now() + COUNTDOWN_MS, reason: "silence" },
-  ]);
-  h.runFor(COUNTDOWN_MS);
-  assert.deepEqual(h.stops, [{ sessionId: "s1", reason: "silence" }]);
+  harness.runFor(SILENCE_WINDOW_MS - FAST_SILENCE_MS);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
-test("fallback: activity on either channel resets the window and cancels the countdown", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
-  h.runFor(SILENCE_WINDOW_MS - 5_000);
+test("fallback: a session with no chunks still stops after the silence window", () => {
+  const harness = createHarness();
+  beginFallback(harness.controller);
 
-  audio(h.controller, true, false);
-  h.runFor(5_000);
-  audio(h.controller, false, false);
-  h.runFor(SILENCE_WINDOW_MS - TICK_MS);
-  assert.deepEqual(h.countdowns, [], "the window restarted when the mic went quiet");
-  h.runFor(TICK_MS);
-  assert.equal(h.countdowns.length, 1);
+  harness.runFor(SILENCE_WINDOW_MS);
 
-  audio(h.controller, false, true);
-  assert.deepEqual(h.canceledCountdowns, ["s1"]);
-  h.runFor(2 * COUNTDOWN_MS);
-  assert.deepEqual(h.stops, []);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
-test("fallback: process exit with no tracked app left shortens the window to 10s", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
-  h.runFor(20_000);
+test("fallback: unreliable ownership uses the silence window from session start", () => {
+  const harness = createHarness();
+  beginFallback(harness.controller, "s1", { reliable: false });
 
-  h.controller.handleMeetingProcessExit({ sessionId: "s1" });
-  h.runFor(FAST_SILENCE_MS - TICK_MS);
-  assert.deepEqual(h.countdowns, []);
-  h.runFor(TICK_MS);
+  harness.runFor(SILENCE_WINDOW_MS);
 
-  assert.equal(h.countdowns.length, 1);
-  assert.equal(h.countdowns[0].reason, "process-exit");
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
-test("fallback: activity after a process exit clears the fast window", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
-  h.controller.handleMeetingProcessExit({ sessionId: "s1" });
-  h.runFor(5_000);
+test("mode transitions: fresh ownership switches fallback into ownership mode", () => {
+  const harness = createHarness();
+  beginFallback(harness.controller);
+  harness.runFor(SILENCE_WINDOW_MS - TICK_MS);
 
-  audio(h.controller, false, true);
-  h.runFor(5_000);
-  audio(h.controller, false, false);
-  h.runFor(FAST_SILENCE_MS);
-  assert.deepEqual(h.countdowns, [], "call continued elsewhere — back to the full window");
+  micAcquired(harness.controller);
+  harness.runFor(2 * SILENCE_WINDOW_MS);
+  assert.deepEqual(harness.stops, []);
 
-  h.runFor(SILENCE_WINDOW_MS - FAST_SILENCE_MS);
-  assert.equal(h.countdowns.length, 1);
-  assert.equal(h.countdowns[0].reason, "silence");
+  micReleased(harness.controller);
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });
 
-test("fallback: process exit while a countdown is visible is ignored", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
-  h.runFor(SILENCE_WINDOW_MS);
-  assert.equal(h.countdowns.length, 1);
-  const { expiresAt } = h.countdowns[0];
+test("mode transitions: reliability loss restarts fallback silence from that moment", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
 
-  h.controller.handleMeetingProcessExit({ sessionId: "s1" });
-  h.runFor(COUNTDOWN_MS);
-
-  assert.equal(h.countdowns.length, 1);
-  assert.deepEqual(h.stops, [{ sessionId: "s1", reason: "silence" }]);
-  assert.equal(h.countdowns[0].expiresAt, expiresAt);
-});
-
-test("fallback: keep is honored until activity resumes and the cooldown passes", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
-  h.runFor(SILENCE_WINDOW_MS);
-  assert.equal(h.controller.keepRecording("s1"), true);
-  const keptAt = h.now();
-
-  h.runFor(2 * KEEP_COOLDOWN_MS);
-  assert.equal(h.countdowns.length, 1, "no fresh evidence → no re-prompt");
-
-  audio(h.controller, true, false);
-  h.runFor(2_000);
-  audio(h.controller, false, false);
-  h.runFor(SILENCE_WINDOW_MS);
-  assert.equal(h.countdowns.length, 2, "renewed audio then silence reopened the episode");
-  assert.ok(h.countdowns[1].expiresAt > keptAt + KEEP_COOLDOWN_MS);
-});
-
-test("fallback: process exit after keep reopens the episode but fires no earlier than the cooldown", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
-  h.runFor(SILENCE_WINDOW_MS);
-  h.controller.keepRecording("s1");
-  const keptAt = h.now();
-
-  h.runFor(60_000);
-  h.controller.handleMeetingProcessExit({ sessionId: "s1" });
-  h.runFor(FAST_SILENCE_MS + TICK_MS);
-  assert.equal(h.countdowns.length, 1, "inside the cooldown");
-
-  h.runFor(keptAt + KEEP_COOLDOWN_MS - h.now());
-  assert.equal(h.countdowns.length, 2);
-  assert.equal(h.countdowns[1].reason, "process-exit");
-});
-
-test("fallback: a session that never sees a chunk prompts after the first window", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
-
-  h.runFor(SILENCE_WINDOW_MS);
-
-  assert.equal(h.countdowns.length, 1);
-  assert.equal(h.countdowns[0].reason, "silence");
-});
-
-test("fallback: unreliable ownership behaves as fallback from the start", () => {
-  const h = createHarness();
-  beginFallback(h.controller, "s1", { reliable: false });
-
-  h.runFor(SILENCE_WINDOW_MS);
-  assert.equal(h.countdowns.length, 1);
-});
-
-// --------------------------------------------------------------------------
-// Mode transitions
-// --------------------------------------------------------------------------
-
-test("fresh active ownership switches fallback to ownership and cancels a pending fallback countdown", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
-  h.runFor(SILENCE_WINDOW_MS);
-  assert.equal(h.countdowns.length, 1);
-
-  micAcquired(h.controller);
-  assert.deepEqual(h.canceledCountdowns, ["s1"]);
-  h.runFor(2 * SILENCE_WINDOW_MS);
-  assert.equal(h.countdowns.length, 1, "silence no longer prompts while an app holds the mic");
-
-  micReleased(h.controller);
-  assert.equal(h.countdowns.length, 2);
-  assert.equal(h.countdowns[1].reason, "mic-released");
-});
-
-test("reliability loss switches to fallback, dismisses the countdown, and restarts silence from now", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
-  h.runFor(30_000);
-
-  h.controller.handleExternalMicState({
+  harness.controller.handleExternalMicState({
     sessionId: "s1",
     reliable: false,
     externalMicActive: false,
   });
-  assert.deepEqual(h.canceledCountdowns, ["s1"]);
+  harness.runFor(SILENCE_WINDOW_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
+  harness.runFor(TICK_MS);
 
-  h.runFor(SILENCE_WINDOW_MS - TICK_MS);
-  assert.equal(h.countdowns.length, 1);
-  h.runFor(TICK_MS);
-  assert.equal(h.countdowns.length, 2);
-  assert.equal(h.countdowns[1].reason, "silence");
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
-test("a reliable-but-inactive report after a reliability loss stays in fallback", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  h.controller.handleExternalMicState({
+test("mode transitions: an inactive reliable report after reliability loss stays fallback", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  harness.controller.handleExternalMicState({
     sessionId: "s1",
     reliable: false,
     externalMicActive: false,
   });
-  h.runFor(5_000);
+  harness.runFor(5_000);
 
-  micReleased(h.controller);
-  assert.deepEqual(
-    h.countdowns,
-    [],
-    "no observed release → must not start a mic-released countdown"
-  );
+  micReleased(harness.controller);
+  assert.deepEqual(harness.stops, []);
+  harness.runFor(SILENCE_WINDOW_MS);
 
-  h.runFor(SILENCE_WINDOW_MS);
-  assert.equal(h.countdowns.length, 1);
-  assert.equal(h.countdowns[0].reason, "silence");
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
-// --------------------------------------------------------------------------
-// Clock, lifecycle, and guards
-// --------------------------------------------------------------------------
+test("clock: a sleep-sized tick gap discards accumulated silence", () => {
+  const harness = createHarness();
+  beginFallback(harness.controller);
+  harness.runFor(SILENCE_WINDOW_MS - TICK_MS);
 
-test("a tick gap over the sleep threshold discards accumulated silence and cancels a visible countdown without stopping", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
-  h.runFor(SILENCE_WINDOW_MS);
-  assert.equal(h.countdowns.length, 1);
+  harness.jump(TICK_GAP_MS + 1);
+  harness.controller.tick();
+  harness.runFor(SILENCE_WINDOW_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
+  harness.runFor(TICK_MS);
 
-  h.jump(8 * 60 * 60 * 1000);
-  h.controller.tick();
-
-  assert.deepEqual(h.stops, []);
-  assert.deepEqual(h.canceledCountdowns, ["s1"]);
-  h.runFor(SILENCE_WINDOW_MS - TICK_MS);
-  assert.equal(h.countdowns.length, 1, "silence restarted from wake");
-  h.runFor(TICK_MS);
-  assert.equal(h.countdowns.length, 2);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
-test("a gap observed through an activity event instead of tick() is handled the same way", () => {
-  const h = createHarness();
-  beginFallback(h.controller);
-  h.runFor(SILENCE_WINDOW_MS);
-  h.runFor(30_000);
+// Every entry point observes the clock, not just tick(): after wake the owner's
+// monitor can deliver an activity change before the controller's own tick runs,
+// and that path has to discard the pre-sleep silence too.
+test("clock: a sleep-sized gap observed through an activity event discards accumulated silence", () => {
+  const harness = createHarness();
+  beginFallback(harness.controller);
+  harness.runFor(SILENCE_WINDOW_MS - TICK_MS);
 
-  h.jump(TICK_GAP_MS + 1);
-  audio(h.controller, false, false);
+  harness.jump(TICK_GAP_MS + 1);
+  audio(harness.controller, false, false);
 
-  assert.deepEqual(h.stops, []);
-  assert.deepEqual(h.canceledCountdowns, ["s1"]);
+  assert.deepEqual(harness.stops, []);
+  harness.runFor(SILENCE_WINDOW_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
+
+  harness.runFor(TICK_MS);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
-test("countdown expiry stops exactly once and later inputs are ignored", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
-  h.runFor(COUNTDOWN_MS);
-  assert.equal(h.stops.length, 1);
+// endSession drops the session outright, so evidence gathered before it can
+// never drive a stop afterwards. Every _deactivateAutoEnd goes through here.
+test("ending a session keeps its pending evidence from stopping anything later", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  micReleased(harness.controller);
 
-  h.runFor(5 * COUNTDOWN_MS);
-  micAcquired(h.controller);
-  micReleased(h.controller);
-  audio(h.controller, true, true);
-  audio(h.controller, false, false);
-  h.controller.handleMeetingProcessExit({ sessionId: "s1" });
-  h.runFor(5 * COUNTDOWN_MS);
+  harness.controller.endSession("s1");
+  harness.runFor(OWNERSHIP_CONFIRM_MS + SILENCE_WINDOW_MS);
 
-  assert.equal(h.stops.length, 1);
-  assert.equal(h.countdowns.length, 1);
+  assert.deepEqual(harness.stops, []);
 });
 
-test("keep recording after countdown expiry reports failure — the stop is already in flight", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
-  h.runFor(COUNTDOWN_MS);
+test("ending a session that is not the live one leaves the live one running", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  micReleased(harness.controller);
 
-  assert.equal(h.controller.keepRecording("s1"), false);
+  harness.controller.endSession("s2");
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
+
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });
 
-test("ending or replacing a session cancels its countdown", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
-  assert.equal(h.countdowns.length, 1);
+test("clock: a mic release observed on wake does not stop immediately", () => {
+  const { controller, jump, runFor, stops } = createHarness();
+  beginOwnership(controller);
+  runFor(OWNERSHIP_MIN_ACTIVE_MS);
 
-  beginOwnership(h.controller, "s2");
-  assert.deepEqual(h.canceledCountdowns, ["s1"]);
-  h.runFor(2 * COUNTDOWN_MS);
-  assert.deepEqual(h.stops, [], "the old countdown never fires for the new session");
+  jump(TICK_GAP_MS + 1);
+  controller.handleExternalMicState({
+    sessionId: "s1",
+    reliable: true,
+    externalMicActive: false,
+  });
 
-  micReleased(h.controller, "s2");
-  h.controller.endSession("s2");
-  assert.deepEqual(h.canceledCountdowns, ["s1", "s2"]);
-  h.runFor(2 * COUNTDOWN_MS);
-  assert.deepEqual(h.stops, []);
+  assert.deepEqual(stops, []);
+  runFor(SILENCE_WINDOW_MS - TICK_MS);
+  assert.deepEqual(stops, []);
+  runFor(TICK_MS);
+  assert.deepEqual(stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
-test("ending an expired session dismisses nothing and does not stop again", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
-  micReleased(h.controller);
-  h.runFor(COUNTDOWN_MS);
+test("lifecycle: a stop fires once and later inputs are ignored", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  micReleased(harness.controller);
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
 
-  h.controller.endSession("s1");
-  h.runFor(COUNTDOWN_MS);
+  micAcquired(harness.controller);
+  micReleased(harness.controller);
+  audio(harness.controller, true, true);
+  audio(harness.controller, false, false);
+  harness.controller.handleMeetingProcessExit({ sessionId: "s1" });
+  harness.runFor(5 * SILENCE_WINDOW_MS);
 
-  assert.equal(h.stops.length, 1);
-  assert.deepEqual(h.canceledCountdowns, []);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });
 
-test("stale session ids and ineligible sessions ignore all inputs", () => {
-  const h = createHarness();
-  beginOwnership(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+test("guards: stale session ids and ineligible sessions ignore inputs", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
 
-  micReleased(h.controller, "other");
-  audio(h.controller, false, false, "other");
-  h.controller.handleMeetingProcessExit({ sessionId: "other" });
-  assert.equal(h.controller.keepRecording("other"), false);
-  h.runFor(2 * SILENCE_WINDOW_MS);
-  assert.deepEqual(h.countdowns, []);
+  micReleased(harness.controller, "other");
+  audio(harness.controller, false, false, "other");
+  harness.controller.handleMeetingProcessExit({ sessionId: "other" });
+  assert.deepEqual(harness.stops, []);
 
-  h.controller.beginSession({
-    sessionId: "s3",
+  harness.controller.beginSession({
+    sessionId: "s2",
     eligible: false,
     reliable: true,
     externalMicActive: true,
   });
-  micReleased(h.controller, "s3");
-  h.runFor(2 * SILENCE_WINDOW_MS);
-  assert.deepEqual(h.countdowns, []);
+  micReleased(harness.controller, "s2");
+  harness.runFor(2 * SILENCE_WINDOW_MS);
+  assert.deepEqual(harness.stops, []);
 });
 
-test("beginSession seeds the initial audio state so an already-audible system channel defers the countdown", () => {
-  const h = createHarness();
-  h.controller.beginSession({
+test("initial state: an already-audible system channel defers ownership stop", () => {
+  const harness = createHarness();
+  harness.controller.beginSession({
     sessionId: "s1",
     eligible: true,
     reliable: true,
@@ -562,12 +408,12 @@ test("beginSession seeds the initial audio state so an already-audible system ch
     micActive: false,
     systemActive: true,
   });
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
 
-  micReleased(h.controller);
-  h.runFor(COUNTDOWN_MS);
-  assert.deepEqual(h.countdowns, []);
+  micReleased(harness.controller);
+  assert.deepEqual(harness.stops, []);
 
-  audio(h.controller, false, false);
-  assert.equal(h.countdowns.length, 1);
+  audio(harness.controller, false, false);
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });

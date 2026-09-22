@@ -1,5 +1,5 @@
-const { shell } = require("electron");
 const debugLogger = require("./debugLogger");
+const { openExternalUrl } = require("./externalUrlOpener");
 const { getMeetingJoinUrl } = require("./meetingJoinUrl");
 const createMeetingAutoEndController = require("./meetingAutoEndController");
 const { createMeetingAudioActivityMonitor } = require("./meetingAudioActivityMonitor");
@@ -71,40 +71,22 @@ class MeetingDetectionEngine {
     });
     this._autoEndController = createAutoEndController({
       now,
-      onCountdown: (countdown) => {
-        debugLogger.info("Meeting auto-end countdown started", countdown, "meeting");
-        Promise.resolve(this.windowManager.showMeetingAutoEndCountdown?.(countdown)).catch(
-          (error) => {
-            debugLogger.error(
-              "Failed to show meeting auto-end countdown",
-              { error: error?.message },
-              "meeting"
-            );
-            this.handleAutoEndNotificationUnavailable(countdown.sessionId);
-          }
-        );
-      },
-      onCountdownCanceled: (sessionId) => {
-        debugLogger.info("Meeting auto-end countdown canceled", { sessionId }, "meeting");
-        this.windowManager.dismissMeetingAutoEndCountdown?.(sessionId);
-      },
-      onCountdownExpired: (sessionId) => {
-        this.windowManager.dismissMeetingAutoEndCountdown?.(sessionId);
-      },
       onStop: (sessionId, reason) => this._requestRecordingStop(sessionId, reason),
     });
     this._bindListeners();
   }
 
   _bindListeners() {
-    // Process detection is context-only — track running apps but don't trigger notifications.
-    // This avoids false positives from apps like FaceTime running in the background.
+    // Process detection is context-only — a running app never prompts by itself
+    // (FaceTime idles in the background), but it corroborates device activity
+    // the mic detector could not attribute to a process.
     this.meetingProcessDetector.on("meeting-process-detected", (data) => {
       debugLogger.info(
         "Meeting app running (context only)",
         { processKey: data.processKey, appName: data.appName },
         "meeting"
       );
+      this.audioActivityDetector.notifyMeetingAppsChanged();
     });
 
     this.meetingProcessDetector.on("meeting-process-ended", (data) => {
@@ -150,7 +132,7 @@ class MeetingDetectionEngine {
     if (!session || session.sessionId !== sessionId) return;
 
     debugLogger.info(
-      "Meeting auto-end countdown expired, requesting stop",
+      "Meeting end detected, requesting automatic stop",
       { sessionId, reason },
       "meeting"
     );
@@ -253,6 +235,7 @@ class MeetingDetectionEngine {
     autoEndEligible,
     ownerWebContents,
     systemAudioAvailable = false,
+    noteId = null,
   }) {
     if (this._recordingSession) this._deactivateAutoEnd();
 
@@ -261,6 +244,9 @@ class MeetingDetectionEngine {
       autoEndEligible: autoEndEligible === true,
       ownerWebContents,
       systemAudioAvailable: systemAudioAvailable === true,
+      // Lets a second manual start surface this recording instead of opening a
+      // new note over it.
+      noteId,
     };
     this._syncMeetingProcessDetector();
 
@@ -329,31 +315,6 @@ class MeetingDetectionEngine {
     return true;
   }
 
-  keepRecordingSession(sessionId) {
-    const session = this._recordingSession;
-    if (!this._autoEndActive || !session || session.sessionId !== sessionId) return false;
-
-    const kept = this._autoEndController.keepRecording(sessionId) === true;
-    debugLogger.info(
-      kept ? "Auto-end paused — user kept recording" : "Keep request lost to expired countdown",
-      { sessionId },
-      "meeting"
-    );
-    return kept;
-  }
-
-  handleAutoEndNotificationUnavailable(sessionId) {
-    const suppressed = this._autoEndController.handleCountdownUnavailable(sessionId) === true;
-    if (suppressed) {
-      debugLogger.warn(
-        "Meeting auto-end suppressed because its countdown was unavailable",
-        { sessionId },
-        "meeting"
-      );
-    }
-    return suppressed;
-  }
-
   // Calendar reminders enter the same pipeline as mic detections, so they share
   // the recording gates, queueing, cooldowns, and the overlay window.
   handleCalendarReminder(event) {
@@ -393,8 +354,8 @@ class MeetingDetectionEngine {
 
     // _userRecording is shared with dictation, so a dictation ending mid-meeting
     // clears it while the recording is still live; the tracked session is the
-    // gate that cannot be reset from outside. A prompt shown then would replace
-    // a visible auto-end countdown card and let the countdown run on unseen.
+    // gate that cannot be reset from outside. A prompt shown then could replace
+    // the recording UI while the tracked recording is still active.
     if (this._userRecording || this._postRecordingCooldown || this._recordingSession) {
       debugLogger.info("Detection queued — user is recording", { detectionId, source }, "meeting");
       this._notificationQueue.push({ source, key, data });
@@ -458,7 +419,6 @@ class MeetingDetectionEngine {
     }
 
     this.windowManager.showMeetingNotification({
-      kind: "detection",
       detectionId,
       source,
       key,
@@ -477,15 +437,13 @@ class MeetingDetectionEngine {
         if (action === "join") {
           const joinUrl = getMeetingJoinUrl(detection.event);
           if (joinUrl) {
-            shell
-              .openExternal(joinUrl)
-              .catch((error) =>
-                debugLogger.error(
-                  "Failed to open meeting link",
-                  { error: error.message, joinUrl },
-                  "meeting"
-                )
-              );
+            openExternalUrl(joinUrl).catch((error) =>
+              debugLogger.error(
+                "Failed to open meeting link",
+                { error: error.message, joinUrl },
+                "meeting"
+              )
+            );
           }
         }
 
@@ -563,6 +521,15 @@ class MeetingDetectionEngine {
 
   async startManualMeeting() {
     debugLogger.info("Starting manual meeting", {}, "meeting");
+
+    // A live meeting already owns a note: a second start would leave the recording
+    // running in it behind a new, empty one. Surface the live note instead.
+    if (this._recordingSession) {
+      const { noteId } = this._recordingSession;
+      debugLogger.info("Manual meeting ignored — a recording is live", { noteId }, "meeting");
+      if (noteId != null) await this.windowManager.queueNoteNavigation({ noteId });
+      return;
+    }
 
     const activeEvents = this.databaseManager.getActiveEvents();
     if (activeEvents?.length > 0) {
@@ -657,6 +624,22 @@ class MeetingDetectionEngine {
       event: calEvent,
       trigger,
     });
+  }
+
+  // A card can vanish without a response — a compositor kill, a load failure,
+  // onboarding taking the screen. Only this detection is released, unlike a
+  // response or an expiry which settle every pending one: clearing them all
+  // would strand _notificationQueue, whose entries the flush below looks up in
+  // activeDetections.
+  handleDetectionNotificationClosed(detectionId, { flushQueued = true } = {}) {
+    if (!this.activeDetections.has(detectionId)) return;
+    this.activeDetections.delete(detectionId);
+    debugLogger.info(
+      "Detection notification closed without a response",
+      { detectionId },
+      "meeting"
+    );
+    if (flushQueued) this._flushNotificationQueue();
   }
 
   handleNotificationTimeout() {

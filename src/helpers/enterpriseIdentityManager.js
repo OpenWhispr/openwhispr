@@ -3,6 +3,7 @@ const fs = require("fs");
 const {
   resolveManagedEnterpriseScope,
   validateManagedEnterpriseEnvelope,
+  managedScopesForConfig,
 } = require("./enterpriseManagedConfig.mjs");
 const { AuthContextError } = require("./cloudApiRequest");
 
@@ -102,7 +103,7 @@ function requiresEnforcedManagedAccess(config) {
   );
 }
 
-function responseError(code, error, identity = null, enforcementRequired) {
+function responseError(code, error, identity = null, enforcementRequired, enforcedScopes) {
   return {
     success: false,
     status: "error",
@@ -112,6 +113,7 @@ function responseError(code, error, identity = null, enforcementRequired) {
     code,
     error,
     ...(typeof enforcementRequired === "boolean" ? { enforcementRequired } : {}),
+    ...(Array.isArray(enforcedScopes) ? { enforcedScopes } : {}),
   };
 }
 
@@ -145,7 +147,7 @@ function createEnterpriseIdentityManager({
     }
   }
 
-  function evictIdentity(identity, code, enforcementRequired = false) {
+  function evictIdentity(identity, code, enforcementRequired = false, enforcedScopes = []) {
     configs.delete(identity.cacheKey);
     configRequests.delete(identity.cacheKey);
     clearIdentityCredentials(identity);
@@ -157,6 +159,7 @@ function createEnterpriseIdentityManager({
       config: null,
       code,
       enforcementRequired,
+      enforcedScopes,
     });
   }
 
@@ -306,7 +309,14 @@ function createEnterpriseIdentityManager({
           const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
           error.enforcementRequired =
             error?.code === "ENTERPRISE_REQUIRED" ? false : requiresEnforcedManagedAccess(prior);
-          evictIdentity(identity, error.code || "MANAGED_CONFIG_FAILED", error.enforcementRequired);
+          error.enforcedScopes =
+            error?.code === "ENTERPRISE_REQUIRED" ? [] : managedScopesForConfig(prior).enforced;
+          evictIdentity(
+            identity,
+            error.code || "MANAGED_CONFIG_FAILED",
+            error.enforcementRequired,
+            error.enforcedScopes
+          );
           throw error;
         }
         if (!isTransientConfigError(error)) throw error;
@@ -345,19 +355,20 @@ function createEnterpriseIdentityManager({
         error.code || "MANAGED_CONFIG_FAILED",
         error.message,
         identity,
-        error.enforcementRequired
+        error.enforcementRequired,
+        error.enforcedScopes
       );
     }
   }
 
-  async function fetchAssertion(identity, provider) {
+  async function fetchAssertion(identity, provider, inferenceScope) {
     const url = `${identity.apiUrl}/api/workspaces/${encodeURIComponent(
       identity.workspaceId
     )}/enterprise-providers/${provider}/assertion`;
     const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: requestHeaders(identity, true),
-      body: "{}",
+      body: JSON.stringify(inferenceScope ? { inferenceScope } : {}),
     });
     assertIdentityCurrent(identity);
     if (!response.ok) {
@@ -370,7 +381,9 @@ function createEnterpriseIdentityManager({
         const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
         error.enforcementRequired =
           error.code === "ENTERPRISE_REQUIRED" ? false : requiresEnforcedManagedAccess(prior);
-        evictIdentity(identity, error.code, error.enforcementRequired);
+        error.enforcedScopes =
+          error.code === "ENTERPRISE_REQUIRED" ? [] : managedScopesForConfig(prior).enforced;
+        evictIdentity(identity, error.code, error.enforcementRequired, error.enforcedScopes);
       }
       throw error;
     }
@@ -421,7 +434,7 @@ function createEnterpriseIdentityManager({
       return {
         credentialProvider: () =>
           dedupeCredential(key, async () => {
-            const assertion = await fetchAssertion(identity, "bedrock");
+            const assertion = await fetchAssertion(identity, "bedrock", resolution.inferenceScope);
             const credentials = await createAwsWebIdentityProvider({
               roleArn: record.config.roleArn,
               roleSessionName: `openwhispr-${identity.workspaceId.slice(0, 8)}`,
@@ -456,7 +469,7 @@ function createEnterpriseIdentityManager({
     return {
       tokenProvider: () =>
         dedupeCredential(key, async () => {
-          const assertion = await fetchAssertion(identity, "azure");
+          const assertion = await fetchAssertion(identity, "azure", resolution.inferenceScope);
           const tokenUrl = `https://login.microsoftonline.com/${encodeURIComponent(
             record.config.tenantId
           )}/oauth2/v2.0/token`;
@@ -514,7 +527,11 @@ function createEnterpriseIdentityManager({
       config: resolution.record.config,
       version: resolution.record.version,
       generation: config.generation,
-      ...managedProviderFunctions(identity, { ...resolution, generation: config.generation }),
+      ...managedProviderFunctions(identity, {
+        ...resolution,
+        generation: config.generation,
+        inferenceScope: request.inferenceScope,
+      }),
     };
   }
 

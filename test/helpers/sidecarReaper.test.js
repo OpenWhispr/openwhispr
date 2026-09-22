@@ -17,7 +17,7 @@ require.cache[electronPath] = {
 };
 
 const sidecarPidFile = require("../../src/helpers/sidecarPidFile");
-const { reapStaleSidecars } = require("../../src/helpers/sidecarReaper");
+const { reapStaleSidecars, waitForExit } = require("../../src/helpers/sidecarReaper");
 
 // Short graces keep the escalation path fast; the poll interval is 200ms so
 // anything comfortably above that works.
@@ -101,6 +101,18 @@ test("does not kill a reused PID that is no longer the sidecar binary", posixOnl
 
   assert.equal(isAlive(child.pid), true);
   assert.deepEqual(sidecarPidFile.readAll(), []);
+});
+
+// qdrantManager's unhealthy-restart path uses waitForExit to verify the old
+// process is gone before spawning a replacement.
+test("waitForExit distinguishes a live process from a dead one", async (t) => {
+  createUserDataDir(t);
+  const child = await spawnFakeSidecar(t, { scriptName: "qdrant-wait.js", ignoreSigterm: false });
+
+  assert.equal(await waitForExit(child.pid, 400), false);
+
+  process.kill(child.pid, "SIGKILL");
+  assert.equal(await waitForExit(child.pid, 2000), true);
 });
 
 test("clears entries for processes that already exited", async (t) => {

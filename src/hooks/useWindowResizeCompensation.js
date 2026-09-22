@@ -101,6 +101,11 @@ export function useWindowResizeCompensation() {
       cancelAnimationFrame(frame);
       clearCompensation();
       frame = requestAnimationFrame(sample);
+      // The main process holds setBounds until the mask is armed; a fixed
+      // delay on its side loses the race whenever this renderer is busy.
+      if (resize.token !== undefined) {
+        window.electronAPI?.ackMainWindowResizeMask?.(resize.token);
+      }
     });
     window.addEventListener("resize", handleRendererResize);
 

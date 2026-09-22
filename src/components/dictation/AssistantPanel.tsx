@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, Plus, X } from "lucide-react";
+import { Check, Copy, Plus, X } from "../icons";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { Button } from "../ui/button";
@@ -27,29 +27,42 @@ import {
   normalizeAgentSelectionContext,
   type AgentSelectionContext,
 } from "../../utils/agentSelectionContext";
+import {
+  getSelectionForCopyShortcut,
+  getSelectionInside,
+  isEditableTarget,
+} from "../../utils/assistantSelection";
 import { AssistantEmptyState } from "./AssistantEmptyState";
 import { useToast } from "../ui/useToast";
 import {
   resolveAssistantPanelBusy,
   restoreAssistantConversation,
 } from "../../helpers/assistantSessionState";
+import {
+  deliverAssistantResponse,
+  type AssistantResponseDelivery,
+} from "../../helpers/assistantResponseDelivery";
 
 export interface AssistantCommand {
   id: number;
   text: string;
   attachment: ChatImageAttachment | null;
   selectedContext: AgentSelectionContext | null;
+  delivery: AssistantResponseDelivery | null;
 }
 
 type AssistantFooterPhase =
   "pill" | "pill-entering" | "pill-exiting" | "actions-entering" | "actions" | "actions-exiting";
+
+const MANUAL_COPY_FEEDBACK_MS = 1800;
+const AUTO_COPY_FEEDBACK_MS = 6000;
 
 interface AssistantPanelProps {
   /** Voice command waiting to be sent into the conversation (consumed on mount and on change). */
   pendingCommand: AssistantCommand | null;
   onCommandConsumed: (id: number) => void;
   onCommandDiscarded: (id: number) => void;
-  onCommandSettled: (id: number) => void;
+  onCommandSettled: (id: number, options?: { showPanel?: boolean }) => void;
   /** Conversation to resume when reopening the panel; null starts fresh on first message. */
   initialConversationId: number | null;
   onConversationIdChange: (id: number | null) => void;
@@ -68,10 +81,7 @@ interface AssistantPanelProps {
   onSelectionContextChange: (context: AgentSelectionContext | null) => void;
 }
 
-// Updating the selection indicator must not rerender react-markdown: its
-// component map is recreated on render, which remounts the text nodes and
-// collapses the browser's live selection. Streaming content still rerenders
-// normally because the content prop changes.
+// Avoid reparsing Markdown when only the selection indicator changes.
 const StableAssistantMarkdown = memo(MarkdownRenderer);
 
 export function AssistantPanel({
@@ -105,8 +115,10 @@ export function AssistantPanel({
   const streaming = useChatStreaming({
     messages,
     setMessages,
+    // Spoken commands answer on the Voice Assistant scope, not the Chat one.
+    inferenceScope: "dictationAgent",
     onStreamComplete: (_assistantId, content, toolCalls) => {
-      persistence.saveAssistantMessage(content, toolCalls);
+      void persistence.saveAssistantMessage(content, toolCalls);
     },
     onResponseContent,
   });
@@ -126,6 +138,18 @@ export function AssistantPanel({
     streaming,
     createConversation,
     onSendingChange: setSubmissionInFlight,
+  });
+  const latestAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
+  const responseContent = latestAssistantMessage?.content ?? "";
+  const {
+    copied,
+    copy: handleCopy,
+    copyText,
+    confirmCopied,
+  } = useCopyFeedback(responseContent, {
+    resetMs: MANUAL_COPY_FEEDBACK_MS,
   });
 
   useEffect(() => {
@@ -171,6 +195,9 @@ export function AssistantPanel({
     }
     consumedCommandIdRef.current = pendingCommand.id;
     const commandId = pendingCommand.id;
+    const delivery = pendingCommand.delivery;
+    const targetsCapturedInput = delivery?.mode === "paste";
+    let responseDelivered = false;
     if (pendingCommand.selectedContext) {
       setSelectedContext(null);
       onSelectionContextChange(null);
@@ -178,6 +205,14 @@ export function AssistantPanel({
     void sendMessage(pendingCommand.text, {
       attachment: pendingCommand.attachment ?? undefined,
       selectedContext: pendingCommand.selectedContext ?? undefined,
+      suppressResponseContent: targetsCapturedInput,
+      onComplete: delivery
+        ? async ({ content }) => {
+            const result = await deliverAssistantResponse(delivery, content);
+            responseDelivered = result.pasted;
+            if (result.copied) confirmCopied(content, AUTO_COPY_FEEDBACK_MS);
+          }
+        : undefined,
     })
       .then((sent) => {
         if (sent) {
@@ -206,7 +241,7 @@ export function AssistantPanel({
           },
         ]);
       })
-      .finally(() => onCommandSettled(commandId));
+      .finally(() => onCommandSettled(commandId, { showPanel: !responseDelivered }));
   }, [
     historyReady,
     submissionInFlight,
@@ -215,6 +250,7 @@ export function AssistantPanel({
     onCommandDiscarded,
     onCommandSettled,
     onSelectionContextChange,
+    confirmCopied,
     sendMessage,
     setMessages,
     t,
@@ -245,10 +281,6 @@ export function AssistantPanel({
     return () => onBusyChange(false);
   }, [isBusy, onBusyChange]);
 
-  const latestAssistantMessage = [...messages]
-    .reverse()
-    .find((message) => message.role === "assistant");
-  const responseContent = latestAssistantMessage?.content ?? "";
   const displayedResponseRef = useRef("");
   if (responseContent) displayedResponseRef.current = responseContent;
   const displayedResponse = responseContent || displayedResponseRef.current;
@@ -263,7 +295,6 @@ export function AssistantPanel({
     voiceState,
     requestPending: thinking || pendingCommand != null,
   });
-  const { copied, copy: handleCopy } = useCopyFeedback(responseContent, { resetMs: 1800 });
   const responseSelectionRootRef = useRef<HTMLDivElement | null>(null);
   const [selectedContext, setSelectedContext] = useState<AgentSelectionContext | null>(null);
 
@@ -315,15 +346,11 @@ export function AssistantPanel({
     if (!open || !isResponseReady || !latestAssistantMessage) return undefined;
 
     const captureSelection = () => {
-      const selection = window.getSelection();
-      const root = responseSelectionRootRef.current;
-      if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !root) return;
-
-      const range = selection.getRangeAt(0);
-      if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return;
+      const selectedText = getSelectionInside(responseSelectionRootRef.current);
+      if (!selectedText) return;
 
       const context = normalizeAgentSelectionContext({
-        text: selection.toString(),
+        text: selectedText,
         sourceMessageId: latestAssistantMessage.id,
       });
       if (!context) return;
@@ -362,9 +389,15 @@ export function AssistantPanel({
         return;
       }
 
-      const target = e.target as HTMLElement | null;
-      const isEditable =
-        target?.isContentEditable || target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+      if (isResponseReady) {
+        const selectedText = getSelectionForCopyShortcut(e, responseSelectionRootRef.current);
+        if (selectedText) {
+          e.preventDefault();
+          void copyText(selectedText);
+          return;
+        }
+      }
+      const isEditable = isEditableTarget(e.target);
       if (
         isResponseReady &&
         footerPhase === "actions" &&
@@ -380,7 +413,17 @@ export function AssistantPanel({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [voiceState, isBusy, streaming, open, onClose, isResponseReady, footerPhase, handleCopy]);
+  }, [
+    voiceState,
+    isBusy,
+    streaming,
+    open,
+    onClose,
+    isResponseReady,
+    footerPhase,
+    handleCopy,
+    copyText,
+  ]);
 
   return (
     <>
@@ -408,9 +451,9 @@ export function AssistantPanel({
           </button>
         )}
 
-        <div className="flex min-w-0 flex-1 items-center justify-end text-right text-xs text-muted-foreground/70">
+        <div className="flex min-w-0 flex-1 items-center justify-end text-end text-xs text-muted-foreground/70">
           {selectedContext ? (
-            <div className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border/55 bg-foreground/[0.06] py-1 pl-2.5 pr-1.5 text-foreground/75">
+            <div className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border/55 bg-foreground/[0.06] py-1 ps-2.5 pe-1.5 text-foreground/75">
               <span className="truncate">{t("assistant.panel.selectedContext")}</span>
               <button
                 type="button"
@@ -432,7 +475,10 @@ export function AssistantPanel({
             <>
               <span className="truncate">{t("assistant.panel.selectionHint")}</span>
               {readableVoiceHotkey && (
-                <kbd className="ml-2 inline-flex rounded-md border border-border/40 bg-foreground/5 px-2 py-1 font-mono text-[11px] tracking-normal text-foreground/65 shadow-sm">
+                <kbd
+                  dir="ltr"
+                  className="ms-2 inline-flex rounded-md border border-border/40 bg-foreground/5 px-2 py-1 font-mono text-[11px] tracking-normal text-foreground/65 shadow-sm"
+                >
                   {readableVoiceHotkey}
                 </kbd>
               )}
@@ -464,7 +510,7 @@ export function AssistantPanel({
                 />
                 {latestAssistantMessage?.isStreaming && (
                   <span
-                    className="ml-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
+                    className="ms-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
                     style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
                   />
                 )}
@@ -519,7 +565,7 @@ export function AssistantPanel({
               <span className="assistant-tool-invocation-pulse relative flex size-2 shrink-0 rounded-full bg-agent-brand" />
               <span
                 key={`${streaming.activeToolName}-${toolVerbIndex}`}
-                className="assistant-tool-invocation-verb w-16 text-right text-sm text-muted-foreground"
+                className="assistant-tool-invocation-verb w-16 text-end text-sm text-muted-foreground"
               >
                 {t(AGENT_TOOL_ACTIVITY_VERB_KEYS[toolVerbIndex])}
               </span>
@@ -559,7 +605,7 @@ export function AssistantPanel({
               type="button"
               variant="secondary"
               size="sm"
-              className="rounded-full px-4"
+              className="px-4"
               onClick={onClose}
               tabIndex={footerPhase === "actions" ? 0 : -1}
             >
@@ -569,7 +615,7 @@ export function AssistantPanel({
             <Button
               type="button"
               size="sm"
-              className="rounded-full border-border/70 bg-surface-raised px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
+              className="bg-surface-raised bg-none px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
               onClick={() => void handleCopy()}
               aria-live="polite"
               tabIndex={footerPhase === "actions" ? 0 : -1}
@@ -577,7 +623,10 @@ export function AssistantPanel({
               {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
               {copied ? t("common.copied") : t("assistant.panel.copyToClipboard")}
               {!copied && (
-                <kbd className="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-medium dark:bg-black/10">
+                <kbd
+                  dir="ltr"
+                  className="ms-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-medium dark:bg-black/10"
+                >
                   C
                 </kbd>
               )}

@@ -166,7 +166,10 @@ class TinfoilRealtimeStreaming extends OpenAIRealtimeStreaming {
       return true;
     } catch (error) {
       this._settleCommit();
-      debugLogger.debug(`${this.providerLabel} commit send failed`, { error: error.message });
+      debugLogger.debug(
+        `${this.providerLabel} commit send failed`,
+        this._logContext({ error: error.message })
+      );
       return false;
     }
   }
@@ -174,9 +177,12 @@ class TinfoilRealtimeStreaming extends OpenAIRealtimeStreaming {
   _requestRecovery(error, surfaceError = true) {
     if (this._recoveryRequested) return;
     this._recoveryRequested = true;
-    debugLogger.warn(`${this.providerLabel} connection recovery requested`, {
-      error: error.message,
-    });
+    debugLogger.warn(
+      `${this.providerLabel} connection recovery requested`,
+      this._logContext({
+        error: error.message,
+      })
+    );
     if (this.onConnectionLost) {
       this._notifyConnectionLost(error);
     } else if (surfaceError) {

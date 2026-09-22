@@ -1,5 +1,6 @@
 import * as React from "react";
-import { X, Copy, Check } from "lucide-react";
+import { X, Copy, Check } from "../icons";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import {
   ToastContext,
@@ -15,6 +16,7 @@ import {
 } from "../../helpers/toastPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { DictationErrorCard } from "../dictation/DictationErrorCard";
+import { TechnicalErrorDetails } from "./TechnicalErrorDetails";
 
 interface ToastState extends ToastProps {
   id: string;
@@ -202,8 +204,8 @@ const ToastViewport: React.FC<{
         isDictationPanel
           ? hasDictationError
             ? "inset-x-3 bottom-3"
-            : "bottom-20 right-6"
-          : "bottom-5 right-5"
+            : "bottom-20 end-6"
+          : "bottom-5 end-5"
       )}
     >
       {toasts.map((toast) => (
@@ -243,6 +245,9 @@ const Toast: React.FC<
 > = ({
   title,
   description,
+  secondaryDescription,
+  copyCommand,
+  technicalDetails,
   action,
   actions,
   presentation = "standard",
@@ -259,6 +264,10 @@ const Toast: React.FC<
   const remainingDurationRef = React.useRef(duration);
   const timerStartedAtRef = React.useRef(createdAt);
   const { copied, copy } = useCopyFeedback(description ?? "", { resetMs: 2000 });
+  const { copied: commandCopied, copy: copyRecoveryCommand } = useCopyFeedback(copyCommand ?? "", {
+    resetMs: 2000,
+  });
+  const { t } = useTranslation();
   const [timerPaused, setTimerPaused] = React.useState(false);
   const [errorSurfaceReady, setErrorSurfaceReady] = React.useState(false);
   const isDestructive = variant === "destructive";
@@ -347,8 +356,8 @@ const Toast: React.FC<
         "rounded-[5px]",
         "transition-[opacity,transform] duration-200 ease-out",
         isExiting
-          ? "opacity-0 translate-x-2 scale-[0.98]"
-          : "opacity-100 translate-x-0 scale-100 animate-in slide-in-from-right-4 fade-in-0 duration-300"
+          ? "opacity-0 translate-x-2 rtl:-translate-x-2 scale-[0.98]"
+          : "toast-enter opacity-100 translate-x-0 scale-100"
       )}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -359,6 +368,9 @@ const Toast: React.FC<
         <div className="flex-1 min-w-0">
           {message && (
             <div className="text-xs font-medium leading-tight text-white/90">{message}</div>
+          )}
+          {secondaryDescription && (
+            <div className="mt-1 text-xs leading-snug text-white/45">{secondaryDescription}</div>
           )}
           {detail &&
             (isDestructive ? (
@@ -388,6 +400,25 @@ const Toast: React.FC<
             ) : (
               <div className="text-xs leading-snug mt-0.5 text-white/45">{detail}</div>
             ))}
+          {copyCommand && (
+            <div className="mt-1.5 flex items-center gap-1.5 rounded-[3px] border border-white/6 bg-white/4 px-1.5 py-1">
+              <code
+                dir="ltr"
+                className="min-w-0 flex-1 wrap-break-word font-mono text-[11px] text-white/60 select-all"
+              >
+                {copyCommand}
+              </code>
+              <button
+                type="button"
+                onClick={() => void copyRecoveryCommand()}
+                className="shrink-0 rounded-xs p-1 text-white/30 transition-colors hover:bg-white/6 hover:text-white/70"
+                aria-label={t("reasoning.enterprise.technicalDetails.copyCommand")}
+              >
+                {commandCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
+              </button>
+            </div>
+          )}
+          <TechnicalErrorDetails details={technicalDetails} onDark />
         </div>
 
         {action && <div className="shrink-0 self-center">{action}</div>}
@@ -397,7 +428,7 @@ const Toast: React.FC<
         <button
           onClick={onClose}
           className={cn(
-            "absolute -left-2 -top-2 size-6 rounded-full",
+            "absolute -start-2 -top-2 size-6 rounded-full",
             "flex items-center justify-center",
             "bg-white/10 backdrop-blur-sm border border-white/10",
             "text-white/70 hover:text-white hover:bg-white/20",
@@ -412,7 +443,7 @@ const Toast: React.FC<
       )}
 
       {duration > 0 && !isExiting && (
-        <div className="absolute bottom-0 left-0.5 right-0 h-px overflow-hidden">
+        <div className="absolute bottom-0 start-0.5 end-0 h-px overflow-hidden">
           <div
             className={cn("h-full", config.progressClass)}
             style={{

@@ -1,6 +1,6 @@
 const http = require("http");
 const crypto = require("crypto");
-const { shell } = require("electron");
+const { openExternalUrl } = require("./externalUrlOpener");
 
 const OAUTH_TIMEOUT_MS = 120000;
 const DEFAULT_DESKTOP_CALLBACK_URL = "https://openwhispr.com/auth/desktop-callback";
@@ -121,7 +121,9 @@ function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
     server.listen(0, "127.0.0.1", () => {
       const port = server.address().port;
       const redirectUri = `http://127.0.0.1:${port}`;
-      shell.openExternal(buildAuthUrl(redirectUri, state, codeChallenge));
+      // Fire-and-forget like the shell.openExternal call it replaced: a failed
+      // browser launch surfaces as the flow timeout.
+      openExternalUrl(buildAuthUrl(redirectUri, state, codeChallenge)).catch(() => {});
     });
 
     timeoutId = setTimeout(() => {

@@ -49,6 +49,9 @@ export interface CloudNote {
   // The note's owner (creator), not its last editor. Absent on access_removed
   // stubs and on API versions that predate ownership.
   user_id?: string | null;
+  // Creator attribution is separate from the operational custodian. It is
+  // explicitly null after the creator deletes their account.
+  created_by_user_id?: string | null;
   updated_by_user_id: string | null;
   previous_space_id?: string | null;
   // Redacted stub for a row that moved out of one of the caller's spaces —

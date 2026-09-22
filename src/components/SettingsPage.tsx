@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Badge } from "./ui/badge";
 import {
   RefreshCw,
@@ -18,6 +19,7 @@ import {
   Key,
   Cpu,
   Network,
+  ShieldCheck,
   Sparkles,
   AlertTriangle,
   Loader2,
@@ -35,9 +37,12 @@ import {
   Wand2,
   Upload,
   Languages,
-} from "lucide-react";
+} from "./icons";
 import { useAuth } from "../hooks/useAuth";
-import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
+import { AUTH_URL, signOut } from "../lib/auth";
+import { deleteAccount } from "../lib/accountDeletionRequest";
+import { executeAccountDeletion } from "../lib/accountDeletionFlow";
+import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
@@ -59,6 +64,8 @@ import {
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { useSettings } from "../hooks/useSettings";
 import { useDialogs } from "../hooks/useDialogs";
+import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
+import { useLeaderboardParticipation } from "../hooks/useLeaderboardParticipation";
 import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
@@ -94,7 +101,7 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
-import { resetOnboardingProgress } from "./onboarding/flow";
+import { useStartOnboarding } from "../hooks/useStartOnboarding";
 import type {
   ChineseScriptPreference,
   GpuDevice,
@@ -109,11 +116,17 @@ import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { startMigration, useMigration } from "../stores/noteStore.js";
+import {
+  startMigration,
+  useMigration,
+  loadFolders,
+  initializeNotesTree,
+} from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import {
   clearMissingLocalModelSelections,
+  TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
 } from "../stores/settingsStore";
@@ -126,6 +139,7 @@ import {
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
   isCloudBackupAllowed,
+  isEnterpriseTranscriptionOfferable,
   lockedLocalHistoryValue,
   maxAudioRetentionDays,
 } from "../stores/policyRules";
@@ -133,10 +147,14 @@ import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
+import { enterpriseTileCta, type EnterpriseTileCta } from "../lib/workspaceBilling";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
+import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
+import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
-import { getTranscriptionProvider } from "../models/ModelRegistry";
+import { enterpriseProviderName, getTranscriptionProvider } from "../models/ModelRegistry";
+import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
 export type SettingsSectionType =
@@ -159,6 +177,7 @@ interface SettingsPageProps {
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
   { value: "en", label: "English", flag: "🇺🇸" },
+  { value: "ar", label: "العربية", flag: "🇦🇪" },
   { value: "es", label: "Español", flag: "🇪🇸" },
   { value: "fr", label: "Français", flag: "🇫🇷" },
   { value: "de", label: "Deutsch", flag: "🇩🇪" },
@@ -186,7 +205,7 @@ function SettingsPanel({
 }) {
   return (
     <div
-      className={`rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm divide-y divide-border/30 dark:divide-border-subtle/50 ${className}`}
+      className={`rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm divide-y divide-border/60 dark:divide-border-subtle/50 ${className}`}
     >
       {children}
     </div>
@@ -227,6 +246,243 @@ function SectionHeader({
   );
 }
 
+interface GranolaImportPreview {
+  total: number;
+  newCount: number;
+  duplicateCount: number;
+  sampleTitles: string[];
+  warningCount: number;
+}
+
+type GranolaImportState =
+  | { phase: "idle" }
+  | { phase: "picking" }
+  | { phase: "preview"; preview: GranolaImportPreview }
+  | { phase: "importing"; preview: GranolaImportPreview }
+  | { phase: "done"; imported: number; skipped: number };
+
+function GranolaImportSection({
+  showAlertDialog,
+}: {
+  showAlertDialog: (options: { title: string; description?: string }) => void;
+}) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<GranolaImportState>({ phase: "idle" });
+  // Guards double-clicks: handlers read stale closure state, so state alone
+  // can't prevent a second dialog/run being started in the same frame.
+  const requestInFlightRef = useRef(false);
+
+  const errorDescription = (code?: string) => {
+    switch (code) {
+      case "EMPTY_FILE":
+        return t("settings.granolaImport.error.EMPTY_FILE");
+      case "HEADERS_UNRECOGNIZED":
+        return t("settings.granolaImport.error.HEADERS_UNRECOGNIZED");
+      case "NO_DATA_ROWS":
+        return t("settings.granolaImport.error.NO_DATA_ROWS");
+      case "FILE_TOO_LARGE":
+        return t("settings.granolaImport.error.FILE_TOO_LARGE");
+      default:
+        return t("settings.granolaImport.error.generic");
+    }
+  };
+
+  const showImportError = (code?: string) => {
+    showAlertDialog({
+      title: t("settings.granolaImport.error.title"),
+      description: errorDescription(code),
+    });
+  };
+
+  const handleChooseFile = async () => {
+    if (requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
+    setState({ phase: "picking" });
+    try {
+      let result:
+        | Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportPickAndPreview>>>
+        | undefined;
+      try {
+        result = await window.electronAPI?.granolaImportPickAndPreview?.();
+      } catch {
+        setState({ phase: "idle" });
+        showImportError();
+        return;
+      }
+      if (!result || result.canceled) {
+        setState({ phase: "idle" });
+        return;
+      }
+      if (!result.success) {
+        setState({ phase: "idle" });
+        showImportError(result.error);
+        return;
+      }
+      setState({
+        phase: "preview",
+        preview: {
+          total: result.total ?? 0,
+          newCount: result.newCount ?? 0,
+          duplicateCount: result.duplicateCount ?? 0,
+          sampleTitles: result.sampleTitles ?? [],
+          warningCount: result.rowIssueCount ?? 0,
+        },
+      });
+    } finally {
+      requestInFlightRef.current = false;
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (state.phase !== "preview" || requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
+    setState({ phase: "importing", preview: state.preview });
+    try {
+      let result:
+        Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportRun>>> | undefined;
+      try {
+        result = await window.electronAPI?.granolaImportRun?.();
+      } catch {
+        result = undefined;
+      }
+      if (!result?.success) {
+        setState({ phase: "idle" });
+        showImportError(result?.error);
+        return;
+      }
+      const imported = result.imported ?? 0;
+      setState({ phase: "done", imported, skipped: result.skipped ?? 0 });
+      if (imported > 0) {
+        // One refresh + one batched sync pass — never per-note pushes.
+        void loadFolders();
+        void initializeNotesTree();
+        void syncService.requestSyncAll("manual");
+      }
+    } finally {
+      requestInFlightRef.current = false;
+    }
+  };
+
+  const dialogOpen =
+    state.phase === "preview" || state.phase === "importing" || state.phase === "done";
+  const preview = state.phase === "preview" || state.phase === "importing" ? state.preview : null;
+
+  return (
+    <div>
+      <SectionHeader
+        title={t("settings.granolaImport.title")}
+        description={t("settings.granolaImport.howTo")}
+      />
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settings.granolaImport.title")}
+            description={t("settings.granolaImport.description")}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={state.phase === "picking"}
+              onClick={handleChooseFile}
+            >
+              {state.phase === "picking" ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                t("settings.granolaImport.chooseFile")
+              )}
+            </Button>
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
+
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open && state.phase !== "importing") setState({ phase: "idle" });
+        }}
+      >
+        <DialogContent className="sm:max-w-90">
+          <DialogHeader>
+            <DialogTitle>
+              {state.phase === "done"
+                ? t("settings.granolaImport.done.title")
+                : t("settings.granolaImport.preview.title")}
+            </DialogTitle>
+            {state.phase === "done" ? (
+              <DialogDescription>
+                {t("settings.granolaImport.done.summary", {
+                  imported: state.imported,
+                  skipped: state.skipped,
+                })}
+              </DialogDescription>
+            ) : (
+              preview && (
+                <DialogDescription>
+                  {preview.newCount === 0
+                    ? t("settings.granolaImport.preview.nothingNew")
+                    : t("settings.granolaImport.preview.summary", {
+                        total: preview.total,
+                        newCount: preview.newCount,
+                        duplicateCount: preview.duplicateCount,
+                      })}
+                </DialogDescription>
+              )
+            )}
+          </DialogHeader>
+          {preview && (
+            <div className="space-y-2">
+              {preview.sampleTitles.length > 0 && (
+                <ul className="text-xs text-muted-foreground space-y-1">
+                  {preview.sampleTitles.map((title, index) => (
+                    <li key={`${index}-${title}`} className="truncate">
+                      {title}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {preview.warningCount > 0 && (
+                <p className="text-xs text-muted-foreground/80">
+                  {t("settings.granolaImport.preview.warnings", {
+                    warningCount: preview.warningCount,
+                  })}
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            {state.phase === "done" ? (
+              <Button size="sm" onClick={() => setState({ phase: "idle" })}>
+                {t("common.close")}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={state.phase === "importing"}
+                  onClick={() => setState({ phase: "idle" })}
+                >
+                  {t("common.cancel")}
+                </Button>
+                <Button size="sm" disabled={state.phase === "importing"} onClick={handleConfirm}>
+                  {state.phase === "importing" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    t("settings.granolaImport.preview.confirm", {
+                      newCount: preview?.newCount ?? 0,
+                    })
+                  )}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 interface TranscriptionSectionProps {
   isSignedIn: boolean;
   startOnboarding: () => void;
@@ -245,6 +501,8 @@ interface TranscriptionSectionProps {
   setWhisperModel: (model: string) => void;
   parakeetModel: string;
   setParakeetModel: (model: string) => void;
+  cohereModel: string;
+  setCohereModel: (model: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl: (url: string) => void;
   transcriptionMode: InferenceMode;
@@ -281,6 +539,8 @@ function TranscriptionSection({
   setWhisperModel,
   parakeetModel,
   setParakeetModel,
+  cohereModel,
+  setCohereModel,
   cloudTranscriptionBaseUrl,
   setCloudTranscriptionBaseUrl,
   transcriptionMode,
@@ -294,6 +554,15 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
+  const policySnapshot = usePolicySnapshot();
+  const enterpriseTranscriptionSetupMode = useSettingsStore(
+    (s) => s.enterpriseTranscriptionSetupMode
+  );
+  const setEnterpriseTranscriptionSetupMode = useSettingsStore(
+    (s) => s.setEnterpriseTranscriptionSetupMode
+  );
+  const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
+  const managedAvailable = useManagedScopeResolution("transcription", "managed");
   const {
     modes: transcriptionModes,
     effectiveMode: effectiveTranscriptionMode,
@@ -326,10 +595,23 @@ function TranscriptionSection({
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
       },
+      ...(isEnterpriseTranscriptionOfferable(policySnapshot)
+        ? [
+            {
+              id: "enterprise" as const,
+              label: t("settingsPage.transcription.modes.enterprise"),
+              description: t("settingsPage.transcription.modes.enterpriseDesc"),
+              icon: <ShieldCheck className="w-4 h-4" />,
+            },
+          ]
+        : []),
     ],
     "transcription",
     transcriptionMode,
-    { byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS }
+    {
+      byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS,
+      enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
+    }
   );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
@@ -342,12 +624,14 @@ function TranscriptionSection({
     setUseLocalWhisper(mode === "local");
     updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
     setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
 
     const toastKey = {
       openwhispr: "switchedCloud",
       providers: "switchedProviders",
       local: "switchedLocal",
       "self-hosted": "switchedSelfHosted",
+      enterprise: "switchedEnterprise",
     }[mode];
     toast({
       title: t(`settingsPage.transcription.toasts.${toastKey}.title`),
@@ -359,13 +643,16 @@ function TranscriptionSection({
 
   const handleLocalModelSelect = useCallback(
     (modelId: string, providerId?: string) => {
-      if (providerId === "nvidia" || (!providerId && localTranscriptionProvider === "nvidia")) {
+      const provider = providerId ?? localTranscriptionProvider;
+      if (provider === "nvidia") {
         setParakeetModel(modelId);
+      } else if (provider === "cohere") {
+        setCohereModel(modelId);
       } else {
         setWhisperModel(modelId);
       }
     },
-    [localTranscriptionProvider, setParakeetModel, setWhisperModel]
+    [localTranscriptionProvider, setParakeetModel, setCohereModel, setWhisperModel]
   );
 
   const selectedCloudModelStreams = Boolean(
@@ -397,7 +684,13 @@ function TranscriptionSection({
       onCloudProviderSelect={setCloudTranscriptionProvider}
       selectedCloudModel={cloudTranscriptionModel}
       onCloudModelSelect={setCloudTranscriptionModel}
-      selectedLocalModel={localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel}
+      selectedLocalModel={
+        localTranscriptionProvider === "nvidia"
+          ? parakeetModel
+          : localTranscriptionProvider === "cohere"
+            ? cohereModel
+            : whisperModel
+      }
       onLocalModelSelect={handleLocalModelSelect}
       selectedLocalProvider={localTranscriptionProvider}
       onLocalProviderSelect={setLocalTranscriptionProvider}
@@ -418,28 +711,113 @@ function TranscriptionSection({
     />
   );
 
+  // Local decoding still serves meetings and uploads under a managed-config
+  // error, so this stays a card alongside the rest of the section (including
+  // the GPU selector below) instead of an early return that hides it.
+  const errorCard =
+    managed.kind === "error" ? (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3" role="alert">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div>
+            <p className="text-sm font-medium">
+              {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {managed.messageKey ? t(managed.messageKey) : managed.message}
+            </p>
+          </div>
+        </div>
+      </div>
+    ) : null;
+
+  const managedCard =
+    managed.kind === "managed" ? (
+      <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
+        <div className="flex items-start gap-2.5">
+          <div className="rounded-md bg-primary/10 p-1.5 text-primary">
+            <ShieldCheck className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">
+              {t("settingsPage.aiModels.managedEnterprise.title")}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {enterpriseProviderName(managed.provider)} ·{" "}
+              <span className="font-mono">{managed.model}</span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("settingsPage.aiModels.managedEnterprise.description")}
+            </p>
+          </div>
+        </div>
+        {managed.mode !== "managed_required" && managed.allowManualSetup && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setEnterpriseTranscriptionSetupMode("manual")}
+            >
+              {t("settingsPage.aiModels.managedEnterprise.usePersonalSetup")}
+            </Button>
+          </div>
+        )}
+      </div>
+    ) : null;
+
   return (
     <div className="space-y-4">
-      <InferenceModeSelector
-        modes={transcriptionModes}
-        activeMode={effectiveTranscriptionMode}
-        onSelect={handleTranscriptionModeSelect}
-      />
+      {errorCard}
+      {managedCard}
+      {!errorCard && !managedCard && (
+        <>
+          {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  {t("settingsPage.aiModels.managedEnterprise.availableTitle")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settingsPage.aiModels.managedEnterprise.availableDescription", {
+                    provider: enterpriseProviderName(managedAvailable.provider),
+                  })}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setEnterpriseTranscriptionSetupMode("managed")}
+              >
+                {t("settingsPage.aiModels.managedEnterprise.useManaged")}
+              </Button>
+            </div>
+          )}
+          <InferenceModeSelector
+            modes={transcriptionModes}
+            activeMode={effectiveTranscriptionMode}
+            onSelect={handleTranscriptionModeSelect}
+          />
 
-      {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
-      {previewAvailable && renderPreviewToggle()}
+          {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+          {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+          {previewAvailable && renderPreviewToggle()}
 
-      {effectiveTranscriptionMode === "self-hosted" && (
-        <SelfHostedPanel
-          service="transcription"
-          url={remoteTranscriptionUrl}
-          onUrlChange={setRemoteTranscriptionUrl}
-          model={remoteTranscriptionModel}
-          onModelChange={setRemoteTranscriptionModel}
-        />
+          {effectiveTranscriptionMode === "self-hosted" && (
+            <SelfHostedPanel
+              service="transcription"
+              url={remoteTranscriptionUrl}
+              onUrlChange={setRemoteTranscriptionUrl}
+              model={remoteTranscriptionModel}
+              onModelChange={setRemoteTranscriptionModel}
+            />
+          )}
+        </>
       )}
 
+      {/* Local decoding still serves meetings and uploads, so the GPU choice stays reachable. */}
       <GpuDeviceSelector purpose="transcription" />
     </div>
   );
@@ -744,7 +1122,7 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
   if (!loaded || gpus.length < 2) return null;
 
   return (
-    <div className="border-t border-border/40 pt-4 mt-4">
+    <div className="border-t border-border/70 pt-4 mt-4">
       <SectionHeader
         title={t(`settingsPage.${purpose}.gpuDevice.title`)}
         description={t(`settingsPage.${purpose}.gpuDevice.description`)}
@@ -759,7 +1137,7 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
                 setSelectedUuid(uuid);
                 await window.electronAPI?.setGpuDeviceIndex?.(purpose, uuid);
               }}
-              className="w-full appearance-none rounded-md border border-border bg-background px-3 pr-10 py-2 text-sm"
+              className="w-full appearance-none rounded-md border border-border bg-background px-3 pe-10 py-2 text-sm"
             >
               {gpus.map((gpu) => (
                 <option key={gpu.uuid} value={gpu.uuid}>
@@ -768,7 +1146,7 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
               ))}
             </select>
             <svg
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+              className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
               fill="none"
@@ -806,6 +1184,7 @@ export default function SettingsPage({
     whisperModel,
     localTranscriptionProvider,
     parakeetModel,
+    cohereModel,
     uiLanguage,
     preferredLanguage,
     chineseScriptPreference,
@@ -829,6 +1208,7 @@ export default function SettingsPage({
     setWhisperModel,
     setLocalTranscriptionProvider,
     setParakeetModel,
+    setCohereModel,
     setCloudTranscriptionProvider,
     setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl,
@@ -857,8 +1237,8 @@ export default function SettingsPage({
     setNotifyMeetingDetection,
     notifyCalendarReminders,
     setNotifyCalendarReminders,
-    notifyUpdates,
-    setNotifyUpdates,
+    autoUpdatesEnabled,
+    setAutoUpdatesEnabled,
     audioCuesEnabled,
     setAudioCuesEnabled,
     pauseMediaOnDictation,
@@ -877,6 +1257,7 @@ export default function SettingsPage({
     setPanelStartPosition,
     cloudBackupEnabled,
     setCloudBackupEnabled,
+    insightsSyncEnabled,
     telemetryEnabled,
     setTelemetryEnabled,
     audioRetentionDays,
@@ -961,8 +1342,6 @@ export default function SettingsPage({
     downloadUpdate,
     installUpdate: installUpdateAction,
     getAppVersion,
-    error: updateError,
-    clearError: clearUpdateError,
   } = useUpdater();
 
   const isUpdateAvailable =
@@ -1049,6 +1428,16 @@ export default function SettingsPage({
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
   const billingWorkspaces = useWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const billingWorkspacesLoaded = useWorkspaceStore((s) => s.loaded);
+  const [enterpriseCheckoutOpen, setEnterpriseCheckoutOpen] = useState(false);
+  const [enterpriseWorkspaceCreateOpen, setEnterpriseWorkspaceCreateOpen] = useState(false);
+  // Until the store resolves, an empty list would make enterpriseTileCta answer
+  // "createWorkspace" for everyone — including members who must never be routed
+  // into creating a workspace. Fall back to contact sales for that window.
+  const enterpriseCta: EnterpriseTileCta = billingWorkspacesLoaded
+    ? enterpriseTileCta(billingWorkspaces, activeWorkspaceId)
+    : { action: "contactSales", ownerName: null };
   const coveringWorkspaces = billingWorkspaces.filter((workspace) =>
     usage?.entitledWorkspaceIds?.includes(workspace.id)
   );
@@ -1260,9 +1649,8 @@ export default function SettingsPage({
       notificationsEnabled,
       notifyMeetingDetection,
       notifyCalendarReminders,
-      notifyUpdates,
     });
-  }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders, notifyUpdates]);
+  }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders]);
 
   const handleAutoStartChange = async (enabled: boolean) => {
     if (!window.electronAPI?.setAutoStartEnabled) return;
@@ -1367,16 +1755,6 @@ export default function SettingsPage({
   }, [toast, t, setActivationMode]);
 
   useEffect(() => {
-    if (updateError) {
-      showAlertDialog({
-        title: t("settingsPage.general.updates.dialogs.updateError.title"),
-        description: t("settingsPage.general.updates.dialogs.updateError.description"),
-      });
-      clearUpdateError();
-    }
-  }, [updateError, showAlertDialog, clearUpdateError, t]);
-
-  useEffect(() => {
     if (installInitiated) {
       if (installTimeoutRef.current) {
         clearTimeout(installTimeoutRef.current);
@@ -1461,6 +1839,65 @@ export default function SettingsPage({
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
   const { isSignedIn, isLoaded, user, refetch } = useAuth();
+  const {
+    canToggleSync: canToggleInsightsSync,
+    disableInsightsSync,
+    enableInsightsSync,
+    optInDialog: insightsOptInDialog,
+    syncAllowedByPolicy: insightsSyncAllowedByPolicy,
+  } = useInsightsSyncOptIn();
+  const {
+    enabled: leaderboardParticipationEnabled,
+    error: leaderboardParticipationError,
+    join: joinLeaderboard,
+    leave: leaveLeaderboard,
+    leavePending: leaderboardLeavePending,
+    ready: leaderboardParticipationReady,
+    updating: leaderboardParticipationUpdating,
+  } = useLeaderboardParticipation();
+  const [leaderboardPreferencePending, setLeaderboardPreferencePending] = useState(false);
+  const updateLeaderboardParticipation = useCallback(
+    async (enabled: boolean) => {
+      if (!isSignedIn || !leaderboardParticipationReady || leaderboardPreferencePending) return;
+      setLeaderboardPreferencePending(true);
+      try {
+        if (enabled) {
+          if (
+            !effectiveDataRetentionEnabled ||
+            !insightsSyncAllowedByPolicy ||
+            (!insightsSyncEnabled && !(await enableInsightsSync({ confirmWhenEmpty: true })))
+          )
+            return;
+          if (!(await joinLeaderboard())) {
+            toast({
+              title: t("insights.leaderboard.activationError"),
+              variant: "destructive",
+            });
+          }
+          return;
+        }
+
+        if (!(await leaveLeaderboard())) {
+          toast({ title: t("insights.leaderboard.leavePending") });
+        }
+      } finally {
+        setLeaderboardPreferencePending(false);
+      }
+    },
+    [
+      effectiveDataRetentionEnabled,
+      enableInsightsSync,
+      insightsSyncAllowedByPolicy,
+      insightsSyncEnabled,
+      isSignedIn,
+      joinLeaderboard,
+      leaderboardParticipationReady,
+      leaderboardPreferencePending,
+      leaveLeaderboard,
+      t,
+      toast,
+    ]
+  );
   // Signed out there is nothing to load and the plan grid is purely
   // promotional; signed in, no card may claim a plan until usage confirms one.
   const planStateKnown = !isSignedIn || usage?.status === "success";
@@ -1474,6 +1911,8 @@ export default function SettingsPage({
   });
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
+  const [eraseDeviceData, setEraseDeviceData] = useState(false);
   const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(usage);
   const [billingState, setBillingState] = useState<Record<string, boolean>>({
     pro: true,
@@ -1491,11 +1930,7 @@ export default function SettingsPage({
   } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  const startOnboarding = useCallback(() => {
-    localStorage.setItem("pendingCloudMigration", "true");
-    resetOnboardingProgress(localStorage);
-    window.location.reload();
-  }, []);
+  const startOnboarding = useStartOnboarding();
 
   const handleSwitchPlan = useCallback(
     async (plan: "monthly" | "annual", tier: "pro" | "business") => {
@@ -1563,8 +1998,8 @@ export default function SettingsPage({
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
     try {
-      // Team content is membership-scoped, not account data: drop it locally
-      // before the session ends (never blocks sign-out).
+      // Clear account-scoped renderer/session state before ending the session.
+      // Workspace-owned rows remain cached behind their membership boundary.
       await syncService.purgeTeamSpacesForSignOut();
       await signOut();
       window.location.reload();
@@ -1580,47 +2015,72 @@ export default function SettingsPage({
   }, [showAlertDialog, t]);
 
   const handleDeleteAccount = useCallback(() => {
-    showConfirmDialog({
-      title: t("settingsPage.account.deleteAccount.title"),
-      description: t("settingsPage.account.deleteAccount.description"),
-      onConfirm: async () => {
-        setIsDeletingAccount(true);
-        try {
-          // Best-effort cloud cleanup (needs session cookies before sign-out)
-          try {
-            const { NotesService } = await import("../services/NotesService");
-            await NotesService.deleteAll();
-          } catch {}
+    setEraseDeviceData(false);
+    setIsDeleteAccountDialogOpen(true);
+  }, []);
 
-          const result = await deleteAccount();
-          if (result.error) {
-            logger.error("Server account deletion failed", result.error, "auth");
-          }
+  const confirmDeleteAccount = useCallback(async () => {
+    const accountId = user?.id;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) {
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.failedTitle"),
+        description: t("settingsPage.account.deleteAccount.failedDescription"),
+      });
+      return;
+    }
 
-          try {
-            await signOut();
-          } catch {}
-          await window.electronAPI?.cleanupApp();
+    setIsDeletingAccount(true);
+    try {
+      const result = await executeAccountDeletion({
+        eraseDeviceData,
+        dependencies: {
+          deleteRemoteAccount: deleteAccount,
+          deleteLocalAccountData: async () => {
+            const cleanup = await window.electronAPI?.deleteAccountData?.(
+              accountId,
+              authGeneration
+            );
+            if (!cleanup?.success) {
+              throw new Error(cleanup?.error ?? "Could not remove local account data");
+            }
+          },
+          clearWorkspaceSessionState: () => syncService.purgeTeamSpacesForSignOut(),
+          signOut,
+          eraseDeviceData: async () => {
+            const cleanup = await window.electronAPI?.cleanupApp();
+            if (!cleanup?.success) {
+              throw new Error(cleanup?.errors?.join(", ") || "Could not erase device data");
+            }
+          },
+        },
+      });
 
-          showAlertDialog({
-            title: t("settingsPage.account.deleteAccount.successTitle"),
-            description: t("settingsPage.account.deleteAccount.successDescription"),
-          });
-          setTimeout(() => window.location.reload(), 1000);
-        } catch (error) {
-          logger.error("Account deletion failed", error, "auth");
-          showAlertDialog({
-            title: t("settingsPage.account.deleteAccount.failedTitle"),
-            description: t("settingsPage.account.deleteAccount.failedDescription"),
-          });
-        } finally {
-          setIsDeletingAccount(false);
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.successTitle"),
+        description:
+          result.localCleanupFailures.length > 0
+            ? t("settingsPage.account.deleteAccount.partialCleanupDescription")
+            : t("settingsPage.account.deleteAccount.successDescription"),
+      });
+      // cleanup-app leaves the database closed; only a relaunch reopens it.
+      setTimeout(() => {
+        if (eraseDeviceData) {
+          window.electronAPI?.relaunchApp();
+        } else {
+          window.location.reload();
         }
-      },
-      variant: "destructive",
-      confirmText: t("settingsPage.account.deleteAccount.confirmText"),
-    });
-  }, [showConfirmDialog, showAlertDialog, t]);
+      }, 1000);
+    } catch (error) {
+      logger.error("Account deletion failed", error, "auth");
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.failedTitle"),
+        description: t("settingsPage.account.deleteAccount.failedDescription"),
+      });
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  }, [eraseDeviceData, showAlertDialog, t, user?.id]);
 
   const renderWhisperVadSettings = () => (
     <div>
@@ -1661,6 +2121,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.threshold.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="0.01"
                 min="0.1"
@@ -1675,6 +2136,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="10"
                 min="50"
@@ -1689,6 +2151,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.minSilenceDurationMs.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="10"
                 min="50"
@@ -1703,6 +2166,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="1"
                 min="5"
@@ -1717,6 +2181,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.speechPadMs.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="10"
                 min="0"
@@ -1731,6 +2196,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.samplesOverlap.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="0.01"
                 min="0"
@@ -1786,7 +2252,7 @@ export default function SettingsPage({
                       size="sm"
                       className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
                     >
-                      <LogOut className="mr-1.5 h-3.5 w-3.5" />
+                      <LogOut className="me-1.5 h-3.5 w-3.5" />
                       {isSigningOut
                         ? t("settingsPage.account.signOut.signingOut")
                         : t("settingsPage.account.signOut.signOut")}
@@ -1807,7 +2273,7 @@ export default function SettingsPage({
                         size="sm"
                         className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
                       >
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                        <Trash2 className="me-1.5 h-3.5 w-3.5" />
                         {isDeletingAccount
                           ? t("settingsPage.account.deleteAccount.deleting")
                           : t("settingsPage.account.deleteAccount.button")}
@@ -1845,7 +2311,7 @@ export default function SettingsPage({
                         </p>
                       </div>
                       <Button onClick={startOnboarding} size="sm" className="w-full">
-                        <UserCircle className="mr-1.5 h-3.5 w-3.5" />
+                        <UserCircle className="me-1.5 h-3.5 w-3.5" />
                         {t("settingsPage.account.trialCta.button")}
                       </Button>
                     </div>
@@ -2133,7 +2599,7 @@ export default function SettingsPage({
                           !usage?.isTrial &&
                           !isWorkspaceCovered
                           ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
-                          : "border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
+                          : "border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
                       )}
                     >
                       <p className="text-xs font-semibold text-foreground">
@@ -2156,7 +2622,7 @@ export default function SettingsPage({
                           feature.startsWith("## ") ? (
                             <li
                               key={i}
-                              className={`text-[8px] font-semibold uppercase tracking-wide text-muted-foreground/60 ${i > 0 ? "pt-1.5" : ""}`}
+                              className={`text-[8px] font-semibold uppercase tracking-wide text-muted-foreground/70 ${i > 0 ? "pt-1.5" : ""}`}
                             >
                               {feature.slice(3)}
                             </li>
@@ -2222,7 +2688,7 @@ export default function SettingsPage({
                           className={`relative w-7 h-4 rounded-full transition-colors ${billingState.pro ? "bg-primary" : "bg-muted"}`}
                         >
                           <div
-                            className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.pro ? "translate-x-3" : ""}`}
+                            className={`absolute top-0.5 start-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.pro ? "translate-x-3 rtl:-translate-x-3" : ""}`}
                           />
                         </div>
                         <span className="text-[9px] text-muted-foreground">
@@ -2330,7 +2796,7 @@ export default function SettingsPage({
                           className={`relative w-7 h-4 rounded-full transition-colors ${billingState.business ? "bg-primary" : "bg-muted"}`}
                         >
                           <div
-                            className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.business ? "translate-x-3" : ""}`}
+                            className={`absolute top-0.5 start-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.business ? "translate-x-3 rtl:-translate-x-3" : ""}`}
                           />
                         </div>
                         <span className="text-[9px] text-muted-foreground">
@@ -2382,7 +2848,7 @@ export default function SettingsPage({
                       )}
                     </div>
 
-                    <div className="rounded-md border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
+                    <div className="rounded-md border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
                       <p className="text-xs font-semibold text-foreground">
                         {t("settingsPage.account.pricing.enterprise.name")}
                       </p>
@@ -2415,17 +2881,73 @@ export default function SettingsPage({
                           </li>
                         ))}
                       </ul>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                        onClick={() =>
-                          window.electronAPI?.openExternal?.("https://openwhispr.com/contact-sales")
-                        }
-                      >
-                        <Mail size={10} />
-                        {t("settingsPage.account.pricing.enterprise.cta")}
-                      </Button>
+                      {isSignedIn && enterpriseCta.action !== "contactSales" ? (
+                        <div className="mt-2 space-y-1">
+                          <Button
+                            size="sm"
+                            className="w-full h-6 text-[10px]"
+                            onClick={() => {
+                              if (enterpriseCta.action === "openDialog") {
+                                setEnterpriseCheckoutOpen(true);
+                              } else {
+                                setEnterpriseWorkspaceCreateOpen(true);
+                              }
+                            }}
+                          >
+                            {t("settingsPage.account.pricing.enterprise.upgradeCta")}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full h-6 text-[10px] text-muted-foreground"
+                            onClick={() =>
+                              window.electronAPI?.openExternal?.(
+                                "https://openwhispr.com/contact-sales"
+                              )
+                            }
+                          >
+                            <Mail size={10} />
+                            {t("settingsPage.account.pricing.enterprise.cta")}
+                          </Button>
+                        </div>
+                      ) : isSignedIn ? (
+                        <div className="mt-2 space-y-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-6 text-[10px]"
+                            onClick={() =>
+                              window.electronAPI?.openExternal?.(
+                                "https://openwhispr.com/contact-sales"
+                              )
+                            }
+                          >
+                            <Mail size={10} />
+                            {t("settingsPage.account.pricing.enterprise.cta")}
+                          </Button>
+                          {enterpriseCta.action === "contactSales" && enterpriseCta.ownerName && (
+                            <p className="text-[10px] text-muted-foreground text-center">
+                              {t("settingsPage.account.pricing.enterprise.askOwner", {
+                                name: enterpriseCta.ownerName,
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                          onClick={() =>
+                            window.electronAPI?.openExternal?.(
+                              "https://openwhispr.com/contact-sales"
+                            )
+                          }
+                        >
+                          <Mail size={10} />
+                          {t("settingsPage.account.pricing.enterprise.cta")}
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -2450,7 +2972,7 @@ export default function SettingsPage({
                         </DialogDescription>
                       </DialogHeader>
                       {switchPreview && (
-                        <div className="rounded-lg border border-border/50 dark:border-border-subtle/60 overflow-hidden">
+                        <div className="rounded-lg border border-border/70 dark:border-border-subtle/60 overflow-hidden">
                           <div className="flex justify-between items-center px-3 py-2.5 bg-muted/40 dark:bg-surface-2/50">
                             <span className="text-xs text-muted-foreground">
                               {switchPreview.immediateAmount < 0
@@ -2471,7 +2993,7 @@ export default function SettingsPage({
                               )}
                             </span>
                           </div>
-                          <div className="divide-y divide-border/40">
+                          <div className="divide-y divide-border/60">
                             <div className="flex justify-between items-center px-3 py-2">
                               <span className="text-xs text-muted-foreground">
                                 {t("settingsPage.account.pricing.confirmSwitch.newPrice")}
@@ -2515,6 +3037,18 @@ export default function SettingsPage({
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
+
+                  <EnterpriseCheckoutDialog
+                    open={enterpriseCheckoutOpen}
+                    onOpenChange={setEnterpriseCheckoutOpen}
+                    workspaces={billingWorkspaces}
+                    onRefreshEntitlement={usage?.refetch}
+                  />
+                  <CreateWorkspaceDialog
+                    open={enterpriseWorkspaceCreateOpen}
+                    onOpenChange={setEnterpriseWorkspaceCreateOpen}
+                    onCreated={() => setEnterpriseCheckoutOpen(true)}
+                  />
                 </div>
               </>
             ) : (
@@ -2667,18 +3201,6 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.general.notifications.updates")}
-                    description={t("settingsPage.general.notifications.updatesDescription")}
-                  >
-                    <Toggle
-                      checked={notifyUpdates}
-                      onChange={setNotifyUpdates}
-                      disabled={!notificationsEnabled}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 
@@ -2725,7 +3247,11 @@ export default function SettingsPage({
                     <SettingsPanelRow>
                       <SettingsRow
                         label={t("settings.noteFiles.path")}
-                        description={noteFilesPath || noteFilesDefaultPath || "..."}
+                        description={
+                          <span dir="ltr" className="block break-all">
+                            {noteFilesPath || noteFilesDefaultPath || "..."}
+                          </span>
+                        }
                       >
                         <Button
                           variant="outline"
@@ -2761,6 +3287,9 @@ export default function SettingsPage({
                 )}
               </SettingsPanel>
             </div>
+
+            {/* Import from Granola */}
+            <GranolaImportSection showAlertDialog={showAlertDialog} />
 
             {/* Floating Icon */}
             <div>
@@ -3354,7 +3883,7 @@ EOF`,
                                     )}
                                     <div className="flex-1 min-w-0">
                                       <span className="text-sm font-medium">{item.label}</span>
-                                      <span className="text-xs text-muted-foreground ml-2">
+                                      <span className="text-xs text-muted-foreground ms-2">
                                         {item.desc}
                                       </span>
                                       {item.note && (
@@ -3430,7 +3959,10 @@ EOF`,
                                                   </p>
                                                 )}
                                                 <div className="flex items-start gap-1.5">
-                                                  <pre className="flex-1 text-[11px] bg-muted/60 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-all select-all overflow-x-auto">
+                                                  <pre
+                                                    dir="ltr"
+                                                    className="flex-1 text-[11px] bg-muted/60 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-all select-all overflow-x-auto"
+                                                  >
                                                     {c.cmd}
                                                   </pre>
                                                   <button
@@ -3477,9 +4009,12 @@ EOF`,
                   {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningTitle")}
                 </AlertTitle>
                 <AlertDescription>
-                  {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningDescription", {
-                    path: hyprlandConfigStatus.path,
-                  })}
+                  <BidiInterpolatedText
+                    text={t("settingsPage.general.hotkey.hyprlandConfigWriteWarningDescription", {
+                      path: BIDI_VALUE_TOKEN,
+                    })}
+                    value={hyprlandConfigStatus.path}
+                  />
                 </AlertDescription>
               </Alert>
             )}
@@ -3508,9 +4043,12 @@ EOF`,
                           disabled={isHotkeyRegistering}
                           className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
                         >
-                          {t("settingsPage.general.hotkey.resetToDefault", {
-                            hotkey: formatHotkeyLabel(effectiveDefaultHotkey),
-                          })}
+                          <BidiInterpolatedText
+                            text={t("settingsPage.general.hotkey.resetToDefault", {
+                              hotkey: BIDI_VALUE_TOKEN,
+                            })}
+                            value={formatHotkeyLabel(effectiveDefaultHotkey)}
+                          />
                         </button>
                       ) : null
                     }
@@ -3627,16 +4165,26 @@ EOF`,
                   <HotkeyListInput
                     value={meetingKey}
                     onChange={(list) => registerMeetingHotkey(list)}
-                    onClear={async () => {
-                      await window.electronAPI?.registerMeetingHotkey?.("");
+                    onClear={async (): Promise<boolean> => {
+                      const result = await window.electronAPI?.registerMeetingHotkey?.("");
+                      if (!result?.success) {
+                        showAlertDialog({
+                          title: t("hooks.hotkeyRegistration.titles.notRegistered"),
+                          description:
+                            result?.message ||
+                            t("hooks.hotkeyRegistration.errors.couldNotRegister"),
+                        });
+                        return false;
+                      }
                       setMeetingKey("");
+                      return true;
                     }}
                     validate={validateMeetingHotkey}
                     disabled={isMeetingHotkeyRegistering}
                     maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
                 </SettingsPanelRow>
-                <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/40 dark:border-white/5">
+                <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/70 dark:border-white/10">
                   <span className="text-xs text-muted-foreground/80">
                     {t("settingsPage.general.meetingHotkey.layoutLabel")}
                   </span>
@@ -3652,13 +4200,13 @@ EOF`,
                     <SelectContent>
                       <SelectItem
                         value="full-width"
-                        className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
+                        className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
                       >
                         {t("settingsPage.general.meetingHotkey.layoutFullWidth")}
                       </SelectItem>
                       <SelectItem
                         value="side-panel"
-                        className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
+                        className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
                       >
                         {t("settingsPage.general.meetingHotkey.layoutSidePanel")}
                       </SelectItem>
@@ -3778,6 +4326,73 @@ EOF`,
               <SettingsPanel>
                 <SettingsPanelRow>
                   <SettingsRow
+                    label={t("settingsPage.privacy.insightsSync")}
+                    description={
+                      !isSignedIn
+                        ? t("settingsPage.privacy.insightsSyncRequiresAccount")
+                        : !insightsSyncAllowedByPolicy
+                          ? t("common.managedByOrg")
+                          : effectiveDataRetentionEnabled
+                            ? t("settingsPage.privacy.insightsSyncDescription")
+                            : t("settingsPage.privacy.insightsSyncRequiresHistory")
+                    }
+                  >
+                    {/* With history off nothing is counted anywhere: this
+                        device records no counter, and the cloud writes none
+                        either, because analyticsSyncEnabled withholds the
+                        localDate its analytics write requires. Turning this on
+                        could therefore only promise a sync that never happens —
+                        but an already-on toggle must stay switchable off. */}
+                    <Toggle
+                      checked={insightsSyncEnabled}
+                      disabled={
+                        !isSignedIn ||
+                        !canToggleInsightsSync ||
+                        (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
+                      }
+                      onChange={(enabled) => {
+                        if (enabled) void enableInsightsSync();
+                        else disableInsightsSync();
+                      }}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("insights.leaderboard.title")}
+                    description={
+                      !isSignedIn
+                        ? t("settingsPage.privacy.leaderboardRequiresAccount")
+                        : leaderboardParticipationError === "read"
+                          ? t("insights.leaderboard.activationError")
+                          : leaderboardLeavePending
+                            ? t("insights.leaderboard.leavePending")
+                            : !insightsSyncAllowedByPolicy
+                              ? t("common.managedByOrg")
+                              : !effectiveDataRetentionEnabled
+                                ? t("settingsPage.privacy.leaderboardRequiresHistory")
+                                : t("settingsPage.privacy.leaderboardDescription")
+                    }
+                  >
+                    <Toggle
+                      checked={isSignedIn && leaderboardParticipationEnabled}
+                      disabled={
+                        !isSignedIn ||
+                        !leaderboardParticipationReady ||
+                        leaderboardPreferencePending ||
+                        leaderboardParticipationUpdating ||
+                        leaderboardParticipationError === "read" ||
+                        (!leaderboardParticipationEnabled &&
+                          (!effectiveDataRetentionEnabled ||
+                            !insightsSyncAllowedByPolicy ||
+                            (!insightsSyncEnabled && !canToggleInsightsSync)))
+                      }
+                      onChange={(enabled) => void updateLeaderboardParticipation(enabled)}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
                     label={t("settingsPage.privacy.usageAnalytics")}
                     description={t("settingsPage.privacy.usageAnalyticsDescription")}
                   >
@@ -3788,7 +4403,7 @@ EOF`,
             </div>
 
             {/* Audio Retention */}
-            <div className="border-t border-border/40 pt-6">
+            <div className="border-t border-border/70 pt-6">
               <SectionHeader
                 title={t("settingsPage.privacy.audioRetention")}
                 description={t("settingsPage.privacy.audioRetentionDescription")}
@@ -3857,7 +4472,7 @@ EOF`,
             </div>
 
             {/* Data Retention */}
-            <div className="border-t border-border/40 pt-6">
+            <div className="border-t border-border/70 pt-6">
               <SettingsPanel>
                 <SettingsPanelRow>
                   <SettingsRow
@@ -3913,7 +4528,7 @@ EOF`,
             </div>
 
             {/* Permissions */}
-            <div className="border-t border-border/40 pt-6">
+            <div className="border-t border-border/70 pt-6">
               <SectionHeader
                 title={t("settingsPage.permissions.title")}
                 description={t("settingsPage.permissions.description")}
@@ -4017,13 +4632,18 @@ EOF`,
                     description={
                       updateStatus.isDevelopment
                         ? t("settingsPage.general.updates.devMode")
-                        : isUpdateAvailable
-                          ? t("settingsPage.general.updates.newVersionAvailable")
-                          : t("settingsPage.general.updates.latestVersion")
+                        : !updateStatus.isSupported
+                          ? t("settingsPage.general.updates.managedByPackageManager")
+                          : isUpdateAvailable
+                            ? t("settingsPage.general.updates.newVersionAvailable")
+                            : t("settingsPage.general.updates.latestVersion")
                     }
                   >
                     <div className="flex items-center gap-2.5">
-                      <span className="text-xs tabular-nums text-muted-foreground font-mono">
+                      <span
+                        dir="ltr"
+                        className="text-xs tabular-nums text-muted-foreground font-mono"
+                      >
                         {currentVersion || t("settingsPage.general.updates.versionPlaceholder")}
                       </span>
                       {updateStatus.isDevelopment ? (
@@ -4043,6 +4663,17 @@ EOF`,
                   </SettingsRow>
                 </SettingsPanelRow>
 
+                {updateStatus.isSupported && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.general.updates.automaticUpdates")}
+                      description={t("settingsPage.general.updates.automaticUpdatesDescription")}
+                    >
+                      <Toggle checked={autoUpdatesEnabled} onChange={setAutoUpdatesEnabled} />
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
+
                 <SettingsPanelRow>
                   <div className="space-y-2.5">
                     <Button
@@ -4057,16 +4688,27 @@ EOF`,
                               ),
                             });
                           }
-                        } catch {}
+                        } catch {
+                          showAlertDialog({
+                            title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
+                            description: t(
+                              "settingsPage.general.updates.dialogs.checkFailed.description"
+                            ),
+                          });
+                        }
                       }}
-                      disabled={checkingForUpdates || updateStatus.isDevelopment}
+                      disabled={
+                        checkingForUpdates ||
+                        updateStatus.isDevelopment ||
+                        !updateStatus.isSupported
+                      }
                       variant="outline"
                       className="w-full"
                       size="sm"
                     >
                       <RefreshCw
                         size={13}
-                        className={`mr-1.5 ${checkingForUpdates ? "animate-spin" : ""}`}
+                        className={`me-1.5 ${checkingForUpdates ? "animate-spin" : ""}`}
                       />
                       {checkingForUpdates
                         ? t("settingsPage.general.updates.checking")
@@ -4097,7 +4739,7 @@ EOF`,
                         >
                           <Download
                             size={13}
-                            className={`mr-1.5 ${downloadingUpdate ? "animate-pulse" : ""}`}
+                            className={`me-1.5 ${downloadingUpdate ? "animate-pulse" : ""}`}
                           />
                           {downloadingUpdate
                             ? t("settingsPage.general.updates.downloading", {
@@ -4155,7 +4797,7 @@ EOF`,
                       >
                         <RefreshCw
                           size={14}
-                          className={`mr-2 ${installInitiated ? "animate-spin" : ""}`}
+                          className={`me-2 ${installInitiated ? "animate-spin" : ""}`}
                         />
                         {installInitiated
                           ? t("settingsPage.general.updates.restarting")
@@ -4165,14 +4807,17 @@ EOF`,
                   </div>
 
                   {updateInfo?.releaseNotes && (
-                    <div className="mt-4 pt-4 border-t border-border/30">
+                    <div className="mt-4 pt-4 border-t border-border/70">
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                        {t("settingsPage.general.updates.whatsNew", {
-                          version: updateInfo.version,
-                        })}
+                        <BidiInterpolatedText
+                          text={t("settingsPage.general.updates.whatsNew", {
+                            version: BIDI_VALUE_TOKEN,
+                          })}
+                          value={updateInfo.version}
+                        />
                       </p>
                       <div
-                        className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:space-y-1 [&_li]:pl-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
+                        className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
                         dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
                       />
                     </div>
@@ -4182,12 +4827,12 @@ EOF`,
             </div>
 
             {/* Developer Tools */}
-            <div className="border-t border-border/40 pt-6">
+            <div className="border-t border-border/70 pt-6">
               <DeveloperSection />
             </div>
 
             {/* Data Management */}
-            <div className="border-t border-border/40 pt-6">
+            <div className="border-t border-border/70 pt-6">
               <SectionHeader
                 title={t("settingsPage.developer.dataManagementTitle")}
                 description={t("settingsPage.developer.dataManagementDescription")}
@@ -4198,7 +4843,11 @@ EOF`,
                   <SettingsPanelRow>
                     <SettingsRow
                       label={t("settingsPage.developer.modelCache")}
-                      description={cachePathHint}
+                      description={
+                        <span dir="ltr" className="block break-all">
+                          {cachePathHint}
+                        </span>
+                      }
                     >
                       <div className="flex items-center gap-2">
                         <Button
@@ -4206,7 +4855,7 @@ EOF`,
                           size="sm"
                           onClick={() => window.electronAPI?.openWhisperModelsFolder?.()}
                         >
-                          <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
+                          <FolderOpen className="me-1.5 h-3.5 w-3.5" />
                           {t("settingsPage.developer.open")}
                         </Button>
                         <Button
@@ -4247,9 +4896,7 @@ EOF`,
                                     "settingsPage.developer.resetAll.successDescription"
                                   ),
                                 });
-                                setTimeout(() => {
-                                  window.location.reload();
-                                }, 1000);
+                                setTimeout(() => window.electronAPI?.relaunchApp(), 1000);
                               } catch {
                                 showAlertDialog({
                                   title: t("settingsPage.developer.resetAll.failedTitle"),
@@ -4284,6 +4931,8 @@ EOF`,
 
   return (
     <>
+      {insightsOptInDialog}
+
       <ConfirmDialog
         open={confirmDialog.open}
         onOpenChange={(open) => !open && hideConfirmDialog()}
@@ -4294,6 +4943,42 @@ EOF`,
         confirmText={confirmDialog.confirmText}
         cancelText={confirmDialog.cancelText}
       />
+
+      <ConfirmDialog
+        open={isDeleteAccountDialogOpen}
+        onOpenChange={(open) => {
+          setIsDeleteAccountDialogOpen(open);
+          if (!open) setEraseDeviceData(false);
+        }}
+        title={t("settingsPage.account.deleteAccount.title")}
+        description={t("settingsPage.account.deleteAccount.description")}
+        onConfirm={() => void confirmDeleteAccount()}
+        variant="destructive"
+        confirmText={t("settingsPage.account.deleteAccount.confirmText")}
+        confirmDisabled={isDeletingAccount}
+      >
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-border accent-destructive"
+            checked={eraseDeviceData}
+            onChange={(event) => setEraseDeviceData(event.target.checked)}
+          />
+          <span className="space-y-1">
+            <span className="block text-sm font-medium">
+              {t("settingsPage.account.deleteAccount.eraseDeviceLabel")}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {t("settingsPage.account.deleteAccount.eraseDeviceDescription")}
+            </span>
+            {eraseDeviceData && (
+              <span className="block text-xs font-medium text-destructive">
+                {t("settingsPage.account.deleteAccount.eraseDeviceWarning")}
+              </span>
+            )}
+          </span>
+        </label>
+      </ConfirmDialog>
 
       <AlertDialog
         open={alertDialog.open}
@@ -4332,6 +5017,8 @@ EOF`,
                   setWhisperModel={setWhisperModel}
                   parakeetModel={parakeetModel}
                   setParakeetModel={setParakeetModel}
+                  cohereModel={cohereModel}
+                  setCohereModel={setCohereModel}
                   cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
                   setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
                   transcriptionMode={transcriptionMode}
@@ -4345,7 +5032,7 @@ EOF`,
                   toast={toast}
                 />
                 {transcriptionMode === "local" &&
-                  localTranscriptionProvider !== "nvidia" &&
+                  localTranscriptionProvider === "whisper" &&
                   renderWhisperVadSettings()}
               </div>
             )}
@@ -4353,7 +5040,7 @@ EOF`,
               <div className="space-y-6">
                 <MeetingTranscriptionPanel />
                 {transcriptionMode === "local" &&
-                  localTranscriptionProvider !== "nvidia" &&
+                  localTranscriptionProvider === "whisper" &&
                   renderWhisperVadSettings()}
               </div>
             )}
@@ -4381,7 +5068,7 @@ EOF`,
                   }}
                   toast={toast}
                 />
-                <div className="border-t border-border/40 pt-6">
+                <div className="border-t border-border/70 pt-6">
                   <SectionHeader
                     title={t("settingsPage.prompts.title")}
                     description={t("settingsPage.prompts.description")}

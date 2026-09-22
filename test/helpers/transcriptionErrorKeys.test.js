@@ -20,6 +20,22 @@ test("every mapped code resolves to a key that exists in en", async () => {
   }
 });
 
+test("local sherpa silence resolves to the upload no-speech message, while decode failures do not", async () => {
+  const { transcriptionErrorKey } = await load();
+  const ParakeetManager = require("../../src/helpers/parakeet.js");
+  const manager = new ParakeetManager();
+  const silence = manager.parseParakeetResult({ text: "", elapsed: 0 });
+
+  assert.equal(transcriptionErrorKey(silence), "noSpeechDetected");
+  assert.equal(
+    en.notes.upload[transcriptionErrorKey(silence)],
+    "No speech detected in this audio."
+  );
+  for (const output of [null, { error: "engine failed" }, { text: "", truncated: true }]) {
+    assert.equal(transcriptionErrorKey(manager.parseParakeetResult(output)), undefined);
+  }
+});
+
 // OpenWhispr Cloud rethrows coded failures through withSessionRefresh, so the
 // upload views only see them in a catch block — resolving from the returned
 // result alone silently left cloud users with the raw English message.

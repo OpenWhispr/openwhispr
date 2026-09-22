@@ -207,6 +207,63 @@ test("meeting sessions declare the 24kHz PCM input format", async () => {
   streaming.cleanup();
 });
 
+test("meeting session.update honors streamLabel + vadThreshold overrides through the subclass", async () => {
+  const { TinfoilRealtimeStreaming } = await load();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const { factory } = makeRecordingFactory(socket);
+  const streaming = new TinfoilRealtimeStreaming(factory);
+
+  const connected = streaming.connect({
+    apiKey: "tk-secret",
+    streamLabel: "system",
+    vadThreshold: 0.3,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+
+  const [update] = sentEvents(socket, "session.update");
+  assert.deepEqual(update.session.audio.input.turn_detection, {
+    type: "server_vad",
+    threshold: 0.3,
+    silence_duration_ms: 600,
+    prefix_padding_ms: 500,
+  });
+  assert.equal(streaming.streamLabel, "system");
+
+  socket.emit("message", JSON.stringify({ type: "session.updated" }));
+  await connected;
+  streaming.cleanup();
+});
+
+test("labelled Tinfoil sessions carry the stream label in log metadata", async () => {
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const { TinfoilRealtimeStreaming } = await load();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const { factory } = makeRecordingFactory(socket);
+  const streaming = new TinfoilRealtimeStreaming(factory);
+
+  const entries = [];
+  const levels = ["debug", "warn", "error"];
+  const originals = Object.fromEntries(levels.map((level) => [level, debugLogger[level]]));
+  for (const level of levels) {
+    debugLogger[level] = (message, meta) => entries.push({ message, meta });
+  }
+  try {
+    const connected = streaming.connect({ apiKey: "tk-secret", streamLabel: "system" });
+    await finishConnect(streaming, socket);
+    await connected;
+    await streaming.disconnect();
+  } finally {
+    for (const level of levels) debugLogger[level] = originals[level];
+  }
+
+  const summary = entries.find((entry) => entry.message === "Tinfoil Realtime disconnect");
+  assert.ok(summary, "disconnect summary must be logged");
+  assert.equal(summary.meta.stream, "system");
+  assert.equal(typeof summary.meta.speechStartedCount, "number");
+});
+
 test("preconfigured sessions do not send a client session update", async () => {
   const { TinfoilRealtimeStreaming } = await load();
   const socket = makeFakeSocket(WS.CONNECTING);

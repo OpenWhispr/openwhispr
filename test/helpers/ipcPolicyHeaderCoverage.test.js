@@ -15,7 +15,6 @@ const helperSources = fs
   }));
 
 const NON_POLICY_ROUTE_REASONS = new Map([
-  ["streaming-usage", "usage accounting does not perform a policy-gated action"],
   ["usage", "entitlement and recovery status must remain available"],
   ["stripe/switch-plan", "billing recovery must remain available"],
   ["stripe/preview-switch", "billing recovery must remain available"],

@@ -164,7 +164,11 @@ test("_syncCalendar backfills stripped recurring occurrences from their series m
   const MicrosoftCalendarManager = loadManagerModule();
   const upserted = [];
   const contacts = [];
-  const manager = createManager(MicrosoftCalendarManager, upserted, contacts);
+  const tokenWrites = [];
+  const manager = createManager(MicrosoftCalendarManager, upserted, contacts, {
+    updateMicrosoftCalendarSyncToken: (id, token, expiresAt) =>
+      tokenWrites.push({ id, token, expiresAt }),
+  });
 
   const masterFetches = [];
   manager._apiGet = async (url) => {
@@ -207,7 +211,7 @@ test("_syncCalendar backfills stripped recurring occurrences from their series m
   await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
 
   assert.equal(masterFetches.length, 1);
-  assert.match(masterFetches[0], /^\/me\/events\/master-1\?\$select=/);
+  assert.match(masterFetches[0], /^\/me\/calendars\/cal-1\/events\/master-1\?\$select=/);
 
   const occurrence = upserted.find((event) => event.id === "occ-1");
   assert.equal(occurrence.summary, "Standup");
@@ -218,6 +222,7 @@ test("_syncCalendar backfills stripped recurring occurrences from their series m
   assert.equal(upserted.find((event) => event.id === "occ-2").summary, "Standup");
   assert.equal(upserted.find((event) => event.id === "evt-1").summary, "One-off");
   assert.ok(contacts.some((contact) => contact.email === "me@example.com"));
+  assert.ok(tokenWrites[0].expiresAt > Date.now() + 6 * 24 * 60 * 60 * 1000);
 });
 
 test("_syncCalendar inserts a never-seen stripped occurrence bare when the series master fetch fails", async () => {
@@ -238,6 +243,31 @@ test("_syncCalendar inserts a never-seen stripped occurrence bare when the serie
   assert.equal(upserted[0].id, "occ-1");
   assert.equal(upserted[0].summary, null);
   assert.equal(upserted[0].start_time, "2026-07-20T09:25:00Z");
+});
+
+test("_syncCalendar shortens the delta token TTL when a master fetch fails", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const upserted = [];
+  const tokenWrites = [];
+  const manager = createManager(MicrosoftCalendarManager, upserted, [], {
+    updateMicrosoftCalendarSyncToken: (id, token, expiresAt) =>
+      tokenWrites.push({ id, token, expiresAt }),
+  });
+
+  manager._apiGet = async (url) => {
+    if (url.includes("/calendarView/delta")) {
+      return { "@odata.deltaLink": "delta-link", value: [STRIPPED_OCCURRENCE] };
+    }
+    throw new Error("master gone");
+  };
+
+  await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
+
+  assert.equal(tokenWrites.length, 1);
+  assert.ok(
+    tokenWrites[0].expiresAt <= Date.now() + 10 * 60 * 1000,
+    `expected a shortened TTL, got expiry ${tokenWrites[0].expiresAt - Date.now()}ms out`
+  );
 });
 
 // A bare stub has attendees_count 0 and no join link, which the reminder

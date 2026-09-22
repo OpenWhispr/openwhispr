@@ -36,10 +36,26 @@ export function useMainProcessNotifications({
     });
 
     const showGpuFallbackToast = () => {
-      toast({
+      let toastId: string;
+      toastId = toast({
         title: t("app.toasts.gpuFallback.title"),
         description: t("app.toasts.gpuFallback.description"),
         duration: 10000,
+        action: (
+          <button
+            onClick={async () => {
+              try {
+                const result = await window.electronAPI?.whisperGpuRetry?.();
+                if (result?.success) dismiss(toastId);
+              } catch {
+                // silently fail — toast stays up for another attempt
+              }
+            }}
+            className="rounded-sm border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-medium whitespace-nowrap text-white/90 transition-colors hover:border-white/35 hover:bg-white/20 hover:text-white"
+          >
+            {t("app.toasts.gpuFallback.retry")}
+          </button>
+        ),
       });
     };
     const unsubscribeCudaFallback =

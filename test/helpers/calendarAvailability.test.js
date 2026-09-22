@@ -55,7 +55,7 @@ test("request validation applies defaults, clamps a slightly stale start, and ca
     bufferMinutes: 0,
     maxResults: 10,
   });
-  assert.equal(MAX_AVAILABILITY_HORIZON_DAYS, 7);
+  assert.equal(MAX_AVAILABILITY_HORIZON_DAYS, 31);
 });
 
 test("request validation rejects unknown fields, invalid bounds, stale starts, and excessive horizons", () => {
@@ -81,18 +81,18 @@ test("request validation rejects unknown fields, invalid bounds, stale starts, a
       validateCalendarAvailabilityRequest(
         {
           ...base,
-          end: new Date(NOW.getTime() + 7 * 24 * 60 * 60 * 1000 + 1).toISOString(),
+          end: new Date(NOW.getTime() + 31 * 24 * 60 * 60 * 1000 + 1).toISOString(),
         },
         NOW
       ),
-    /7 local calendar days/
+    /31 local calendar days/
   );
   assert.throws(
     () =>
       validateCalendarAvailabilityRequest(
         {
           ...base,
-          end: new Date(NOW.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          end: new Date(NOW.getTime() + 31 * 24 * 60 * 60 * 1000).toISOString(),
           bufferMinutes: 1,
         },
         NOW
@@ -115,12 +115,12 @@ test("request validation rejects unknown fields, invalid bounds, stale starts, a
   }
 });
 
-test("request horizon spans seven local calendar days across fall-back DST", () => {
+test("request horizon spans 31 local calendar days across fall-back DST", () => {
   const originalTimezone = process.env.TZ;
   process.env.TZ = "America/New_York";
   try {
     const localNow = new Date("2026-10-30T09:00:00-04:00");
-    const endAtLocalHorizon = "2026-11-06T09:00:00-05:00";
+    const endAtLocalHorizon = "2026-11-30T09:00:00-05:00";
     const normalized = validateCalendarAvailabilityRequest(
       {
         start: localNow.toISOString(),
@@ -129,18 +129,18 @@ test("request horizon spans seven local calendar days across fall-back DST", () 
       localNow
     );
 
-    assert.equal(normalized.end, "2026-11-06T14:00:00.000Z");
-    assert.equal(Date.parse(normalized.end) - localNow.getTime(), 169 * 60 * 60 * 1000);
+    assert.equal(normalized.end, "2026-11-30T14:00:00.000Z");
+    assert.equal(Date.parse(normalized.end) - localNow.getTime(), 745 * 60 * 60 * 1000);
     assert.throws(
       () =>
         validateCalendarAvailabilityRequest(
           {
             start: localNow.toISOString(),
-            end: "2026-11-06T09:00:00.001-05:00",
+            end: "2026-11-30T09:00:00.001-05:00",
           },
           localNow
         ),
-      /7 local calendar days/
+      /31 local calendar days/
     );
     assert.throws(
       () =>

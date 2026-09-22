@@ -67,6 +67,20 @@ test("malformed verbose segments are dropped, never thrown", () => {
   ]);
 });
 
+test("verbose segments clamp negative start timestamps and inverted end timestamps", () => {
+  const mapped = mapVerboseSegments({
+    segments: [
+      { start: -2.5, end: 3, text: "negative start clamped" },
+      { start: 6, end: 2, text: "inverted end clamped" },
+    ],
+  });
+
+  assert.deepEqual(mapped, [
+    { text: "negative start clamped", start: 0, end: 3 },
+    { text: "inverted end clamped", start: 6, end: 6 },
+  ]);
+});
+
 test("responses without usable segments map to null", () => {
   assert.equal(mapVerboseSegments({ text: "plain json response" }), null);
   assert.equal(mapVerboseSegments({ segments: "not-an-array" }), null);
