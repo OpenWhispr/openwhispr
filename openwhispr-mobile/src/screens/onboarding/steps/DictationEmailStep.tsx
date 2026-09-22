@@ -1,131 +1,174 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  Image,
-  Keyboard,
-  PlatformColor,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-  type ImageSourcePropType,
-} from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { Keyboard, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SpaceGrotesk } from '@/lib/fonts';
-import { getStepProgress, useOnboardingStore } from '@/store/useOnboardingStore';
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useHandoffStore } from '@/store/useHandoffStore';
+import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-storage/src';
 
-const STEP_ID = 'dictation-email';
+const SAMPLE_EMAIL =
+  'Hey Tim, excited to chat. Are you free next Friday at 3pm… actually, 4pm? Thanks, Chad';
+const EXAMPLE_EMAIL =
+  'Hey Tim,\n\nExcited to chat! Are you free next Friday at 4 pm?\n\nThanks,\nChad';
 
-const SAMPLE_EMAIL = `Hey Tim, excited to chat. Are you free next Friday at 3pm… actually, 4pm? Thanks, Chad`;
-
-const GMAIL_ICON = require('../../../../assets/onboarding/app-icons/gmail.png');
-const MAIL_ICON = require('../../../../assets/onboarding/app-icons/mail.png');
-const OUTLOOK_ICON = require('../../../../assets/onboarding/app-icons/outlook.png');
-
-export function DictationEmailStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+export function DictationEmailStep(): ReactElement {
+  const { goNext, progress } = useOnboardingStep('dictation-email');
+  const selectedMode = useOnboardingStore((state) => state.selectedMode);
+  const user = useAuthStore((state) => state.user);
+  const ensureSession = useAuthStore((state) => state.ensureAnonymousSession);
+  const isTranscribing = useHandoffStore((state) => state.isTranscribing);
+  const input = useRef<TextInput>(null);
   const [value, setValue] = useState('');
-
-  // Auto-hide the keyboard the moment a dictation finishes — scoped to this step
-  // only, so the transcribed email and the Continue button are immediately visible.
-  // Everywhere else the keyboard stays up for continuous dictation. Dictation into
-  // this in-app field is "self-hosted", so useHandoffStore.isActive never flips;
-  // isTranscribing is the flag that toggles true→false as the transcript lands.
-  const isTranscribing = useHandoffStore((s) => s.isTranscribing);
-  const wasTranscribing = useRef(false);
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [showExample, setShowExample] = useState(false);
+  const localSelected = selectedMode === 'private';
+  const liveAvailable = !localSelected && !!user;
+  const busy =
+    status === 'recording' || status === 'transcribing' || status === 'cleaning' || isTranscribing;
 
   useEffect(() => {
-    if (wasTranscribing.current && !isTranscribing) {
-      Keyboard.dismiss();
-    }
-    wasTranscribing.current = isTranscribing;
-  }, [isTranscribing]);
+    // Practice may use Cloud before the choice, but must never override a Local choice.
+    if (selectedMode !== null) return;
+    const previous = useProcessingModeStore.getState();
+    previous.setActiveMode('cloud', true);
+    return () => {
+      useProcessingModeStore.getState().setActiveMode(previous.activeMode, previous.isUserOverride);
+    };
+  }, [selectedMode]);
+
+  useEffect(() => {
+    const subscription = addKeyboardStatusChangedListener((event) => {
+      if (!event.status) return;
+      setStatus(event.status);
+      if (
+        event.status === 'error' ||
+        event.status === 'no_speech' ||
+        event.status === 'setup_required'
+      ) {
+        setError(
+          event.status === 'no_speech'
+            ? 'No speech detected. Try again or view the example.'
+            : event.error || 'Dictation could not finish. Try again or view the example.',
+        );
+        Keyboard.dismiss();
+      } else {
+        setError(null);
+      }
+    });
+    return () => subscription?.remove();
+  }, []);
+
+  const retry = useCallback(async (): Promise<void> => {
+    await ensureSession();
+    if (!useAuthStore.getState().user)
+      throw new Error('Cloud practice needs a connection. You can view the example or skip.');
+    setError(null);
+    setStatus('idle');
+    setShowExample(false);
+    setValue('');
+    input.current?.focus();
+  }, [ensureSession]);
+
+  const statusLabel =
+    status === 'recording'
+      ? 'Listening…'
+      : busy
+        ? 'Transcribing…'
+        : value.trim()
+          ? 'Your email is ready'
+          : 'Tap the field, then the keyboard microphone';
 
   return (
     <OnboardingShell
-      progress={getStepProgress(STEP_ID)}
-      onSkip={goNext}
+      avoidKeyboard
+      progress={progress}
+      onSkip={busy ? undefined : goNext}
       title="Try dictating an email"
       titleAccent="email"
-      subtitle="Don't type — just talk naturally. OpenWhispr formats it for you."
+      subtitle={
+        localSelected
+          ? 'Local is still selected. Here is an example of Cloud cleanup.'
+          : 'This practice uses Cloud. You’ll choose Cloud or Local after the previews.'
+      }
       ctaLabel="Continue"
+      ctaDisabled={busy}
       onCta={goNext}
+      secondaryCtaLabel={!localSelected && (error || !user) ? 'Retry' : undefined}
+      onSecondaryCta={retry}
     >
-      <Pressable className="flex-1" onPress={Keyboard.dismiss}>
-        {/* Compose-style card — a light email hint (To / Subject), not a real client */}
-        <View className="overflow-hidden rounded-2xl border border-separator bg-secondarySystemGroupedBackground">
-          <View className="flex-row items-center gap-3 border-b border-separator px-4 py-3">
-            <Text className="w-16 text-[14px] text-tertiaryLabel">To</Text>
-            <View className="flex-row items-center gap-1.5 rounded-full bg-quaternarySystemFill py-1 pl-1 pr-2.5">
-              <View className="h-5 w-5 items-center justify-center rounded-full bg-brand">
-                <Text className="text-[10px] font-bold text-white">T</Text>
-              </View>
-              <Text className="text-[13px] font-semibold text-label">Tim</Text>
-            </View>
-          </View>
-          <View className="flex-row items-center gap-3 border-b border-separator px-4 py-3">
-            <Text className="w-16 text-[14px] text-tertiaryLabel">Subject</Text>
-            <Text className="text-[14px] font-medium text-label">Quick sync</Text>
-          </View>
-          <View className="px-4 pb-4 pt-3">
-            <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
-              Read this aloud
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 16, gap: 12 }}
+      >
+        <View className="rounded-2xl border border-separator bg-secondarySystemGroupedBackground p-4">
+          <Text className="text-[12px] font-semibold text-secondaryLabel">Read this aloud</Text>
+          <Text className="mt-2 text-[15px] leading-[21px] text-label">{SAMPLE_EMAIL}</Text>
+        </View>
+        <View className="rounded-2xl border border-separator bg-secondarySystemGroupedBackground p-4">
+          <Text className="text-[12px] font-semibold text-secondaryLabel">
+            To: Tim · Quick sync
+          </Text>
+          <TextInput
+            ref={input}
+            accessibilityLabel="Your dictated email"
+            value={value}
+            onChangeText={(text) => {
+              setValue(text);
+              // Native readiness precedes the keyboard consuming its pending transcript.
+              if (status === 'ready' && text.trim()) Keyboard.dismiss();
+            }}
+            editable={liveAvailable}
+            multiline
+            placeholder="Your words appear here"
+            className="mt-3 text-label placeholder:text-tertiaryLabel"
+            style={{
+              minHeight: 100,
+              fontFamily: SpaceGrotesk.regular,
+              fontSize: 16,
+              lineHeight: 22,
+            }}
+            textAlignVertical="top"
+            autoCorrect={false}
+          />
+        </View>
+        {liveAvailable ? (
+          <Text accessibilityLiveRegion="polite" className="text-[14px] text-secondaryLabel">
+            {statusLabel}
+          </Text>
+        ) : null}
+        {error || (!localSelected && !user) ? (
+          <Text accessibilityRole="alert" className="text-[14px] text-systemRed">
+            {error || 'Cloud practice needs a connection. View the example or skip for now.'}
+          </Text>
+        ) : null}
+        {showExample || localSelected ? (
+          <View className="rounded-xl bg-primary/5 p-4">
+            <Text className="text-[12px] font-semibold text-secondaryLabel">
+              Example · not a live transcription
             </Text>
-            <TextInput
-              value={value}
-              onChangeText={setValue}
-              multiline
-              placeholder={SAMPLE_EMAIL}
-              placeholderTextColor="#9CA3AF"
-              style={styles.emailInput}
-              textAlignVertical="top"
-              autoCorrect={false}
-              autoFocus
-              scrollEnabled
-            />
+            <Text className="mt-2 text-[15px] leading-[21px] text-label">{EXAMPLE_EMAIL}</Text>
           </View>
-        </View>
-
-        {/* Reassurance — works anywhere */}
-        <View className="mt-4 flex-row items-center justify-center">
-          <AppIcon source={GMAIL_ICON} size={18} />
-          <AppIcon source={MAIL_ICON} size={16} overlap />
-          <AppIcon source={OUTLOOK_ICON} size={27} overlap />
-          <Text className="ml-2.5 text-[12px] text-tertiaryLabel">works in any email app</Text>
-        </View>
-      </Pressable>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            accessibilityState={{ disabled: busy }}
+            onPress={() => {
+              Keyboard.dismiss();
+              setShowExample(true);
+            }}
+            className="py-2"
+          >
+            <Text className="text-[15px] text-primary">Show an example</Text>
+          </Pressable>
+        )}
+      </ScrollView>
     </OnboardingShell>
   );
 }
-
-function AppIcon({
-  source,
-  overlap,
-  size = 18,
-}: {
-  source: ImageSourcePropType;
-  overlap?: boolean;
-  size?: number;
-}) {
-  return (
-    <View
-      className={`h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-systemBackground bg-white ${
-        overlap ? '-ml-2.5' : ''
-      }`}
-    >
-      <Image source={source} resizeMode="contain" style={{ height: size, width: size }} />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  emailInput: {
-    minHeight: 140,
-    color: PlatformColor('label') as unknown as string,
-    fontFamily: SpaceGrotesk.regular,
-    fontSize: 16,
-    fontWeight: '400',
-    lineHeight: 22,
-  },
-});

@@ -1,9 +1,9 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
@@ -26,31 +26,45 @@ export const PAYWALL_READY_GRACE_MS = 3_000;
 export const PAYWALL_ESCAPE_MS = 8_000;
 
 /**
- * Presents the Superwall paywall, then hands off to the account step whether or
+ * Presents the Superwall paywall, then resumes setup whether or
  * not anything was purchased. This screen is only a backdrop — Superwall's own
  * paywall is the real surface — so its job is to never become a dead end.
  */
 export function PaywallStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+  const { goNext } = useOnboardingStep('paywall');
   const user = useAuthStore((s) => s.user);
   const isSubscribed = useUsageStore((s) => s.usage?.isSubscribed ?? false);
   const { register, state, isConfigured } = useSuperwallGate();
   const hasPresentedRef = useRef(false);
   const hasAdvancedRef = useRef(false);
   const unmountedRef = useRef(false);
+  const registrationRef = useRef<AbortController | null>(null);
   const [readyGraceElapsed, setReadyGraceElapsed] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [escapeElapsed, setEscapeElapsed] = useState(false);
 
-  const advance = useCallback(() => {
+  const [advanceError, setAdvanceError] = useState<string | null>(null);
+  const advance = useCallback(async (): Promise<void> => {
     if (hasAdvancedRef.current) return;
     hasAdvancedRef.current = true;
-    goNext();
+    hasPresentedRef.current = true;
+    registrationRef.current?.abort();
+    setAdvanceError(null);
+    try {
+      await goNext();
+    } catch (error) {
+      hasAdvancedRef.current = false;
+      setAdvanceError(
+        error instanceof Error ? error.message : 'Could not save progress. Try again.',
+      );
+    }
   }, [goNext]);
 
   useEffect(() => {
+    unmountedRef.current = false;
     return () => {
       unmountedRef.current = true;
+      registrationRef.current?.abort();
     };
   }, []);
 
@@ -77,7 +91,7 @@ export function PaywallStep() {
     // buy. Either way there is no paywall worth presenting.
     if (!user || isSubscribed) {
       hasPresentedRef.current = true;
-      advance();
+      void advance();
       return;
     }
 
@@ -87,30 +101,37 @@ export function PaywallStep() {
 
     // Failures are already reported by SuperwallGateProvider. Swallowing here is
     // what keeps a missing campaign, a bad API key or an SDK error from stopping
-    // onboarding — the user just continues to the account step. Unmount is the
+    // onboarding — the user just continues setup. Unmount is the
     // only thing that cancels the advance; effect re-runs must not.
-    register({ placement: SUPERWALL_PLACEMENTS.onboardingPaywall })
+    const controller = new AbortController();
+    registrationRef.current = controller;
+    register({ placement: SUPERWALL_PLACEMENTS.onboardingPaywall, signal: controller.signal })
       .catch(() => {})
       .finally(() => {
-        if (!unmountedRef.current) advance();
+        if (!unmountedRef.current) void advance();
       });
   }, [advance, isConfigured, isSubscribed, readyGraceElapsed, register, user]);
 
   // Between registering and the SDK presenting, this backdrop looks like an
-  // ordinary screen with a primary button; tapping it would mount the account
+  // ordinary screen with a primary button; tapping it would mount the next
   // step underneath a paywall that then presents on top of it.
-  const ctaDisabled = presenting && state.status === 'idle' && !escapeElapsed;
+  const ctaDisabled = !advanceError && presenting && state.status === 'idle' && !escapeElapsed;
 
   return (
     <OnboardingShell
       title="Go further with OpenWhispr Pro."
       titleAccent="Pro"
-      subtitle="You've seen what it can do. Unlock the whole thing."
+      subtitle="Unlock more with Pro, or close the offer to keep using Cloud with your current limits."
       ctaLabel="Continue"
       ctaDisabled={ctaDisabled}
       onCta={advance}
     >
       <View className="gap-4 pt-2">
+        {advanceError ? (
+          <Text accessibilityRole="alert" className="text-systemRed">
+            {advanceError}
+          </Text>
+        ) : null}
         {HIGHLIGHTS.map((item) => (
           <View key={item.label} className="flex-row items-center gap-3">
             <SystemIcon name={item.icon} mdName={item.mdIcon} size={20} />

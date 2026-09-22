@@ -6,6 +6,7 @@ jest.mock('@/lib/sentry', () => ({
   Sentry: { captureException: (...args: unknown[]) => mockCaptureException(...args) },
 }));
 jest.mock('@/store/useOnboardingStore', () => ({
+  getStepProgress: () => undefined,
   useOnboardingStore: (selector: (s: { goNext: () => Promise<void> }) => unknown) =>
     selector({ goNext: mockGoNext }),
 }));

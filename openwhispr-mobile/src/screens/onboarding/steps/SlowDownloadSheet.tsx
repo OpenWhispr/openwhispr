@@ -1,3 +1,4 @@
+import { useRef, useState, type ReactElement } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
@@ -5,14 +6,41 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 
 interface Props {
   visible: boolean;
-  onContinueCloud: () => void;
+  onContinueCloud: () => Promise<void>;
   onKeepWaiting: () => void;
 }
 
-export function SlowDownloadSheet({ visible, onContinueCloud, onKeepWaiting }: Props) {
+export function SlowDownloadSheet({
+  visible,
+  onContinueCloud,
+  onKeepWaiting,
+}: Props): ReactElement {
+  const inFlight = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const continueCloud = async (): Promise<void> => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      await onContinueCloud();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Cloud is unavailable. Try again.');
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
+  const keepWaiting = (): void => {
+    if (!inFlight.current) {
+      setError(null);
+      onKeepWaiting();
+    }
+  };
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onKeepWaiting}>
-      <Pressable className="flex-1 justify-end bg-black/40" onPress={onKeepWaiting}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={keepWaiting}>
+      <Pressable className="flex-1 justify-end bg-black/40" onPress={keepWaiting}>
         <Pressable
           onPress={(e) => e.stopPropagation()}
           className="rounded-t-3xl bg-systemBackground px-6 pb-8 pt-3"
@@ -35,11 +63,16 @@ export function SlowDownloadSheet({ visible, onContinueCloud, onKeepWaiting }: P
           </View>
 
           <View className="mt-5">
-            <Button onPress={onContinueCloud} size="lg">
+            {error ? (
+              <Text accessibilityRole="alert" className="mb-3 text-systemRed">
+                {error}
+              </Text>
+            ) : null}
+            <Button onPress={() => void continueCloud()} loading={busy} size="lg">
               Continue with Cloud for now
             </Button>
             <Pressable
-              onPress={onKeepWaiting}
+              onPress={keepWaiting}
               className="mt-3 items-center py-2"
               accessibilityRole="button"
               accessibilityLabel="Keep waiting for download"

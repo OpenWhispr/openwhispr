@@ -1,14 +1,13 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Linking, type AppStateStatus, View } from 'react-native';
+import { Alert, AppState, Linking, type AppStateStatus, View } from 'react-native';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { AnimatedKeyboardPreview } from '@/components/onboarding/AnimatedKeyboardPreview';
 import { FullAccessReasons } from '@/components/onboarding/FullAccessReasons';
 import { InstructionOverlay } from '@/components/onboarding/InstructionOverlay';
-import { getStepProgress, useOnboardingStore } from '@/store/useOnboardingStore';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { isKeyboardInstalled } from '@/lib/keyboardInstallation';
 import { startKeyboardPipTutorial, stopKeyboardPipTutorial } from '@/lib/keyboardPipTutorial';
-
-const STEP_ID = 'keyboard-intro';
 
 const STEPS = [
   'Tap Keyboards',
@@ -19,7 +18,7 @@ const STEPS = [
 ];
 
 export function KeyboardIntroStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+  const { goNext, progress } = useOnboardingStep('keyboard-intro');
   const setKeyboardInstalled = useOnboardingStore((s) => s.setKeyboardInstalled);
   const [openedSettings, setOpenedSettings] = useState(false);
   const [hasReturned, setHasReturned] = useState(false);
@@ -27,10 +26,25 @@ export function KeyboardIntroStep() {
   const leftAppRef = useRef(false);
   const settingsLaunchInFlightRef = useRef(false);
   const skipCheckRef = useRef(false);
+  const advancingRef = useRef(false);
 
   const stopPipTutorial = useCallback(() => {
     stopKeyboardPipTutorial();
   }, []);
+
+  const advance = useCallback(async (): Promise<void> => {
+    if (advancingRef.current) return;
+    advancingRef.current = true;
+    try {
+      stopPipTutorial();
+      await setKeyboardInstalled(true);
+      await goNext();
+    } catch (error) {
+      advancingRef.current = false;
+      setHasReturned(true);
+      Alert.alert('Could not continue', error instanceof Error ? error.message : 'Try again.');
+    }
+  }, [goNext, setKeyboardInstalled, stopPipTutorial]);
 
   // Mirror MicrophoneStep's auto-skip pattern: if the OpenWhispr keyboard is
   // already enabled in iOS, advance immediately without showing this screen.
@@ -39,9 +53,9 @@ export function KeyboardIntroStep() {
     skipCheckRef.current = true;
     if (isKeyboardInstalled()) {
       stopPipTutorial();
-      setKeyboardInstalled(true).then(() => goNext());
+      void advance();
     }
-  }, [goNext, setKeyboardInstalled, stopPipTutorial]);
+  }, [advance, stopPipTutorial]);
 
   useEffect(() => {
     let pollHandle: ReturnType<typeof setInterval> | null = null;
@@ -70,17 +84,17 @@ export function KeyboardIntroStep() {
           if (isKeyboardInstalled()) {
             stopPolling();
             stopPipTutorial();
-            setKeyboardInstalled(true).then(() => goNext());
-            return;
+            void advance();
+            return true;
           }
           attempts += 1;
           if (attempts >= maxAttempts) {
             stopPolling();
             setHasReturned(true);
           }
+          return false;
         };
-        tryDetect();
-        if (!pollHandle) {
+        if (!tryDetect()) {
           pollHandle = setInterval(tryDetect, 200);
         }
       }
@@ -90,7 +104,7 @@ export function KeyboardIntroStep() {
       stopPolling();
       stopPipTutorial();
     };
-  }, [goNext, setKeyboardInstalled, stopPipTutorial]);
+  }, [advance, stopPipTutorial]);
 
   const openSettings = useCallback(async () => {
     if (settingsLaunchInFlightRef.current) return;
@@ -108,15 +122,9 @@ export function KeyboardIntroStep() {
     }
   }, []);
 
-  const handleConfirm = useCallback(async () => {
-    stopPipTutorial();
-    await setKeyboardInstalled(true);
-    await goNext();
-  }, [setKeyboardInstalled, goNext, stopPipTutorial]);
-
   return (
     <OnboardingShell
-      progress={getStepProgress(STEP_ID)}
+      progress={progress}
       title={hasReturned ? 'Did you enable the keyboard?' : 'Use OpenWhispr in any app.'}
       titleAccent={hasReturned ? 'enable' : 'any app'}
       subtitle={
@@ -127,9 +135,9 @@ export function KeyboardIntroStep() {
       ctaLabel={hasReturned ? 'Try again' : 'Open Settings'}
       ctaDisabled={settingsLaunchPending}
       ctaLoading={settingsLaunchPending}
-      onCta={hasReturned ? openSettings : openSettings}
+      onCta={openSettings}
       secondaryCtaLabel={hasReturned ? "I've enabled it" : undefined}
-      onSecondaryCta={hasReturned ? handleConfirm : undefined}
+      onSecondaryCta={hasReturned ? advance : undefined}
     >
       <View className="flex-1 justify-center gap-4">
         {openedSettings ? (

@@ -1,10 +1,26 @@
 import type React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 // nativewind's cssInterop breaks jest's transform; same stub the other screen suites use.
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
-jest.mock('../SlowDownloadSheet', () => ({ SlowDownloadSheet: () => null }));
+jest.mock('../SlowDownloadSheet', () => {
+  const { Pressable, Text } = require('react-native');
+  return {
+    SlowDownloadSheet: ({
+      visible,
+      onContinueCloud,
+    }: {
+      visible: boolean;
+      onContinueCloud: () => Promise<void>;
+    }) =>
+      visible ? (
+        <Pressable onPress={onContinueCloud}>
+          <Text>Keep downloading with Cloud</Text>
+        </Pressable>
+      ) : null,
+  };
+});
 interface MockShellProps {
   ctaLabel: string;
   ctaDisabled?: boolean;
@@ -39,6 +55,7 @@ jest.mock('@/components/onboarding/OnboardingShell', () => {
     ),
   };
 });
+jest.mock('@/lib/onboardingMode', () => ({ chooseOnboardingMode: jest.fn(async () => undefined) }));
 jest.mock('@/lib/privateMode', () => ({ getPrivateModeUnavailableMessage: () => '' }));
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguages: () => ['en'],
@@ -90,7 +107,8 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
   },
 }));
 
-import { useConfigStore } from '@/store/useConfigStore';
+import { chooseOnboardingMode } from '@/lib/onboardingMode';
+import { LocalTranscriptionService } from '@/services/transcription/LocalTranscriptionService';
 import {
   useModelDownloadStore,
   type LocalModelKey,
@@ -98,7 +116,7 @@ import {
 } from '@/store/useModelDownloadStore';
 import { PrivateDownloadStep } from '../PrivateDownloadStep';
 
-const mockUpdateConfig = useConfigStore.getState().updateConfig as jest.Mock;
+const mockChooseMode = jest.mocked(chooseOnboardingMode);
 const mockStartDownload = jest.fn(async () => undefined);
 const mockCancelDownload = jest.fn(async () => undefined);
 
@@ -109,11 +127,51 @@ const setDownload = (key: LocalModelKey, entry: ModelDownloadEntry): void =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(LocalTranscriptionService.isAvailable).mockReturnValue(true);
   useModelDownloadStore.getState().reset();
   useModelDownloadStore.setState({
     startDownload: mockStartDownload,
     cancelDownload: mockCancelDownload,
   });
+});
+afterEach(() => jest.useRealTimers());
+
+it('uses the same Cloud choice from the slow-download sheet and keeps the download', async () => {
+  jest.useFakeTimers();
+  setDownload('parakeet-v2', { status: 'downloading', progress: 0.2 });
+  render(<PrivateDownloadStep />);
+  await screen.findByText('Parakeet v2');
+  await act(async () => {
+    jest.advanceTimersByTime(8000);
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByText('Keep downloading with Cloud'));
+  });
+  expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download');
+  expect(mockCancelDownload).not.toHaveBeenCalled();
+});
+
+it('uses the same Cloud choice when local recording is unavailable', async () => {
+  jest.mocked(LocalTranscriptionService.isAvailable).mockReturnValue(false);
+  render(<PrivateDownloadStep />);
+  fireEvent.press(screen.getByText('Use Cloud instead'));
+  await waitFor(() => expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download'));
+});
+
+it('uses the same Cloud choice when model discovery fails', async () => {
+  jest
+    .mocked(LocalTranscriptionService.getAvailability)
+    .mockRejectedValueOnce(new Error('Unavailable'));
+  render(<PrivateDownloadStep />);
+  fireEvent.press(await screen.findByText('Use Cloud instead'));
+  await waitFor(() => expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download'));
+});
+
+it('reasserts Local before continuing with a completed model', async () => {
+  setDownload('parakeet-v2', { status: 'completed', progress: 1 });
+  render(<PrivateDownloadStep />);
+  fireEvent.press(await screen.findByText('Continue with Private'));
+  await waitFor(() => expect(mockChooseMode).toHaveBeenCalledWith('private', 'private-download'));
 });
 
 describe('PrivateDownloadStep — switching to Cloud', () => {
@@ -127,7 +185,7 @@ describe('PrivateDownloadStep — switching to Cloud', () => {
     fireEvent.press(screen.getByText("Don't use Private — switch to Cloud"));
 
     await waitFor(() => expect(mockCancelDownload).toHaveBeenCalledWith('parakeet-v2'));
-    expect(mockUpdateConfig).toHaveBeenCalledWith({ defaultMode: 'cloud' });
+    expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download');
   });
 
   it('keeps a completed model when switching to Cloud', async () => {
@@ -137,7 +195,7 @@ describe('PrivateDownloadStep — switching to Cloud', () => {
 
     fireEvent.press(screen.getByText('Use Cloud instead'));
 
-    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledWith({ defaultMode: 'cloud' }));
+    await waitFor(() => expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download'));
     expect(mockCancelDownload).not.toHaveBeenCalled();
   });
 });
@@ -161,4 +219,13 @@ describe('PrivateDownloadStep — retrying after an error', () => {
 
     expect(screen.queryByText('Try again')).toBeNull();
   });
+});
+
+it('offers retry when model discovery fails instead of spinning forever', async () => {
+  jest
+    .mocked(LocalTranscriptionService.getAvailability)
+    .mockRejectedValueOnce(new Error('Model lookup failed'));
+  render(<PrivateDownloadStep />);
+  fireEvent.press(await screen.findByText('Retry model selection'));
+  expect(await screen.findByText('Parakeet v2')).toBeTruthy();
 });

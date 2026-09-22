@@ -57,14 +57,14 @@ describe('PaywallStep', () => {
     expect(mockRegister.mock.calls[0][0].placement).toBe(SUPERWALL_PLACEMENTS.onboardingPaywall);
   });
 
-  it('advances to the account step once the paywall closes', async () => {
+  it('advances to the saved setup destination once the paywall closes', async () => {
     render(<PaywallStep />);
 
     await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(1));
   });
 
   // The property that matters most here: nothing about Superwall may strand a
-  // first run. A rejected register still has to hand off to the account step.
+  // first run. A rejected register still has to hand off to the saved setup destination.
   it('advances even when the paywall fails to present', async () => {
     mockRegister.mockRejectedValue(new Error('Superwall unavailable'));
 
@@ -78,33 +78,40 @@ describe('PaywallStep', () => {
     mockRegister.mockReturnValue(new Promise<boolean>(() => {}));
 
     const { getByText } = render(<PaywallStep />);
-    act(() => {
+    await act(async () => {
       jest.advanceTimersByTime(PAYWALL_ESCAPE_MS);
     });
-    fireEvent.press(getByText('Continue'));
+    await act(async () => {
+      fireEvent.press(getByText('Continue'));
+    });
 
     expect(mockGoNext).toHaveBeenCalledTimes(1);
+    expect(mockRegister.mock.calls[0][0].signal.aborted).toBe(true);
   });
 
   // Between register and the SDK actually presenting, the backdrop is a
   // normal-looking screen with a primary button. Tapping it would mount the
   // account step underneath a paywall that then presents on top of it.
-  it('keeps Continue inert while the paywall is still being presented', () => {
+  it('keeps Continue inert while the paywall is still being presented', async () => {
     mockRegister.mockReturnValue(new Promise<boolean>(() => {}));
 
     const { getByText } = render(<PaywallStep />);
-    fireEvent.press(getByText('Continue'));
+    await act(async () => {
+      fireEvent.press(getByText('Continue'));
+    });
 
     expect(mockGoNext).not.toHaveBeenCalled();
   });
 
-  it('re-enables Continue once the SDK reports the paywall failed to present', () => {
+  it('re-enables Continue once the SDK reports the paywall failed to present', async () => {
     mockRegister.mockReturnValue(new Promise<boolean>(() => {}));
     const { getByText, rerender } = render(<PaywallStep />);
 
     mockGate = { isConfigured: true, state: { status: 'error' } };
     rerender(<PaywallStep />);
-    fireEvent.press(getByText('Continue'));
+    await act(async () => {
+      fireEvent.press(getByText('Continue'));
+    });
 
     expect(mockGoNext).toHaveBeenCalledTimes(1);
   });
@@ -124,12 +131,12 @@ describe('PaywallStep', () => {
     await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
   });
 
-  it('presents anyway once the readiness grace period elapses', () => {
+  it('presents anyway once the readiness grace period elapses', async () => {
     jest.useFakeTimers();
     mockGate = { isConfigured: false, state: { status: 'idle' } };
 
     render(<PaywallStep />);
-    act(() => {
+    await act(async () => {
       jest.advanceTimersByTime(PAYWALL_READY_GRACE_MS);
     });
 
@@ -145,7 +152,9 @@ describe('PaywallStep', () => {
     );
 
     const { getByText } = render(<PaywallStep />);
-    fireEvent.press(getByText('Continue'));
+    await act(async () => {
+      fireEvent.press(getByText('Continue'));
+    });
     releaseRegister(true);
 
     await waitFor(() => expect(mockGoNext).toHaveBeenCalled());
@@ -187,4 +196,13 @@ describe('PaywallStep', () => {
 
     expect(mockGoNext).not.toHaveBeenCalled();
   });
+});
+
+it('allows retrying continuation after a progress save fails', async () => {
+  mockGoNext.mockRejectedValueOnce(new Error('Could not save progress'));
+  const screen = render(<PaywallStep />);
+  expect(await screen.findByText('Could not save progress')).toBeTruthy();
+  fireEvent.press(screen.getByText('Continue'));
+  await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(2));
+  expect(mockRegister).toHaveBeenCalledTimes(1);
 });

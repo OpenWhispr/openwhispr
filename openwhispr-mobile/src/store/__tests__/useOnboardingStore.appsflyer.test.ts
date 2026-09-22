@@ -1,8 +1,13 @@
 const mockCompleteOnboarding = jest.fn();
 const mockLogTutorialCompletion = jest.fn();
 
+jest.mock('@/store/useConfigStore', () => ({
+  useConfigStore: { getState: () => ({ config: { defaultMode: 'cloud' } }) },
+}));
+
 jest.mock('@/utils/onboarding', () => ({
   FIRST_ONBOARDING_STEP: 'get-started',
+  ONBOARDING_VERSION: 2,
   OnboardingService: {
     isOnboardingComplete: jest.fn(),
     getProgress: jest.fn(),
@@ -37,7 +42,8 @@ beforeEach(() => {
   useOnboardingStore.setState({
     hydrated: true,
     finished: false,
-    currentStep: 'graduation',
+    currentStep: 'voice-agent',
+    tutorialCompleted: false,
     keyboardInstalled: true,
     permissionsGranted: {
       microphone: false,
@@ -47,30 +53,26 @@ beforeEach(() => {
 });
 
 describe('useOnboardingStore AppsFlyer events', () => {
-  // The tutorial ends at graduation. The paywall and account steps that follow
-  // are a different funnel, so the event fires when the user leaves graduation
-  // rather than when onboarding is finally persisted — otherwise everyone who
-  // drops at the paywall or the account screen would read as never having
-  // finished the tutorial.
-  it('logs tutorial completion when leaving graduation with the setup state', async () => {
-    await useOnboardingStore.getState().goNext();
+  it('logs tutorial completion when leaving the tone preview with the setup state', async () => {
+    await useOnboardingStore.getState().goNext('voice-agent');
 
-    expect(useOnboardingStore.getState().currentStep).toBe('paywall');
+    expect(useOnboardingStore.getState().currentStep).toBe('privacy-mode');
     expect(mockLogTutorialCompletion).toHaveBeenCalledWith({
       keyboardInstalled: true,
       microphonePermissionGranted: false,
     });
   });
 
-  it('logs it once, not again on the steps after graduation', async () => {
-    await useOnboardingStore.getState().goNext();
-    await useOnboardingStore.getState().goNext();
+  it('logs it once, not again on the duplicate callbacks', async () => {
+    await useOnboardingStore.getState().goNext('voice-agent');
+    await useOnboardingStore.getState().goNext('voice-agent');
 
-    expect(useOnboardingStore.getState().currentStep).toBe('create-account');
+    expect(useOnboardingStore.getState().currentStep).toBe('privacy-mode');
     expect(mockLogTutorialCompletion).toHaveBeenCalledTimes(1);
   });
 
   it('does not log completion when onboarding is persisted', async () => {
+    useOnboardingStore.setState({ currentStep: 'graduation' });
     await useOnboardingStore.getState().finish();
 
     expect(mockCompleteOnboarding).toHaveBeenCalledTimes(1);
@@ -79,7 +81,9 @@ describe('useOnboardingStore AppsFlyer events', () => {
   });
 
   it('does not persist completion again once onboarding is finished', async () => {
+    useOnboardingStore.setState({ currentStep: 'graduation' });
     await useOnboardingStore.getState().finish();
+    useOnboardingStore.setState({ currentStep: 'graduation' });
     await useOnboardingStore.getState().finish();
 
     expect(mockCompleteOnboarding).toHaveBeenCalledTimes(1);
@@ -89,6 +93,7 @@ describe('useOnboardingStore AppsFlyer events', () => {
     const deferredPersistence = createDeferredPromise();
     mockCompleteOnboarding.mockReturnValueOnce(deferredPersistence.promise);
 
+    useOnboardingStore.setState({ currentStep: 'graduation' });
     const firstCompletion = useOnboardingStore.getState().finish();
     const secondCompletion = useOnboardingStore.getState().finish();
 
@@ -103,6 +108,7 @@ describe('useOnboardingStore AppsFlyer events', () => {
   it('does not log a failed completion and allows a later retry', async () => {
     mockCompleteOnboarding.mockRejectedValueOnce(new Error('secure storage unavailable'));
 
+    useOnboardingStore.setState({ currentStep: 'graduation' });
     await expect(useOnboardingStore.getState().finish()).rejects.toThrow(
       'secure storage unavailable',
     );
@@ -111,6 +117,7 @@ describe('useOnboardingStore AppsFlyer events', () => {
 
     mockCompleteOnboarding.mockResolvedValueOnce(undefined);
 
+    useOnboardingStore.setState({ currentStep: 'graduation' });
     await useOnboardingStore.getState().finish();
 
     expect(mockCompleteOnboarding).toHaveBeenCalledTimes(2);

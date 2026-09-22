@@ -1,8 +1,8 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { usePlacement, useSuperwall } from 'expo-superwall';
-import type { PaywallResult, PaywallSkippedReason } from 'expo-superwall';
+import type { PaywallResult, PaywallSkippedReason, PaywallState } from 'expo-superwall';
 import { SuperwallGateContext } from '@/hooks/useSuperwallGate';
 import type {
   RegisterSuperwallGateOptions,
@@ -36,8 +36,59 @@ type PendingGate = {
   purchaseCompletionReported: boolean;
   terminalEventProcessed: boolean;
   closed: boolean;
+  cancelled?: boolean;
+  removeAbortListener?: () => void;
   resolve: (granted: boolean) => void;
 };
+
+type PlacementCallbacks = NonNullable<Parameters<typeof usePlacement>[0]>;
+type NativeRegister = ReturnType<typeof usePlacement>['registerPlacement'];
+type OnboardingOffer = {
+  id: number;
+  gate: PendingGate;
+  start: (register: NativeRegister) => void;
+};
+
+function OnboardingOfferHandler({
+  offer,
+  callbacks,
+  dismiss,
+  retire,
+}: {
+  offer: OnboardingOffer;
+  callbacks: PlacementCallbacks;
+  dismiss: () => void;
+  retire: (gate: PendingGate) => void;
+}): null {
+  const startedRef = useRef(false);
+  const { gate } = offer;
+  // Each offer gets its own SDK handler identity, including after an explicit
+  // onboarding reset. Keep cancelled listeners until native sends a terminal event.
+  const { registerPlacement } = usePlacement({
+    onPresent(info) {
+      if (gate.cancelled) dismiss();
+      else if (!gate.closed) callbacks.onPresent?.(info);
+    },
+    onDismiss(info, result) {
+      if (!gate.closed) callbacks.onDismiss?.(info, result);
+      retire(gate);
+    },
+    onSkip(reason) {
+      if (!gate.closed) callbacks.onSkip?.(reason);
+      retire(gate);
+    },
+    onError(error) {
+      if (!gate.closed) callbacks.onError?.(error);
+      retire(gate);
+    },
+  });
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    if (!gate.cancelled) offer.start(registerPlacement);
+  }, [gate, offer, registerPlacement]);
+  return null;
+}
 
 // Dev-only visibility into gate decisions: Sentry breadcrumbs are invisible
 // without a DSN, and skips are deliberately silent in the UI.
@@ -102,6 +153,7 @@ function completeGate(
   if (granted && reportNoPurchaseAccess) reportAccessGrantedWithoutPurchase(gate);
   if (gate.closed) return;
   gate.closed = true;
+  gate.removeAbortListener?.();
   gate.resolve(granted);
   if (runFeature && !gate.featureRan) {
     gate.featureRan = true;
@@ -273,14 +325,21 @@ export function DisabledSuperwallGateProvider({ children }: Props) {
 
 export function EnabledSuperwallGateProvider({ children }: Props) {
   const user = useAuthStore((state) => state.user);
-  const { isConfigured, configurationError } = useSuperwall((state) => ({
+  const { isConfigured, configurationError, dismiss } = useSuperwall((state) => ({
     isConfigured: state.isConfigured,
     configurationError: state.configurationError,
+    dismiss: state.dismiss,
   }));
 
   const activePlacementRef = useRef<SuperwallPlacement | null>(null);
   const pendingGateRef = useRef<PendingGate | null>(null);
   const presentationGatesRef = useRef<PendingGate[]>([]);
+  const nextOfferId = useRef(0);
+  const [onboardingOffers, setOnboardingOffers] = useState<OnboardingOffer[]>([]);
+  const [onboardingState, setOnboardingState] = useState<PaywallState>({ status: 'idle' });
+  const retireOffer = useCallback((gate: PendingGate): void => {
+    setOnboardingOffers((offers) => offers.filter((offer) => offer.gate !== gate));
+  }, []);
   const routeToAuth = useRouteToAuth(activePlacementRef);
 
   const finishActiveGate = useCallback(
@@ -309,9 +368,12 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
     [],
   );
 
-  const { registerPlacement, state } = usePlacement({
+  const placementCallbacks: PlacementCallbacks = {
     onPresent(paywallInfo) {
       const gate = pendingGateRef.current;
+      if (gate?.placement === SUPERWALL_PLACEMENTS.onboardingPaywall) {
+        setOnboardingState({ status: 'presented', paywallInfo });
+      }
       if (gate && !presentationGatesRef.current.includes(gate)) {
         presentationGatesRef.current.push(gate);
       }
@@ -438,7 +500,21 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
       );
       if (gate?.transactional && !billingFallback) showBillingUnavailable();
     },
-  });
+  };
+
+  const dismissCancelledOffer = useCallback((): void => {
+    dismiss().catch((error: unknown) => {
+      Sentry.captureException(error, {
+        tags: { feature: 'superwall', operation: 'dismiss-cancelled-onboarding' },
+      });
+    });
+  }, [dismiss]);
+
+  const { registerPlacement, state: billingState } = usePlacement(placementCallbacks);
+  const state =
+    activePlacementRef.current === SUPERWALL_PLACEMENTS.onboardingPaywall
+      ? onboardingState
+      : billingState;
 
   const register = useCallback(
     async ({
@@ -447,8 +523,11 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
       feature,
       onAccessGrantedWithoutPurchase,
       onPurchaseComplete,
+      signal,
       requiresAccount = isTransactionalSuperwallPlacement(placement),
     }: RegisterSuperwallGateOptions): Promise<boolean> => {
+      const isOnboarding = placement === SUPERWALL_PLACEMENTS.onboardingPaywall;
+      if (isOnboarding && signal?.aborted) return false;
       debugLog('register', {
         placement,
         requiresAccount,
@@ -551,13 +630,33 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
         };
         pendingGateRef.current = gate;
 
+        if (isOnboarding && signal) {
+          const cancel = (): void => {
+            gate.cancelled = true;
+            const wasPresented = presentationGatesRef.current.includes(gate);
+            presentationGatesRef.current = presentationGatesRef.current.filter(
+              (item) => item !== gate,
+            );
+            if (pendingGateRef.current === gate) {
+              pendingGateRef.current = null;
+              activePlacementRef.current = null;
+            }
+            completeGate(gate, false, false, false);
+            if (wasPresented) dismissCancelledOffer();
+          };
+          signal.addEventListener('abort', cancel);
+          gate.removeAbortListener = () => signal.removeEventListener('abort', cancel);
+        }
+
         const finishGate = (
           granted: boolean,
           runFeature: boolean,
           reportNoPurchaseAccess: boolean,
         ) => {
           if (gate.terminalEventProcessed) return;
+          if (gate.closed) return;
           const isPresented = presentationGatesRef.current.includes(gate);
+          if (isOnboarding && isPresented) return;
           completeGate(gate, granted, runFeature, reportNoPurchaseAccess && !isPresented);
           if (isPresented) return;
           if (pendingGateRef.current === gate) pendingGateRef.current = null;
@@ -565,47 +664,85 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
         };
 
         debugLog('registering placement with Superwall', { placement, params });
-        registerPlacement({
-          placement,
-          params,
-          feature: () => {
-            if (gate.closed) return;
-            debugLog('feature gate granted', { placement });
-            Sentry.addBreadcrumb({
-              category: 'superwall',
-              message: 'feature gate granted',
-              level: 'info',
-              data: { placement },
-            });
-            finishGate(true, true, true);
-          },
-        })
-          .then(() => {
-            debugLog('registerPlacement resolved (access granted)', { placement });
-            finishGate(true, true, true);
+        const start = (present: NativeRegister): void => {
+          present({
+            placement,
+            params,
+            feature: () => {
+              if (gate.closed) return;
+              debugLog('feature gate granted', { placement });
+              Sentry.addBreadcrumb({
+                category: 'superwall',
+                message: 'feature gate granted',
+                level: 'info',
+                data: { placement },
+              });
+              finishGate(true, true, true);
+              if (isOnboarding && !presentationGatesRef.current.includes(gate) && !gate.cancelled)
+                retireOffer(gate);
+            },
           })
-          .catch((error) => {
-            debugLog('registerPlacement REJECTED', { placement, error: String(error) });
-            if (gate.closed) return;
-            Sentry.captureException(error, {
-              tags: { feature: 'superwall', operation: 'register-placement' },
-              extra: { placement, isConfigured },
+            .then(() => {
+              debugLog('registerPlacement resolved (access granted)', { placement });
+              finishGate(true, true, true);
+            })
+            .catch((error) => {
+              debugLog('registerPlacement REJECTED', { placement, error: String(error) });
+              if (gate.closed) return;
+              Sentry.captureException(error, {
+                tags: { feature: 'superwall', operation: 'register-placement' },
+                extra: { placement, isConfigured },
+              });
+              const billingFallback = canOpenExistingBilling(placement);
+              const failOpen = !gate.transactional;
+              const finish =
+                isOnboarding && presentationGatesRef.current.includes(gate)
+                  ? finishPresentationGate
+                  : finishGate;
+              finish(
+                failOpen || billingFallback,
+                failOpen || billingFallback,
+                failOpen || billingFallback,
+              );
+              if (gate.transactional && !billingFallback) showBillingUnavailable();
+              if (isOnboarding) retireOffer(gate);
             });
-            const billingFallback = canOpenExistingBilling(placement);
-            const failOpen = !gate.transactional;
-            finishGate(
-              failOpen || billingFallback,
-              failOpen || billingFallback,
-              failOpen || billingFallback,
-            );
-            if (gate.transactional && !billingFallback) showBillingUnavailable();
-          });
+        };
+        if (isOnboarding) {
+          setOnboardingState({ status: 'idle' });
+          const offer = { id: nextOfferId.current++, gate, start };
+          setOnboardingOffers((offers) => [...offers, offer]);
+        } else {
+          start(registerPlacement);
+        }
       });
     },
-    [configurationError, isConfigured, registerPlacement, routeToAuth, user],
+    [
+      configurationError,
+      isConfigured,
+      registerPlacement,
+      dismissCancelledOffer,
+      finishPresentationGate,
+      retireOffer,
+      routeToAuth,
+      user,
+    ],
   );
 
   const value = useMemo(() => ({ register, state, isConfigured }), [isConfigured, register, state]);
 
-  return <SuperwallGateContext.Provider value={value}>{children}</SuperwallGateContext.Provider>;
+  return (
+    <SuperwallGateContext.Provider value={value}>
+      {children}
+      {onboardingOffers.map((offer) => (
+        <OnboardingOfferHandler
+          key={offer.id}
+          offer={offer}
+          callbacks={placementCallbacks}
+          dismiss={dismissCancelledOffer}
+          retire={retireOffer}
+        />
+      ))}
+    </SuperwallGateContext.Provider>
+  );
 }

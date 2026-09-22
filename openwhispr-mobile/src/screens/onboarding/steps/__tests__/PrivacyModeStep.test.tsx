@@ -1,92 +1,44 @@
-import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-
-// accountAccess pulls in the router for its sign-in alert; stub it here.
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
-jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: require('react-native').View,
-  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+import { PrivacyModeStep } from '../PrivacyModeStep';
+import { chooseOnboardingMode } from '@/lib/onboardingMode';
+let mockSelectedMode: string | null = null;
+jest.mock('@/store/useOnboardingStore', () => ({
+  useOnboardingStore: (selector: (state: unknown) => unknown) =>
+    selector({ selectedMode: mockSelectedMode }),
 }));
+jest.mock('@/lib/onboardingMode', () => ({ chooseOnboardingMode: jest.fn() }));
+jest.mock('@/hooks/useOnboardingStep', () => ({
+  useOnboardingStep: () => ({ goBack: jest.fn(), progress: { current: 6, total: 8 } }),
+}));
+jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/OpenWhisprMark', () => ({ OpenWhisprMark: () => null }));
 
-jest.mock('@/store/useOnboardingStore', () => ({
-  useOnboardingStore: (selector: (s: { goNext: () => Promise<void> }) => unknown) =>
-    selector({ goNext: jest.fn() }),
-  getStepProgress: () => ({ current: 1, total: 1 }),
-}));
-jest.mock('@/store/useConfigStore', () => ({
-  useConfigStore: (
-    selector: (s: {
-      config: { defaultMode: string };
-      loadConfig: () => void;
-      updateConfig: () => Promise<void>;
-    }) => unknown,
-  ) =>
-    selector({
-      config: { defaultMode: 'private' },
-      loadConfig: jest.fn(),
-      updateConfig: jest.fn().mockResolvedValue(undefined),
-    }),
-}));
-
-const mockEnsureAnonymousSession = jest.fn().mockResolvedValue(undefined);
-type MockAuthState = {
-  user: { id: string; isAnonymous: boolean } | null;
-  isGuest: boolean;
-  ensureAnonymousSession: jest.Mock;
-};
-let mockAuthState: MockAuthState = {
-  user: null,
-  isGuest: false,
-  ensureAnonymousSession: mockEnsureAnonymousSession,
-};
-jest.mock('@/store/useAuthStore', () => ({
-  useAuthStore: Object.assign(
-    (selector: (s: MockAuthState) => unknown) => selector(mockAuthState),
-    { getState: () => mockAuthState },
-  ),
-}));
-
-import { PrivacyModeStep } from '../PrivacyModeStep';
-
-const alertSpy = jest.spyOn(Alert, 'alert');
-
 beforeEach(() => {
   jest.clearAllMocks();
-  mockAuthState = {
-    user: null,
-    isGuest: false,
-    ensureAnonymousSession: mockEnsureAnonymousSession,
-  };
+  mockSelectedMode = null;
+  jest.mocked(chooseOnboardingMode).mockResolvedValue(undefined);
 });
-
-describe('PrivacyModeStep cloud card without a session', () => {
-  it('explains a missing connection when the anonymous session never opened', async () => {
-    const { getByLabelText } = render(<PrivacyModeStep />);
-
-    fireEvent.press(getByLabelText('OpenWhispr Cloud'));
-
-    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
-    expect(alertSpy.mock.calls[0][0]).toBe('Cloud is unavailable');
-  });
-
-  // A guest chose to continue without an account on an earlier build; they
-  // have a connection and no session is going to be minted for them, so
-  // blaming the network would be wrong.
-  it('tells a guest that Cloud needs an account, not a connection', async () => {
-    mockAuthState = {
-      user: null,
-      isGuest: true,
-      ensureAnonymousSession: mockEnsureAnonymousSession,
-    };
-    const { getByLabelText } = render(<PrivacyModeStep />);
-
-    fireEvent.press(getByLabelText('OpenWhispr Cloud'));
-
-    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
-    expect(alertSpy.mock.calls[0][0]).toBe('Cloud needs an account');
-    expect(mockEnsureAnonymousSession).not.toHaveBeenCalled();
-  });
+it('shows the confirmed mode when revisiting the choice', () => {
+  mockSelectedMode = 'private';
+  const screen = render(<PrivacyModeStep />);
+  expect(screen.getByText('Local is selected')).toBeTruthy();
+});
+it.each([
+  ['Use Cloud', 'cloud'],
+  ['Use Local', 'private'],
+] as const)('commits %s without an extra Continue tap', async (label, mode) => {
+  const screen = render(<PrivacyModeStep />);
+  fireEvent.press(screen.getByText(label));
+  await waitFor(() => expect(chooseOnboardingMode).toHaveBeenCalledWith(mode, 'privacy-mode'));
+  expect(screen.queryByText('Continue')).toBeNull();
+});
+it('keeps the choices available after a failed Cloud attempt', async () => {
+  jest.mocked(chooseOnboardingMode).mockRejectedValueOnce(new Error('Cloud is unavailable'));
+  const screen = render(<PrivacyModeStep />);
+  fireEvent.press(screen.getByText('Use Cloud'));
+  expect(await screen.findByText('Cloud is unavailable')).toBeTruthy();
+  fireEvent.press(screen.getByText('Use Local'));
+  await waitFor(() => expect(chooseOnboardingMode).toHaveBeenCalledWith('private', 'privacy-mode'));
 });

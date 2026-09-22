@@ -1,7 +1,7 @@
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { TrackingAuthorizationStatus } from '@/lib/trackingTransparency';
 
-const mockFinish = jest.fn();
+const mockGoNext = jest.fn();
 const mockMarkRequestAttempted = jest.fn();
 const mockGetTrackingAuthorizationStatus = jest.fn();
 const mockRequestTrackingAuthorization = jest.fn();
@@ -49,15 +49,16 @@ jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/OpenWhisprMark', () => ({ OpenWhisprMark: () => null }));
 
 jest.mock('@/store/useOnboardingStore', () => ({
+  getStepProgress: () => undefined,
   useOnboardingStore: (
     selector: (state: {
-      finish: () => Promise<void>;
+      goNext: () => Promise<void>;
       markTrackingAuthorizationRequestAttempted: () => Promise<void>;
       trackingAuthorizationRequestAttempted: boolean;
     }) => unknown,
   ) =>
     selector({
-      finish: mockFinish,
+      goNext: mockGoNext,
       markTrackingAuthorizationRequestAttempted: mockMarkRequestAttempted,
       trackingAuthorizationRequestAttempted: mockTrackingAuthorizationRequestAttempted,
     }),
@@ -95,7 +96,7 @@ function deferred<T>(): {
 beforeEach(() => {
   jest.clearAllMocks();
   mockTrackingAuthorizationRequestAttempted = false;
-  mockFinish.mockResolvedValue(undefined);
+  mockGoNext.mockResolvedValue(undefined);
   mockMarkRequestAttempted.mockResolvedValue(undefined);
   mockGetTrackingAuthorizationStatus.mockResolvedValue('notDetermined');
   mockRequestTrackingAuthorization.mockResolvedValue('authorized');
@@ -107,7 +108,7 @@ describe('TrackingPermissionStep', () => {
 
     expect(await findByRole('header')).toBeTruthy();
     expect(getByText('Continue')).toBeTruthy();
-    expect(mockFinish).not.toHaveBeenCalled();
+    expect(mockGoNext).not.toHaveBeenCalled();
   });
 
   it('omits the decorative OpenWhispr logo from the education content', async () => {
@@ -124,7 +125,8 @@ describe('TrackingPermissionStep', () => {
 
       const { queryByText } = render(<TrackingPermissionStep />);
 
-      await waitFor(() => expect(mockFinish).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockGoNext).toHaveBeenCalledWith('tracking-permission'));
+      expect(mockGoNext).toHaveBeenCalledTimes(1);
       expect(queryByText('Continue')).toBeNull();
       expect(mockRequestTrackingAuthorization).not.toHaveBeenCalled();
     },
@@ -135,7 +137,8 @@ describe('TrackingPermissionStep', () => {
 
     render(<TrackingPermissionStep />);
 
-    await waitFor(() => expect(mockFinish).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGoNext).toHaveBeenCalledWith('tracking-permission'));
+    expect(mockGoNext).toHaveBeenCalledTimes(1);
     expect(mockRequestTrackingAuthorization).not.toHaveBeenCalled();
   });
 
@@ -144,7 +147,8 @@ describe('TrackingPermissionStep', () => {
 
     render(<TrackingPermissionStep />);
 
-    await waitFor(() => expect(mockFinish).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGoNext).toHaveBeenCalledWith('tracking-permission'));
+    expect(mockGoNext).toHaveBeenCalledTimes(1);
     expect(mockRequestTrackingAuthorization).not.toHaveBeenCalled();
   });
 
@@ -161,30 +165,33 @@ describe('TrackingPermissionStep', () => {
     expect(mockMarkRequestAttempted).toHaveBeenCalledTimes(1);
 
     authorization.resolve('authorized');
-    await waitFor(() => expect(mockFinish).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGoNext).toHaveBeenCalledWith('tracking-permission'));
+    expect(mockGoNext).toHaveBeenCalledTimes(1);
   });
 
   it.each(['authorized', 'denied', 'notDetermined', 'notSupported'] as const)(
-    'finishes onboarding after the native request returns %s',
+    'advances to completion after the native request returns %s',
     async (status) => {
       mockRequestTrackingAuthorization.mockResolvedValue(status);
       const { findByText } = render(<TrackingPermissionStep />);
 
       fireEvent.press(await findByText('Continue'));
 
-      await waitFor(() => expect(mockFinish).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockGoNext).toHaveBeenCalledWith('tracking-permission'));
+      expect(mockGoNext).toHaveBeenCalledTimes(1);
       expect(mockSetAppsFlyerTrackingAuthorizationStatus).toHaveBeenCalledWith(status);
     },
   );
 
-  it('fails open and finishes onboarding when the native request errors', async () => {
+  it('fails open and advances to completion when the native request errors', async () => {
     const error = new Error('native ATT request failed');
     mockRequestTrackingAuthorization.mockRejectedValue(error);
     const { findByText } = render(<TrackingPermissionStep />);
 
     fireEvent.press(await findByText('Continue'));
 
-    await waitFor(() => expect(mockFinish).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGoNext).toHaveBeenCalledWith('tracking-permission'));
+    expect(mockGoNext).toHaveBeenCalledTimes(1);
     expect(mockCaptureException).toHaveBeenCalledWith(error);
   });
 
@@ -194,17 +201,28 @@ describe('TrackingPermissionStep', () => {
 
     fireEvent.press(await findByText('Continue'));
 
-    await waitFor(() => expect(mockFinish).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGoNext).toHaveBeenCalledWith('tracking-permission'));
+    expect(mockGoNext).toHaveBeenCalledTimes(1);
     expect(mockRequestTrackingAuthorization).not.toHaveBeenCalled();
   });
 
-  it('fails open and finishes onboarding when checking authorization errors', async () => {
+  it('fails open and advances to completion when checking authorization errors', async () => {
     const error = new Error('ATT status unavailable');
     mockGetTrackingAuthorizationStatus.mockRejectedValue(error);
 
     render(<TrackingPermissionStep />);
 
-    await waitFor(() => expect(mockFinish).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGoNext).toHaveBeenCalledWith('tracking-permission'));
+    expect(mockGoNext).toHaveBeenCalledTimes(1);
     expect(mockCaptureException).toHaveBeenCalledWith(error);
   });
+});
+
+it('offers continuation retry when auto-skipping ATT fails to save progress', async () => {
+  mockGetTrackingAuthorizationStatus.mockResolvedValue('authorized');
+  mockGoNext.mockRejectedValueOnce(new Error('Keychain unavailable'));
+  const screen = render(<TrackingPermissionStep />);
+  fireEvent.press(await screen.findByText('Retry'));
+  await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(2));
+  expect(mockRequestTrackingAuthorization).not.toHaveBeenCalled();
 });

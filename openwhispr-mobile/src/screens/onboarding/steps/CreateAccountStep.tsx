@@ -1,13 +1,13 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useRef, type ReactElement } from 'react';
 import AuthScreen from '@/screens/AuthScreen';
 import { Sentry } from '@/lib/sentry';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useOnboardingStore } from '@/store/useOnboardingStore';
 
 // Account creation runs on an anonymous session, so "signed in" here has to
 // mean a *real* account — otherwise the step would end the moment it mounted.
 export function CreateAccountStep(): ReactElement {
-  const goNext = useOnboardingStore((s) => s.goNext);
+  const { goNext } = useOnboardingStep('create-account');
   const user = useAuthStore((s) => s.user);
   const isGuest = useAuthStore((s) => s.isGuest);
   const hasContinuedRef = useRef(false);

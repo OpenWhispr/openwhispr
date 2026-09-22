@@ -1,188 +1,236 @@
-import {
-  STEP_ORDER,
-  getStepProgress,
-  useOnboardingStore,
-  type OnboardingStepId,
-} from '@/store/useOnboardingStore';
-import { FIRST_ONBOARDING_STEP, OnboardingService } from '@/utils/onboarding';
+import { getStepProgress, useOnboardingStore } from '../useOnboardingStore';
+import { OnboardingService } from '@/utils/onboarding';
+import { logTutorialCompletion } from '@/lib/appsflyer';
 
-// The tutorial milestone reports to AppsFlyer, whose module pulls in the
-// SQLite-backed config store; the event itself has its own focused suite.
 jest.mock('@/lib/appsflyer', () => ({ logTutorialCompletion: jest.fn() }));
-
+jest.mock('@/store/useConfigStore', () => ({
+  useConfigStore: { getState: () => ({ config: { defaultMode: 'cloud' } }) },
+}));
 jest.mock('@/utils/onboarding', () => ({
   FIRST_ONBOARDING_STEP: 'get-started',
+  ONBOARDING_VERSION: 2,
   OnboardingService: {
     isOnboardingComplete: jest.fn(),
     completeOnboarding: jest.fn(),
-    resetOnboarding: jest.fn(),
     hasAttemptedTrackingAuthorizationRequest: jest.fn(),
     markTrackingAuthorizationRequestAttempted: jest.fn(),
     getProgress: jest.fn(),
     setProgress: jest.fn(),
+    resetOnboarding: jest.fn(),
   },
 }));
+const service = jest.mocked(OnboardingService);
 
-const mockedService = OnboardingService as jest.Mocked<typeof OnboardingService>;
+beforeEach(() => {
+  jest.clearAllMocks();
+  service.setProgress.mockResolvedValue();
+  service.completeOnboarding.mockResolvedValue();
+  service.isOnboardingComplete.mockResolvedValue(false);
+  service.hasAttemptedTrackingAuthorizationRequest.mockResolvedValue(false);
+  useOnboardingStore.setState(useOnboardingStore.getInitialState());
+});
 
-async function advanceTo(step: OnboardingStepId): Promise<void> {
-  await useOnboardingStore.getState().goToStep(step);
-}
+it('ignores a late callback from a step that has already advanced', async () => {
+  await useOnboardingStore.getState().goToStep('keyboard-intro');
+  await Promise.all([
+    useOnboardingStore.getState().goNext('keyboard-intro'),
+    useOnboardingStore.getState().goNext('keyboard-intro'),
+  ]);
+  expect(useOnboardingStore.getState().currentStep).toBe('keyboard-switch');
+});
 
-describe('useOnboardingStore step order', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockedService.setProgress.mockResolvedValue();
-    mockedService.completeOnboarding.mockResolvedValue();
-    mockedService.hasAttemptedTrackingAuthorizationRequest.mockResolvedValue(false);
-    mockedService.markTrackingAuthorizationRequestAttempted.mockResolvedValue(undefined);
-    useOnboardingStore.setState({
-      currentStep: 'security-first',
-      finished: false,
-      trackingAuthorizationRequestAttempted: false,
-    });
+it.each([
+  ['get-started', 'get-started'],
+  ['unknown-old-step', 'get-started'],
+  ['keyboard-switch', 'keyboard-switch'],
+] as const)('resumes %s at %s without replaying earlier content', async (step, expected) => {
+  service.getProgress.mockResolvedValue({
+    step,
+    keyboardInstalled: false,
+    permissionsGranted: { microphone: false, notifications: false },
   });
-
-  it('opens on Get Started and ends with account creation then tracking permission', () => {
-    expect(STEP_ORDER[0]).toBe('get-started');
-    expect(STEP_ORDER.slice(-4)).toEqual([
-      'graduation',
-      'paywall',
-      'create-account',
-      'tracking-permission',
-    ]);
+  service.hasAttemptedTrackingAuthorizationRequest.mockResolvedValue(true);
+  await useOnboardingStore.getState().hydrate();
+  expect(useOnboardingStore.getState()).toMatchObject({
+    currentStep: expected,
+    hydrated: true,
+    finished: false,
+    trackingAuthorizationRequestAttempted: true,
   });
+});
 
-  it('starts a fresh install at the first step', async () => {
-    mockedService.isOnboardingComplete.mockResolvedValue(false);
-    mockedService.getProgress.mockResolvedValue({
-      step: FIRST_ONBOARDING_STEP,
-      keyboardInstalled: false,
-      permissionsGranted: { microphone: false, notifications: false },
-    });
+it('marks tracking permission attempted only after its marker is saved', async () => {
+  service.markTrackingAuthorizationRequestAttempted.mockRejectedValueOnce(
+    new Error('Storage unavailable'),
+  );
+  await expect(
+    useOnboardingStore.getState().markTrackingAuthorizationRequestAttempted(),
+  ).rejects.toThrow();
+  expect(useOnboardingStore.getState().trackingAuthorizationRequestAttempted).toBe(false);
+  await useOnboardingStore.getState().markTrackingAuthorizationRequestAttempted();
+  expect(useOnboardingStore.getState().trackingAuthorizationRequestAttempted).toBe(true);
+});
 
-    await useOnboardingStore.getState().hydrate();
+it('does not leave a step when persisting the transition fails', async () => {
+  service.setProgress.mockRejectedValueOnce(new Error('Keychain unavailable'));
+  await expect(useOnboardingStore.getState().goNext('get-started')).rejects.toThrow();
+  expect(useOnboardingStore.getState().currentStep).toBe('get-started');
+  await useOnboardingStore.getState().goNext('get-started');
+  expect(useOnboardingStore.getState().currentStep).toBe('security-first');
+});
 
-    expect(useOnboardingStore.getState().currentStep).toBe('get-started');
+it('shows the paywall immediately for Cloud, then resumes languages only once', async () => {
+  await useOnboardingStore.getState().goToStep('privacy-mode');
+  await useOnboardingStore.getState().chooseMode('cloud', 'privacy-mode');
+  expect(useOnboardingStore.getState().currentStep).toBe('paywall');
+  await useOnboardingStore.getState().goNext('paywall');
+  await useOnboardingStore.getState().goNext('paywall');
+  expect(useOnboardingStore.getState()).toMatchObject({
+    currentStep: 'language',
+    paywallHandled: true,
   });
+  await useOnboardingStore.getState().goBack('language');
+  expect(useOnboardingStore.getState().currentStep).toBe('privacy-mode');
+  await useOnboardingStore.getState().chooseMode('cloud', 'privacy-mode');
+  expect(useOnboardingStore.getState().currentStep).toBe('language');
+  await useOnboardingStore.getState().goNext('language');
+  expect(useOnboardingStore.getState().currentStep).toBe('notifications');
+});
 
-  it('falls back to the first step when saved progress names an unknown step', async () => {
-    mockedService.isOnboardingComplete.mockResolvedValue(false);
-    mockedService.getProgress.mockResolvedValue({
-      step: 'a-step-that-was-removed',
-      keyboardInstalled: false,
-      permissionsGranted: { microphone: false, notifications: false },
-    });
+it('routes Local through languages and download without a paywall', async () => {
+  await useOnboardingStore.getState().goToStep('privacy-mode');
+  await useOnboardingStore.getState().chooseMode('private', 'privacy-mode');
+  expect(useOnboardingStore.getState().currentStep).toBe('language');
+  await useOnboardingStore.getState().goNext('language');
+  expect(useOnboardingStore.getState().currentStep).toBe('private-download');
+  await useOnboardingStore.getState().goBack('private-download');
+  expect(useOnboardingStore.getState().currentStep).toBe('language');
+});
 
-    await useOnboardingStore.getState().hydrate();
+it('resumes a download-to-Cloud paywall at notifications after relaunch', async () => {
+  await useOnboardingStore.getState().goToStep('private-download');
+  await useOnboardingStore.getState().chooseMode('cloud', 'private-download');
+  const saved = service.setProgress.mock.calls.at(-1)?.[0];
+  service.getProgress.mockResolvedValue(saved!);
+  useOnboardingStore.setState(useOnboardingStore.getInitialState());
+  await useOnboardingStore.getState().hydrate();
+  expect(useOnboardingStore.getState().currentStep).toBe('paywall');
+  await useOnboardingStore.getState().goNext('paywall');
+  expect(useOnboardingStore.getState().currentStep).toBe('notifications');
+});
 
-    expect(useOnboardingStore.getState().currentStep).toBe(FIRST_ONBOARDING_STEP);
-  });
-
-  it('resumes mid-onboarding installs where they left off', async () => {
-    mockedService.isOnboardingComplete.mockResolvedValue(false);
-    mockedService.getProgress.mockResolvedValue({
-      step: 'language',
+it.each(['graduation', 'paywall'] as const)(
+  'migrates legacy %s past the relocated offer',
+  async (step) => {
+    service.getProgress.mockResolvedValue({
+      step,
       keyboardInstalled: true,
       permissionsGranted: { microphone: true, notifications: false },
     });
-
     await useOnboardingStore.getState().hydrate();
-
-    expect(useOnboardingStore.getState().currentStep).toBe('language');
-  });
-
-  it('restores a persisted ATT request attempt when resuming onboarding', async () => {
-    mockedService.isOnboardingComplete.mockResolvedValue(false);
-    mockedService.hasAttemptedTrackingAuthorizationRequest.mockResolvedValue(true);
-    mockedService.getProgress.mockResolvedValue({
-      step: 'tracking-permission',
-      keyboardInstalled: true,
-      permissionsGranted: { microphone: true, notifications: true },
-    });
-
-    await useOnboardingStore.getState().hydrate();
-
     expect(useOnboardingStore.getState()).toMatchObject({
-      currentStep: 'tracking-permission',
-      trackingAuthorizationRequestAttempted: true,
+      currentStep: 'create-account',
+      paywallHandled: true,
+      tutorialCompleted: true,
     });
+  },
+);
+
+it('preserves a legacy local download and does not replay earlier steps', async () => {
+  service.getProgress.mockResolvedValue({
+    step: 'private-download',
+    keyboardInstalled: true,
+    permissionsGranted: { microphone: true, notifications: false },
   });
-
-  it('walks graduation into the paywall rather than finishing', async () => {
-    await advanceTo('graduation');
-    await useOnboardingStore.getState().goNext();
-
-    expect(useOnboardingStore.getState().currentStep).toBe('paywall');
-    expect(useOnboardingStore.getState().finished).toBe(false);
-    expect(mockedService.completeOnboarding).not.toHaveBeenCalled();
+  await useOnboardingStore.getState().hydrate();
+  expect(useOnboardingStore.getState()).toMatchObject({
+    currentStep: 'private-download',
+    selectedMode: 'private',
+    paywallHandled: true,
   });
+});
 
-  it('walks the paywall into account creation', async () => {
-    await advanceTo('paywall');
-    await useOnboardingStore.getState().goNext();
+it('does not restart completed installs', async () => {
+  service.isOnboardingComplete.mockResolvedValue(true);
+  await useOnboardingStore.getState().hydrate();
+  expect(useOnboardingStore.getState().finished).toBe(true);
+  expect(service.getProgress).not.toHaveBeenCalled();
+});
 
-    expect(useOnboardingStore.getState().currentStep).toBe('create-account');
-    expect(useOnboardingStore.getState().finished).toBe(false);
+it('counts only teaching screens and counts the local download once', () => {
+  expect(getStepProgress('microphone', 'cloud')).toEqual({ current: 1, total: 8 });
+  expect(getStepProgress('notifications', 'cloud')).toEqual({ current: 8, total: 8 });
+  expect(getStepProgress('private-download', 'private')).toEqual({ current: 8, total: 9 });
+  expect(getStepProgress('notifications', 'private')).toEqual({ current: 9, total: 9 });
+  expect(getStepProgress('paywall', 'cloud')).toBeUndefined();
+});
+
+it('completes teaching once at the preview, but only finishes onboarding at graduation', async () => {
+  await useOnboardingStore.getState().goToStep('voice-agent');
+  await useOnboardingStore.getState().goNext('voice-agent');
+  await useOnboardingStore.getState().goBack('privacy-mode');
+  await useOnboardingStore.getState().goNext('voice-agent');
+  expect(logTutorialCompletion).toHaveBeenCalledTimes(1);
+  await useOnboardingStore.getState().goToStep('tracking-permission');
+  await useOnboardingStore.getState().goNext('tracking-permission');
+  expect(useOnboardingStore.getState()).toMatchObject({
+    currentStep: 'graduation',
+    finished: false,
   });
+  await useOnboardingStore.getState().finish();
+  expect(useOnboardingStore.getState().finished).toBe(true);
+});
 
-  it('walks account creation into tracking permission without finishing', async () => {
-    await advanceTo('create-account');
-    await useOnboardingStore.getState().goNext();
-
-    expect(useOnboardingStore.getState().currentStep).toBe('tracking-permission');
-    expect(useOnboardingStore.getState().finished).toBe(false);
-    expect(mockedService.completeOnboarding).not.toHaveBeenCalled();
-  });
-
-  it('only completes onboarding once the tracking step finishes', async () => {
-    await advanceTo('tracking-permission');
-    await useOnboardingStore.getState().goNext();
-
-    // tracking-permission is terminal: goNext is a no-op, finish() is the only exit.
-    expect(useOnboardingStore.getState().currentStep).toBe('tracking-permission');
-    expect(useOnboardingStore.getState().finished).toBe(false);
-
-    await useOnboardingStore.getState().finish();
-
-    expect(mockedService.completeOnboarding).toHaveBeenCalledTimes(1);
-    expect(useOnboardingStore.getState().finished).toBe(true);
-  });
-
-  it('persists the ATT attempt before the system request can run', async () => {
-    await advanceTo('tracking-permission');
-
-    await useOnboardingStore.getState().markTrackingAuthorizationRequestAttempted();
-
-    expect(useOnboardingStore.getState().trackingAuthorizationRequestAttempted).toBe(true);
-    expect(mockedService.markTrackingAuthorizationRequestAttempted).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps the ATT request attempt when onboarding is reset', async () => {
-    mockedService.hasAttemptedTrackingAuthorizationRequest.mockResolvedValue(true);
-    useOnboardingStore.setState({ trackingAuthorizationRequestAttempted: false });
-
-    await useOnboardingStore.getState().reset();
-
-    expect(useOnboardingStore.getState().trackingAuthorizationRequestAttempted).toBe(true);
-    expect(mockedService.hasAttemptedTrackingAuthorizationRequest).toHaveBeenCalledTimes(1);
-  });
-
-  it('counts only the teaching steps, not the intro or closing screens', () => {
-    const total = getStepProgress('welcome').total;
-
-    expect(getStepProgress('welcome').current).toBe(1);
-    expect(getStepProgress('notifications').current).toBe(total);
-    // Uncounted screens clamp to 1 rather than reporting a bogus position.
-    for (const step of [
-      'get-started',
-      'security-first',
-      'graduation',
-      'paywall',
-      'create-account',
-      'tracking-permission',
-    ] as const) {
-      expect(getStepProgress(step).current).toBe(1);
+it.each(['cloud', 'private'] as const)(
+  'completes the %s route through optional account and tracking',
+  async (mode) => {
+    await useOnboardingStore.getState().goToStep('privacy-mode');
+    await useOnboardingStore.getState().chooseMode(mode, 'privacy-mode');
+    if (mode === 'cloud') await useOnboardingStore.getState().goNext('paywall');
+    await useOnboardingStore.getState().goNext('language');
+    if (mode === 'private') await useOnboardingStore.getState().goNext('private-download');
+    for (const from of ['notifications', 'create-account', 'tracking-permission'] as const) {
+      expect(useOnboardingStore.getState().currentStep).toBe(from);
+      await useOnboardingStore.getState().goNext(from);
     }
+    expect(useOnboardingStore.getState().currentStep).toBe('graduation');
+    expect(service.completeOnboarding).not.toHaveBeenCalled();
+  },
+);
+
+it('keeps resolved offers and confirmed choices across a relaunch and backward navigation', async () => {
+  await useOnboardingStore.getState().goToStep('privacy-mode');
+  await useOnboardingStore.getState().chooseMode('cloud', 'privacy-mode');
+  await useOnboardingStore.getState().goNext('paywall');
+  service.getProgress.mockResolvedValue(service.setProgress.mock.calls.at(-1)![0]);
+  useOnboardingStore.setState(useOnboardingStore.getInitialState());
+  await useOnboardingStore.getState().hydrate();
+  await useOnboardingStore.getState().goBack('language');
+  await useOnboardingStore.getState().goBack('privacy-mode');
+  await useOnboardingStore.getState().goBack('voice-agent');
+  expect(useOnboardingStore.getState()).toMatchObject({
+    currentStep: 'dictation-email',
+    selectedMode: 'cloud',
+    paywallHandled: true,
+  });
+  await useOnboardingStore.getState().goToStep('privacy-mode');
+  await useOnboardingStore.getState().chooseMode('cloud', 'privacy-mode');
+  expect(useOnboardingStore.getState().currentStep).toBe('language');
+});
+
+it('preserves the tracking request marker when resetting setup', async () => {
+  useOnboardingStore.setState({
+    finished: true,
+    paywallHandled: true,
+    selectedMode: 'private',
+    trackingAuthorizationRequestAttempted: true,
+  });
+  await useOnboardingStore.getState().reset();
+  expect(useOnboardingStore.getState()).toMatchObject({
+    currentStep: 'get-started',
+    finished: false,
+    selectedMode: null,
+    paywallHandled: false,
+    trackingAuthorizationRequestAttempted: true,
   });
 });

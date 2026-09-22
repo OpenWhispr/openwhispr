@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import Animated, {
@@ -17,9 +18,6 @@ import { KeyboardDetectedToast } from '@/components/onboarding/KeyboardDetectedT
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { SpaceGrotesk } from '@/lib/fonts';
 import { useKeyboardHeartbeat } from '@/hooks/useKeyboardHeartbeat';
-import { getStepProgress, useOnboardingStore } from '@/store/useOnboardingStore';
-
-const STEP_ID = 'keyboard-switch';
 
 // Worklet-safe color literals — `interpolateColor` runs on the UI thread, so
 // PlatformColor / iosColor() can't be used here. These match `systemBlue` and
@@ -34,9 +32,15 @@ const TRANSPARENT = 'rgba(0,0,0,0)';
 const ROW_HEIGHT = 48;
 
 export function KeyboardSwitchStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+  const { goNext, progress } = useOnboardingStep('keyboard-switch');
   const inputRef = useRef<TextInput>(null);
-  const detected = useKeyboardHeartbeat(goNext);
+  const [advanceError, setAdvanceError] = useState<string | null>(null);
+  const advanceOnDetection = useCallback((): void => {
+    goNext().catch((error: unknown) => {
+      setAdvanceError(error instanceof Error ? error.message : 'Could not save progress.');
+    });
+  }, [goNext]);
+  const detected = useKeyboardHeartbeat(advanceOnDetection);
 
   useEffect(() => {
     // Bring up the system keyboard so the user can reach the globe key.
@@ -46,21 +50,23 @@ export function KeyboardSwitchStep() {
     return () => clearTimeout(focusTimer);
   }, []);
 
-  const handleManualAdvance = useCallback(() => {
-    goNext();
-  }, [goNext]);
-
   const titleNode = <KeyboardSwitchTitle />;
 
   return (
     <>
       <OnboardingShell
-        progress={getStepProgress(STEP_ID)}
-        title="Almost done. Press and hold the globe icon in the bottom-left corner of your keyboard, then select OpenWhispr."
+        avoidKeyboard
+        progress={progress}
+        title="Press and hold the globe icon in the bottom-left corner of your keyboard, then select OpenWhispr."
         titleNode={titleNode}
-        ctaLabel="I switched"
-        onCta={handleManualAdvance}
+        ctaLabel={advanceError ? 'Retry' : 'I switched'}
+        onCta={goNext}
       >
+        {advanceError ? (
+          <Text accessibilityRole="alert" className="text-systemRed">
+            {advanceError}
+          </Text>
+        ) : null}
         <View className="flex-1 items-center justify-start pt-6">
           <AnimatedKeyboardSwitchPreview />
         </View>
@@ -87,7 +93,9 @@ export function KeyboardSwitchStep() {
 function KeyboardSwitchTitle() {
   return (
     <View>
-      <Text className="text-[28px] font-medium leading-[34px] text-label">Almost done.</Text>
+      <Text className="text-[28px] font-medium leading-[34px] text-label">
+        Switch to OpenWhispr.
+      </Text>
       <View className="flex-row flex-wrap items-center">
         <Text className="text-[28px] font-medium leading-[34px] text-label">
           Press and hold the{' '}

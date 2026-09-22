@@ -33,6 +33,7 @@ const mockRegisterPlacement = jest.fn(
 const mockReconcileStoreBilling = jest.fn();
 const mockLogPaywallViewed = jest.fn();
 const mockLogSubscription = jest.fn();
+const mockDismiss = jest.fn(async () => undefined);
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn() },
@@ -45,10 +46,16 @@ jest.mock(
       selector({
         isConfigured: mockIsConfigured,
         configurationError: mockConfigurationError,
+        dismiss: mockDismiss,
       }),
     usePlacement: (callbacks: Record<string, (...args: any[]) => void>) => {
-      mockPlacementCallbacks = callbacks;
-      return { registerPlacement: mockRegisterPlacement, state: { status: 'idle' } };
+      return {
+        registerPlacement: (options: { feature?: () => void }) => {
+          mockPlacementCallbacks = callbacks;
+          return mockRegisterPlacement(options);
+        },
+        state: { status: 'idle' },
+      };
     },
   }),
   { virtual: true },
@@ -117,12 +124,14 @@ function GateConsumer({
   onAccessGrantedWithoutPurchase,
   onPurchaseComplete,
   label = 'register',
+  signal,
 }: {
   placement: SuperwallPlacement;
   feature?: () => void;
   onAccessGrantedWithoutPurchase?: () => void;
   onPurchaseComplete?: (completion: SuperwallPurchaseCompletion) => void;
   label?: string;
+  signal?: AbortSignal;
 }): React.JSX.Element {
   const { register } = useSuperwallGate();
   const [result, setResult] = useState('pending');
@@ -136,6 +145,7 @@ function GateConsumer({
             feature,
             onAccessGrantedWithoutPurchase,
             onPurchaseComplete,
+            signal,
           };
           register(options).then((granted) => setResult(String(granted)));
         }}
@@ -189,6 +199,66 @@ describe('SuperwallGateProvider', () => {
       usage,
       load: jest.fn().mockResolvedValue({ status: 'loaded', usage, loadedAt: Date.now() }),
     });
+  });
+
+  it('retires an aborted onboarding offer and dismisses late presentation without affecting later billing', async () => {
+    mockShouldPresent = false;
+    const controller = new AbortController();
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.onboardingPaywall}
+          signal={controller.signal}
+          label="onboard"
+        />
+        <GateConsumer placement={SUPERWALL_PLACEMENTS.accountBillingOpen} label="billing" />
+      </EnabledSuperwallGateProvider>,
+    );
+    fireEvent.press(screen.getByText('onboard'));
+    const cancelledCallbacks = mockPlacementCallbacks;
+    await act(async () => controller.abort());
+    mockShouldPresent = true;
+    fireEvent.press(screen.getByText('billing'));
+    expect(mockRegisterPlacement).toHaveBeenCalledTimes(2);
+    const billingCallbacks = mockPlacementCallbacks;
+    await act(async () => {
+      cancelledCallbacks.onPresent({ identifier: 'old-offer', name: 'Offer' });
+      cancelledCallbacks.onDismiss({}, { type: 'declined' });
+    });
+    expect(mockDismiss).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByTestId('result')[1].props.children).toBe('pending');
+    await act(async () => billingCallbacks.onDismiss({}, { type: 'declined' }));
+    expect(screen.getAllByTestId('result')[1].props.children).toBe('false');
+  });
+
+  it('allows a fresh onboarding run after cancellation while ignoring events from the old offer', async () => {
+    mockShouldPresent = false;
+    const firstRun = new AbortController();
+    const secondRun = new AbortController();
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.onboardingPaywall}
+          signal={firstRun.signal}
+          label="first run"
+        />
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.onboardingPaywall}
+          signal={secondRun.signal}
+          label="second run"
+        />
+      </EnabledSuperwallGateProvider>,
+    );
+    fireEvent.press(screen.getByText('first run'));
+    const oldCallbacks = mockPlacementCallbacks;
+    await act(async () => firstRun.abort());
+    fireEvent.press(screen.getByText('second run'));
+    expect(mockRegisterPlacement).toHaveBeenCalledTimes(2);
+    const currentCallbacks = mockPlacementCallbacks;
+    await act(async () => oldCallbacks.onSkip({ type: 'PlacementNotFound' }));
+    expect(screen.getAllByTestId('result')[1].props.children).toBe('pending');
+    await act(async () => currentCallbacks.onSkip({ type: 'PlacementNotFound' }));
+    expect(screen.getAllByTestId('result')[1].props.children).toBe('true');
   });
 
   it('logs a paywall view only when Superwall presents one', () => {
