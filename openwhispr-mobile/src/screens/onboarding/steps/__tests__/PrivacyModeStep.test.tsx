@@ -16,19 +16,19 @@ jest.mock('@/store/useOnboardingStore', () => ({
     selector({ goNext: jest.fn() }),
   getStepProgress: () => ({ current: 1, total: 1 }),
 }));
+const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
+let mockConfig: Record<string, unknown> = { defaultMode: 'private' };
 jest.mock('@/store/useConfigStore', () => ({
-  useConfigStore: (
-    selector: (s: {
-      config: { defaultMode: string };
-      loadConfig: () => void;
-      updateConfig: () => Promise<void>;
-    }) => unknown,
-  ) =>
-    selector({
-      config: { defaultMode: 'private' },
-      loadConfig: jest.fn(),
-      updateConfig: jest.fn().mockResolvedValue(undefined),
-    }),
+  useConfigStore: Object.assign(
+    (
+      selector: (s: {
+        config: Record<string, unknown>;
+        loadConfig: () => void;
+        updateConfig: () => Promise<void>;
+      }) => unknown,
+    ) => selector({ config: mockConfig, loadConfig: jest.fn(), updateConfig: mockUpdateConfig }),
+    { getState: () => ({ config: mockConfig }) },
+  ),
 }));
 
 const mockEnsureAnonymousSession = jest.fn().mockResolvedValue(undefined);
@@ -55,6 +55,7 @@ const alertSpy = jest.spyOn(Alert, 'alert');
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockConfig = { defaultMode: 'private' };
   mockAuthState = {
     user: null,
     isGuest: false,
@@ -88,5 +89,23 @@ describe('PrivacyModeStep cloud card without a session', () => {
     await waitFor(() => expect(alertSpy).toHaveBeenCalled());
     expect(alertSpy.mock.calls[0][0]).toBe('Cloud needs an account');
     expect(mockEnsureAnonymousSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('PrivacyModeStep continue', () => {
+  // Reset onboarding keeps the saved config, so a stale dictation selection must
+  // follow the mode picked here or routing disagrees with the Home toggle.
+  it('writes the dictation selection alongside the picked mode', async () => {
+    mockConfig = { defaultMode: 'cloud', inference: { dictation: { mode: 'openwhispr' } } };
+    const { getByText } = render(<PrivacyModeStep />);
+
+    fireEvent.press(getByText('Continue'));
+
+    await waitFor(() =>
+      expect(mockUpdateConfig).toHaveBeenCalledWith({
+        defaultMode: 'private',
+        inference: { dictation: { mode: 'local' } },
+      }),
+    );
   });
 });

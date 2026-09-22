@@ -8,6 +8,7 @@ import { BRAND } from '@/config/colors';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { accountRequiredForCloud } from '@/lib/accountAccess';
+import { dictationModeConfig } from '@/lib/inferenceModes';
 import { getStepProgress, useOnboardingStore } from '@/store/useOnboardingStore';
 import type { ProcessingMode } from '@/types';
 
@@ -70,7 +71,12 @@ export function PrivacyModeStep() {
   }, [cloudNeedsAccount, ensureAnonymousSession, isGuest]);
 
   const handleContinue = useCallback(async () => {
-    await updateConfig({ defaultMode: selected });
+    await updateConfig(
+      dictationModeConfig(
+        useConfigStore.getState().config ?? null,
+        selected === 'private' ? 'private' : 'cloud',
+      ),
+    );
     // Everyone picks languages next (cloud transcription uses them too); the language
     // step then routes cloud users past the model download.
     await goNext();

@@ -209,7 +209,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
           ...(scope === 'dictation' &&
           saved.mode === 'providers' &&
           !currentConfig?.inference?.upload
-            ? { upload: currentConfig?.inference?.dictation ?? legacyMode(currentConfig) }
+            ? { upload: legacyMode(currentConfig) }
             : {}),
           [scope]: saved,
         },

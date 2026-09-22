@@ -272,3 +272,28 @@ it('keeps uploads on the previous mode when dictation switches to Providers', as
   expect(saved.inference.dictation.mode).toBe('providers');
   expect(saved.inference.upload).toEqual({ mode: 'local' });
 });
+
+it('keeps an existing BYOK user uploads on Cloud when dictation is re-saved as Providers', async () => {
+  mockConfig = {
+    defaultMode: 'providers',
+    inference: {
+      dictation: {
+        mode: 'providers',
+        providerId: 'groq',
+        modelId: 'whisper-large-v3-turbo',
+        credentialRef: 'provider.groq',
+      },
+    },
+  };
+  mockActiveMode = 'providers';
+  mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+  render(<ProviderSettingsScreen />);
+  // Dictation already opens in Providers mode for this config.
+  chooseProvider('OpenAI');
+  fireEvent.press(screen.getByText('Save selection'));
+  await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
+  const saved = mockUpdateConfig.mock.calls[0][0] as {
+    inference: Record<string, { mode: string }>;
+  };
+  expect(saved.inference.upload).toEqual({ mode: 'openwhispr' });
+});

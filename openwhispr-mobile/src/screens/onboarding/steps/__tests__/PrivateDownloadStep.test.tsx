@@ -49,7 +49,10 @@ jest.mock('@/store/useOnboardingStore', () => ({
   getStepProgress: () => ({ current: 1, total: 1 }),
 }));
 jest.mock('@/store/useConfigStore', () => {
-  const state = { updateConfig: jest.fn(async () => undefined) };
+  const state: { config: Record<string, unknown> | null; updateConfig: jest.Mock } = {
+    config: null,
+    updateConfig: jest.fn(async () => undefined),
+  };
   return {
     useConfigStore: Object.assign((selector: (s: typeof state) => unknown) => selector(state), {
       getState: () => state,
@@ -98,6 +101,9 @@ import {
 } from '@/store/useModelDownloadStore';
 import { PrivateDownloadStep } from '../PrivateDownloadStep';
 
+const mockConfigState = useConfigStore.getState() as unknown as {
+  config: Record<string, unknown> | null;
+};
 const mockUpdateConfig = useConfigStore.getState().updateConfig as jest.Mock;
 const mockStartDownload = jest.fn(async () => undefined);
 const mockCancelDownload = jest.fn(async () => undefined);
@@ -127,7 +133,10 @@ describe('PrivateDownloadStep — switching to Cloud', () => {
     fireEvent.press(screen.getByText("Don't use Private — switch to Cloud"));
 
     await waitFor(() => expect(mockCancelDownload).toHaveBeenCalledWith('parakeet-v2'));
-    expect(mockUpdateConfig).toHaveBeenCalledWith({ defaultMode: 'cloud' });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({
+      defaultMode: 'cloud',
+      inference: { dictation: { mode: 'openwhispr' } },
+    });
   });
 
   it('keeps a completed model when switching to Cloud', async () => {
@@ -137,8 +146,38 @@ describe('PrivateDownloadStep — switching to Cloud', () => {
 
     fireEvent.press(screen.getByText('Use Cloud instead'));
 
-    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledWith({ defaultMode: 'cloud' }));
+    await waitFor(() =>
+      expect(mockUpdateConfig).toHaveBeenCalledWith({
+        defaultMode: 'cloud',
+        inference: { dictation: { mode: 'openwhispr' } },
+      }),
+    );
     expect(mockCancelDownload).not.toHaveBeenCalled();
+  });
+
+  // Reset onboarding keeps the saved config; a stale on-device dictation
+  // selection must not outlive a switch to Cloud.
+  it('replaces a stale on-device dictation selection when switching to Cloud', async () => {
+    mockConfigState.config = {
+      defaultMode: 'private',
+      inference: { dictation: { mode: 'local' } },
+    };
+    try {
+      setDownload('parakeet-v2', { status: 'completed', progress: 1 });
+      render(<PrivateDownloadStep />);
+      await screen.findByText('Parakeet v2');
+
+      fireEvent.press(screen.getByText('Use Cloud instead'));
+
+      await waitFor(() =>
+        expect(mockUpdateConfig).toHaveBeenCalledWith({
+          defaultMode: 'cloud',
+          inference: { dictation: { mode: 'openwhispr' } },
+        }),
+      );
+    } finally {
+      mockConfigState.config = null;
+    }
   });
 });
 

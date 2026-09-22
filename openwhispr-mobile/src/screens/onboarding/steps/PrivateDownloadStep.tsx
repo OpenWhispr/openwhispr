@@ -10,6 +10,7 @@ import { LocalTranscriptionService } from '@/services/transcription/LocalTranscr
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 import { getLocalModelCatalog, type LocalModelCatalogEntry } from '@/lib/localModelCatalog';
 import { getPrivateModeUnavailableMessage } from '@/lib/privateMode';
+import { dictationModeConfig } from '@/lib/inferenceModes';
 import { SlowDownloadSheet } from './SlowDownloadSheet';
 
 // Reuse the language step's progress so the conditional step doesn't jump the bar.
@@ -87,12 +88,12 @@ export function PrivateDownloadStep() {
     // The CTA is gated on status === 'completed', which means the model is on disk (and for
     // Parakeet, prepared). If it ever isn't, the Home toggle's readiness check re-prompts a
     // download — so we trust the store's completed status here rather than re-checking disk.
-    await updateConfig({ defaultMode: 'private' });
+    await updateConfig(dictationModeConfig(useConfigStore.getState().config ?? null, 'private'));
     await goNext();
   }, [updateConfig, goNext]);
 
   const switchToCloud = useCallback(async () => {
-    await updateConfig({ defaultMode: 'cloud' });
+    await updateConfig(dictationModeConfig(useConfigStore.getState().config ?? null, 'cloud'));
     await goNext();
   }, [updateConfig, goNext]);
 
