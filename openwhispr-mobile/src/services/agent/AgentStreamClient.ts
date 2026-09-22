@@ -1,5 +1,4 @@
 import type { InferenceSelection } from '@shared/ai/routing';
-import sharedPrompts from '@shared/ai/prompts.json';
 import { fetch } from 'expo/fetch';
 import {
   BASE_URL,
@@ -175,13 +174,13 @@ export async function streamAgentText(options: StreamAgentTextOptions): Promise<
     const latest = messages.at(-1);
     if (!latest || latest.role !== 'user')
       throw new Error('An agent request requires a user instruction.');
+    if (!systemPrompt) throw new Error('Keyboard composition requires a system prompt.');
     const controller = new AbortController();
     const timeout = setTimeout((): void => controller.abort(), AGENT_STREAM_TIMEOUT_MS);
     try {
       const result = await processProviderText({
         route,
-        systemPrompt:
-          systemPrompt ?? sharedPrompts.actionPrompt.replace(/\{\{agentName\}\}/g, 'OpenWhispr'),
+        systemPrompt,
         messages: messages.slice(0, -1),
         text: latest.content,
         signal: externalSignal

@@ -150,9 +150,18 @@ export class ReasoningService {
     const localRequired =
       localSelected ||
       (usesProviders ? privateContent : !!routing && isLocalReasoningRequired(routing));
+    // buildProviderPrompt already folds language, tone and dictionary into the
+    // system prompt; drop the raw fields so the local path does not append them again.
     const localRequest =
       (usesProviders || localSelected) && !systemPrompt
-        ? { ...request, ...buildProviderPrompt(request) }
+        ? {
+            ...request,
+            ...buildProviderPrompt(request),
+            language: undefined,
+            locale: undefined,
+            tone: undefined,
+            customDictionary: undefined,
+          }
         : request;
 
     if (localRequired) {
@@ -197,6 +206,13 @@ export class ReasoningService {
       }
     }
 
+    if (localSelected) {
+      throw new LocalReasoningError(
+        'LOCAL_REASONING_UNAVAILABLE',
+        'On-device AI is unavailable for this request. Choose a provider or OpenWhispr Cloud in AI Models.',
+      );
+    }
+
     if (usesProviders) {
       const route = await resolveMobileProviderRoute(
         scope,
@@ -206,7 +222,7 @@ export class ReasoningService {
       );
       const { processProviderText } =
         require('@/services/providers/ProviderExecution') as typeof import('@/services/providers/ProviderExecution');
-      const prompt = buildProviderPrompt(request);
+      const prompt = { systemPrompt: localRequest.systemPrompt as string, text: localRequest.text };
       const result = await processProviderText({
         route,
         ...prompt,
@@ -232,14 +248,24 @@ export class ReasoningService {
 
   static async chatOverNote(request: ChatOverNoteRequest): Promise<ReasoningResponse> {
     const payload = buildChatOverNotePayload(request);
-
-    return this.processText({
-      text: payload.text,
+    const { getInferenceSelection } =
+      require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+    const selection = request.inferenceRoute ?? getInferenceSelection('agent');
+    if (selection?.mode === 'providers' || selection?.mode === 'local') {
+      return this.processText({
+        text: payload.text,
+        systemPrompt: payload.systemPrompt,
+        signal: request.signal,
+        inferenceScope: 'agent',
+        inferenceRoute: request.inferenceRoute,
+        routing: request.routing,
+      });
+    }
+    // Cloud note chat keeps its pre-BYOK behavior: the consent dialog in the
+    // editor is the privacy gate, and the answer always comes from the hosted model.
+    return this.callApi(payload.text, {
       systemPrompt: payload.systemPrompt,
       signal: request.signal,
-      inferenceScope: 'agent',
-      inferenceRoute: request.inferenceRoute,
-      routing: request.routing,
     });
   }
 }

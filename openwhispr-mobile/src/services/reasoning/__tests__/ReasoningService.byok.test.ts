@@ -131,3 +131,31 @@ it('routes note chat through the agent scope and retains its bounded chat prompt
   );
   expect(api.post).not.toHaveBeenCalled();
 });
+
+it('never sends an On-Device text scope to OpenWhispr Cloud, even with fallback consent', async () => {
+  jest.mocked(getInferenceSelection).mockReturnValue({ mode: 'local' });
+  await expect(
+    ReasoningService.processText({
+      text: 'private note question',
+      systemPrompt: 'answer',
+      inferenceScope: 'agent',
+      routing: { isPrivateNote: true, allowCloudFallback: true },
+    }),
+  ).rejects.toThrow('On-device AI is unavailable for this request');
+  expect(api.post).not.toHaveBeenCalled();
+  expect(processProviderText).not.toHaveBeenCalled();
+});
+
+it('keeps note chat on OpenWhispr Cloud when no provider or On-Device selection exists', async () => {
+  jest.mocked(getInferenceSelection).mockReturnValue(undefined);
+  jest.mocked(api.post).mockResolvedValue({ text: 'cloud answer', model: 'cloud' });
+  await expect(
+    ReasoningService.chatOverNote({
+      context: 'note body',
+      question: 'what?',
+      history: [],
+      routing: { isPrivateNote: true, allowCloudFallback: true },
+    }),
+  ).resolves.toMatchObject({ text: 'cloud answer' });
+  expect(api.post).toHaveBeenCalledTimes(1);
+});

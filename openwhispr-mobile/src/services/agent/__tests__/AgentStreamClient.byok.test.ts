@@ -63,7 +63,11 @@ it('preserves role-separated history and cancellation on direct provider composi
 
 it('uses the persisted provider route after provider settings change', async () => {
   jest.mocked(getInferenceSelection).mockReturnValue({ mode: 'openwhispr' });
-  await streamAgentText({ messages: [{ role: 'user', content: 'revise' }], inferenceRoute: route });
+  await streamAgentText({
+    messages: [{ role: 'user', content: 'revise' }],
+    systemPrompt: 'Compose text.',
+    inferenceRoute: route,
+  });
   expect(resolveMobileProviderRoute).toHaveBeenCalledWith('agent', route);
   expect(fetch).not.toHaveBeenCalled();
 });
@@ -81,6 +85,14 @@ it('rejects unsupported local composition without a remote request', async () =>
   await expect(streamAgentText({ messages: [{ role: 'user', content: 'write' }] })).rejects.toThrow(
     'On-device keyboard composition',
   );
+  expect(processProviderText).not.toHaveBeenCalled();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('requires a system prompt for direct provider composition', async () => {
+  await expect(
+    streamAgentText({ messages: [{ role: 'user', content: 'write' }], inferenceRoute: route }),
+  ).rejects.toThrow('Keyboard composition requires a system prompt.');
   expect(processProviderText).not.toHaveBeenCalled();
   expect(fetch).not.toHaveBeenCalled();
 });
