@@ -565,6 +565,7 @@ export default function PersonalNotesView({
     actionName,
     progress: actionProgress,
     runAction,
+    cancel: cancelAction,
   } = useActionProcessing(activeNoteId ?? null);
 
   // Boolean flag so actions enable during recording without re-rendering on every transcript update.
@@ -802,6 +803,7 @@ export default function PersonalNotesView({
               actionProcessingState={actionProcessingState}
               actionName={actionName}
               actionProgress={actionProgress}
+              onCancelAction={cancelAction}
               onGenerateSummary={generateSummary}
               actionPicker={
                 <ActionPicker

@@ -199,6 +199,7 @@ interface NoteEditorProps {
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   actionProgress?: NoteActionProgress | null;
+  onCancelAction?: () => void;
   diarizationSessionId?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
   sessionDiarizationEnabled?: boolean;
@@ -233,6 +234,7 @@ export default function NoteEditor({
   actionProcessingState,
   actionName,
   actionProgress,
+  onCancelAction,
   diarizationSessionId,
   onLiveSpeakerLock,
   sessionDiarizationEnabled,
@@ -1228,6 +1230,7 @@ export default function NoteEditor({
             state={actionProcessingState ?? "idle"}
             actionName={actionName ?? null}
             progress={actionProgress ?? null}
+            onCancel={onCancelAction}
           />
           <div
             className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none"

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check } from "../icons";
 import { cn } from "../lib/utils";
+import { Button } from "../ui/button";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 
@@ -10,12 +11,15 @@ interface ActionProcessingOverlayProps {
   actionName: string | null;
   /** Set while a long note is summarised in parts. */
   progress?: NoteActionProgress | null;
+  /** Offered while processing: a run in parts takes minutes, and only quitting stopped it before. */
+  onCancel?: () => void;
 }
 
 export default function ActionProcessingOverlay({
   state,
   actionName,
   progress = null,
+  onCancel,
 }: ActionProcessingOverlayProps) {
   const { t } = useTranslation();
   // A mount mid-run is a note switch (NoteEditor is keyed by note id); the
@@ -105,6 +109,17 @@ export default function ActionProcessingOverlay({
                 data-scanner-progress=""
               />
             </div>
+            {onCancel ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                className="h-6 px-2 text-[11px] text-accent/60 hover:text-accent hover:bg-accent/8 dark:text-accent/60 dark:hover:text-accent dark:hover:bg-accent/8"
+              >
+                {t("common.cancel")}
+              </Button>
+            ) : null}
           </>
         )}
       </div>
