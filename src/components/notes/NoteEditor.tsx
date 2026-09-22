@@ -247,12 +247,13 @@ export default function NoteEditor({
   const { t } = useTranslation();
   const locale = useUiLocale();
   const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
-  const [viewMode, setViewMode] = useState<MeetingViewMode>(defaultViewMode);
-  // A tab that no longer renders can never be the selected one: the sliding
-  // indicator measures the selected button, and finding none would leave it
-  // frozen over the tab that was just removed.
-  const activeViewMode: MeetingViewMode =
-    viewMode === "enhanced" && !enhancement ? "raw" : viewMode;
+  const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
+  // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
+  // rendering, and a tab that no longer renders can never be the current one.
+  // Its button carries the highlight, the sliding indicator measures it and the
+  // body branches on it, so all of them read the clamped value.
+  const viewMode: MeetingViewMode =
+    selectedViewMode === "enhanced" && !enhancement ? "raw" : selectedViewMode;
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   const [folderSearch, setFolderSearch] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -465,9 +466,7 @@ export default function NoteEditor({
     if (!container) return;
 
     const buttons = container.querySelectorAll<HTMLButtonElement>("[data-segment-button]");
-    const activeBtn = Array.from(buttons).find(
-      (btn) => btn.dataset.segmentValue === activeViewMode
-    );
+    const activeBtn = Array.from(buttons).find((btn) => btn.dataset.segmentValue === viewMode);
     if (!activeBtn) {
       setIndicatorStyle((style) => ({ ...style, opacity: 0 }));
       return;
@@ -481,7 +480,7 @@ export default function NoteEditor({
       transform: `translateX(${br.left - cr.left}px)`,
       opacity: 1,
     });
-  }, [activeViewMode]);
+  }, [viewMode]);
 
   useEffect(() => {
     updateSegmentIndicator();
@@ -498,7 +497,7 @@ export default function NoteEditor({
     let cancelScheduledUpdate: (() => void) | undefined;
 
     if (prevProcessingStateRef.current === "processing" && actionProcessingState === "success") {
-      cancelScheduledUpdate = scheduleUiUpdate(() => setViewMode("enhanced"));
+      cancelScheduledUpdate = scheduleUiUpdate(() => setSelectedViewMode("enhanced"));
     }
     prevProcessingStateRef.current = actionProcessingState;
 
@@ -513,7 +512,7 @@ export default function NoteEditor({
         setDiarizedSegments(null);
         setIsDiarizing(false);
         setSpeakerMappings({});
-        setViewMode(defaultViewMode);
+        setSelectedViewMode(defaultViewMode);
         if (titleRef.current && titleRef.current.textContent !== note.title) {
           titleRef.current.textContent = note.title || "";
         }
@@ -824,7 +823,7 @@ export default function NoteEditor({
   }, []);
 
   const exportOptions = useMemo<NoteExportOption[]>(() => {
-    if (activeViewMode === "transcript" && onExportTranscript) {
+    if (viewMode === "transcript" && onExportTranscript) {
       return (["txt", "srt", "md", "json"] as const).map((format) => ({
         id: format,
         label: t(TRANSCRIPT_EXPORT_LABEL_KEYS[format]),
@@ -837,7 +836,7 @@ export default function NoteEditor({
       label: t(NOTE_EXPORT_LABEL_KEYS[format]),
       onSelect: () => onExportNote(format),
     }));
-  }, [activeViewMode, onExportTranscript, onExportNote, t]);
+  }, [viewMode, onExportTranscript, onExportNote, t]);
 
   return (
     <div className="flex h-full min-h-0">
@@ -1035,10 +1034,10 @@ export default function NoteEditor({
                 <button
                   data-segment-button
                   data-segment-value="transcript"
-                  onClick={() => setViewMode("transcript")}
+                  onClick={() => setSelectedViewMode("transcript")}
                   className={cn(
                     SEGMENT_BUTTON_CLASS,
-                    activeViewMode === "transcript"
+                    viewMode === "transcript"
                       ? "text-foreground"
                       : "text-foreground/60 hover:text-foreground/80"
                   )}
@@ -1049,10 +1048,10 @@ export default function NoteEditor({
                 <button
                   data-segment-button
                   data-segment-value="raw"
-                  onClick={() => setViewMode("raw")}
+                  onClick={() => setSelectedViewMode("raw")}
                   className={cn(
                     SEGMENT_BUTTON_CLASS,
-                    activeViewMode === "raw"
+                    viewMode === "raw"
                       ? "text-foreground"
                       : "text-foreground/60 hover:text-foreground/80"
                   )}
@@ -1064,10 +1063,10 @@ export default function NoteEditor({
                   <button
                     data-segment-button
                     data-segment-value="enhanced"
-                    onClick={() => setViewMode("enhanced")}
+                    onClick={() => setSelectedViewMode("enhanced")}
                     className={cn(
                       SEGMENT_BUTTON_CLASS,
-                      activeViewMode === "enhanced"
+                      viewMode === "enhanced"
                         ? "text-foreground"
                         : "text-foreground/60 hover:text-foreground/80"
                     )}
@@ -1158,7 +1157,7 @@ export default function NoteEditor({
 
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">
-            {activeViewMode === "transcript" && (hasChatSegments || isRecording) ? (
+            {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
@@ -1197,9 +1196,9 @@ export default function NoteEditor({
                   onToggleSelect={handleToggleSelect}
                 />
               )
-            ) : activeViewMode === "transcript" && hasMeetingTranscript ? (
+            ) : viewMode === "transcript" && hasMeetingTranscript ? (
               <RichTextEditor value={note.transcript || ""} disabled />
-            ) : activeViewMode === "transcript" ? (
+            ) : viewMode === "transcript" ? (
               <EmptyStateCard
                 icon={Mic}
                 title={t("notes.editor.transcriptEmptyTitle")}
@@ -1213,7 +1212,7 @@ export default function NoteEditor({
                   </Button>
                 )}
               </EmptyStateCard>
-            ) : activeViewMode === "enhanced" && enhancement ? (
+            ) : viewMode === "enhanced" && enhancement ? (
               <RichTextEditor
                 value={enhancement.content}
                 onChange={handleEnhancedChange}
