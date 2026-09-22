@@ -231,6 +231,27 @@ describe('SuperwallGateProvider', () => {
     expect(screen.getAllByTestId('result')[1].props.children).toBe('false');
   });
 
+  it('drops a late completion from an aborted onboarding offer', async () => {
+    mockShouldPresent = false;
+    const controller = new AbortController();
+    const onAccessGrantedWithoutPurchase = jest.fn();
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.onboardingPaywall}
+          signal={controller.signal}
+          onAccessGrantedWithoutPurchase={onAccessGrantedWithoutPurchase}
+        />
+      </EnabledSuperwallGateProvider>,
+    );
+    fireEvent.press(screen.getByText('register'));
+    const completeAbortedPlacement = mockResolveNativePlacement;
+    await act(async () => controller.abort());
+    await act(async () => completeAbortedPlacement?.());
+
+    expect(onAccessGrantedWithoutPurchase).not.toHaveBeenCalled();
+  });
+
   it('allows a fresh onboarding run after cancellation while ignoring events from the old offer', async () => {
     mockShouldPresent = false;
     const firstRun = new AbortController();
@@ -837,6 +858,28 @@ describe('SuperwallGateProvider', () => {
 
     await waitFor(() => expect(secondOnPurchaseComplete).toHaveBeenCalledWith('purchased'));
     expect(secondOnPurchaseComplete).toHaveBeenCalledTimes(1);
+  });
+
+  // The native SDK still completes the placement after a PlacementNotFound skip. Only an aborted
+  // onboarding offer may drop that late grant: the Billing row relies on it to open management.
+  it('still reports access without purchase when the placement completes after a skip', async () => {
+    const onAccessGrantedWithoutPurchase = jest.fn();
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.accountBillingOpen}
+          onAccessGrantedWithoutPurchase={onAccessGrantedWithoutPurchase}
+        />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    mockShouldPresent = false;
+    fireEvent.press(screen.getByText('register'));
+    act(() => mockPlacementCallbacks.onSkip?.({ type: 'PlacementNotFound' }));
+    await waitFor(() => expect(screen.getByTestId('result').props.children).toBe('false'));
+    await act(async () => mockResolveNativePlacement?.());
+
+    expect(onAccessGrantedWithoutPurchase).toHaveBeenCalledTimes(1);
   });
 
   it('fails open after a pre-presentation error and allows a later registration', async () => {

@@ -654,7 +654,9 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
           reportNoPurchaseAccess: boolean,
         ) => {
           if (gate.terminalEventProcessed) return;
-          if (gate.closed) return;
+          // Only an aborted onboarding offer drops a late completion. A skipped billing placement
+          // still reports access so its caller can open billing management.
+          if (gate.cancelled) return;
           const isPresented = presentationGatesRef.current.includes(gate);
           if (isOnboarding && isPresented) return;
           completeGate(gate, granted, runFeature, reportNoPurchaseAccess && !isPresented);
