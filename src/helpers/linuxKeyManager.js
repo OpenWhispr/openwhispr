@@ -173,6 +173,10 @@ class LinuxKeyManager extends EventEmitter {
   }
 
   handleOutputLine(line, key, entry = this.readiness.get(key)) {
+    // Permission is a property of this process, not of one reader generation:
+    // a denial from a stale or already-failed reader is still true, so record
+    // it before ignoring the reader's lifecycle output.
+    if (line === "NO_PERMISSION") this.permissionDenied = true;
     if (!entry || this.listeners.get(key) !== entry || entry.state === "failed") return;
     if (line === "READY") {
       if (entry.state === "ready") return;
@@ -184,7 +188,6 @@ class LinuxKeyManager extends EventEmitter {
       return;
     }
     if (line === "NO_PERMISSION") {
-      this.permissionDenied = true;
       const error = new Error("No permission to access Linux input devices");
       this._failKey(key, entry, error);
       this.emit("permission-denied", key);
