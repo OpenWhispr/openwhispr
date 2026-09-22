@@ -311,6 +311,7 @@ test("does not respawn over a process that survived SIGKILL", async (t) => {
   await tickHealthCheck(t, QdrantManager.HEALTH_FAILURES_BEFORE_RESTART);
 
   assert.equal(state.spawnCalls.length, 1);
+  assert.equal(manager.restartBlocked, true);
   assert.equal(manager.getStatus().running, false);
   // The pid entry is restored so the next launch's reaper retries the kill.
   assert.deepEqual(state.pidFileOps[state.pidFileOps.length - 1], ["write", "qdrant", 1001]);
@@ -368,4 +369,17 @@ test("a late close from the replaced child does not clobber the new process", as
   assert.equal(manager.getStatus().running, true);
   assert.notEqual(manager.healthCheckInterval, null);
   assert.equal(state.pidFileOps.length, opsBeforeLateClose, "pid entry must not be cleared");
+});
+
+test("restart exhaustion distinguishes an unhealthy cap from a healthy idle stop", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { QdrantManager, manager } = loadManager();
+  await manager.start();
+  manager.restartCount = QdrantManager.MAX_RESTARTS_PER_SESSION;
+  await manager.stop();
+  assert.equal(manager.restartBlocked, false);
+  await manager.start();
+  await manager._restartUnhealthy();
+  assert.equal(manager.restartBlocked, true);
+  assert.equal(manager.isReady(), false);
 });

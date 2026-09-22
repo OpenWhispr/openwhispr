@@ -15,39 +15,47 @@ class VectorIndex {
     this.client = new QdrantClient({ host: "127.0.0.1", port });
   }
 
+  reset() {
+    this.client = null;
+  }
+
   async ensureCollection() {
-    if (!this.client) return;
+    if (!this.client) throw new Error("Vector index is not initialized");
     try {
       await this.client.getCollection(this.collectionName);
-    } catch {
-      try {
-        await this.client.createCollection(this.collectionName, {
-          vectors: { size: 384, distance: "Cosine" },
-        });
-      } catch (err) {
-        debugLogger.error("Failed to create Qdrant collection", { error: err.message });
-      }
+      return { created: false };
+    } catch (error) {
+      if (error.status !== 404) throw error;
+      await this.client.createCollection(this.collectionName, {
+        vectors: { size: 384, distance: "Cosine" },
+      });
+      return { created: true };
     }
   }
 
   async upsertNote(noteId, text, payload = {}) {
-    if (!this.client) return;
+    if (!this.client) return false;
     try {
       const vector = await localEmbeddings.embedText(text);
       await this.client.upsert(this.collectionName, {
+        wait: true,
         points: [{ id: noteId, vector: Array.from(vector), payload }],
       });
+      return true;
     } catch (err) {
       debugLogger.debug("Vector index upsert failed", { noteId, error: err.message });
+      return false;
     }
   }
 
   async deleteNote(noteId) {
-    if (!this.client) return;
+    if (!this.client) return false;
     try {
-      await this.client.delete(this.collectionName, { points: [noteId] });
+      await this.client.delete(this.collectionName, { wait: true, points: [noteId] });
+      return true;
     } catch (err) {
       debugLogger.debug("Vector index delete failed", { noteId, error: err.message });
+      return false;
     }
   }
 
@@ -55,6 +63,7 @@ class VectorIndex {
     if (!this.client) return false;
     try {
       await this.client.delete(this.collectionName, {
+        wait: true,
         filter: { must: [{ key: "space_id", match: { value: spaceId } }] },
       });
       return true;

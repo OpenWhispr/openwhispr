@@ -37,6 +37,7 @@ class OnnxWorkerClient {
     this.gaveUp = false;
     this.spawnPromise = null;
     this.respawnTimer = null;
+    this.generation = 0;
   }
 
   _logPath() {
@@ -119,6 +120,7 @@ class OnnxWorkerClient {
   }
 
   _onExit(code) {
+    this.generation += 1;
     debugLogger.warn("onnx worker exited", {
       code,
       pending: this.pending.size,
@@ -167,6 +169,8 @@ class OnnxWorkerClient {
   }
 
   async request(method, payload, transferList) {
+    // Releasing text must never start a worker just to free an absent session.
+    if (method === "text.unload" && !this.child) return { ok: true };
     if (this.shuttingDown) {
       throw new WorkerCrashedError("worker shutting down");
     }
@@ -189,7 +193,7 @@ class OnnxWorkerClient {
       }
     }
 
-    await this._spawn();
+    if (method !== "text.unload") await this._spawn();
 
     const id = this.nextRequestId++;
     return new Promise((resolve, reject) => {

@@ -3206,6 +3206,22 @@ export async function initializeSettings(): Promise<void> {
   const state = useSettingsStore.getState();
 
   if (window.electronAPI) {
+    // Preferences are already in localStorage; do not wait for secret or provider hydration.
+    try {
+      await window.electronAPI.syncNotificationPreferences?.({
+        notificationsEnabled: state.notificationsEnabled,
+        notifyMeetingDetection: state.notifyMeetingDetection,
+        notifyCalendarReminders: state.notifyCalendarReminders,
+        meetingProcessDetection: state.meetingProcessDetection,
+      });
+    } catch (err) {
+      logger.warn(
+        "Failed to sync notification preferences on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
     try {
       const [
         openai,
@@ -3490,36 +3506,6 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync snippets on startup",
-        { error: (err as Error).message },
-        "settings"
-      );
-    }
-
-    // Audio detection is derived from the meeting-notification toggle in
-    // sync-notification-preferences, so it is not sent here.
-    try {
-      const currentState = useSettingsStore.getState();
-      await window.electronAPI.meetingDetectionSetPreferences?.({
-        processDetection: currentState.meetingProcessDetection,
-      });
-    } catch (err) {
-      logger.warn(
-        "Failed to sync meeting detection preferences on startup",
-        { error: (err as Error).message },
-        "settings"
-      );
-    }
-
-    try {
-      const currentState = useSettingsStore.getState();
-      await window.electronAPI.syncNotificationPreferences?.({
-        notificationsEnabled: currentState.notificationsEnabled,
-        notifyMeetingDetection: currentState.notifyMeetingDetection,
-        notifyCalendarReminders: currentState.notifyCalendarReminders,
-      });
-    } catch (err) {
-      logger.warn(
-        "Failed to sync notification preferences on startup",
         { error: (err as Error).message },
         "settings"
       );

@@ -613,7 +613,7 @@ class IPCHandlers {
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
     this.windowsLoopbackAudioManager = managers.windowsLoopbackAudioManager;
     this.meetingAecManager = managers.meetingAecManager;
-    this.getQdrantManager = managers.getQdrantManager;
+    this.getSemanticSearch = managers.getSemanticSearch;
     this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
@@ -900,46 +900,16 @@ class IPCHandlers {
     };
   }
 
-  _asyncVectorUpsert(note) {
-    setImmediate(() => {
-      const vectorIndex = require("./vectorIndex");
-      if (!vectorIndex.isReady()) return;
-      const { LocalEmbeddings } = require("./localEmbeddings");
-      const text = LocalEmbeddings.noteEmbedText(note.title, note.content, note.enhanced_content);
-      vectorIndex
-        .upsertNote(note.id, text, { space_id: note.space_id, folder_id: note.folder_id ?? null })
-        .catch(() => {});
-    });
+  _asyncVectorUpsert() {
+    this.getSemanticSearch?.()?.notifyChanges();
   }
 
-  _asyncVectorDelete(noteId) {
-    setImmediate(() => {
-      const vectorIndex = require("./vectorIndex");
-      if (!vectorIndex.isReady()) return;
-      vectorIndex.deleteNote(noteId).catch(() => {});
-    });
+  _asyncVectorDelete() {
+    this._asyncVectorUpsert();
   }
 
-  // Space vector purges are persisted (pending_vector_purges) so a purge that
-  // lands while Qdrant is booting or down is retried once the index is ready.
   drainPendingVectorPurges() {
-    setImmediate(() => {
-      void (async () => {
-        const vectorIndex = require("./vectorIndex");
-        if (!vectorIndex.isReady()) return;
-        for (const { space_id } of this.databaseManager.getPendingVectorPurges()) {
-          if (await vectorIndex.deleteBySpace(space_id)) {
-            this.databaseManager.clearPendingVectorPurge(space_id);
-          }
-        }
-      })().catch((error) => {
-        debugLogger.error(
-          "Pending vector purge drain failed",
-          { error: error?.message || String(error) },
-          "semantic-search"
-        );
-      });
-    });
+    this._asyncVectorUpsert();
   }
 
   _mirrorDeleteFolderIfUnshared(folderName) {
@@ -2069,11 +2039,6 @@ class IPCHandlers {
     ipcMain.handle(
       "db-semantic-search-notes",
       async (event, query, limit = 5, spaceId, folderId) => {
-        const vectorIndex = require("./vectorIndex");
-        if (!vectorIndex.isReady()) {
-          return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
-        }
-
         try {
           // Qdrant payload updates are best-effort. Use its space filter to
           // reduce the candidate set, then validate every scoped vector hit
@@ -2085,8 +2050,9 @@ class IPCHandlers {
               : undefined;
           const [ftsResults, vectorResults] = await Promise.all([
             this.databaseManager.searchNotes(query, overFetch, spaceId, folderId),
-            vectorIndex.search(query, overFetch, vectorFilter),
+            this.getSemanticSearch?.()?.search(query, overFetch, vectorFilter),
           ]);
+          if (vectorResults == null) return ftsResults.slice(0, limit);
           const scopedIds = new Set(
             this.databaseManager.getNoteIdsInScope(
               spaceId,
@@ -2134,17 +2100,17 @@ class IPCHandlers {
     );
 
     ipcMain.handle("db-semantic-reindex-all", async () => {
-      const vectorIndex = require("./vectorIndex");
-      if (!vectorIndex.isReady()) return { success: false, error: "Vector index not ready" };
-
-      const notes = this.databaseManager.getNotes(null, 100000);
-      let done = 0;
-      const { failed } = await vectorIndex.reindexAll(notes, (completed, total) => {
-        done = completed;
-        broadcastToWindows("semantic-reindex-progress", { done: completed, total });
-      });
-      // Report failed batches so callers only latch their done-flag on a clean pass.
-      return { success: failed === 0, indexed: done - failed };
+      try {
+        const result = await this.getSemanticSearch?.()?.reindex();
+        if (!result) return { success: false, error: "Vector index not ready" };
+        broadcastToWindows("semantic-reindex-progress", {
+          done: result.indexed ?? 0,
+          total: result.indexed ?? 0,
+        });
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
     });
 
     ipcMain.handle("db-update-note-cloud-id", async (event, id, cloudId) => {
@@ -3953,7 +3919,7 @@ class IPCHandlers {
         errors.push(`Diarization stop: ${e.message}`);
       }
       try {
-        await this.getQdrantManager?.()?.stop();
+        await this.getSemanticSearch?.()?.stop();
       } catch (e) {
         errors.push(`Vector index stop: ${e.message}`);
       }
@@ -11469,9 +11435,25 @@ class IPCHandlers {
       }
     });
 
+    let meetingProcessDetection = true;
+    let notificationPreferencesInitialized = false;
+    const syncMeetingDetectionPreferences = () => {
+      const { notificationsEnabled, notifyMeetingDetection } = this.windowManager.notificationPrefs;
+      const promptsEnabled = Boolean(
+        notificationPreferencesInitialized && notificationsEnabled && notifyMeetingDetection
+      );
+      this.meetingDetectionEngine?.setPreferences({
+        audioDetection: promptsEnabled,
+        processDetection: promptsEnabled && meetingProcessDetection,
+      });
+    };
+
     ipcMain.handle("meeting-detection-set-preferences", async (_event, prefs) => {
       try {
-        this.meetingDetectionEngine.setPreferences(prefs);
+        if (typeof prefs?.processDetection === "boolean") {
+          meetingProcessDetection = prefs.processDetection;
+        }
+        syncMeetingDetectionPreferences();
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -11489,17 +11471,23 @@ class IPCHandlers {
         if (!prefs || typeof prefs !== "object") {
           return { success: false, error: "Invalid preferences" };
         }
-        for (const [k, v] of Object.entries(prefs)) {
-          if (NOTIFICATION_PREF_KEYS.has(k)) {
-            this.windowManager.notificationPrefs[k] = !!v;
+        for (const [key, value] of Object.entries(prefs)) {
+          if (NOTIFICATION_PREF_KEYS.has(key)) {
+            this.windowManager.notificationPrefs[key] = !!value;
           }
         }
-        // Detection only serves the notification, so the toggle also gates the detector.
-        const { notificationsEnabled, notifyMeetingDetection } =
-          this.windowManager.notificationPrefs;
-        this.meetingDetectionEngine?.setPreferences({
-          audioDetection: notificationsEnabled && notifyMeetingDetection,
-        });
+        if (typeof prefs.meetingProcessDetection === "boolean") {
+          meetingProcessDetection = prefs.meetingProcessDetection;
+        }
+        // A partial update must not enable detectors before the saved snapshot arrives.
+        if (
+          typeof prefs.notificationsEnabled === "boolean" &&
+          typeof prefs.notifyMeetingDetection === "boolean" &&
+          typeof prefs.meetingProcessDetection === "boolean"
+        ) {
+          notificationPreferencesInitialized = true;
+        }
+        syncMeetingDetectionPreferences();
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -11771,23 +11759,11 @@ class IPCHandlers {
       try {
         const result = this.databaseManager.importNotes(pending.notes);
         if (result.imported > 0) {
-          const importedIds = result.noteIds;
-          // One-shot side effects: batched vector upsert of just the new notes
-          // and a single mirror rebuild — never per-note work (sync storm /
-          // O(notes × files) mirror scans).
+          // Triggers journal every imported note; wake only an already-active index.
+          // Rebuild the file mirror once for the whole import.
           setImmediate(() => {
             try {
-              const vectorIndex = require("./vectorIndex");
-              if (vectorIndex.isReady()) {
-                const importedNotes = importedIds
-                  .map((id) => this.databaseManager.getNote(id))
-                  .filter(Boolean);
-                vectorIndex
-                  .reindexAll(importedNotes, (done, total) => {
-                    broadcastToWindows("semantic-reindex-progress", { done, total });
-                  })
-                  .catch(() => {});
-              }
+              this._asyncVectorUpsert();
               if (this._noteFilesEnabled) this._rebuildMirror();
             } catch (sideEffectError) {
               debugLogger.error(

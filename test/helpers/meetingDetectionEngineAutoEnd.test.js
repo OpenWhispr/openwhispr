@@ -465,6 +465,7 @@ test("a post-dictation queue flush holds detections while the meeting session is
 test("a detection-started recording re-enables prompts once its session ends", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { audioActivityDetector, clock, engine, owner, shownNotifications } = createEngine();
+  engine.setPreferences({ audioDetection: true, processDetection: true });
   engine.setMeetingModeActive(true);
   engine.setUserRecording(true);
   await engine.beginRecordingSession({
@@ -490,6 +491,7 @@ test("a detection-started recording re-enables prompts once its session ends", a
 test("the next reminder prompts after a detection-started recording ends", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { clock, engine, owner, shownNotifications } = createEngine();
+  engine.setPreferences({ audioDetection: true, processDetection: true });
   engine.setMeetingModeActive(true);
   engine.setUserRecording(true);
   await engine.beginRecordingSession({
@@ -512,6 +514,7 @@ test("the next reminder prompts after a detection-started recording ends", async
 test("meeting mode still suppresses prompts while a detection-started recording is live", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { audioActivityDetector, clock, engine, owner, shownNotifications } = createEngine();
+  engine.setPreferences({ audioDetection: true, processDetection: true });
   engine.setMeetingModeActive(true);
   engine.setUserRecording(true);
   await engine.beginRecordingSession({
