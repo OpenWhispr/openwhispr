@@ -291,7 +291,8 @@ describe('useKeyboardHandoff — orphaned keyboard transcript', () => {
       text: 'write a follow-up email to Bob',
       route: { provider: 'byok' },
     });
-    readKeyboardAgentJob.mockReturnValue({ jobId: '100-job', instruction: '' });
+    const agentJob = { jobId: '100-job', instruction: '' };
+    readKeyboardAgentJob.mockImplementation((id: string) => (id === '100-job' ? agentJob : null));
 
     mountWithInitialUrl('openwhispr://ignored');
 
@@ -306,6 +307,49 @@ describe('useKeyboardHandoff — orphaned keyboard transcript', () => {
       'keyboard_pending_transcript',
       expect.anything(),
     );
+  });
+
+  it('leaves a deliberately ended agent job with nothing to recover alone', async () => {
+    const { readKeyboardAgentJob, clearKeyboardAgentJob } =
+      jest.requireMock('@/lib/keyboardAgentSync');
+    const agentJob = { jobId: '100-job', instruction: '' };
+    readKeyboardAgentJob.mockImplementation((id: string) => (id === '100-job' ? agentJob : null));
+    storage.getItem.mockImplementation((key: string) => {
+      if (key === 'keyboard_recording_job_id') return '100-job';
+      return null;
+    });
+
+    mountWithInitialUrl('openwhispr://ignored');
+
+    await waitFor(() => expect(mockHandoffStoreState.setCheckingInitialUrl).toHaveBeenCalled());
+    await waitFor(() => expect(readKeyboardProviderResult).toHaveBeenCalledWith('100-job'));
+    expect(storage.setKeyboardStatus).not.toHaveBeenCalledWith('agent_error', expect.anything());
+    expect(clearKeyboardAgentJob).not.toHaveBeenCalled();
+  });
+
+  it('keeps a newer job orphan slot when an older orphan cleanup goes stale', async () => {
+    const cleanup = deferred<string>();
+    let newerJobStarted = false;
+    mockCleanupTranscript.mockReturnValueOnce(cleanup.promise);
+    storage.getItem.mockImplementation((key: string) => {
+      const jobId = newerJobStarted ? '200-job' : '100-job';
+      if (key === 'keyboard_orphaned_raw_transcript') return 'raw transcript';
+      if (key === 'keyboard_orphaned_raw_transcript_job_id') return jobId;
+      if (key === 'keyboard_recording_job_id') return jobId;
+      return null;
+    });
+
+    mountWithInitialUrl('openwhispr://ignored');
+    await waitFor(() => expect(mockCleanupTranscript).toHaveBeenCalled());
+
+    newerJobStarted = true;
+    cleanup.resolve('clean transcript');
+    await cleanup.promise;
+    await waitFor(() => expect(clearKeyboardProviderRecovery).toHaveBeenCalledWith('100-job'));
+
+    expect(storage.removeItem).not.toHaveBeenCalledWith('keyboard_orphaned_raw_transcript');
+    expect(storage.removeItem).not.toHaveBeenCalledWith('keyboard_orphaned_raw_transcript_job_id');
+    expect(mockAddTranscript).not.toHaveBeenCalled();
   });
 
   it('uses the per-job route snapshot to clean a Cloud orphan', async () => {

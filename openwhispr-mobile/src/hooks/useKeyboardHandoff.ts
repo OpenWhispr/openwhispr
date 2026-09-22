@@ -288,17 +288,6 @@ export function useKeyboardHandoff() {
       const providerJobId = readActiveJobId();
       let providerResult: ReturnType<typeof readKeyboardProviderResult>;
       if (providerJobId) {
-        if (readKeyboardAgentJob(providerJobId)) {
-          // An agent job's provider result is the spoken instruction, never text
-          // to insert. The composer did not finish; clear both and let the user retry.
-          clearKeyboardProviderRecovery(providerJobId);
-          clearKeyboardAgentJob();
-          setKeyboardStatus(
-            'agent_error',
-            'The agent request was interrupted. Try again from the keyboard.',
-          );
-          return;
-        }
         try {
           providerResult = readKeyboardProviderResult(providerJobId);
         } catch {
@@ -309,6 +298,30 @@ export function useKeyboardHandoff() {
           );
           return;
         }
+      }
+      const orphanBelongsToJob =
+        AppGroupStorage.getItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID) ===
+        providerJobId;
+      // Only intervene when an agent job left text behind: an agent job's provider
+      // result is the spoken instruction, never text to insert. Agent jobs that
+      // ended on purpose (cancel, route or recording failure) have nothing to
+      // protect and keep the status their own exit path set.
+      if (
+        providerJobId &&
+        (providerResult || orphanBelongsToJob) &&
+        readKeyboardAgentJob(providerJobId)
+      ) {
+        clearKeyboardProviderRecovery(providerJobId);
+        clearKeyboardAgentJob();
+        if (orphanBelongsToJob) {
+          AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT);
+          AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID);
+        }
+        setKeyboardStatus(
+          'agent_error',
+          'The agent request was interrupted. Try again from the keyboard.',
+        );
+        return;
       }
       const raw = AppGroupStorage.getItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT);
       const rawText = providerResult?.text.trim() || raw?.trim();
@@ -465,7 +478,12 @@ export function useKeyboardHandoff() {
           setKeyboardStatus('error', error instanceof Error ? error.message : 'cleanup_error');
         }
       } finally {
-        if (recoverySaved) {
+        const orphanSlotJobId = AppGroupStorage.getItem(
+          APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID,
+        );
+        // The orphan slot is shared: a newer job may have written it while this
+        // one was cleaning, so only clear it while it still belongs to this job.
+        if (recoverySaved && (!orphanSlotJobId || orphanSlotJobId === rawJobId)) {
           AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT);
           AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID);
         }
