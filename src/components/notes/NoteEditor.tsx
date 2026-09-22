@@ -250,8 +250,6 @@ export default function NoteEditor({
   const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
   // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
   // rendering, and a tab that no longer renders can never be the current one.
-  // Its button carries the highlight, the sliding indicator measures it and the
-  // body branches on it, so all of them read the clamped value.
   const viewMode: MeetingViewMode =
     selectedViewMode === "enhanced" && !enhancement ? "raw" : selectedViewMode;
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");

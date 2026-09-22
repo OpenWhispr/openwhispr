@@ -121,7 +121,6 @@ async function loadNoteEditor(t) {
       electronAPI: {
         getSpeakerProfiles: async () => [],
         getSpeakerMappings: async () => [],
-        updateNote: async () => ({}),
       },
     },
   });
@@ -202,7 +201,7 @@ async function loadNoteEditor(t) {
   return { render, click, latest, unmount, resizeCallbacks };
 }
 
-test("deleting the AI summary leaves an orphaned selected tab", async (t) => {
+test("deleting the AI summary moves the selection to Your notes", async (t) => {
   const { render, latest, unmount } = await loadNoteEditor(t);
 
   await render(ENHANCEMENT);
