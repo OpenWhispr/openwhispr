@@ -130,7 +130,8 @@ test("refused material is summarised in parts, then merged with the action promp
 
   const parts = calls.slice(1, -1);
   const final = calls[calls.length - 1];
-  assert.ok(parts.length >= 2, `expected several parts, got ${parts.length}`);
+  // 400 lines at the small budget pack into 3 parts at the 85% fill; 2 at 100%.
+  assert.equal(parts.length, 3);
   parts.forEach((call, index) => {
     assert.ok(
       call.text.includes(material.meetingContext),
@@ -145,7 +146,7 @@ test("refused material is summarised in parts, then merged with the action promp
       /this part only/i.test(call.config.systemPrompt),
       "part prompt is the part-notes prompt"
     );
-    assert.equal(call.config.maxTokens, 2048);
+    assert.ok(call.config.maxTokens <= 2048);
   });
   assert.ok(
     final.config.systemPrompt.includes("Summarize the meeting."),
@@ -195,22 +196,29 @@ test("cancelling between parts stops further requests and saves nothing", async 
   await new Promise((resolve) => setTimeout(resolve, 200));
   assert.equal(calls.length, 2);
   assert.equal(updates.length, 0);
+  assert.equal(
+    store.useActionProcessingStore.getState().noteStates[6],
+    undefined,
+    "the cancelled run writes no progress back into the cleared slot"
+  );
 });
 
-test("progress counts parts and ends on the final pass", async (t) => {
-  const { store, updates } = await loadStore(t, { failFirst: true });
+test("progress advances once per part and ends on the final pass", async (t) => {
+  const { store, calls, updates } = await loadStore(t, { failFirst: true });
   const seen = [];
   const unsubscribe = store.useActionProcessingStore.subscribe((state) => {
     const progress = state.noteStates[7]?.progress;
-    if (progress) seen.push(`${progress.step}/${progress.total}`);
+    const label = progress ? `${progress.step}/${progress.total}` : null;
+    if (label && seen.at(-1) !== label) seen.push(label);
   });
   t.after(unsubscribe);
   run(store, 7, longMaterial(400));
   await waitFor(() => updates.length > 0, "save");
-  assert.ok(seen.length >= 2, `saw ${JSON.stringify(seen)}`);
-  const [step, total] = seen[seen.length - 1].split("/").map(Number);
-  assert.equal(step, total);
-  assert.equal(seen[0], `1/${total}`);
+  const parts = calls.length - 2;
+  assert.deepEqual(
+    seen,
+    Array.from({ length: parts + 1 }, (_, index) => `${index + 1}/${parts + 1}`)
+  );
 });
 
 async function waitForResult(store, updates) {
@@ -223,30 +231,10 @@ async function waitForResult(store, updates) {
 const overflow = () => Object.assign(new Error("too big"), { code: "CONTEXT_TOO_LARGE" });
 const FLOOR_BUDGET = { success: true, maxContextTokens: 16384, modelName: "Local model" };
 
-test("a truncated part is split and only complete working notes reach the merge", async (t) => {
-  let partCalls = 0;
-  const { store, calls, updates } = await loadStore(t, {
-    failFirst: true,
-    processText: (text, config) => {
-      if (config.maxTokens === 4096) return "Final notes";
-      assert.equal(config.requireCompleteOutput, true);
-      partCalls += 1;
-      if (partCalls === 1) {
-        throw Object.assign(new Error("truncated"), { code: "OUTPUT_TRUNCATED" });
-      }
-      return `Complete working notes ${partCalls}`;
-    },
-  });
-  run(store, 17, longMaterial(20));
-  await waitForResult(store, updates);
-  assert.equal(updates.length, 1);
-  assert.equal(partCalls, 3);
-  assert.ok(calls.at(-1).text.includes("Complete working notes 2"));
-  assert.ok(calls.at(-1).text.includes("Complete working notes 3"));
-  assert.equal(calls.at(-1).config.requireCompleteOutput, undefined);
-});
-
-test("a part still truncated at the split limit is kept clipped instead of failing the note", async (t) => {
+// The main process only reports OUTPUT_TRUNCATED when asked for a complete
+// reply; a part is never asked, so a verbose model costs one clipped part, not
+// a cascade of halvings (measured: 26 part calls for 2 parts on a 9B).
+test("a part whose reply fills its allowance is kept clipped, never split", async (t) => {
   const { store, calls, updates } = await loadStore(t, {
     failFirst: true,
     processText: (text, config) => {
@@ -257,13 +245,97 @@ test("a part still truncated at the split limit is kept clipped instead of faili
       return "Clipped working notes";
     },
   });
-  run(store, 18, longMaterial(20));
+  run(store, 17, longMaterial(400));
   await waitForResult(store, updates);
   assert.equal(updates.length, 1);
   assert.deepEqual(store.consumeErrorEvents(), []);
-  // 1 + 2 + 4 complete attempts, then 8 leaves that accept a clipped reply.
-  assert.equal(calls.filter((call) => call.config.maxTokens === 2048).length, 15);
+  assert.equal(calls.length, 5, "the refused request, three parts, one merge");
+  for (const part of calls.slice(1, -1)) {
+    assert.equal(part.config.requireCompleteOutput, undefined);
+    assert.equal(part.config.refuseClippedByWindow, false);
+  }
   assert.ok(calls.at(-1).text.includes("Clipped working notes"));
+});
+
+test("a part cut short by the model is a plain failure, not a reason to split", async (t) => {
+  // OUTPUT_TRUNCATED only arrives when a caller asked for a complete reply. A
+  // part never asks, so seeing it means the request was not the store's own;
+  // halving on it is what turned 2 parts into 26 calls on a verbose 9B.
+  const { store, calls, updates } = await loadStore(t, {
+    failFirst: true,
+    processText: (text, config) => {
+      if (config.maxTokens === 4096) return "Final notes";
+      throw Object.assign(new Error("truncated"), { code: "OUTPUT_TRUNCATED" });
+    },
+  });
+  run(store, 27, longMaterial(400));
+  await waitForResult(store, updates);
+  assert.equal(updates.length, 0);
+  assert.equal(calls.length, 2, "the refused request and the one failed part");
+  assert.equal(store.consumeErrorEvents()[0].message, "truncated");
+});
+
+test("part allowances are sized so every part's notes fit the final pass together", async (t) => {
+  const { estimateNoteTokens } = await import("../../src/helpers/noteChunking.js");
+  const { store, calls, updates } = await loadStore(t, { failFirst: true });
+  const material = longMaterial(400);
+  run(store, 18, material);
+  await waitForResult(store, updates);
+  assert.equal(updates.length, 1);
+  const parts = calls.slice(1, -1);
+  const final = calls.at(-1);
+  const allowances = parts.map((call) => call.config.maxTokens);
+  assert.ok(
+    allowances[0] < 2048,
+    `the small budget must shrink the allowance, got ${allowances[0]}`
+  );
+  assert.ok(allowances.every((allowance) => allowance === allowances[0]));
+  // Each part's share of what the final pass has left after its fixed pieces:
+  // the merge prompt, manual notes, context, the 4096 reply, the main process's
+  // 512-token reserve, and a "## Notes from part i of N" heading per part.
+  const room =
+    SMALL_BUDGET.maxContextTokens -
+    estimateNoteTokens(final.config.systemPrompt) -
+    estimateNoteTokens(material.notes) -
+    estimateNoteTokens(material.meetingContext) -
+    final.config.maxTokens -
+    512 -
+    parts.length * 16;
+  assert.equal(allowances[0], Math.floor(room / parts.length));
+  for (const part of parts) {
+    assert.match(
+      part.config.systemPrompt,
+      new RegExp(`about ${Math.floor(allowances[0] / 2)} words`),
+      "the part prompt names the length the allowance leaves room for"
+    );
+  }
+});
+
+test("material that would leave each part too small an allowance is refused before any part runs", async (t) => {
+  const { store, calls, updates } = await loadStore(t, { failFirst: true });
+  run(store, 25, longMaterial(4000));
+  await waitForResult(store, updates);
+  assert.equal(updates.length, 0);
+  assert.equal(calls.length, 1);
+  const [error] = store.consumeErrorEvents();
+  assert.equal(error.messageKey, "models.errors.contextTooLargeGeneric");
+});
+
+test("an empty part reply fails the note instead of merging a blank section", async (t) => {
+  let partCalls = 0;
+  const { store, calls, updates } = await loadStore(t, {
+    failFirst: true,
+    processText: (text, config) => {
+      if (config.maxTokens === 4096) return "Final notes";
+      partCalls += 1;
+      return partCalls === 2 ? "  \n" : "Working notes";
+    },
+  });
+  run(store, 26, longMaterial(400));
+  await waitForResult(store, updates);
+  assert.equal(updates.length, 0);
+  assert.equal(calls.length, 3, "stops at the blank part; no merge");
+  assert.equal(store.consumeErrorEvents()[0].message, "Model returned no text");
 });
 
 test("cancelling a refused part prevents its first recursive retry", async (t) => {
@@ -289,7 +361,7 @@ test("speaker attribution survives packing and an overflow retry", async (t) => 
   const { store, calls, updates } = await loadStore(t, {
     failFirst: true,
     processText: (text, config) => {
-      if (config.maxTokens === 2048 && !refused) {
+      if (config.maxTokens !== 4096 && !refused) {
         refused = true;
         throw overflow();
       }
@@ -301,6 +373,10 @@ test("speaker attribution survives packing and an overflow retry", async (t) => 
   await waitForResult(store, updates);
   assert.equal(updates.length, 1);
   for (const call of calls.slice(1, -1)) assert.match(call.text, /\nBob: /);
+  // The halves share the refused part's allowance so the merge still fits.
+  const refusedAllowance = calls[1].config.maxTokens;
+  assert.equal(calls[2].config.maxTokens, Math.ceil(refusedAllowance / 2));
+  assert.equal(calls[3].config.maxTokens, Math.ceil(refusedAllowance / 2));
 });
 
 test("a conservative overestimate preserves the original request when the model accepts it", async (t) => {
@@ -460,7 +536,7 @@ test("an unbroken CJK part rejected by the tokenizer is split and merged without
     },
   });
   const body = "𠀀".repeat(14000);
-  run(store, 15, { notes: body, meetingContext: "", transcript: "" }, { isMeetingNote: false });
+  run(store, 15, { notes: "", meetingContext: "", transcript: body }, { isMeetingNote: false });
   await waitForResult(store, updates);
   assert.equal(updates.length, 1);
   assert.equal(accepted.join(""), body);
@@ -538,13 +614,16 @@ test("re-running a note right after cancelling it never revives the cancelled ru
   );
 });
 
-test("the whole-note request and the merge refuse a reply the window clipped", async (t) => {
+// Only the whole-note request may trade a clipped reply for the parts route.
+// Once the note is in parts there is no better route left, so a clipped merge
+// is saved as it was before #2155 rather than refused after minutes of work.
+test("only the whole-note request refuses a reply the window clipped", async (t) => {
   const { store, calls, updates } = await loadStore(t, { failFirst: true });
   run(store, 23, longMaterial(400));
   await waitForResult(store, updates);
   assert.equal(updates.length, 1);
   assert.equal(calls[0].config.refuseClippedByWindow, true);
-  assert.equal(calls.at(-1).config.refuseClippedByWindow, true);
+  for (const call of calls.slice(1)) assert.equal(call.config.refuseClippedByWindow, false);
   assert.equal(calls.at(-1).config.maxTokens, 4096);
 });
 
@@ -561,7 +640,13 @@ test("a transcript without speaker labels is packed without a prose prefix", asy
   assert.equal(updates.length, 1);
   const parts = calls.slice(1, -1);
   assert.ok(parts.length > 1);
-  assert.equal(parts.map((call) => call.text).join("").split("Meeting at 10:").length - 1, 1);
+  assert.equal(
+    parts
+      .map((call) => call.text)
+      .join("")
+      .split("Meeting at 10:").length - 1,
+    1
+  );
 });
 
 test("parts never spend their output budget on thinking", async (t) => {
@@ -599,8 +684,35 @@ test("manual notes that cannot fit the final pass are refused before any part ru
   assert.equal(error.messageKey, "models.errors.contextTooLargeGeneric");
 });
 
-test("a long plain note is condensed as a document, not as a meeting", async (t) => {
-  const { store, calls, updates } = await loadStore(t, { failFirst: true });
+// A plain note has no parts route, so the trade the whole-note request makes
+// for a recording (refuse a reply the window clipped, summarise in parts) would
+// only turn a clipped save into a refusal. It keeps main's behaviour instead.
+test("a plain note saves a reply the window clipped rather than refusing it", async (t) => {
+  const { store, calls, updates } = await loadStore(t, { budget: BIG_BUDGET });
+  const notes = "The proposal argues that the migration should wait for the audit.\n".repeat(60);
+  store.runBackgroundAction(
+    28,
+    notes,
+    "hash",
+    ACTION,
+    {
+      modelId: "qwen3.5-9b-q4_k_m",
+      isCloudMode: false,
+      material: { notes, meetingContext: "", transcript: "" },
+    },
+    LABELS
+  );
+  await waitForResult(store, updates);
+  assert.equal(updates.length, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].config.refuseClippedByWindow, false);
+});
+
+// The store cannot tell "summarise" from "fix the grammar"; condensing a plain
+// note into working notes and then applying an edit-style action to those
+// would silently replace the user's text with a digest of it.
+test("a long plain note keeps the translated refusal instead of being condensed", async (t) => {
+  const { store, calls, updates, budgetCalls } = await loadStore(t, { failFirst: true });
   const notes = "The proposal argues that the migration should wait for the audit.\n".repeat(600);
   store.runBackgroundAction(
     24,
@@ -615,12 +727,8 @@ test("a long plain note is condensed as a document, not as a meeting", async (t)
     LABELS
   );
   await waitForResult(store, updates);
-  assert.equal(updates.length, 1);
-  const parts = calls.slice(1, -1);
-  assert.ok(parts.length > 1);
-  for (const call of parts) {
-    assert.match(call.config.systemPrompt, /document/);
-    assert.doesNotMatch(call.config.systemPrompt, /speaker|Decisions|Action Items/);
-    assert.match(call.text, /^## Notes \(part \d+ of \d+\)\n/);
-  }
+  assert.equal(updates.length, 0);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(budgetCalls, []);
+  assert.equal(store.consumeErrorEvents()[0].message, "too big");
 });

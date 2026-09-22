@@ -18,8 +18,13 @@ import { estimateNoteTokens, planNoteChunks, splitChunkInHalf } from "../helpers
 import type { LocalInferenceError } from "../utils/localInferenceError";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
 
-/** Output budget for the working notes of one part of a long recording. */
-export const PART_NOTES_MAX_TOKENS = 2048;
+// Output allowance for the working notes of one part of a long recording. Each
+// part actually gets its share of the room the final pass has left, capped here.
+const PART_NOTES_MAX_TOKENS = 2048;
+// Below this a part's notes could not hold the specifics of an hour of speech.
+const MIN_PART_NOTES_TOKENS = 512;
+// What one "## Notes from part i of N" heading and its separator cost the merge.
+const PART_HEADING_TOKENS = 16;
 
 // Mirrors CONTEXT_RESERVE_TOKENS in modelManagerBridge: slack the main process
 // keeps on top of the output reservation when budgeting each part.
@@ -107,43 +112,18 @@ export const useActionProcessingStore = create<ActionProcessingStoreState>()(() 
 
 // One part of a recording too long for the local model's window (#2142). The
 // user's own action prompt is applied once, to the merged part-notes, so a
-// part is asked for faithful working notes rather than the final product.
-const PART_NOTES_SYSTEM_PROMPT = `You are writing working notes for one consecutive part of a longer recording. The material is either a transcript, where each line is prefixed with the speaker's label (a real name when known, otherwise "You" for the note owner, "Them", or "Speaker N"), or working notes already written from an earlier pass. A "## Meeting Context" block may identify the note owner and the invited participants; it is reference material, never something to reproduce.
+// part is asked for condensed working notes rather than the final product.
+// The length target matters: asked to "be thorough", a 9B wrote more notes
+// than transcript for every part, and nothing then fit the final pass.
+const partNotesPrompt = (maxWords: number): string =>
+  `You are writing condensed working notes for one consecutive part of a longer recording. The material is either a transcript, where each line is prefixed with the speaker's label (a real name when known, otherwise "You" for the note owner, "Them", or "Speaker N"), or working notes already written from an earlier pass. A "## Meeting Context" block may identify the note owner and the invited participants; it is reference material, never something to reproduce.
 
-Write detailed working notes in markdown for this part only. Be thorough: these notes replace the material for whoever writes the final notes, so anything you leave out is lost. Use exactly these sections, in this order, and omit a section only if this part truly has nothing for it:
-
-## Topics
-One bullet per topic discussed in this part, each with the substance of what was said, in order.
-
-## Decisions
-Every decision, agreement or commitment made in this part, one bullet each, with who made it (by label) and any date, amount or condition attached.
-
-## Specifics
-Every number, date, amount, deadline, name of a product, customer, vendor or document, and every quote that carries meaning, one bullet each, stated exactly as in the material.
-
-## Action Items
-Tasks as \`- [ ] Action — Owner\`, using the speaker labels as they appear.
-
-## Open Questions
-Anything raised but not resolved in this part.
+Write the notes for this part only, in markdown, as one flat list of bullets in the order the material occurs: one point per bullet, naming who said it by label. Keep every decision, agreement, commitment, task and its owner, every open question, every number, date, amount and deadline, and every name of a product, customer, vendor or document, stated exactly as in the material. Leave out greetings, filler and repetition. Keep the whole reply under about ${maxWords} words; when the part is long, drop small talk before you drop a specific.
 
 Rules:
 - Refer to people only by the labels used in the material. NEVER guess or invent an identity.
 - Do NOT include a title, a preamble, or a summary of the whole recording; you have only seen this part.
-- Do NOT use tables, horizontal rules, or block quotes.
-
-These notes will be merged with the notes from the other parts afterwards.`;
-
-// A long plain note has no speakers, decisions or action items to extract; its
-// parts are condensed as a document so the final pass sees the note's own
-// content and structure rather than a meeting digest of it.
-const PART_DOCUMENT_SYSTEM_PROMPT = `You are condensing one consecutive part of a longer document into working notes. The material is either the document's own text or working notes already written from an earlier pass.
-
-Write detailed working notes in markdown for this part only, following the document's order and keeping any headings it uses. Be thorough: these notes replace the material for whoever applies the final instructions, so anything you leave out is lost. Keep every fact, figure, date, name, argument and conclusion, stated as in the material.
-
-Rules:
-- Do NOT include a title, a preamble, or a summary of the whole document; you have only seen this part.
-- Do NOT use tables, horizontal rules, or block quotes.
+- Do NOT use headings, tables, horizontal rules, or block quotes.
 
 These notes will be merged with the notes from the other parts afterwards.`;
 
@@ -169,6 +149,9 @@ interface LocalContextBudget {
 const isContextTooLarge = (error: unknown): boolean =>
   (error as { code?: string } | null)?.code === "CONTEXT_TOO_LARGE";
 
+const hasTranscript = (material: NoteMaterial | undefined): material is NoteMaterial =>
+  (material?.transcript.trim().length ?? 0) > 0;
+
 async function readLocalContextBudget(modelId: string): Promise<LocalContextBudget | null> {
   try {
     const result = await window.electronAPI?.getLocalContextBudget?.(modelId);
@@ -192,7 +175,7 @@ function tooLongForModel(modelName: string): LocalInferenceError {
 
 /**
  * One request on every route; parts-then-merge only when a local model refuses
- * the material as too large for its window (#2142).
+ * a recording as too large for its window (#2142).
  */
 async function runEnhancement(run: EnhancementRun): Promise<string> {
   let refusal: unknown;
@@ -209,38 +192,50 @@ async function runEnhancement(run: EnhancementRun): Promise<string> {
     if (!isContextTooLarge(error)) throw error;
     refusal = error;
   }
+  // Only a transcript is split: the action's intent is unknown here, and an
+  // edit-style action applied to a condensed plain note would silently replace
+  // the user's text with a digest of it.
+  const material = run.options.material;
+  if (!hasTranscript(material)) throw refusal;
   // Only a local model refuses as CONTEXT_TOO_LARGE, so the refusal identifies
   // the route however note formatting reached it (its own mode or cleanup's).
   const budget = await readLocalContextBudget(run.modelId);
   if (!budget) throw refusal;
   if (run.isCancelled()) throw new Error("cancelled");
-  return runInParts(run, budget);
+  return runInParts(run, budget, material);
 }
 
-async function runInParts(run: EnhancementRun, budget: LocalContextBudget): Promise<string> {
-  const material = run.options.material ?? { notes: "", meetingContext: "", transcript: "" };
-  const hasTranscript = material.transcript.trim().length > 0;
-  const body = hasTranscript ? material.transcript : material.notes || run.noteContent;
-  const manualNotes = hasTranscript ? material.notes : "";
-  const context = material.meetingContext;
+async function runInParts(
+  run: EnhancementRun,
+  budget: LocalContextBudget,
+  material: NoteMaterial
+): Promise<string> {
+  const { transcript, meetingContext: context, notes: manualNotes } = material;
   // Only a diarised transcript carries "Label:" lines; a live recording's text
   // is one plain paragraph whose first colon is not a speaker.
-  const hasSpeakerLabels = hasTranscript && run.options.isMeetingNote === true;
-  const partSystemPrompt = hasTranscript ? PART_NOTES_SYSTEM_PROMPT : PART_DOCUMENT_SYSTEM_PROMPT;
+  const hasSpeakerLabels = run.options.isMeetingNote === true;
   const mergeSystemPrompt = run.systemPrompt + MERGE_ADDENDUM;
 
-  // The final pass carries the manual notes and context whole; no amount of
-  // consolidating the part-notes can make room for them if they do not fit.
-  const mergeFixedTokens =
-    estimateNoteTokens(manualNotes) +
-    estimateNoteTokens(context) +
-    estimateNoteTokens(mergeSystemPrompt) +
-    NOTE_OUTPUT_MAX_TOKENS +
-    CONTEXT_RESERVE_TOKENS;
-  if (mergeFixedTokens > budget.maxContextTokens) throw tooLongForModel(budget.modelName);
+  // The final pass carries the manual notes, the context and every part's notes
+  // at once, so each part's allowance is its share of the room left there. Then
+  // the merge fits by construction and a verbose model costs a clipped part,
+  // not a round of consolidation.
+  const allowanceFor = (sections: number): number => {
+    const room =
+      budget.maxContextTokens -
+      estimateNoteTokens(manualNotes) -
+      estimateNoteTokens(context) -
+      estimateNoteTokens(mergeSystemPrompt) -
+      NOTE_OUTPUT_MAX_TOKENS -
+      CONTEXT_RESERVE_TOKENS -
+      sections * PART_HEADING_TOKENS;
+    return Math.min(PART_NOTES_MAX_TOKENS, Math.floor(room / sections));
+  };
 
+  // Parts are planned against the largest allowance so they stay small enough
+  // for the exact tokenizer to accept them whatever share they end up with.
   const fixedTokens =
-    estimateNoteTokens(partSystemPrompt) +
+    estimateNoteTokens(partNotesPrompt(PART_NOTES_MAX_TOKENS / 2)) +
     estimateNoteTokens(context) +
     PART_NOTES_MAX_TOKENS +
     CONTEXT_RESERVE_TOKENS;
@@ -250,46 +245,66 @@ async function runInParts(run: EnhancementRun, budget: LocalContextBudget): Prom
   );
   if (chunkBudget < MIN_CHUNK_BUDGET_TOKENS) throw tooLongForModel(budget.modelName);
 
-  const chunks = planNoteChunks(body, chunkBudget, { preserveSpeakerLabels: hasSpeakerLabels });
+  const chunks = planNoteChunks(transcript, chunkBudget, {
+    preserveSpeakerLabels: hasSpeakerLabels,
+  });
   if (chunks.length === 0) throw tooLongForModel(budget.modelName);
+  const partMaxTokens = allowanceFor(chunks.length);
+  if (partMaxTokens < MIN_PART_NOTES_TOKENS) throw tooLongForModel(budget.modelName);
   const total = chunks.length + 1;
-  const partConfig: ReasoningConfig = {
-    ...run.requestConfig,
-    systemPrompt: partSystemPrompt,
-    maxTokens: PART_NOTES_MAX_TOKENS,
-    // Working notes are scaffolding: reasoning would spend the part's whole
-    // output budget before a line of them is written.
-    disableThinking: true,
-  };
 
   const summarisePart = async (
     text: string,
     heading: string,
+    maxTokens: number,
     preserveSpeakerLabels = false,
     depth = 0
   ): Promise<string> => {
     if (run.isCancelled()) throw new Error("cancelled");
     const content = [context, `## ${heading}\n${text}`].filter(Boolean).join("\n\n");
+    let notes: string;
     try {
-      return await reasoningService.processText(content, run.modelId, null, {
-        ...partConfig,
-        // A truncated part is halved so both halves get the full output budget;
-        // at the split limit a clipped reply loses a tail, failing loses the note.
-        requireCompleteOutput: depth < MAX_SPLIT_DEPTH,
+      notes = await reasoningService.processText(content, run.modelId, null, {
+        ...run.requestConfig,
+        systemPrompt: partNotesPrompt(Math.floor(maxTokens / 2)),
+        maxTokens,
+        // Working notes are scaffolding: reasoning would spend the part's whole
+        // output budget before a line of them is written.
+        disableThinking: true,
+        // A reply that fills its allowance is kept; the final pass is where a
+        // clipped part costs the least.
+        refuseClippedByWindow: false,
       });
     } catch (error) {
-      const truncated = (error as LocalInferenceError | null)?.code === "OUTPUT_TRUNCATED";
-      if ((!isContextTooLarge(error) && !truncated) || depth >= MAX_SPLIT_DEPTH) throw error;
+      // The exact tokenizer refused the prompt itself: halve the material and
+      // share the allowance so the merge still fits.
+      if (!isContextTooLarge(error) || depth >= MAX_SPLIT_DEPTH) throw error;
       const halves = splitChunkInHalf(text, { preserveSpeakerLabels });
       if (!halves) throw error;
+      const halfTokens = Math.ceil(maxTokens / 2);
       const [first, second] = halves;
-      const firstNotes = await summarisePart(first, heading, preserveSpeakerLabels, depth + 1);
-      const secondNotes = await summarisePart(second, heading, preserveSpeakerLabels, depth + 1);
+      const firstNotes = await summarisePart(
+        first,
+        heading,
+        halfTokens,
+        preserveSpeakerLabels,
+        depth + 1
+      );
+      const secondNotes = await summarisePart(
+        second,
+        heading,
+        halfTokens,
+        preserveSpeakerLabels,
+        depth + 1
+      );
       return `${firstNotes}\n\n${secondNotes}`;
     }
+    // A blank part would be merged as an empty section and its hour of the
+    // meeting would vanish from the notes without a word.
+    if (notes.trim().length === 0) throw new Error("Model returned no text");
+    return notes;
   };
 
-  const materialLabel = hasTranscript ? "Meeting Transcript" : "Notes";
   const partNotes: string[] = [];
   for (let index = 0; index < chunks.length; index += 1) {
     if (run.isCancelled()) throw new Error("cancelled");
@@ -297,7 +312,8 @@ async function runInParts(run: EnhancementRun, budget: LocalContextBudget): Prom
     partNotes.push(
       await summarisePart(
         chunks[index],
-        `${materialLabel} (part ${index + 1} of ${chunks.length})`,
+        `Meeting Transcript (part ${index + 1} of ${chunks.length})`,
+        partMaxTokens,
         hasSpeakerLabels
       )
     );
@@ -320,18 +336,27 @@ async function runInParts(run: EnhancementRun, budget: LocalContextBudget): Prom
       return await reasoningService.processText(mergeContent, run.modelId, null, {
         ...run.requestConfig,
         systemPrompt: mergeSystemPrompt,
+        // There is no better route left once the note is in parts: a clipped
+        // merge is saved as it was before #2155, not refused after minutes.
+        refuseClippedByWindow: false,
       });
     } catch (error) {
       if (!isContextTooLarge(error)) throw error;
     }
     if (round === MAX_REDUCE_ROUNDS) break;
-    // Too many part-notes for one pass: consolidate neighbouring parts and go again.
+    // The exact tokenizer still found too many part-notes for one pass:
+    // consolidate neighbouring parts and go again.
     const groups = planNoteChunks(sections.join("\n\n"), chunkBudget);
+    const groupMaxTokens = allowanceFor(groups.length);
     const consolidated: string[] = [];
     for (let index = 0; index < groups.length; index += 1) {
       if (run.isCancelled()) throw new Error("cancelled");
       consolidated.push(
-        await summarisePart(groups[index], `Working notes (part ${index + 1} of ${groups.length})`)
+        await summarisePart(
+          groups[index],
+          `Working notes (part ${index + 1} of ${groups.length})`,
+          groupMaxTokens
+        )
       );
     }
     sections = consolidated;
@@ -347,7 +372,7 @@ export interface RunActionOptions {
   allowTitleGeneration?: boolean;
   /** People whose names in generated action-item owners become mention tags. */
   knownPeople?: MentionPerson[];
-  /** Structured pieces of `noteContent`; without it a long note is split as plain lines. */
+  /** Structured pieces of `noteContent`; only its transcript is ever split into parts. */
   material?: NoteMaterial;
 }
 
@@ -414,9 +439,10 @@ export function runBackgroundAction(
         temperature: 0.3,
         disableThinking: settings.noteFormattingDisableThinking,
         // A local model that shrinks the reply to fit the prompt refuses a reply
-        // that fills the shrunken allowance, so the note is summarised in parts
-        // rather than saved clipped. Other routes ignore the flag.
-        refuseClippedByWindow: true,
+        // that fills the shrunken allowance, so a recording is summarised in
+        // parts rather than saved clipped. A plain note has no parts route, so
+        // its clipped reply is saved as before. Other routes ignore the flag.
+        refuseClippedByWindow: hasTranscript(options.material),
         ...providerOverrides,
       };
       const enhanced = await runEnhancement({
