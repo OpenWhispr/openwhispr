@@ -1,10 +1,9 @@
-import { api, ApiError } from '@/lib/apiClient';
+import { api } from '@/lib/apiClient';
 import type {
   AccessPrincipalSuggestion,
   CreateAccessGrantInput,
-  CreateInvitationsResponse,
+  ExternalSharingMode,
   NoteAccessGrant,
-  NoteAccessState,
   NotePermission,
   RotateTokenResponse,
   ShareMutationResponse,
@@ -27,14 +26,17 @@ export async function getNoteShareState(
   remoteId: string,
   options?: NoteSharingRequestOptions,
 ): Promise<ShareStateResponse> {
-  const state = await api.get<ShareStateResponse>(sharePath(remoteId), options);
-  if (state.access) return state;
-  try {
-    return { ...state, access: await getNoteAccessState(remoteId, options) };
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 404) return state;
-    throw error;
-  }
+  return api.get<ShareStateResponse>(sharePath(remoteId), options);
+}
+
+/** The strictest external-sharing mode across the caller's workspaces; the server still enforces it. */
+export async function getExternalSharingMode(
+  options?: NoteSharingRequestOptions,
+): Promise<ExternalSharingMode> {
+  const { data } = await api.get<{
+    data: { managed: boolean; policy: { sharing: { externalLinkSharing: ExternalSharingMode } } };
+  }>('/api/workspace-policy', options);
+  return data.managed ? data.policy.sharing.externalLinkSharing : 'allowed';
 }
 
 export async function setNoteShareVisibility(
@@ -62,13 +64,6 @@ export async function replaceNoteShareToken(
   options?: NoteSharingRequestOptions,
 ): Promise<RotateTokenResponse> {
   return api.post<RotateTokenResponse>(sharePath(remoteId, '/rotate-token'), undefined, options);
-}
-
-export async function getNoteAccessState(
-  remoteId: string,
-  options?: NoteSharingRequestOptions,
-): Promise<NoteAccessState> {
-  return api.get<NoteAccessState>(accessPath(remoteId), options);
 }
 
 export async function searchNoteAccessPrincipals(
@@ -111,18 +106,6 @@ export async function removeNoteAccessGrant(
   await api.delete<void>(
     accessPath(remoteId, `/grants/${encodeURIComponent(grantId)}`),
     undefined,
-    options,
-  );
-}
-
-export async function inviteNoteEmails(
-  remoteId: string,
-  emails: string[],
-  options?: NoteSharingRequestOptions,
-): Promise<CreateInvitationsResponse> {
-  return api.post<CreateInvitationsResponse>(
-    sharePath(remoteId, '/invitations'),
-    { emails },
     options,
   );
 }

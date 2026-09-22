@@ -842,7 +842,6 @@ export default function NoteEditorScreen() {
       {shareVisible ? (
         <NoteShareSheet
           noteId={noteId}
-          visible
           onClose={() => setShareVisible(false)}
           onFlushDraft={flushDraft}
           onExport={handleExport}

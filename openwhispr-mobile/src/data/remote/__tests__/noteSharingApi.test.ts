@@ -1,55 +1,65 @@
 jest.mock('@/lib/apiClient', () => ({
-  ApiError: class extends Error {
-    status: number;
-    constructor(message: string, errorStatus: number) {
-      super(message);
-      this.status = errorStatus;
-    }
-  },
   api: { get: jest.fn(), patch: jest.fn(), post: jest.fn(), delete: jest.fn() },
 }));
 
-import { api, ApiError } from '@/lib/apiClient';
+import { api } from '@/lib/apiClient';
 import {
   getNoteShareState,
   setNoteShareVisibility,
   disableNoteShare,
   replaceNoteShareToken,
-  getNoteAccessState,
+  getExternalSharingMode,
   searchNoteAccessPrincipals,
   createNoteAccessGrant,
   updateNoteAccessGrant,
   removeNoteAccessGrant,
-  inviteNoteEmails,
   revokeNoteInvitation,
   resendNoteInvitation,
 } from '../noteSharingApi';
 
 const mockApi = jest.mocked(api);
 const options = { signal: new AbortController().signal };
+const share = {
+  visibility: 'invited' as const,
+  token_prefix: 'ow_share_Ab_9-xY',
+  domain_allowlist: [],
+  updated_by_user_id: 'owner',
+  updated_at: '2026-09-22T00:00:00.000Z',
+};
 
 beforeEach(() => jest.clearAllMocks());
 
-it('gets share settings and access when absent in the response', async () => {
-  mockApi.get.mockResolvedValueOnce({ share: { visibility: 'link' }, invitations: [] });
-  mockApi.get.mockResolvedValueOnce({ grants: [] });
-  await expect(getNoteShareState('note/id', options)).resolves.toMatchObject({
-    access: { grants: [] },
-  });
-  expect(mockApi.get).toHaveBeenNthCalledWith(1, '/api/notes/note%2Fid/share', options);
-  expect(mockApi.get).toHaveBeenNthCalledWith(2, '/api/notes/note%2Fid/access', options);
+it('reads share settings, invitations, and access in one request', async () => {
+  const state = {
+    share,
+    invitations: [],
+    access: {
+      owner: { type: 'user', id: 'owner', email: 'o@x.com', name: null, image: null },
+      grants: [],
+      my_permission: 'owner',
+      can_manage_access: true,
+      can_manage_inherited_access: true,
+    },
+  };
+  mockApi.get.mockResolvedValueOnce(state);
+  await expect(getNoteShareState('note/id', options)).resolves.toBe(state);
+  expect(mockApi.get).toHaveBeenCalledTimes(1);
+  expect(mockApi.get).toHaveBeenCalledWith('/api/notes/note%2Fid/share', options);
 });
 
-it('keeps legacy share response only when ACL explicitly returns 404', async () => {
-  const state = { share: { visibility: 'link' }, invitations: [] };
-  mockApi.get.mockResolvedValueOnce(state).mockRejectedValueOnce(new ApiError('missing', 404));
-  await expect(getNoteShareState('id')).resolves.toEqual(state);
-  mockApi.get.mockResolvedValueOnce(state).mockRejectedValueOnce(new ApiError('blocked', 403));
-  await expect(getNoteShareState('id')).rejects.toMatchObject({ status: 403 });
+it('reads the organization external sharing mode, permissive when unmanaged', async () => {
+  const policy = (managed: boolean, mode: string) => ({
+    data: { managed, policy: { sharing: { externalLinkSharing: mode } }, policyUpdatedAt: null },
+  });
+  mockApi.get.mockResolvedValueOnce(policy(true, 'domain_only'));
+  await expect(getExternalSharingMode(options)).resolves.toBe('domain_only');
+  expect(mockApi.get).toHaveBeenCalledWith('/api/workspace-policy', options);
+  mockApi.get.mockResolvedValueOnce(policy(false, 'disabled'));
+  await expect(getExternalSharingMode()).resolves.toBe('allowed');
 });
 
 it('preserves returned raw token and writes expected share endpoints', async () => {
-  const response = { share: { visibility: 'link' }, raw_token: null };
+  const response = { share: { ...share, visibility: 'link' as const }, raw_token: null };
   mockApi.patch.mockResolvedValue(response);
   await expect(setNoteShareVisibility('note/id', 'link', [], options)).resolves.toEqual(response);
   expect(mockApi.patch).toHaveBeenCalledWith(
@@ -71,7 +81,6 @@ it('preserves returned raw token and writes expected share endpoints', async () 
 });
 
 it('routes ACL grants, principal search, and invitations with encoded ids', async () => {
-  await getNoteAccessState('note/id', options);
   await searchNoteAccessPrincipals('note/id', 'a+b', options);
   const input = {
     principal_type: 'email' as const,
@@ -81,10 +90,8 @@ it('routes ACL grants, principal search, and invitations with encoded ids', asyn
   await createNoteAccessGrant('note/id', input, options);
   await updateNoteAccessGrant('note/id', 'grant/id', 'editor', options);
   await removeNoteAccessGrant('note/id', 'grant/id', options);
-  await inviteNoteEmails('note/id', ['a@example.com'], options);
   await revokeNoteInvitation('note/id', 'inv/id', options);
   await resendNoteInvitation('note/id', 'inv/id', options);
-  expect(mockApi.get).toHaveBeenCalledWith('/api/notes/note%2Fid/access', options);
   expect(mockApi.get).toHaveBeenCalledWith(
     '/api/notes/note%2Fid/access/suggestions?q=a%2Bb',
     options,
@@ -98,11 +105,6 @@ it('routes ACL grants, principal search, and invitations with encoded ids', asyn
   expect(mockApi.delete).toHaveBeenCalledWith(
     '/api/notes/note%2Fid/access/grants/grant%2Fid',
     undefined,
-    options,
-  );
-  expect(mockApi.post).toHaveBeenCalledWith(
-    '/api/notes/note%2Fid/share/invitations',
-    { emails: ['a@example.com'] },
     options,
   );
   expect(mockApi.delete).toHaveBeenCalledWith(

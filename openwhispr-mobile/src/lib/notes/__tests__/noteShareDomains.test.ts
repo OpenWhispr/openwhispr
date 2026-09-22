@@ -9,3 +9,8 @@ it('classifies desktop personal domains exactly', () => {
   expect(isPersonalEmailDomain('GMAIL.COM')).toBe(true);
   expect(isPersonalEmailDomain('example.com')).toBe(false);
 });
+
+it('treats Apple relay addresses as personal like the server does', () => {
+  expect(isPersonalEmailDomain('privaterelay.appleid.com')).toBe(true);
+  expect(isPersonalEmailDomain('private.icloud.com')).toBe(true);
+});

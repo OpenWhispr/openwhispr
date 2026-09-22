@@ -3,6 +3,7 @@ import { Buffer } from 'buffer';
 import { getNoteShareViewerBaseUrl } from '@/config/noteSharing';
 
 const FULL_TOKEN = /^ow_share_[A-Za-z0-9_-]{32}$/;
+const TOKEN_PREFIX = /^ow_share_[A-Za-z0-9_-]{7}$/;
 const ACCOUNT_PREFIX = 'openwhispr.noteShares.';
 const accountQueues = new Map<string, Promise<void>>();
 const accountEpochs = new Map<string, number>();
@@ -112,4 +113,10 @@ export async function clearNoteShareTokens(userId: string): Promise<void> {
 export function buildNoteShareUrl(token: string): string {
   if (!FULL_TOKEN.test(token)) throw new Error('Invalid note share token');
   return `${getNoteShareViewerBaseUrl()}/n/${token}`;
+}
+
+/** The sign-in link invitation emails carry; it opens for invited people and needs no full token. */
+export function buildNoteInviteUrl(prefix: string): string {
+  if (!TOKEN_PREFIX.test(prefix)) throw new Error('Invalid note share token prefix');
+  return `${getNoteShareViewerBaseUrl()}/invite/${prefix}`;
 }

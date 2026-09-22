@@ -1,3 +1,5 @@
+// Mirrors PERSONAL_EMAIL_DOMAINS in the API's lib/personal-email-domains.ts, which rejects these
+// as domain allowlists; an entry missing here offers an organization option the server refuses.
 const PERSONAL_EMAIL_DOMAINS = new Set<string>([
   'gmail.com',
   'googlemail.com',
@@ -12,6 +14,8 @@ const PERSONAL_EMAIL_DOMAINS = new Set<string>([
   'icloud.com',
   'me.com',
   'mac.com',
+  'privaterelay.appleid.com',
+  'private.icloud.com',
   'proton.me',
   'protonmail.com',
   'pm.me',

@@ -1,6 +1,8 @@
 export type ShareVisibility = 'private' | 'link' | 'domain' | 'invited';
 export type NotePermission = 'owner' | 'editor' | 'viewer';
-export type NoteAccessPrincipalType = 'user' | 'email' | 'team' | 'folder' | 'workspace';
+// 'space' only appears on synthetic `scope:` rows for team-space membership.
+export type NoteAccessPrincipalType = 'user' | 'email' | 'team' | 'space' | 'folder' | 'workspace';
+export type ExternalSharingMode = 'allowed' | 'domain_only' | 'disabled';
 
 export interface NoteAccessPrincipal {
   type: NoteAccessPrincipalType;
@@ -15,7 +17,7 @@ export interface NoteAccessGrant {
   id: string;
   principal: NoteAccessPrincipal;
   permission: Exclude<NotePermission, 'owner'>;
-  source: 'direct' | 'team' | 'folder' | 'workspace';
+  source: 'direct' | 'team' | 'space' | 'folder' | 'workspace';
   inherited: boolean;
   pending: boolean;
   created_at: string;
@@ -41,7 +43,8 @@ export interface ShareSettings {
 export interface NoteShareInvitation {
   id: string;
   email: string;
-  invited_by_user_id: string;
+  invited_by_user_id: string | null;
+  permission: Exclude<NotePermission, 'owner'>;
   accepted_at: string | null;
   revoked_at: string | null;
   last_emailed_at: string | null;
@@ -51,7 +54,7 @@ export interface NoteShareInvitation {
 export interface ShareStateResponse {
   share: ShareSettings;
   invitations: NoteShareInvitation[];
-  access?: NoteAccessState;
+  access: NoteAccessState;
 }
 
 export interface ShareMutationResponse {
@@ -62,12 +65,6 @@ export interface ShareMutationResponse {
 export interface RotateTokenResponse {
   share: ShareSettings;
   raw_token: string;
-}
-
-export interface CreateInvitationsResponse {
-  created: NoteShareInvitation[];
-  already_invited: string[];
-  email_failed_ids: string[];
 }
 
 export interface AccessPrincipalSuggestion extends NoteAccessPrincipal {

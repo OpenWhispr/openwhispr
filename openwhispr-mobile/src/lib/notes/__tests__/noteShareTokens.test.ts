@@ -16,6 +16,7 @@ import {
   removeNoteShareToken,
   clearNoteShareTokens,
   buildNoteShareUrl,
+  buildNoteInviteUrl,
 } from '../noteShareTokens';
 
 const token = `ow_share_${'A'.repeat(32)}`;
@@ -36,6 +37,14 @@ it('rejects malformed tokens without writing them', async () => {
   await expect(saveNoteShareToken('user', 'note', 'ow_share_short')).rejects.toThrow();
   expect(mockStored.size).toBe(0);
   expect(() => buildNoteShareUrl('ow_share_short')).toThrow();
+});
+
+it('builds the invitation link from the server token prefix', () => {
+  expect(buildNoteInviteUrl('ow_share_Ab_9-xY')).toBe(
+    'https://notes.openwhispr.com/invite/ow_share_Ab_9-xY',
+  );
+  expect(() => buildNoteInviteUrl(token)).toThrow();
+  expect(() => buildNoteInviteUrl('ow_share_ab')).toThrow();
 });
 
 it('removes a token when the server prefix changes', async () => {
