@@ -7,7 +7,7 @@ jest.mock('@/store/useConfigStore', () => ({
 
 jest.mock('@/utils/onboarding', () => ({
   FIRST_ONBOARDING_STEP: 'get-started',
-  ONBOARDING_VERSION: 2,
+  ONBOARDING_VERSION: 3,
   OnboardingService: {
     isOnboardingComplete: jest.fn(),
     getProgress: jest.fn(),
@@ -42,7 +42,7 @@ beforeEach(() => {
   useOnboardingStore.setState({
     hydrated: true,
     finished: false,
-    currentStep: 'voice-agent',
+    currentStep: 'tone',
     tutorialCompleted: false,
     keyboardInstalled: true,
     permissionsGranted: {
@@ -54,7 +54,7 @@ beforeEach(() => {
 
 describe('useOnboardingStore AppsFlyer events', () => {
   it('logs tutorial completion when leaving the tone preview with the setup state', async () => {
-    await useOnboardingStore.getState().goNext('voice-agent');
+    await useOnboardingStore.getState().goNext('tone');
 
     expect(useOnboardingStore.getState().currentStep).toBe('privacy-mode');
     expect(mockLogTutorialCompletion).toHaveBeenCalledWith({
@@ -64,8 +64,8 @@ describe('useOnboardingStore AppsFlyer events', () => {
   });
 
   it('logs it once, not again on the duplicate callbacks', async () => {
-    await useOnboardingStore.getState().goNext('voice-agent');
-    await useOnboardingStore.getState().goNext('voice-agent');
+    await useOnboardingStore.getState().goNext('tone');
+    await useOnboardingStore.getState().goNext('tone');
 
     expect(useOnboardingStore.getState().currentStep).toBe('privacy-mode');
     expect(mockLogTutorialCompletion).toHaveBeenCalledTimes(1);

@@ -18,6 +18,7 @@ export type OnboardingStepId =
   | 'keyboard-switch'
   | 'dictation-email'
   | 'voice-agent'
+  | 'tone'
   | 'privacy-mode'
   | 'paywall'
   | 'language'
@@ -36,6 +37,7 @@ export const STEP_ORDER: readonly OnboardingStepId[] = [
   'keyboard-switch',
   'dictation-email',
   'voice-agent',
+  'tone',
   'privacy-mode',
   'paywall',
   'language',
@@ -57,7 +59,8 @@ const UNCOUNTED_STEPS = new Set<OnboardingStepId>([
 ]);
 const BACK_DESTINATIONS: Partial<Record<OnboardingStepId, OnboardingStepId>> = {
   'voice-agent': 'dictation-email',
-  'privacy-mode': 'voice-agent',
+  tone: 'voice-agent',
+  'privacy-mode': 'tone',
   language: 'privacy-mode',
   'private-download': 'language',
 };
@@ -160,7 +163,9 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
       let step = STEP_ORDER.includes(progress.step as OnboardingStepId)
         ? (progress.step as OnboardingStepId)
         : FIRST_ONBOARDING_STEP;
-      const legacy = progress.version !== ONBOARDING_VERSION;
+      const legacy = (progress.version ?? 1) < 2;
+      // Version 2 used this identifier for the combined agent/tone preview.
+      if (progress.version === 2 && step === 'voice-agent') step = 'tone';
       const pastChoice =
         legacy &&
         [
@@ -202,7 +207,7 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
       const route = getOnboardingRoute(state.selectedMode);
       const next = from === 'paywall' ? state.paywallNextStep : route[route.indexOf(from) + 1];
       if (!next || from === 'graduation') return;
-      const completesTutorial = from === 'voice-agent' && !state.tutorialCompleted;
+      const completesTutorial = from === 'tone' && !state.tutorialCompleted;
       await transition(from, {
         currentStep: next,
         paywallHandled: state.paywallHandled || from === 'paywall',

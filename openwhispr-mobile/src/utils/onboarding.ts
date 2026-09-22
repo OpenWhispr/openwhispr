@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import type { OnboardingStepId } from '@/store/useOnboardingStore';
 import type { ProcessingMode } from '@/types';
 
-export const ONBOARDING_VERSION = 2;
+export const ONBOARDING_VERSION = 3;
 
 const ONBOARDING_COMPLETE_KEY = 'onboarding_complete';
 const ONBOARDING_PROGRESS_KEY = 'onboarding_progress';

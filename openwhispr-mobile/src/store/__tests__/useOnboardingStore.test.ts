@@ -8,7 +8,7 @@ jest.mock('@/store/useConfigStore', () => ({
 }));
 jest.mock('@/utils/onboarding', () => ({
   FIRST_ONBOARDING_STEP: 'get-started',
-  ONBOARDING_VERSION: 2,
+  ONBOARDING_VERSION: 3,
   OnboardingService: {
     isOnboardingComplete: jest.fn(),
     completeOnboarding: jest.fn(),
@@ -158,18 +158,47 @@ it('does not restart completed installs', async () => {
 });
 
 it('counts only teaching screens and counts the local download once', () => {
-  expect(getStepProgress('microphone', 'cloud')).toEqual({ current: 1, total: 8 });
-  expect(getStepProgress('notifications', 'cloud')).toEqual({ current: 8, total: 8 });
-  expect(getStepProgress('private-download', 'private')).toEqual({ current: 8, total: 9 });
-  expect(getStepProgress('notifications', 'private')).toEqual({ current: 9, total: 9 });
+  expect(getStepProgress('voice-agent', 'cloud')).toEqual({ current: 5, total: 9 });
+  expect(getStepProgress('tone', 'cloud')).toEqual({ current: 6, total: 9 });
+  expect(getStepProgress('microphone', 'cloud')).toEqual({ current: 1, total: 9 });
+  expect(getStepProgress('notifications', 'cloud')).toEqual({ current: 9, total: 9 });
+  expect(getStepProgress('private-download', 'private')).toEqual({ current: 9, total: 10 });
+  expect(getStepProgress('notifications', 'private')).toEqual({ current: 10, total: 10 });
   expect(getStepProgress('paywall', 'cloud')).toBeUndefined();
+});
+
+it.each([
+  ['voice-agent', 'tone'],
+  ['privacy-mode', 'privacy-mode'],
+  ['paywall', 'paywall'],
+  ['graduation', 'graduation'],
+] as const)('preserves version 2 progress at %s as %s', async (step, expected) => {
+  service.getProgress.mockResolvedValue({
+    version: 2,
+    step,
+    selectedMode: 'private',
+    paywallHandled: false,
+    paywallNextStep: 'notifications',
+    keyboardInstalled: true,
+    permissionsGranted: { microphone: true, notifications: false },
+  });
+  await useOnboardingStore.getState().hydrate();
+  expect(useOnboardingStore.getState()).toMatchObject({
+    currentStep: expected,
+    selectedMode: 'private',
+    paywallHandled: false,
+    paywallNextStep: 'notifications',
+  });
 });
 
 it('completes teaching once at the preview, but only finishes onboarding at graduation', async () => {
   await useOnboardingStore.getState().goToStep('voice-agent');
   await useOnboardingStore.getState().goNext('voice-agent');
+  expect(useOnboardingStore.getState().currentStep).toBe('tone');
+  expect(logTutorialCompletion).not.toHaveBeenCalled();
+  await useOnboardingStore.getState().goNext('tone');
   await useOnboardingStore.getState().goBack('privacy-mode');
-  await useOnboardingStore.getState().goNext('voice-agent');
+  await useOnboardingStore.getState().goNext('tone');
   expect(logTutorialCompletion).toHaveBeenCalledTimes(1);
   await useOnboardingStore.getState().goToStep('tracking-permission');
   await useOnboardingStore.getState().goNext('tracking-permission');
@@ -207,6 +236,7 @@ it('keeps resolved offers and confirmed choices across a relaunch and backward n
   await useOnboardingStore.getState().hydrate();
   await useOnboardingStore.getState().goBack('language');
   await useOnboardingStore.getState().goBack('privacy-mode');
+  await useOnboardingStore.getState().goBack('tone');
   await useOnboardingStore.getState().goBack('voice-agent');
   expect(useOnboardingStore.getState()).toMatchObject({
     currentStep: 'dictation-email',

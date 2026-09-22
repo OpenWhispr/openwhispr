@@ -2,6 +2,7 @@ import { useEffect, type ComponentType, type ReactElement } from 'react';
 import { View } from 'react-native';
 import { useOnboardingStore, type OnboardingStepId } from '@/store/useOnboardingStore';
 import { VoiceAgentStep } from './steps/VoiceAgentStep';
+import { ToneStep } from './steps/ToneStep';
 import { GetStartedStep } from './steps/GetStartedStep';
 import { SecurityFirstStep } from './steps/SecurityFirstStep';
 import { WelcomeStep } from './steps/WelcomeStep';
@@ -29,6 +30,7 @@ const STEP_COMPONENTS: Record<OnboardingStepId, ComponentType> = {
   microphone: MicrophoneStep,
   'dictation-email': DictationEmailStep,
   'voice-agent': VoiceAgentStep,
+  tone: ToneStep,
   'privacy-mode': PrivacyModeStep,
   'private-download': PrivateDownloadStep,
   language: LanguageStep,
