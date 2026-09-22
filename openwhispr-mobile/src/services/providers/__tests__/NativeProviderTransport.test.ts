@@ -34,7 +34,12 @@ it.each(['json', 'file'])(
   },
 );
 it.each(['json', 'file'])('sends the 300 second provider timeout for %s requests', async (kind) => {
-  mockRequest.mockResolvedValue({ status: 200, body: '{}', url: 'https://api.example.com', headers: {} });
+  mockRequest.mockResolvedValue({
+    status: 200,
+    body: '{}',
+    url: 'https://api.example.com',
+    headers: {},
+  });
   if (kind === 'json') await requestProviderNative('https://api.example.com', { method: 'GET' });
   else
     await requestProviderFileNative({
