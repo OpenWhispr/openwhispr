@@ -246,13 +246,20 @@ async function maybeRunAgentActionOnFusedResult(
       onSkipped(request.agentUnavailable);
       return undefined;
     }
+    // Same rule as cleanupTranscript: a Cloud agent route never takes the
+    // privacy hint, which would make ReasoningService demand local reasoning.
+    const agentMode = request.agentRoute?.mode;
+    const routing =
+      agentMode === 'providers' || agentMode === 'local'
+        ? { isPrivateNote: useProcessingModeStore.getState().activeMode === 'private' }
+        : undefined;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), AGENT_ACTION_TIMEOUT_MS);
     try {
       const response = await ReasoningService.processText({
         text: rawText,
         inferenceScope: 'agent',
-        routing: { isPrivateNote: useProcessingModeStore.getState().activeMode === 'private' },
+        ...(routing ? { routing } : {}),
         inferenceRoute: request.agentRoute,
         agentName,
         timeoutMs: AGENT_ACTION_TIMEOUT_MS,
@@ -370,7 +377,7 @@ async function processTranscriptionJob(
   lifecycle: DictationProcessingLifecycle = {},
 ): Promise<DictationProcessingResult> {
   const captured = snapshotTextInference(request.provider);
-  let pinnedRequest: TranscriptionRequest = {
+  const pinnedRequest: TranscriptionRequest = {
     ...request,
     cleanupRoute: request.cleanupRoute ?? captured.cleanupRoute,
     agentRoute: request.agentRoute ?? captured.agentRoute,
