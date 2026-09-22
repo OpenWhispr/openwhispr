@@ -171,8 +171,17 @@ export const ParakeetASR = {
     return NativeModule !== null;
   },
 
+  /**
+   * Whether this binary's native module can serve a version. JS can reach a binary older than
+   * itself through an OTA update, and binaries without `installFromArchive` reject 'orukeet'.
+   */
+  supportsVersion(version: ParakeetVersion): boolean {
+    if (!NativeModule) return false;
+    return version !== 'orukeet' || typeof NativeModule.installFromArchive === 'function';
+  },
+
   async isModelDownloaded(version: ParakeetVersion): Promise<boolean> {
-    return NativeModule ? NativeModule.isModelDownloaded(version) : false;
+    return this.supportsVersion(version) ? requireNative().isModelDownloaded(version) : false;
   },
 
   /** How to fetch a version: its HuggingFace tree, or its pinned archive (see ParakeetModelSpec). */
