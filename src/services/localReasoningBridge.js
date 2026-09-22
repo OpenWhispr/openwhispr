@@ -24,7 +24,10 @@ class LocalReasoningService {
     });
 
     if (this.isProcessing) {
-      throw new Error("Already processing a request");
+      // Typed so the renderer can translate it: a note summarised in parts
+      // holds this bridge for minutes, and whatever arrives meanwhile (another
+      // note's action, dictation cleanup) used to surface this text raw.
+      throw Object.assign(new Error("Already processing a request"), { code: "LOCAL_MODEL_BUSY" });
     }
 
     this.isProcessing = true;

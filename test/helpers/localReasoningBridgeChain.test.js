@@ -170,3 +170,25 @@ test("refuseClippedByWindow reaches runInference (the bridge rebuilds the config
   assert.equal(forwarded.length, 1);
   assert.equal(forwarded[0].refuseClippedByWindow, true);
 });
+
+test("a second request while one is in flight is refused with a typed code", async (t) => {
+  // A note summarised in parts holds the bridge for minutes; whatever arrives
+  // meanwhile (another note's action, dictation cleanup) must fail with a code
+  // the renderer can translate rather than the raw guard text.
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "ok"));
+  let release;
+  modelManager.runInference = () =>
+    new Promise((resolve) => {
+      release = () => resolve("first reply");
+    });
+
+  const first = bridge.processText("first", modelId, {});
+  await new Promise((resolve) => setImmediate(resolve));
+  await assert.rejects(bridge.processText("second", modelId, {}), (error) => {
+    assert.equal(error.code, "LOCAL_MODEL_BUSY");
+    return true;
+  });
+
+  release();
+  assert.equal(await first, "first reply");
+});
