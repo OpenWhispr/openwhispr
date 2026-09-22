@@ -106,6 +106,7 @@ struct ProviderRequestTransportTests {
     precondition(metadata?.encoded?.contains("synthetic-secret") == false)
     precondition(ProviderJobMetadata.decode(snapshot.replacingOccurrences(of: "https://api.openai.com/v1", with: "https://api.openai.com/v1?api_key=synthetic-secret")) == nil)
     precondition(ProviderJobMetadata.decode(snapshot.replacingOccurrences(of: "\"version\":1", with: "\"version\":2")) == nil)
+    precondition(ProviderJobMetadata.decode(snapshot.replacingOccurrences(of: "\"scope\":\"dictation\"", with: "\"scope\":\"meeting\"")) == nil, "Meeting routes are not a mobile BYOK scope")
     let contextSnapshot = snapshot.replacingOccurrences(of: "\"jobId\":\"original-job\"", with: "\"jobId\":\"original-job\",\"requestContext\":\"recording\"")
     precondition(ProviderJobMetadata.decode(contextSnapshot)?.resultEnvelope(text: "raw")?.contains("recording") == true)
     let suiteName = "ProviderRecoveryTests.\(UUID().uuidString)"

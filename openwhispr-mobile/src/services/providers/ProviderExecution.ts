@@ -34,7 +34,6 @@ export interface ProviderTranscriptionInput {
   language?: string;
   prompt?: string;
   routeSnapshot?: string;
-  jobId?: string;
   signal?: AbortSignal;
 }
 
@@ -54,11 +53,7 @@ export interface ProviderFileRequest {
 export interface ProviderExecutionDependencies {
   getCredential(reference: string): Promise<ProviderCredential | null>;
   fileSize(uri: string): Promise<number | undefined>;
-  request(
-    url: string,
-    init: RequestInit,
-    recovery?: { routeSnapshot?: string; recoveryAudioUri?: string },
-  ): Promise<Response>;
+  request(url: string, init: RequestInit): Promise<Response>;
   requestFile(input: ProviderFileRequest): Promise<Response>;
 }
 
@@ -472,9 +467,9 @@ export function createProviderExecution(
     const scope = createProviderCredentialScope(input.route.credentialRef, input.signal);
     const scoped: ProviderExecutionDependencies = {
       ...dependencies,
-      request: (url, init, recovery) => {
+      request: (url, init) => {
         scope.assertActive();
-        return dependencies.request(url, { ...init, signal: scope.signal }, recovery);
+        return dependencies.request(url, { ...init, signal: scope.signal });
       },
       requestFile: (request) => {
         scope.assertActive();

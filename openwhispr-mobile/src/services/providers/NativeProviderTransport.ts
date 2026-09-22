@@ -35,11 +35,7 @@ function nativeResponse(result: {
   return response;
 }
 
-export async function requestProviderNative(
-  url: string,
-  init: RequestInit,
-  recovery?: { routeSnapshot?: string; recoveryAudioUri?: string },
-): Promise<Response> {
+export async function requestProviderNative(url: string, init: RequestInit): Promise<Response> {
   if (init.body !== undefined && typeof init.body !== 'string') {
     throw new Error('This provider request requires a supported native body type');
   }
@@ -57,8 +53,6 @@ export async function requestProviderNative(
       method: init.method === 'GET' ? 'GET' : 'POST',
       headers: headersToRecord(init.headers),
       ...(typeof init.body === 'string' ? { body: init.body } : {}),
-      routeSnapshot: recovery?.routeSnapshot,
-      recoveryAudioUri: recovery?.recoveryAudioUri,
       timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
     });
     if (init.signal?.aborted) throw new DOMException('Aborted', 'AbortError');

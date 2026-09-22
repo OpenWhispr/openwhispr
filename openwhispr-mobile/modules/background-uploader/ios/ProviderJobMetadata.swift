@@ -10,7 +10,7 @@ struct ProviderJobMetadata: Codable {
     var credentialRef: String?
 
     mutating func validate() -> Bool {
-      guard ["dictation", "upload", "meeting", "cleanup", "notes", "agent"].contains(scope) else { return false }
+      guard ["dictation", "upload", "cleanup", "notes", "agent"].contains(scope) else { return false }
       if ["local", "openwhispr"].contains(mode) {
         providerId = nil; modelId = nil; endpoint = nil; credentialRef = nil
         return true
