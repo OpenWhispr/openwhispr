@@ -1507,7 +1507,6 @@
     },
     "account": {
       "badges": {
-        "free": "無料",
         "limitReached": "上限到達",
         "pastDue": "支払い遅延",
         "pro": "Pro",
@@ -1649,7 +1648,6 @@
           "confirm": "確認"
         }
       },
-      "rollingWeeklyLimit": "週間利用上限（ローリング）",
       "signOut": {
         "failedDescription": "サインアウト中に問題が発生しました。もう一度お試しください。",
         "failedTitle": "サインアウトできませんでした",
@@ -1672,7 +1670,6 @@
         "title": "Pro を 7 日間無料でお試し"
       },
       "user": "ユーザー",
-      "wordsRemaining": "残り {{remaining}}",
       "deleteAccount": {
         "label": "アカウントを削除",
         "labelDescription": "アカウントと個人のクラウドデータを完全に削除します。他のローカルユーザーとワークスペース所有のコンテンツは保持されます。",

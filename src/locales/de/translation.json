@@ -1800,7 +1800,6 @@
     },
     "account": {
       "badges": {
-        "free": "Kostenlos",
         "limitReached": "Limit erreicht",
         "pastDue": "Überfällig",
         "pro": "Pro",
@@ -1942,7 +1941,6 @@
           "confirm": "Bestätigen"
         }
       },
-      "rollingWeeklyLimit": "Rollierendes Wochenlimit",
       "signOut": {
         "failedDescription": "Beim Abmelden ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.",
         "failedTitle": "Abmeldung fehlgeschlagen",
@@ -1965,7 +1963,6 @@
         "button": "Kostenloses Konto erstellen"
       },
       "user": "Benutzer",
-      "wordsRemaining": "{{remaining}} verbleibend",
       "deleteAccount": {
         "label": "Konto löschen",
         "labelDescription": "Konto und persönliche Cloud-Daten dauerhaft löschen. Andere lokale Benutzer und Arbeitsbereichsdaten bleiben erhalten.",

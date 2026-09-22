@@ -1507,7 +1507,6 @@
     },
     "account": {
       "badges": {
-        "free": "Gratuito",
         "limitReached": "Limite raggiunto",
         "pastDue": "Scaduto",
         "pro": "Pro",
@@ -1553,7 +1552,6 @@
         "business": "Business",
         "trial": "Prova"
       },
-      "rollingWeeklyLimit": "Limite settimanale progressivo",
       "signOut": {
         "failedDescription": "Qualcosa è andato storto durante la disconnessione. Riprova.",
         "failedTitle": "Impossibile disconnettersi",
@@ -1672,7 +1670,6 @@
         "button": "Crea account gratuito"
       },
       "user": "Utente",
-      "wordsRemaining": "{{remaining}} rimanenti",
       "deleteAccount": {
         "label": "Elimina account",
         "labelDescription": "Elimina permanentemente il tuo account e i dati cloud personali. Gli altri utenti locali e i contenuti degli spazi di lavoro vengono conservati.",

@@ -1800,7 +1800,6 @@
     },
     "account": {
       "badges": {
-        "free": "Gratuit",
         "limitReached": "Limite atteinte",
         "pastDue": "Paiement en retard",
         "pro": "Pro",
@@ -1942,7 +1941,6 @@
           "confirm": "Confirmer"
         }
       },
-      "rollingWeeklyLimit": "Limite hebdomadaire glissante",
       "signOut": {
         "failedDescription": "Un problème est survenu lors de la déconnexion. Veuillez réessayer.",
         "failedTitle": "Impossible de se déconnecter",
@@ -1965,7 +1963,6 @@
         "button": "Créer un compte gratuit"
       },
       "user": "Utilisateur",
-      "wordsRemaining": "{{remaining}} restants",
       "deleteAccount": {
         "label": "Supprimer le compte",
         "labelDescription": "Supprimer définitivement votre compte et vos données cloud personnelles. Les autres utilisateurs locaux et le contenu des espaces de travail sont conservés.",

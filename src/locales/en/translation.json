@@ -1800,7 +1800,6 @@
     },
     "account": {
       "badges": {
-        "free": "Free",
         "limitReached": "Limit reached",
         "pastDue": "Past due",
         "pro": "Pro",
@@ -1942,7 +1941,6 @@
           "confirm": "Confirm"
         }
       },
-      "rollingWeeklyLimit": "Rolling weekly limit",
       "signOut": {
         "failedDescription": "Something went wrong signing out. Please try again.",
         "failedTitle": "Couldn't sign out",
@@ -1965,7 +1963,6 @@
         "button": "Create Free Account"
       },
       "user": "User",
-      "wordsRemaining": "{{remaining}} remaining",
       "deleteAccount": {
         "label": "Delete Account",
         "labelDescription": "Permanently delete your account and personal cloud data. Other local users and workspace-owned content are preserved.",

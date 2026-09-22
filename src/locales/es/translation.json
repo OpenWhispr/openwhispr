@@ -1560,7 +1560,6 @@
     },
     "account": {
       "badges": {
-        "free": "Gratis",
         "limitReached": "Límite alcanzado",
         "pastDue": "Pago vencido",
         "pro": "Pro",
@@ -1702,7 +1701,6 @@
           "confirm": "Confirmar"
         }
       },
-      "rollingWeeklyLimit": "Límite semanal móvil",
       "signOut": {
         "failedDescription": "Algo salió mal al cerrar sesión. Inténtalo de nuevo.",
         "failedTitle": "No se pudo cerrar sesión",
@@ -1725,7 +1723,6 @@
         "title": "Prueba Pro gratis por 7 días"
       },
       "user": "Usuario",
-      "wordsRemaining": "{{remaining}} restantes",
       "deleteAccount": {
         "label": "Eliminar cuenta",
         "labelDescription": "Eliminar permanentemente tu cuenta y datos personales en la nube. Se conservan los demás usuarios locales y el contenido de los espacios de trabajo.",

@@ -1507,7 +1507,6 @@
     },
     "account": {
       "badges": {
-        "free": "免费版",
         "limitReached": "已达上限",
         "pastDue": "逾期未付",
         "pro": "Pro",
@@ -1553,7 +1552,6 @@
         "business": "Business",
         "trial": "试用"
       },
-      "rollingWeeklyLimit": "滚动周限额",
       "signOut": {
         "failedDescription": "退出登录时出错，请重试。",
         "failedTitle": "无法退出登录",
@@ -1672,7 +1670,6 @@
         "button": "免费创建账户"
       },
       "user": "用户",
-      "wordsRemaining": "剩余 {{remaining}} 个词",
       "deleteAccount": {
         "label": "删除账户",
         "labelDescription": "永久删除您的账户和个人云端数据。其他本地用户和工作区所有的内容将被保留。",

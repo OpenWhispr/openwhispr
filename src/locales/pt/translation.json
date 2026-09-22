@@ -1486,7 +1486,6 @@
     },
     "account": {
       "badges": {
-        "free": "Gratuito",
         "limitReached": "Limite atingido",
         "pastDue": "Em atraso",
         "pro": "Pro",
@@ -1532,7 +1531,6 @@
         "business": "Business",
         "trial": "Teste"
       },
-      "rollingWeeklyLimit": "Limite semanal contínuo",
       "signOut": {
         "failedDescription": "Algo deu errado ao sair. Tente novamente.",
         "failedTitle": "Não foi possível sair",
@@ -1651,7 +1649,6 @@
         "button": "Criar conta gratuita"
       },
       "user": "Usuário",
-      "wordsRemaining": "{{remaining}} restantes",
       "deleteAccount": {
         "label": "Excluir conta",
         "labelDescription": "Excluir permanentemente sua conta e dados pessoais na nuvem. Outros usuários locais e conteúdos dos espaços de trabalho são preservados.",
