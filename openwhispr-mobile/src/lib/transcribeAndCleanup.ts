@@ -1,5 +1,5 @@
 import { withActiveProviderJob } from './providerJobActivity';
-import { snapshotTextInference, resolveMobileProviderRoute } from './inferenceRouting';
+import { snapshotTextInference } from './inferenceRouting';
 import {
   TranscriptionService,
   isLocalModelMissingError,
@@ -381,10 +381,7 @@ async function processTranscriptionJob(
       request.agentUnavailable ?? (request.agentRoute ? undefined : captured.agentUnavailable),
   };
   if (request.provider === 'byok' && !request.inferenceRoute) {
-    const route = await resolveMobileProviderRoute(
-      request.requestContext === 'file' ? 'upload' : 'dictation',
-    );
-    pinnedRequest = { ...pinnedRequest, inferenceRoute: route };
+    throw new Error('The original provider route is unavailable. Start a new transcription.');
   }
   const result = await runTranscribeAndCleanup(pinnedRequest, lifecycle);
   result.transcription = {

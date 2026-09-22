@@ -1,7 +1,8 @@
 import { BackgroundUploader } from '../../modules/background-uploader/src';
 import { AppGroupStorage } from '../../modules/app-group-storage/src';
 import { snapshotTranscriptionJob, type TranscriptionJobRoute } from './inferenceRouting';
-import { resolveInferenceRoute, type InferenceSelection } from '@shared/ai/routing';
+import type { InferenceSelection } from '@shared/ai/routing';
+import { resolveMobileInferenceRoute } from '@/lib/mobileProviders';
 
 const STORAGE_KEY = 'keyboard_inference_route';
 
@@ -26,16 +27,7 @@ function decodeProviderRoute(
       throw new Error('Invalid provider route.');
     selection[key] = fields[key] as string | undefined;
   }
-  if (fields.cortiEnvironment !== undefined) {
-    if (fields.cortiEnvironment !== 'us' && fields.cortiEnvironment !== 'eu')
-      throw new Error('Invalid provider region.');
-    selection.cortiEnvironment = fields.cortiEnvironment;
-  }
-  if (fields.cortiTenant !== undefined) {
-    if (typeof fields.cortiTenant !== 'string') throw new Error('Invalid provider tenant.');
-    selection.cortiTenant = fields.cortiTenant;
-  }
-  const result = resolveInferenceRoute({
+  const result = resolveMobileInferenceRoute({
     scope,
     selection,
     privateContent: false,

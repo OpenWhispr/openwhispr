@@ -1,4 +1,4 @@
-import { resolveInferenceRoute } from '@shared/ai/routing';
+import { resolveMobileInferenceRoute } from '@/lib/mobileProviders';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -101,7 +101,7 @@ export async function cleanupTranscript(
     options.onSkipped?.('Sign in to use OpenWhispr cleanup. Your raw transcript is saved.');
     return rawText;
   }
-  const resolved = resolveInferenceRoute({
+  const resolved = resolveMobileInferenceRoute({
     scope,
     selection: configuredRoute ?? { mode: 'openwhispr' },
     privateContent: false,

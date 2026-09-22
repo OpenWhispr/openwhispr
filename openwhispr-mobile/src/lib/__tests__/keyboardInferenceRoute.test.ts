@@ -6,6 +6,7 @@ import {
   listPendingProviderRecoveryJobs,
   clearKeyboardProviderRecovery,
 } from '../keyboardInferenceRoute';
+import { AppGroupStorage } from '../../../modules/app-group-storage/src';
 const mockJobIds: string[] = [];
 jest.mock('../../../modules/background-uploader/src', () => ({
   BackgroundUploader: {
@@ -152,9 +153,9 @@ it('includes a legacy active job and clears only the durably handled job', () =>
   expect(mockStorage.has('keyboard_upload_audio.legacy')).toBe(false);
   expect(mockStorage.has('keyboard_upload_audio.other')).toBe(true);
 });
-it('preserves Corti region and tenant in original job metadata', () => {
+it('refuses a stored route for a provider the mobile build no longer ships', () => {
   const route = {
-    ...mockRoute,
+    provider: 'byok',
     inferenceRoute: {
       mode: 'providers',
       scope: 'dictation',
@@ -162,16 +163,13 @@ it('preserves Corti region and tenant in original job metadata', () => {
       modelId: 'corti-transcribe',
       endpoint: 'https://api.eu.corti.app/v2',
       credentialRef: 'provider.corti',
-      cortiEnvironment: 'eu',
-      cortiTenant: 'original-tenant',
     },
   };
-  mockStorage.set(
+  AppGroupStorage.setItem(
     'keyboard_upload_route.corti',
     JSON.stringify({ version: 1, jobId: 'corti', route }),
   );
-  expect(readKeyboardInferenceRoute('corti')?.inferenceRoute).toMatchObject({
-    cortiEnvironment: 'eu',
-    cortiTenant: 'original-tenant',
-  });
+  expect(() => readKeyboardInferenceRoute('corti')).toThrow(
+    'The original keyboard provider route is unavailable. Record again.',
+  );
 });

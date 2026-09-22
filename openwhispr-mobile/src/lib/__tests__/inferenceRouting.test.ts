@@ -117,3 +117,38 @@ it('rechecks private mode after awaiting workspace policy', async () => {
   resolvePolicy({ status: 'unmanaged' });
   await expect(pending).rejects.toThrow('Private content');
 });
+
+it('refuses a persisted selection for a provider the mobile build does not ship', async () => {
+  mockGetPolicy.mockResolvedValue({ status: 'unmanaged' });
+  await expect(
+    resolveMobileProviderRoute('dictation', {
+      mode: 'providers',
+      providerId: 'deepgram',
+      modelId: 'nova-3',
+      credentialRef: 'provider.deepgram',
+    }),
+  ).rejects.toThrow('This provider does not support the selected workflow.');
+});
+
+it('marks text stages unavailable for an unsupported provider instead of falling back', () => {
+  mockProcessing.activeMode = 'cloud';
+  mockState.config.inference = {
+    dictation: {
+      mode: 'providers',
+      providerId: 'groq',
+      modelId: 'whisper-large-v3-turbo',
+      credentialRef: 'provider.groq',
+    },
+    cleanup: {
+      mode: 'providers',
+      providerId: 'anthropic',
+      modelId: 'claude-sonnet-4-6',
+      credentialRef: 'provider.anthropic',
+    },
+  };
+  const snapshot = snapshotTranscriptionJob('dictation');
+  expect(snapshot.cleanupRoute).toBeUndefined();
+  expect(snapshot.cleanupUnavailable).toBe(
+    'Complete cleanup provider setup in AI Models. Your raw transcript is saved.',
+  );
+});

@@ -1,11 +1,12 @@
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import {
-  resolveInferenceRoute,
-  type InferenceScope,
-  type InferenceSelection,
-  type InferenceRoute,
+import type {
+  InferenceScope,
+  InferenceSelection,
+  InferenceRoute,
+  RouteErrorCode,
 } from '@shared/ai/routing';
+import { resolveMobileInferenceRoute } from '@/lib/mobileProviders';
 import type { TranscriptionProvider, TranscriptionRequest, TextInferenceSnapshot } from '@/types';
 
 export type ProviderRoute = Extract<InferenceRoute, { mode: 'providers' }>;
@@ -37,7 +38,7 @@ export async function resolveMobileProviderRoute(
   const { getProviderPolicy } =
     require('@/services/providers/ProviderPolicy') as typeof import('@/services/providers/ProviderPolicy');
   const policy = await getProviderPolicy();
-  const result = resolveInferenceRoute({
+  const result = resolveMobileInferenceRoute({
     scope,
     selection,
     privateContent:
@@ -46,7 +47,7 @@ export async function resolveMobileProviderRoute(
     policy,
   });
   if (!result.ok) {
-    const messages: Record<string, string> = {
+    const messages: Record<RouteErrorCode, string> = {
       PRIVATE_CONTENT: 'Private content cannot be sent to a provider without your confirmation.',
       POLICY_UNRESOLVED: 'Organization policy is unavailable. Try again when connected.',
       POLICY_BLOCKED: 'Your organization does not allow this provider or mode.',
@@ -76,7 +77,11 @@ export function snapshotTextInference(provider: TranscriptionProvider): TextInfe
     } else if (!selection && provider === 'byok') {
       result[errorKey] = `Choose a ${scope} provider in AI Models. Your raw transcript is saved.`;
     } else if (selection?.mode === 'providers') {
-      const resolved = resolveInferenceRoute({ scope, selection, policy: { status: 'unmanaged' } });
+      const resolved = resolveMobileInferenceRoute({
+        scope,
+        selection,
+        policy: { status: 'unmanaged' },
+      });
       if (resolved.ok) result[routeKey] = { ...resolved.route };
       else
         result[errorKey] =
@@ -94,7 +99,7 @@ export function snapshotTranscriptionJob(scope: 'dictation' | 'upload'): Transcr
   if (provider === 'byok') {
     const selection = getInferenceSelection(scope);
     if (!selection) throw new Error('Choose a transcription provider in AI Models.');
-    const result = resolveInferenceRoute({
+    const result = resolveMobileInferenceRoute({
       scope,
       selection,
       privateContent: false,
