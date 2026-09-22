@@ -28,7 +28,7 @@ export function AssistantEmptyState({
               key={key}
               type="button"
               disabled={disabled}
-              className="rounded-full border border-border/55 bg-foreground/[0.035] px-3 py-1.5 text-left text-xs text-foreground/70 transition-colors hover:border-border hover:bg-foreground/[0.07] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full border border-border/55 bg-foreground/[0.035] px-3 py-1.5 text-start text-xs text-foreground/70 transition-colors hover:border-border hover:bg-foreground/[0.07] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => onSelectSuggestion(suggestion)}
             >
               {suggestion}

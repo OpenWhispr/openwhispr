@@ -12,7 +12,7 @@ import {
   WandSparkles,
   WifiOff,
   Zap,
-} from "lucide-react";
+} from "../icons";
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
@@ -24,8 +24,9 @@ import {
 import type { OnboardingSetupMode } from "./flow";
 import { getOnboardingSetupAvailability, hasAvailableOnboardingSetup } from "./setupEligibility";
 import { BrandMark } from "./OnboardingShell";
-import openAIIcon from "../../assets/icons/providers/openai.svg";
-import nvidiaIcon from "../../assets/icons/providers/nvidia.webp";
+import { LOCAL_ASR_ORGANIZATIONS } from "../../helpers/localASROrganization";
+import { getProviderIcon, isMonochromeProvider } from "@/utils/providerIcons";
+import { cn } from "../lib/utils";
 // Only the Local card opens the warning dialog now — BYOK goes
 // straight through from the "Choose your API setup" modal.
 import warningBackdrop from "../../assets/onboarding-setup-warning-hero.webp";
@@ -57,11 +58,11 @@ interface MoreSetupOption {
 // The mark is tertiary grey on the self-serve cards and the brand accent on the
 // cloud card, which is the only visual weighting between them.
 //
-// strokeWidth stays at lucide's default 2 rather than the 1.16667 the export
-// shows. Both describe the same line: Figma exports these at viewBox 0 0 14 14,
-// so its 1.16667 is already in 14px space, while lucide draws in a 24 viewBox
-// scaled down to 14 — 2 x (14/24) = 1.1667 device px, exactly the spec. Passing
-// 1.167 here applies the scale twice and renders a 0.68px hairline.
+// strokeWidth stays at the icon set's default 2 rather than the 1.16667 the
+// export shows. Both describe the same line: Figma exports these at viewBox
+// 0 0 14 14, so its 1.16667 is already in 14px space, while the icons draw in a
+// 24 viewBox scaled down to 14 — 2 x (14/24) = 1.1667 device px, exactly the
+// spec. Passing 1.167 here applies the scale twice and renders a 0.68px hairline.
 function Feature({
   icon: Icon,
   accent = false,
@@ -84,7 +85,7 @@ function Feature({
 // Compact setup card: content stays pinned to the top and the action to the bottom.
 function SetupCard({ children }: { children: React.ReactNode }) {
   return (
-    <section className="relative flex h-[350px] w-68 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 pb-5 pt-4 text-left">
+    <section className="relative flex h-[350px] w-68 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 pb-5 pt-4 text-start">
       {children}
     </section>
   );
@@ -129,12 +130,15 @@ export default function SetupChoiceStep({
   const [showMore, setShowMore] = useState(false);
 
   const localReferenceModel = getParakeetModelInfo(REFERENCE_LOCAL_MODEL_ID);
+  // Two deliberately different numbers: the setup steps quote the transfer, so
+  // they get the model's own download size, while the disk figure is rounded up
+  // and floored at 2 GB because the model arrives as an archive and needs room
+  // to unpack — quoting only the compressed size as the space requirement can
+  // send a user into a setup that runs out of disk.
   const localModelSize = (localReferenceModel?.size ?? t("common.unknown")).replace(
     /(\d)([A-Za-z])/,
     "$1 $2"
   );
-  // The model arrives as an archive and needs room to unpack, so quoting only
-  // its compressed size can send a user into a setup that runs out of disk.
   const minimumLocalSpaceGb = Math.max(2, Math.ceil((localReferenceModel?.sizeMb ?? 0) / 1000));
 
   const availability = getOnboardingSetupAvailability({
@@ -223,38 +227,30 @@ export default function SetupChoiceStep({
           <SetupCard>
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                {/* Frame 2147259034: the two model marks overlap by 8, each on a
-                    1.33px white ring so the stack reads front-to-back. */}
+                {/* Frame 2147259034: the local model marks overlap by 8, each on a
+                    1.33px surface ring so the stack reads front-to-back. NVIDIA's
+                    tile is its own green field, so it fills the chip and is clipped
+                    to the circle; the other marks sit inside it, with OpenAI's
+                    inverted onto the dark chip. */}
                 <span className="flex -space-x-2">
-                  <span className="flex size-9 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] ring-[1.33px] ring-[var(--onboarding-surface)]">
-                    <img
-                      src={openAIIcon}
-                      alt=""
-                      aria-hidden="true"
-                      width={20}
-                      height={20}
-                      decoding="async"
-                      draggable={false}
-                      className="size-4 invert dark:invert-0"
-                    />
-                  </span>
-                  {/* The tile is its own green field, so it fills the chip and gets
-                      clipped to the circle — the old lime-500 circle sat behind a
-                      green eye mark, which read as green on green. The mark and
-                      wordmark both fall inside the inscribed circle, so nothing of
-                      the logo is lost to the crop. */}
-                  <span className="size-9 overflow-hidden rounded-full ring-[1.33px] ring-[var(--onboarding-surface)]">
-                    <img
-                      src={nvidiaIcon}
-                      alt=""
-                      aria-hidden="true"
-                      width={40}
-                      height={40}
-                      decoding="async"
-                      draggable={false}
-                      className="size-full object-cover"
-                    />
-                  </span>
+                  {LOCAL_ASR_ORGANIZATIONS.map(({ id }) => (
+                    <span
+                      key={id}
+                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-[var(--onboarding-inverse-surface)] ring-[1.33px] ring-[var(--onboarding-surface)]"
+                    >
+                      <img
+                        src={getProviderIcon(id)}
+                        alt=""
+                        aria-hidden="true"
+                        decoding="async"
+                        draggable={false}
+                        className={cn(
+                          id === "nvidia" ? "size-full object-cover" : "size-4",
+                          isMonochromeProvider(id) && "invert dark:invert-0"
+                        )}
+                      />
+                    </span>
+                  ))}
                 </span>
                 {/* Frame 49: pad 4 9, radius 47, surface-tertiary, 10/140%. */}
                 <span className="rounded-[47px] bg-[var(--onboarding-surface-tertiary)] px-[9px] py-1 text-[10px] leading-[1.4] text-[var(--onboarding-text-primary)]">
@@ -273,10 +269,8 @@ export default function SetupChoiceStep({
                     })}
                   </p>
                 </div>
-                {/* The four marks are the lucide originals the Figma assets were
-                    exported from, matched by their path coordinates: Laptop (not
-                    LaptopMinimal, which is a plain rect with a detached base line)
-                    and BanknoteCheck (not BadgeCheck). */}
+                {/* The four marks are the icon-set equivalents of the glyphs the
+                    Figma assets were exported from. */}
                 <ul className="flex flex-col gap-2">
                   <Feature icon={Laptop}>
                     {t("onboarding.rehaul.setupChoice.local.features.device")}
@@ -311,7 +305,7 @@ export default function SetupChoiceStep({
               <div className="flex items-center justify-between">
                 {/* Frame 48: 40px mark on the brand gradient. */}
                 <span className="flex size-9 items-center justify-center rounded-full bg-gradient-to-b from-[#4079ed] to-[#244587] text-white">
-                  <BrandMark className="size-5" />
+                  <BrandMark className="size-6" />
                 </span>
                 {/* Frame 49: the "Recommended" chip. Figma has white text on a
                     glass fill over the card's background artwork ("Vector 1",
@@ -376,7 +370,7 @@ export default function SetupChoiceStep({
       <Dialog open={showMore} onOpenChange={(open) => !open && setShowMore(false)}>
         <DialogContent
           overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
-          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-left [&>button]:hidden"
+          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-start [&>button]:hidden"
         >
           {/* Frame 2147258979: 238 tall, radius 20, image fill. Source is 840x477,
               so it lands at ~2x for the 420x238 slot. */}
@@ -422,7 +416,7 @@ export default function SetupChoiceStep({
                     // starting it with the self-hosted field set on.
                     onSelect("byok", { selfHosted: row.id === "self-hosted" });
                   }}
-                  className={`onboarding-pressable flex w-full items-center gap-[14px] text-left ${
+                  className={`onboarding-pressable flex w-full items-center gap-[14px] text-start ${
                     index === 0 ? "pb-4" : "border-t border-[var(--onboarding-control-border)] pt-4"
                   }`}
                 >
@@ -439,7 +433,7 @@ export default function SetupChoiceStep({
                   </span>
                   {/* Frame 25: 32px surface-tertiary disc with a tertiary chevron. */}
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--onboarding-surface-tertiary)] text-[var(--onboarding-text-tertiary)]">
-                    <ChevronRight className="size-4" strokeWidth={1.667} />
+                    <ChevronRight className="size-4 rtl:rotate-180" strokeWidth={1.667} />
                   </span>
                 </button>
               ))}
@@ -451,7 +445,7 @@ export default function SetupChoiceStep({
       <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <DialogContent
           overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
-          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-left text-[var(--onboarding-text-primary)] [&>button]:hidden"
+          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-start text-[var(--onboarding-text-primary)] [&>button]:hidden"
           onOpenAutoFocus={handleWarningAutoFocus}
         >
           {/* Frame 2147258979: 238 tall, radius 20, image crop. The three marks

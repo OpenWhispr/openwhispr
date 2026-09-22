@@ -1,7 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { expandSnippets, getDictionaryHintWords } = require("../../src/utils/snippets.ts");
+const {
+  expandSnippets,
+  findSnippetTriggerRanges,
+  getDictionaryHintWords,
+} = require("../../src/utils/snippets.ts");
 
 test("expands a trigger containing Turkish capital İ", () => {
   const snippets = [{ trigger: "İmza", replacement: "Best regards,\nUmut" }];
@@ -128,4 +132,29 @@ test("getDictionaryHintWords combines dictionary words and snippet triggers safe
     "my cal",
     "zoom link",
   ]);
+});
+
+test("findSnippetTriggerRanges reports where each trigger occurs", () => {
+  const snippets = [{ trigger: "openwhispr review", replacement: "Review the PR" }];
+
+  assert.deepEqual(findSnippetTriggerRanges("openwhispr review this PR", snippets), [
+    { start: 0, end: 17 },
+  ]);
+  assert.deepEqual(findSnippetTriggerRanges("please openwhispr review it", snippets), [
+    { start: 7, end: 24 },
+  ]);
+  assert.deepEqual(findSnippetTriggerRanges("nothing to expand here", snippets), []);
+  assert.deepEqual(findSnippetTriggerRanges("openwhispr review", null), []);
+});
+
+// Wake-word suppression keys off these ranges, so a range that expandSnippets
+// will not actually replace costs the user both the wake word and the snippet.
+// The matcher folds case the Unicode way (/iu) while the replacement lookup
+// uses toLowerCase(); Turkish dotless ı is where the two part company, since
+// the pattern's [ıI] matches a plain "i" that is not a Map key.
+test("findSnippetTriggerRanges reports only ranges expandSnippets will replace", () => {
+  const snippets = [{ trigger: "ımza", replacement: "Saygılarımla" }];
+
+  assert.equal(expandSnippets("imza raporu hazırla", snippets), "imza raporu hazırla");
+  assert.deepEqual(findSnippetTriggerRanges("imza raporu hazırla", snippets), []);
 });

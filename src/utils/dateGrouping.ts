@@ -6,8 +6,11 @@ export interface DateGroup<T> {
 }
 
 /**
- * Buckets newest-first items into Today / Yesterday / Previous 7 days / Older
- * groups, preserving item order within each group.
+ * Buckets items into Today / Yesterday / Previous 7 days / Older, in that
+ * order, preserving item order within each group. The input is not assumed to
+ * be sorted: `updated_at` mixes CURRENT_TIMESTAMP and ISO strings, so SQLite's
+ * string ORDER BY can interleave days, and an edited note keeps its old slot
+ * in the store.
  */
 export function groupItemsByDate<T>(
   items: T[],
@@ -23,30 +26,23 @@ export function groupItemsByDate<T>(
   const weekAgo = new Date(today);
   weekAgo.setDate(weekAgo.getDate() - 7);
 
-  const groups: Array<DateGroup<T>> = [];
-  let current: DateGroup<T> | null = null;
-
+  const labels = [t("chat.today"), t("chat.yesterday"), t("chat.previousWeek"), t("chat.older")];
+  const buckets: T[][] = labels.map(() => []);
   for (const item of items) {
     const date = normalizeDbDate(getDate(item));
-    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-    let label: string;
-    if (target.getTime() >= today.getTime()) {
-      label = t("chat.today");
-    } else if (target.getTime() >= yesterday.getTime()) {
-      label = t("chat.yesterday");
-    } else if (target.getTime() >= weekAgo.getTime()) {
-      label = t("chat.previousWeek");
-    } else {
-      label = t("chat.older");
-    }
-
-    if (!current || current.label !== label) {
-      current = { label, items: [] };
-      groups.push(current);
-    }
-    current.items.push(item);
+    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const index =
+      target >= today.getTime()
+        ? 0
+        : target >= yesterday.getTime()
+          ? 1
+          : target >= weekAgo.getTime()
+            ? 2
+            : 3;
+    buckets[index].push(item);
   }
 
-  return groups;
+  return labels.flatMap((label, index) =>
+    buckets[index].length > 0 ? [{ label, items: buckets[index] }] : []
+  );
 }

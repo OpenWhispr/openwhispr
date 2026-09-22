@@ -7,16 +7,6 @@ const { broadcastToWindows } = require("./windowBroadcast");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
 const AUTO_END_TICK_MS = 1000;
-const AUTO_END_RESTART_WINDOW_MS = 30_000;
-// Clicking Restart is the user saying the meeting is still live. Honour that for
-// a while, or the same silence that just ended the recording ends it again a
-// minute later and they have to keep clicking.
-const AUTO_END_RESTART_GRACE_MS = 5 * 60_000;
-// The grace belongs to the recording the user restarted, which starts within a
-// second or two. Main cannot see a restart the renderer drops (its context died
-// with a reload, or a manual recording won the race), so an unclaimed grace has
-// to lapse rather than wait to be taken by whatever recording starts next.
-const AUTO_END_RESTART_CLAIM_MS = 30_000;
 
 const PLACEHOLDER_PREFIX = { __detected__: "detected", __manual__: "manual" };
 
@@ -64,8 +54,6 @@ class MeetingDetectionEngine {
     this._notificationQueue = [];
     this._postRecordingCooldown = null;
     this._recordingSession = null;
-    this._pendingAutoEnd = null;
-    this._autoEndRestartGrace = null;
     this._now = now;
     this._setInterval = setInterval;
     this._clearInterval = clearInterval;
@@ -89,14 +77,16 @@ class MeetingDetectionEngine {
   }
 
   _bindListeners() {
-    // Process detection is context-only — track running apps but don't trigger notifications.
-    // This avoids false positives from apps like FaceTime running in the background.
+    // Process detection is context-only — a running app never prompts by itself
+    // (FaceTime idles in the background), but it corroborates device activity
+    // the mic detector could not attribute to a process.
     this.meetingProcessDetector.on("meeting-process-detected", (data) => {
       debugLogger.info(
         "Meeting app running (context only)",
         { processKey: data.processKey, appName: data.appName },
         "meeting"
       );
+      this.audioActivityDetector.notifyMeetingAppsChanged();
     });
 
     this.meetingProcessDetector.on("meeting-process-ended", (data) => {
@@ -148,149 +138,15 @@ class MeetingDetectionEngine {
     );
     const ownerWebContents = session.ownerWebContents;
     if (!ownerWebContents || ownerWebContents.isDestroyed?.()) return;
-    this._clearAutoEndRecovery();
-    this._pendingAutoEnd = {
-      sessionId,
-      reason,
-      ownerWebContents,
-      expiresAt: null,
-    };
     try {
       ownerWebContents.send("meeting-auto-end-requested", { sessionId, reason });
     } catch (error) {
-      this._pendingAutoEnd = null;
       debugLogger.error(
         "Failed to request meeting auto-end from recording renderer",
         { error: error?.message, sessionId },
         "meeting"
       );
     }
-  }
-
-  // Time-bounded on purpose: the window manager destroys a notification window
-  // on paths that cannot notify us (_hideNormalAppSurfaces, a late detection
-  // response landing on a replaced card), and this gate holds every meeting
-  // prompt. Without the deadline one of those silently kills detection for the
-  // rest of the app session.
-  _hasLiveAutoEndOffer() {
-    const expiresAt = this._pendingAutoEnd?.expiresAt;
-    return expiresAt != null && this._now() < expiresAt;
-  }
-
-  _clearAutoEndRecovery({ dismiss = true } = {}) {
-    const pending = this._pendingAutoEnd;
-    this._pendingAutoEnd = null;
-    if (dismiss && pending?.expiresAt != null) {
-      this.windowManager.dismissMeetingAutoEndNotification?.(pending.sessionId);
-    }
-  }
-
-  async completeAutoEndSession(sessionId, ownerWebContents) {
-    const pending = this._pendingAutoEnd;
-    if (
-      !pending ||
-      pending.sessionId !== sessionId ||
-      pending.ownerWebContents !== ownerWebContents ||
-      pending.expiresAt !== null ||
-      this._recordingSession !== null ||
-      ownerWebContents?.isDestroyed?.()
-    ) {
-      return false;
-    }
-
-    const expiresAt = this._now() + AUTO_END_RESTART_WINDOW_MS;
-    pending.expiresAt = expiresAt;
-    try {
-      const shown = await this.windowManager.showMeetingAutoEndNotification?.({
-        sessionId,
-        reason: pending.reason,
-        expiresAt,
-      });
-      if (this._pendingAutoEnd !== pending) return false;
-      // Only an explicit success offers the restart: anything else (a missing
-      // window manager method, a load aborted by a replacement) means the card
-      // the user would click never appeared.
-      if (shown !== true) {
-        this._clearAutoEndRecovery({ dismiss: false });
-        return false;
-      }
-      debugLogger.info(
-        "Meeting recording auto-ended; restart window shown",
-        { sessionId, reason: pending.reason, expiresAt },
-        "meeting"
-      );
-      return true;
-    } catch (error) {
-      if (this._pendingAutoEnd === pending) {
-        this._clearAutoEndRecovery({ dismiss: false });
-      }
-      debugLogger.error(
-        "Failed to show meeting auto-end recovery notification",
-        { error: error?.message, sessionId },
-        "meeting"
-      );
-      return false;
-    }
-  }
-
-  respondToAutoEndNotification(sessionId, action, responderWebContents) {
-    if (
-      (action !== "restart" && action !== "dismiss") ||
-      !this.windowManager.isMeetingNotificationSender?.(responderWebContents)
-    ) {
-      return false;
-    }
-
-    const pending = this._pendingAutoEnd;
-    if (!pending || pending.sessionId !== sessionId || pending.expiresAt === null) return false;
-    if (this._now() >= pending.expiresAt || this._recordingSession !== null) {
-      this._clearAutoEndRecovery();
-      this._flushNotificationQueue();
-      return false;
-    }
-
-    const ownerWebContents = pending.ownerWebContents;
-    this._clearAutoEndRecovery();
-    if (action === "dismiss") {
-      this._flushNotificationQueue();
-      return true;
-    }
-
-    // A delivered restart deliberately does not flush: the user chose the old
-    // meeting, and the recording about to start gates the queue again anyway.
-    // One that cannot be delivered starts nothing, so the detections held
-    // behind the offer have to go out.
-    if (!ownerWebContents || ownerWebContents.isDestroyed?.()) {
-      this._flushNotificationQueue();
-      return false;
-    }
-
-    try {
-      ownerWebContents.send("meeting-auto-end-restart-requested", { sessionId });
-      const nowMs = this._now();
-      this._autoEndRestartGrace = {
-        suppressUntil: nowMs + AUTO_END_RESTART_GRACE_MS,
-        claimUntil: nowMs + AUTO_END_RESTART_CLAIM_MS,
-      };
-      return true;
-    } catch (error) {
-      debugLogger.error(
-        "Failed to request meeting recording restart",
-        { error: error?.message, sessionId },
-        "meeting"
-      );
-      this._flushNotificationQueue();
-      return false;
-    }
-  }
-
-  // `flushQueued` is false when a replacement notification is already being
-  // shown: flushing there would re-enter showMeetingNotification.
-  handleAutoEndNotificationClosed(sessionId, { flushQueued = true } = {}) {
-    if (this._pendingAutoEnd?.sessionId !== sessionId) return false;
-    this._clearAutoEndRecovery({ dismiss: false });
-    if (flushQueued) this._flushNotificationQueue();
-    return true;
   }
 
   // Hot path — called for every meeting PCM chunk of both channels.
@@ -363,15 +219,11 @@ class MeetingDetectionEngine {
       "meeting"
     );
     this._audioActivityMonitor.reset();
-    const grace = this._autoEndRestartGrace;
-    this._autoEndRestartGrace = null;
-    const suppressUntil = grace && this._now() < grace.claimUntil ? grace.suppressUntil : 0;
     this._autoEndController.beginSession({
       sessionId,
       eligible: true,
       reliable: externalMicState.reliable,
       externalMicActive: externalMicState.externalMicActive,
-      suppressUntil,
       ...this._audioActivityMonitor.getState(),
     });
     this._autoEndActive = true;
@@ -383,8 +235,8 @@ class MeetingDetectionEngine {
     autoEndEligible,
     ownerWebContents,
     systemAudioAvailable = false,
+    noteId = null,
   }) {
-    this._clearAutoEndRecovery();
     if (this._recordingSession) this._deactivateAutoEnd();
 
     this._recordingSession = {
@@ -392,6 +244,9 @@ class MeetingDetectionEngine {
       autoEndEligible: autoEndEligible === true,
       ownerWebContents,
       systemAudioAvailable: systemAudioAvailable === true,
+      // Lets a second manual start surface this recording instead of opening a
+      // new note over it.
+      noteId,
     };
     this._syncMeetingProcessDetector();
 
@@ -501,12 +356,7 @@ class MeetingDetectionEngine {
     // clears it while the recording is still live; the tracked session is the
     // gate that cannot be reset from outside. A prompt shown then could replace
     // the recording UI while the tracked recording is still active.
-    if (
-      this._userRecording ||
-      this._postRecordingCooldown ||
-      this._recordingSession ||
-      this._hasLiveAutoEndOffer()
-    ) {
+    if (this._userRecording || this._postRecordingCooldown || this._recordingSession) {
       debugLogger.info("Detection queued — user is recording", { detectionId, source }, "meeting");
       this._notificationQueue.push({ source, key, data });
       this.activeDetections.set(detectionId, { source, key, data });
@@ -569,7 +419,6 @@ class MeetingDetectionEngine {
     }
 
     this.windowManager.showMeetingNotification({
-      kind: "detection",
       detectionId,
       source,
       key,
@@ -672,6 +521,15 @@ class MeetingDetectionEngine {
 
   async startManualMeeting() {
     debugLogger.info("Starting manual meeting", {}, "meeting");
+
+    // A live meeting already owns a note: a second start would leave the recording
+    // running in it behind a new, empty one. Surface the live note instead.
+    if (this._recordingSession) {
+      const { noteId } = this._recordingSession;
+      debugLogger.info("Manual meeting ignored — a recording is live", { noteId }, "meeting");
+      if (noteId != null) await this.windowManager.queueNoteNavigation({ noteId });
+      return;
+    }
 
     const activeEvents = this.databaseManager.getActiveEvents();
     if (activeEvents?.length > 0) {
@@ -784,12 +642,7 @@ class MeetingDetectionEngine {
     if (flushQueued) this._flushNotificationQueue();
   }
 
-  handleNotificationTimeout(notification = null) {
-    if (notification?.kind === "auto-end") {
-      this.handleAutoEndNotificationClosed(notification.sessionId);
-      return;
-    }
-
+  handleNotificationTimeout() {
     // Expiring unanswered is not a decline, so no dismissal cooldown starts:
     // the detector's hasPrompted flag already keeps the ongoing call from
     // re-prompting, while a call starting right after the timeout still
@@ -815,14 +668,6 @@ class MeetingDetectionEngine {
     // is still live; hold the queue for the flush that follows the recording.
     if (this._recordingSession) {
       debugLogger.info("Holding queued notifications — recording session live", {}, "meeting");
-      return;
-    }
-
-    // The post-recording cooldown fires 2.5s after an auto-end stop, while the
-    // restart card still has most of its window left. Showing a prompt here
-    // would replace that card and silently void the restart offer.
-    if (this._hasLiveAutoEndOffer()) {
-      debugLogger.info("Holding queued notifications — restart offer live", {}, "meeting");
       return;
     }
 
@@ -905,8 +750,6 @@ class MeetingDetectionEngine {
 
   stop() {
     debugLogger.info("Meeting detection engine stopped", {}, "meeting");
-    this._clearAutoEndRecovery();
-    this._autoEndRestartGrace = null;
     this._deactivateAutoEnd();
     this._recordingSession = null;
     this.meetingProcessDetector.stop();
@@ -922,6 +765,3 @@ class MeetingDetectionEngine {
 }
 
 module.exports = MeetingDetectionEngine;
-module.exports.AUTO_END_RESTART_WINDOW_MS = AUTO_END_RESTART_WINDOW_MS;
-module.exports.AUTO_END_RESTART_GRACE_MS = AUTO_END_RESTART_GRACE_MS;
-module.exports.AUTO_END_RESTART_CLAIM_MS = AUTO_END_RESTART_CLAIM_MS;

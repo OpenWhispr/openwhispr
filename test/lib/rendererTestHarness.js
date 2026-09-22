@@ -99,7 +99,12 @@ function installHookDom(t) {
 // source served in its place.
 async function createRendererServer(
   t,
-  { cachePrefix = "openwhispr-renderer-test-", mockModules = {}, noExternal = false } = {}
+  {
+    cachePrefix = "openwhispr-renderer-test-",
+    mockModules = {},
+    noExternal = false,
+    resolveAlias = {},
+  } = {}
 ) {
   const { createServer } = await import("vite");
   const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), cachePrefix));
@@ -108,6 +113,7 @@ async function createRendererServer(
     root: path.resolve(__dirname, "../../src"),
     cacheDir,
     configFile: false,
+    resolve: { alias: resolveAlias },
     appType: "custom",
     logLevel: "silent",
     optimizeDeps: { noDiscovery: true },
