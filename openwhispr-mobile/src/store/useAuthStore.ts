@@ -19,6 +19,7 @@ import {
 import { Sentry } from '@/lib/sentry';
 import { useUsageStore } from '@/store/useUsageStore';
 import { clearAllSessions as clearAgentSessions } from '@/services/agent/AgentComposerService';
+import { clearNoteShareTokens } from '@/lib/notes/noteShareTokens';
 
 const GUEST_SESSION_KEY = 'openwhispr_guest_session';
 
@@ -68,6 +69,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     await anonymousSignInInFlight?.catch(() => undefined);
     try {
       const user = await getSession();
+      await clearPreviousNoteShareTokens(user?.id);
       if (user) {
         const sessionCookie = await getStoredSession();
         set({ user, sessionCookie, isGuest: false, isInitialized: true, isLoading: false });
@@ -125,6 +127,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ isLoading: true });
     try {
       await anonymousSignInInFlight?.catch(() => undefined);
+      await clearPreviousNoteShareTokens();
       await clearSession();
       await SecureStore.setItemAsync(GUEST_SESSION_KEY, 'true');
       useUsageStore.getState().reset();
@@ -177,6 +180,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
   signOut: async () => {
     set({ isLoading: true });
     await anonymousSignInInFlight?.catch(() => undefined);
+    await clearPreviousNoteShareTokens();
     await signOutApi();
     await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
     useUsageStore.getState().reset();
@@ -188,6 +192,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ isLoading: true, error: null });
     await anonymousSignInInFlight?.catch(() => undefined);
     try {
+      await clearPreviousNoteShareTokens();
       await deleteAccountApi();
       await clearSession();
       await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
@@ -205,6 +210,18 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
 type SetState = StoreApi<AuthStore>['setState'];
 
+async function clearPreviousNoteShareTokens(nextUserId?: string): Promise<void> {
+  const previousUserId = useAuthStore.getState().user?.id;
+  if (previousUserId && previousUserId !== nextUserId) {
+    try {
+      await clearNoteShareTokens(previousUserId);
+    } catch {
+      // A local cache failure must not retain an authenticated session.
+      Sentry.captureMessage('Note sharing cache cleanup failed', 'warning');
+    }
+  }
+}
+
 async function applyAuthenticatedSession(
   set: SetState,
   result: SessionResult,
@@ -212,6 +229,7 @@ async function applyAuthenticatedSession(
 ): Promise<void> {
   await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
   await initAuthenticatedUser(result.user, fallbackName);
+  await clearPreviousNoteShareTokens(result.user?.id);
   useUsageStore.getState().reset();
   set({
     user: result.user,

@@ -6,7 +6,6 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
-  ActionSheetIOS,
   ActivityIndicator,
   Alert,
 } from 'react-native';
@@ -27,6 +26,7 @@ import { useAudioRecording } from '@/hooks/useAudioRecording';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useUsageLimitRecovery } from '@/hooks/useUsageLimitRecovery';
 import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer';
+import { NoteShareSheet } from '@/components/notes/NoteShareSheet';
 import { NoteActionsMenu } from '@/components/notes/NoteActionsMenu';
 import { ConflictBanner } from '@/components/notes/ConflictBanner';
 import { NoteChatSheet } from '@/components/notes/NoteChatSheet';
@@ -151,6 +151,7 @@ export default function NoteEditorScreen() {
   const [mergeSheetVisible, setMergeSheetVisible] = useState(false);
   const [suggestionSheetVisible, setSuggestionSheetVisible] = useState(false);
   const [chatVisible, setChatVisible] = useState(false);
+  const [shareVisible, setShareVisible] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatOverNoteMessage[]>([]);
   const [chatDraft, setChatDraft] = useState('');
   const [chatError, setChatError] = useState<string | null>(null);
@@ -197,6 +198,7 @@ export default function NoteEditorScreen() {
     chatAbortRef.current?.abort();
     chatAbortRef.current = null;
     setChatVisible(false);
+    setShareVisible(false);
     setChatMessages([]);
     setChatDraft('');
     setChatError(null);
@@ -334,50 +336,44 @@ export default function NoteEditorScreen() {
     [addLearnedWords],
   );
 
-  const debouncedSave = useCallback(
-    (updates: { title?: string; content?: string }) => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => {
-        updateNote(noteId, updates);
-        if (typeof updates.content === 'string') {
-          maybeLearnCorrections(updates.content);
-        }
-      }, 800);
-    },
-    [noteId, updateNote, maybeLearnCorrections],
-  );
+  const flushDraft = useCallback((): void => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = null;
+    const titleChanged = titleRef.current !== originalTitleRef.current;
+    const contentChanged =
+      !usesSegmentTranscriptRef.current && contentRef.current !== originalContentRef.current;
+    if (!titleChanged && !contentChanged) return;
+    updateNote(noteId, {
+      ...(titleChanged ? { title: titleRef.current } : {}),
+      ...(contentChanged ? { content: contentRef.current } : {}),
+    });
+    originalTitleRef.current = titleRef.current;
+    if (contentChanged) {
+      originalContentRef.current = contentRef.current;
+      maybeLearnCorrections(contentRef.current);
+    }
+  }, [noteId, updateNote, maybeLearnCorrections]);
 
-  useEffect(
-    () => () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      const titleChanged = titleRef.current !== originalTitleRef.current;
-      const contentChanged =
-        !usesSegmentTranscriptRef.current && contentRef.current !== originalContentRef.current;
-      if (!titleChanged && !contentChanged) return;
-      updateNote(noteId, {
-        ...(titleChanged ? { title: titleRef.current } : {}),
-        ...(contentChanged ? { content: contentRef.current } : {}),
-      });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [noteId],
-  );
+  const debouncedSave = useCallback((): void => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(flushDraft, 800);
+  }, [flushDraft]);
+
+  useEffect(() => flushDraft, [flushDraft]);
 
   const handleTitleChange = useCallback(
     (text: string) => {
       setTitle(text);
-      debouncedSave(
-        usesSegmentTranscript ? { title: text } : { title: text, content: contentRef.current },
-      );
+      debouncedSave();
     },
-    [debouncedSave, usesSegmentTranscript],
+    [debouncedSave],
   );
 
   const handleContentChange = useCallback(
     (text: string) => {
       if (usesSegmentTranscript) return;
       setContent(text);
-      debouncedSave({ title: titleRef.current, content: text });
+      debouncedSave();
     },
     [debouncedSave, usesSegmentTranscript],
   );
@@ -426,7 +422,7 @@ export default function NoteEditorScreen() {
       // Re-root the learner baseline to the freshly-dictated text so we only
       // learn from user edits performed after this dictation.
       learnedBaselineRef.current = newContent;
-      debouncedSave({ title: titleRef.current, content: newContent });
+      debouncedSave();
       safeHaptics('success');
       if (useProcessingModeStore.getState().activeMode === 'cloud') {
         useUsageStore.getState().load(true);
@@ -483,30 +479,25 @@ export default function NoteEditorScreen() {
     }
   }, [activeMode, isRecording, registerSuperwallGate, startRecording, stopRecording, user]);
 
-  const handleExport = useCallback(() => {
-    safeHaptics('light');
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        options: ['Export as Markdown', 'Export as Plain Text', 'Cancel'],
-        cancelButtonIndex: 2,
-      },
-      (buttonIndex) => {
-        const payload = {
+  const handleExport = useCallback(
+    (format: 'md' | 'txt'): void => {
+      safeHaptics('light');
+      exportNote(
+        {
           title: titleRef.current,
           content: buildNoteShareContent({
             viewMode,
             enhancedContent: note?.enhancedContent ?? null,
             usesSegmentTranscript,
-            // Title-free: exportNote already leads the file with the title.
             transcript: formatTranscriptForExport({ blocks: transcriptBlocks }),
             content: contentRef.current,
           }),
-        };
-        if (buttonIndex === 0) exportNote(payload, 'md');
-        if (buttonIndex === 1) exportNote(payload, 'txt');
-      },
-    );
-  }, [note?.enhancedContent, transcriptBlocks, usesSegmentTranscript, viewMode]);
+        },
+        format,
+      ).catch(() => Alert.alert('Export failed', 'Could not export this note. Please try again.'));
+    },
+    [note?.enhancedContent, transcriptBlocks, usesSegmentTranscript, viewMode],
+  );
 
   const handleCopyTranscript = useCallback(() => {
     if (!transcriptText.trim()) return;
@@ -848,6 +839,15 @@ export default function NoteEditorScreen() {
 
   return (
     <View className="flex-1 bg-systemBackground">
+      {shareVisible ? (
+        <NoteShareSheet
+          noteId={noteId}
+          visible
+          onClose={() => setShareVisible(false)}
+          onFlushDraft={flushDraft}
+          onExport={handleExport}
+        />
+      ) : null}
       <TabScreenHeader
         title={title || 'Untitled'}
         left={<GlassBackButton fallbackRoute="/(tabs)/(notes)" />}
@@ -864,7 +864,7 @@ export default function NoteEditorScreen() {
             askNoteDisabled={isChatProcessing}
             onCopyGeneratedNote={note?.enhancedContent ? handleCopyGeneratedNote : undefined}
             onCopyTranscript={usesSegmentTranscript ? handleCopyTranscript : undefined}
-            onShare={handleExport}
+            onShare={() => setShareVisible(true)}
             onDelete={handleDelete}
           />
         }

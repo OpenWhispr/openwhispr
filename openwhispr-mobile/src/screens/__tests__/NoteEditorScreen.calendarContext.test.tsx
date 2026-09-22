@@ -544,3 +544,5 @@ describe('NoteEditorScreen generated titles', () => {
     expect(mockUpdateNote.mock.calls[0][1]).not.toHaveProperty('title');
   });
 });
+
+jest.mock('@/components/notes/NoteShareSheet', () => ({ NoteShareSheet: () => null }));

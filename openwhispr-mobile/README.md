@@ -9,7 +9,18 @@ The mobile app lives in the main [`OpenWhispr/openwhispr`](https://github.com/Op
 - **Cloud or Private mode** — flip between fast cloud transcription and fully on-device Whisper inference
 - **iOS dictation keyboard** — dictate from any text field system-wide via a custom keyboard extension
 - **Markdown notes** — folders, full-text search, AI-assisted cleanup
+- **Note sharing** — web links, email invitations, organization domains, and viewer/editor access; Markdown and plain-text exports remain available offline
 - **Native iOS feel** — Liquid Glass tab bar and headers on iOS 26+, blur fallback on iOS 18
+
+## Sharing notes
+
+Open a note’s menu and choose **Share**. Creating a link or inviting someone uploads the latest saved draft through normal cloud sync, then uses the existing notes website for recipients. Opening the sheet does not publish a note. Private notes require an explicit cloud-sync opt-in; exports work without an account or cloud sync.
+
+Full link tokens stay in account-scoped secure storage on the device that creates them. A link created on another device may require **Replace link**, which invalidates the previous link. Changing external access to private preserves existing team/space access and grant records. If cloud deletion is pending after making a note private, **Disable previous link** can revoke its old external link separately.
+
+The backend currently versions sharing settings and content together. Revoking sharing while local edits are unsynced can show a sync conflict; the app preserves those edits for explicit resolution. Normal link publication waits for the new server revision before returning the link. Native device and cross-device acceptance are still required before release.
+
+For a custom API, configure its paired notes viewer as described in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Tech stack
 

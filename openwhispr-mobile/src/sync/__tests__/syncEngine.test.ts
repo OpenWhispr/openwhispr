@@ -125,7 +125,7 @@ jest.mock('../initialBackfill', () => ({
   runInitialBackfillIfNeeded: (...args: unknown[]) => mockRunInitialBackfillIfNeeded(...args),
 }));
 
-import { requestSync } from '../syncEngine';
+import { requestSync, subscribeSyncCompletion } from '../syncEngine';
 import { pushPrivateNoteDeletes } from '../privateNoteDeletion';
 import { useSyncStore } from '../useSyncStore';
 import { ApiError } from '@/lib/apiClient';
@@ -735,4 +735,18 @@ describe('in-flight cancellation', () => {
     expect(mockPushDictionary).not.toHaveBeenCalled();
     expect(mockPushSnippets).not.toHaveBeenCalled();
   });
+});
+
+it('notifies sync completion after a gated pass and supports unsubscription', async (): Promise<void> => {
+  const finished = jest.fn();
+  const unsubscribe = subscribeSyncCompletion(finished);
+  mockConfigState.config = { cloudBackupEnabled: false };
+  mockSyncSpaces.mockResolvedValue({ capable: false, activeSpaces: [] });
+  requestSync('manual');
+  await flush();
+  expect(finished).toHaveBeenCalledTimes(1);
+  unsubscribe();
+  requestSync('manual');
+  await flush();
+  expect(finished).toHaveBeenCalledTimes(1);
 });

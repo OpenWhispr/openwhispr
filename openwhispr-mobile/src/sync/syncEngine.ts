@@ -38,6 +38,14 @@ export type SyncReason = 'after-write' | 'foreground' | 'sign-in' | 'manual';
 let inFlight = false;
 let pendingTrigger: SyncReason | null = null;
 let postWriteTimer: ReturnType<typeof setTimeout> | null = null;
+const syncCompletionListeners = new Set<(hasQueuedRun: boolean) => void>();
+
+export function subscribeSyncCompletion(listener: (hasQueuedRun: boolean) => void): () => void {
+  syncCompletionListeners.add(listener);
+  return (): void => {
+    syncCompletionListeners.delete(listener);
+  };
+}
 
 // The snippets endpoints (/api/snippets/*) may not be deployed yet on the
 // backend. A missing route returns 404/405; treat that as "endpoint unavailable"
@@ -458,6 +466,7 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
   } finally {
     dispose();
     inFlight = false;
+    syncCompletionListeners.forEach((listener) => listener(pendingTrigger !== null));
     if (pendingTrigger) {
       const next = pendingTrigger;
       pendingTrigger = null;

@@ -1,5 +1,6 @@
 const mockSignInAnonymously = jest.fn();
 const mockCaptureMessage = jest.fn();
+const mockClearNoteShareTokens = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('@/lib/authClient', () => ({
   getStoredSession: jest.fn(),
@@ -25,6 +26,9 @@ jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: { getState: () => ({ reset: jest.fn(), load: jest.fn() }) },
 }));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));
+jest.mock('@/lib/notes/noteShareTokens', () => ({
+  clearNoteShareTokens: (...args: unknown[]) => mockClearNoteShareTokens(...args),
+}));
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn().mockResolvedValue(null),
   setItemAsync: jest.fn(),
@@ -32,6 +36,7 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 import { useAuthStore } from '@/store/useAuthStore';
+import { signInWithEmail } from '@/lib/authClient';
 
 const anonymousUser = {
   id: 'anon-user',
@@ -50,6 +55,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockClearNoteShareTokens.mockResolvedValue(undefined);
   useAuthStore.setState({
     user: null,
     sessionCookie: null,
@@ -64,6 +70,25 @@ beforeEach(() => {
     error: null,
     status: null,
   });
+});
+
+it('clears the prior account tokens on sign out', async () => {
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  await useAuthStore.getState().signOut();
+  expect(mockClearNoteShareTokens).toHaveBeenCalledWith('anon-user');
+  expect(useAuthStore.getState().user).toBeNull();
+});
+
+it('clears the prior account tokens when signing into a different account', async () => {
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  jest.mocked(signInWithEmail).mockResolvedValueOnce({
+    user: { ...anonymousUser, id: 'other-user' },
+    sessionCookie: 'session=other',
+    error: null,
+  });
+  await useAuthStore.getState().signIn('other@example.com', 'password');
+  expect(mockClearNoteShareTokens).toHaveBeenCalledWith('anon-user');
+  expect(useAuthStore.getState().user?.id).toBe('other-user');
 });
 
 describe('useAuthStore.ensureAnonymousSession', () => {
@@ -176,4 +201,12 @@ it('still enters guest mode if the anonymous request fails while guest mode is w
     isGuest: true,
     isLoading: false,
   });
+});
+
+it('still signs out if local sharing cache cleanup fails', async (): Promise<void> => {
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  mockClearNoteShareTokens.mockRejectedValueOnce(new Error('Secure storage unavailable'));
+  await useAuthStore.getState().signOut();
+  expect(useAuthStore.getState().user).toBeNull();
+  expect(useAuthStore.getState().isLoading).toBe(false);
 });

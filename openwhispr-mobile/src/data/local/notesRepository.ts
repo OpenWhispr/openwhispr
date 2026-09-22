@@ -890,6 +890,8 @@ export class LocalNotesRepository implements NotesRepository {
       .where(eq(notes.id, local.id))
       .run();
 
+    this.clearSyncState(`note.pushRejected.${local.id}`);
+
     // Rebuild the transcript when the server sent a different one. Normally
     // gated on !hasDirtyTranscript (un-pushed local edits are authoritative
     // during an ordinary pull) — options.forceTranscript (resolveConflictUseServer
@@ -1030,13 +1032,20 @@ export class LocalNotesRepository implements NotesRepository {
       )
       .where(eq(notes.id, pushed.id))
       .run();
+    if (unchanged) this.clearSyncState(`note.pushRejected.${pushed.id}`);
   }
 
   markNoteTerminal(localId: number): void {
     // Clear pendingSync so the row stops re-attempting; preserve the local state
     // so the user still sees their attempted change. They can edit it to fix and
     // retry — that will re-flag pending.
-    this.database.update(notes).set({ pendingSync: 0 }).where(eq(notes.id, localId)).run();
+    this.database.transaction((tx) => {
+      tx.insert(syncState)
+        .values({ key: `note.pushRejected.${localId}`, value: '1' })
+        .onConflictDoUpdate({ target: syncState.key, set: { value: '1' } })
+        .run();
+      tx.update(notes).set({ pendingSync: 0 }).where(eq(notes.id, localId)).run();
+    });
   }
 
   dropNotePushAttempt(localId: number): void {
@@ -1044,11 +1053,17 @@ export class LocalNotesRepository implements NotesRepository {
     // whatever it was before — the next pull carries the truth. Clearing
     // cloud_updated_at alongside pendingSync means that pull re-seeds the sync
     // base instead of leaving a base this device can no longer trust.
-    this.database
-      .update(notes)
-      .set({ pendingSync: 0, cloudUpdatedAt: null })
-      .where(eq(notes.id, localId))
-      .run();
+    this.database.transaction((tx) => {
+      // A cleared queue flag alone must never be mistaken for uploaded content.
+      tx.insert(syncState)
+        .values({ key: `note.pushRejected.${localId}`, value: '1' })
+        .onConflictDoUpdate({ target: syncState.key, set: { value: '1' } })
+        .run();
+      tx.update(notes)
+        .set({ pendingSync: 0, cloudUpdatedAt: null })
+        .where(eq(notes.id, localId))
+        .run();
+    });
   }
 
   parkNoteConflict(localId: number, serverNote: RemoteNote): void {
@@ -1145,6 +1160,7 @@ export class LocalNotesRepository implements NotesRepository {
   }
 
   hardDeleteNote(localId: number): void {
+    this.clearSyncState(`note.pushRejected.${localId}`);
     this.deleteNoteChildrenAndAudio(localId);
     this.database.delete(notes).where(eq(notes.id, localId)).run();
   }
