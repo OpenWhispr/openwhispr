@@ -3,7 +3,9 @@ import { Keyboard, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SpaceGrotesk } from '@/lib/fonts';
+import { OnboardingError } from '@/lib/onboardingErrors';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
+import { useConfigStore } from '@/store/useConfigStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -18,33 +20,37 @@ const EXAMPLE_EMAIL =
 export function DictationEmailStep(): ReactElement {
   const { goNext, progress } = useOnboardingStep('dictation-email');
   const selectedMode = useOnboardingStore((state) => state.selectedMode);
+  // Replaying onboarding starts with no choice made, but a saved Local default still stands.
+  const savedMode = useConfigStore((state) => state.config?.defaultMode);
   const user = useAuthStore((state) => state.user);
   const ensureSession = useAuthStore((state) => state.ensureAnonymousSession);
   const isTranscribing = useHandoffStore((state) => state.isTranscribing);
   const input = useRef<TextInput>(null);
+  const dismissOnInsert = useRef(false);
   const [value, setValue] = useState('');
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState<string | null>(null);
   const [showExample, setShowExample] = useState(false);
-  const localSelected = selectedMode === 'private';
+  const localSelected = (selectedMode ?? savedMode) === 'private';
   const liveAvailable = !localSelected && !!user;
   const busy =
     status === 'recording' || status === 'transcribing' || status === 'cleaning' || isTranscribing;
 
   useEffect(() => {
     // Practice may use Cloud before the choice, but must never override a Local choice.
-    if (selectedMode !== null) return;
+    if (selectedMode !== null || localSelected) return;
     const previous = useProcessingModeStore.getState();
     previous.setActiveMode('cloud', true);
     return () => {
       useProcessingModeStore.getState().setActiveMode(previous.activeMode, previous.isUserOverride);
     };
-  }, [selectedMode]);
+  }, [selectedMode, localSelected]);
 
   useEffect(() => {
     const subscription = addKeyboardStatusChangedListener((event) => {
       if (!event.status) return;
       setStatus(event.status);
+      if (event.status === 'ready') dismissOnInsert.current = true;
       if (
         event.status === 'error' ||
         event.status === 'no_speech' ||
@@ -56,7 +62,8 @@ export function DictationEmailStep(): ReactElement {
             : event.error || 'Dictation could not finish. Try again or view the example.',
         );
         Keyboard.dismiss();
-      } else {
+      } else if (event.status === 'recording') {
+        // The keyboard settles back to idle after a failure, so only a new attempt clears it.
         setError(null);
       }
     });
@@ -66,7 +73,9 @@ export function DictationEmailStep(): ReactElement {
   const retry = useCallback(async (): Promise<void> => {
     await ensureSession();
     if (!useAuthStore.getState().user)
-      throw new Error('Cloud practice needs a connection. You can view the example or skip.');
+      throw new OnboardingError(
+        'Cloud practice needs a connection. You can view the example or skip.',
+      );
     setError(null);
     setStatus('idle');
     setShowExample(false);
@@ -120,8 +129,12 @@ export function DictationEmailStep(): ReactElement {
             value={value}
             onChangeText={(text) => {
               setValue(text);
-              // Native readiness precedes the keyboard consuming its pending transcript.
-              if (status === 'ready' && text.trim()) Keyboard.dismiss();
+              // Native readiness precedes the keyboard consuming its pending transcript, and the
+              // status stays ready afterwards, so dismiss once per dictation, not on every edit.
+              if (dismissOnInsert.current && text.trim()) {
+                dismissOnInsert.current = false;
+                Keyboard.dismiss();
+              }
             }}
             editable={liveAvailable}
             multiline

@@ -34,6 +34,11 @@ jest.mock('@/store/useAuthStore', () => ({
     { getState: () => ({ user: mockUser }) },
   ),
 }));
+let mockSavedMode: 'private' | 'cloud' = 'cloud';
+jest.mock('@/store/useConfigStore', () => ({
+  useConfigStore: (selector: (s: unknown) => unknown) =>
+    selector({ config: { defaultMode: mockSavedMode } }),
+}));
 jest.mock('@/store/useHandoffStore', () => ({
   useHandoffStore: (selector: (s: unknown) => unknown) => selector({ isTranscribing: false }),
 }));
@@ -41,6 +46,7 @@ jest.mock('@/store/useHandoffStore', () => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockMode = null;
+  mockSavedMode = 'cloud';
   mockUser = { id: 'anon' };
   mockNext.mockResolvedValue(undefined);
   mockEnsureSession.mockResolvedValue(undefined);
@@ -91,4 +97,44 @@ it('does not dismiss the keyboard until the pending transcript has actually been
   fireEvent.changeText(screen.getByLabelText('Your dictated email'), 'Hello Tim.');
   expect(dismiss).toHaveBeenCalledTimes(1);
   dismiss.mockRestore();
+});
+
+it('lets the user edit the inserted email without the keyboard closing on every keystroke', () => {
+  const dismiss = jest.spyOn(Keyboard, 'dismiss');
+  const screen = render(<DictationEmailStep />);
+  const field = screen.getByLabelText('Your dictated email');
+  act(() => mockListener({ status: 'recording' }));
+  act(() => mockListener({ status: 'ready' }));
+  fireEvent.changeText(field, 'Hello Tim.');
+  fireEvent.changeText(field, 'Hello Tim!');
+  fireEvent.changeText(field, 'Hello Tim!!');
+  expect(dismiss).toHaveBeenCalledTimes(1);
+  dismiss.mockRestore();
+});
+
+// After no speech the keyboard settles back to idle a couple of seconds later.
+it('keeps the no-speech error until the next recording starts', () => {
+  const screen = render(<DictationEmailStep />);
+  act(() => mockListener({ status: 'no_speech' }));
+  act(() => mockListener({ status: 'idle' }));
+  expect(screen.getByText('No speech detected. Try again or view the example.')).toBeTruthy();
+  act(() => mockListener({ status: 'recording' }));
+  expect(screen.queryByText('No speech detected. Try again or view the example.')).toBeNull();
+});
+
+// Replaying onboarding starts with no choice made, but the saved Local default still stands.
+it('keeps a saved Local default when replaying onboarding', () => {
+  mockSavedMode = 'private';
+  const screen = render(<DictationEmailStep />);
+  expect(mockSetMode).not.toHaveBeenCalled();
+  expect(screen.getByText('Example · not a live transcription')).toBeTruthy();
+});
+
+it('explains why Cloud practice could not be retried', async () => {
+  mockUser = null;
+  const screen = render(<DictationEmailStep />);
+  fireEvent.press(screen.getByText('Retry'));
+  expect(
+    await screen.findByText('Cloud practice needs a connection. You can view the example or skip.'),
+  ).toBeTruthy();
 });
