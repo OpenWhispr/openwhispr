@@ -183,9 +183,9 @@ export function ModelCard({
                     e.stopPropagation();
                     onDelete?.(model.value);
                   }}
-                  size="sm"
+                  size="icon"
                   variant="ghost"
-                  className="h-6 w-6 p-0 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
+                  className="size-6 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
                 >
                   <Trash2 size={12} />
                 </Button>

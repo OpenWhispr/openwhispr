@@ -4095,9 +4095,19 @@ EOF`,
                   <HotkeyListInput
                     value={meetingKey}
                     onChange={(list) => registerMeetingHotkey(list)}
-                    onClear={async () => {
-                      await window.electronAPI?.registerMeetingHotkey?.("");
+                    onClear={async (): Promise<boolean> => {
+                      const result = await window.electronAPI?.registerMeetingHotkey?.("");
+                      if (!result?.success) {
+                        showAlertDialog({
+                          title: t("hooks.hotkeyRegistration.titles.notRegistered"),
+                          description:
+                            result?.message ||
+                            t("hooks.hotkeyRegistration.errors.couldNotRegister"),
+                        });
+                        return false;
+                      }
                       setMeetingKey("");
+                      return true;
                     }}
                     validate={validateMeetingHotkey}
                     disabled={isMeetingHotkeyRegistering}

@@ -8,30 +8,96 @@ on:
   schedule:
     - cron: "0 6 * * 1"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
   analyze:
-    name: Analyze
+    name: Analyze (desktop)
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       security-events: write
       contents: read
     strategy:
       fail-fast: false
       matrix:
+        # Preserve the main-branch analysis identity for PR comparisons.
         language: [javascript-typescript]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@ed1a0fa18ac745d017ca370dd4ef08bba3b4f504 # v3
         with:
           languages: ${{ matrix.language }}
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+          build-mode: none
+          config: '{"paths-ignore":["openwhispr-mobile/**"]}'
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@ed1a0fa18ac745d017ca370dd4ef08bba3b4f504 # v3
         with:
-          category: "/language:${{ matrix.language }}"
+          category: /language:${{ matrix.language }}
+
+  analyze-mobile:
+    name: Analyze (mobile)
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@ed1a0fa18ac745d017ca370dd4ef08bba3b4f504 # v3
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          config: '{"paths":["openwhispr-mobile"]}'
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@ed1a0fa18ac745d017ca370dd4ef08bba3b4f504 # v3
+        with:
+          category: /language:javascript-typescript/mobile
+
+  codeql-status:
+    name: CodeQL CI
+    needs: [changes, analyze, analyze-mobile]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require selected security analysis
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          DESKTOP: ${{ needs.changes.outputs.desktop }}
+          MOBILE: ${{ needs.changes.outputs.mobile }}
+          DESKTOP_RESULT: ${{ needs.analyze.result }}
+          MOBILE_RESULT: ${{ needs.analyze-mobile.result }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          if [ "$DESKTOP" = true ]; then
+            test "$DESKTOP_RESULT" = success
+          fi
+          if [ "$MOBILE" = true ]; then
+            test "$MOBILE_RESULT" = success
+          fi
