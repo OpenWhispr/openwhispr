@@ -107,4 +107,4 @@ For desktop regression checks, install root dependencies separately and run the 
 
 Before shipping, inspect an EAS archive from the mobile directory and verify it includes `shared/ai` beside `openwhispr-mobile`; builds must preserve those relative paths. Build a fresh native iOS app after changing any native module or config plugin. Do not use a JavaScript-only update to introduce the provider request transport.
 
-Provider diagnostics are explicit user actions and may incur provider charges. Tests use mocks and synthetic credentials. Complete the [maintainer smoke-test matrix](./docs/BYOK_SMOKE_TESTS.md) using your own provider accounts and a physical device. Never paste keys, tokens, transcript content, or raw provider responses into test artifacts or logs.
+Provider diagnostics are explicit user actions and may incur provider charges. Tests use mocks and synthetic credentials. Complete the [maintainer smoke-test matrix](./docs/BYOK_SMOKE_TESTS.md) (four providers) using your own provider accounts and a physical device. Never paste keys, tokens, transcript content, or raw provider responses into test artifacts or logs.

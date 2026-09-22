@@ -1,5 +1,7 @@
 # Mobile BYOK implementation plan
 
+> **Superseded in part (2026-09-22):** the shipped scope was cut to the OpenAI-compatible providers (OpenAI, Groq, OpenRouter, Custom) without Live Meetings; see `2026-09-22-mobile-byok-cutdown.md`. The provider matrix, streaming protocols and Tinfoil transport described below were removed from the branch and remain future work.
+
 **Goal:** Deliver desktop-style personal bring-your-own-key support across existing mobile workflows, starting with iOS.
 
 **Architecture:** Desktop and mobile consume a small, dependency-free shared AI core. Each application owns its credentials, network transports, lifecycle, and UI. Mobile calls providers directly and keeps credentials in Keychain.
