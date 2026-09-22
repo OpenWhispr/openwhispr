@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform, Share } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as WebBrowser from 'expo-web-browser';
@@ -22,6 +22,7 @@ import {
   saveNoteShareToken,
   removeNoteShareToken,
 } from '@/lib/notes/noteShareTokens';
+import { canChangeGrant, isGroupPrincipal } from '@/lib/notes/noteShareAccess';
 import { ensureNoteSynced } from '@/sync/ensureNoteSynced';
 import { requestSync } from '@/sync/syncEngine';
 
@@ -55,6 +56,15 @@ interface SharingOperation {
   current: ShareStateResponse;
   check: () => void;
   mutate: <Result>(request: () => Promise<Result>) => Promise<Result>;
+  /** Ends the operation before handing off to OS UI that stays open until the user dismisses it. */
+  release: () => void;
+}
+
+interface RunOptions {
+  /** Flush the draft and wait for its acknowledged upload before reading settings. */
+  publish?: boolean;
+  /** Allow a locally private note, e.g. to disable a link left over from its old cloud copy. */
+  allowPrivate?: boolean;
 }
 
 function sharingError(error: unknown): string {
@@ -64,6 +74,7 @@ function sharingError(error: unknown): string {
   }
   if (code === 'ACCOUNT_REQUIRED') return 'Sign in to an account to share notes.';
   if (code === 'email_verification_required') return 'Verify your email before inviting people.';
+  if (code === 'resend_cooldown') return 'Please wait a minute before resending.';
   return error instanceof Error ? error.message : 'Unable to update sharing. Please try again.';
 }
 
@@ -74,7 +85,14 @@ export function useNoteSharing(
 ): NoteSharingController {
   const user = useAuthStore((s) => s.user);
   const cookie = useAuthStore((s) => s.sessionCookie);
-  const note = useNotesStore((s) => s.notes.find((item) => item.id === noteId));
+  const notes = useNotesStore((s) => s.notes);
+  // The store only holds the current folder/space/search view; like the editor, fall back to the
+  // repository so a note outside that view keeps its identity (and its stored link).
+  const note = useMemo<Note | undefined>(
+    () =>
+      notes.find((item) => item.id === noteId) ?? notesRepository.getNoteById(noteId) ?? undefined,
+    [notes, noteId],
+  );
   const [state, setState] = useState<ShareStateResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -191,8 +209,7 @@ export function useNoteSharing(
 
   const run = async (
     task: (context: SharingOperation) => Promise<void>,
-    publish = false,
-    allowPrivate = false,
+    { publish = false, allowPrivate = false }: RunOptions = {},
   ): Promise<void> => {
     if (operation.current || !visible) return;
     const controller = new AbortController();
@@ -213,6 +230,13 @@ export function useNoteSharing(
       }
     }, 60_000);
     controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
+    const release = (): void => {
+      clearTimeout(timer);
+      if (operation.current === controller) {
+        operation.current = null;
+        setBusy(false);
+      }
+    };
     const check = (): void => {
       const auth = useAuthStore.getState();
       const current = notesRepository.getNoteById(noteId);
@@ -264,33 +288,24 @@ export function useNoteSharing(
           throw failure;
         }
       };
-      await task({ remoteId, userId: user.id, signal: controller.signal, current, check, mutate });
+      await task({
+        remoteId,
+        userId: user.id,
+        signal: controller.signal,
+        current,
+        check,
+        mutate,
+        release,
+      });
     } catch (failure) {
       if (!controller.signal.aborted && version === generation.current)
         setError(sharingError(failure));
     } finally {
-      clearTimeout(timer);
-      if (operation.current === controller) {
-        operation.current = null;
-        setBusy(false);
-      }
+      release();
     }
   };
 
-  const reconcile = async (
-    context: SharingOperation,
-    current: ShareStateResponse,
-  ): Promise<void> => {
-    await ensureNoteSynced(noteId, {
-      signal: context.signal,
-      minCloudUpdatedAt: current.share.updated_at ?? undefined,
-    });
-    context.check();
-  };
-  const adopt = async (
-    context: SharingOperation,
-    published = false,
-  ): Promise<ShareStateResponse> => {
+  const adopt = async (context: SharingOperation): Promise<ShareStateResponse> => {
     let current: ShareStateResponse;
     try {
       current = await api.getNoteShareState(context.remoteId, { signal: context.signal });
@@ -304,11 +319,11 @@ export function useNoteSharing(
       );
     }
     setState(current);
-    if (published) await reconcile(context, current);
-    else requestSync('manual');
+    requestSync('manual');
     return current;
   };
-  const sendUrl = async (url: string): Promise<void> => {
+  const sendUrl = async (context: SharingOperation, url: string): Promise<void> => {
+    context.release();
     await Share.share(
       Platform.OS === 'ios' ? { url, title: note?.title } : { message: url, title: note?.title },
     );
@@ -323,8 +338,11 @@ export function useNoteSharing(
   const setVisibility = async (
     visibility: ShareVisibility,
     domainAllowlist: string[] = [],
-  ): Promise<void> =>
-    run(
+  ): Promise<void> => {
+    // Compare-and-set against what the sheet showed, so a restricted share changed elsewhere (or
+    // unknown locally) is never widened by a tap that was meant for different settings.
+    const shown = state?.share.visibility ?? 'private';
+    return run(
       async (context) => {
         if (visibility === 'private') {
           const result = await context.mutate(() =>
@@ -337,6 +355,8 @@ export function useNoteSharing(
           requestSync('manual');
           return;
         }
+        if (context.current.share.visibility !== shown)
+          throw new Error('Sharing settings changed. Review them and try again.');
         getNoteShareViewerBaseUrl();
         const result = await context.mutate(() =>
           api.setNoteShareVisibility(context.remoteId, visibility, domainAllowlist, {
@@ -344,40 +364,39 @@ export function useNoteSharing(
           }),
         );
         context.check();
-        setState({ ...context.current, share: result.share });
+        const next = { ...context.current, share: result.share };
+        setState(next);
         requestSync('manual');
         if (result.raw_token) {
           await remember(context, result.raw_token);
-          await reconcile(context, { ...context.current, share: result.share });
-          if (visibility === 'link') await sendUrl(buildNoteShareUrl(result.raw_token));
+          if (visibility === 'link') await sendUrl(context, buildNoteShareUrl(result.raw_token));
         } else {
-          const token = await loadToken(context.remoteId, {
-            ...context.current,
-            share: result.share,
-          });
+          const token = await loadToken(context.remoteId, next);
           context.check();
           setHasToken(Boolean(token));
-          await reconcile(context, { ...context.current, share: result.share });
         }
       },
-      visibility !== 'private',
-      visibility === 'private',
+      { publish: visibility !== 'private', allowPrivate: visibility === 'private' },
     );
+  };
 
   const replaceLink = async (): Promise<void> =>
-    run(async (context) => {
-      getNoteShareViewerBaseUrl();
-      const result = await context.mutate(() =>
-        api.replaceNoteShareToken(context.remoteId, { signal: context.signal }),
-      );
-      context.check();
-      setState({ ...context.current, share: result.share });
-      await remember(context, result.raw_token);
-      await reconcile(context, { ...context.current, share: result.share });
-      await Clipboard.setStringAsync(buildNoteShareUrl(result.raw_token));
-      context.check();
-      setMessage('New link copied. The previous link no longer works.');
-    }, true);
+    run(
+      async (context) => {
+        getNoteShareViewerBaseUrl();
+        const result = await context.mutate(() =>
+          api.replaceNoteShareToken(context.remoteId, { signal: context.signal }),
+        );
+        context.check();
+        setState({ ...context.current, share: result.share });
+        requestSync('manual');
+        await remember(context, result.raw_token);
+        await Clipboard.setStringAsync(buildNoteShareUrl(result.raw_token));
+        context.check();
+        setMessage('New link copied. The previous link no longer works.');
+      },
+      { publish: true },
+    );
 
   const sendLink = async (destination: 'copy' | 'share' | 'open'): Promise<void> =>
     run(async (context) => {
@@ -393,87 +412,95 @@ export function useNoteSharing(
         await Clipboard.setStringAsync(url);
         context.check();
         setMessage('Link copied.');
-      } else if (destination === 'open') await WebBrowser.openBrowserAsync(url);
-      else await sendUrl(url);
-    }, true);
+      } else if (destination === 'open') {
+        context.release();
+        await WebBrowser.openBrowserAsync(url);
+      } else await sendUrl(context, url);
+    });
 
   const inviteEmail = async (input: string): Promise<void> =>
-    run(async (context) => {
-      const email = input.trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-        throw new Error('Enter a valid email address.');
-      if (
-        context.current.access?.grants.some(
-          (grant) => grant.principal.email?.toLowerCase() === email,
-        ) ||
-        context.current.invitations.some(
-          (invite) => !invite.revoked_at && invite.email.toLowerCase() === email,
-        )
-      ) {
-        throw new Error('This person already has access or an invitation.');
-      }
-      if (context.current.access) {
+    run(
+      async (context) => {
+        const email = input.trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+          throw new Error('Enter a valid email address.');
+        if (
+          context.current.access?.grants.some(
+            (grant) => grant.principal.email?.toLowerCase() === email,
+          ) ||
+          context.current.invitations.some(
+            (invite) => !invite.revoked_at && invite.email.toLowerCase() === email,
+          )
+        ) {
+          throw new Error('This person already has access or an invitation.');
+        }
+        if (context.current.access) {
+          await context.mutate(() =>
+            api.createNoteAccessGrant(
+              context.remoteId,
+              { principal_type: 'email', email, permission: 'viewer' },
+              { signal: context.signal },
+            ),
+          );
+          context.check();
+          setMessage('Access granted.');
+        } else {
+          const result = await context.mutate(() =>
+            api.inviteNoteEmails(context.remoteId, [email], {
+              signal: context.signal,
+            }),
+          );
+          context.check();
+          setMessage(
+            result.email_failed_ids.length
+              ? 'Invitation saved, but email delivery failed. Use Resend to try again.'
+              : result.already_invited.length
+                ? 'This person is already invited.'
+                : 'Invitation sent.',
+          );
+        }
+        const updated = await adopt(context);
+        if (
+          context.current.access &&
+          updated.invitations.some(
+            (invite) =>
+              invite.email.toLowerCase() === email && !invite.revoked_at && !invite.last_emailed_at,
+          )
+        ) {
+          setMessage(
+            'Access granted, but the invitation email was not sent. Use Resend to try again.',
+          );
+        }
+      },
+      { publish: true },
+    );
+
+  const addPrincipal = async (principal: AccessPrincipalSuggestion): Promise<void> =>
+    run(
+      async (context) => {
+        if (
+          isGroupPrincipal(principal.type) &&
+          !context.current.access?.can_manage_inherited_access
+        ) {
+          throw new Error('You do not have permission to manage group access.');
+        }
         await context.mutate(() =>
           api.createNoteAccessGrant(
             context.remoteId,
-            { principal_type: 'email', email, permission: 'viewer' },
+            {
+              principal_type: principal.type,
+              ...(principal.id ? { principal_id: principal.id } : { email: principal.email ?? '' }),
+              permission: 'viewer',
+            },
             { signal: context.signal },
           ),
         );
         context.check();
+        await adopt(context);
         setMessage('Access granted.');
-      } else {
-        const result = await context.mutate(() =>
-          api.inviteNoteEmails(context.remoteId, [email], {
-            signal: context.signal,
-          }),
-        );
-        context.check();
-        setMessage(
-          result.email_failed_ids.length
-            ? 'Invitation saved, but email delivery failed. Use Resend to try again.'
-            : result.already_invited.length
-              ? 'This person is already invited.'
-              : 'Invitation sent.',
-        );
-      }
-      const updated = await adopt(context, true);
-      if (
-        context.current.access &&
-        updated.invitations.some(
-          (invite) =>
-            invite.email.toLowerCase() === email && !invite.revoked_at && !invite.last_emailed_at,
-        )
-      ) {
-        setMessage(
-          'Access granted, but the invitation email was not sent. Use Resend to try again.',
-        );
-      }
-    }, true);
-
-  const addPrincipal = async (principal: AccessPrincipalSuggestion): Promise<void> =>
-    run(async (context) => {
-      if (
-        ['team', 'folder', 'workspace'].includes(principal.type) &&
-        !context.current.access?.can_manage_inherited_access
-      ) {
-        throw new Error('You do not have permission to manage group access.');
-      }
-      await context.mutate(() =>
-        api.createNoteAccessGrant(
-          context.remoteId,
-          {
-            principal_type: principal.type,
-            ...(principal.id ? { principal_id: principal.id } : { email: principal.email ?? '' }),
-            permission: 'viewer',
-          },
-          { signal: context.signal },
-        ),
-      );
-      context.check();
-      await adopt(context, true);
-      setMessage('Access granted.');
-    }, true);
+      },
+      { publish: true },
+    );
   const changeGrant = async (
     grant: NoteAccessGrant,
     permission: NoteAccessGrant['permission'] | null,
@@ -481,12 +508,9 @@ export function useNoteSharing(
     run(async (context) => {
       const fresh = context.current.access?.grants.find((item) => item.id === grant.id);
       if (!fresh) throw new Error('Access changed. Refresh and try again.');
-      if (fresh.inherited || fresh.id.startsWith('scope:'))
-        throw new Error('Inherited access is managed in its team or space.');
-      if (
-        ['team', 'folder', 'workspace'].includes(fresh.principal.type) &&
-        !context.current.access?.can_manage_inherited_access
-      ) {
+      if (!canChangeGrant(context.current.access, fresh)) {
+        if (fresh.id.startsWith('scope:'))
+          throw new Error('Inherited access is managed in its team or space.');
         throw new Error('You do not have permission to change inherited access.');
       }
       if (permission)
@@ -508,13 +532,19 @@ export function useNoteSharing(
   ): Promise<void> =>
     run(async (context) => {
       if (resend) {
-        const result = await context.mutate(() =>
-          api.resendNoteInvitation(context.remoteId, invitation.id, {
+        // A resend only sends email, so a failure never leaves sharing settings unconfirmed.
+        try {
+          await api.resendNoteInvitation(context.remoteId, invitation.id, {
             signal: context.signal,
-          }),
-        );
+          });
+        } catch (failure) {
+          context.check();
+          if (failure instanceof ApiError && failure.status === 502)
+            throw new Error('The invitation email could not be sent. Try again later.');
+          throw failure;
+        }
         context.check();
-        setMessage(result.resent ? 'Invitation sent.' : 'Please wait a minute before resending.');
+        setMessage('Invitation sent.');
       } else
         await context.mutate(() =>
           api.revokeNoteInvitation(context.remoteId, invitation.id, { signal: context.signal }),

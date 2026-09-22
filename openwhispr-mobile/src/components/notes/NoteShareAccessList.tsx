@@ -8,12 +8,19 @@ import type {
   NoteAccessState,
   NoteShareInvitation,
 } from '@/data/remote/noteSharingTypes';
+import {
+  canChangeGrant,
+  isGroupPrincipal,
+  isPausedBySharingOff,
+} from '@/lib/notes/noteShareAccess';
 import { GroupedList } from './GroupedList';
 
 interface NoteShareAccessListProps {
   remoteId?: string;
   access?: NoteAccessState;
   invitations: NoteShareInvitation[];
+  /** External sharing is off, which suspends stored grants and invitations on the server. */
+  paused?: boolean;
   busy: boolean;
   onAddPrincipal?: (principal: AccessPrincipalSuggestion) => void;
   onUpdateGrant: (grant: NoteAccessGrant, permission: NoteAccessGrant['permission']) => void;
@@ -26,6 +33,7 @@ export function NoteShareAccessList({
   remoteId,
   access,
   invitations,
+  paused = false,
   busy,
   onAddPrincipal,
   onUpdateGrant,
@@ -77,8 +85,7 @@ export function NoteShareAccessList({
       !principal.existing_grant_id &&
       !existingIds.has(principal.id) &&
       !existingEmails.has(principal.email?.toLowerCase()) &&
-      (!['team', 'folder', 'workspace'].includes(principal.type) ||
-        access?.can_manage_inherited_access),
+      (!isGroupPrincipal(principal.type) || access?.can_manage_inherited_access),
   );
   if (!access && pending.length === 0) return null;
 
@@ -87,6 +94,11 @@ export function NoteShareAccessList({
       <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">
         People with access
       </Text>
+      {paused && (
+        <Text className="px-1 text-[12px] text-secondaryLabel">
+          People you added and invitations are paused until you share this note again.
+        </Text>
+      )}
       {access?.can_manage_access && remoteId && onAddPrincipal && (
         <View className="gap-2">
           <TextInput
@@ -141,11 +153,7 @@ export function NoteShareAccessList({
         )}
         {grants?.map((grant) => {
           const name = grant.principal.name || grant.principal.email || 'Unnamed group';
-          const canEdit =
-            access?.can_manage_access &&
-            !grant.inherited &&
-            (!['team', 'folder', 'workspace'].includes(grant.principal.type) ||
-              access.can_manage_inherited_access);
+          const canEdit = canChangeGrant(access, grant);
           return (
             <GroupedList.Row key={grant.id}>
               <Text className="text-[15px] font-medium text-label">{name}</Text>
@@ -153,6 +161,7 @@ export function NoteShareAccessList({
                 {grant.permission === 'editor' ? 'Editor' : 'Viewer'}
                 {grant.inherited ? ` · Inherited from ${grant.source}` : ' · Direct'}
                 {grant.pending ? ' · Pending' : ''}
+                {paused && isPausedBySharingOff(grant) ? ' · Paused' : ''}
               </Text>
               {canEdit && (
                 <View className="mt-2 flex-row gap-4">
@@ -190,6 +199,7 @@ export function NoteShareAccessList({
               <Text className="text-[15px] font-medium text-label">{invite.email}</Text>
               <Text className="text-[12px] text-secondaryLabel">
                 Pending invitation
+                {paused ? ' · Paused' : ''}
                 {invitationGrant
                   ? ` · ${invitationGrant.permission === 'editor' ? 'Editor' : 'Viewer'}`
                   : ''}

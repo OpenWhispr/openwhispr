@@ -73,9 +73,9 @@ it('shows owner, grants, and pending invitations, and forwards permitted changes
 it('keeps inherited grants read-only and invitation actions visible beside invite grants', () => {
   const inherited = {
     ...access.grants[0],
-    id: 'inherited',
+    id: 'scope:workspace:00000000-0000-4000-8000-000000000001',
     inherited: true,
-    source: 'team' as const,
+    source: 'workspace' as const,
   };
   const screen = render(
     <NoteShareAccessList
@@ -180,4 +180,56 @@ it('searches principals and only offers grants allowed by server permissions', a
   fireEvent.press(screen.getByText('Jamie'));
   expect(onAddPrincipal).not.toHaveBeenCalled();
   jest.useRealTimers();
+});
+
+const teamGrant = {
+  ...access.grants[0],
+  id: 'grant-team',
+  principal: { ...owner, type: 'team' as const, id: 'team-1', email: null, name: 'Design' },
+  inherited: true,
+  source: 'team' as const,
+};
+it.each([
+  [true, true],
+  [false, false],
+])(
+  'lets group managers change stored team grants (can manage inherited: %s)',
+  (canManageInherited, editable) => {
+    const removeGrant = jest.fn();
+    const screen = render(
+      <NoteShareAccessList
+        access={{ ...access, can_manage_inherited_access: canManageInherited, grants: [teamGrant] }}
+        invitations={[]}
+        busy={false}
+        onUpdateGrant={jest.fn()}
+        onRemoveGrant={removeGrant}
+        onRevokeInvitation={jest.fn()}
+        onResendInvitation={jest.fn()}
+      />,
+    );
+    if (editable) {
+      fireEvent.press(screen.getByLabelText('Remove access for Design'));
+      expect(removeGrant).toHaveBeenCalledWith(teamGrant);
+    } else {
+      expect(screen.queryByLabelText('Remove access for Design')).toBeNull();
+    }
+  },
+);
+
+it('marks direct access and invitations as paused while external sharing is off', () => {
+  const screen = render(
+    <NoteShareAccessList
+      access={access}
+      invitations={[invitation]}
+      paused
+      busy={false}
+      onUpdateGrant={jest.fn()}
+      onRemoveGrant={jest.fn()}
+      onRevokeInvitation={jest.fn()}
+      onResendInvitation={jest.fn()}
+    />,
+  );
+  expect(screen.getByText(/paused until you share this note again/i)).toBeTruthy();
+  expect(screen.getByText(/Viewer · Direct · Paused/)).toBeTruthy();
+  expect(screen.getByText(/Pending invitation · Paused/)).toBeTruthy();
 });

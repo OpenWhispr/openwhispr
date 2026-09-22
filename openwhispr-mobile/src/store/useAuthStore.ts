@@ -192,8 +192,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ isLoading: true, error: null });
     await anonymousSignInInFlight?.catch(() => undefined);
     try {
-      await clearPreviousNoteShareTokens();
       await deleteAccountApi();
+      await clearPreviousNoteShareTokens();
       await clearSession();
       await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
       useUsageStore.getState().reset();

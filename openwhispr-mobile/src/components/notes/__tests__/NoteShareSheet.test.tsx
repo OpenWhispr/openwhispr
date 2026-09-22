@@ -136,7 +136,10 @@ it('lets a private note revoke its retained cloud link without enabling sync', (
   const screen = render(<NoteShareSheet {...props} />);
   fireEvent.press(screen.getByText('Disable previous link'));
   const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
-  expect((Alert.alert as jest.Mock).mock.calls[0][1]).toContain('External links will stop working');
+  expect((Alert.alert as jest.Mock).mock.calls[0][1]).toMatch(/links stop working/i);
+  expect((Alert.alert as jest.Mock).mock.calls[0][1]).toMatch(/new link/i);
+  expect((Alert.alert as jest.Mock).mock.calls[0][1]).not.toMatch(/links.*until you share/i);
+  expect((Alert.alert as jest.Mock).mock.calls[0][1]).not.toMatch(/team and space access remains/i);
   buttons[1].onPress();
   expect(mockController.setVisibility).toHaveBeenCalledWith('private');
   expect(mockSetNotePrivacy).not.toHaveBeenCalled();
@@ -193,6 +196,7 @@ it('keeps both exports available when sharing settings cannot load', () => {
 it('creates public links only after an explicit tap', () => {
   mockController.state = { share, invitations: [] };
   const screen = render(<NoteShareSheet {...props} />);
+  expect(screen.getByText('Anyone with the link can view this note.')).toBeTruthy();
   expect(mockController.setVisibility).not.toHaveBeenCalled();
   fireEvent.press(screen.getByText('Create link'));
   expect(mockController.setVisibility).toHaveBeenCalledWith('link');
@@ -257,4 +261,76 @@ it('allows legacy sharing revocation when the share endpoint authorizes access',
   mockController.state = { share: { ...share, visibility: 'link' }, invitations: [] };
   const screen = render(<NoteShareSheet {...props} />);
   expect(screen.getByText('Disable previous link')).toBeTruthy();
+});
+
+it('confirms before widening a restricted share to anyone with the link', () => {
+  mockController.state = {
+    share: { ...share, visibility: 'invited', token_prefix: 'abc' },
+    invitations: [],
+  };
+  const screen = render(<NoteShareSheet {...props} />);
+  fireEvent.press(screen.getByText('Anyone with link'));
+  expect(mockController.setVisibility).not.toHaveBeenCalled();
+  const [title, , buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+  expect(title).toBe('Make this note public?');
+  buttons[1].onPress();
+  expect(mockController.setVisibility).toHaveBeenCalledWith('link');
+});
+
+it('marks the current access mode as selected for assistive technology', () => {
+  mockController.state = {
+    share: { ...share, visibility: 'invited', token_prefix: 'abc' },
+    invitations: [],
+  };
+  const screen = render(<NoteShareSheet {...props} />);
+  expect(screen.getByLabelText('Invited only').props.accessibilityState).toMatchObject({
+    selected: true,
+  });
+  expect(screen.getByLabelText('Anyone with link').props.accessibilityState).toMatchObject({
+    selected: false,
+  });
+});
+
+it('shows paused direct access after external sharing is disabled', () => {
+  mockController.state = {
+    share,
+    invitations: [
+      {
+        id: 'inv-1',
+        email: 'pending@example.com',
+        invited_by_user_id: 'owner',
+        accepted_at: null,
+        revoked_at: null,
+        last_emailed_at: null,
+        created_at: '',
+      },
+    ],
+  };
+  const screen = render(<NoteShareSheet {...props} />);
+  expect(screen.getByText(/Pending invitation · Paused/)).toBeTruthy();
+});
+
+it('confirms before widening invited-only sharing to the organization', () => {
+  mockController.state = {
+    share: { ...share, visibility: 'invited', token_prefix: 'abc' },
+    invitations: [],
+  };
+  const screen = render(<NoteShareSheet {...props} />);
+  fireEvent.press(screen.getByText('Organization (example.com)'));
+  expect(mockController.setVisibility).not.toHaveBeenCalled();
+  const [title, , buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+  expect(title).toBe('Share with example.com?');
+  buttons[1].onPress();
+  expect(mockController.setVisibility).toHaveBeenCalledWith('domain', ['example.com']);
+});
+
+it('narrows sharing without asking', () => {
+  mockController.state = {
+    share: { ...share, visibility: 'link', token_prefix: 'abc' },
+    invitations: [],
+  };
+  const screen = render(<NoteShareSheet {...props} />);
+  fireEvent.press(screen.getByText('Invited only'));
+  expect(Alert.alert).not.toHaveBeenCalled();
+  expect(mockController.setVisibility).toHaveBeenCalledWith('invited');
 });

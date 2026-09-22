@@ -24,15 +24,7 @@ function readPublishableNote(noteId: number): Note {
 /** Wait for the existing sync pipeline to acknowledge this note's latest edits. */
 export async function ensureNoteSynced(
   noteId: number,
-  {
-    signal,
-    timeoutMs = 30_000,
-    minCloudUpdatedAt,
-  }: {
-    signal: AbortSignal;
-    timeoutMs?: number;
-    minCloudUpdatedAt?: string;
-  },
+  { signal, timeoutMs = 30_000 }: { signal: AbortSignal; timeoutMs?: number },
 ): Promise<string> {
   const auth = useAuthStore.getState();
   if (!auth.user || auth.user.isAnonymous || auth.isGuest || auth.isLoading) {
@@ -84,24 +76,20 @@ export async function ensureNoteSynced(
         if (!isTeamNote && useConfigStore.getState().config?.cloudBackupEnabled === false) {
           throw new Error('Enable cloud backup in Preferences before sharing.');
         }
-        if (!completedPass) return;
+        // Acknowledgement is repository state: a push clears pendingSync only when the server
+        // accepted this exact snapshot, terminal rejections leave a flag, and conflicts or privacy
+        // changes are rejected above. It needs no completed pass to observe.
         if (note.remoteId && !note.pendingSync && !notesRepository.hasDirtyTranscript(noteId)) {
           if (notesRepository.getSyncState(`note.pushRejected.${noteId}`)) {
             throw new Error(
               'The latest changes were rejected by sync. Edit the note and retry before sharing.',
             );
           }
-          // The share timestamp is only a pull target, never a content acknowledgement.
-          if (
-            !minCloudUpdatedAt ||
-            (note.cloudUpdatedAt &&
-              (note.cloudUpdatedAt === minCloudUpdatedAt ||
-                Date.parse(note.cloudUpdatedAt) > Date.parse(minCloudUpdatedAt)))
-          ) {
-            finish(note.remoteId);
-            return;
-          }
+          finish(note.remoteId);
+          return;
         }
+        // Sync status only reflects this request once a pass has finished with nothing queued.
+        if (!completedPass) return;
         const sync = useSyncStore.getState();
         if (sync.policyBlocked) throw new Error('Your organization does not allow cloud backup.');
         if (!isTeamNote && sync.subscriptionRequired) {

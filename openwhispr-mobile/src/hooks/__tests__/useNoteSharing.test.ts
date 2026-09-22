@@ -16,7 +16,17 @@ jest.mock('@/store/useNotesStore', () => ({
 jest.mock('@/data', () => ({ notesRepository: { getNoteById: jest.fn() } }));
 jest.mock('@/sync/ensureNoteSynced', () => ({ ensureNoteSynced: jest.fn() }));
 jest.mock('@/sync/syncEngine', () => ({ requestSync: jest.fn() }));
-jest.mock('@/lib/apiClient', () => ({ ApiError: class extends Error {} }));
+jest.mock('@/lib/apiClient', () => ({
+  ApiError: class extends Error {
+    status: number;
+    code?: string;
+    constructor(message: string, status: number, code?: string) {
+      super(message);
+      this.status = status;
+      this.code = code;
+    }
+  },
+}));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn() }));
 jest.mock('@/lib/notes/noteShareTokens', () => ({
@@ -38,6 +48,8 @@ jest.mock('@/data/remote/noteSharingApi', () => ({
   revokeNoteInvitation: jest.fn(),
   resendNoteInvitation: jest.fn(),
 }));
+import * as Clipboard from 'expo-clipboard';
+import { ApiError } from '@/lib/apiClient';
 import * as sharing from '@/data/remote/noteSharingApi';
 import * as tokens from '@/lib/notes/noteShareTokens';
 import { notesRepository } from '@/data';
@@ -237,11 +249,11 @@ it('rejects cached tokens replaced on another device', async (): Promise<void> =
 });
 it('cannot modify inherited scope access even with group management permission', async (): Promise<void> => {
   const grant = {
-    id: 'scope:team',
-    principal: { ...access.owner, type: 'team' as const },
+    id: 'scope:workspace:00000000-0000-4000-8000-000000000001',
+    principal: { ...access.owner, type: 'workspace' as const },
     permission: 'viewer' as const,
     inherited: true,
-    source: 'team' as const,
+    source: 'workspace' as const,
     pending: false,
     created_at: 'now',
     updated_at: 'now',
@@ -256,6 +268,55 @@ it('cannot modify inherited scope access even with group management permission',
   });
   expect(sharing.updateNoteAccessGrant).not.toHaveBeenCalled();
   expect(result.current.error).toMatch(/inherited/i);
+});
+// The server marks every stored group grant `inherited: true`; only `scope:` rows are read-only.
+const teamGrant = {
+  id: 'grant-team',
+  principal: { ...access.owner, id: 'team-1', type: 'team' as const, name: 'Design' },
+  permission: 'viewer' as const,
+  inherited: true,
+  source: 'team' as const,
+  pending: false,
+  created_at: 'now',
+  updated_at: 'now',
+};
+it('lets group managers change and remove a stored team grant', async (): Promise<void> => {
+  jest
+    .mocked(sharing.getNoteShareState)
+    .mockResolvedValue({ share, invitations: [], access: { ...access, grants: [teamGrant] } });
+  const { result } = setup();
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  await act(async (): Promise<void> => {
+    await result.current.updateGrant(teamGrant, 'editor');
+  });
+  expect(sharing.updateNoteAccessGrant).toHaveBeenCalledWith(
+    'remote',
+    'grant-team',
+    'editor',
+    expect.anything(),
+  );
+  await act(async (): Promise<void> => {
+    await result.current.removeGrant(teamGrant);
+  });
+  expect(sharing.removeNoteAccessGrant).toHaveBeenCalledWith(
+    'remote',
+    'grant-team',
+    expect.anything(),
+  );
+});
+it('blocks stored team grant changes without inherited-access management', async (): Promise<void> => {
+  jest.mocked(sharing.getNoteShareState).mockResolvedValue({
+    share,
+    invitations: [],
+    access: { ...access, can_manage_inherited_access: false, grants: [teamGrant] },
+  });
+  const { result } = setup();
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  await act(async (): Promise<void> => {
+    await result.current.removeGrant(teamGrant);
+  });
+  expect(sharing.removeNoteAccessGrant).not.toHaveBeenCalled();
+  expect(result.current.error).toMatch(/permission/i);
 });
 it('reports legacy invitation delivery failure without sending twice', async (): Promise<void> => {
   jest.mocked(sharing.getNoteShareState).mockResolvedValue({ share, invitations: [] });
@@ -337,25 +398,19 @@ it('requires a paired viewer before uploading to a custom API', async (): Promis
   }
 });
 
-it('keeps a issued token and confirmed access if post-share sync times out', async (): Promise<void> => {
+it('shares a new link without waiting for a later server revision', async (): Promise<void> => {
   jest.mocked(sharing.setNoteShareVisibility).mockResolvedValue({
     share: { ...share, visibility: 'link', updated_at: '2026-09-22T12:00:00Z' },
     raw_token: TOKEN,
   });
-  jest
-    .mocked(ensureNoteSynced)
-    .mockResolvedValueOnce('remote')
-    .mockRejectedValueOnce(new Error('Sync timed out'));
   const { result } = setup();
   await waitFor(() => expect(result.current.loading).toBe(false));
   await act(async (): Promise<void> => {
     await result.current.setVisibility('link');
   });
-  expect(tokens.saveNoteShareToken).toHaveBeenCalledWith('owner', 'remote', TOKEN);
-  expect(result.current.hasToken).toBe(true);
-  expect(result.current.state?.share.visibility).toBe('link');
-  expect(result.current.error).toMatch(/timed out/i);
-  expect(Share.share).not.toHaveBeenCalled();
+  expect(ensureNoteSynced).toHaveBeenCalledTimes(1);
+  expect(Share.share).toHaveBeenCalled();
+  expect(result.current.error).toBeNull();
 });
 
 it('can disable an old external link after local cloud sync opt-out', async (): Promise<void> => {
@@ -426,4 +481,141 @@ it('requires refreshing access after a confirmed grant cannot be reloaded', asyn
   expect(result.current.state).toBeNull();
   expect(result.current.message).toBeNull();
   expect(result.current.error).toMatch(/sharing changed.*refresh/i);
+});
+
+const linkShare = { ...share, visibility: 'link' as const, token_prefix: TOKEN.slice(0, 16) };
+it('keeps the stored link when the note leaves the current notes list', async (): Promise<void> => {
+  jest.mocked(sharing.getNoteShareState).mockResolvedValue({
+    share: linkShare,
+    invitations: [],
+    access,
+  });
+  jest.mocked(tokens.readNoteShareToken).mockResolvedValue(TOKEN);
+  const { result } = setup();
+  await waitFor(() => expect(result.current.hasToken).toBe(true));
+  await act(async (): Promise<void> => {
+    useNotesStore.setState({ notes: [] });
+  });
+  expect(result.current.note?.remoteId).toBe('remote');
+  expect(tokens.removeNoteShareToken).not.toHaveBeenCalled();
+  expect(result.current.hasToken).toBe(true);
+});
+it('finishes creating a link after the note leaves the current notes list', async (): Promise<void> => {
+  let finish!: (value: Awaited<ReturnType<typeof sharing.setNoteShareVisibility>>) => void;
+  jest.mocked(sharing.setNoteShareVisibility).mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const { result } = setup();
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  let pending!: Promise<void>;
+  act(() => {
+    pending = result.current.setVisibility('link');
+  });
+  await waitFor(() => expect(sharing.setNoteShareVisibility).toHaveBeenCalled());
+  await act(async (): Promise<void> => {
+    useNotesStore.setState({ notes: [] });
+  });
+  await act(async (): Promise<void> => {
+    finish({ share: linkShare, raw_token: TOKEN });
+    await pending;
+  });
+  expect(tokens.saveNoteShareToken).toHaveBeenCalledWith('owner', 'remote', TOKEN);
+  expect(Share.share).toHaveBeenCalled();
+});
+it('never makes a restricted share public when settings changed after loading', async (): Promise<void> => {
+  const { result } = setup();
+  await waitFor(() => expect(result.current.state?.share.visibility).toBe('private'));
+  jest.mocked(sharing.getNoteShareState).mockResolvedValue({
+    share: { ...linkShare, visibility: 'invited' },
+    invitations: [],
+    access,
+  });
+  await act(async (): Promise<void> => {
+    await result.current.setVisibility('link');
+  });
+  expect(sharing.setNoteShareVisibility).not.toHaveBeenCalled();
+  expect(result.current.state?.share.visibility).toBe('invited');
+  expect(result.current.error).toMatch(/changed/i);
+});
+it('copies an existing link without syncing note content', async (): Promise<void> => {
+  note = { ...note, conflictServerNote: '{}' };
+  jest.mocked(sharing.getNoteShareState).mockResolvedValue({
+    share: linkShare,
+    invitations: [],
+    access,
+  });
+  jest.mocked(tokens.readNoteShareToken).mockResolvedValue(TOKEN);
+  const { result } = setup();
+  await waitFor(() => expect(result.current.hasToken).toBe(true));
+  await act(async (): Promise<void> => {
+    await result.current.copyLink();
+  });
+  expect(Clipboard.setStringAsync).toHaveBeenCalledWith(`https://notes.openwhispr.com/n/${TOKEN}`);
+  expect(ensureNoteSynced).not.toHaveBeenCalled();
+  expect(flushDraft).not.toHaveBeenCalled();
+  expect(result.current.error).toBeNull();
+});
+it('does not time out while the OS share sheet stays open', async (): Promise<void> => {
+  jest.mocked(sharing.getNoteShareState).mockResolvedValue({
+    share: linkShare,
+    invitations: [],
+    access,
+  });
+  jest.mocked(tokens.readNoteShareToken).mockResolvedValue(TOKEN);
+  const { result } = setup();
+  await waitFor(() => expect(result.current.hasToken).toBe(true));
+  jest.useFakeTimers();
+  try {
+    jest.spyOn(Share, 'share').mockReturnValue(new Promise(() => undefined));
+    await act(async (): Promise<void> => {
+      result.current.shareLink();
+      await Promise.resolve();
+    });
+    await act(async (): Promise<void> => {
+      for (let tick = 0; tick < 5; tick += 1) await Promise.resolve();
+    });
+    expect(Share.share).toHaveBeenCalled();
+    await act(async (): Promise<void> => {
+      jest.advanceTimersByTime(61_000);
+    });
+    expect(result.current.error).toBeNull();
+    expect(result.current.state?.share.visibility).toBe('link');
+    expect(result.current.busy).toBe(false);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+it('keeps settings when an invitation email cannot be resent', async (): Promise<void> => {
+  const invitation = {
+    id: 'invite',
+    email: 'friend@example.com',
+    revoked_at: null,
+    accepted_at: null,
+    created_at: 'now',
+    last_emailed_at: 'now',
+    invited_by_user_id: 'owner',
+  };
+  jest.mocked(sharing.getNoteShareState).mockResolvedValue({
+    share: { ...linkShare, visibility: 'invited' },
+    invitations: [invitation],
+    access,
+  });
+  jest
+    .mocked(sharing.resendNoteInvitation)
+    .mockRejectedValueOnce(new ApiError('Failed to send invitation email', 502))
+    .mockRejectedValueOnce(new ApiError('Please wait before resending', 429, 'resend_cooldown'));
+  const { result } = setup();
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  await act(async (): Promise<void> => {
+    await result.current.resendInvitation(invitation);
+  });
+  expect(result.current.state?.invitations).toHaveLength(1);
+  expect(result.current.error).toMatch(/could not be sent/i);
+  await act(async (): Promise<void> => {
+    await result.current.resendInvitation(invitation);
+  });
+  expect(result.current.state?.invitations).toHaveLength(1);
+  expect(result.current.error).toMatch(/wait a minute/i);
 });

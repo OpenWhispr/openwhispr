@@ -203,18 +203,15 @@ it('waits for the queued manual pass before using an earlier pass’s gate', asy
   await expect(pending).resolves.toBe('remote');
 });
 
-it('waits for the actual content base to reach a sharing metadata revision', async (): Promise<void> => {
-  note = { ...note, remoteId: 'remote', pendingSync: 0, cloudUpdatedAt: '2026-09-22T12:00:00Z' };
-  const settled = jest.fn();
-  const pending = ensureNoteSynced(1, {
-    signal: controller.signal,
-    minCloudUpdatedAt: '2026-09-22T12:00:01Z',
-  }).then(settled);
-  complete();
-  await Promise.resolve();
-  expect(settled).not.toHaveBeenCalled();
-  note = { ...note, cloudUpdatedAt: '2026-09-22T12:00:01Z' };
-  complete();
-  await pending;
-  expect(settled).toHaveBeenCalledWith('remote');
+it('resolves an acknowledged note even if a queued pass never reports back', async (): Promise<void> => {
+  // A queued foreground trigger can be dropped by the sync throttle without notifying listeners.
+  const pending = ensureNoteSynced(1, { signal: controller.signal });
+  note = { ...note, remoteId: 'remote', pendingSync: 0 };
+  complete(true);
+  await expect(pending).resolves.toBe('remote');
+});
+it('resolves an already acknowledged note without waiting for another pass', async (): Promise<void> => {
+  note = { ...note, remoteId: 'remote', pendingSync: 0 };
+  await expect(ensureNoteSynced(1, { signal: controller.signal })).resolves.toBe('remote');
+  expect(requestSync).not.toHaveBeenCalled();
 });

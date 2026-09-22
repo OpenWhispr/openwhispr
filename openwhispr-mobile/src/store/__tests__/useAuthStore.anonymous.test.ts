@@ -36,7 +36,7 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 import { useAuthStore } from '@/store/useAuthStore';
-import { signInWithEmail } from '@/lib/authClient';
+import { deleteAccount, signInWithEmail } from '@/lib/authClient';
 
 const anonymousUser = {
   id: 'anon-user',
@@ -209,4 +209,20 @@ it('still signs out if local sharing cache cleanup fails', async (): Promise<voi
   await useAuthStore.getState().signOut();
   expect(useAuthStore.getState().user).toBeNull();
   expect(useAuthStore.getState().isLoading).toBe(false);
+});
+
+it('keeps stored share links when account deletion fails', async (): Promise<void> => {
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  jest.mocked(deleteAccount).mockRejectedValueOnce(new Error('Network request failed'));
+  await expect(useAuthStore.getState().deleteAccount()).rejects.toThrow(/network/i);
+  expect(mockClearNoteShareTokens).not.toHaveBeenCalled();
+  expect(useAuthStore.getState().user?.id).toBe('anon-user');
+});
+
+it('clears stored share links after the account is deleted', async (): Promise<void> => {
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  jest.mocked(deleteAccount).mockResolvedValueOnce(undefined as never);
+  await useAuthStore.getState().deleteAccount();
+  expect(mockClearNoteShareTokens).toHaveBeenCalledWith('anon-user');
+  expect(useAuthStore.getState().user).toBeNull();
 });
