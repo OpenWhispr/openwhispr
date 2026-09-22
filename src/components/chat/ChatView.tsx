@@ -9,6 +9,7 @@ import { ChatEmptyIllustration } from "./ChatEmptyIllustration";
 import ConversationList from "./ConversationList";
 import EmptyChatState from "./EmptyChatState";
 import { ConfirmDialog } from "../ui/dialog";
+import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
 
@@ -163,15 +164,22 @@ export default function ChatView() {
         <div className="flex-1 min-w-80 flex flex-col">
           {hasActiveChat ? (
             <>
-              <ChatMessages messages={persistence.messages} emptyState={<NewChatEmptyState />} />
-              <ChatInput
-                agentState={streaming.agentState}
-                partialTranscript=""
-                onTextSubmit={handleTextSubmit}
-                onCancel={streaming.cancelStream}
-                autoFocus={isNewChat}
-                voiceDraft
+              <ChatMessages
+                messages={persistence.messages}
+                emptyState={<NewChatEmptyState />}
+                contentClassName={PAGE_CONTENT_WIDTH_CLASS}
               />
+              <div className="px-3 pb-3 pt-1">
+                <ChatInput
+                  className={PAGE_CONTENT_WIDTH_CLASS}
+                  agentState={streaming.agentState}
+                  partialTranscript=""
+                  onTextSubmit={handleTextSubmit}
+                  onCancel={streaming.cancelStream}
+                  autoFocus={isNewChat}
+                  voiceDraft
+                />
+              </div>
             </>
           ) : (
             <EmptyChatState />

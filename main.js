@@ -1320,6 +1320,8 @@ async function startApp() {
     await flushPendingNoteDeepLink();
   }
 
+  await hotkeyManager.hyprlandRegistrationReady;
+
   // Set up voice agent hotkey (dictation routed straight to the dictation
   // agent, bypassing cleanup). The shared callback resolves the slot's own
   // activation mode: tap toggles, Hold drives the push-to-talk machines.
