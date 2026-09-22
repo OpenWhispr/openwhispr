@@ -357,6 +357,7 @@ export function ByokProviderStep({
     // card the session recorded for it.
     const selfHostedWanted =
       hasDraft || !saved ? selfHostedRequested : Boolean(saved.draft.baseUrl);
+    const selfHosted = selfHostedWanted && selfHostedAllowed;
     return {
       provider: providerData?.id ?? "",
       model: providerData?.models?.some((model) => model.id === draft?.selectedModel)
@@ -364,7 +365,8 @@ export function ByokProviderStep({
         : pickDefaultModelId(providerData),
       baseUrl: draft?.baseUrl ?? "",
       customModel: draft?.customModel ?? "",
-      selfHosted: selfHostedWanted && selfHostedAllowed,
+      selfHosted,
+      cardDiffersFromSession: selfHosted !== selfHostedRequested,
       keyedBaseUrl: saved?.usesCustomKey ? saved.draft.baseUrl : "",
     };
   });
@@ -398,14 +400,12 @@ export function ByokProviderStep({
     onConnectionChange(false);
   }, [onConnectionChange]);
 
-  // The card the saved setup picked goes on the session once, so the draft this visit
-  // writes reopens on it; later switches report through toggleSelfHosted.
-  const sessionSynced = useRef(false);
+  // The card the saved setup picked goes on the session once, at mount (both deps are
+  // stable), so the draft this visit writes reopens on it; later switches report
+  // through toggleSelfHosted.
   useEffect(() => {
-    if (sessionSynced.current) return;
-    sessionSynced.current = true;
-    if (seed.selfHosted !== selfHostedRequested) onSelfHostedChange(seed.selfHosted);
-  }, [onSelfHostedChange, seed.selfHosted, selfHostedRequested]);
+    if (seed.cardDiffersFromSession) onSelfHostedChange(seed.selfHosted);
+  }, [onSelfHostedChange, seed]);
 
   // Base URL and custom model are typed, so the write is debounced the way the
   // auth draft is; the flush covers the pending write this card drops when the
@@ -528,18 +528,18 @@ export function ByokProviderStep({
         store.setChatAgentMode("self-hosted");
         store.setChatAgentProvider("custom");
       } else if (draftApiKey.trim()) {
-        // Only the Custom route sends the key; a Settings server left in place would win.
         store.setCloudTranscriptionBaseUrl(committedBaseUrl);
         store.setCustomTranscriptionApiKey(draftApiKey);
         // Switch before setting the model: a switch files the current model under the
         // outgoing provider and loads the incoming one's, replacing what was typed here.
         store.switchCloudTranscriptionProvider("dictation", "custom");
         store.setCloudTranscriptionModel(draftCustomModel);
+        // A Settings server routes ahead of the keyed Custom endpoint, and sends no key.
         store.setRemoteTranscriptionUrl("");
         store.setCloudTranscriptionMode("byok");
       } else {
-        // Saved as the Settings self-hosted server, so the Custom URL, key and model are
-        // kept. Custom is still the provider: byok + custom derives the self-hosted mode.
+        // Key-less, so it is the Settings self-hosted server; the Custom endpoint and its
+        // key stay as they were. byok + custom is what derives the self-hosted mode.
         store.switchCloudTranscriptionProvider("dictation", "custom");
         store.setRemoteTranscriptionUrl(committedBaseUrl);
         store.setRemoteTranscriptionModel(draftCustomModel);

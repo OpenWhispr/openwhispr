@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { managedPolicy } = require("../helpers/harness/policyFixtures");
 
 const load = () => import("../../src/utils/signInCloudNudge.ts");
 
@@ -18,22 +19,10 @@ const decide = async (overrides) => {
   });
 };
 
-const managedPolicy = (allowedModes) => ({
+const managedSnapshot = (allowedModes) => ({
   status: "managed",
   appVersion: "1.10.0",
-  policy: {
-    version: 1,
-    transcription: { allowedModes, allowedByokProviders: [], allowedEnterpriseProviders: [] },
-    llm: { allowedModes: [], allowedByokProviders: [], allowedEnterpriseProviders: [] },
-    features: { agentEnabled: false, webSearchEnabled: false },
-    sharing: { externalLinkSharing: "disabled" },
-    dataRetention: {
-      audioRetentionMaxDays: null,
-      localHistoryMode: "user_choice",
-      cloudBackupAllowed: false,
-    },
-    minAppVersion: null,
-  },
+  policy: managedPolicy({ transcription: { allowedModes } }),
 });
 
 test("a signed-in user on their own dictation setup is nudged towards Cloud", async () => {
@@ -56,8 +45,8 @@ test("it waits for the sign-in and for the account's policy to settle", async ()
 });
 
 test("a policy that forbids Cloud gets no nudge", async () => {
-  assert.equal(await decide({ policy: managedPolicy(["local", "providers"]) }), "skip");
-  assert.equal(await decide({ policy: managedPolicy(["openwhispr", "providers"]) }), "nudge");
+  assert.equal(await decide({ policy: managedSnapshot(["local", "providers"]) }), "skip");
+  assert.equal(await decide({ policy: managedSnapshot(["openwhispr", "providers"]) }), "nudge");
 });
 
 test("a prompt that is too old or unreadable is dropped", async () => {
