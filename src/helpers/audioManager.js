@@ -3367,10 +3367,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       opts.localDate = localDateKey(analyticsOccurredAt);
     }
     const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
-    if (
-      (settings.useCleanupModel && cleanupCloudMode === "openwhispr") ||
-      (this.translationRequested && translationChainReachable(settings) && isCloudTranslationMode())
-    ) {
+    // Only cloud cleanup writes a combined STT log; translation alone does not.
+    if (settings.useCleanupModel && cleanupCloudMode === "openwhispr") {
       opts.sendLogs = "false";
     }
 
@@ -3441,6 +3439,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               customPrompt: this.getCustomPrompt(),
               language: this.getCleanupLanguage(settings),
               locale: settings.uiLanguage || "en",
+              streamingFallbackReason,
               sttProvider: result.sttProvider,
               sttModel: result.sttModel,
               sttProcessingMs: result.sttProcessingMs,
@@ -3484,6 +3483,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 ? {
                     mode: "cloudReason",
                     meta: {
+                      streamingFallbackReason,
                       sttProvider: result.sttProvider,
                       sttModel: result.sttModel,
                       sttProcessingMs: result.sttProcessingMs,

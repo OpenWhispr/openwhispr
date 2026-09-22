@@ -9389,6 +9389,7 @@ class IPCHandlers {
             clientType: "desktop",
             appVersion: app.getVersion(),
             clientVersion: app.getVersion(),
+            streamingFallbackReason: opts.streamingFallbackReason,
             sttProvider: opts.sttProvider,
             sttModel: opts.sttModel,
             sttProcessingMs: opts.sttProcessingMs,

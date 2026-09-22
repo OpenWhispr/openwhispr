@@ -343,3 +343,120 @@ test("a cloud upload reports why it was batch instead of the managed Orukeet str
     undefined,
   ]);
 });
+
+for (const { name, translationRequested, useCleanupModel, cleanupCloudMode } of [
+  {
+    name: "cloud cleanup",
+    translationRequested: false,
+    useCleanupModel: true,
+    cleanupCloudMode: "openwhispr",
+  },
+  {
+    name: "cloud translation cleanup",
+    translationRequested: true,
+    useCleanupModel: true,
+    cleanupCloudMode: "openwhispr",
+  },
+  {
+    name: "cloud translation without cleanup",
+    translationRequested: true,
+    useCleanupModel: false,
+    cleanupCloudMode: "openwhispr",
+  },
+  {
+    name: "cloud translation with BYOK cleanup",
+    translationRequested: true,
+    useCleanupModel: true,
+    cleanupCloudMode: "byok",
+  },
+]) {
+  test(`batch fallback telemetry survives ${name}`, async (t) => {
+    const { createManager, window } = await loadAudioManager(t, {
+      cachePrefix: "openwhispr-fallback-cleanup-",
+      settingsKey: "__fallbackCleanupSettings",
+      settings: {
+        cloudTranscriptionMode: "openwhispr",
+        isSignedIn: true,
+        useCleanupModel,
+        cleanupCloudMode,
+        preferredLanguage: "en",
+        translationSourceLanguage: "en",
+        translationTargetLanguage: "es",
+        customPrompts: {},
+      },
+      mockModules: {
+        "/stores/settingsStore": `
+          export const getSettings = () => globalThis.__fallbackCleanupSettings;
+          export const getEffectiveCleanupModel = () => "cleanup-model";
+          export const selectResolvedLLMConfig = () => ({ model: "cleanup-model", provider: "openwhispr" });
+          export const isCloudCleanupMode = () => globalThis.__fallbackCleanupSettings.cleanupCloudMode === "openwhispr";
+          export const isCloudDictationAgentMode = () => false;
+          export const isCloudTranslationMode = () => true;
+        `,
+        "/config/prompts": `
+          export const resolvePrompt = () => "translation prompt";
+          export const appendScreenContextSuffix = (prompt) => prompt;
+        `,
+        "/dictationAgentInference": `
+          export const resolveDictationAgentInference = () => ({ reachable: false, config: {} });
+          export const resolveDictationAgentVisionInference = () => ({ active: false, config: {} });
+        `,
+        "/dictationTranslationInference": `
+          export const resolveDictationTranslationInference = () => ({
+            reachable: true, model: "translation-model", config: { provider: "openwhispr" }
+          });
+        `,
+      },
+    });
+    const originalNavigator = globalThis.navigator;
+    Object.defineProperty(globalThis, "navigator", {
+      value: { onLine: true },
+      configurable: true,
+    });
+    t.after(() =>
+      Object.defineProperty(globalThis, "navigator", {
+        value: originalNavigator,
+        configurable: true,
+      })
+    );
+    const manager = createManager({
+      translationRequested,
+      isDictionaryEcho: () => false,
+      getWhisperPrompt: () => null,
+      finalizeChineseScript: async (text) => text,
+      processWithReasoningModel: async () => "translated transcript",
+    });
+    const uploads = [];
+    const cleanupRequests = [];
+    window.electronAPI.cloudTranscribe = async (_audio, opts) => {
+      uploads.push(opts);
+      return { success: true, text: "raw transcript", sttProvider: "groq", sttModel: "whisper" };
+    };
+    window.electronAPI.cloudReason = async (_text, opts) => {
+      cleanupRequests.push(opts);
+      return { success: true, text: "clean transcript" };
+    };
+    const combinedLog = useCleanupModel && cleanupCloudMode === "openwhispr";
+    for (const reason of [
+      "feature_disabled",
+      "rate_limited",
+      "session_unavailable",
+      "language_unsupported",
+      "stream_no_final",
+      undefined,
+    ]) {
+      const result = await manager.processWithOpenWhisprCloud(new Blob([new Uint8Array(16)]), {
+        streamingFallbackReason: reason,
+      });
+      assert.equal(
+        result.text,
+        translationRequested ? "translated transcript" : "clean transcript"
+      );
+      assert.equal(uploads.at(-1).sendLogs, combinedLog ? "false" : undefined);
+      assert.equal(uploads.at(-1).streamingFallbackReason, reason);
+      if (combinedLog) assert.equal(cleanupRequests.at(-1).streamingFallbackReason, reason);
+    }
+    assert.equal(uploads.length, 6);
+    assert.equal(cleanupRequests.length, combinedLog ? 6 : 0);
+  });
+}

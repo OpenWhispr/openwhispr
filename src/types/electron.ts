@@ -2354,6 +2354,7 @@ declare global {
           screenContext?: ScreenContextImage;
           language?: string;
           locale?: string;
+          streamingFallbackReason?: string;
         }
       ) => Promise<{
         success: boolean;

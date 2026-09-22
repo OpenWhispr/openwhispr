@@ -57,9 +57,14 @@ const electronStub = {
   },
   net: {
     fetch: async (url, options) => {
-      assert.equal(url, "https://api.openwhispr.test/api/stt/orukeet/session");
+      assert.ok(
+        [
+          "https://api.openwhispr.test/api/stt/orukeet/session",
+          "https://api.openwhispr.test/api/reason",
+        ].includes(url)
+      );
       assert.equal(options.headers.Authorization, "Bearer account-a");
-      return backendResponse();
+      return backendResponse(url, options);
     },
   },
   BrowserWindow: class BrowserWindow {
@@ -229,4 +234,25 @@ test("closing the owning window releases the managed socket and auth subscriptio
   assert.equal(target._dictationStreaming, null);
   assert.equal(tokenListeners.size, 0);
   assert.equal(event.sender.listenerCount("destroyed"), 0);
+});
+
+test("cloud cleanup forwards fallback telemetry to its combined log request", async () => {
+  const requests = [];
+  backendResponse = async (url, options) => {
+    assert.equal(url, "https://api.openwhispr.test/api/reason");
+    requests.push(JSON.parse(options.body));
+    return Response.json({ text: "clean transcript" });
+  };
+  for (const reason of ["rate_limited", undefined]) {
+    const result = await handlers.get("cloud-reason")(event, "raw transcript", {
+      purpose: "cleanup",
+      sttProvider: "groq",
+      streamingFallbackReason: reason,
+    });
+    assert.equal(result.success, true);
+    assert.equal(requests.at(-1).streamingFallbackReason, reason);
+    assert.equal(requests.at(-1).sttProvider, "groq");
+  }
+  assert.equal(requests.length, 2);
+  assert.equal(Object.hasOwn(requests[1], "streamingFallbackReason"), false);
 });
