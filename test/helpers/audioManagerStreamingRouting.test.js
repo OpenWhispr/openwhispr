@@ -272,6 +272,36 @@ test("a refused managed Orukeet session starts a batch recording instead of fail
   assert.equal(errors.length, 0);
 });
 
+test("the weekly word quota on a managed Orukeet start opens the upgrade prompt", async (t) => {
+  const { createManager, window } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-streaming-routing-test-",
+    settingsKey: "__streamingRoutingSettings",
+  });
+  const manager = createManager();
+  manager.sttConfig = orukeetConfig;
+  managedSettings({ preferredLanguage: "fr" });
+  const prompts = [];
+  window.electronAPI.notifyLimitReached = (data) => prompts.push(data);
+
+  assert.throws(
+    () =>
+      manager.classifyStreamingStartResult(
+        {
+          success: false,
+          code: "LIMIT_REACHED",
+          status: 429,
+          error: "Weekly word limit reached",
+          details: { wordsUsed: 2000, limit: 2000 },
+        },
+        { useLocalWhisper: false }
+      ),
+    { code: "LIMIT_REACHED", message: "Weekly word limit reached" }
+  );
+  assert.deepEqual(prompts, [{ wordsUsed: 2000, limit: 2000 }]);
+  // A quota denial is not a fallback: batch would be refused the same way.
+  assert.ok(!manager.streamingFallbackReason);
+});
+
 test("a missing streaming API still falls back to batch for every provider", async (t) => {
   const manager = await loadManager(t);
   setSettings();

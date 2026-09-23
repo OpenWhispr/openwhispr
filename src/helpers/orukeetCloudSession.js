@@ -1,5 +1,5 @@
 const { captureAuthFence } = require("./cloudApiRequest");
-const { readPolicyResponseError } = require("./policyResponseError");
+const { createPolicyResponseError } = require("./policyResponseError");
 
 const ORUKEET_BASE_URL = "https://orukeet.gizmovoice.ai";
 const ORUKEET_SESSION_PATH = "/api/stt/orukeet/session";
@@ -70,8 +70,21 @@ async function connectManagedOrukeet({
       throw Object.assign(new Error("Session expired"), { code: "AUTH_EXPIRED", status: 401 });
     }
     if (!response.ok) {
-      throw await fence.awaitBound(() =>
-        readPolicyResponseError(response, `Orukeet session unavailable (${response.status})`)
+      const payload = await fence.awaitBound(() => response.json().catch(() => null));
+      // The weekly word quota, as opposed to the RATE_LIMITED mint cap: the
+      // same LIMIT_REACHED the batch upload raises, carrying the usage the
+      // upgrade prompt shows.
+      if (response.status === 429 && payload?.limitReached === true) {
+        throw Object.assign(new Error(payload.error || "Weekly word limit reached"), {
+          code: "LIMIT_REACHED",
+          status: 429,
+          details: { wordsUsed: payload.wordsUsed, limit: payload.limit },
+        });
+      }
+      throw createPolicyResponseError(
+        response.status,
+        payload,
+        `Orukeet session unavailable (${response.status})`
       );
     }
     const data = await fence.awaitBound(() => response.json());

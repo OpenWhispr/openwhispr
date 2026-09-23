@@ -137,6 +137,22 @@ for (const [status, code] of [
   });
 }
 
+test("the weekly word quota surfaces as LIMIT_REACHED with its usage, not the mint cap", async (t) => {
+  const f = await fixture(t, async () =>
+    Response.json(
+      { error: "Weekly word limit reached", limitReached: true, wordsUsed: 2000, limit: 2000 },
+      { status: 429 }
+    )
+  );
+  await assert.rejects(connectManagedOrukeet(f.options), {
+    code: "LIMIT_REACHED",
+    status: 429,
+    message: "Weekly word limit reached",
+    details: { wordsUsed: 2000, limit: 2000 },
+  });
+  assert.equal(f.sockets.length, 0);
+});
+
 for (const cancellation of ["logout", "cancel"]) {
   test(`${cancellation} while a token request is pending cannot reopen a session`, async (t) => {
     let release;
