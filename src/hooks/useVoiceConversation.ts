@@ -4,7 +4,11 @@ import logger from "../utils/logger";
 import { createSpeechChunker } from "../services/voice/speechChunker";
 import { createPcmPlayer, type PcmPlayer } from "../services/voice/pcmPlayer";
 import { startMicStream, type MicStream } from "../services/voice/micStream";
-import type { AssistantSpeechTap, VoiceSpikeEvent } from "../services/voice/types";
+import type {
+  AssistantSpeechTap,
+  VoiceSpikeEvent,
+  VoiceTurnEndpoint,
+} from "../services/voice/types";
 import { shouldStopForIdle, voiceToolFiller } from "../services/voice/voiceTools";
 import { resolveChatStreamingInference } from "../helpers/dictationAgentInference.js";
 
@@ -18,6 +22,7 @@ interface VoiceConversationOptions {
 
 interface TurnMetrics {
   endedAt: number;
+  endpoint: VoiceTurnEndpoint | null;
   speechMs: number;
   sttMs: number;
   transcriptAt: number;
@@ -104,11 +109,22 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         ? since(turn.firstChunkSentAt, turn.firstAudioAt)
         : null,
       speechEndToFirstAudioMs: since(turn.endedAt, turn.firstAudioAt),
+      // Adds the end-of-turn wait, which speechEndToFirstAudioMs starts after.
+      userStopToFirstAudioMs:
+        turn.endpoint && turn.firstAudioAt !== undefined
+          ? turn.endpoint.endpointMs + Math.round(turn.firstAudioAt - turn.endedAt)
+          : null,
+      endpointMs: turn.endpoint?.endpointMs ?? null,
+      endpointProbability: turn.endpoint?.probability ?? null,
+      endpointSegments: turn.endpoint?.segments ?? null,
+      smartTurnFeatureMs: turn.endpoint?.featureMs ?? null,
+      smartTurnInferenceMs: turn.endpoint?.inferenceMs ?? null,
       ttsQueueWaitMs: turn.ttsQueueWaitMs ?? null,
       ttsGenerateMs: turn.ttsGenerateMs ?? null,
       chunks: turn.chunks,
     };
-    logger.info("Voice spike turn", { outcome, ...metrics }, "voice-spike");
+    const endpointReason = turn.endpoint?.reason ?? null;
+    logger.info("Voice spike turn", { outcome, endpointReason, ...metrics }, "voice-spike");
     if (harnessRef.current) {
       window.electronAPI?.voiceSpike?.reportTurn({
         outcome,
@@ -189,6 +205,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         chunkerRef.current.reset();
         turnRef.current = {
           endedAt: event.endedAt,
+          endpoint: event.endpoint,
           speechMs: event.speechMs,
           sttMs: event.sttMs,
           transcriptAt: Date.now(),

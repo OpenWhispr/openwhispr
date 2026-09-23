@@ -86,3 +86,38 @@ test("float32ToPcm16Buffer clamps and scales samples little-endian", () => {
     [0, 32767, -32768, 32767, -32768, 16384]
   );
 });
+
+test("smart turn is off by default", () => {
+  assert.equal(buildVoiceWorkerConfig({ cacheDir: CACHE }).smartTurn, null);
+});
+
+test("smart turn shortens Silero's silence to 200 ms and adds the classifier config", () => {
+  const config = buildVoiceWorkerConfig({ cacheDir: CACHE, smartTurn: true });
+  assert.equal(config.vad.sileroVad.minSilenceDuration, 0.2);
+  assert.deepEqual(config.smartTurn, {
+    model: path.join(CACHE, "turn-models", "smart-turn-v3.2-cpu.onnx"),
+    maxSilenceMs: 1200,
+    threshold: 0.8,
+    numThreads: 4,
+  });
+});
+
+test("smart turn honours explicit silence and max-silence overrides", () => {
+  const config = buildVoiceWorkerConfig({
+    cacheDir: CACHE,
+    smartTurn: true,
+    silenceMs: "300",
+    smartTurnMaxSilenceMs: "900",
+  });
+  assert.equal(config.vad.sileroVad.minSilenceDuration, 0.3);
+  assert.equal(config.smartTurn.maxSilenceMs, 900);
+});
+
+test("smart turn max silence never drops below Silero's pause", () => {
+  const config = buildVoiceWorkerConfig({
+    cacheDir: CACHE,
+    smartTurn: true,
+    smartTurnMaxSilenceMs: 50,
+  });
+  assert.equal(config.smartTurn.maxSilenceMs, 200);
+});

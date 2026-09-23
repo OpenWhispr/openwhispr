@@ -171,6 +171,7 @@
     "kysely": "^0.28.17",
     "object-assign": "^4.1.1",
     "onnxruntime-node": "^1.21.0",
+    "onnxruntime-web": "1.27.0",
     "opencc-js": "^1.4.1",
     "ps-list": "^9.0.0",
     "react": "^19.1.0",

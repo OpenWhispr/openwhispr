@@ -5,6 +5,8 @@ const VAD_SAMPLE_RATE = 16000;
 const DEFAULT_SILENCE_MS = 500;
 const MIN_SILENCE_MS = 150;
 const MAX_SILENCE_MS = 2000;
+const SMART_TURN_PAUSE_MS = 200;
+const SMART_TURN_MAX_SILENCE_MS = 1200;
 
 function resolveTtsKind(value) {
   const kind = String(value || "")
@@ -49,13 +51,43 @@ function ttsModelFor(kind, ttsRoot) {
   return { model: { kokoro: espeakModel(path.join(ttsRoot, "kokoro-en-v0_19"), "model.onnx") } };
 }
 
+const clampSilenceMs = (value, fallback) =>
+  Math.min(MAX_SILENCE_MS, Math.max(MIN_SILENCE_MS, Number(value) || fallback));
+
+/**
+ * Smart Turn: Silero cuts at a short pause and the classifier decides whether the
+ * turn is over; max silence commits the turn when the classifier keeps saying no.
+ */
+function smartTurnConfig(cacheDir, pauseMs, maxSilenceMs) {
+  return {
+    model: path.join(cacheDir, "turn-models", "smart-turn-v3.2-cpu.onnx"),
+    maxSilenceMs: Math.max(pauseMs, Number(maxSilenceMs) || SMART_TURN_MAX_SILENCE_MS),
+    // Pipecat uses 0.5; offline, 0.8 kept the same turn-end speed with fewer mid-sentence cuts.
+    threshold: 0.8,
+    numThreads: 4,
+  };
+}
+
 /** Worker config for the local voice spike; model paths are fixed spike downloads. */
-function buildVoiceWorkerConfig({ cacheDir, ttsKind, silenceMs = DEFAULT_SILENCE_MS, numThreads = 4 }) {
+function buildVoiceWorkerConfig({
+  cacheDir,
+  ttsKind,
+  silenceMs,
+  numThreads = 4,
+  smartTurn = false,
+  smartTurnMaxSilenceMs,
+}) {
   const kind = resolveTtsKind(ttsKind);
   const { model, pocketVoiceWav } = ttsModelFor(kind, path.join(cacheDir, "tts-models"));
-  const clampedSilenceMs = Math.min(MAX_SILENCE_MS, Math.max(MIN_SILENCE_MS, Number(silenceMs) || DEFAULT_SILENCE_MS));
+  const clampedSilenceMs = clampSilenceMs(
+    silenceMs,
+    smartTurn ? SMART_TURN_PAUSE_MS : DEFAULT_SILENCE_MS
+  );
   return {
     ttsKind: kind,
+    smartTurn: smartTurn
+      ? smartTurnConfig(cacheDir, clampedSilenceMs, smartTurnMaxSilenceMs)
+      : null,
     tts: {
       model: { ...model, numThreads, provider: "cpu" },
       maxNumSentences: 1,

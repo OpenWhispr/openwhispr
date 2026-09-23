@@ -2,6 +2,11 @@
 // Silero VAD. Native aborts (e.g. an unsupported ORT provider) stay confined here.
 const fs = require("fs");
 const path = require("path");
+const { createTurnEndpointer, createSampleRing } = require("../helpers/voiceTurnEndpointer");
+const { createSmartTurnSession } = require("./smartTurnSession");
+
+const VAD_SAMPLE_RATE = 16000;
+const FALLBACK_SILENCE_SECONDS = 0.5;
 
 let logStream = null;
 try {
@@ -31,6 +36,13 @@ let tts = null;
 let ttsRequestExtras = {};
 let vad = null;
 let vadSpeaking = false;
+let endpointer = null;
+let smartTurn = null;
+// 8 s classifier context plus pre-roll and headroom.
+let micRing = createSampleRing(VAD_SAMPLE_RATE * 10);
+let classifyQueue = Promise.resolve();
+let latestClassifyId = 0;
+let lastClassify = null;
 let ttsQueue = Promise.resolve();
 const cancelledUtterances = new Set();
 
@@ -43,7 +55,38 @@ function emit(event, payload) {
   port?.postMessage({ event, ...payload });
 }
 
-async function configure({ tts: ttsConfig, pocketVoiceWav, vad: vadConfig }) {
+async function loadSmartTurn(smartTurnConfig, vadConfig) {
+  smartTurn = null;
+  if (!smartTurnConfig) return vadConfig;
+  const started = Date.now();
+  try {
+    smartTurn = await createSmartTurnSession(smartTurnConfig);
+    log("info", "smart turn loaded", { loadMs: Date.now() - started });
+    return vadConfig;
+  } catch (error) {
+    // Without the classifier a 200 ms Silero pause would cut turns mid-sentence.
+    log("error", "smart turn failed to load; using silence-only turns", { error: error?.message });
+    return {
+      ...vadConfig,
+      sileroVad: { ...vadConfig.sileroVad, minSilenceDuration: FALLBACK_SILENCE_SECONDS },
+    };
+  }
+}
+
+function resetTurnState() {
+  vad?.reset();
+  vadSpeaking = false;
+  endpointer?.reset();
+  micRing = createSampleRing(VAD_SAMPLE_RATE * 10);
+  latestClassifyId = 0;
+}
+
+async function configure({
+  tts: ttsConfig,
+  pocketVoiceWav,
+  vad: requestedVadConfig,
+  smartTurn: smartTurnConfig,
+}) {
   const lib = loadSherpa();
   const started = Date.now();
   tts = await lib.OfflineTts.createAsync(ttsConfig);
@@ -56,10 +99,26 @@ async function configure({ tts: ttsConfig, pocketVoiceWav, vad: vadConfig }) {
       referenceSampleRate: wave.sampleRate,
     });
   }
+  const vadConfig = await loadSmartTurn(smartTurnConfig, requestedVadConfig);
   vad = new lib.Vad(vadConfig, 60);
-  vadSpeaking = false;
-  log("info", "configured", { loadMs: Date.now() - started, sampleRate: tts.sampleRate });
-  return { sampleRate: tts.sampleRate, loadMs: Date.now() - started };
+  endpointer = createTurnEndpointer({
+    smartTurn: Boolean(smartTurn),
+    sampleRate: VAD_SAMPLE_RATE,
+    maxSilenceMs: smartTurnConfig?.maxSilenceMs,
+    threshold: smartTurnConfig?.threshold,
+  });
+  resetTurnState();
+  log("info", "configured", {
+    loadMs: Date.now() - started,
+    sampleRate: tts.sampleRate,
+    smartTurn: Boolean(smartTurn),
+    minSilenceDuration: vadConfig.sileroVad.minSilenceDuration,
+  });
+  return {
+    sampleRate: tts.sampleRate,
+    loadMs: Date.now() - started,
+    smartTurn: Boolean(smartTurn),
+  };
 }
 
 function speak({ utteranceId, chunkIndex, text }) {
@@ -103,18 +162,77 @@ function speak({ utteranceId, chunkIndex, text }) {
   return result;
 }
 
+const samplesToMs = (samples) => Math.round((samples / VAD_SAMPLE_RATE) * 1000);
+
+function classify({ requestId, fromSample, toSample }) {
+  latestClassifyId = requestId;
+  const audio = micRing.slice(fromSample, toSample);
+  const run = async () => {
+    // A newer pause superseded this one while it waited behind a running call.
+    if (requestId !== latestClassifyId || !smartTurn) return;
+    let probability = null;
+    const samplesBefore = micRing.totalSamples;
+    const started = performance.now();
+    try {
+      const result = await smartTurn.predict(audio);
+      probability = result.probability;
+      lastClassify = { ...result, audioMs: samplesToMs(audio.length) };
+    } catch (error) {
+      log("error", "smart turn prediction failed", { error: error?.message });
+    }
+    // Multithreaded WASM run() blocks this thread, so no mic frames arrive while it
+    // runs; stamp the decision with the wall time it took, not the stalled mic clock.
+    const elapsedSamples = Math.round(((performance.now() - started) * VAD_SAMPLE_RATE) / 1000);
+    const nowSample = Math.max(micRing.totalSamples, samplesBefore + elapsedSamples);
+    applyTurnActions(endpointer.onPrediction({ requestId, probability, nowSample }));
+  };
+  classifyQueue = classifyQueue.then(run, run);
+}
+
+function applyTurnActions(actions) {
+  for (const action of actions) {
+    if (action.type === "classify") {
+      classify(action);
+    } else if (action.type === "commit") {
+      emit("speech-segment", {
+        samples: action.samples,
+        endpoint: {
+          reason: action.reason,
+          probability: action.probability,
+          segments: action.segments,
+          // Speech end to commit, on the mic clock: what the user waits before the pipeline starts.
+          endpointMs: samplesToMs(action.commitSample - action.speechEndSample),
+          featureMs: action.reason === "silence" ? null : (lastClassify?.featureMs ?? null),
+          inferenceMs: action.reason === "silence" ? null : (lastClassify?.inferenceMs ?? null),
+        },
+      });
+      lastClassify = null;
+    }
+  }
+}
+
 function feedVad({ samples }) {
   if (!vad) return;
+  micRing.push(samples);
   vad.acceptWaveform(samples);
   const detected = vad.isDetected();
-  if (detected && !vadSpeaking) emit("speech-start", {});
+  if (detected && !vadSpeaking) {
+    emit("speech-start", {});
+    applyTurnActions(endpointer.onSpeechStart());
+  }
   vadSpeaking = detected;
   while (!vad.isEmpty()) {
     const segment = vad.front(false);
     vad.pop();
-    const copy = new Float32Array(segment.samples);
-    emit("speech-segment", { samples: copy, startSample: segment.start });
+    applyTurnActions(
+      endpointer.onSegment({
+        samples: new Float32Array(segment.samples),
+        startSample: segment.start,
+        nowSample: micRing.totalSamples,
+      })
+    );
   }
+  applyTurnActions(endpointer.advance(micRing.totalSamples));
 }
 
 const handlers = {
@@ -125,10 +243,7 @@ const handlers = {
     return { cancelled: true };
   },
   "vad-feed": feedVad,
-  "vad-reset": () => {
-    vad?.reset();
-    vadSpeaking = false;
-  },
+  "vad-reset": resetTurnState,
 };
 
 async function onMessage({ id, method, payload }) {

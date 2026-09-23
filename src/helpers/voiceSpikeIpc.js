@@ -28,8 +28,9 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
       debugLogger.warn("voice spike could not update meeting detection", { error: error?.message });
     }
   };
-  let configuredKind = null;
+  let configuredKey = null;
   let configuredSampleRate = null;
+  let configuredSmartTurn = false;
   const spikeEvents = new EventEmitter();
 
   const send = (payload, transfer) => {
@@ -41,7 +42,7 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
     if (session) send({ type: "speech-start", at: Date.now() });
   });
 
-  voiceWorker.on("speech-segment", async ({ samples }) => {
+  voiceWorker.on("speech-segment", async ({ samples, endpoint }) => {
     if (!session) return;
     const endedAt = Date.now();
     const speechMs = Math.round((samples.length / VAD_SAMPLE_RATE) * 1000);
@@ -57,6 +58,7 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
         speechMs,
         sttMs: Date.now() - endedAt,
         endedAt,
+        endpoint: endpoint || null,
       });
     } catch (error) {
       debugLogger.error("voice spike transcription failed", { error: error?.message });
@@ -69,7 +71,7 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
   });
 
   voiceWorker.on("exit", ({ code }) => {
-    configuredKind = null;
+    configuredKey = null;
     if (session) send({ type: "error", stage: "worker", message: `voice worker exited (${code})` });
   });
 
@@ -101,12 +103,20 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
       cacheDir: path.join(os.homedir(), ".cache", "openwhispr"),
       ttsKind: process.env.OPENWHISPR_VOICE_SPIKE_TTS,
       silenceMs: process.env.OPENWHISPR_VOICE_SPIKE_SILENCE_MS,
+      smartTurn: process.env.OPENWHISPR_VOICE_SPIKE_SMART_TURN === "1",
+      smartTurnMaxSilenceMs: process.env.OPENWHISPR_VOICE_SPIKE_SMART_TURN_MAX_MS,
     });
+    const configKey = JSON.stringify([
+      config.ttsKind,
+      config.vad.sileroVad.minSilenceDuration,
+      config.smartTurn,
+    ]);
     let loadMs = 0;
     let sampleRate = configuredSampleRate;
-    if (configuredKind !== config.ttsKind || !voiceWorker.running) {
+    if (configuredKey !== configKey || !voiceWorker.running) {
       const result = await voiceWorker.request("configure", config);
-      configuredKind = config.ttsKind;
+      configuredKey = configKey;
+      configuredSmartTurn = result.smartTurn;
       loadMs = result.loadMs;
       sampleRate = result.sampleRate;
       configuredSampleRate = result.sampleRate;
@@ -131,11 +141,14 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
     });
     debugLogger.info("voice spike started", {
       ttsKind: config.ttsKind,
+      smartTurn: configuredSmartTurn,
+      minSilenceMs: Math.round(config.vad.sileroVad.minSilenceDuration * 1000),
+      maxSilenceMs: config.smartTurn?.maxSilenceMs ?? null,
       loadMs,
       sampleRate,
       parakeetModel: session.parakeetModel,
     });
-    return { ttsKind: config.ttsKind, sampleRate, loadMs };
+    return { ttsKind: config.ttsKind, sampleRate, loadMs, smartTurn: configuredSmartTurn };
   });
 
   // Starts the voice model if needed and resets llama-server's 5-minute idle

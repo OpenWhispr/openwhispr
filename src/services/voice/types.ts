@@ -24,8 +24,26 @@ export interface VoiceTurnReport {
   metrics: Record<string, number | null>;
 }
 
+/** How the worker decided the user's turn was over (Smart Turn or plain silence). */
+export interface VoiceTurnEndpoint {
+  reason: "silence" | "smart-turn" | "smart-turn-hold" | "max-silence";
+  probability: number | null;
+  segments: number;
+  /** Speech end to turn commit, on the mic clock. */
+  endpointMs: number;
+  featureMs: number | null;
+  inferenceMs: number | null;
+}
+
 export type VoiceSpikeEvent =
   | { type: "speech-start"; at: number }
-  | { type: "transcript"; text: string; speechMs: number; sttMs: number; endedAt: number }
+  | {
+      type: "transcript";
+      text: string;
+      speechMs: number;
+      sttMs: number;
+      endedAt: number;
+      endpoint: VoiceTurnEndpoint | null;
+    }
   | { type: "tts-audio"; utteranceId: string; chunkIndex: number; samples: Float32Array; at: number }
   | { type: "error"; stage: string; message: string };
