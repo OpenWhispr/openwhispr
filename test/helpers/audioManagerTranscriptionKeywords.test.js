@@ -103,6 +103,8 @@ test("the custom dictionary rides gpt-transcribe's keywords[] channel, legacy mo
           sent = {
             parts: body.split(`--${boundary}\r\n`).length - 1,
             keywords: init.body.getAll("keywords[]"),
+            language: init.body.get("language"),
+            prompt: init.body.get("prompt"),
           };
           return {
             ok: true,
@@ -120,6 +122,10 @@ test("the custom dictionary rides gpt-transcribe's keywords[] channel, legacy mo
         assert.equal(result.success, true);
         assert.ok(sent.parts < 1000, `${sent.parts} multipart parts exceeds OpenAI's form limit`);
         assert.deepEqual(sent.keywords, terms.slice(0, 900));
+        if (language === "zh-CN") {
+          assert.ok(sent.language, "zh-CN must send the language part");
+          assert.match(sent.prompt, /简体中文/, "zh-CN must send the script-bias prompt part");
+        }
       }
     );
   }
