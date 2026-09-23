@@ -92,7 +92,10 @@ describe('ModelDownloadScreen — partial Parakeet download', () => {
     fireEvent.press(action);
 
     await waitFor(() => expect(mockParakeet.cancelModelDownload).toHaveBeenCalledWith('v2'));
-    await waitFor(() => expect(screen.queryByText(/Clear partial download/)).toBeNull());
+    // Not `toBeNull()`: its failure message pretty-prints the element's whole fiber graph, which
+    // blocks the event loop for ~250 ms per poll, so under CPU load the render that removes the
+    // link never runs before waitFor times out.
+    await waitFor(() => expect(screen.queryByText(/Clear partial download/)).not.toBeOnTheScreen());
   });
 
   it('shows nothing when no partial download is staged', async () => {
