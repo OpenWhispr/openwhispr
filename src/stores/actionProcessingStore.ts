@@ -18,8 +18,10 @@ import { estimateNoteTokens, planNoteChunks, splitChunkInHalf } from "../helpers
 import type { LocalInferenceError } from "../utils/localInferenceError";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
 
-// Output allowance for the working notes of one part of a long recording. Each
-// part actually gets its share of the room the final pass has left, capped here.
+// Output room reserved in each part's window when the parts are planned. The
+// allowance a part actually gets is its share of the room the final pass has
+// left, up to NOTE_OUTPUT_MAX_TOKENS: capping it here clipped every part of a
+// meeting on the default 9B while the merge still had room to spare.
 const PART_NOTES_MAX_TOKENS = 2048;
 // Below this a part's notes could not hold the specifics of an hour of speech.
 const MIN_PART_NOTES_TOKENS = 512;
@@ -230,7 +232,7 @@ async function runInParts(
       NOTE_OUTPUT_MAX_TOKENS -
       CONTEXT_RESERVE_TOKENS -
       sections * PART_HEADING_TOKENS;
-    return Math.min(PART_NOTES_MAX_TOKENS, Math.floor(room / sections));
+    return Math.min(NOTE_OUTPUT_MAX_TOKENS, Math.floor(room / sections));
   };
 
   // Parts are planned against the largest allowance so they stay small enough

@@ -777,6 +777,11 @@ class LlamaServerManager {
                 reject(error);
                 return;
               }
+              if (truncated) {
+                debugLogger.warn("llama-server reply was cut off at max_tokens", {
+                  maxTokens: requestBody.max_tokens,
+                });
+              }
               // Some builds still route a suppressed-thinking answer into
               // `reasoning_content` (#809). With thinking on, that field is the
               // reasoning itself, which must never stand in for the answer.

@@ -11,6 +11,9 @@ const LINE = "Alice: we agreed to ship the billing migration on Friday after QA.
 const BIG_BUDGET = { success: true, maxContextTokens: 131072, modelName: "Qwen3.5 9B" };
 // 8192 leaves roughly 4,400 tokens per part after the part prompt and output reserve.
 const SMALL_BUDGET = { success: true, maxContextTokens: 8192, modelName: "Qwen3.5 9B" };
+// Parts may be allowed the same 4096 tokens as the whole note, so the prompt,
+// not the allowance, tells a part request from the whole-note or merge request.
+const isPart = (config) => /this part only/i.test(config.systemPrompt);
 
 async function loadStore(
   t,
@@ -253,7 +256,7 @@ test("a part whose reply fills its allowance is kept clipped, never split", asyn
   const { store, calls, updates } = await loadStore(t, {
     failFirst: true,
     processText: (text, config) => {
-      if (config.maxTokens === 4096) return "Final notes";
+      if (!isPart(config)) return "Final notes";
       if (config.requireCompleteOutput) {
         throw Object.assign(new Error("truncated"), { code: "OUTPUT_TRUNCATED" });
       }
@@ -279,7 +282,7 @@ test("a part cut short by the model is a plain failure, not a reason to split", 
   const { store, calls, updates } = await loadStore(t, {
     failFirst: true,
     processText: (text, config) => {
-      if (config.maxTokens === 4096) return "Final notes";
+      if (!isPart(config)) return "Final notes";
       throw Object.assign(new Error("truncated"), { code: "OUTPUT_TRUNCATED" });
     },
   });
@@ -326,6 +329,18 @@ test("part allowances are sized so every part's notes fit the final pass togethe
   }
 });
 
+// A cap below the final pass's room clipped every part of a meeting on the
+// default 9B, dropping whatever each part said last.
+test("parts share the final pass's room up to a full note reply", async (t) => {
+  const { store, calls, updates } = await loadStore(t, { budget: FLOOR_BUDGET, failFirst: true });
+  run(store, 30, longMaterial(700));
+  await waitForResult(store, updates);
+  assert.equal(updates.length, 1);
+  const parts = calls.slice(1, -1);
+  assert.ok(parts.length >= 2, `expected several parts, got ${parts.length}`);
+  for (const part of parts) assert.equal(part.config.maxTokens, 4096);
+});
+
 test("material that would leave each part too small an allowance is refused before any part runs", async (t) => {
   const { store, calls, updates } = await loadStore(t, { failFirst: true });
   run(store, 25, longMaterial(4000));
@@ -341,7 +356,7 @@ test("an empty part reply fails the note instead of merging a blank section", as
   const { store, calls, updates } = await loadStore(t, {
     failFirst: true,
     processText: (text, config) => {
-      if (config.maxTokens === 4096) return "Final notes";
+      if (!isPart(config)) return "Final notes";
       partCalls += 1;
       return partCalls === 2 ? "  \n" : "Working notes";
     },
@@ -376,7 +391,7 @@ test("speaker attribution survives packing and an overflow retry", async (t) => 
   const { store, calls, updates } = await loadStore(t, {
     failFirst: true,
     processText: (text, config) => {
-      if (config.maxTokens !== 4096 && !refused) {
+      if (isPart(config) && !refused) {
         refused = true;
         throw overflow();
       }
@@ -415,7 +430,7 @@ test("an exact-token overflow at the final merge reduces the existing part notes
         reduced = true;
         return "Alice owns QA; Bob owns release.";
       }
-      if (config.maxTokens === 4096) {
+      if (!isPart(config)) {
         if (!reduced) throw overflow();
         return "- [ ] QA — Alice\n- [ ] Release — Bob";
       }
@@ -427,7 +442,7 @@ test("an exact-token overflow at the final merge reduces the existing part notes
   assert.equal(updates.length, 1);
   assert.equal(updates[0].payload.enhanced_content, "- [ ] QA — Alice\n- [ ] Release — Bob");
   assert.equal(calls.filter((call) => call.text.includes("## Working notes")).length, 1);
-  assert.equal(calls.filter((call) => call.config.maxTokens === 4096).length, 3);
+  assert.equal(calls.filter((call) => !isPart(call.config)).length, 3);
   assert.ok(calls.at(-1).text.includes("Alice owns QA; Bob owns release."));
 });
 
@@ -441,7 +456,7 @@ test("a shorter consolidation is usable even when its section count stays the sa
         reductions += 1;
         return reductions === 1 ? "detail ".repeat(750) : "Alice owns QA.";
       }
-      if (config.maxTokens === 4096) {
+      if (!isPart(config)) {
         if (text.includes("detail")) throw overflow();
         return "- [ ] QA — Alice";
       }
@@ -467,7 +482,7 @@ test("the last allowed consolidation still gets a final merge attempt", async (t
     failFirst: true,
     processText: (text, config) => {
       if (text.includes("## Working notes")) reductions += 1;
-      if (config.maxTokens === 4096) {
+      if (!isPart(config)) {
         if (reductions < 3) throw overflow();
         return "Final notes";
       }
@@ -486,7 +501,7 @@ test("repeated merge overflows stop after three consolidations and name the mode
     failFirst: true,
     processText: (text, config) => {
       if (text.includes("## Working notes")) reductions += 1;
-      if (config.maxTokens === 4096) throw overflow();
+      if (!isPart(config)) throw overflow();
       return "Working notes";
     },
   });
@@ -494,7 +509,7 @@ test("repeated merge overflows stop after three consolidations and name the mode
   await waitForResult(store, updates);
   assert.equal(updates.length, 0);
   assert.equal(reductions, 3);
-  assert.equal(calls.filter((call) => call.config.maxTokens === 4096).length, 5);
+  assert.equal(calls.filter((call) => !isPart(call.config)).length, 5);
   const [error] = store.consumeErrorEvents();
   assert.equal(error.messageKey, "models.errors.contextTooLargeGeneric");
   assert.deepEqual(error.messageParams, { model: "Qwen3.5 9B" });
@@ -504,7 +519,7 @@ test("a non-context merge error is reported without retrying", async (t) => {
   const { store, calls, updates } = await loadStore(t, {
     failFirst: true,
     processText: (text, config) => {
-      if (config.maxTokens === 4096) throw new Error("model unavailable");
+      if (!isPart(config)) throw new Error("model unavailable");
       return "Working notes";
     },
   });
@@ -522,7 +537,7 @@ test("cancelling a failed merge prevents further consolidation and saving", asyn
   const { store, calls, updates } = await loadStore(t, {
     failFirst: true,
     processText: (text, config) => {
-      if (config.maxTokens === 4096) {
+      if (!isPart(config)) {
         store.cancelAction(14);
         throw overflow();
       }
@@ -543,7 +558,7 @@ test("an unbroken CJK part rejected by the tokenizer is split and merged without
     budget: FLOOR_BUDGET,
     failFirst: true,
     processText: (text, config) => {
-      if (config.maxTokens === 4096) return "Final notes";
+      if (!isPart(config)) return "Final notes";
       const characters = (text.match(/𠀀/gu) || []).join("");
       if ([...characters].length > 7000) throw overflow();
       accepted.push(characters);
@@ -682,7 +697,7 @@ test("manual notes that cannot fit the final pass are refused before any part ru
     budget: FLOOR_BUDGET,
     failFirst: true,
     processText: (text, config) => {
-      if (config.maxTokens === 4096) throw overflow();
+      if (!isPart(config)) throw overflow();
       return "Working notes";
     },
   });
