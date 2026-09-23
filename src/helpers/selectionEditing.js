@@ -30,6 +30,8 @@ const STANDALONE_CAPTURE_CODES = new Set([
   // macOS: neither the accessibility tree nor a synthetic copy could inspect the
   // app, so a selection is neither readable nor ruled out.
   "accessibility_unavailable",
+  // Linux: keys still held past the wait block the copy, so the same holds.
+  "modifiers_held",
 ]);
 
 export function getSelectionCaptureDisposition(capture) {

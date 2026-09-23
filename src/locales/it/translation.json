@@ -932,11 +932,18 @@
         "description": "La dettatura si è interrotta mentre il tasto era ancora premuto, quindi il testo non è stato incollato. La trascrizione è negli appunti.",
         "descriptionClipboardFailed": "La dettatura si è interrotta mentre il tasto era ancora premuto: il testo non è stato incollato e non è stato possibile copiarlo negli appunti."
       },
+      "modifiersHeld": {
+        "title": "Trascrizione non incollata",
+        "description": "Un tasto modificatore (come Ctrl o Maiusc) era ancora premuto, quindi il testo non è stato incollato. La trascrizione è negli appunti.",
+        "descriptionClipboardFailed": "Un tasto modificatore (come Ctrl o Maiusc) era ancora premuto: il testo non è stato incollato e non è stato possibile copiarlo negli appunti."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Modifica della selezione non applicata",
         "changed": "Il testo selezionato o l’app di destinazione è cambiato durante l’elaborazione. Non è stato sostituito nulla.",
         "expired": "La modifica è scaduta. Seleziona di nuovo il testo e riprova.",
         "pasteFailed": "OpenWhispr ha generato la modifica, ma non ha potuto sostituire il testo selezionato.",
+        "modifiersHeld": "OpenWhispr ha generato la modifica, ma un tasto modificatore (come Ctrl o Maiusc) era ancora premuto, quindi non è stata applicata. La modifica è negli appunti.",
+        "modifiersHeldClipboardFailed": "OpenWhispr ha generato la modifica, ma un tasto modificatore (come Ctrl o Maiusc) era ancora premuto, quindi non è stata applicata e non è stato possibile copiarla negli appunti.",
         "unavailable": "OpenWhispr non ha potuto leggere in sicurezza il testo selezionato. Controlla i permessi di accessibilità o automazione.",
         "tooLarge": "La selezione è troppo grande. Seleziona al massimo 6.000 caratteri.",
         "reasoningFailed": "L’IA non ha potuto completare la modifica. Il testo originale non è stato cambiato."

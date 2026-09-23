@@ -243,6 +243,65 @@ test("does not paste when the selection changed", async () => {
   assert.equal(pastes.length, 0);
 });
 
+// Keys still held past the modifier wait (#2113) block the edit at two points.
+// Both must say so: "selection_unavailable" sends the user to permissions
+// settings and "paste_failed" hides that the edit is on the clipboard.
+test("a replacement blocked by held modifiers at revalidation reports modifiers_held", async () => {
+  const { manager, pastes } = makeHarness({ selections: ["original"] });
+  const capture = await manager.captureSelectedText();
+  manager._readCurrentSelection = async () => ({ status: "unavailable", code: "modifiers_held" });
+
+  assert.deepEqual(await manager.replaceSelectedText(capture.sessionId, "improved"), {
+    success: false,
+    code: "modifiers_held",
+  });
+  assert.equal(pastes.length, 0);
+});
+
+test("a replacement whose paste was held back for modifiers reports modifiers_held", async () => {
+  const { manager, pastes } = makeHarness({
+    selections: ["original", "original"],
+    pasteResult: { restoreComplete: Promise.resolve(), pasted: false, reason: "modifiers-held" },
+  });
+  const capture = await manager.captureSelectedText();
+
+  assert.deepEqual(await manager.replaceSelectedText(capture.sessionId, "improved"), {
+    success: false,
+    code: "modifiers_held",
+  });
+  assert.equal(pastes.length, 1);
+});
+
+// The assistant's caret paste is blocked the same two ways. The renderer only
+// reads `success`, so this code is for logs and support rather than UI.
+test("an assistant caret paste held back by modifier keys reports modifiers_held", async () => {
+  const { manager } = makeHarness({
+    selections: [
+      { state: "none", editable: true },
+      { state: "none", editable: true },
+    ],
+    pasteResult: { restoreComplete: Promise.resolve(), pasted: false, reason: "modifiers-held" },
+  });
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+
+  assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
+    success: false,
+    code: "modifiers_held",
+  });
+});
+
+test("a caret re-read blocked by held modifier keys reports modifiers_held", async () => {
+  const { manager, pastes } = makeHarness({ selections: [{ state: "none", editable: true }] });
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+  manager._readCurrentSelection = async () => ({ status: "unavailable", code: "modifiers_held" });
+
+  assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
+    success: false,
+    code: "modifiers_held",
+  });
+  assert.equal(pastes.length, 0);
+});
+
 test("selection sessions are single-use", async () => {
   const { manager } = makeHarness({ selections: ["original", "original", "original"] });
   const capture = await manager.captureSelectedText();
@@ -573,6 +632,44 @@ test("a terminal target reads as no selection", async () => {
   assert.equal(result.status, "none");
   assert.deepEqual(result.target, terminalTarget);
 });
+
+// Capture runs right after the voice assistant hotkey press, while its keys are
+// often still down. A Ctrl+C sent into them copies nothing, so capture waits for
+// the release and fails closed when the keys stay held.
+for (const [modifiers, expectCopy] of [
+  ["held", false],
+  ["released", true],
+  ["unknown", true],
+]) {
+  test(`Linux selection capture ${expectCopy ? "copies" : "sends no copy"} when modifiers are ${modifiers}`, async () => {
+    let copyAttempts = 0;
+    const manager = new SelectionManager({
+      clipboardManager: {
+        runClipboardOperation: (operation) => operation(),
+        isLinuxTerminalWindowClass: () => false,
+        resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste",
+        _awaitModifierRelease: async () => modifiers,
+      },
+      textEditMonitor: {},
+      platform: "linux",
+      now: () => 1000,
+    });
+    const target = { kind: "x11-window", id: "7", windowClass: "org.gnome.texteditor" };
+    manager._getLinuxTarget = async () => target;
+    manager._captureViaClipboard = async () => {
+      copyAttempts += 1;
+      return { status: "none", target };
+    };
+
+    const result = await manager._readLinuxSelection(null);
+
+    assert.equal(copyAttempts, expectCopy ? 1 : 0);
+    assert.deepEqual(
+      result,
+      expectCopy ? { status: "none", target } : { status: "unavailable", code: "modifiers_held" }
+    );
+  });
+}
 
 // macOS accessibility never resolves a focused element in Chromium browsers, so
 // a synthetic ⌘C is the only way to tell a real selection from an empty field.

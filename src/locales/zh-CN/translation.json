@@ -932,11 +932,18 @@
         "description": "听写停止时快捷键仍处于按下状态，因此未粘贴文本。转录内容已复制到剪贴板。",
         "descriptionClipboardFailed": "听写停止时快捷键仍处于按下状态，因此未粘贴文本，也无法复制到剪贴板。"
       },
+      "modifiersHeld": {
+        "title": "转录内容未粘贴",
+        "description": "修饰键（如 Ctrl 或 Shift）仍处于按下状态，因此未粘贴文本。转录内容已复制到剪贴板。",
+        "descriptionClipboardFailed": "修饰键（如 Ctrl 或 Shift）仍处于按下状态，因此未粘贴文本，也无法复制到剪贴板。"
+      },
       "selectionEditing": {
         "notAppliedTitle": "未应用选中文本编辑",
         "changed": "处理期间，选中的文本或目标应用已发生变化。未替换任何内容。",
         "expired": "选中文本编辑已过期。请重新选择文本后再试。",
         "pasteFailed": "OpenWhispr 已生成编辑结果，但无法替换选中的文本。",
+        "modifiersHeld": "OpenWhispr 已生成编辑结果，但修饰键（如 Ctrl 或 Shift）仍处于按下状态，因此未应用。编辑结果已复制到剪贴板。",
+        "modifiersHeldClipboardFailed": "OpenWhispr 已生成编辑结果，但修饰键（如 Ctrl 或 Shift）仍处于按下状态，因此未应用，也无法复制到剪贴板。",
         "unavailable": "OpenWhispr 无法安全读取选中的文本。请检查辅助功能或输入自动化权限。",
         "tooLarge": "选中的内容过长。请选择不超过 6,000 个字符。",
         "reasoningFailed": "AI 无法完成选中文本编辑。原始文本未被更改。"

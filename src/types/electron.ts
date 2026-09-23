@@ -1104,7 +1104,7 @@ declare global {
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
         }
-      ) => Promise<{ success: true; pasted: boolean }>;
+      ) => Promise<{ success: true; pasted: boolean; reason?: "modifiers-held" }>;
       captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
@@ -1136,6 +1136,7 @@ declare global {
           | "selection_unavailable"
           | "selection_changed"
           | "paste_failed"
+          | "modifiers_held"
           | "selection_manager_unavailable";
         error?: string;
       }>;
@@ -1150,6 +1151,7 @@ declare global {
           | "session_expired"
           | "target_changed"
           | "paste_failed"
+          | "modifiers_held"
           | "selection_manager_unavailable";
         error?: string;
       }>;
