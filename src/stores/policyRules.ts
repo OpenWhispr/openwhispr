@@ -202,6 +202,14 @@ export function isScreenContextAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.screenContextEnabled !== false);
 }
 
+/**
+ * Whether agent connectors may run. Servers that predate the field send
+ * none; absent means allowed.
+ */
+export function isConnectorsAllowed(state: PolicyDecisionSnapshot): boolean {
+  return managedPolicyDecision(state, (policy) => policy.features.connectorsEnabled !== false);
+}
+
 const warnedUnknownRequiredModelIds = new Set<string>();
 
 /**
