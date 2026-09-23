@@ -135,24 +135,54 @@ test("resolveFailedGpuBackends tolerates empty and messy values", () => {
   assert.deepEqual(resolveFailedGpuBackends(" cuda , vulkan ,"), ["cuda", "vulkan"]);
 });
 
+const debugLogger = require("../../src/helpers/debugLogger");
+const VULKAN_SKIPPED =
+  "Vulkan pack skipped: it fell back to CPU on an earlier start (Retry in settings)";
+const DEVICE_LOST = "vk::PhysicalDevice::createDevice: ErrorDeviceLost";
 
-test("a downloaded pack skipped for an earlier failure is logged once, with its saved reason", (t) => {
-  // A debug log turned on after the fallback otherwise shows only a CPU start (#1736)
-  const debugLogger = require("../../src/helpers/debugLogger");
+function captureInfoLogs(t) {
   const logged = [];
   t.mock.method(debugLogger, "info", (message, meta) => logged.push({ message, meta }));
+  return logged;
+}
+
+test("a downloaded pack skipped for an earlier failure is logged once per state, with its saved reason", (t) => {
+  // A debug log turned on after the fallback otherwise shows only a CPU start (#1736)
+  const logged = captureInfoLogs(t);
   process.env.WHISPER_GPU_FAILED = "cuda,vulkan";
-  process.env.WHISPER_GPU_FAILED_REASON_VULKAN = "vk::PhysicalDevice::createDevice: ErrorDeviceLost";
+  process.env.WHISPER_GPU_FAILED_REASON_VULKAN = DEVICE_LOST;
   // CUDA failed too but its pack is gone, so there is nothing skipped to explain
   const manager = managerWith({ vulkanDownloaded: true });
 
   manager.resolveGpuStartOptions();
   manager.resolveGpuStartOptions();
+  // A later failure with another cause is a new state
+  process.env.WHISPER_GPU_FAILED_REASON_VULKAN = "exit code 3";
+  manager.resolveGpuStartOptions();
 
   assert.deepEqual(logged, [
-    {
-      message: "Vulkan pack skipped: it fell back to CPU on an earlier start (Retry in settings)",
-      meta: { reason: "vk::PhysicalDevice::createDevice: ErrorDeviceLost" },
-    },
+    { message: VULKAN_SKIPPED, meta: { reason: DEVICE_LOST } },
+    { message: VULKAN_SKIPPED, meta: { reason: "exit code 3" } },
+  ]);
+});
+
+test("the skipped pack is logged again when debug mode is switched on without a restart", (t) => {
+  // Settings > Developer > Debug mode raises the level live. The startup line
+  // went to no file, so the debug file opened now must get it too.
+  const logged = captureInfoLogs(t);
+  let level = "info";
+  t.mock.method(debugLogger, "getLevel", () => level);
+  process.env.WHISPER_GPU_FAILED = "vulkan";
+  process.env.WHISPER_GPU_FAILED_REASON_VULKAN = DEVICE_LOST;
+  const manager = managerWith({ vulkanDownloaded: true });
+
+  manager.resolveGpuStartOptions();
+  level = "debug";
+  manager.resolveGpuStartOptions();
+  manager.resolveGpuStartOptions();
+
+  assert.deepEqual(logged, [
+    { message: VULKAN_SKIPPED, meta: { reason: DEVICE_LOST } },
+    { message: VULKAN_SKIPPED, meta: { reason: DEVICE_LOST } },
   ]);
 });

@@ -107,7 +107,9 @@ class WhisperManager {
 
   // A remembered failure skips a downloaded pack silently, so a debug log turned
   // on after the fallback would show only a CPU start. Say why, once per state,
-  // with the reason saved at the fallback (#1736).
+  // with the reason saved at the fallback (#1736). The log level is part of the
+  // state: Debug mode in settings raises it without a restart, and the line
+  // logged at startup reached no file.
   _logSkippedGpuPacks(failed) {
     const skipped = [
       ["cuda", "CUDA", this._cudaBinaryManager],
@@ -118,7 +120,7 @@ class WhisperManager {
         label,
         reason: process.env[WHISPER_GPU_FAILURE_REASON_KEYS[backend]] || null,
       }));
-    const signature = JSON.stringify(skipped);
+    const signature = JSON.stringify([debugLogger.getLevel(), skipped]);
     if (signature === this._loggedGpuSkips) return;
     this._loggedGpuSkips = signature;
     for (const { label, reason } of skipped) {
