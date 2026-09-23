@@ -3443,6 +3443,7 @@
     "actions": {
       "done": "Fertig",
       "chunkProgress": "Teil {{step}} von {{total}}",
+      "emptyReply": "Das Modell hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
       "manage": "Aktionen verwalten...",
       "manageTitle": "Benutzerdefinierte Aktionen",
       "addAction": "Neue Aktion",

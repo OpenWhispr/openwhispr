@@ -3154,6 +3154,7 @@
       "selectAction": "Seleccionar acción",
       "done": "Listo",
       "chunkProgress": "Parte {{step}} de {{total}}",
+      "emptyReply": "El modelo devolvió una respuesta vacía. Vuelve a intentarlo o elige otro modelo.",
       "builtin": {
         "generateNotes": {
           "name": "Generar notas",

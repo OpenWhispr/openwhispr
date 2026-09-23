@@ -2882,6 +2882,7 @@
       "selectAction": "アクションを選択",
       "done": "完了",
       "chunkProgress": "パート {{step}} / {{total}}",
+      "emptyReply": "モデルから空の応答が返されました。もう一度お試しいただくか、別のモデルを選択してください。",
       "builtin": {
         "generateNotes": {
           "name": "ノートを生成",

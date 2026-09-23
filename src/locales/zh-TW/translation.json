@@ -3101,6 +3101,7 @@
       "selectAction": "選擇動作",
       "done": "完成",
       "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
+      "emptyReply": "模型傳回了空白回覆。請再試一次，或選擇其他模型。",
       "builtin": {
         "generateNotes": {
           "name": "生成筆記",

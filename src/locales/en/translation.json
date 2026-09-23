@@ -3443,6 +3443,7 @@
     "actions": {
       "done": "Done",
       "chunkProgress": "Part {{step}} of {{total}}",
+      "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
       "manage": "Manage Actions...",
       "manageTitle": "Custom Actions",
       "addAction": "New Action",

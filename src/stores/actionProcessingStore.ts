@@ -165,6 +165,9 @@ async function readLocalContextBudget(modelId: string): Promise<LocalContextBudg
   }
 }
 
+const emptyReplyError = () =>
+  Object.assign(new Error("Model returned no text"), { messageKey: "notes.actions.emptyReply" });
+
 /** The translated refusal from #2142, for material no amount of splitting can fit. */
 function tooLongForModel(modelName: string): LocalInferenceError {
   const error: LocalInferenceError = new Error(
@@ -304,7 +307,7 @@ async function runInParts(
     }
     // A blank part would be merged as an empty section and its hour of the
     // meeting would vanish from the notes without a word.
-    if (notes.trim().length === 0) throw new Error("Model returned no text");
+    if (notes.trim().length === 0) throw emptyReplyError();
     return notes;
   };
 
@@ -462,7 +465,7 @@ export function runBackgroundAction(
       // IPC-bridged providers relay whatever the model returned; a blank
       // result must not be saved as the enhanced note.
       if (!enhanced.trim()) {
-        throw new Error("Model returned no text");
+        throw emptyReplyError();
       }
 
       if (isCancelled()) return;

@@ -365,7 +365,17 @@ test("an empty part reply fails the note instead of merging a blank section", as
   await waitForResult(store, updates);
   assert.equal(updates.length, 0);
   assert.equal(calls.length, 3, "stops at the blank part; no merge");
-  assert.equal(store.consumeErrorEvents()[0].message, "Model returned no text");
+  const [error] = store.consumeErrorEvents();
+  assert.equal(error.message, "Model returned no text");
+  assert.equal(error.messageKey, "notes.actions.emptyReply");
+});
+
+test("an empty whole-note reply fails with a translated message", async (t) => {
+  const { store, updates } = await loadStore(t, { processText: () => "  \n" });
+  run(store, 31, longMaterial(3));
+  await waitForResult(store, updates);
+  assert.equal(updates.length, 0);
+  assert.equal(store.consumeErrorEvents()[0].messageKey, "notes.actions.emptyReply");
 });
 
 test("cancelling a refused part prevents its first recursive retry", async (t) => {
