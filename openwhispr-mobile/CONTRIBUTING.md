@@ -2,25 +2,48 @@
 
 Thanks for your interest in contributing. This guide covers everything you need to fork, build, and submit a PR.
 
+The mobile app is maintained in `openwhispr-mobile/` inside the main OpenWhispr repository, but it has its own dependencies, lockfile, commands, CI checks, and release process. Run the commands below from `openwhispr-mobile/`.
+
 ## Prerequisites
 
-- **Node.js** 24.x and npm
-- **Xcode** 16+ (for iOS builds; required even if you only ship Android because the keyboard extension is iOS-only)
-- An **Apple Developer account** (free is fine for local simulator; paid is required to install on a physical device because the iOS keyboard extension uses an App Group capability)
-- **EAS CLI**: `npm install -g eas-cli`
-- iOS Simulator and/or Android Emulator
+All contributors need:
+
+- Git
+- Node.js 24.x and npm
+
+For iOS development:
+
+- macOS with [Xcode 26.2 or newer](https://docs.expo.dev/versions/v55.0.0/)
+- Ruby and Bundler for the locked CocoaPods dependencies
+- An iOS Simulator, or a physical device for device-only testing
+
+The simulator does not require an Apple Developer account. A paid Apple Developer Program membership is required to sign a physical-device build because the keyboard and activity extensions use an App Group capability.
+
+For Android development:
+
+- Android Studio with Android SDK 36
+- An Android emulator or physical device
+
+Android development does not require Xcode or an Apple Developer account. The EAS CLI is only required when working with EAS builds or submissions; it is not needed for normal local development.
 
 ## First-Time Setup
 
 ```bash
 git clone https://github.com/<your-fork>/openwhispr.git
 cd openwhispr/openwhispr-mobile
-npm ci
+npm install
+cp .env.example .env.local
 ```
 
-For hosted-service development, optionally copy `.env.example` to `.env` and configure the values described in [Environment Variables](#environment-variables). Personal provider and on-device development require no OpenWhispr production credentials. Enter provider keys only in the app, never in source, fixtures, or `EXPO_PUBLIC_` variables.
+The example uses the hosted OpenWhispr API and leaves optional integrations disabled. Edit `.env.local` only for the features or local identity values you need. Local environment files are ignored by Git. Personal provider and on-device development need no OpenWhispr production credentials. Enter provider keys only in the app, never in source, fixtures, or `EXPO_PUBLIC_` variables.
 
-If you plan to build on a real iOS device, you must rebrand the bundle identifiers and App Group — see [Rebranding for Forks](#rebranding-for-forks).
+Install the locked Ruby dependencies before the first iOS build:
+
+```bash
+bundle install
+```
+
+If you plan to build on a physical iOS device, configure a unique local identity and signing team first. See [Physical iOS Devices and Forks](#physical-ios-devices-and-forks).
 
 ## Development Workflow
 
@@ -32,48 +55,57 @@ npm run typecheck      # tsc --noEmit
 npm run lint           # ESLint
 npm run format         # Prettier --check
 npm run format:write   # Prettier --write
+npm run check          # format + lint + typecheck + Expo Doctor
 npm run clean          # format + lint + typecheck
 ```
 
 `npm run ios` runs `expo run:ios`, which executes `expo prebuild` and compiles the native project. The keyboard extension is wired in by the config plugin at `plugins/keyboard-extension/withKeyboardExtension.js` during prebuild.
 
+OpenWhispr uses custom native modules, so Expo Go is not a supported development environment. Use `npm run ios` or `npm run android` to create a development build.
+
+The `android`, `ios`, and `prebuild` npm scripts use POSIX environment-variable syntax. On Windows, put `OPENWHISPR_APP_ENV=development` in `.env.local` and run `npx expo run:android` or `npx expo prebuild` directly. iOS builds still require macOS.
+
 ## Environment Variables
 
-Only non-secret client configuration belongs in `EXPO_PUBLIC_` variables. Provider credentials must never use this prefix. See `.env.example` for the full list:
+Use [.env.example](./.env.example) as the canonical variable reference. It groups configuration into:
 
-| Variable                         | Purpose                                          |
-| -------------------------------- | ------------------------------------------------ |
-| `EXPO_PUBLIC_API_URL`            | Backend API base URL                             |
-| `EXPO_PUBLIC_OAUTH_CALLBACK_URL` | OAuth redirect URL configured in the backend     |
-| `EXPO_PUBLIC_SENTRY_DSN`         | Optional. Leave empty to disable error reporting |
+- hosted API and transcription settings;
+- optional Sentry, AppsFlyer, Superwall, RevenueCat, and Google Calendar integrations;
+- keyboard audio behavior; and
+- local bundle identifiers, URL schemes, and display names.
 
-## Rebranding for Forks
+Variables prefixed with `EXPO_PUBLIC_` are embedded in the application bundle and must never contain secrets. Keep contributor-specific values in `.env.local`, which is ignored by Git.
 
-The repo is hard-coded to Gizmo Labs Inc. identifiers. If you fork and want to build on a real device or ship your own version, change these references to your own org:
+## Physical iOS Devices and Forks
 
-1. **`app.base.json`** — `expo.owner`, `expo.ios.bundleIdentifier`, `expo.android.package`, `expo.ios.appleTeamId`, and the keyboard extension entry under `expo.extra.eas.build.experimental.ios.appExtensions[0].bundleIdentifier` and its `entitlements["com.apple.security.application-groups"]`.
-2. **`plugins/keyboard-extension/withKeyboardExtension.js`** — `APP_GROUP_ID` constant near the top of the file.
-3. **`modules/app-group-storage/ios/AppGroupStorageModule.swift`** — `appGroupId` property and the Darwin notification names.
-4. **`plugins/keyboard-extension/ios/KeyboardViewController.swift`** and **`plugins/keyboard-extension/ios/OpenWhisprKeyboard.entitlements`** — the App Group identifier string.
+The committed configuration contains OpenWhispr's production identifiers. Do not manually replace identifiers throughout the source. For a local physical-device build, set a unique identity in `.env.local`:
 
-Confirm with:
-
-```bash
-grep -rn 'group.com.gizmolabs' modules/ plugins/
-grep -rn 'com.gizmolabs.openwhispr' app.base.json
+```dotenv
+OPENWHISPR_IOS_BUNDLE_IDENTIFIER=com.example.openwhispr.dev
+OPENWHISPR_SCHEME=example-openwhispr-dev
+OPENWHISPR_DISPLAY_NAME=OpenWhispr Dev
+OPENWHISPR_KEYBOARD_DISPLAY_NAME=OpenWhispr Dev
 ```
 
-After rebranding, run `npm run ios` again to regenerate the native project.
+`app.config.js` derives matching bundle identifiers for the keyboard and activity extensions and an App Group named `group.<bundle identifier>`. Override `OPENWHISPR_APP_GROUP_ID` or `OPENWHISPR_KEYBOARD_BUNDLE_IDENTIFIER` only when your Apple configuration requires different values.
+
+Verify the resolved configuration and generate the native project:
+
+```bash
+OPENWHISPR_APP_ENV=development npx expo config --type public
+npm run prebuild:dev -- --clean
+```
+
+In the generated Xcode workspace, select your Apple development team for the main app, `OpenWhisprKeyboard`, and `OpenWhisprActivity` targets. Your team must own the bundle identifiers and App Group. The generated `ios/` directory is ignored by Git, so these local signing changes should not be committed.
+
+Maintainers shipping a separate fork must also replace the organization-specific Expo owner, Apple team, EAS project, update URL, and App Store submission values in `app.base.json` and `eas.json`. Those release settings are separate from the local identity overrides above.
 
 ## Pull Request Checklist
 
 Before submitting:
 
-- [ ] `npm run typecheck` passes
-- [ ] `npm run lint` passes
-- [ ] `npm run format` passes (run `npm run format:write` to fix)
+- [ ] `npm run check` passes
 - [ ] `npm test -- --runInBand` passes
-- [ ] `npm run doctor` passes
 - [ ] No secrets, API keys, or credentials committed
 - [ ] PR description explains the why, not just the what
 - [ ] Screenshots or screen recordings included for UI changes

@@ -2,6 +2,8 @@
 
 Native iOS and Android companion app for [OpenWhispr](https://openwhispr.com). Fast on-device or cloud transcription, AI-powered cleanup, notes, and a system-wide dictation keyboard.
 
+The mobile app lives in the main [`OpenWhispr/openwhispr`](https://github.com/OpenWhispr/openwhispr) repository under `openwhispr-mobile/`. It currently remains self-contained, with its own dependencies, lockfile, CI checks, and release process. Run all mobile commands from this directory.
+
 ## Highlights
 
 - **Cloud, Private, or Providers** — choose hosted transcription, on-device inference, or your own provider on iOS
@@ -13,16 +15,38 @@ Native iOS and Android companion app for [OpenWhispr](https://openwhispr.com). F
 
 Expo SDK 55 · React 19 · expo-router (NativeTabs) · NativeWind · Zustand · Drizzle + expo-sqlite · whisper.rn · Sentry
 
+## Platform status
+
+- **iOS** is the active release target. The keyboard extension and several native features require a development build; they do not run in Expo Go.
+- **Android** can be built locally from the checked-in source, but native Android build and release validation are not yet part of CI.
+
 ## Quick start
 
 ```bash
 git clone https://github.com/<your-fork>/openwhispr.git
 cd openwhispr/openwhispr-mobile
-npm ci
-npm run ios       # or: npm run android
+npm install
+cp .env.example .env.local
 ```
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for prerequisites, env-var details, and the rebrand steps required to build on a real device.
+For iOS, install the locked Ruby dependencies before building:
+
+```bash
+bundle install
+npm run ios
+```
+
+For Android:
+
+```bash
+npm run android
+```
+
+The npm script above uses POSIX environment-variable syntax. On Windows, add
+`OPENWHISPR_APP_ENV=development` to `.env.local`, then run `npx expo run:android` from
+PowerShell or Command Prompt.
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for platform prerequisites, configuration details, and the signing steps required to build on a physical iOS device.
 
 ## Personal provider setup (iOS)
 
@@ -62,13 +86,9 @@ plugins/keyboard-extension Expo config plugin + iOS keyboard target
 
 ## Environment variables
 
-See [.env.example](./.env.example). All client-side variables are prefixed `EXPO_PUBLIC_`.
+Copy [.env.example](./.env.example) to `.env.local`. It documents the hosted-service defaults, optional integrations, and local app-identity overrides. Optional services remain disabled when their values are empty.
 
-| Variable                         | Purpose                                  |
-| -------------------------------- | ---------------------------------------- |
-| `EXPO_PUBLIC_API_URL`            | Backend API base URL                     |
-| `EXPO_PUBLIC_OAUTH_CALLBACK_URL` | OAuth callback configured in the backend |
-| `EXPO_PUBLIC_SENTRY_DSN`         | Optional. Empty disables error reporting |
+Variables prefixed with `EXPO_PUBLIC_` are bundled into the application. Never put secrets in them or commit local environment files.
 
 ## Contributing
 

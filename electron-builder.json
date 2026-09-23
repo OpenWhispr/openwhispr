@@ -179,7 +179,7 @@
     }
   },
   "win": {
-    "target": ["nsis", "portable"],
+    "target": ["nsis"],
     "icon": "src/assets/icon.ico",
     "forceCodeSigning": true,
     "azureSignOptions": {

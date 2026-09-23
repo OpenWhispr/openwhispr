@@ -702,6 +702,11 @@
       "title": "缺少必需的模型",
       "description": "您的组织要求在此设备上安装这些模型：{{models}}。",
       "download": "下载"
+    },
+    "cloudNudge": {
+      "title": "你已登录",
+      "description": "听写仍在使用你自己的配置。你可以随时切换到 OpenWhispr Cloud。",
+      "action": "打开设置"
     }
   },
   "reasoning": {
@@ -2655,7 +2660,8 @@
     "errors": {
       "contextTooLarge": "内容过长，{{model}} 无法在这台电脑上读取。大约需要 {{needed}} 个上下文 token，但内存中只能容纳 {{max}} 个。请改用云端模型，或对更短的选区执行该操作。",
       "contextTooLargeGeneric": "内容过长，{{model}} 无法在这台电脑上读取。请改用云端模型，或对更短的选区执行该操作。",
-      "localServerUnavailable": "无法在这台电脑上启动 {{model}}。请重试，或改用云端模型。"
+      "localServerUnavailable": "无法在这台电脑上启动 {{model}}。请重试，或改用云端模型。",
+      "localModelBusy": "本地模型仍在处理另一个请求。请等待其完成后再试。"
     }
   },
   "referral": {
@@ -3099,6 +3105,8 @@
       "runAction": "运行 {{name}}",
       "selectAction": "选择操作",
       "done": "完成",
+      "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
+      "emptyReply": "模型返回了空回复。请重试，或选择其他模型。",
       "builtin": {
         "generateNotes": {
           "name": "生成笔记",
