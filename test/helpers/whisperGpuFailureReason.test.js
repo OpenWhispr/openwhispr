@@ -76,6 +76,33 @@ test("recovered warnings alone are not a cause: the exit is reported instead", (
   assert.equal(extractReason({ stderr, exitCode: 3221225477 }), "exit code 3221225477");
 });
 
+test("a ggml abort with no error word in it is reported, not the exit it caused", () => {
+  // ggml_abort prints "<file>:<line>: <message>", then a backtrace, then aborts
+  const preallocation =
+    "D:\\a\\whisper.cpp\\whisper.cpp\\ggml\\src\\ggml-vulkan\\ggml-vulkan.cpp:8412: Requested preallocation size is too large";
+  assert.equal(
+    extractReason({
+      stderr: `ggml_vulkan: Found 1 Vulkan devices:\n${preallocation}\n`,
+      exitCode: 3,
+    }),
+    preallocation
+  );
+  // It mentions pinned memory but, unlike the warnings above, it is fatal
+  const nonPinned =
+    "/home/runner/work/whisper.cpp/whisper.cpp/ggml/src/ggml-vulkan/ggml-vulkan.cpp:7507: Asynchronous write to non-pinned memory not supported";
+  assert.equal(extractReason({ stderr: `${nonPinned}\n`, signal: "SIGABRT" }), nonPinned);
+});
+
+test("the Vulkan loader's notes about drivers it skipped are not a cause", () => {
+  // Common with several drivers installed; the loader skips that one and carries on
+  const stderr = [
+    "ERROR: [Loader Message] Code 0 : loader_scanned_icd_add: Could not get 'vkCreateInstance' via 'vk_icdGetInstanceProcAddr' for ICD libGLX_nvidia.so.0",
+    "ggml_vulkan: Found 1 Vulkan devices:",
+  ].join("\n");
+  assert.equal(extractReason({ stderr, signal: "SIGSEGV" }), "terminated by SIGSEGV");
+  assert.equal(extractReason({ stderr, timeoutMs: 120000 }), "startup timed out after 120 s");
+});
+
 test("an unrecognised error line beats the generic load-failure lines after it", () => {
   const stderr = [
     "ggml_vulkan: Found 1 Vulkan devices:",
@@ -130,11 +157,11 @@ test("replaces the user's home folder with ~ in any letter case or slash style",
   const homeDir = "C:\\Users\\Mika";
   assert.equal(
     extractReason({ stderr: "error: failed to read 'c:\\users\\MIKA\\a.wav'", homeDir }),
-    "error: failed to read '~\\a.wav'"
+    "error: failed to read '~\\a.wav"
   );
   assert.equal(
     extractReason({ stderr: "error: failed to read 'C:/Users/Mika/a.wav'", homeDir }),
-    "error: failed to read '~/a.wav'"
+    "error: failed to read '~/a.wav"
   );
 });
 
@@ -155,5 +182,24 @@ test("the reason survives the raw KEY=value line it is saved as in .env", () => 
     const env = parseDotenv(`WHISPER_GPU_FAILED_REASON_VULKAN=${reason}\n${laterLines}`);
     assert.equal(env.WHISPER_GPU_FAILED_REASON_VULKAN, reason, line);
     assert.equal(env.WHISPER_THREADS, "4", `${line} swallowed the next key`);
+  }
+});
+
+test("the reason never closes a quote that an earlier .env line left open", () => {
+  // A backtick hotkey is saved as DICTATION_KEY=`. A reason whose only backtick
+  // ends the line would close that quote, and the hotkey would swallow every key
+  // down to the reason, the failure flag included.
+  for (const quote of ["'", '"', "`"]) {
+    const reason = extractReason({
+      stderr: `exception during model load: ${quote}vkCreateDevice failed${quote}`,
+      homeDir: null,
+    });
+    const env = parseDotenv(
+      `DICTATION_KEY=${quote}\nWHISPER_GPU_FAILED=vulkan\nWHISPER_GPU_FAILED_REASON_VULKAN=${reason}\n`
+    );
+    assert.equal(reason, "vkCreateDevice failed", quote);
+    assert.equal(env.DICTATION_KEY, quote, `${quote}: the hotkey swallowed the keys after it`);
+    assert.equal(env.WHISPER_GPU_FAILED, "vulkan", quote);
+    assert.equal(env.WHISPER_GPU_FAILED_REASON_VULKAN, reason, quote);
   }
 });

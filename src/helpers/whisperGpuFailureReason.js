@@ -35,14 +35,19 @@ const CAUSE_PATTERNS = [
 ];
 // Any other error line; the first one is the closest to the cause.
 const ERROR_LINE = /\b(?:error|failed|failure|exception|abort(?:ed)?)\b/i;
+// ggml_abort and the assert macros print "<source file>:<line>: <message>" and
+// abort, e.g. "…/ggml-vulkan.cpp:8412: Requested preallocation size is too large".
+// Often no error word, and after an error line it is only the consequence.
+const ABORT_LINE = /^(?:WHISPER_ASSERT: )?\S+\.(?:c|cpp|cu|cuh|h):\d+: /;
 // What whisper.cpp and whisper-server print after any failed load. They say
 // that loading failed, never why, so they are the answer of last resort.
 const LOAD_FAILURE_ECHO = /failed to load model|failed to initialize whisper context/;
 // Warnings the backends log and then carry on from (a CPU-side buffer instead
-// of pinned memory, a copy instead of an imported host pointer). They carry
-// vk::…: Error… text, so they would otherwise outrank the line that killed it.
+// of pinned memory, a copy instead of an imported host pointer, the Vulkan
+// loader skipping one of several drivers). They carry error text, so they would
+// otherwise outrank the line that killed it. The non-pinned abort is fatal.
 const RECOVERED_WARNING =
-  /pinned memory|^WARNING:|Failed getMemoryHostPointerPropertiesEXT|Failed ggml_vk_create_buffer/;
+  /(?<!non-)pinned memory|^WARNING:|\[Loader Message\]|Failed getMemoryHostPointerPropertiesEXT|Failed ggml_vk_create_buffer/;
 
 function findCauseLine(lines) {
   for (const pattern of CAUSE_PATTERNS) {
@@ -53,6 +58,7 @@ function findCauseLine(lines) {
   }
   return (
     lines.find((line) => ERROR_LINE.test(line) && !LOAD_FAILURE_ECHO.test(line)) ||
+    lines.find((line) => ABORT_LINE.test(line)) ||
     lines.find((line) => LOAD_FAILURE_ECHO.test(line)) ||
     null
   );
@@ -64,7 +70,8 @@ function escapeRegExp(text) {
 
 // One line that is safe to show and to save. EnvironmentManager writes .env
 // values raw (KEY=value), and dotenv reads "#" as a comment and a leading
-// quote as the start of a quoted value that can run over later keys.
+// quote as the start of a quoted value that can run over later keys. A trailing
+// quote can close one an earlier line left open (a backtick hotkey).
 function sanitizeReason(text, homeDir) {
   let reason = String(text);
   if (homeDir) {
@@ -79,7 +86,7 @@ function sanitizeReason(text, homeDir) {
     .replace(/#/g, "")
     .replace(/\s+/g, " ")
     .trim()
-    .replace(/^['"`\s]+/, "");
+    .replace(/^['"`\s]+|['"`\s]+$/g, "");
   if (reason.length > MAX_REASON_LENGTH) {
     reason = `${reason.slice(0, MAX_REASON_LENGTH - 1).trimEnd()}…`;
   }
