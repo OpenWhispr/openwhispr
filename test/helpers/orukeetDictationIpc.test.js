@@ -256,3 +256,53 @@ test("cloud cleanup forwards fallback telemetry to its combined log request", as
   assert.equal(requests.length, 2);
   assert.equal(Object.hasOwn(requests[1], "streamingFallbackReason"), false);
 });
+
+test("warmups landing together mint one session and share its unused socket", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  let mints = 0;
+  backendResponse = async () => {
+    mints += 1;
+    return Response.json(cloudSession);
+  };
+  const socketsBefore = opened;
+
+  // Both post-dictation re-warm paths fire at once.
+  const [first, second] = await Promise.all([
+    handlers.get("dictation-realtime-warmup")(event, managedOptions),
+    handlers.get("dictation-realtime-warmup")(event, managedOptions),
+  ]);
+  assert.equal(first.success, true);
+  assert.deepEqual(second, { success: true, alreadyWarm: true });
+  assert.equal(mints, 1);
+  assert.equal(opened, socketsBefore + 1);
+
+  // The dictation itself rides the warm socket.
+  assert.equal(
+    (await handlers.get("dictation-realtime-start")(event, managedOptions)).success,
+    true
+  );
+  assert.equal(mints, 1);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  assert.equal((await handlers.get("dictation-realtime-finalize")()).success, true);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a warmup never reuses a socket that has already carried audio", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  let mints = 0;
+  backendResponse = async () => {
+    mints += 1;
+    return Response.json(cloudSession);
+  };
+
+  await handlers.get("dictation-realtime-start")(event, managedOptions);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  const used = target._dictationStreaming;
+  const warmup = await handlers.get("dictation-realtime-warmup")(event, managedOptions);
+
+  assert.equal(warmup.success, true);
+  assert.equal(warmup.alreadyWarm, undefined);
+  assert.equal(mints, 2);
+  assert.notEqual(target._dictationStreaming, used);
+  await handlers.get("dictation-realtime-stop")();
+});

@@ -8373,6 +8373,16 @@ class IPCHandlers {
       }, DICTATION_IDLE_TIMEOUT_MS);
     };
 
+    // What a dictation connection was opened for; a start or warmup reuses one
+    // only when nothing about the route changed.
+    const dictationConnectionKey = (options) =>
+      JSON.stringify([
+        options.provider || "openai-realtime",
+        options.mode,
+        options.model,
+        options.baseUrl,
+      ]);
+
     const connectDictationStreaming = async (event, options) => {
       // Older renderers did not label the OpenAI dictation adapter. Dictation
       // realtime was OpenAI-only before Tinfoil support, so preserve that
@@ -8407,12 +8417,7 @@ class IPCHandlers {
         // dictation-realtime-send has a live instance to buffer into instead
         // of silently dropping the start of the recording.
         streaming.beginConnecting();
-        streaming.connectionKey = JSON.stringify([
-          provider,
-          options.mode,
-          options.model,
-          options.baseUrl,
-        ]);
+        streaming.connectionKey = dictationConnectionKey(options);
         this._dictationStreaming = streaming;
         try {
           if (provider === "orukeet") {
@@ -9097,29 +9102,45 @@ class IPCHandlers {
       return result;
     };
 
-    ipcMain.handle("dictation-realtime-warmup", async (event, options = {}) => {
-      try {
+    // Every managed Orukeet connection spends a single-use GPU token, and both
+    // post-dictation re-warm paths fire together. Warmups run one at a time so
+    // the second finds the first's fresh socket and reuses it rather than
+    // discarding it and minting another.
+    const isUnusedOrukeetConnection = (streaming, options) =>
+      streaming instanceof OrukeetStreaming &&
+      streaming.isConnected &&
+      !streaming.failure &&
+      !streaming.finalPromise &&
+      streaming.audioBytesSent === 0 &&
+      streaming.connectionKey === dictationConnectionKey(options);
+
+    const warmupDictationStreaming = async (event, options) => {
+      await this._dictationConnectPromise?.catch(() => {});
+      if (!isUnusedOrukeetConnection(this._dictationStreaming, options)) {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
         return { success: true };
-      } catch (err) {
-        return streamingStartFailure(err);
       }
+      startDictationIdleTimer();
+      return { success: true, alreadyWarm: true };
+    };
+
+    let dictationWarmupQueue = Promise.resolve();
+    ipcMain.handle("dictation-realtime-warmup", (event, options = {}) => {
+      const warmup = dictationWarmupQueue
+        .then(() => warmupDictationStreaming(event, options))
+        .catch(streamingStartFailure);
+      dictationWarmupQueue = warmup;
+      return warmup;
     });
 
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
-        const connectionKey = JSON.stringify([
-          options.provider || "openai-realtime",
-          options.mode,
-          options.model,
-          options.baseUrl,
-        ]);
         if (
           !this._dictationStreaming?.isConnected ||
-          this._dictationStreaming.connectionKey !== connectionKey
+          this._dictationStreaming.connectionKey !== dictationConnectionKey(options)
         ) {
           await connectDictationStreaming(event, options);
         }
