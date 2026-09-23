@@ -54,6 +54,7 @@ function createElectronAPI({ stopResult = async () => ({ success: true }) } = {}
     },
     onMeetingTranscriptionSegment: capture("segment"),
     onNoteDeleted: capture("noteDeleted"),
+    onNoteSynced: capture("noteSynced"),
     onMeetingSpeakerIdentified: noopListener,
     onMeetingSpeakersMerged: noopListener,
     onMeetingSessionSpeakerConfigUpdated: noopListener,
@@ -109,6 +110,7 @@ const transcriptWrites = (writes) =>
 
 const final = (text) => ({ text, source: "mic", type: "final", timestamp: Date.now() });
 const deleteNote = (listeners, id) => listeners.noteDeleted?.({ id });
+const syncNote = (listeners, note) => listeners.noteSynced?.(note);
 
 // Lets a stop reach its first real await (the audio flush timer).
 const settle = async () => {
@@ -217,6 +219,32 @@ test("a note deleted mid-recording is not written back from its tombstone", asyn
   writes.length = 0;
   unload();
   assert.equal(transcriptWrites(writes).length, 1);
+  await store.stopRecording();
+});
+
+// A team-note delete the server denies (stale admin permissions) revives the
+// same row, and the snapshot pull that follows re-syncs it as a live note.
+test("a recording note restored after a denied delete is saved again", async (t) => {
+  const { api, listeners, writes } = createElectronAPI();
+  const { store, unload } = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  listeners.segment(final("said before the delete"));
+  deleteNote(listeners, NOTE_ID);
+
+  // A pull racing the delete re-syncs the row with its tombstone intact.
+  syncNote(listeners, { id: NOTE_ID, deleted_at: "2026-09-23 10:00:00" });
+  syncNote(listeners, { id: 12, deleted_at: null });
+  writes.length = 0;
+  unload();
+  assert.deepEqual(transcriptWrites(writes), [], "still a tombstone");
+
+  syncNote(listeners, { id: NOTE_ID, deleted_at: null });
+  listeners.segment(final("said after the restore"));
+  writes.length = 0;
+  unload();
+  const flushed = transcriptWrites(writes);
+  assert.equal(flushed.length, 1, "the restored note is saved again");
+  assert.match(flushed[0][1].transcript, /said after the restore/);
   await store.stopRecording();
 });
 

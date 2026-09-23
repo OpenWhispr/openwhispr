@@ -430,7 +430,7 @@ let recentSystemSpeaker: RecentSystemSpeaker | null = null;
 let speakerLocks: Map<string, string> = new Map();
 let pushConfigTimeout: ReturnType<typeof setTimeout> | null = null;
 let sessionSystemAudioActive = false;
-// Set when the recording's own note is deleted mid-recording, so a live save
+// True while the recording's own note is deleted mid-recording, so a live save
 // never writes the transcript back onto its tombstone.
 let recordingNoteDeleted = false;
 
@@ -1818,11 +1818,19 @@ if (typeof window !== "undefined") {
 }
 
 // Registered once at module load, like the diarization listener above: the
-// note can be deleted from the sidebar while the recording runs on.
+// note can be deleted from the sidebar while the recording runs on. A team-note
+// delete the server denies revives the same row, and the snapshot pull that
+// follows re-syncs it live, so saves resume. A pull never clears deleted_at, so
+// one racing a real delete re-syncs the tombstone and the guard holds.
 if (typeof window !== "undefined") {
   window.electronAPI?.onNoteDeleted?.(({ id }) => {
     if (isRecordingFlag && id === useMeetingRecordingStore.getState().recordingNoteId) {
       recordingNoteDeleted = true;
+    }
+  });
+  window.electronAPI?.onNoteSynced?.((note) => {
+    if (!note.deleted_at && note.id === useMeetingRecordingStore.getState().recordingNoteId) {
+      recordingNoteDeleted = false;
     }
   });
 }
