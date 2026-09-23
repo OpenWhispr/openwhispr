@@ -75,6 +75,13 @@ export const useAudioRecording = (toast, options = {}) => {
     assistantOpenRef,
   } = options;
 
+  useEffect(
+    () => () => {
+      dictationErrorGenerationRef.current += 1;
+    },
+    []
+  );
+
   useEffect(() => {
     onDemoEventRef.current = onDemoEvent;
   }, [onDemoEvent]);
@@ -916,7 +923,6 @@ export const useAudioRecording = (toast, options = {}) => {
 
     // Cleanup
     return () => {
-      dictationErrorGenerationRef.current += 1;
       reportLifecycle("idle");
       unsubscribePolicy();
       disposeToggle?.();

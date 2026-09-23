@@ -7,9 +7,6 @@ const {
   installBrowserGlobals,
   installHookDom,
 } = require("../lib/rendererTestHarness");
-const i18n = require("i18next");
-const { initReactI18next } = require("react-i18next");
-const translations = require("../../src/locales/en/translation.json");
 const permission = {
   title: "Paste Error",
   code: "ACCESSIBILITY_PERMISSION_REQUIRED",
@@ -62,11 +59,6 @@ async function mount(t) {
     },
   });
   const container = installHookDom(t);
-  await i18n.use(initReactI18next).init({
-    lng: "en",
-    resources: { en: { translation: translations } },
-    interpolation: { escapeValue: false },
-  });
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-paste-recovery-hook-",
     mockModules: {
@@ -89,6 +81,8 @@ async function mount(t) {
   });
   const { useAudioRecording } = await vite.ssrLoadModule("/hooks/useAudioRecording.js");
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
+  await i18n.changeLanguage("en");
   useSettingsStore.setState({
     autoPasteEnabled: false,
     keepTranscriptionInClipboard: false,
@@ -120,6 +114,7 @@ async function mount(t) {
     api: window.electronAPI,
     recording: () => recording,
     settingsCalls: () => settingsCalls,
+    changeLanguage: async (language) => React.act(async () => i18n.changeLanguage(language)),
     error: async (error = { ...permission, transcript: finalText }) =>
       React.act(async () => manager.callbacks.onError(error)),
     unmount: async () => {
@@ -148,6 +143,26 @@ test("permission recovery preserves final text and keeps Settings and Copy on th
   assert.equal(h.manager.starts, 0);
   assert.deepEqual(h.shown, []);
   assert.deepEqual(h.hidden, []);
+});
+
+test("a visible permission card keeps its actions working after changing the app language", async (t) => {
+  const h = await mount(t);
+  await h.error();
+  const card = h.toasts.at(-1);
+  const copy = deferred();
+  h.api.writeClipboard = async (text) => {
+    h.writes.push(text);
+    return copy.promise;
+  };
+  const pendingCopy = card.actions[1].onClick();
+  await h.changeLanguage("de");
+  copy.resolve({ success: true });
+  assert.equal(await pendingCopy, true);
+  assert.equal(h.toasts.length, 1);
+  await card.actions[0].onClick();
+  assert.equal(h.settingsCalls(), 1);
+  assert.equal(await card.actions[1].onClick(), true);
+  assert.deepEqual(h.writes, [finalText, finalText]);
 });
 
 test("copy reports only strict bridge success and never falls back or replaces the card", async (t) => {
