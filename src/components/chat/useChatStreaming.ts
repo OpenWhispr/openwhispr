@@ -20,6 +20,7 @@ import {
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
+import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { Message, AgentState, ChatImageAttachment, ToolCallInfo } from "./types";
 import type { ContainerScope } from "../../types/chat";
@@ -100,6 +101,10 @@ export interface SendToAIOptions {
     content: string;
     toolCalls?: ToolCallInfo[];
   }) => void | Promise<void>;
+  /** Fires when a tool shows an approval card, so a hidden panel can open. */
+  onApprovalRequested?: () => void;
+  /** Fires when a tool put user content on the clipboard (e.g. a long email body). */
+  onClipboardReserved?: () => void;
 }
 
 export interface ChatStreaming {
@@ -201,11 +206,14 @@ export function useChatStreaming({
   // before routing through cancelStream, so it never stamps this — which is
   // how sendToAI tells a user's cancel from an unmount mid-stream.
   const explicitCancelGenerationRef = useRef(0);
+  const toolScopeRef = useRef<ToolExecutionScope | null>(null);
   const cancelStream = useCallback(() => {
     sendGenerationRef.current += 1;
     if (mountedRef.current) {
       explicitCancelGenerationRef.current = sendGenerationRef.current;
     }
+    toolScopeRef.current?.abort();
+    toolScopeRef.current = null;
     ReasoningService.cancelActiveStream();
     setAgentState("idle");
     clearToolActivity();
@@ -229,6 +237,11 @@ export function useChatStreaming({
     async (userText: string, allMessages: Message[], options?: SendToAIOptions) => {
       const sendGeneration = ++sendGenerationRef.current;
       const cancelled = () => sendGeneration !== sendGenerationRef.current;
+      const toolScope = createToolExecutionScope({
+        onApprovalRequested: options?.onApprovalRequested,
+        onClipboardReserved: options?.onClipboardReserved,
+      });
+      toolScopeRef.current = toolScope;
       clearToolActivity();
       let responseAnnounced = false;
       const announceResponse = () => {
@@ -408,7 +421,7 @@ export function useChatStreaming({
 
         if (isCloudAgent) {
           const executeToolCall = registry
-            ? async (name: string, argsJson: string) => {
+            ? async (name: string, argsJson: string, toolCallId: string) => {
                 const tool = registry.get(name);
                 if (!tool)
                   return {
@@ -424,7 +437,7 @@ export function useChatStreaming({
                     displayText: t("agentMode.tools.invalidArgs", { name }),
                   };
                 }
-                const result = await tool.execute(args);
+                const result = await tool.execute(args, toolScope.createContext(toolCallId));
                 const data = result.success
                   ? typeof result.data === "string"
                     ? result.data
@@ -449,7 +462,7 @@ export function useChatStreaming({
             ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
           });
         } else {
-          const aiTools = registry?.toAISDKFormat();
+          const aiTools = registry?.toAISDKFormat(toolScope.createContext);
           stream = ReasoningService.processTextStreamingAI(
             llmMessages,
             llmConfig.model,

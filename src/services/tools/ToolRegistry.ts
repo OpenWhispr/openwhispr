@@ -1,5 +1,5 @@
 import { jsonSchema } from "ai";
-import type { Tool } from "ai";
+import type { Tool, ToolExecutionOptions } from "ai";
 
 export interface ToolResult {
   success: boolean;
@@ -7,12 +7,26 @@ export interface ToolResult {
   displayText: string;
 }
 
+/**
+ * Per-call context from the chat turn that invoked the tool. Absent when a
+ * tool runs outside a chat turn (tests, direct calls).
+ */
+export interface ToolExecutionContext {
+  toolCallId: string;
+  /** Aborts when the turn is cancelled or its conversation ends. */
+  signal: AbortSignal;
+  /** Tells the chat surface an approval card needs the user's attention. */
+  onApprovalRequested: () => void;
+  /** The tool put user content on the clipboard; the turn must not overwrite it. */
+  onClipboardReserved: () => void;
+}
+
 export interface ToolDefinition {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
   readOnly: boolean;
-  execute: (args: Record<string, unknown>) => Promise<ToolResult>;
+  execute: (args: Record<string, unknown>, context?: ToolExecutionContext) => Promise<ToolResult>;
 }
 
 export class ToolRegistry {
@@ -30,15 +44,20 @@ export class ToolRegistry {
     return Array.from(this.tools.values());
   }
 
-  toAISDKFormat(): Record<string, Tool> {
+  toAISDKFormat(
+    createContext?: (toolCallId: string) => ToolExecutionContext
+  ): Record<string, Tool> {
     const result: Record<string, Tool> = {};
     for (const def of this.getAll()) {
       result[def.name] = {
         description: def.description,
         inputSchema: jsonSchema(def.parameters),
-        execute: async (args: unknown) => {
+        execute: async (args: unknown, options: ToolExecutionOptions) => {
           try {
-            const toolResult = await def.execute(args as Record<string, unknown>);
+            const toolResult = await def.execute(
+              args as Record<string, unknown>,
+              createContext?.(options.toolCallId)
+            );
             return toolResult.success ? toolResult.data : { error: toolResult.displayText };
           } catch (error) {
             return { error: (error as Error).message || "Tool execution failed" };
