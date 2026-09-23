@@ -72,12 +72,18 @@ async function setupChain(t, respond) {
     req.on("data", (chunk) => (raw += chunk));
     req.on("end", () => {
       requests.push(JSON.parse(raw));
+      const reply = respond();
+      // null leaves the request hanging, like a model still generating.
+      if (reply === null) return;
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(respond()));
+      res.end(JSON.stringify(reply));
     });
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  t.after(() => {
+    server.closeAllConnections();
+    return new Promise((resolve) => server.close(resolve));
+  });
 
   const { bridge, modelManager } = loadChain();
   const model = modelRegistryData.localProviders[0].models[0];
@@ -191,4 +197,33 @@ test("a second request while one is in flight is refused with a typed code", asy
 
   release();
   assert.equal(await first, "first reply");
+});
+
+test("cancel aborts only the in-flight request carrying that id, and frees the slot", async (t) => {
+  // A note cancelled mid-part used to hold the one local slot until the model
+  // finished, so an immediate rerun (or dictation cleanup) was refused as busy.
+  let hang = true;
+  const { bridge, modelId, requests } = await setupChain(t, () =>
+    hang ? null : completion("stop", "ok")
+  );
+
+  const pending = bridge.processText("long part", modelId, { requestId: "run-1" });
+  const settled = pending.then(
+    () => "resolved",
+    (error) => error
+  );
+  while (requests.length === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+
+  bridge.cancel("run-2");
+  const stillPending = await Promise.race([
+    settled,
+    new Promise((resolve) => setTimeout(() => resolve("pending"), 50)),
+  ]);
+  assert.equal(stillPending, "pending", "another caller's id must not abort this request");
+
+  bridge.cancel("run-1");
+  assert.ok((await settled) instanceof Error, "the tagged request is aborted");
+
+  hang = false;
+  assert.equal(await bridge.processText("next", modelId, {}), "ok");
 });

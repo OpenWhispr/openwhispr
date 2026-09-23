@@ -1849,6 +1849,8 @@ declare global {
         modelName?: string;
         error?: string;
       }>;
+      /** Aborts the local request tagged with this `requestId`, if it is still in flight. */
+      cancelLocalReasoning: (requestId: string) => Promise<void>;
 
       // Anthropic reasoning
       processAnthropicReasoning: (

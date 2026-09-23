@@ -881,6 +881,10 @@ class ModelManager {
     return this.serverManager.getStatus();
   }
 
+  cancelInference() {
+    this.serverManager.cancelInference();
+  }
+
   async prewarmServer(modelId) {
     if (!modelId) return false;
     this.ensureInitialized();

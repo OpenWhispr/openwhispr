@@ -4,6 +4,7 @@ const debugLogger = require("../helpers/debugLogger");
 class LocalReasoningService {
   constructor() {
     this.isProcessing = false;
+    this.activeRequestId = null;
   }
 
   async isAvailable() {
@@ -31,6 +32,7 @@ class LocalReasoningService {
     }
 
     this.isProcessing = true;
+    this.activeRequestId = config.requestId ?? null;
     const startTime = Date.now();
 
     try {
@@ -84,7 +86,14 @@ class LocalReasoningService {
       throw error;
     } finally {
       this.isProcessing = false;
+      this.activeRequestId = null;
     }
+  }
+
+  // Only the caller that tagged the request can abort it, so a cancelled note
+  // never kills a dictation cleanup that took the slot after it.
+  cancel(requestId) {
+    if (requestId && requestId === this.activeRequestId) modelManager.cancelInference();
   }
 
   calculateMaxTokens(textLength, minTokens = 512, maxTokens = 2048, multiplier = 2) {

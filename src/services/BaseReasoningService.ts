@@ -27,6 +27,8 @@ export interface ReasoningConfig {
    * returning a reply the context window clipped.
    */
   refuseClippedByWindow?: boolean;
+  /** Local models only: tags the request so `cancelLocalReasoning` can abort it. */
+  requestId?: string;
   requiresAgent?: boolean;
   inferenceScope?: InferenceScope;
 }

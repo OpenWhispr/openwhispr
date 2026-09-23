@@ -79,7 +79,8 @@ interface ActionProcessingStoreState {
 
 // The run a note's in-flight action belongs to. A per-note flag would be reset
 // by a new run on the same note and revive the run the user just cancelled.
-const activeRuns = new Map<number, object>();
+// The id also tags the run's local requests so a cancel can abort them.
+const activeRuns = new Map<number, string>();
 const processingFlags = new Map<number, boolean>();
 const successTimers = new Map<number, NodeJS.Timeout>();
 
@@ -410,9 +411,9 @@ export function runBackgroundAction(
     return;
   }
 
-  const runToken = {};
-  activeRuns.set(noteId, runToken);
-  const isCancelled = () => activeRuns.get(noteId) !== runToken;
+  const runId = crypto.randomUUID();
+  activeRuns.set(noteId, runId);
+  const isCancelled = () => activeRuns.get(noteId) !== runId;
   processingFlags.set(noteId, true);
   setNoteState(noteId, { status: "processing", actionName: action.name, progress: null });
 
@@ -443,6 +444,7 @@ export function runBackgroundAction(
         // parts rather than saved clipped. A plain note has no parts route, so
         // its clipped reply is saved as before. Other routes ignore the flag.
         refuseClippedByWindow: hasTranscript(options.material),
+        requestId: runId,
         ...providerOverrides,
       };
       const enhanced = await runEnhancement({
@@ -500,13 +502,18 @@ export function runBackgroundAction(
       };
       pushErrorEvent({ noteId, message, messageKey, messageParams });
     } finally {
-      if (activeRuns.get(noteId) === runToken) activeRuns.delete(noteId);
+      if (activeRuns.get(noteId) === runId) activeRuns.delete(noteId);
     }
   })();
 }
 
-/** Soft cancel: the HTTP request continues but the result is discarded. */
+/**
+ * Aborts the run's local request in flight, which would otherwise hold the one
+ * local model slot for minutes. Other routes finish and are discarded.
+ */
 export function cancelAction(noteId: number): void {
+  const runId = activeRuns.get(noteId);
+  if (runId) void window.electronAPI?.cancelLocalReasoning?.(runId);
   activeRuns.delete(noteId);
   processingFlags.set(noteId, false);
   const timer = successTimers.get(noteId);

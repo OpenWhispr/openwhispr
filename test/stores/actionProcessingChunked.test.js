@@ -18,6 +18,7 @@ async function loadStore(
 ) {
   const updates = [];
   const budgetCalls = [];
+  const cancelledRequests = [];
   installBrowserGlobals(t, {
     // The real settings store reads the route from storage at load time.
     initialStorage: { noteFormattingMode: mode, noteFormattingUseLocal: "true", ...storage },
@@ -31,6 +32,9 @@ async function loadStore(
           budgetCalls.push(modelId);
           if (budget instanceof Error) throw budget;
           return budget;
+        },
+        cancelLocalReasoning: async (requestId) => {
+          cancelledRequests.push(requestId);
         },
       },
     },
@@ -74,7 +78,7 @@ async function loadStore(
   });
 
   const store = await vite.ssrLoadModule("/stores/actionProcessingStore.ts");
-  return { store, calls, updates, budgetCalls };
+  return { store, calls, updates, budgetCalls, cancelledRequests };
 }
 
 async function waitFor(predicate, label) {
@@ -201,6 +205,17 @@ test("cancelling between parts stops further requests and saves nothing", async 
     undefined,
     "the cancelled run writes no progress back into the cleared slot"
   );
+});
+
+test("cancelling aborts the run's local request in flight by its id", async (t) => {
+  const { store, calls, cancelledRequests } = await loadStore(t, { failFirst: true });
+  globalThis.__cancelAfter = { after: 2, cancel: () => store.cancelAction(29) };
+  run(store, 29, longMaterial(400));
+  await waitFor(() => cancelledRequests.length > 0, "the abort");
+  const requestId = calls[1].config.requestId;
+  assert.equal(typeof requestId, "string");
+  assert.equal(calls[0].config.requestId, requestId, "every request of a run carries its id");
+  assert.deepEqual(cancelledRequests, [requestId]);
 });
 
 test("progress advances once per part and ends on the final pass", async (t) => {
