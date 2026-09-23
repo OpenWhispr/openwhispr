@@ -7,6 +7,15 @@ import type {
   ManagedEnterpriseRequestContext,
 } from "./enterpriseIdentity";
 import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./calendar";
+import type {
+  ConnectorActionRecord,
+  ConnectorCancelReason,
+  ConnectorCommitResult,
+  ConnectorDirectResult,
+  ConnectorEdits,
+  ConnectorPrepareResult,
+  ConnectorStatus,
+} from "./connectors";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 
@@ -2862,6 +2871,26 @@ declare global {
       gcalGetUpcomingEvents?: (
         windowMinutes?: number
       ) => Promise<{ success: boolean; events: any[] }>;
+      connectorStatus?: () => Promise<ConnectorStatus[]>;
+      connectorPrepare?: (
+        connectorId: string,
+        action: string,
+        args: Record<string, unknown>
+      ) => Promise<ConnectorPrepareResult>;
+      connectorCommit?: (actionId: string, edits: ConnectorEdits) => Promise<ConnectorCommitResult>;
+      connectorCancel?: (
+        actionId: string,
+        reason: ConnectorCancelReason
+      ) => Promise<{ cancelled: boolean }>;
+      connectorRunDirect?: (
+        connectorId: string,
+        action: string,
+        args: Record<string, unknown>
+      ) => Promise<ConnectorDirectResult>;
+      connectorRecentActions?: (
+        connectorId: string,
+        limit?: number
+      ) => Promise<ConnectorActionRecord[]>;
       calendarGetAvailability?: (
         request: CalendarAvailabilityRequest
       ) => Promise<

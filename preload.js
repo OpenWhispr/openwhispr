@@ -1265,6 +1265,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   gcalSyncEvents: () => ipcRenderer.invoke("gcal-sync-events"),
   gcalGetUpcomingEvents: (windowMinutes) =>
     ipcRenderer.invoke("gcal-get-upcoming-events", windowMinutes),
+  connectorStatus: () => ipcRenderer.invoke("connector-status"),
+  connectorPrepare: (connectorId, action, args) =>
+    ipcRenderer.invoke("connector-prepare", connectorId, action, args),
+  connectorCommit: (actionId, edits) => ipcRenderer.invoke("connector-commit", actionId, edits),
+  connectorCancel: (actionId, reason) => ipcRenderer.invoke("connector-cancel", actionId, reason),
+  connectorRunDirect: (connectorId, action, args) =>
+    ipcRenderer.invoke("connector-run-direct", connectorId, action, args),
+  connectorRecentActions: (connectorId, limit) =>
+    ipcRenderer.invoke("connector-recent-actions", connectorId, limit),
   calendarGetAvailability: (request) => ipcRenderer.invoke("calendar-get-availability", request),
   gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),
 

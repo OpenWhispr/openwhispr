@@ -31,6 +31,10 @@ const {
 } = require("./policyResponseError");
 const { classifyAndLog } = require("./networkErrors");
 const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
+const {
+  registerConnectorIpc,
+  createConnectorPolicyResolver,
+} = require("./connectors/connectorIpc");
 // The renderer's ModelRegistry is not main-loadable; the raw registry data is
 // packaged, and the route resolver only needs {id, baseUrl} per provider.
 const transcriptionProviderBaseUrls = () =>
@@ -606,6 +610,7 @@ class IPCHandlers {
     this.whisperCudaManager = managers.whisperCudaManager;
     this.whisperVulkanManager = managers.whisperVulkanManager;
     this.googleCalendarManager = managers.googleCalendarManager;
+    this.connectorManager = managers.connectorManager;
     this.microsoftCalendarManager = managers.microsoftCalendarManager;
     this.appleCalendarManager = managers.appleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
@@ -6085,6 +6090,17 @@ class IPCHandlers {
       broadcast: (snapshot) => broadcastToWindows("workspace-policy-changed", snapshot),
       logger: debugLogger,
     });
+    if (this.connectorManager) {
+      registerConnectorIpc({
+        ipcMain,
+        manager: this.connectorManager,
+        getPolicyState: createConnectorPolicyResolver({
+          getAuthHeader,
+          getPolicy: (options) => workspacePolicyManager.getPolicy(options),
+          getAuthGeneration: () => tokenStore.getState().generation,
+        }),
+      });
+    }
     this.enterpriseIdentityManager = createEnterpriseIdentityManager({
       cachePath: path.join(app.getPath("userData"), "managed-enterprise-config.json"),
       getApiUrl,

@@ -315,6 +315,7 @@ let windowManager = null;
 let hotkeyManager = null;
 let databaseManager = null;
 let clipboardManager = null;
+let connectorManager = null;
 let whisperManager = null;
 let parakeetManager = null;
 let diarizationManager = null;
@@ -445,6 +446,15 @@ function initializeCoreManagers() {
   });
   if (bootAccountId) databaseManager.setActiveAccountId(bootAccountId);
   clipboardManager = new ClipboardManager();
+  const { createConnectorManager } = require("./src/helpers/connectors/connectorManager");
+  const { createPendingActions } = require("./src/helpers/connectors/pendingActions");
+  const { createActionLog } = require("./src/helpers/connectors/actionLog");
+  connectorManager = createConnectorManager({
+    connectors: [],
+    pendingActions: createPendingActions(),
+    actionLog: createActionLog(databaseManager),
+    logger: debugLogger,
+  });
   whisperManager = new WhisperManager();
   if (process.platform !== "darwin") {
     whisperCudaManager = new WhisperCudaManager();
@@ -551,6 +561,7 @@ function initializeCoreManagers() {
     googleCalendarManager,
     microsoftCalendarManager,
     appleCalendarManager,
+    connectorManager,
     meetingDetectionEngine,
     audioTapManager,
     linuxPortalAudioManager,
