@@ -15,9 +15,10 @@ import {
   isLocalHistoryPolicyResolved,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import type { UiLanguage } from "../config/uiLanguages";
 
 export interface TranscriptionSettings {
-  uiLanguage: string;
+  uiLanguage: UiLanguage;
   useLocalWhisper: boolean;
   whisperModel: string;
   localTranscriptionProvider: LocalTranscriptionProvider;

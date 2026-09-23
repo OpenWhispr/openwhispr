@@ -11,6 +11,7 @@ test("account flow includes the complete guided setup", async () => {
     [
       "auth",
       "permissions",
+      "interface-language",
       "languages",
       "use-cases",
       "dictation-hotkey",
@@ -63,6 +64,7 @@ test("guest flow keeps permissions and the hotkey before setup choice", async ()
   assert.deepEqual(getOnboardingRoute({ authPath: "guest", setupMode: null, agentAllowed: true }), [
     "auth",
     "permissions",
+    "interface-language",
     "dictation-hotkey",
     "setup-choice",
   ]);
@@ -80,7 +82,15 @@ test("setup choice appends the selected two-stage route", async () => {
   const { getOnboardingRoute } = await load();
   assert.deepEqual(
     getOnboardingRoute({ authPath: "guest", setupMode: "byok", agentAllowed: true }),
-    ["auth", "permissions", "dictation-hotkey", "setup-choice", "byok-dictation", "byok-assistant"]
+    [
+      "auth",
+      "permissions",
+      "interface-language",
+      "dictation-hotkey",
+      "setup-choice",
+      "byok-dictation",
+      "byok-assistant",
+    ]
   );
   assert.deepEqual(
     getOnboardingRoute({ authPath: "account", setupMode: "local", agentAllowed: false }).slice(-2),
@@ -225,6 +235,20 @@ test("versioned sessions reject malformed or old data", async () => {
   );
 });
 
+test("an in-progress v2 session resumes without rewinding for a newly inserted step", async () => {
+  const { createOnboardingSession, parseOnboardingSession } = await load();
+  const session = {
+    ...createOnboardingSession(),
+    currentStepId: "languages",
+    history: ["auth", "permissions"],
+    authPath: "account",
+  };
+
+  const resumed = parseOnboardingSession(JSON.stringify(session));
+  assert.equal(resumed.currentStepId, "languages");
+  assert.deepEqual(resumed.history, ["auth", "permissions"]);
+});
+
 // The permissions step's Enable click must survive the quit-and-reopen macOS
 // asks for after granting Screen Recording, or the OS permission lands with
 // the Voice Assistant setting still off.
@@ -366,7 +390,8 @@ test("progress counts every step the user is shown, once each", async () => {
   const route = getOnboardingRoute({ authPath: "account", setupMode: null, agentAllowed: true });
 
   // The compact steps render in a frame with no footer, so they carry no row and
-  // must not inflate the total — landing on languages is "1 of 8", not "3 of 10".
+  // must not inflate the total — landing on interface-language is "1 of 9",
+  // not "3 of 11".
   assert.equal(getOnboardingProgress("auth", route), null);
   assert.equal(getOnboardingProgress("permissions", route), null);
 
@@ -375,8 +400,9 @@ test("progress counts every step the user is shown, once each", async () => {
     counted.map((stepId) => getOnboardingProgress(stepId, route).index),
     counted.map((_, index) => index)
   );
-  assert.deepEqual(getOnboardingProgress("languages", route), { index: 0, total: 8 });
-  assert.deepEqual(getOnboardingProgress("setup-choice", route), { index: 7, total: 8 });
+  assert.deepEqual(getOnboardingProgress("interface-language", route), { index: 0, total: 9 });
+  assert.deepEqual(getOnboardingProgress("languages", route), { index: 1, total: 9 });
+  assert.deepEqual(getOnboardingProgress("setup-choice", route), { index: 8, total: 9 });
 });
 
 test("progress total tracks the conditional parts of the route", async () => {
@@ -386,29 +412,29 @@ test("progress total tracks the conditional parts of the route", async () => {
   // Dropping the assistant pair shortens the row rather than leaving two dots
   // that can never fill.
   const noAgent = getOnboardingRoute({ ...context, agentAllowed: false });
-  assert.equal(getOnboardingProgress("languages", noAgent).total, 6);
-  assert.deepEqual(getOnboardingProgress("setup-choice", noAgent), { index: 5, total: 6 });
+  assert.equal(getOnboardingProgress("interface-language", noAgent).total, 7);
+  assert.deepEqual(getOnboardingProgress("setup-choice", noAgent), { index: 6, total: 7 });
 
   // Picking a non-cloud mode appends the provider pair, so the row grows by two
   // at that moment and the last provider step is what fills it.
   const byok = getOnboardingRoute({ ...context, setupMode: "byok" });
-  assert.deepEqual(getOnboardingProgress("setup-choice", byok), { index: 7, total: 10 });
-  assert.deepEqual(getOnboardingProgress("byok-assistant", byok), { index: 9, total: 10 });
+  assert.deepEqual(getOnboardingProgress("setup-choice", byok), { index: 8, total: 11 });
+  assert.deepEqual(getOnboardingProgress("byok-assistant", byok), { index: 10, total: 11 });
 });
 
 test("progress counts only the guest steps that draw a footer", async () => {
   const { getOnboardingProgress, getOnboardingRoute } = await load();
-  // auth and permissions are compact, so the pre-plan guest route counts
-  // dictation-hotkey and setup-choice: a two-dot row.
+  // auth and permissions are compact, so the pre-plan guest route counts the
+  // interface language, dictation hotkey and setup choice: a three-dot row.
   const guest = getOnboardingRoute({ authPath: "guest", setupMode: null, agentAllowed: true });
-  assert.deepEqual(getOnboardingProgress("setup-choice", guest), { index: 1, total: 2 });
+  assert.deepEqual(getOnboardingProgress("setup-choice", guest), { index: 2, total: 3 });
 
   const guestByok = getOnboardingRoute({
     authPath: "guest",
     setupMode: "byok",
     agentAllowed: true,
   });
-  assert.deepEqual(getOnboardingProgress("setup-choice", guestByok), { index: 1, total: 4 });
+  assert.deepEqual(getOnboardingProgress("setup-choice", guestByok), { index: 2, total: 5 });
 
   // An off-route step has no position to report.
   assert.equal(getOnboardingProgress("notes", guestByok), null);
@@ -469,8 +495,9 @@ test("the required-models step is counted in progress", async () => {
     agentAllowed: true,
     requiredModelsPending: true,
   });
-  assert.deepEqual(getOnboardingProgress("required-models", route), { index: 0, total: 9 });
-  assert.deepEqual(getOnboardingProgress("languages", route), { index: 1, total: 9 });
+  assert.deepEqual(getOnboardingProgress("required-models", route), { index: 0, total: 10 });
+  assert.deepEqual(getOnboardingProgress("interface-language", route), { index: 1, total: 10 });
+  assert.deepEqual(getOnboardingProgress("languages", route), { index: 2, total: 10 });
 });
 
 test("the tray suppression predicate matches only an active required-models session", async () => {
