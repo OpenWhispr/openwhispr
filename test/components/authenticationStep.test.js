@@ -182,7 +182,9 @@ async function createAuthenticationRenderer(t) {
         return children;
       }`,
       "/utils/logger": `export default { error() {} };`,
-      "/utils/platform": `export function getCachedPlatform() { return "linux"; }`,
+      "/utils/platform": `export function getCachedPlatform() {
+        return globalThis.__authenticationStepHarness?.platform ?? "linux";
+      }`,
       "/ForgotPasswordView": `export default function ForgotPasswordView() { return null; }`,
       "/OnboardingShell": `
         export function CompactOnboardingFrame(props) { return props.children; }
@@ -411,14 +413,14 @@ test("email authentication discovers accounts, restores drafts, and persists the
   ]);
 });
 
-test("Apple sign-in renders and dispatches on Linux", async (t) => {
+test("Apple sign-in renders and dispatches on every desktop platform", async (t) => {
   const { render } = await createAuthenticationRenderer(t);
-  const linuxSocialSignIn = createHarness();
-  const appleProvider = findElement(
-    render(linuxSocialSignIn),
-    (node) => node.props?.label === "Apple" && typeof node.props?.onClick === "function"
-  );
-  assert.ok(appleProvider, "Apple sign-in should render on Linux");
-  await appleProvider.props.onClick();
-  assert.deepEqual(linuxSocialSignIn.socialSignIns, ["apple"]);
+  for (const platform of ["darwin", "win32", "linux"]) {
+    const harness = createHarness();
+    harness.platform = platform;
+    const appleTile = providerTile(render(harness), "Apple");
+    assert.ok(appleTile, `Apple sign-in should render on ${platform}`);
+    await appleTile.props.onClick();
+    assert.deepEqual(harness.socialSignIns, ["apple"], `Apple should dispatch on ${platform}`);
+  }
 });
