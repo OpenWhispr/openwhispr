@@ -7,6 +7,7 @@ const {
   shouldFallbackToCpuAfterRequestError,
   shouldRetryAfterServerReplaced,
 } = require("../../src/helpers/whisperServer");
+const { CUDA_KERNEL_IMAGE_STDERR } = require("./harness/whisperServerStderr");
 
 const base = {
   isConnectionError: true,
@@ -191,6 +192,47 @@ test("falls back to CPU and emits gpu-fallback when a Vulkan server dies mid-req
   assert.equal(startCalls.length, 1);
   assert.equal(startCalls[0].options.useCuda, false);
   assert.equal(startCalls[0].options.useVulkan, false);
+});
+
+test("the mid-transcription fallback carries the crashed server's error line", async (t) => {
+  let manager;
+  let requestCount = 0;
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: true });
+  // What _doStart records for the server it spawned: its output and how it ended
+  manager._lastProcessInfo = () => ({
+    stderr: CUDA_KERNEL_IMAGE_STDERR,
+    exitCode: null,
+    signal: "SIGABRT",
+  });
+  manager.start = async () => {
+    // The CPU restart spawns a new process, so the reason must be read before it
+    manager._lastProcessInfo = () => ({ stderr: "", exitCode: null, signal: null });
+    manager.useCuda = false;
+    manager.ready = true;
+  };
+
+  const events = [];
+  manager.on("cuda-fallback", (payload) => events.push(payload));
+
+  const result = await manager.transcribe(Buffer.from("audio"));
+
+  assert.equal(result.text, "hello");
+  assert.deepEqual(events, [
+    { reason: "CUDA error: no kernel image is available for execution on the device" },
+  ]);
 });
 
 test("falls back to CPU when a peer's replacement is another doomed CUDA server", async (t) => {

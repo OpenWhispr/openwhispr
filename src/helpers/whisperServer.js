@@ -18,6 +18,7 @@ const {
   computeTranscriptionTimeoutMs,
   PCM16_MONO_16K_BYTES_PER_SECOND,
 } = require("./transcriptionTimeout");
+const { extractWhisperGpuFailureReason } = require("./whisperGpuFailureReason");
 
 const PORT_RANGE_START = 8178;
 const PORT_RANGE_END = 8199;
@@ -305,6 +306,9 @@ class WhisperServerManager extends EventEmitter {
     this.gpuSignature = "gpu:cpu";
     this.gpuFallbackActive = false;
     this.lastStartOptions = {};
+    // Output and exit of the last spawned server, read when a GPU server that
+    // started fine dies mid-transcription (_fallbackToCpuAndRetry). See #1736.
+    this._lastProcessInfo = null;
   }
 
   getFFmpegPath() {
@@ -642,6 +646,9 @@ class WhisperServerManager extends EventEmitter {
 
     let stderrBuffer = "";
     let exitCode = null;
+    let exitSignal = null;
+    const getProcessInfo = () => ({ stderr: stderrBuffer, exitCode, signal: exitSignal });
+    this._lastProcessInfo = getProcessInfo;
 
     this.process.stdout.on("data", (data) => {
       debugLogger.debug("whisper-server stdout", { data: data.toString().trim() });
@@ -657,20 +664,19 @@ class WhisperServerManager extends EventEmitter {
       this.ready = false;
     });
 
-    this.process.on("close", (code) => {
+    this.process.on("close", (code, signal) => {
       exitCode = code;
-      debugLogger.debug("whisper-server process exited", { code });
+      exitSignal = signal;
+      debugLogger.debug("whisper-server process exited", { code, signal });
       this.ready = false;
       this.process = null;
       this.stopHealthCheck();
       sidecarPidFile.clear("whisper");
     });
 
+    const startupTimeoutMs = usingVulkan ? VULKAN_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS;
     try {
-      await this.waitForReady(
-        () => ({ stderr: stderrBuffer, exitCode }),
-        usingVulkan ? VULKAN_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS
-      );
+      await this.waitForReady(getProcessInfo, startupTimeoutMs);
     } catch (err) {
       // An intentional stop() during startup is not a GPU/thread failure
       if (err.isStopped) throw err;
@@ -678,16 +684,18 @@ class WhisperServerManager extends EventEmitter {
         // Fall back on ANY startup rejection — a GPU server can exit early
         // (missing kernels), die late (VRAM OOM mid-model-load), or hang, and
         // in every case the CPU binary is the working answer. stop() reaps a
-        // hung process before the CPU restart.
+        // hung process before the CPU restart. The reason travels with the
+        // event so it is saved beside the failure and shown on the GPU card:
+        // the device banner is far longer than 200 characters (#1736).
+        const reason = extractWhisperGpuFailureReason({
+          ...getProcessInfo(),
+          timeoutMs: startupTimeoutMs,
+        });
         debugLogger.warn(
           `${usingCuda ? "CUDA" : "Vulkan"} whisper-server failed, falling back to CPU`,
-          {
-            error: err.message,
-            exitCode,
-            stderr: stderrBuffer.slice(0, 200),
-          }
+          { error: err.message, exitCode, reason }
         );
-        this.emit(usingCuda ? "cuda-fallback" : "gpu-fallback");
+        this.emit(usingCuda ? "cuda-fallback" : "gpu-fallback", { reason });
         await this.stop();
         this.gpuFallbackActive = true;
         return this._doStart(modelPath, { ...options, useCuda: false, useVulkan: false });
@@ -1079,14 +1087,17 @@ class WhisperServerManager extends EventEmitter {
 
   async _fallbackToCpuAndRetry(body, boundary, modelPath) {
     const backend = this.useCuda ? "cuda" : "vulkan";
+    // Read the crashed server's output now: the CPU start below replaces it
+    const reason = extractWhisperGpuFailureReason(this._lastProcessInfo?.() ?? {});
     debugLogger.warn(`${backend} whisper-server died during transcription, falling back to CPU`, {
       port: this.port,
       model: modelPath ? path.basename(modelPath) : null,
+      reason,
     });
     await this.start(modelPath, { ...this.lastStartOptions, useCuda: false, useVulkan: false });
     this.gpuFallbackActive = true;
     // Emit only once the CPU server is up — the notification tells the user CPU is in use
-    this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback");
+    this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback", { reason });
     return await this._postInference(body, boundary);
   }
 
