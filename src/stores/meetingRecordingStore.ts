@@ -3,6 +3,7 @@ import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { getMeetingStreamingTranscriptionProviders } from "../models/ModelRegistry";
 import { resolveMeetingTranscriptionOptions } from "../helpers/meetingTranscriptionRouting";
+import { normalizeSystemAudioSource } from "../helpers/systemAudioSource";
 import { followsSystemDefaultMic } from "../helpers/micSelectionRecovery";
 import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
@@ -922,8 +923,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       }
 
       const startTime = performance.now();
+      // Read once so the access check and main's start agree (#1546): the check
+      // decides whether this renderer opens Chromium loopback up front, and
+      // main decides whether its native helper captures instead.
+      const systemAudioSource = normalizeSystemAudioSource(getSettings().systemAudioSource);
       const initialSystemAudioAccess =
-        (await (window.electronAPI?.checkSystemAudioAccess?.() ??
+        (await (window.electronAPI?.checkSystemAudioAccess?.({ systemAudioSource }) ??
           Promise.resolve(DEFAULT_SYSTEM_AUDIO_ACCESS))) ?? getFallbackSystemAudioAccess();
       if (!isCurrentStart()) {
         await teardownStart();
@@ -935,6 +940,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       startOperation.markMainStartAttempted();
       const mainStartPromise = window.electronAPI?.meetingTranscriptionStart?.({
         ...getMeetingTranscriptionOptions(),
+        systemAudioSource,
         noteId: args.noteId ?? null,
         sessionId,
         autoEndEligible: args.autoEndEligible,
