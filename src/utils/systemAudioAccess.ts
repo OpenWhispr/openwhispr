@@ -50,3 +50,17 @@ export const isRendererSystemAudioStrategy = (
 export const getDisplayCaptureModeForStrategy = (
   _strategy: RendererSystemAudioStrategy
 ): "loopback" | "portal" => "loopback";
+
+// Chromium lists the Windows default output as deviceId "default", labelled
+// "Default - <name>" (Electron hard-codes the English prefix). It resolves that
+// entry and its display-media loopback to the same console default device, so
+// this names what "Default Playback Device Only" records. Empty while Chromium
+// withholds labels.
+export const getDefaultPlaybackDeviceName = (
+  devices: ReadonlyArray<Pick<MediaDeviceInfo, "kind" | "deviceId" | "label">>
+): string => {
+  const output = devices.find(
+    (device) => device.kind === "audiooutput" && device.deviceId === "default"
+  );
+  return (output?.label ?? "").replace(/^\s*default\s*-\s*/i, "").trim();
+};

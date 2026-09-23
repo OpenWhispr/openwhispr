@@ -1347,6 +1347,15 @@
       }
     }
   },
+  "systemAudioSourceSettings": {
+    "title": "系統音訊",
+    "description": "選擇筆記錄音擷取哪些喇叭的聲音",
+    "label": "播放裝置",
+    "allDevices": "所有播放裝置",
+    "defaultDevice": "僅預設播放裝置",
+    "allDevicesHelp": "筆記錄音會從所有喇叭和耳機擷取通話中其他人的聲音，其中也包括變聲器和音訊路由應用程式（例如 Voicemod 或 VB-Cable）建立的虛擬裝置，這可能會讓您自己的聲音在逐字稿中再出現一次。",
+    "defaultDeviceHelp": "筆記錄音只擷取 Windows 用來播放聲音的裝置。如果您的會議應用程式透過其他喇叭或耳機播放，將不會擷取通話中其他人的聲音。"
+  },
   "pasteToolsInfo": {
     "checking": "正在檢查系統功能...",
     "installCommands": {

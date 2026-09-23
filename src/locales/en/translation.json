@@ -1440,6 +1440,15 @@
       }
     }
   },
+  "systemAudioSourceSettings": {
+    "title": "System Audio",
+    "description": "Choose which speakers Note Recording listens to",
+    "label": "Playback Device",
+    "allDevices": "All Playback Devices",
+    "defaultDevice": "Default Playback Device Only",
+    "allDevicesHelp": "Note Recording captures the other people in a call from every speaker and headset. That includes virtual devices from voice changers and audio routing apps, such as Voicemod or VB-Cable, which can add your own voice to the transcript a second time.",
+    "defaultDeviceHelp": "Note Recording captures only the device Windows plays sound through. If your meeting app plays on a different speaker or headset, the other people in the call won't be captured."
+  },
   "pasteToolsInfo": {
     "checking": "Checking system capabilities...",
     "installCommands": {

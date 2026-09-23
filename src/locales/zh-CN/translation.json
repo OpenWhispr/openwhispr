@@ -1347,6 +1347,15 @@
       }
     }
   },
+  "systemAudioSourceSettings": {
+    "title": "系统音频",
+    "description": "选择笔记录音采集哪些扬声器的声音",
+    "label": "播放设备",
+    "allDevices": "所有播放设备",
+    "defaultDevice": "仅默认播放设备",
+    "allDevicesHelp": "笔记录音会从所有扬声器和耳机采集通话中其他人的声音，其中也包括变声器和音频路由应用（例如 Voicemod 或 VB-Cable）创建的虚拟设备，这可能会让您自己的声音在转录中再出现一次。",
+    "defaultDeviceHelp": "笔记录音只采集 Windows 用于播放声音的设备。如果您的会议应用通过其他扬声器或耳机播放，将不会采集通话中其他人的声音。"
+  },
   "pasteToolsInfo": {
     "checking": "正在检查系统功能...",
     "installCommands": {

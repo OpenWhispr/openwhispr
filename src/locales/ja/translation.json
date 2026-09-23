@@ -1347,6 +1347,15 @@
       }
     }
   },
+  "systemAudioSourceSettings": {
+    "title": "システムオーディオ",
+    "description": "ノート録音で聞き取るスピーカーを選択",
+    "label": "再生デバイス",
+    "allDevices": "すべての再生デバイス",
+    "defaultDevice": "デフォルトの再生デバイスのみ",
+    "allDevicesHelp": "ノート録音では、すべてのスピーカーとヘッドセットから通話相手の音声を取り込みます。Voicemod や VB-Cable などのボイスチェンジャーや音声ルーティングアプリの仮想デバイスも含まれるため、自分の声が文字起こしに二重に入ることがあります。",
+    "defaultDeviceHelp": "ノート録音では、Windows がサウンドを再生しているデバイスだけを取り込みます。会議アプリが別のスピーカーやヘッドセットで再生している場合、通話相手の音声は取り込まれません。"
+  },
   "pasteToolsInfo": {
     "checking": "システム機能を確認中...",
     "installCommands": {

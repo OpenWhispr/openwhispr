@@ -46,6 +46,7 @@ import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
+import SystemAudioSourceSettings from "./ui/SystemAudioSourceSettings";
 import PermissionCard from "./ui/PermissionCard";
 import PasteToolsInfo from "./ui/PasteToolsInfo";
 import NixOsPasteInfo from "./ui/NixOsPasteInfo";
@@ -1294,6 +1295,8 @@ export default function SettingsPage({
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
   const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
+  const systemAudioSource = useSettingsStore((s) => s.systemAudioSource);
+  const setSystemAudioSource = useSettingsStore((s) => s.setSystemAudioSource);
 
   const settingsPolicyState = usePolicySnapshot();
   const agentAllowedByPolicy = isAgentAllowed(settingsPolicyState);
@@ -3437,6 +3440,12 @@ export default function SettingsPage({
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
+
+            <SystemAudioSourceSettings
+              platform={platform}
+              systemAudioSource={systemAudioSource}
+              onSystemAudioSourceChange={setSystemAudioSource}
+            />
 
             {/* Dictionary */}
             <div>

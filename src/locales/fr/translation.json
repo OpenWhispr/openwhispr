@@ -1440,6 +1440,15 @@
       }
     }
   },
+  "systemAudioSourceSettings": {
+    "title": "Audio Système",
+    "description": "Sélectionnez les haut-parleurs qu'écoute l'enregistrement de notes",
+    "label": "Périphérique de lecture",
+    "allDevices": "Tous les périphériques de lecture",
+    "defaultDevice": "Périphérique de lecture par défaut uniquement",
+    "allDevicesHelp": "L'enregistrement de notes capte les autres participants de l'appel depuis tous les haut-parleurs et casques. Cela inclut les périphériques virtuels des modificateurs de voix et des applications de routage audio, comme Voicemod ou VB-Cable, qui peuvent ajouter votre propre voix une seconde fois à la transcription.",
+    "defaultDeviceHelp": "L'enregistrement de notes ne capte que le périphérique par lequel Windows diffuse le son. Si votre application de réunion diffuse le son sur d'autres haut-parleurs ou un autre casque, les autres participants de l'appel ne seront pas captés."
+  },
   "pasteToolsInfo": {
     "checking": "Vérification des capacités du système...",
     "installCommands": {
