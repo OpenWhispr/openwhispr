@@ -3064,11 +3064,25 @@ class IPCHandlers {
           ? winTarget.id
           : null;
 
-      const pasteResult = await this.clipboardManager.pasteText(textToPaste, {
-        ...options,
-        webContents: event.sender,
-        targetWindow,
-      });
+      let pasteResult;
+      try {
+        pasteResult = await this.clipboardManager.pasteText(textToPaste, {
+          ...options,
+          webContents: event.sender,
+          targetWindow,
+          silentAccessibilityCheck: true,
+        });
+      } catch (error) {
+        if (error?.code !== "ACCESSIBILITY_PERMISSION_REQUIRED" || error.clipboardCopied !== true) {
+          throw error;
+        }
+        return {
+          success: false,
+          pasted: false,
+          code: "ACCESSIBILITY_PERMISSION_REQUIRED",
+          clipboardCopied: true,
+        };
+      }
       const pasted = pasteResult?.pasted !== false;
       debugLogger.debug("[AutoLearn] Paste completed", {
         autoLearnEnabled: this._autoLearnEnabled,

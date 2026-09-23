@@ -1104,7 +1104,15 @@ declare global {
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
         }
-      ) => Promise<{ success: true; pasted: boolean }>;
+      ) => Promise<
+        | { success: true; pasted: boolean }
+        | {
+            success: false;
+            pasted: false;
+            code: "ACCESSIBILITY_PERMISSION_REQUIRED";
+            clipboardCopied: true;
+          }
+      >;
       captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
