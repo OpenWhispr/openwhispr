@@ -839,7 +839,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
    - **Lockfile**: Always use Node 24 when running `npm install` (matches CI). If your local Node version differs, use `nvm exec 24 npm install`. Running `npm install` with a different major version will produce an incompatible `package-lock.json` that breaks `npm ci` in CI.
 
 5. **Windows Push-to-Talk Binary**:
-   - Prebuilt binary downloaded automatically on Windows during build
+   - Compiled from `resources/windows-key-listener.c` during `prebuild:win`; the prebuilt binary download from GitHub releases is the fallback
    - If download fails, push-to-talk falls back to tap mode
    - To compile locally: install Visual Studio Build Tools or MinGW-w64
    - CI workflow (`.github/workflows/build-windows-key-listener.yml`) auto-builds on push to main
