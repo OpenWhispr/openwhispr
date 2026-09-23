@@ -9,7 +9,13 @@ const { resolveFailedGpuBackends } = require("../../src/helpers/whisper.js");
 // without an app restart, and what stops a crashed backend from being
 // re-attempted (and its model reload re-paid) on every launch.
 
-const ENV_KEYS = ["WHISPER_CUDA_ENABLED", "WHISPER_VULKAN_ENABLED", "WHISPER_GPU_FAILED"];
+const ENV_KEYS = [
+  "WHISPER_CUDA_ENABLED",
+  "WHISPER_VULKAN_ENABLED",
+  "WHISPER_GPU_FAILED",
+  "WHISPER_GPU_FAILED_REASON_CUDA",
+  "WHISPER_GPU_FAILED_REASON_VULKAN",
+];
 const saved = {};
 
 test.beforeEach(() => {
@@ -127,4 +133,26 @@ test("resolveFailedGpuBackends tolerates empty and messy values", () => {
   assert.deepEqual(resolveFailedGpuBackends(""), []);
   assert.deepEqual(resolveFailedGpuBackends("cuda"), ["cuda"]);
   assert.deepEqual(resolveFailedGpuBackends(" cuda , vulkan ,"), ["cuda", "vulkan"]);
+});
+
+
+test("a downloaded pack skipped for an earlier failure is logged once, with its saved reason", (t) => {
+  // A debug log turned on after the fallback otherwise shows only a CPU start (#1736)
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const logged = [];
+  t.mock.method(debugLogger, "info", (message, meta) => logged.push({ message, meta }));
+  process.env.WHISPER_GPU_FAILED = "cuda,vulkan";
+  process.env.WHISPER_GPU_FAILED_REASON_VULKAN = "vk::PhysicalDevice::createDevice: ErrorDeviceLost";
+  // CUDA failed too but its pack is gone, so there is nothing skipped to explain
+  const manager = managerWith({ vulkanDownloaded: true });
+
+  manager.resolveGpuStartOptions();
+  manager.resolveGpuStartOptions();
+
+  assert.deepEqual(logged, [
+    {
+      message: "Vulkan pack skipped: it fell back to CPU on an earlier start (Retry in settings)",
+      meta: { reason: "vk::PhysicalDevice::createDevice: ErrorDeviceLost" },
+    },
+  ]);
 });

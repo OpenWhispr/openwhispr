@@ -13,6 +13,7 @@ const {
 const WhisperServerManager = require("./whisperServer");
 const { createAbortError } = require("./abortError");
 const { getModelsDirForService } = require("./modelDirUtils");
+const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 
@@ -69,6 +70,8 @@ class WhisperManager {
     this._rewarmInFlight = false;
     this._cudaBinaryManager = null;
     this._vulkanBinaryManager = null;
+    // Which skipped packs were last logged, so the reason is logged once per state
+    this._loggedGpuSkips = null;
   }
 
   setGpuBinaryManagers({ cuda, vulkan }) {
@@ -89,6 +92,7 @@ class WhisperManager {
   // reload re-paid — on every launch.
   resolveGpuStartOptions() {
     const failed = resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
+    this._logSkippedGpuPacks(failed);
     const useCuda =
       (process.env.WHISPER_CUDA_ENABLED || "").toLowerCase() !== "false" &&
       !failed.includes("cuda") &&
@@ -99,6 +103,30 @@ class WhisperManager {
       !failed.includes("vulkan") &&
       !!this._vulkanBinaryManager?.isDownloaded();
     return { useCuda, useVulkan };
+  }
+
+  // A remembered failure skips a downloaded pack silently, so a debug log turned
+  // on after the fallback would show only a CPU start. Say why, once per state,
+  // with the reason saved at the fallback (#1736).
+  _logSkippedGpuPacks(failed) {
+    const skipped = [
+      ["cuda", "CUDA", this._cudaBinaryManager],
+      ["vulkan", "Vulkan", this._vulkanBinaryManager],
+    ]
+      .filter(([backend, , manager]) => failed.includes(backend) && manager?.isDownloaded())
+      .map(([backend, label]) => ({
+        label,
+        reason: process.env[WHISPER_GPU_FAILURE_REASON_KEYS[backend]] || null,
+      }));
+    const signature = JSON.stringify(skipped);
+    if (signature === this._loggedGpuSkips) return;
+    this._loggedGpuSkips = signature;
+    for (const { label, reason } of skipped) {
+      debugLogger.info(
+        `${label} pack skipped: it fell back to CPU on an earlier start (Retry in settings)`,
+        { reason }
+      );
+    }
   }
 
   // Re-resolve GPU options and reload the server in place. Used after a GPU
