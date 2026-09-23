@@ -77,20 +77,25 @@ test("recovered warnings alone are not a cause: the exit is reported instead", (
 });
 
 test("a ggml abort with no error word in it is reported, not the exit it caused", () => {
-  // ggml_abort prints "<file>:<line>: <message>", then a backtrace, then aborts
+  // ggml_abort prints "<file>:<line>: <message>", then a backtrace, then aborts.
+  // The paths are the build machine's, so no home folder is redacted from them.
   const preallocation =
     "D:\\a\\whisper.cpp\\whisper.cpp\\ggml\\src\\ggml-vulkan\\ggml-vulkan.cpp:8412: Requested preallocation size is too large";
   assert.equal(
     extractReason({
       stderr: `ggml_vulkan: Found 1 Vulkan devices:\n${preallocation}\n`,
       exitCode: 3,
+      homeDir: null,
     }),
     preallocation
   );
   // It mentions pinned memory but, unlike the warnings above, it is fatal
   const nonPinned =
     "/home/runner/work/whisper.cpp/whisper.cpp/ggml/src/ggml-vulkan/ggml-vulkan.cpp:7507: Asynchronous write to non-pinned memory not supported";
-  assert.equal(extractReason({ stderr: `${nonPinned}\n`, signal: "SIGABRT" }), nonPinned);
+  assert.equal(
+    extractReason({ stderr: `${nonPinned}\n`, signal: "SIGABRT", homeDir: null }),
+    nonPinned
+  );
 });
 
 test("the Vulkan loader's notes about drivers it skipped are not a cause", () => {
