@@ -3684,6 +3684,10 @@ export async function initializeSettings(): Promise<void> {
       } else {
         value = parsed;
       }
+    } else if (key === "systemAudioSource") {
+      // Same guard as the setter: a value from another window or a newer build
+      // must never opt this one out of recording every playback device.
+      value = normalizeSystemAudioSource(newValue);
     } else {
       value = newValue;
     }

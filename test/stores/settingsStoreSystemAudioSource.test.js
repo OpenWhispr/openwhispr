@@ -53,3 +53,38 @@ test("the system audio source setting", async (t) => {
     assert.equal(storage.getItem("systemAudioSource"), "all-devices");
   });
 });
+
+test("a choice synced from another window is normalised like the setter's", async (t) => {
+  const storageListeners = [];
+  installBrowserGlobals(t, {
+    // The agent name is already in the dictionary, so startup writes nothing
+    // and starts no cloud sync that would outlive the test.
+    initialStorage: { customDictionary: JSON.stringify(["OpenWhispr"]) },
+    window: {
+      addEventListener: (type, listener) => type === "storage" && storageListeners.push(listener),
+      electronAPI: {
+        getDictionary: async () => ["OpenWhispr"],
+        getUiLanguage: async () => "",
+        setDictionary: async () => ({ success: true }),
+      },
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-system-audio-source-sync-test-",
+  });
+  const { initializeSettings, useSettingsStore } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  await initializeSettings();
+  const syncFromAnotherWindow = (newValue) =>
+    storageListeners.forEach((listener) =>
+      listener({ key: "systemAudioSource", newValue, storageArea: localStorage })
+    );
+
+  syncFromAnotherWindow("default-device");
+  assert.equal(useSettingsStore.getState().systemAudioSource, "default-device");
+
+  // A value written by a newer build or by hand never opts this window out.
+  syncFromAnotherWindow("virtual-cable");
+  assert.equal(useSettingsStore.getState().systemAudioSource, "all-devices");
+});
