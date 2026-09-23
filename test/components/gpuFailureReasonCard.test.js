@@ -25,6 +25,16 @@ const vulkanPack = (overrides = {}) => ({
   ...overrides,
 });
 
+const cudaPack = (overrides = {}) => ({
+  downloaded: false,
+  downloading: false,
+  path: null,
+  gpuInfo: { hasNvidiaGpu: false },
+  gpuFailed: false,
+  gpuFailReason: null,
+  ...overrides,
+});
+
 function findElement(node, predicate) {
   if (Array.isArray(node)) {
     for (const child of node) {
@@ -48,7 +58,7 @@ function settle() {
   });
 }
 
-async function mountPicker(t, vulkanStatus) {
+async function mountPicker(t, vulkanStatus, cudaStatus = cudaPack()) {
   installBrowserGlobals(t, {
     window: { location: { search: "" }, electronAPI: { getPlatform: () => "win32" } },
   });
@@ -65,14 +75,7 @@ async function mountPicker(t, vulkanStatus) {
     listWhisperModels: async () => ({ success: true, models: [] }),
     onWhisperDownloadProgress: () => noop,
     onParakeetDownloadProgress: () => noop,
-    getCudaWhisperStatus: async () => ({
-      downloaded: false,
-      downloading: false,
-      path: null,
-      gpuInfo: { hasNvidiaGpu: false },
-      gpuFailed: false,
-      gpuFailReason: null,
-    }),
+    getCudaWhisperStatus: async () => cudaStatus,
     getVulkanWhisperStatus: async () => {
       pack.statusReads += 1;
       return pack.status;
@@ -172,6 +175,29 @@ test("a live fallback re-reads the status: the new reason shows and replaces the
     );
     assert.ok(picker.find(hasText(OUT_OF_DEVICE_MEMORY)));
     assert.equal(picker.find(hasText(DEVICE_LOST)), null);
+  } finally {
+    await picker.unmount();
+  }
+});
+
+test("a Vulkan fallback shows as failed even while the card shows the installed CUDA pack", async (t) => {
+  // Both packs installed on an NVIDIA machine: the card shows CUDA, but main ran
+  // Vulkan (CUDA opted out with WHISPER_CUDA_ENABLED=false, or failed before)
+  const picker = await mountPicker(
+    t,
+    vulkanPack({ hasNvidiaGpu: true }),
+    cudaPack({ downloaded: true, gpuInfo: { hasNvidiaGpu: true, cudaSupported: true } })
+  );
+  try {
+    assert.equal(picker.find(isFailedCard), null);
+
+    await picker.fireVulkanFallback(
+      vulkanPack({ hasNvidiaGpu: true, gpuFailed: true, gpuFailReason: DEVICE_LOST })
+    );
+
+    const card = picker.find(isFailedCard);
+    assert.ok(card, "the fallback that just happened stays visible");
+    assert.ok(findElement(card, hasText(DEVICE_LOST)), "with the reason of the pack that failed");
   } finally {
     await picker.unmount();
   }

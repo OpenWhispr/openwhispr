@@ -709,40 +709,36 @@ export default function TranscriptionModelPicker({
     return () => window.removeEventListener("openwhispr-models-cleared", handleModelsCleared);
   }, [loadLocalModels, loadParakeetModels]);
 
-  // Pack, failure and failure-reason state from main. Also re-read after a
-  // fallback: main saves the reason before it notifies, and a card left open
-  // while the GPU fails must show it without a remount.
-  const refreshGpuStatus = useCallback(async () => {
-    try {
-      const [cuda, vulkan] = await Promise.all([
-        window.electronAPI?.getCudaWhisperStatus?.(),
-        window.electronAPI?.getVulkanWhisperStatus?.(),
-      ]);
-      // Cards below the CUDA build's kernel floor (e.g. Maxwell) crash at the
-      // first kernel launch, so they get the Vulkan pack like AMD/Intel GPUs.
-      const cudaEligible = !!cuda?.gpuInfo.hasNvidiaGpu && !!cuda.gpuInfo.cudaSupported;
-      // Prefer the pack that's already installed: a working Vulkan setup must
-      // not be re-prompted to download the CUDA pack (matches the resolver,
-      // which only prefers CUDA when it is actually downloaded).
-      if (cudaEligible && (cuda.downloaded || !vulkan?.downloaded)) {
-        setGpuBackend("cuda");
-        setGpuDownloaded(cuda.downloaded);
-        setGpuFailed(!!cuda.gpuFailed);
-        setGpuFailReason(cuda.gpuFailReason ?? null);
-      } else if (vulkan?.vulkan.available) {
-        setGpuBackend("vulkan");
-        setGpuDownloaded(vulkan.downloaded);
-        setGpuFailed(!!vulkan.gpuFailed);
-        setGpuFailReason(vulkan.gpuFailReason ?? null);
-      }
-    } catch {}
-  }, []);
-
   useEffect(() => {
     if (!effectiveLocal || internalLocalProvider !== "whisper") return;
     if (getCachedPlatform() === "darwin") return;
-    refreshGpuStatus();
-  }, [effectiveLocal, internalLocalProvider, refreshGpuStatus]);
+    const detect = async () => {
+      try {
+        const [cuda, vulkan] = await Promise.all([
+          window.electronAPI?.getCudaWhisperStatus?.(),
+          window.electronAPI?.getVulkanWhisperStatus?.(),
+        ]);
+        // Cards below the CUDA build's kernel floor (e.g. Maxwell) crash at the
+        // first kernel launch, so they get the Vulkan pack like AMD/Intel GPUs.
+        const cudaEligible = !!cuda?.gpuInfo.hasNvidiaGpu && !!cuda.gpuInfo.cudaSupported;
+        // Prefer the pack that's already installed: a working Vulkan setup must
+        // not be re-prompted to download the CUDA pack (matches the resolver,
+        // which only prefers CUDA when it is actually downloaded).
+        if (cudaEligible && (cuda.downloaded || !vulkan?.downloaded)) {
+          setGpuBackend("cuda");
+          setGpuDownloaded(cuda.downloaded);
+          setGpuFailed(!!cuda.gpuFailed);
+          setGpuFailReason(cuda.gpuFailReason ?? null);
+        } else if (vulkan?.vulkan.available) {
+          setGpuBackend("vulkan");
+          setGpuDownloaded(vulkan.downloaded);
+          setGpuFailed(!!vulkan.gpuFailed);
+          setGpuFailReason(vulkan.gpuFailReason ?? null);
+        }
+      } catch {}
+    };
+    detect();
+  }, [effectiveLocal, internalLocalProvider]);
 
   useEffect(() => {
     if (!gpuDownloading || !gpuBackend) return;
@@ -782,21 +778,32 @@ export default function TranscriptionModelPicker({
 
   // Main falls back to CPU (and remembers it) when a GPU server crashes
   useEffect(() => {
-    const onFallback = () => {
-      setGpuFailed(true);
-      // Never show the previous failure's reason while the new one loads
-      setGpuFailReason(null);
-      setGpuActivating(false);
-      setGpuActive(false);
-      refreshGpuStatus();
-    };
-    const disposeCuda = window.electronAPI?.onCudaFallbackNotification?.(onFallback);
-    const disposeVulkan = window.electronAPI?.onGpuFallbackNotification?.(onFallback);
+    // Main saves the reason before it notifies. Read it from the backend that
+    // failed, not the installed-pack preference above: with both packs
+    // installed, the card can show CUDA while the server ran Vulkan (#1736).
+    const onFallback =
+      (readStatus: () => Promise<{ gpuFailReason?: string | null } | undefined> | undefined) =>
+      () => {
+        setGpuFailed(true);
+        // Never show the previous failure's reason while the new one loads
+        setGpuFailReason(null);
+        setGpuActivating(false);
+        setGpuActive(false);
+        readStatus()
+          ?.then((status) => setGpuFailReason(status?.gpuFailReason ?? null))
+          .catch(() => {});
+      };
+    const disposeCuda = window.electronAPI?.onCudaFallbackNotification?.(
+      onFallback(() => window.electronAPI?.getCudaWhisperStatus?.())
+    );
+    const disposeVulkan = window.electronAPI?.onGpuFallbackNotification?.(
+      onFallback(() => window.electronAPI?.getVulkanWhisperStatus?.())
+    );
     return () => {
       disposeCuda?.();
       disposeVulkan?.();
     };
-  }, [refreshGpuStatus]);
+  }, []);
 
   const handleGpuDownload = async () => {
     setGpuDownloading(true);
