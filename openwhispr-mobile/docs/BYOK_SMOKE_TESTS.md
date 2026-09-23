@@ -9,7 +9,7 @@ The shared catalog describes more providers than the mobile app ships. This rele
 | OpenRouter | API key                         | Text                                 | Discovery/manual model; inference reaches selected model | Unverified          |
 | Custom     | Optional endpoint-bound API key | OpenAI-compatible transcription/text | Discovery/manual model; expected server receives request | Unverified          |
 
-Not offered on mobile in this release: Anthropic, Gemini, xAI, Mistral, Corti, Tinfoil, Deepgram, AssemblyAI, and Live Meetings over a personal provider. Adding one is a data change in `src/lib/mobileProviders.ts` only when its request shape is the OpenAI-compatible batch/chat protocol; anything else needs its own adapter and device verification.
+Not offered on mobile in this release: Anthropic, Gemini, xAI, Mistral, Corti, Tinfoil, Deepgram, AssemblyAI, and Live Meetings over a personal provider. Adding one is a data change (the allowlist in `src/lib/mobileProviders.ts`, plus a chat endpoint in `shared/ai/routing.ts` for text) only when its request shape is the OpenAI-compatible batch/chat protocol; anything else needs its own adapter and device verification.
 
 ## Automated validation
 
@@ -19,7 +19,7 @@ Run from `openwhispr-mobile/`: `npm test -- --runInBand`, `npm run typecheck`, `
 
 - Use Providers while signed out and without Pro. Confirm no OpenWhispr hosted inference or allowance consumption.
 - Replace/remove credentials and retry a job. Removal must reject credential reuse; it must not switch provider or model.
-- Sign-out keeps personal settings/credentials. Deleting the app does not remove Keychain items; "Remove credential" does.
+- Sign-out keeps personal settings/credentials. Deleting the app does not remove Keychain items; "Remove credential" and "Remove all provider keys" do, including keys for a Custom endpoint that was since changed.
 - Reboot an iPhone, unlock once, lock again, and verify background credential access without a biometric prompt.
 - Check valid/invalid keys, rate limits (429), quota (402), missing models (404), timeouts, cancellation, and malformed responses without exposing secrets or provider response bodies in UI/logs.
 - Check organization allowlists, unresolved policy, and account changes. Provider requests must remain blocked when policy denies them.
@@ -31,7 +31,7 @@ Run from `openwhispr-mobile/`: `npm test -- --runInBand`, `npm run typecheck`, `
 - Make transcription succeed and cleanup fail. Retain raw text/audio and show the cleanup failure without calling hosted inference.
 - Exercise keyboard recording, imports, explicit retry, suspension, OS termination/relaunch, and user force-quit separately.
 - Start a newer keyboard job before an old native upload completes. The older completion must not overwrite current status or insert text twice.
-- Force-quit during a keyboard agent command. On relaunch the keyboard must show an agent error, never the spoken instruction inserted as text.
+- Force-quit during a keyboard agent command. On relaunch the spoken instruction must be neither inserted nor added to history.
 - Toggle Cloud/On-Device on Home while not recording, then confirm dictation, Speech-to-Text and Providers screens agree; the toggle is disabled while recording.
 - Record over 25 MB (or import a large file) and confirm the "25 MB provider limit" refusal happens before any upload.
 
