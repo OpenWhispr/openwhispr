@@ -187,12 +187,12 @@ export function resolveDictationRouteKind({
   translationRequested,
   translationReachable,
 }) {
+  if (voiceAgentRequested) {
+    return "agent";
+  }
   if (translationRequested) {
     if (translationReachable) return "translation";
     return cleanupReachable ? "cleanup" : "skip";
-  }
-  if (voiceAgentRequested) {
-    return "agent";
   }
   if (agentReachable && agentInvoked) {
     return "agent";

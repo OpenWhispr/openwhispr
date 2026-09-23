@@ -48,6 +48,34 @@ test("voice agent hotkey ignores the wake word state", async () => {
   );
 });
 
+test("voice agent hotkey wins over translation when both flags are present", async () => {
+  const { resolveDictationRouteKind } = await load();
+
+  assert.equal(
+    resolveDictationRouteKind({
+      cleanupReachable: true,
+      agentReachable: true,
+      agentInvoked: false,
+      voiceAgentRequested: true,
+      translationRequested: true,
+      translationReachable: true,
+    }),
+    "agent"
+  );
+
+  assert.equal(
+    resolveDictationRouteKind({
+      cleanupReachable: true,
+      agentReachable: false,
+      agentInvoked: false,
+      voiceAgentRequested: true,
+      translationRequested: true,
+      translationReachable: false,
+    }),
+    "agent"
+  );
+});
+
 test("normal dictation with wake word routes to the agent", async () => {
   const { resolveDictationRouteKind } = await load();
 
