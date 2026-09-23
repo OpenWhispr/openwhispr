@@ -940,6 +940,19 @@
         "unavailable": "OpenWhispr no pudo leer de forma segura el texto seleccionado. Revisa los permisos de accesibilidad o automatización.",
         "tooLarge": "La selección es demasiado grande. Selecciona 6.000 caracteres o menos.",
         "reasoningFailed": "La IA no pudo completar la edición. El texto original no se modificó."
+      },
+      "pastePermission": {
+        "title": "Permitir el pegado automático",
+        "description": "Activa OpenWhispr en Ajustes del Sistema → Privacidad y seguridad → Accesibilidad.",
+        "settingsFailed": "No se pudieron abrir los ajustes. Abre Ajustes del Sistema → Privacidad y seguridad → Accesibilidad y activa OpenWhispr.",
+        "manualPaste": "Copia tu texto abajo y pulsa {{shortcut}} para pegarlo.",
+        "openSettings": "Abrir ajustes",
+        "copyToClipboard": "Copiar al portapapeles",
+        "copyFailed": "Error al copiar"
+      },
+      "pasteFailed": {
+        "title": "No se pudo pegar automáticamente",
+        "description": "Haz clic en un campo de texto editable de tu aplicación e inténtalo de nuevo."
       }
     },
     "clipboard": {

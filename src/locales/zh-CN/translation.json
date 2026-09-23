@@ -940,6 +940,19 @@
         "unavailable": "OpenWhispr 无法安全读取选中的文本。请检查辅助功能或输入自动化权限。",
         "tooLarge": "选中的内容过长。请选择不超过 6,000 个字符。",
         "reasoningFailed": "AI 无法完成选中文本编辑。原始文本未被更改。"
+      },
+      "pastePermission": {
+        "title": "允许自动粘贴",
+        "description": "请在系统设置 → 隐私与安全性 → 辅助功能中启用 OpenWhispr。",
+        "settingsFailed": "无法打开设置。请打开系统设置 → 隐私与安全性 → 辅助功能，并启用 OpenWhispr。",
+        "manualPaste": "点击下方按钮复制文本，然后按 {{shortcut}} 粘贴。",
+        "openSettings": "打开设置",
+        "copyToClipboard": "复制到剪贴板",
+        "copyFailed": "复制失败"
+      },
+      "pasteFailed": {
+        "title": "无法自动粘贴",
+        "description": "请点击应用中可编辑的文本框，然后重试。"
       }
     },
     "clipboard": {

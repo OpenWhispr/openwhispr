@@ -940,6 +940,19 @@
         "unavailable": "OpenWhispr konnte den ausgewählten Text nicht sicher lesen. Prüfe die Bedienungshilfen oder Eingabeautomatisierung.",
         "tooLarge": "Die Auswahl ist zu groß. Wähle höchstens 6.000 Zeichen aus.",
         "reasoningFailed": "Die KI konnte die Auswahlbearbeitung nicht abschließen. Dein ursprünglicher Text wurde nicht geändert."
+      },
+      "pastePermission": {
+        "title": "Automatisches Einfügen erlauben",
+        "description": "Aktiviere OpenWhispr unter Systemeinstellungen → Datenschutz & Sicherheit → Bedienungshilfen.",
+        "settingsFailed": "Die Einstellungen konnten nicht geöffnet werden. Öffne Systemeinstellungen → Datenschutz & Sicherheit → Bedienungshilfen und aktiviere OpenWhispr.",
+        "manualPaste": "Kopiere deinen Text unten und drücke dann {{shortcut}}, um ihn einzufügen.",
+        "openSettings": "Einstellungen öffnen",
+        "copyToClipboard": "Text kopieren",
+        "copyFailed": "Kopieren fehlgeschlagen"
+      },
+      "pasteFailed": {
+        "title": "Automatisches Einfügen fehlgeschlagen",
+        "description": "Klicke auf ein bearbeitbares Textfeld in deiner App und versuche es erneut."
       }
     },
     "clipboard": {

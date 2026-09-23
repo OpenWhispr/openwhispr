@@ -940,6 +940,19 @@
         "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
         "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
         "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"
+      },
+      "pastePermission": {
+        "title": "允許自動貼上",
+        "description": "請在系統設定 → 隱私權與安全性 → 輔助使用中啟用 OpenWhispr。",
+        "settingsFailed": "無法開啟設定。請開啟系統設定 → 隱私權與安全性 → 輔助使用，並啟用 OpenWhispr。",
+        "manualPaste": "點擊下方按鈕複製文字，然後按 {{shortcut}} 貼上。",
+        "openSettings": "開啟設定",
+        "copyToClipboard": "複製到剪貼板",
+        "copyFailed": "複製失敗"
+      },
+      "pasteFailed": {
+        "title": "無法自動貼上",
+        "description": "請點擊應用程式中可編輯的文字欄位，然後再試一次。"
       }
     },
     "clipboard": {

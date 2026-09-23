@@ -53,6 +53,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const pushForceStoppedRef = useRef(false);
   const stopLockRef = useRef(false);
   const preparationGenerationRef = useRef(0);
+  const dictationErrorGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
   const demoKindRef = useRef("dictation");
@@ -135,6 +136,7 @@ export const useAudioRecording = (toast, options = {}) => {
         }
 
         if (!canStartDictation(audioManagerRef.current.getState())) return false;
+        dictationErrorGenerationRef.current += 1;
 
         const assistantSelectionContext = voiceAgentRequested
           ? (getAssistantSelectionContextRef.current?.() ?? null)
@@ -329,9 +331,95 @@ export const useAudioRecording = (toast, options = {}) => {
         audioManagerRef.current?.streamingPartialText
       ).trim() || fallback.trim();
 
-    const showDictationError = ({ title, description, transcript = "", duration }) => {
+    const showDictationError = ({
+      title,
+      description,
+      transcript = "",
+      duration,
+      code,
+      settingsLaunchFailed = false,
+    }) => {
+      const errorGeneration = ++dictationErrorGenerationRef.current;
       const recoverAssistant = Boolean(audioManagerRef.current?.voiceAgentRequested);
       onDictationError?.({ recoverAssistant });
+      if (code === "ACCESSIBILITY_PERMISSION_REQUIRED") {
+        let settingsOpening = false;
+        const isCurrent = () => errorGeneration === dictationErrorGenerationRef.current;
+        const actions = [
+          {
+            label: t("hooks.audioRecording.pastePermission.openSettings"),
+            icon: "settings",
+            dismissOnClick: false,
+            onClick: async () => {
+              if (settingsOpening || !isCurrent()) return;
+              settingsOpening = true;
+              let opened = false;
+              try {
+                const result = await window.electronAPI?.openAccessibilitySettings?.();
+                opened = result?.success === true;
+              } catch {
+                // Keep the manual path available if System Settings cannot open.
+              } finally {
+                settingsOpening = false;
+              }
+              if (!opened && isCurrent()) {
+                showDictationError({
+                  title,
+                  description,
+                  transcript,
+                  code,
+                  settingsLaunchFailed: true,
+                });
+              }
+            },
+          },
+        ];
+        if (transcript.trim()) {
+          actions.push({
+            label: t("hooks.audioRecording.pastePermission.copyToClipboard"),
+            icon: "copy",
+            dismissOnClick: false,
+            feedback: {
+              successLabel: t("common.copied"),
+              failureLabel: t("hooks.audioRecording.pastePermission.copyFailed"),
+            },
+            onClick: async () => {
+              if (!isCurrent()) return;
+              let copied = false;
+              try {
+                const result = await window.electronAPI?.writeClipboard?.(transcript);
+                copied = result?.success === true;
+              } catch {
+                copied = false;
+              }
+              if (isCurrent()) return copied;
+            },
+          });
+        }
+        toast({
+          title,
+          description: [
+            settingsLaunchFailed
+              ? t("hooks.audioRecording.pastePermission.settingsFailed")
+              : description,
+            transcript.trim()
+              ? t("hooks.audioRecording.pastePermission.manualPaste", { shortcut: "Cmd+V" })
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" "),
+          descriptionHotkey: transcript.trim() ? "Cmd+V" : undefined,
+          variant: "destructive",
+          presentation: "dictation-error",
+          duration: 0,
+          dismissible: true,
+          onClose: () => {
+            if (isCurrent()) dictationErrorGenerationRef.current += 1;
+          },
+          actions,
+        });
+        return;
+      }
       const recoverableTranscript = getRecoverableTranscript(transcript);
       const actions = [
         {
@@ -435,6 +523,8 @@ export const useAudioRecording = (toast, options = {}) => {
             title,
             description,
             duration: error?.code === "AUTH_EXPIRED" ? 8000 : undefined,
+            code: error?.code,
+            transcript: error?.transcript,
           });
         }
         if (getSettings().pauseMediaOnDictation) {
@@ -483,6 +573,7 @@ export const useAudioRecording = (toast, options = {}) => {
       },
       onTranscriptionComplete: async (result) => {
         if (result.success) {
+          dictationErrorGenerationRef.current += 1;
           dismissDictationError?.();
           const transcribedText = result.text?.trim();
 
@@ -825,6 +916,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
     // Cleanup
     return () => {
+      dictationErrorGenerationRef.current += 1;
       reportLifecycle("idle");
       unsubscribePolicy();
       disposeToggle?.();

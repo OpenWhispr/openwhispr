@@ -940,6 +940,19 @@
         "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
         "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
         "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."
+      },
+      "pastePermission": {
+        "title": "Allow automatic pasting",
+        "description": "Enable OpenWhispr in System Settings → Privacy & Security → Accessibility.",
+        "settingsFailed": "Couldn't open Settings. Open System Settings → Privacy & Security → Accessibility and enable OpenWhispr.",
+        "manualPaste": "Copy your text below, then press {{shortcut}} to paste it.",
+        "openSettings": "Open Settings",
+        "copyToClipboard": "Copy to clipboard",
+        "copyFailed": "Copy failed"
+      },
+      "pasteFailed": {
+        "title": "Couldn't paste automatically",
+        "description": "Click an editable text field in your app and try again."
       }
     },
     "clipboard": {
