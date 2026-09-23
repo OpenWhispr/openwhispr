@@ -111,7 +111,11 @@ import {
   payloadSendsDictionaryBias,
 } from "../utils/dictionaryEchoFilter.js";
 import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionaryPromptCap.js";
-import { dictionaryKeywords, usesTranscriptionKeywords } from "../utils/dictionaryKeywords.js";
+import {
+  dictionaryKeywordOverflow,
+  dictionaryKeywords,
+  usesTranscriptionKeywords,
+} from "../utils/dictionaryKeywords.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 import { getAgentName } from "../utils/agentName";
@@ -3667,7 +3671,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const endpoint = this.getTranscriptionEndpoint(route);
 
       // gpt-transcribe takes the dictionary on its own keywords[] channel (see
-      // dictionaryKeywords), so its prompt carries only the Chinese script bias.
+      // dictionaryKeywords), so its prompt carries only the Chinese script bias and
+      // the terms past the keyword cap.
       const usesKeywords = usesTranscriptionKeywords(model);
       const dictionary = this.getCustomDictionaryPrompt();
 
@@ -3678,7 +3683,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Whisper decoders read the tail of whatever they are given.
       const MAX_PROMPT_CHARS = dictionaryPromptLimit({ provider, endpoint, model });
       const trimmedPrompt = trimDictionaryPrompt(
-        this.getWhisperPrompt(apiSettings, usesKeywords ? null : dictionary),
+        this.getWhisperPrompt(
+          apiSettings,
+          usesKeywords ? dictionaryKeywordOverflow(dictionary) : dictionary
+        ),
         MAX_PROMPT_CHARS
       );
       const dictionaryPrompt = trimmedPrompt.prompt;
