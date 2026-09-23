@@ -1,5 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const path = require("node:path");
+const React = require("react");
+const { renderToStaticMarkup } = require("react-dom/server");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 // Upload inherits unset values from dictation, but a realtime-only dictation
@@ -74,6 +77,7 @@ test("audio upload has its own self-hosted server", async (t) => {
   const { storage } = installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-upload-self-hosted-test-",
+    resolveAlias: { "@": path.resolve(__dirname, "../../src") },
   });
   // Migrations run once per module evaluation, so every case re-evaluates the store.
   const load = async (seed) => {
@@ -86,14 +90,14 @@ test("audio upload has its own self-hosted server", async (t) => {
   const resolved = (mod, store) => mod.selectResolvedUploadTranscription(store.getState());
 
   await t.test(
-    "the Upload tab's URL and model override dictation's without writing them",
+    "uploads use only the Upload tab's URL and model, and never write dictation's",
     async () => {
       const { mod, store } = await load({});
       store.getState().setRemoteTranscriptionUrl(DICTATION_URL);
       store.getState().setRemoteTranscriptionModel(DICTATION_MODEL);
-      // Unset upload values inherit dictation's, like every other upload field.
-      assert.equal(resolved(mod, store).remoteTranscriptionUrl, DICTATION_URL);
-      assert.equal(resolved(mod, store).remoteTranscriptionModel, DICTATION_MODEL);
+      // An empty Upload tab must not send uploads to dictation's server.
+      assert.equal(resolved(mod, store).remoteTranscriptionUrl, "");
+      assert.equal(resolved(mod, store).remoteTranscriptionModel, "");
 
       store.getState().setUploadRemoteTranscriptionUrl(UPLOAD_URL);
       store.getState().setUploadRemoteTranscriptionModel("whisper-diarize");
@@ -130,10 +134,28 @@ test("audio upload has its own self-hosted server", async (t) => {
 
     const done = await load({ ...LATCHED_SELF_HOSTED, uploadSelfHostedMigrated: "true" });
     assert.equal(storage.getItem("uploadRemoteTranscriptionUrl"), null, "no second copy");
+    assert.equal(storage.getItem("uploadRemoteTranscriptionModel"), null, "no second model copy");
     assert.equal(done.store.getState().uploadRemoteTranscriptionUrl, "");
 
     await load({});
     assert.equal(storage.getItem("uploadSelfHostedMigrated"), "true", "fresh install latches");
     assert.equal(storage.getItem("uploadRemoteTranscriptionUrl"), null, "nothing to copy");
+  });
+
+  await t.test("the Upload tab shows its own server, not dictation's", async () => {
+    await load({
+      ...LATCHED_SELF_HOSTED,
+      uploadRemoteTranscriptionUrl: UPLOAD_URL,
+      uploadRemoteTranscriptionModel: "whisper-diarize",
+    });
+    const { UploadTranscriptionPanel } = await vite.ssrLoadModule(
+      "/components/settings/UploadSettings.tsx"
+    );
+    const html = renderToStaticMarkup(React.createElement(UploadTranscriptionPanel));
+    assert.ok(html.includes(UPLOAD_URL) && html.includes("whisper-diarize"), "upload server shown");
+    assert.ok(
+      !html.includes(DICTATION_URL) && !html.includes(DICTATION_MODEL),
+      "dictation's server hidden"
+    );
   });
 });

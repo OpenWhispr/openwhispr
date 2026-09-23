@@ -2793,9 +2793,9 @@ export interface ResolvedUploadTranscription {
 // A realtime-only dictation provider is the exception: it has no batch route, so
 // inheriting it would fail every upload closed. Uploads take the default provider
 // instead, and the dictation model stays behind with the provider it belongs to.
-// The self-hosted server inherits the same way; migrateUploadSelfHosted() seeds it
-// once for profiles from before the Upload tab had its own, so the tab shows the
-// server uploads already use.
+// The self-hosted server is the exception the other way: it never inherits, so
+// uploads go only to the server the Upload tab shows (#2049).
+// migrateUploadSelfHosted() seeds it once for profiles from before the tab had its own.
 export const selectResolvedUploadTranscription = (
   state: SettingsState
 ): ResolvedUploadTranscription => {
@@ -2818,9 +2818,8 @@ export const selectResolvedUploadTranscription = (
       state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
     cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
     transcriptionMode: state.uploadTranscriptionMode,
-    remoteTranscriptionUrl: state.uploadRemoteTranscriptionUrl || state.remoteTranscriptionUrl,
-    remoteTranscriptionModel:
-      state.uploadRemoteTranscriptionModel || state.remoteTranscriptionModel,
+    remoteTranscriptionUrl: state.uploadRemoteTranscriptionUrl,
+    remoteTranscriptionModel: state.uploadRemoteTranscriptionModel,
   };
 };
 
