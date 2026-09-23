@@ -179,11 +179,14 @@ function stubBinaryFound(t, found) {
   });
 }
 
-function stubInputDir(t, { entries, readable = [], keyboards = readable, sysfs = true }) {
+function stubInputDir(
+  t,
+  { entries, listError = enoent, readable = [], keyboards = readable, sysfs = true }
+) {
   const realReaddir = fs.readdirSync;
   t.mock.method(fs, "readdirSync", (target, ...rest) => {
     if (String(target) !== "/dev/input") return realReaddir.call(fs, target, ...rest);
-    if (!entries) throw enoent();
+    if (!entries) throw listError();
     return entries;
   });
 
@@ -239,7 +242,8 @@ test("checkAvailability is available when a single event node is readable", (t) 
   assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
 });
 
-// The C listener treats both of these as "wait for hotplug", not as a failure.
+// The C listener watches /dev/input for hotplug, so an empty directory is a wait,
+// not a failure.
 test("checkAvailability does not block when /dev/input holds no event nodes", (t) => {
   const LinuxKeyManager = loadManagerWithRealFs();
   stubBinaryFound(t, true);
@@ -248,12 +252,28 @@ test("checkAvailability does not block when /dev/input holds no event nodes", (t
   assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
 });
 
-test("checkAvailability does not block when /dev/input cannot be read", (t) => {
+// A /dev/input it cannot list, it cannot watch either: the listener stays silent
+// and never recovers. A Flatpak without input devices has no /dev/input at all.
+test("checkAvailability reports the listener unavailable without /dev/input", (t) => {
   const LinuxKeyManager = loadManagerWithRealFs();
   stubBinaryFound(t, true);
   stubInputDir(t, { entries: null });
 
-  assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), {
+    available: false,
+    reason: "input_devices_unavailable",
+  });
+});
+
+test("checkAvailability denies access when /dev/input itself is unreadable", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, { entries: null, listError: eacces });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), {
+    available: false,
+    reason: "input_access_denied",
+  });
 });
 
 // systemd's uaccess rule (rules.d/70-uaccess.rules.in) grants the session user

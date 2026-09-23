@@ -177,13 +177,13 @@ class LinuxKeyManager extends EventEmitter {
    * Whether the listener could actually run right now: binary present and a
    * readable keyboard among the /dev/input/event* nodes. Mirrors the C
    * listener's own rule — it keeps only keyboards and prints NO_PERMISSION only
-   * when it kept none AND at least one node returned EACCES, so a missing or
-   * event-less /dev/input is not a failure there (it waits for hotplug) and
-   * must not be one here. Any other readable node proves nothing: systemd
-   * grants the session user every joystick.
+   * when it kept none AND at least one node returned EACCES, so an event-less
+   * /dev/input is not a failure there (it waits for hotplug) and must not be
+   * one here. Any other readable node proves nothing: systemd grants the
+   * session user every joystick.
    * Callers ask at registration time, because a hotkey only this listener can
    * serve must not report success when the listener cannot run.
-   * @returns {{available: true} | {available: false, reason: "binary_missing" | "input_access_denied"}}
+   * @returns {{available: true} | {available: false, reason: "binary_missing" | "input_access_denied" | "input_devices_unavailable"}}
    */
   checkAvailability() {
     if (!this.resolveListenerBinary()) return { available: false, reason: "binary_missing" };
@@ -191,8 +191,14 @@ class LinuxKeyManager extends EventEmitter {
     let devices;
     try {
       devices = fs.readdirSync(INPUT_DIR).filter((entry) => entry.startsWith("event"));
-    } catch {
-      return { available: true };
+    } catch (error) {
+      // The listener cannot watch a directory it cannot list, so it never sees a
+      // keyboard, and it reports nothing: NO_PERMISSION only covers device nodes.
+      const deniedAccess = error.code === "EACCES" || error.code === "EPERM";
+      return {
+        available: false,
+        reason: deniedAccess ? "input_access_denied" : "input_devices_unavailable",
+      };
     }
 
     let denied = false;
