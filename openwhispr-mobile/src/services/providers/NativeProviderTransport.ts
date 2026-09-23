@@ -6,6 +6,14 @@ const PROVIDER_REQUEST_TIMEOUT_SECONDS = 300;
 
 let requestSequence = 0;
 
+// Hermes has no DOMException global, so cancellations use a plain Error that
+// callers recognise by name, as they would a fetch AbortError.
+export function abortError(): Error {
+  const error = new Error('Provider request cancelled.');
+  error.name = 'AbortError';
+  return error;
+}
+
 function backgroundUploader(): typeof BackgroundUploaderType {
   const { BackgroundUploader } =
     require('../../../modules/background-uploader/src') as typeof import('../../../modules/background-uploader/src');
@@ -43,7 +51,7 @@ export async function requestProviderNative(url: string, init: RequestInit): Pro
   const uploader = backgroundUploader();
   const abort = (): void => uploader.cancelProviderRequest(id);
   if (init.signal?.aborted) {
-    throw new DOMException('Aborted', 'AbortError');
+    throw abortError();
   }
   init.signal?.addEventListener('abort', abort, { once: true });
   try {
@@ -55,7 +63,7 @@ export async function requestProviderNative(url: string, init: RequestInit): Pro
       ...(typeof init.body === 'string' ? { body: init.body } : {}),
       timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
     });
-    if (init.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (init.signal?.aborted) throw abortError();
     return nativeResponse(result);
   } finally {
     init.signal?.removeEventListener('abort', abort);
@@ -78,7 +86,7 @@ export async function requestProviderFileNative(input: {
   const uploader = backgroundUploader();
   const abort = (): void => uploader.cancelProviderRequest(id);
   if (input.signal?.aborted) {
-    throw new DOMException('Aborted', 'AbortError');
+    throw abortError();
   }
   input.signal?.addEventListener('abort', abort, { once: true });
   try {
@@ -96,7 +104,7 @@ export async function requestProviderFileNative(input: {
       recoveryAudioUri: input.recoveryAudioUri,
       timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
     });
-    if (input.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (input.signal?.aborted) throw abortError();
     return nativeResponse(result);
   } finally {
     input.signal?.removeEventListener('abort', abort);

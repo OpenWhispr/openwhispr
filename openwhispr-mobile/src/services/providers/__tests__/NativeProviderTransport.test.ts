@@ -7,6 +7,14 @@ jest.mock('../../../../modules/background-uploader/src', () => ({
     cancelProviderRequest: (...args: unknown[]) => mockCancel(...args),
   },
 }));
+// Hermes has no DOMException global; run the abort paths the way the device does.
+const nodeDOMException = globalThis.DOMException;
+beforeAll(() => {
+  delete (globalThis as { DOMException?: unknown }).DOMException;
+});
+afterAll(() => {
+  globalThis.DOMException = nodeDOMException;
+});
 beforeEach(() => jest.clearAllMocks());
 it.each(['json', 'file'])(
   'rejects a late successful %s response after cancellation',
