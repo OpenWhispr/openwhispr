@@ -162,14 +162,21 @@ test.before(async () => {
     let bytes = 0;
     socket.on("message", (data, binary) => {
       if (binary) bytes += data.length;
-      else if (JSON.parse(data).type === "commit")
+      else if (JSON.parse(data).type === "commit") {
+        socket.send(
+          JSON.stringify({ type: "language", language: "en", language_confidence: 0.99 })
+        );
         socket.send(
           JSON.stringify({
             type: "final",
             text: `Recorded ${bytes} bytes`,
             model: "orukeet-v0.1.0",
+            language: "en",
+            language_confidence: 0.99,
+            language_audio_seconds: 6,
           })
         );
+      }
     });
   });
   delete require.cache[handlersModulePath];
@@ -195,6 +202,13 @@ test("registered managed IPC streams startup audio and returns exactly one compl
   const final = await handlers.get("dictation-realtime-finalize")();
   assert.equal(final.success, true);
   assert.equal(final.text, "Recorded 1280 bytes");
+  assert.equal(final.language, "en");
+  assert.equal(final.languageConfidence, 0.99);
+  assert.equal(final.languageAudioSeconds, 6);
+  assert.deepEqual(messages.find(([channel]) => channel === "dictation-realtime-language")?.[1], {
+    language: "en",
+    languageConfidence: 0.99,
+  });
   assert.equal(messages.filter(([channel]) => channel === "dictation-realtime-final").length, 1);
   assert.equal((await handlers.get("dictation-realtime-stop")()).text, final.text);
   assert.equal(tokenListeners.size, 0);

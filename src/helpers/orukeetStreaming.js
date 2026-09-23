@@ -2,6 +2,27 @@ const WebSocket = require("ws");
 
 const MAX_PENDING_BYTES = 2 * 1024 * 1024;
 
+function languageMetadata(message) {
+  const language = message.language;
+  const confidence = message.language_confidence;
+  if (
+    typeof language === "string" &&
+    /^[a-z]{2}$/.test(language) &&
+    Number.isFinite(confidence) &&
+    confidence >= 0 &&
+    confidence <= 1
+  ) {
+    return {
+      language,
+      languageConfidence: confidence,
+      ...(Number.isFinite(message.language_audio_seconds) && message.language_audio_seconds > 0
+        ? { languageAudioSeconds: message.language_audio_seconds }
+        : {}),
+    };
+  }
+  return { language: null, languageConfidence: null };
+}
+
 function capacityRetryDelay(requestedMs) {
   if (!Number.isFinite(requestedMs)) return 100;
   // Select a fixed local delay, rounding the server's hint up. Large hints
@@ -132,6 +153,12 @@ class OrukeetStreaming {
         if (this.isConnected) this.sendControl({ type: "ping" });
       }, 15000);
       this.keepAlive.unref?.();
+    } else if (message.type === "language") {
+      // Advisory audio-language metadata never commits a transcript or triggers a paste.
+      // The final message remains authoritative for this recording.
+      if (!this.isConnected || this.result) return;
+      const metadata = languageMetadata(message);
+      if (metadata.language) this.onLanguage?.(metadata);
     } else if (message.type === "final") {
       // A duplicate or unsolicited final must never result in a second paste.
       if (this.result) return;
@@ -145,6 +172,7 @@ class OrukeetStreaming {
         inferenceMs: message.inference_ms,
         serverMs: message.server_ms,
         queueMs: message.queue_ms,
+        ...("language" in message ? languageMetadata(message) : {}),
       };
       this.onFinalTranscript?.(this.result.text);
       this.finalResolve?.(this.result);

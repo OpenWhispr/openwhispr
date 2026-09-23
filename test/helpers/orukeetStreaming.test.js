@@ -87,6 +87,60 @@ test("capacity retry commits retained audio without uploading it twice", async (
   assert.equal(commits, 2);
 });
 
+test("language hints are advisory and the final language is passed through", async (t) => {
+  const { adapter, options } = await fixture(t, (socket, event) => {
+    if (Buffer.isBuffer(event)) {
+      socket.send(JSON.stringify({ type: "language", language: "ar", language_confidence: 0.8 }));
+    } else if (event.type === "commit") {
+      socket.send(
+        JSON.stringify({
+          type: "final",
+          text: "Transcript",
+          language: "hi",
+          language_confidence: 0.97,
+          language_audio_seconds: 6,
+        })
+      );
+    }
+  });
+  const hints = [];
+  let finals = 0;
+  adapter.onLanguage = (value) => hints.push(value);
+  adapter.onFinalTranscript = () => finals++;
+  await adapter.connect(options);
+  adapter.sendAudio(Buffer.alloc(640));
+  const result = await adapter.finalize();
+  assert.deepEqual(hints, [{ language: "ar", languageConfidence: 0.8 }]);
+  assert.equal(result.language, "hi");
+  assert.equal(result.languageConfidence, 0.97);
+  assert.equal(result.languageAudioSeconds, 6);
+  assert.equal(finals, 1);
+});
+
+for (const metadata of [
+  { language: null, language_confidence: null },
+  { language: "english", language_confidence: 0.9 },
+  { language: "en", language_confidence: "0.9" },
+  { language: "en", language_confidence: 1.1 },
+  { language: "en", language_confidence: -0.1 },
+]) {
+  test(`invalid or unknown language does not fail transcription: ${JSON.stringify(metadata)}`, async (t) => {
+    const { adapter, options } = await fixture(t, (socket, event) => {
+      if (event.type === "commit") {
+        socket.send(JSON.stringify({ type: "language", ...metadata }));
+        socket.send(JSON.stringify({ type: "final", text: "Still works", ...metadata }));
+      }
+    });
+    adapter.onLanguage = () => assert.fail("Invalid hint must not reach consumers");
+    await adapter.connect(options);
+    adapter.sendAudio(Buffer.alloc(640));
+    const result = await adapter.finalize();
+    assert.equal(result.text, "Still works");
+    assert.equal(result.language, null);
+    assert.equal(result.languageConfidence, null);
+  });
+}
+
 test("cancellation closes without committing audio", async (t) => {
   const { adapter, seen, options } = await fixture(t);
   await adapter.connect(options);

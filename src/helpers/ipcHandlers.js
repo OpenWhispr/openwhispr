@@ -8342,6 +8342,9 @@ class IPCHandlers {
       streaming.onFinalTranscript = (text) => {
         if (canNotify()) event.sender.send("dictation-realtime-final", text);
       };
+      streaming.onLanguage = (metadata) => {
+        if (canNotify()) event.sender.send("dictation-realtime-language", metadata);
+      };
       streaming.onError = (err) => {
         if (!canNotify()) return;
         event.sender.send("dictation-realtime-error", err.message);

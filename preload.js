@@ -963,6 +963,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "dictation-realtime-final",
     (callback) => (_event, data) => callback(data)
   ),
+  onDictationRealtimeLanguage: registerListener(
+    "dictation-realtime-language",
+    (callback) => (_event, data) => callback(data)
+  ),
   onDictationRealtimeError: registerListener(
     "dictation-realtime-error",
     (callback) => (_event, data) => callback(data)
