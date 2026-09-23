@@ -9,8 +9,6 @@ export interface InferenceSelection {
   modelId?: string;
   endpoint?: string;
   credentialRef?: string;
-  cortiEnvironment?: "us" | "eu";
-  cortiTenant?: string;
 }
 export interface ProviderModel {
   id: string;
@@ -40,8 +38,6 @@ export type InferenceRoute =
       modelId: string;
       endpoint: string;
       credentialRef?: string;
-      cortiEnvironment?: "us" | "eu";
-      cortiTenant?: string;
     };
 export type RouteErrorCode =
   | "PRIVATE_CONTENT"
@@ -55,21 +51,12 @@ export type RouteErrorCode =
 export type RouteResolution =
   { ok: true; route: InferenceRoute } | { ok: false; code: RouteErrorCode };
 
-export const MEETING_PROVIDER_IDS: readonly string[] = [
-  "openai",
-  "assemblyai",
-  "deepgram",
-  "corti",
-  "tinfoil",
-];
-export const STREAMING_ONLY_PROVIDER_IDS: readonly string[] = ["deepgram", "assemblyai"];
+// Routes are resolved for the OpenAI-compatible batch and chat protocol. Catalog
+// providers that need their own adapters (streaming-only, batch models, regional
+// endpoints) stay out of the apps' allowlists until those adapters exist.
 const TEXT_ENDPOINTS: Record<string, string> = {
   openai: "https://api.openai.com/v1",
-  anthropic: "https://api.anthropic.com/v1",
-  gemini: "https://generativelanguage.googleapis.com/v1beta",
   groq: "https://api.groq.com/openai/v1",
-  tinfoil: "https://inference.tinfoil.sh/v1",
-  corti: "https://ai.eu.corti.app/v1",
 };
 
 export function isTranscriptionScope(scope: InferenceScope): boolean {
@@ -77,12 +64,16 @@ export function isTranscriptionScope(scope: InferenceScope): boolean {
 }
 
 export function getProvidersForScope(scope: InferenceScope): ProviderDefinition[] {
+  // Live meetings stream audio, which the batch protocol does not cover.
+  if (scope === "meeting") return [];
   if (!isTranscriptionScope(scope)) {
     return [
-      ...catalog.cloudProviders.map((provider): ProviderDefinition => ({
-        ...provider,
-        endpoint: TEXT_ENDPOINTS[provider.id],
-      })),
+      ...catalog.cloudProviders
+        .filter((provider): boolean => provider.id in TEXT_ENDPOINTS)
+        .map((provider): ProviderDefinition => ({
+          ...provider,
+          endpoint: TEXT_ENDPOINTS[provider.id],
+        })),
       {
         id: "openrouter",
         name: "OpenRouter",
@@ -92,36 +83,15 @@ export function getProvidersForScope(scope: InferenceScope): ProviderDefinition[
       { id: "custom", name: "Custom", endpoint: "", models: [] },
     ];
   }
-  const providers: ProviderDefinition[] = catalog.transcriptionProviders
-    .filter(
-      (provider): boolean => scope !== "meeting" || MEETING_PROVIDER_IDS.includes(provider.id)
-    )
-    .filter(
-      (provider): boolean =>
-        scope !== "upload" || !STREAMING_ONLY_PROVIDER_IDS.includes(provider.id)
-    )
-    .map((provider): ProviderDefinition => ({
-      ...provider,
+  return [
+    ...catalog.transcriptionProviders.map((provider): ProviderDefinition => ({
+      id: provider.id,
+      name: provider.name,
       endpoint: provider.baseUrl,
-      models:
-        scope === "meeting"
-          ? provider.models.filter(
-              (model): boolean => "streaming" in model && model.streaming === true
-            )
-          : scope === "upload" && provider.id === "gemini"
-            ? provider.models.filter(
-                (model): boolean => !("streaming" in model && model.streaming === true)
-              )
-            : scope === "upload" &&
-                provider.id === "tinfoil" &&
-                "batchModel" in provider &&
-                typeof provider.batchModel === "string"
-              ? [{ id: provider.batchModel, name: "Voxtral Batch" }]
-              : provider.models,
-    }));
-  if (scope !== "meeting")
-    providers.push({ id: "custom", name: "Custom", endpoint: "", models: [] });
-  return providers;
+      models: provider.models,
+    })),
+    { id: "custom", name: "Custom", endpoint: "", models: [] },
+  ];
 }
 
 export function resolveInferenceRoute(input: {
@@ -158,19 +128,8 @@ export function resolveInferenceRoute(input: {
     !provider.models.some((model): boolean => model.id === modelId)
   )
     return { ok: false, code: "MODEL_UNSUPPORTED" };
-  const cortiEnvironment = selection.cortiEnvironment ?? "us";
-  const cortiTenant = selection.cortiTenant?.trim() || "base";
-  if (
-    provider.id === "corti" &&
-    (!/^(us|eu)$/.test(cortiEnvironment) || !/^[a-zA-Z0-9_-]+$/.test(cortiTenant))
-  )
-    return { ok: false, code: "ENDPOINT_INVALID" };
-  const configuredEndpoint =
-    provider.id === "corti" && isTranscriptionScope(scope)
-      ? provider.endpoint.replace("api.us.corti.app", `api.${cortiEnvironment}.corti.app`)
-      : provider.endpoint;
   const endpoint = normalizeBaseUrl(
-    provider.id === "custom" ? selection.endpoint : configuredEndpoint
+    provider.id === "custom" ? selection.endpoint : provider.endpoint
   );
   if (!endpoint || !isSecureHttpEndpoint(endpoint)) return { ok: false, code: "ENDPOINT_INVALID" };
   const parsed = new URL(endpoint);
@@ -192,7 +151,6 @@ export function resolveInferenceRoute(input: {
       modelId,
       endpoint,
       ...(selection.credentialRef ? { credentialRef: selection.credentialRef } : {}),
-      ...(provider.id === "corti" ? { cortiEnvironment, cortiTenant } : {}),
     },
   };
 }

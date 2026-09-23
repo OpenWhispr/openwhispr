@@ -37,26 +37,13 @@ test("unsupported provider/model combinations never fall through to another prov
   );
   assert.equal(resolveInferenceRoute({ ...input, scope: "meeting" }).code, "PROVIDER_UNSUPPORTED");
 });
-test("uploads exclude streaming-only providers and meetings exclude Gemini Live", () => {
-  assert.equal(
-    getProvidersForScope("upload").some((p) => p.id === "deepgram" || p.id === "assemblyai"),
-    false
-  );
-  assert.equal(
-    getProvidersForScope("meeting").some((p) => p.id === "gemini"),
-    false
-  );
+test("live meetings have no personal-provider route", () => {
+  assert.deepEqual(getProvidersForScope("meeting"), []);
+});
+test("text providers are limited to those with a known chat endpoint", () => {
   assert.deepEqual(
-    getProvidersForScope("upload")
-      .find((p) => p.id === "gemini")
-      .models.map((m) => m.id),
-    ["gemini-3.5-transcribe"]
-  );
-  assert.deepEqual(
-    getProvidersForScope("upload")
-      .find((p) => p.id === "tinfoil")
-      .models.map((m) => m.id),
-    ["voxtral-small-24b"]
+    getProvidersForScope("cleanup").map((p) => p.id),
+    ["openai", "groq", "openrouter", "custom"]
   );
 });
 test("text routes accept an explicitly discovered model id without changing provider", () => {
@@ -128,21 +115,4 @@ test("missing credentials and model choices fail without changing selection", ()
     resolveInferenceRoute({ ...input, selection: { ...selection, modelId: "" } }).code,
     "MODEL_REQUIRED"
   );
-});
-test("Corti routes preserve the selected region and tenant", () => {
-  const result = resolveInferenceRoute({
-    scope: "meeting",
-    selection: {
-      mode: "providers",
-      providerId: "corti",
-      modelId: "corti-transcribe",
-      credentialRef: "provider.corti",
-      cortiEnvironment: "eu",
-      cortiTenant: "clinic_1",
-    },
-    policy: { status: "unmanaged" },
-  });
-  assert.equal(result.route.endpoint, "https://api.eu.corti.app/v2");
-  assert.equal(result.route.cortiEnvironment, "eu");
-  assert.equal(result.route.cortiTenant, "clinic_1");
 });

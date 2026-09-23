@@ -21,11 +21,8 @@ export function getMobileProvidersForScope(scope: MobileInferenceScope): Provide
 export function resolveMobileInferenceRoute(
   input: Parameters<typeof resolveInferenceRoute>[0],
 ): RouteResolution {
-  const { scope, selection } = input;
-  if (
-    selection.mode === 'providers' &&
-    (scope === 'meeting' || !MOBILE_PROVIDER_IDS.includes(selection.providerId ?? ''))
-  ) {
+  const { selection } = input;
+  if (selection.mode === 'providers' && !MOBILE_PROVIDER_IDS.includes(selection.providerId ?? '')) {
     return { ok: false, code: 'PROVIDER_UNSUPPORTED' };
   }
   return resolveInferenceRoute(input);
