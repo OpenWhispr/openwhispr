@@ -121,16 +121,16 @@ function createConnectorManager({
     const refusal = policyRefusal(policyState);
     if (refusal) {
       pendingActions.cancel(actionId);
-      record(() => actionLog.update(actionId, { state: "cancelled", errorCode: refusal }));
+      record(() => actionLog.update(actionId, { state: "cancelled", errorCode: refusal }, "pending"));
       return { state: "not_sent", reason: refusal };
     }
 
     const connector = byId.get(entry.connectorId);
     const begun = pendingActions.beginCommit(actionId, await connector.getBinding());
     if (!begun.ok) {
-      if (begun.reason !== "not_pending") {
+      if (begun.reason === "expired" || begun.reason === "connection_changed") {
         const state = begun.reason === "expired" ? "expired" : "cancelled";
-        record(() => actionLog.update(actionId, { state, errorCode: begun.reason }));
+        record(() => actionLog.update(actionId, { state, errorCode: begun.reason }, "pending"));
       }
       return { state: "not_sent", reason: begun.reason };
     }
@@ -141,7 +141,7 @@ function createConnectorManager({
     );
     if (!recorded) {
       pendingActions.finish(actionId, "failed");
-      record(() => actionLog.update(actionId, { state: "cancelled", errorCode: "receipt_unavailable" }));
+      record(() => actionLog.update(actionId, { state: "cancelled", errorCode: "receipt_unavailable" }, "pending"));
       return { state: "not_sent", reason: "receipt_unavailable" };
     }
 

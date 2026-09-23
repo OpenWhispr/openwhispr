@@ -314,3 +314,69 @@ test("a direct action whose record can't be written never runs", async () => {
   });
   assert.equal(fake.calls.runDirect.length, 0);
 });
+
+test("a gated getBinding during second commit never overwrites a sent receipt", async () => {
+  const gate = deferred();
+  const bindingCalls = [];
+  const { manager, fake, log } = await setup({
+    async getBinding() {
+      bindingCalls.push(1);
+      if (bindingCalls.length >= 3) {
+        // Second commit's getBinding is call 3; gate it.
+        await gate.promise;
+      }
+      return { accountId: "U1", workspaceId: "T1", generation: 1 };
+    },
+  });
+
+  // First prepare and commit should succeed.
+  const { actionId } = await manager.prepare("fake", "post", { text: "hello" }, "allowed");
+  const firstCommit = manager.commit(actionId, {}, "allowed");
+
+  // Let the first commit complete and record "sent".
+  const firstResult = await firstCommit;
+  assert.equal(firstResult.state, "sent");
+  const rowAfterFirstCommit = log.rows.get(actionId);
+  assert.equal(rowAfterFirstCommit.state, "sent");
+  assert.equal(rowAfterFirstCommit.resultUrl, "https://example.test/p/1");
+
+  // Second commit's getBinding will be gated.
+  const secondCommit = manager.commit(actionId, {}, "allowed");
+
+  // Release the gate and let the second commit complete.
+  gate.resolve();
+  const secondResult = await secondCommit;
+
+  // Second commit should return not_found without attempting send.
+  assert.deepEqual(secondResult, { state: "not_sent", reason: "not_found" });
+  // Connector.commit should have run only once (from the first commit).
+  assert.equal(fake.calls.commit.length, 1);
+  // Row should still be "sent" with its URL, never overwritten to "cancelled".
+  const rowAfterSecondCommit = log.rows.get(actionId);
+  assert.equal(rowAfterSecondCommit.state, "sent");
+  assert.equal(rowAfterSecondCommit.resultUrl, "https://example.test/p/1");
+});
+
+test("commit never overwrites a receipt with not_found via policy refusal guard", async () => {
+  // Verify that policy refusal can't overwrite a non-pending row.
+  // This would only happen if a row was manually set to sent then commit tried with policy block.
+  // In practice this is prevented by the fromState="pending" guard.
+  const { manager, fake, log } = await setup();
+
+  const { actionId } = await manager.prepare("fake", "post", { text: "x" }, "allowed");
+  assert.equal(log.rows.get(actionId).state, "pending");
+
+  // Manually change the row state to "sent" (simulating a first commit that succeeded)
+  log.rows.set(actionId, { ...log.rows.get(actionId), state: "sent" });
+
+  // Now try commit with policy unavailable - should not overwrite the sent state
+  const result = await manager.commit(actionId, {}, "unavailable");
+
+  // Should return not_sent with policy_unavailable reason
+  assert.equal(result.state, "not_sent");
+  assert.equal(result.reason, "policy_unavailable");
+
+  // Row should still be "sent" because the update was guarded by fromState="pending"
+  const row = log.rows.get(actionId);
+  assert.equal(row.state, "sent");
+});
