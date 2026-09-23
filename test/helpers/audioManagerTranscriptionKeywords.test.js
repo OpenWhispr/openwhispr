@@ -83,6 +83,47 @@ test("the custom dictionary rides gpt-transcribe's keywords[] channel, legacy mo
     assert.deepEqual(requests, [{ prompt: DICTIONARY, keywords: [], stream: "true" }]);
   });
 
+  // #2224: OpenAI rejects a form of more than ~1,000 parts with "Could not parse
+  // multipart form", so a 1,481-term dictionary failed every dictation. zh-CN adds
+  // the language and script-bias prompt parts, the most this request carries.
+  for (const language of ["auto", "zh-CN"]) {
+    await t.test(
+      `a 1,481-term dictionary sends only the first 900 keywords (${language})`,
+      async (st) => {
+        const terms = Array.from({ length: 1481 }, (_, i) => `Term${i}`);
+        const originalFetch = globalThis.fetch;
+        st.after(() => {
+          globalThis.fetch = originalFetch;
+        });
+        let sent;
+        globalThis.fetch = async (endpoint, init) => {
+          const request = new Request(endpoint, init);
+          const boundary = request.headers.get("content-type").split("boundary=")[1];
+          const body = await request.text();
+          sent = {
+            parts: body.split(`--${boundary}\r\n`).length - 1,
+            keywords: init.body.getAll("keywords[]"),
+          };
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => "application/json" },
+            text: async () => JSON.stringify({ text: "transcribed text" }),
+          };
+        };
+
+        const result = await manager("gpt-transcribe", {
+          getEffectiveSttLanguage: () => language,
+          getCustomDictionaryPrompt: () => terms.join(", "),
+        }).processWithOpenAIAPI(audioBlob, {});
+
+        assert.equal(result.success, true);
+        assert.ok(sent.parts < 1000, `${sent.parts} multipart parts exceeds OpenAI's form limit`);
+        assert.deepEqual(sent.keywords, terms.slice(0, 900));
+      }
+    );
+  }
+
   await t.test("whisper-1 keeps the prompt and never streams", async () => {
     const requests = captureRequests(t);
     await manager("whisper-1").processWithOpenAIAPI(audioBlob, {});
