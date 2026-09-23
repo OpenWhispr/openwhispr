@@ -21,7 +21,7 @@ import {
   getVoiceReplyInstructions,
 } from "../../config/prompts";
 import { getDictionaryHintWords } from "../../utils/snippets";
-import { buildVoiceHistory, type VoiceHistoryMessage } from "../../services/voice/voiceHistory";
+import { buildVoiceHistory } from "../../services/voice/voiceHistory";
 import { compactToolResultForVoice } from "../../services/voice/voiceTools";
 import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
@@ -176,10 +176,10 @@ export function useChatStreaming({
   onContentDeltaRef.current = onContentDelta;
   const voiceRepliesRef = useRef(voiceReplies);
   voiceRepliesRef.current = voiceReplies;
-  // Voice turns: each user message exactly as sent, and each tool-using answer's
-  // steps, so later turns replay them verbatim and the prompt cache holds.
+  // Voice turns: each user message exactly as sent, so later turns replay it verbatim.
+  // Tool steps are deliberately not replayed: Qwen3.5's template renders an assistant
+  // turn differently once a newer question follows, so they can never match the cache.
   const voiceSentContentRef = useRef(new Map<string, string>());
-  const voiceStepsRef = useRef(new Map<string, VoiceHistoryMessage[]>());
   const onToolCallRef = useRef(onToolCall);
   onToolCallRef.current = onToolCall;
   const [agentState, setAgentState] = useState<AgentState>("idle");
@@ -389,8 +389,7 @@ export function useChatStreaming({
             allMessages,
             voiceSentContentRef.current,
             promptParts.turnContext,
-            buildVoiceTurnMessage,
-            voiceStepsRef.current
+            buildVoiceTurnMessage
           )
         : allMessages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
 
@@ -524,7 +523,6 @@ export function useChatStreaming({
               customApiKey:
                 isCustomAgent || isLanAgent ? llmConfig.customApiKey || undefined : undefined,
               disableThinking: llmConfig.disableThinking,
-              captureToolSteps: voiceTurn,
             },
             aiTools
           );
@@ -595,8 +593,6 @@ export function useChatStreaming({
             );
             setAgentState("streaming");
             completeToolActivity();
-          } else if (chunk.type === "tool_steps" && voiceTurn) {
-            voiceStepsRef.current.set(assistantId, chunk.messages as VoiceHistoryMessage[]);
           }
         }
 

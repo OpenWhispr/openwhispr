@@ -23,8 +23,6 @@ export interface ReasoningConfig {
   requireCompleteOutput?: boolean;
   requiresAgent?: boolean;
   inferenceScope?: InferenceScope;
-  /** Voice spike: emit the turn's tool steps as a final `tool_steps` chunk for replay. */
-  captureToolSteps?: boolean;
 }
 
 export abstract class BaseReasoningService {

@@ -57,27 +57,6 @@ test("an already-sent newest turn (a retry) keeps its original context", async (
   assert.deepEqual(history, [{ role: "user", content: "[ctx-old] hi" }]);
 });
 
-test("an assistant turn that used tools replays its tool steps exactly", async () => {
-  const { buildVoiceHistory } = await load();
-  const steps = [
-    { role: "assistant", content: [{ type: "tool-call", toolCallId: "c1", toolName: "web_search", input: { query: "news" } }] },
-    { role: "tool", content: [{ type: "tool-result", toolCallId: "c1", toolName: "web_search", output: { type: "json", value: [] } }] },
-    { role: "assistant", content: [{ type: "text", text: "Here is the news." }] },
-  ];
-  const history = buildVoiceHistory(
-    [
-      { id: "u1", role: "user", content: "news?" },
-      { id: "a1", role: "assistant", content: "Here is the news." },
-      { id: "u2", role: "user", content: "thanks" },
-    ],
-    new Map([["u1", "news?"]]),
-    "",
-    wrap,
-    new Map([["a1", steps]])
-  );
-  assert.deepEqual(history, [{ role: "user", content: "news?" }, ...steps, { role: "user", content: "thanks" }]);
-});
-
 test("only the last 20 messages are sent, like typed chat", async () => {
   const { buildVoiceHistory } = await load();
   const messages = Array.from({ length: 25 }, (_, index) => ({

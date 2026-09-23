@@ -8,22 +8,21 @@ interface StoredMessage {
 
 export interface VoiceHistoryMessage {
   role: string;
-  content: string | Array<Record<string, unknown>>;
+  content: string;
 }
 
 /**
- * Builds a voice turn's history so every earlier message replays byte-for-byte
- * what the model saw before — the per-turn context (clock, notes) a user message
- * was sent with, and the tool calls and results an assistant turn went through.
- * A local model's prompt cache then only has to read the newest turn.
+ * Builds a voice turn's history so every earlier user message replays
+ * byte-for-byte what the model saw before, including the per-turn context
+ * (clock, notes) it was sent with. A local model's prompt cache then only has
+ * to read from the previous answer onward instead of from the previous question.
  * `sentContent` is updated with the newest user message as sent.
  */
 export function buildVoiceHistory(
   messages: StoredMessage[],
   sentContent: Map<string, string>,
   turnContext: string,
-  wrapWithContext: (text: string, context: string) => string,
-  assistantSteps: Map<string, VoiceHistoryMessage[]> = new Map()
+  wrapWithContext: (text: string, context: string) => string
 ): VoiceHistoryMessage[] {
   const recent = messages.slice(-HISTORY_LIMIT);
   let newestUserIndex = -1;
@@ -40,9 +39,8 @@ export function buildVoiceHistory(
       turnContext ? wrapWithContext(newestUser.content, turnContext) : newestUser.content
     );
   }
-  return recent.flatMap((message) => {
-    const steps = message.role === "assistant" ? assistantSteps.get(message.id) : undefined;
-    if (steps) return steps;
-    return [{ role: message.role, content: sentContent.get(message.id) ?? message.content }];
-  });
+  return recent.map((message) => ({
+    role: message.role,
+    content: sentContent.get(message.id) ?? message.content,
+  }));
 }
