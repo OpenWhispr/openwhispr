@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Meetings
+
+- **Choose which playback devices Note Recording hears on Windows.** Note Recording records the other people in a call from every speaker and headset, including the virtual devices that voice changers and audio routing apps such as Voicemod or VB-Cable create. Those devices can carry your own voice, which then turned up in the transcript a second time, often garbled, in another language, or credited to someone else. Settings → Preferences now has a **System Audio** section: leave **Playback Device** on **All Playback Devices** (the default, unchanged), or pick **Default Playback Device Only** to record just the device Windows plays sound through. That option misses a meeting app playing on a different speaker or headset, so it stays opt-in. (#1546, thanks @CptVinyl for the report and the isolation steps)
+
 ### Fixed
 
 - **Assistant selection capture handles dormant macOS accessibility trees.** When accessibility exposes only a browser or Electron window, selection capture now tries a synthetic copy instead of assuming nothing is selected. The caret probe also waits long enough for its native retries to finish. Automatic answer delivery still requires a verified writable field at capture and delivery time: an unknown target keeps the answer in the panel and, with Auto-Paste enabled, copies it for manual paste. Dormant inputs still require manual paste because an empty copy cannot distinguish them from an integrated terminal, a page without an input, or some live selections. (#1952)
