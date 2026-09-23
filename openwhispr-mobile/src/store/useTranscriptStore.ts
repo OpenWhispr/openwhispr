@@ -19,6 +19,7 @@ import {
   transcriptAudioExists,
 } from '@/lib/transcriptAudio';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { snapshotTextInference } from '@/lib/inferenceRouting';
 import { logTranscriptionCompleted } from '@/lib/appsflyer';
 import type { KeyboardTone, Transcript, TranscriptionProvider } from '../types';
 import { StorageService } from '../services/storage/StorageService';
@@ -292,14 +293,23 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     if (current.provider === 'byok' && !current.inferenceRoute) {
       throw new Error('The original provider route is unavailable. Start a new transcription.');
     }
-    const provider = current.provider;
-    if (provider !== 'local' && useProcessingModeStore.getState().activeMode === 'private') {
+    const { activeMode } = useProcessingModeStore.getState();
+    // Provider recordings keep their original route. Cloud and On-Device
+    // recordings follow the current Cloud/On-Device choice, as retry always has.
+    const provider =
+      current.provider === 'byok' || activeMode === 'providers'
+        ? current.provider
+        : activeMode === 'private'
+          ? 'local'
+          : 'cloud';
+    const textRoutes = provider === current.provider ? current : snapshotTextInference(provider);
+    if (provider !== 'local' && activeMode === 'private') {
       throw new Error(
         'This recording used a remote provider. Leave private mode to retry its original route.',
       );
     }
     const retryCount = (current.retryCount ?? 0) + 1;
-    const startedAt = Date.now();
+    const retryJobId = `${current.jobId ?? id}-retry-${Date.now()}`;
     const tempUris: string[] = [];
     let audioUri = current.audioUrl;
     let fileName = current.audioFileName;
@@ -320,29 +330,29 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         provider,
         inferenceRoute: current.inferenceRoute,
         cleanupRoute:
-          current.cleanupRoute ??
+          textRoutes.cleanupRoute ??
           (provider !== 'byok'
             ? { mode: provider === 'local' ? 'local' : 'openwhispr', scope: 'cleanup' }
             : undefined),
         agentRoute:
-          current.agentRoute ??
+          textRoutes.agentRoute ??
           (provider !== 'byok'
             ? { mode: provider === 'local' ? 'local' : 'openwhispr', scope: 'agent' }
             : undefined),
         cleanupUnavailable:
-          current.cleanupUnavailable ??
-          (provider === 'byok' && !current.cleanupRoute
+          textRoutes.cleanupUnavailable ??
+          (provider === 'byok' && !textRoutes.cleanupRoute
             ? 'The original cleanup route is unavailable. Your raw transcript is saved.'
             : undefined),
         agentUnavailable:
-          current.agentUnavailable ??
-          (provider === 'byok' && !current.agentRoute
+          textRoutes.agentUnavailable ??
+          (provider === 'byok' && !textRoutes.agentRoute
             ? 'The original agent route is unavailable. Your raw transcript is saved.'
             : undefined),
         language: getPreferredTranscriptionLanguage(),
         fileName,
         mimeType,
-        jobId: `${current.jobId ?? id}-retry-${startedAt}`,
+        jobId: retryJobId,
         requestContext: current.requestContext ?? 'recording',
         keyboardTone: current.requestContext === 'keyboard' ? current.keyboardTone : undefined,
       });
@@ -387,6 +397,10 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       const updated: Transcript = {
         ...current,
         provider,
+        cleanupRoute: textRoutes.cleanupRoute,
+        agentRoute: textRoutes.agentRoute,
+        cleanupUnavailable: textRoutes.cleanupUnavailable,
+        agentUnavailable: textRoutes.agentUnavailable,
         status: 'failed',
         errorMessage: toFriendlyTranscriptionErrorMessage(error),
         retryCount,
@@ -397,6 +411,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       set({ transcripts, isLoading: false });
       throw error;
     } finally {
+      // The row keeps its own audio and result, so the retry's recovery entry is
+      // never needed once the retry settles.
+      clearKeyboardProviderRecovery(retryJobId);
       await AudioTools.cleanup(tempUris).catch((cleanupError) => {
         if (__DEV__) {
           console.warn('[transcripts] failed to clean up retry temp audio:', cleanupError);

@@ -67,10 +67,15 @@ export function dictationModeConfig(
   config: UserConfig | null,
   mode: 'cloud' | 'private',
 ): Pick<UserConfig, 'defaultMode' | 'inference'> {
+  const { upload, ...inference } = config?.inference ?? {};
+  // Leaving Providers dictation releases the pin that held uploads on the
+  // previous mode, so they follow the Cloud/On-Device choice again.
+  const keepUpload = upload && (config?.defaultMode !== 'providers' || upload.mode === 'providers');
   return {
     defaultMode: mode,
     inference: {
-      ...config?.inference,
+      ...inference,
+      ...(keepUpload ? { upload } : {}),
       dictation: { mode: mode === 'private' ? 'local' : 'openwhispr' },
     },
   };

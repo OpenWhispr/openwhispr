@@ -71,12 +71,10 @@ export function PrivacyModeStep() {
   }, [cloudNeedsAccount, ensureAnonymousSession, isGuest]);
 
   const handleContinue = useCallback(async () => {
-    await updateConfig(
-      dictationModeConfig(
-        useConfigStore.getState().config ?? null,
-        selected === 'private' ? 'private' : 'cloud',
-      ),
-    );
+    // Replaying onboarding keeps a Providers setup unless a card is picked here.
+    if (selected !== 'providers') {
+      await updateConfig(dictationModeConfig(useConfigStore.getState().config ?? null, selected));
+    }
     // Everyone picks languages next (cloud transcription uses them too); the language
     // step then routes cloud users past the model download.
     await goNext();

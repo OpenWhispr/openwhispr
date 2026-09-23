@@ -11,9 +11,10 @@ jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text })
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/OpenWhisprMark', () => ({ OpenWhisprMark: () => null }));
 
+const mockGoNext = jest.fn().mockResolvedValue(undefined);
 jest.mock('@/store/useOnboardingStore', () => ({
   useOnboardingStore: (selector: (s: { goNext: () => Promise<void> }) => unknown) =>
-    selector({ goNext: jest.fn() }),
+    selector({ goNext: mockGoNext }),
   getStepProgress: () => ({ current: 1, total: 1 }),
 }));
 const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
@@ -107,5 +108,16 @@ describe('PrivacyModeStep continue', () => {
         inference: { dictation: { mode: 'local' } },
       }),
     );
+  });
+
+  it('keeps a Providers setup when neither mode card is picked', async () => {
+    const dictation = { mode: 'providers', providerId: 'groq', modelId: 'whisper-large-v3' };
+    mockConfig = { defaultMode: 'providers', inference: { dictation } };
+    const { getByText } = render(<PrivacyModeStep />);
+
+    fireEvent.press(getByText('Continue'));
+
+    await waitFor(() => expect(mockGoNext).toHaveBeenCalled());
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 });

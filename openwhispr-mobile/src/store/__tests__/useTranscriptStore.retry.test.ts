@@ -469,9 +469,78 @@ it('retains text-stage routes on failed rows and passes them unchanged to retry'
   );
 });
 
-it('does not reroute an existing Cloud recording after switching to private mode', async () => {
+it('retries a Cloud recording on-device after switching to private mode', async () => {
   mockProcessingModeState.activeMode = 'private';
+  useTranscriptStore.setState({
+    transcripts: [failedTranscript({ cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' } })],
+  });
+  await useTranscriptStore.getState().retryTranscript('t1');
+  expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+    expect.objectContaining({
+      provider: 'local',
+      cleanupRoute: { mode: 'local', scope: 'cleanup' },
+    }),
+  );
+});
+
+it('retries an On-Device recording on Cloud after switching to Cloud', async () => {
+  useTranscriptStore.setState({
+    transcripts: [
+      failedTranscript({ provider: 'local', cleanupRoute: { mode: 'local', scope: 'cleanup' } }),
+    ],
+  });
+  await useTranscriptStore.getState().retryTranscript('t1');
+  expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+    expect.objectContaining({
+      provider: 'cloud',
+      cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+    }),
+  );
+});
+
+it('saves the rerouted text routes when a rerouted retry fails', async () => {
+  useTranscriptStore.setState({
+    transcripts: [
+      failedTranscript({ provider: 'local', cleanupRoute: { mode: 'local', scope: 'cleanup' } }),
+    ],
+  });
+  mockTranscribeAndCleanup.mockRejectedValueOnce(new Error('network down'));
+  await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toThrow();
+  expect(useTranscriptStore.getState().transcripts[0]).toMatchObject({
+    provider: 'cloud',
+    cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+  });
+});
+
+it('clears the recovery entry a retry creates, whether it succeeds or fails', async () => {
   useTranscriptStore.setState({ transcripts: [failedTranscript()] });
+  await useTranscriptStore.getState().retryTranscript('t1');
+  mockTranscribeAndCleanup.mockRejectedValueOnce(new Error('network down'));
+  useTranscriptStore.setState({ transcripts: [failedTranscript()] });
+  await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toThrow();
+  const retryJobIds = mockTranscribeAndCleanup.mock.calls.map(([request]) => request.jobId);
+  expect(retryJobIds).toHaveLength(2);
+  for (const jobId of retryJobIds) {
+    expect(mockClearKeyboardProviderRecovery).toHaveBeenCalledWith(jobId);
+  }
+});
+
+it('does not send a provider recording anywhere while private mode is on', async () => {
+  mockProcessingModeState.activeMode = 'private';
+  useTranscriptStore.setState({
+    transcripts: [
+      failedTranscript({
+        provider: 'byok',
+        inferenceRoute: {
+          mode: 'providers',
+          scope: 'dictation',
+          providerId: 'groq',
+          modelId: 'whisper-large-v3-turbo',
+          endpoint: 'https://api.groq.com/openai/v1',
+        },
+      }),
+    ],
+  });
   await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toThrow(
     'original route',
   );
