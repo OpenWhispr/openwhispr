@@ -14,7 +14,7 @@ async function loadSection(t) {
   });
   await vite.ssrLoadModule("/i18n.ts");
   const { SystemAudioSourceSettings } = await vite.ssrLoadModule(
-    "/components/ui/SystemAudioSourceSettings.tsx"
+    "/components/settings/SystemAudioSourceSettings.tsx"
   );
   return (props) =>
     renderToStaticMarkup(

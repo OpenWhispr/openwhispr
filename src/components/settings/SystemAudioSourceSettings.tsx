@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { SectionHeader, SettingsPanel, SettingsPanelRow } from "./SettingsSection";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
+import { SectionHeader, SettingsPanel, SettingsPanelRow } from "../ui/SettingsSection";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import {
   SYSTEM_AUDIO_SOURCE_ALL_DEVICES,
   SYSTEM_AUDIO_SOURCE_DEFAULT_DEVICE,
