@@ -936,6 +936,12 @@ class WhisperServerManager extends EventEmitter {
 
     const generation = this.startGeneration;
     const modelPath = this.modelPath;
+    // Where this request's output starts in the server's stderr: a crash is
+    // explained by what the failing request printed, not by earlier requests
+    const stderrMark = {
+      processInfo: this._lastProcessInfo,
+      offset: this._lastProcessInfo?.().stderr.length ?? 0,
+    };
 
     try {
       return await this._postInference(body, boundary, signal);
@@ -943,7 +949,14 @@ class WhisperServerManager extends EventEmitter {
       // A cancel is not a server failure: rethrow before the retry/CPU-fallback
       // logic so it never triggers a server restart.
       if (err?.name === "AbortError") throw err;
-      return await this._retryAfterRequestFailure(err, body, boundary, generation, modelPath);
+      return await this._retryAfterRequestFailure(
+        err,
+        body,
+        boundary,
+        generation,
+        modelPath,
+        stderrMark
+      );
     }
   }
 
@@ -1027,7 +1040,7 @@ class WhisperServerManager extends EventEmitter {
     });
   }
 
-  async _retryAfterRequestFailure(err, body, boundary, generation, modelPath) {
+  async _retryAfterRequestFailure(err, body, boundary, generation, modelPath, stderrMark) {
     if (!err?.isConnectionError || this.isRemote || this._stopRequested) throw err;
 
     if (this.startGeneration === generation) {
@@ -1047,7 +1060,7 @@ class WhisperServerManager extends EventEmitter {
           processExited,
         })
       ) {
-        return await this._fallbackToCpuAndRetry(body, boundary, modelPath);
+        return await this._fallbackToCpuAndRetry(body, boundary, modelPath, stderrMark);
       }
       if (this.startGeneration === generation) throw err;
     }
@@ -1081,14 +1094,21 @@ class WhisperServerManager extends EventEmitter {
       }
       const exited = await this._waitForProcessExit(PROCESS_EXIT_WAIT_MS);
       if (!exited || this._stopRequested) throw retryErr;
-      return await this._fallbackToCpuAndRetry(body, boundary, modelPath);
+      return await this._fallbackToCpuAndRetry(body, boundary, modelPath, stderrMark);
     }
   }
 
-  async _fallbackToCpuAndRetry(body, boundary, modelPath) {
+  async _fallbackToCpuAndRetry(body, boundary, modelPath, stderrMark) {
     const backend = this.useCuda ? "cuda" : "vulkan";
-    // Read the crashed server's output now: the CPU start below replaces it
-    const reason = extractWhisperGpuFailureReason(this._lastProcessInfo?.() ?? {});
+    // Read the crashed server's output now (the CPU start below replaces it),
+    // from where the failing request began. A peer's replacement server is a
+    // different process, so its output is read whole.
+    const processInfo = this._lastProcessInfo?.() ?? {};
+    const offset = stderrMark?.processInfo === this._lastProcessInfo ? stderrMark.offset : 0;
+    const reason = extractWhisperGpuFailureReason({
+      ...processInfo,
+      stderr: processInfo.stderr?.slice(offset),
+    });
     debugLogger.warn(`${backend} whisper-server died during transcription, falling back to CPU`, {
       port: this.port,
       model: modelPath ? path.basename(modelPath) : null,

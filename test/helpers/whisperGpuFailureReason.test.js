@@ -42,6 +42,40 @@ test("reads an uncaught Vulkan exception from its what() line", () => {
   assert.equal(extractReason({ stderr, signal: "SIGABRT" }), "vk::Queue::submit: ErrorDeviceLost");
 });
 
+test("a warning the backend recovered from never outranks the error that killed it", () => {
+  // ggml-vulkan logs the first two and carries on with a CPU-side buffer; the
+  // fence wait in ggml_vk_wait_for_fence then prints the fatal line and exits
+  const stderr = [
+    "ggml_vulkan: Failed to allocate pinned memory (vk::Device::allocateMemory: ErrorOutOfHostMemory)",
+    "WARNING: failed to allocate 512.00 MB of pinned memory",
+    "whisper_print_timings:    total time =   812.44 ms",
+    "ggml_vulkan: error ErrorDeviceLost at D:\\a\\whisper.cpp\\ggml\\src\\ggml-vulkan\\ggml-vulkan.cpp:2209",
+  ].join("\r\n");
+  assert.equal(
+    extractReason({ stderr, exitCode: 1 }),
+    "ggml_vulkan: error ErrorDeviceLost at D:\\a\\whisper.cpp\\ggml\\src\\ggml-vulkan\\ggml-vulkan.cpp:2209"
+  );
+});
+
+test("a VK_CHECK exit names the Vulkan call that failed", () => {
+  const stderr =
+    "ggml_vulkan: ctx->device->device.waitForFences({ ctx->almost_ready_fence }, true, UINT64_MAX) error ErrorDeviceLost at ggml-vulkan.cpp:2200\n";
+  assert.equal(
+    extractReason({ stderr, exitCode: 1 }),
+    "ggml_vulkan: ctx->device->device.waitForFences({ ctx->almost_ready_fence }, true, UINT64_MAX) error ErrorDeviceLost at ggml-vulkan.cpp:2200"
+  );
+});
+
+test("recovered warnings alone are not a cause: the exit is reported instead", () => {
+  const stderr = [
+    "ggml_vulkan: Failed to allocate pinned memory (vk::Device::allocateMemory: ErrorOutOfHostMemory)",
+    "ggml_vulkan: Failed getMemoryHostPointerPropertiesEXT (vk::Device::getMemoryHostPointerPropertiesEXT: ErrorInvalidExternalHandle)",
+    "ggml_vulkan: Failed ggml_vk_create_buffer (vk::Device::allocateMemory: ErrorOutOfDeviceMemory)",
+    "ggml_cuda_host_malloc: failed to allocate 512.00 MiB of pinned memory: out of memory",
+  ].join("\n");
+  assert.equal(extractReason({ stderr, exitCode: 3221225477 }), "exit code 3221225477");
+});
+
 test("an unrecognised error line beats the generic load-failure lines after it", () => {
   const stderr = [
     "ggml_vulkan: Found 1 Vulkan devices:",

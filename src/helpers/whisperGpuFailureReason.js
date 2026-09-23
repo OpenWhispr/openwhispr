@@ -24,6 +24,9 @@ const CAUSE_PATTERNS = [
   // C++ exception around model load, e.g. ggml-vulkan's createDevice throwing
   // vk::DeviceLostError: "...: exception during model load: <what()>"
   /exception during model load: (.+)/,
+  // ggml-vulkan's VK_CHECK and fence wait print this and exit(1), e.g.
+  // "ggml_vulkan: error ErrorDeviceLost at .../ggml-vulkan.cpp:2209"
+  /(ggml_vulkan: .*\berror Error\w+.*)/,
   // vulkan-hpp's exception text wherever else it surfaces, e.g. the "what():"
   // line of an exception nothing caught. \berror\b cannot see "ErrorDeviceLost".
   /(vk::\S+: Error\w+)/,
@@ -35,6 +38,11 @@ const ERROR_LINE = /\b(?:error|failed|failure|exception|abort(?:ed)?)\b/i;
 // What whisper.cpp and whisper-server print after any failed load. They say
 // that loading failed, never why, so they are the answer of last resort.
 const LOAD_FAILURE_ECHO = /failed to load model|failed to initialize whisper context/;
+// Warnings the backends log and then carry on from (a CPU-side buffer instead
+// of pinned memory, a copy instead of an imported host pointer). They carry
+// vk::…: Error… text, so they would otherwise outrank the line that killed it.
+const RECOVERED_WARNING =
+  /pinned memory|^WARNING:|Failed getMemoryHostPointerPropertiesEXT|Failed ggml_vk_create_buffer/;
 
 function findCauseLine(lines) {
   for (const pattern of CAUSE_PATTERNS) {
@@ -94,7 +102,7 @@ function extractWhisperGpuFailureReason({
     .slice(-STDERR_TAIL_CHARS)
     .split(/\r\n|\r|\n/)
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter((line) => line && !RECOVERED_WARNING.test(line));
   const cause = findCauseLine(lines);
   const reason = cause ? sanitizeReason(cause, homeDir) : null;
   if (reason) return reason;
