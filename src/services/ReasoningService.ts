@@ -835,11 +835,14 @@ class ReasoningService extends BaseReasoningService {
     // OpenRouter ids are never in the local registry, so the supportsThinking
     // exemption below can't apply — honor the toggle directly.
     const openrouterDisableThinking = provider === "openrouter" && config.disableThinking === true;
+    // Matches the <think> filter above and the cleanup path: on unless explicitly allowed.
+    // LAN servers are not assumed to be llama.cpp, so only the bundled server gets it.
+    const localDisableThinking = isLocalProvider && config.disableThinking !== false;
     // Resolving a Tinfoil model refreshes the registry, so read model config after it.
     const aiModel = isEnterprise
       ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
       : await getAIModel(aiProvider, model, apiKey, baseURL, {
-          disableThinking: openrouterDisableThinking,
+          disableThinking: openrouterDisableThinking || localDisableThinking,
         });
 
     if (abortController.signal.aborted) {
