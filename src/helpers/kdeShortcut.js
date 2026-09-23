@@ -216,7 +216,9 @@ class KDEShortcutManager {
         const slotName = this.callbacks.has(shortcutUnique)
           ? shortcutUnique
           : this._findSlotByFriendlyName(shortcutUnique);
-        if (slotName !== "dictation") return;
+        // Every push-capable slot's callback takes a phase; the meeting
+        // callback takes none and would start a second meeting on release.
+        if (!slotName || slotName === "meeting") return;
         this.callbacks.get(slotName)?.(undefined, "up");
       });
 
@@ -244,7 +246,13 @@ class KDEShortcutManager {
     return friendlyToSlot[name] || null;
   }
 
-  async registerKeybinding(electronHotkey, slotName = "dictation", callback, isPushToTalk = false) {
+  async registerKeybinding(
+    electronHotkey,
+    slotName = "dictation",
+    callback,
+    isPushToTalk = false,
+    { onMutation } = {}
+  ) {
     if (!this.kglobalaccel) return false;
 
     const qtKey = KDEShortcutManager.convertToQtKeyCode(electronHotkey);
@@ -259,8 +267,7 @@ class KDEShortcutManager {
     const QT_MODIFIER_MASK = 0xfe000000;
     const isModifierOnly = (qtKey & ~QT_MODIFIER_MASK) === 0;
     const modifierOnlyUnsupported =
-      isModifierOnly &&
-      (!KDEShortcutManager.isWayland() || (slotName === "dictation" && isPushToTalk));
+      isModifierOnly && (!KDEShortcutManager.isWayland() || isPushToTalk);
     if (modifierOnlyUnsupported) {
       debugLogger.log("[KDEShortcut] Modifier-only shortcut not supported in this mode", {
         slot: slotName,
@@ -318,6 +325,9 @@ class KDEShortcutManager {
         );
       }
 
+      onMutation?.();
+      this.callbacks.delete(slotName);
+      this.registeredSlots.delete(slotName);
       // Clear stale registration, then register with flag 0x02 (SetPresent).
       // Flag 0x02 overwrites any saved binding; flag 0 preserves stale values.
       try {
@@ -394,7 +404,7 @@ class KDEShortcutManager {
   }
 
   async unregisterKeybinding(slotName = "dictation") {
-    if (!this.kglobalaccel) return;
+    if (!this.kglobalaccel) return false;
 
     const actionId = [COMPONENT_NAME, slotName, "OpenWhispr", `OpenWhispr ${slotName}`];
 
@@ -408,8 +418,10 @@ class KDEShortcutManager {
       this.callbacks.delete(slotName);
       this.registeredSlots.delete(slotName);
       debugLogger.log("[KDEShortcut] Unregistered", { slot: slotName });
+      return true;
     } catch (err) {
       debugLogger.log(`[KDEShortcut] Unregister failed for "${slotName}":`, err.message);
+      return false;
     }
   }
 

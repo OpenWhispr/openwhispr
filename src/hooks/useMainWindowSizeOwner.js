@@ -24,6 +24,7 @@ export function useMainWindowSizeOwner({
   isCommandMenuOpen,
   isCompactPill,
   isDictationActive,
+  handsFreeTipVisible,
   assistantOpen,
   assistantMounted,
   assistantOpenRef,
@@ -108,6 +109,7 @@ export function useMainWindowSizeOwner({
       toastCount,
       compactPill: isCompactPill,
       dictationErrorActionCount,
+      handsFreeTipVisible,
     });
     const prev = lastSizeKeyRef.current;
     lastSizeKeyRef.current = target;
@@ -183,6 +185,7 @@ export function useMainWindowSizeOwner({
     isCommandMenuOpen,
     toastCount,
     isCompactPill,
+    handsFreeTipVisible,
     dictationErrorActionCount,
     requestMainWindowSize,
   ]);

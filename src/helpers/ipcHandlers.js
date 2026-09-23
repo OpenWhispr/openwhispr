@@ -4101,7 +4101,23 @@ class IPCHandlers {
     });
 
     ipcMain.handle("update-hotkey", async (event, hotkey) => {
-      return await this.windowManager.updateHotkey(hotkey);
+      const result = await this.windowManager.updateHotkey(hotkey);
+      // The manager converged the mode for this hotkey in either direction
+      // (Hold it cannot deliver → Tap, or a demoted Tap → Hold): persist it
+      // and tell every renderer, the same way a rejected activation-mode
+      // change is echoed back.
+      if (result?.success && result.activationMode) {
+        this.environmentManager.saveActivationMode(result.activationMode);
+        for (const browserWindow of BrowserWindow.getAllWindows()) {
+          if (!browserWindow.isDestroyed()) {
+            browserWindow.webContents.send("setting-updated", {
+              key: "activationMode",
+              value: result.activationMode,
+            });
+          }
+        }
+      }
+      return result;
     });
 
     ipcMain.handle("set-hotkey-listening-mode", async (event, enabled) => {
@@ -4136,7 +4152,8 @@ class IPCHandlers {
         isGlobeLikeHotkey(hotkey) ||
         isMouseButtonHotkey(hotkey) ||
         isModifierOnlyHotkey(hotkey) ||
-        isRightSideModifier(hotkey);
+        isRightSideModifier(hotkey) ||
+        hotkeyManager.isMacListenerOwnedKey?.(hotkey, "dictation") === true;
 
       if (enabled) {
         // Entering capture mode — unregister ALL slots so none intercept keypresses.
@@ -4293,8 +4310,10 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("get-hotkey-mode-info", async (_event, requestedHotkey) => {
+    ipcMain.handle("get-hotkey-mode-info", async (_event, requestedHotkey, requestedSlot) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
+      const slotName =
+        typeof requestedSlot === "string" && requestedSlot ? requestedSlot : "dictation";
       const hotkey =
         typeof requestedHotkey === "string" && requestedHotkey.trim()
           ? requestedHotkey.split(",")[0].trim()
@@ -4303,11 +4322,9 @@ class IPCHandlers {
       const supportsPushToTalk =
         process.platform === "linux"
           ? isUsingNativeShortcut
-            ? hotkeyManager.supportsPushToTalk(hotkey)
+            ? hotkeyManager.supportsPushToTalk(hotkey, slotName)
             : this.linuxKeyManager?.isAvailable?.() === true
-          : process.platform === "darwin"
-            ? hotkeyManager.supportsPushToTalk(hotkey)
-            : !isUsingNativeShortcut;
+          : hotkeyManager.supportsPushToTalk(hotkey, slotName);
 
       return {
         isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
@@ -5139,6 +5156,10 @@ class IPCHandlers {
 
     ipcMain.handle("save-activation-mode", async (event, mode) => {
       return this.environmentManager.saveActivationMode(mode);
+    });
+
+    ipcMain.handle("get-slot-activation-modes", async () => {
+      return this.environmentManager.getSlotActivationModes();
     });
 
     ipcMain.handle("get-ui-language", async () => {
@@ -11174,37 +11195,89 @@ class IPCHandlers {
       return this.cortiStreaming.getStatus();
     });
 
-    // Agent mode handlers
+    // Resolve the replacement before touching its working binding. The cache,
+    // saved key and renderer mode follow only an accepted registration.
+    const updateOptionalHotkey = async (slotName, settingKey, hotkey, callback, saveKey) => {
+      const windowManager = this.windowManager;
+      const hotkeyManager = windowManager.hotkeyManager;
+      try {
+        const preferred = hotkey
+          ? await hotkeyManager.resolveActivationMode(hotkey, slotName)
+          : "tap";
+        const previousHotkeys = hotkeyManager.getSlotHotkeys(slotName);
+        const previousMode = windowManager.getSlotActivationMode(slotName);
+        const previousCallback = hotkeyManager.slots.get(slotName)?.callback || callback;
+        const result = hotkey
+          ? await hotkeyManager.registerSlot(slotName, hotkey, callback, {
+              atomic: true,
+              activationMode: preferred,
+            })
+          : {
+              success: (await hotkeyManager.unregisterSlot(slotName)) !== false,
+              activationMode: "tap",
+            };
+        if (!result.success) return result;
+        const effective = result.activationMode || preferred;
+        if (
+          previousMode !== effective &&
+          !(await windowManager.setSlotActivationModeCache(slotName, effective, {
+            notifyFailure: false,
+          }))
+        ) {
+          if (previousHotkeys.length) {
+            await hotkeyManager.registerSlot(slotName, previousHotkeys, previousCallback, {
+              atomic: true,
+              activationMode: previousMode,
+            });
+          } else {
+            await hotkeyManager.unregisterSlot(slotName);
+          }
+          return { success: false, error: "Failed to apply hotkey activation mode" };
+        }
+        saveKey(hotkey || "");
+        if (previousMode !== effective) {
+          this.environmentManager.saveSlotActivationMode?.(slotName, effective);
+          for (const browserWindow of BrowserWindow.getAllWindows()) {
+            if (!browserWindow.isDestroyed()) {
+              browserWindow.webContents.send("setting-updated", {
+                key: settingKey,
+                value: effective,
+              });
+            }
+          }
+        }
+        this._notifyHotkeyChanged(hotkey || "");
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      } finally {
+        windowManager.reconcileNativeKeyListeners();
+      }
+    };
+
     ipcMain.handle("update-voice-agent-hotkey", async (_event, hotkey) => {
-      const hotkeyManager = this.windowManager.hotkeyManager;
-      const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
-      if (!voiceAgentCallback) {
+      const callback = this.windowManager._voiceAgentHotkeyCallback;
+      if (!callback) {
         return { success: false, message: "Voice agent hotkey callback not initialized" };
       }
-
-      if (!hotkey) {
-        const removed = await hotkeyManager.unregisterSlot("voiceAgent");
-        if (removed === false) return { success: false };
-        this.environmentManager.saveVoiceAgentKey?.("");
-        this.windowManager.reconcileNativeKeyListeners();
-        this._notifyHotkeyChanged("");
-        return { success: true, message: "Voice agent hotkey cleared" };
-      }
-
-      const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback, {
-        atomic: true,
-      });
-      this.windowManager.reconcileNativeKeyListeners();
-      if (result.success) {
-        this.environmentManager.saveVoiceAgentKey?.(hotkey);
-        this._notifyHotkeyChanged(hotkey);
-        return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
-      }
-
-      return {
-        success: false,
-        message: result.error || `Failed to update voice agent hotkey to: ${hotkey}`,
-      };
+      const result = await updateOptionalHotkey(
+        "voiceAgent",
+        "voiceAgentActivationMode",
+        hotkey,
+        callback,
+        (key) => this.environmentManager.saveVoiceAgentKey?.(key)
+      );
+      return result.success
+        ? {
+            success: true,
+            message: hotkey
+              ? `Voice agent hotkey updated to: ${hotkey}`
+              : "Voice agent hotkey cleared",
+          }
+        : {
+            success: false,
+            message: result.error || `Failed to update voice agent hotkey to: ${hotkey}`,
+          };
     });
 
     ipcMain.handle("get-voice-agent-key", async () => {
@@ -11212,35 +11285,28 @@ class IPCHandlers {
     });
 
     ipcMain.handle("update-translation-hotkey", async (_event, hotkey) => {
-      const hotkeyManager = this.windowManager.hotkeyManager;
-      const translationCallback = this.windowManager._translationHotkeyCallback;
-      if (!translationCallback) {
+      const callback = this.windowManager._translationHotkeyCallback;
+      if (!callback) {
         return { success: false, message: "Translation hotkey callback not initialized" };
       }
-
-      if (!hotkey) {
-        const removed = await hotkeyManager.unregisterSlot("translation");
-        if (removed === false) return { success: false };
-        this.environmentManager.saveTranslationKey?.("");
-        this.windowManager.reconcileNativeKeyListeners();
-        this._notifyHotkeyChanged("");
-        return { success: true, message: "Translation hotkey cleared" };
-      }
-
-      const result = await hotkeyManager.registerSlot("translation", hotkey, translationCallback, {
-        atomic: true,
-      });
-      this.windowManager.reconcileNativeKeyListeners();
-      if (result.success) {
-        this.environmentManager.saveTranslationKey?.(hotkey);
-        this._notifyHotkeyChanged(hotkey);
-        return { success: true, message: `Translation hotkey updated to: ${hotkey}` };
-      }
-
-      return {
-        success: false,
-        message: result.error || `Failed to update translation hotkey to: ${hotkey}`,
-      };
+      const result = await updateOptionalHotkey(
+        "translation",
+        "translationActivationMode",
+        hotkey,
+        callback,
+        (key) => this.environmentManager.saveTranslationKey?.(key)
+      );
+      return result.success
+        ? {
+            success: true,
+            message: hotkey
+              ? `Translation hotkey updated to: ${hotkey}`
+              : "Translation hotkey cleared",
+          }
+        : {
+            success: false,
+            message: result.error || `Failed to update translation hotkey to: ${hotkey}`,
+          };
     });
 
     ipcMain.handle("get-translation-key", async () => {

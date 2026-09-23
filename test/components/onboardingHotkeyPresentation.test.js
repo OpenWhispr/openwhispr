@@ -22,11 +22,7 @@ test("compound shortcuts produce ordered keycaps and readable instructions", asy
 });
 
 test("macOS recommends Right Option first, followed by Globe/Fn and Ctrl + R", async () => {
-  const {
-    DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
-    formatRecommendedHotkey,
-    getRecommendedDictationHotkeys,
-  } = await load();
+  const { formatRecommendedHotkey, getRecommendedDictationHotkeys } = await load();
 
   assert.deepEqual(
     getRecommendedDictationHotkeys("darwin", "Command+K").map(formatRecommendedHotkey),
@@ -38,8 +34,6 @@ test("macOS recommends Right Option first, followed by Globe/Fn and Ctrl + R", a
     "RightControl",
     "Control+Shift+Space",
   ]);
-  assert.equal(DEFAULT_ASSISTANT_ONBOARDING_HOTKEY, "CommandOrControl+Shift+Space");
-  assert.equal(formatRecommendedHotkey(DEFAULT_ASSISTANT_ONBOARDING_HOTKEY), "Cmd + Shift + Space");
 });
 
 test("the dictation step never opens on a chord that would overwrite the user's own", async () => {
@@ -67,17 +61,55 @@ test("the dictation step never opens on a chord that would overwrite the user's 
   assert.equal(onMac("GLOBE", true), "GLOBE");
 });
 
-test("the assistant step keeps a saved chord and otherwise offers the opt-in default", async () => {
-  const { DEFAULT_ASSISTANT_ONBOARDING_HOTKEY, resolveOnboardingAssistantHotkey } = await load();
+test("the assistant step keeps a saved chord and otherwise offers onboarding's Voice Agent preset", async () => {
+  const {
+    getDefaultAssistantOnboardingHotkey,
+    resolveOnboardingAssistantHotkey,
+    formatRecommendedHotkey,
+  } = await load();
 
-  // voiceAgentKey is opt-in with no platform default, so anything saved is the
-  // user's own pick and nothing may substitute for it.
-  assert.equal(resolveOnboardingAssistantHotkey("Alt+Space"), "Alt+Space");
-  assert.equal(
-    resolveOnboardingAssistantHotkey(DEFAULT_ASSISTANT_ONBOARDING_HOTKEY),
-    DEFAULT_ASSISTANT_ONBOARDING_HOTKEY
+  // The preset is onboarding's to own: nothing in main or Settings registers a
+  // Voice Agent chord, so this module is the only place it is ever applied.
+  // Windows takes Win+Alt+Space from the researched candidate table; macOS and
+  // Linux keep the long-standing suggestion.
+  assert.equal(getDefaultAssistantOnboardingHotkey("win32"), "Alt+Super+Space");
+  assert.equal(getDefaultAssistantOnboardingHotkey("darwin"), "CommandOrControl+Shift+Space");
+  assert.equal(getDefaultAssistantOnboardingHotkey("linux"), "CommandOrControl+Shift+Space");
+
+  for (const platform of ["darwin", "win32", "linux"]) {
+    const preset = getDefaultAssistantOnboardingHotkey(platform);
+    // Nothing auto-registers voiceAgentKey, so anything saved is the user's own
+    // pick and nothing may substitute for it.
+    assert.equal(resolveOnboardingAssistantHotkey(platform, "Alt+Space"), "Alt+Space", platform);
+    assert.equal(resolveOnboardingAssistantHotkey(platform, preset), preset, platform);
+    // An empty slot opens on the preset.
+    assert.equal(resolveOnboardingAssistantHotkey(platform, ""), preset, platform);
+  }
+
+  // The label follows the platform's modifier names.
+  const withPlatform = (platform, run) => {
+    const had = "window" in globalThis;
+    const previous = globalThis.window;
+    globalThis.window = { electronAPI: { getPlatform: () => platform } };
+    try {
+      return run();
+    } finally {
+      if (had) globalThis.window = previous;
+      else delete globalThis.window;
+    }
+  };
+  withPlatform("darwin", () =>
+    assert.equal(
+      formatRecommendedHotkey(getDefaultAssistantOnboardingHotkey("darwin")),
+      "Cmd + Shift + Space"
+    )
   );
-  assert.equal(resolveOnboardingAssistantHotkey(""), DEFAULT_ASSISTANT_ONBOARDING_HOTKEY);
+  withPlatform("win32", () =>
+    assert.equal(
+      formatRecommendedHotkey(getDefaultAssistantOnboardingHotkey("win32")),
+      "Alt + Win + Space"
+    )
+  );
 });
 
 test("only macOS substitutes an onboarding default for the platform one", async () => {

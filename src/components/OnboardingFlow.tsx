@@ -31,8 +31,8 @@ import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import {
-  DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
   formatHotkeyInstruction,
+  getDefaultAssistantOnboardingHotkey,
   getRecommendedDictationHotkeys,
   resolveOnboardingAssistantHotkey,
   resolveOnboardingDictationHotkey,
@@ -129,7 +129,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     })
   );
   const [assistantHotkey, setAssistantHotkey] = useState(() =>
-    resolveOnboardingAssistantHotkey(parseHotkeyList(settings.voiceAgentKey)[0] ?? "")
+    resolveOnboardingAssistantHotkey(platform, parseHotkeyList(settings.voiceAgentKey)[0] ?? "")
   );
   // Seeded from main rather than getDefaultHotkey(): main already knows when the
   // platform default can't bind (GNOME/X11 reject modifier-only combos) and
@@ -975,7 +975,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               }}
               recommended={
                 assistant
-                  ? DEFAULT_ASSISTANT_ONBOARDING_HOTKEY
+                  ? getDefaultAssistantOnboardingHotkey(platform)
                   : getRecommendedDictationHotkeys(platform, recommendedDictationHotkey)
               }
               captureLabel={t("onboarding.rehaul.hotkey.capture")}

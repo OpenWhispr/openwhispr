@@ -121,11 +121,17 @@
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
-      "holdNeedsReleaseKey": "ホールドして話すには、macOS が離したことを検知できるキーが必要です。Globe、右 Option のような右側のキー、または修飾キー付きのショートカットです。タップならどのキーでも使えます。",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" には通常のキーが含まれていないため、離したことをデスクトップ環境が検出できません。{{suggestion}} をお試しください。",
+      "holdUnsupportedOnDesktop": "お使いのデスクトップ環境はキーを離したことを通知できません。押しながら話すには GNOME 48 以降、KDE Plasma、または X11 セッションが必要です。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
       "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
       "trySuggestions": "お試しください: {{suggestions}}",
-      "slotConflict": "このホットキーは既に{{slot}}で使用されています。"
+      "slotConflict": "このホットキーは既に{{slot}}で使用されています。",
+      "holdUnsupportedOnHyprland": "Hyprland では、ホールドはディクテーションのホットキーでのみ使用できます。"
+    },
+    "portal": {
+      "voiceAgentHold": "押しながらアシスタントに話す",
+      "translationHold": "押しながら翻訳用に口述する"
     }
   },
   "systemSettings": {
@@ -962,7 +968,8 @@
         "failedToRegister": "ホットキーの登録に失敗しました。もう一度お試しください。"
       },
       "messages": {
-        "nowUsing": "ディクテーションに {{hotkey}} を使用します"
+        "nowUsing": "ディクテーションに {{hotkey}} を使用します",
+        "holdSwitchedToTap": "このデバイスでは {{hotkey}} でホールドを使用できないため、起動モードをタップに切り替えました。"
       }
     },
     "modelDownload": {
@@ -1896,7 +1903,15 @@
         "linuxPttSetupNote": "コマンド実行後、ログアウトして再度ログインしてください。",
         "hyprlandConfigWriteWarningTitle": "Hyprland のキーバインドは永続化されません",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr は {{path}} に書き込めないため、Hyprland の設定を再読み込みするとキーバインドは維持されません。ファイルが存在し、書き込み可能であることを確認してください。",
-        "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。"
+        "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。",
+        "gestures": {
+          "holdTitle": "押しながら話す",
+          "holdDetail": "離すと終了",
+          "handsFreeTitle": "ハンズフリー",
+          "handsFreeDetail": "もう一度押すと停止",
+          "doublePress": "2回押す",
+          "tapOnlyTitle": "押して開始、もう一度押して停止"
+        }
       },
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",
@@ -3571,6 +3586,17 @@
       "askAssistant": "アシスタントに質問",
       "busyRecording": "先に録音を終了してください",
       "startMeetingRecording": "ミーティングの録音を開始"
+    },
+    "handsFreeTip": {
+      "badge": "ヒント",
+      "title": "ハンズフリーモードに切り替え",
+      "description": "{{hotkey}} を2回押すとハンズフリーモードが始まります。"
+    },
+    "holdMigrationCard": {
+      "badge": "このアップデートの新機能",
+      "title": "押しながら話し、離すと終了",
+      "description": "ホットキーの動作が変わりました。話している間は {{hotkey}} を押したままにしてください。",
+      "gesture": "2回押すとハンズフリーモードになり、もう一度押すと停止します。"
     }
   },
   "dictationAgent": {

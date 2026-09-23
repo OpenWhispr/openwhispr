@@ -121,11 +121,17 @@
       "mouseButtonOnlyMac": "Le scorciatoie con i tasti del mouse sono attualmente supportate solo su macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
-      "holdNeedsReleaseKey": "Tieni premuto per parlare richiede un tasto di cui macOS rilevi il rilascio: Globo, un tasto destro come Opzione destra o una scorciatoia con modificatore. Tocca funziona con qualsiasi tasto.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" non contiene un tasto normale, quindi il desktop non può rilevare quando lo rilasci. Prova {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Il tuo desktop non può segnalare il rilascio di un tasto. Tieni premuto per parlare richiede GNOME 48 o successivo, KDE Plasma o una sessione X11.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
       "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
       "trySuggestions": "Prova: {{suggestions}}",
-      "slotConflict": "Questa scorciatoia è già utilizzata per {{slot}}."
+      "slotConflict": "Questa scorciatoia è già utilizzata per {{slot}}.",
+      "holdUnsupportedOnHyprland": "Su Hyprland, Tieni premuto è disponibile solo per la scorciatoia di dettatura."
+    },
+    "portal": {
+      "voiceAgentHold": "Tieni premuto per parlare con l'assistente",
+      "translationHold": "Tieni premuto per dettare un testo da tradurre"
     }
   },
   "systemSettings": {
@@ -962,7 +968,8 @@
         "failedToRegister": "Registrazione scorciatoia non riuscita. Riprova."
       },
       "messages": {
-        "nowUsing": "{{hotkey}} impostata per la dettatura"
+        "nowUsing": "{{hotkey}} impostata per la dettatura",
+        "holdSwitchedToTap": "Tieni premuto non è disponibile per {{hotkey}} su questo dispositivo, quindi l'attivazione è passata a Tocca."
       }
     },
     "modelDownload": {
@@ -1896,7 +1903,15 @@
         "linuxPttSetupNote": "Dopo aver eseguito il comando, esci e riaccedi.",
         "hyprlandConfigWriteWarningTitle": "Le scorciatoie di Hyprland non verranno mantenute",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr non può scrivere in {{path}}, quindi le scorciatoie non sopravvivranno a un ricaricamento della configurazione di Hyprland. Assicurati che il file esista e sia scrivibile.",
-        "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr riserva la scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usa la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia."
+        "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr riserva la scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usa la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia.",
+        "gestures": {
+          "holdTitle": "Tieni premuto per parlare",
+          "holdDetail": "Rilascia per terminare",
+          "handsFreeTitle": "Mani libere",
+          "handsFreeDetail": "Premi di nuovo per fermare",
+          "doublePress": "Premi due volte",
+          "tapOnlyTitle": "Premi per avviare, premi di nuovo per fermare"
+        }
       },
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",
@@ -3571,6 +3586,17 @@
       "askAssistant": "Chiedi all'assistente",
       "busyRecording": "Prima termina la registrazione in corso",
       "startMeetingRecording": "Avvia registrazione meeting"
+    },
+    "handsFreeTip": {
+      "badge": "Suggerimento",
+      "title": "Passa alla modalità a mani libere",
+      "description": "Premi due volte {{hotkey}} per avviare la modalità a mani libere."
+    },
+    "holdMigrationCard": {
+      "badge": "Novità di questo aggiornamento",
+      "title": "Tieni premuto per parlare, rilascia per terminare",
+      "description": "Abbiamo cambiato il modo in cui funziona la tua scorciatoia: tieni premuto {{hotkey}} mentre parli.",
+      "gesture": "Premila due volte per la modalità a mani libere, premi di nuovo per fermare."
     }
   },
   "dictationAgent": {

@@ -323,6 +323,7 @@ let updateManager = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
 let linuxKeyManager = null;
+let activationModeChangeQueue = Promise.resolve();
 let textEditMonitor = null;
 let selectionManager = null;
 let whisperCudaManager = null;
@@ -417,6 +418,162 @@ function wasLaunchedAtLoginHidden() {
   } catch (error) {
     if (debugLogger) debugLogger.warn("Failed to detect a login launch", { error: error?.message });
     return false;
+  }
+}
+
+function initializeNativeKeyListeners() {
+  // Windows and Linux share the same native low-level key listener model: one hook
+  // process per watched key (Electron globalShortcut can't see modifier-only or
+  // right-side-modifier combos), routed to the owning slot here. macOS is handled
+  // separately above via globeKeyManager.
+  if (process.platform === "win32" || process.platform === "linux") {
+    const isWindows = process.platform === "win32";
+    const nativeKeyManager = isWindows ? windowsKeyManager : linuxKeyManager;
+    debugLogger.debug("[Push-to-Talk] Native key listener setup starting");
+
+    // Dictation supports push-to-talk and needs the overlay window; meeting
+    // drives other windows (matching their globalShortcut callbacks and macOS).
+    const dispatchNativeKeyDown = (key) => {
+      const slotName = hotkeyManager.findSlotByHotkey(key);
+      debugLogger.debug(
+        "[Push-to-Talk] Native key-down",
+        {
+          key,
+          slot: slotName,
+          mode: slotName ? windowManager.getSlotActivationMode(slotName) : null,
+        },
+        "ptt"
+      );
+      // Candidate readers can be ready before a transaction commits. A regular
+      // Tap binding still belongs to Electron until its mode changes to Hold.
+      if (!slotName || hotkeyManager.hasNativeShortcutPhases(slotName)) return;
+      if (
+        windowManager.getSlotActivationMode(slotName) !== "push" &&
+        !hotkeyManager.isNativeOnlyHotkey(key)
+      )
+        return;
+      if (hotkeyManager.slotHasHotkey("dictation", key)) {
+        if (!isLiveWindow(windowManager.mainWindow)) return;
+        if (windowManager.getActivationMode() === "push") {
+          windowManager.startNativePushToTalk(key);
+        } else {
+          windowManager.sendToggleDictation();
+        }
+        return;
+      }
+      const dispatchSlotNativeKeyDown = (slotName, inputKind, sendToggle) => {
+        if (windowManager.getSlotActivationMode(slotName) === "push") {
+          if (!isLiveWindow(windowManager.mainWindow)) return;
+          windowManager.startNativePushToTalk(key, inputKind);
+        } else {
+          sendToggle();
+        }
+      };
+      if (hotkeyManager.slotHasHotkey("voiceAgent", key)) {
+        dispatchSlotNativeKeyDown("voiceAgent", "assistant", () =>
+          windowManager.sendToggleVoiceAgent()
+        );
+      } else if (hotkeyManager.slotHasHotkey("translation", key)) {
+        dispatchSlotNativeKeyDown("translation", "translation", () =>
+          windowManager.sendToggleTranslation()
+        );
+      } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
+        windowManager.startManualMeeting();
+      }
+    };
+
+    // Push-capable slots need their key-up; meeting stays tap-only.
+    const dispatchNativeKeyUp = (key) => {
+      const slotName = hotkeyManager.findSlotByHotkey(key);
+      if (!slotName || slotName === "meeting") return;
+      if (windowManager.nativePushState?.active) {
+        windowManager.handleNativePushKeyUp(key);
+      } else if (
+        isLiveWindow(windowManager.mainWindow) &&
+        windowManager.getSlotActivationMode(slotName) === "push"
+      ) {
+        windowManager.handleNativePushKeyUp(key);
+      }
+    };
+
+    nativeKeyManager.on("key-down", dispatchNativeKeyDown);
+    nativeKeyManager.on("key-up", dispatchNativeKeyUp);
+
+    nativeKeyManager.on("failed", (failure) => {
+      activationModeChangeQueue = activationModeChangeQueue
+        .then(async () => {
+          if (!nativeKeyManager.isCurrentFailure(failure)) return;
+          const fallback = await windowManager.demoteFailedNativeHotkey(failure.key);
+          if (!fallback) return;
+          const { slotName, demoted } = fallback;
+          const mode = windowManager.getSlotActivationMode(slotName);
+          const settingKey =
+            slotName === "dictation" ? "activationMode" : `${slotName}ActivationMode`;
+          if (demoted) {
+            if (slotName === "dictation") environmentManager.saveActivationMode(mode);
+            else environmentManager.saveSlotActivationMode(slotName, mode);
+            for (const browserWindow of BrowserWindow.getAllWindows()) {
+              if (!browserWindow.isDestroyed()) {
+                browserWindow.webContents.send("setting-updated", { key: settingKey, value: mode });
+              }
+            }
+          }
+          if (!demoted) {
+            hotkeyManager.notifyHotkeyFailure(failure.key, {
+              error: hotkeyManager.getPushToTalkUnavailableReason(failure.key, slotName),
+            });
+          }
+          if (demoted) windowManager.reconcileNativeKeyListeners();
+        })
+        .catch((error) => {
+          debugLogger.error("Failed to apply native hotkey fallback", { error: error.message });
+        });
+    });
+
+    nativeKeyManager.on("error", (error) => {
+      debugLogger.warn("[Push-to-Talk] Native key listener error", { error: error.message });
+      if (isWindows && isLiveWindow(windowManager.mainWindow)) {
+        windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
+          reason: "error",
+          message: error.message,
+        });
+      }
+    });
+
+    nativeKeyManager.on("unavailable", () => {
+      debugLogger.debug(
+        "[Push-to-Talk] Native key listener unavailable - falling back to toggle mode"
+      );
+      if (isWindows && isLiveWindow(windowManager.mainWindow)) {
+        windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
+          reason: "binary_not_found",
+          message: i18nMain.t("windows.pttUnavailable"),
+        });
+      }
+    });
+
+    nativeKeyManager.on("ready", () => {
+      debugLogger.debug("[Push-to-Talk] Native key listener ready and listening");
+    });
+
+    if (!isWindows) {
+      nativeKeyManager.on("permission-denied", () => {
+        debugLogger.warn(
+          "[Push-to-Talk] Linux key listener has no permission to access input devices"
+        );
+        // Settings displays the notice; effective mode changes belong to main.
+        for (const browserWindow of BrowserWindow.getAllWindows()) {
+          if (!browserWindow.isDestroyed()) {
+            browserWindow.webContents.send("linux-ptt-permission-denied");
+          }
+        }
+      });
+    }
+
+    ipcMain.on("hotkey-changed", () => {
+      windowManager.resetNativePushState();
+      windowManager.reconcileNativeKeyListeners();
+    });
   }
 }
 
@@ -531,6 +688,12 @@ function initializeCoreManagers() {
   windowManager.selectionManager = selectionManager;
   windowManager.windowsKeyManager = windowsKeyManager;
   windowManager.linuxKeyManager = linuxKeyManager;
+  if (process.platform === "win32" || process.platform === "linux") {
+    hotkeyManager.nativeKeyManager =
+      process.platform === "win32" ? windowsKeyManager : linuxKeyManager;
+    initializeNativeKeyListeners();
+  }
+  hotkeyManager.on("native-listeners-reconcile", () => windowManager.reconcileNativeKeyListeners());
 
   // IPC handlers must be registered before window content loads
   ipcHandlers = new IPCHandlers({
@@ -1009,11 +1172,15 @@ async function startApp() {
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 
-  await windowManager.setActivationModeCache(environmentManager.getActivationMode());
+  // Migration requests Hold once. Restore the request before the real saved
+  // key and desktop backend are known; startup registration settles capability.
+  environmentManager.migrateActivationModesToHold();
+  await windowManager.setActivationModeCache(environmentManager.getActivationMode(), {
+    deferCapabilityCheck: true,
+  });
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 
-  let activationModeChangeQueue = Promise.resolve();
   ipcMain.on("activation-mode-changed", (_event, mode) => {
     activationModeChangeQueue = activationModeChangeQueue
       .then(async () => {
@@ -1031,11 +1198,70 @@ async function startApp() {
             }
           }
         }
-        windowManager.resetWindowsPushState();
+        windowManager.resetNativePushState();
         windowManager.reconcileNativeKeyListeners();
       })
       .catch((err) => {
         debugLogger.error("Failed to change activation mode", { error: err.message }, "hotkey");
+      });
+  });
+
+  // Renderer setting keys for the per-slot activation modes (dictation keeps
+  // the legacy "activationMode" flow above).
+  const SLOT_ACTIVATION_SETTING_KEYS = {
+    voiceAgent: "voiceAgentActivationMode",
+    translation: "translationActivationMode",
+  };
+  ipcMain.on("slot-activation-mode-changed", (_event, payload) => {
+    const slotName = payload?.slot;
+    const settingKey = SLOT_ACTIVATION_SETTING_KEYS[slotName];
+    if (!settingKey) return;
+    activationModeChangeQueue = activationModeChangeQueue
+      .then(async () => {
+        const success = await windowManager.setSlotActivationModeCache(slotName, payload?.mode);
+        const effectiveMode = windowManager.getSlotActivationMode(slotName);
+        if (success) {
+          environmentManager.saveSlotActivationMode(slotName, effectiveMode);
+        } else {
+          for (const browserWindow of BrowserWindow.getAllWindows()) {
+            if (!browserWindow.isDestroyed()) {
+              browserWindow.webContents.send("setting-updated", {
+                key: settingKey,
+                value: effectiveMode,
+              });
+            }
+          }
+        }
+        windowManager.resetNativePushState();
+        windowManager.reconcileNativeKeyListeners();
+      })
+      .catch((err) => {
+        debugLogger.error(
+          "Failed to change slot activation mode",
+          { slot: slotName, error: err.message },
+          "hotkey"
+        );
+      });
+  });
+
+  // Dictation's Hold verdict cannot be reached here on Linux: a DE-native
+  // backend only binds the saved hotkey a second later, so the hotkey manager
+  // judges it there and announces the result. Listen before the first window
+  // exists, because that deferred registration starts inside
+  // createMainWindow() below.
+  hotkeyManager.on("dictation-activation-mode-settled", (mode) => {
+    activationModeChangeQueue = activationModeChangeQueue
+      .then(async () => {
+        environmentManager.saveActivationMode(
+          await windowManager.applyDictationActivationMode(mode)
+        );
+      })
+      .catch((err) => {
+        debugLogger.error(
+          "Failed to apply the settled dictation activation mode",
+          { mode, error: err.message },
+          "hotkey"
+        );
       });
   });
 
@@ -1072,20 +1298,6 @@ async function startApp() {
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
   await windowManager.createMainWindow();
-  // The activation mode was cached before the hotkey was registered, so a saved
-  // Hold could not be checked against its key until now.
-  if (
-    windowManager.getActivationMode() === "push" &&
-    !windowManager.hotkeyManager.supportsPushToTalk()
-  ) {
-    await windowManager.setActivationModeCache("tap");
-    environmentManager.saveActivationMode("tap");
-    for (const browserWindow of BrowserWindow.getAllWindows()) {
-      if (!browserWindow.isDestroyed()) {
-        browserWindow.webContents.send("setting-updated", { key: "activationMode", value: "tap" });
-      }
-    }
-  }
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
@@ -1111,54 +1323,70 @@ async function startApp() {
   await hotkeyManager.hyprlandRegistrationReady;
 
   // Set up voice agent hotkey (dictation routed straight to the dictation
-  // agent, bypassing cleanup). Tap-only slots gate autorepeat like the
-  // dictation toggle does.
-  const isVoiceAgentPress = createHotkeyRepeatGate();
-  const voiceAgentHotkeyCallback = () => {
-    if (!isVoiceAgentPress()) return;
-    windowManager.sendToggleVoiceAgent();
-  };
+  // agent, bypassing cleanup). The shared callback resolves the slot's own
+  // activation mode: tap toggles, Hold drives the push-to-talk machines.
+  const voiceAgentHotkeyCallback = windowManager.createHotkeyCallback("assistant");
   windowManager._voiceAgentHotkeyCallback = voiceAgentHotkeyCallback;
 
-  const savedVoiceAgentKey = environmentManager.getVoiceAgentKey?.() || "";
-  if (savedVoiceAgentKey) {
-    const result = await hotkeyManager.registerSlot(
-      "voiceAgent",
-      savedVoiceAgentKey,
-      voiceAgentHotkeyCallback
-    );
-    if (!result.success) {
-      debugLogger.warn(
-        "Failed to restore voice agent hotkey",
-        { hotkey: savedVoiceAgentKey },
-        "hotkey"
-      );
+  const restoreRecordingSlot = async (slotName, hotkey, callback) => {
+    const requestedMode = environmentManager.getSlotActivationModes()[slotName];
+    let effectiveMode = "tap";
+    if (hotkey) {
+      if (requestedMode === "push" || hotkeyManager.isNativeOnlyHotkey(hotkey)) {
+        const resolvedMode = await hotkeyManager.resolveActivationMode(hotkey, slotName);
+        if (requestedMode === "push") effectiveMode = resolvedMode;
+      }
+      const result = await hotkeyManager.registerSlot(slotName, hotkey, callback, {
+        activationMode: effectiveMode,
+      });
+      if (!result.success) {
+        effectiveMode = "tap";
+        debugLogger.warn(
+          "Failed to restore recording hotkey",
+          { slot: slotName, hotkey },
+          "hotkey"
+        );
+      }
     }
-  }
-
-  // Set up translation hotkey (dictation cleaned up and translated into the
-  // configured target language before pasting)
-  const isTranslationPress = createHotkeyRepeatGate();
-  const translationHotkeyCallback = () => {
-    if (!isTranslationPress()) return;
-    windowManager.sendToggleTranslation();
+    await windowManager.setSlotActivationModeCache(slotName, effectiveMode, {
+      notifyFailure: false,
+    });
+    const mode = windowManager.getSlotActivationMode(slotName);
+    environmentManager.saveSlotActivationMode(slotName, mode);
+    for (const browserWindow of BrowserWindow.getAllWindows()) {
+      if (!browserWindow.isDestroyed()) {
+        browserWindow.webContents.send("setting-updated", {
+          key: `${slotName}ActivationMode`,
+          value: mode,
+        });
+      }
+    }
+    windowManager.reconcileNativeKeyListeners();
   };
-  windowManager._translationHotkeyCallback = translationHotkeyCallback;
+  await restoreRecordingSlot(
+    "voiceAgent",
+    environmentManager.getVoiceAgentKey?.() || "",
+    voiceAgentHotkeyCallback
+  );
 
-  const savedTranslationKey = environmentManager.getTranslationKey?.() || "";
-  if (savedTranslationKey) {
-    const result = await hotkeyManager.registerSlot(
-      "translation",
-      savedTranslationKey,
-      translationHotkeyCallback
-    );
-    if (!result.success) {
-      debugLogger.warn(
-        "Failed to restore translation hotkey",
-        { hotkey: savedTranslationKey },
-        "hotkey"
-      );
-    }
+  // Translation uses the same readiness and effective-mode restoration.
+  const translationHotkeyCallback = windowManager.createHotkeyCallback("translation");
+  windowManager._translationHotkeyCallback = translationHotkeyCallback;
+  await restoreRecordingSlot(
+    "translation",
+    environmentManager.getTranslationKey?.() || "",
+    translationHotkeyCallback
+  );
+
+  // Dictation's legacy mode gets the same silent convergence: a stored Hold
+  // whose hotkey has no key-up source (macOS plain single key, stored before
+  // the capability gate existed) behaves as Tap anyway and would wedge every
+  // later hotkey update. Darwin-only on purpose — its hotkey restore is
+  // synchronous by this point, while DE-native Linux registration is still
+  // pending and the current hotkey would be judged before it loads; Linux
+  // arrives through the dictation-activation-mode-settled listener above.
+  if (process.platform === "darwin" && (await windowManager.demoteUnsupportedDictationHold())) {
+    environmentManager.saveActivationMode(await windowManager.applyDictationActivationMode("tap"));
   }
 
   // Set up meeting mode hotkey
@@ -1195,8 +1423,9 @@ async function startApp() {
       }
       return { success: false, message: result.error };
     } else {
-      const removed = await hotkeyManager.unregisterSlot("meeting");
-      if (removed === false) return { success: false };
+      if (!(await hotkeyManager.unregisterSlot("meeting"))) {
+        return { success: false, message: "Failed to clear meeting hotkey" };
+      }
       environmentManager.saveMeetingKey("");
       windowManager.reconcileNativeKeyListeners();
       return { success: true };
@@ -1347,8 +1576,30 @@ async function startApp() {
     let globeKeyDownTime = 0;
     let globeKeyIsRecording = false;
     let globeLastStopTime = 0;
+    // A hands-free stop on bare Fn is deferred to the release: if the press
+    // turns out to be an Fn combo (globe-interrupted), the hands-free
+    // dictation keeps running instead of being stopped mid-sentence.
+    let globePendingHandsFreeStop = null;
     const MIN_HOLD_DURATION_MS = 150;
     const POST_STOP_COOLDOWN_MS = 300;
+
+    // voiceAgent/translation presses from the macOS native listener: tap
+    // toggles as before; Hold runs the shared native push-to-talk machine
+    // (which owns the double-press hands-free gesture).
+    const dispatchMacSlotPress = (slotName, inputKind, key, sendToggle) => {
+      if (hotkeyManager.isInListeningMode()) return;
+      if (windowManager.getSlotActivationMode(slotName) === "push") {
+        if (!isLiveWindow(windowManager.mainWindow)) return;
+        if (windowManager.isDictationProcessing()) return;
+        if (isGlobeLikeHotkey(key) && windowManager.isHandsFreeActive(inputKind)) {
+          globePendingHandsFreeStop = inputKind;
+          return;
+        }
+        windowManager.startNativePushToTalk(key, inputKind);
+      } else {
+        sendToggle();
+      }
+    };
 
     globeKeyManager.on("globe-down", async () => {
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
@@ -1363,6 +1614,7 @@ async function startApp() {
       if (isLiveWindow(windowManager.controlPanelWindow)) {
         windowManager.controlPanelWindow.webContents.send("globe-key-pressed");
       }
+      if (hotkeyManager.isInListeningMode()) return;
 
       // Handle dictation if Globe/Fn is one of the dictation hotkeys
       const dictationUsesGlobe = hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey);
@@ -1374,6 +1626,12 @@ async function startApp() {
           if (textEditMonitor) textEditMonitor.captureTargetPid();
           const activationMode = windowManager.getActivationMode();
           if (activationMode === "push") {
+            if (windowManager.isHandsFreeActive("dictation")) {
+              globePendingHandsFreeStop = "dictation";
+              return;
+            }
+            const verdict = windowManager.handlePushGestureDown("dictation");
+            if (verdict !== "proceed") return;
             const now = Date.now();
             if (now - globeLastStopTime < POST_STOP_COOLDOWN_MS) {
               debugLogger?.debug("[Globe] Ignored — cooldown active");
@@ -1407,10 +1665,14 @@ async function startApp() {
         .getSlotHotkeys("translation")
         .some(isGlobeLikeHotkey);
       if (voiceAgentUsesGlobe) {
-        windowManager.sendToggleVoiceAgent();
+        dispatchMacSlotPress("voiceAgent", "assistant", "GLOBE", () =>
+          windowManager.sendToggleVoiceAgent()
+        );
       }
       if (translationUsesGlobe) {
-        windowManager.sendToggleTranslation();
+        dispatchMacSlotPress("translation", "translation", "GLOBE", () =>
+          windowManager.sendToggleTranslation()
+        );
       }
       if (!voiceAgentUsesGlobe && !translationUsesGlobe && !dictationUsesGlobe) {
         debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE", { currentHotkey });
@@ -1425,6 +1687,13 @@ async function startApp() {
         windowManager.controlPanelWindow.webContents.send("globe-key-released");
       }
 
+      if (globePendingHandsFreeStop) {
+        const inputKind = globePendingHandsFreeStop;
+        globePendingHandsFreeStop = null;
+        globeLastStopTime = Date.now();
+        windowManager.stopHandsFreeSession(inputKind);
+      }
+
       if (hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey)) {
         const activationMode = windowManager.getActivationMode();
         if (activationMode === "push") {
@@ -1433,19 +1702,25 @@ async function startApp() {
             // must not cancel preparation or hide the thinking pill.
             debugLogger?.debug("[Globe] Release without a registered press — ignored");
           } else {
+            const downTime = globeKeyDownTime;
             globeKeyDownTime = 0;
-            globeLastStopTime = Date.now();
             if (globeKeyIsRecording) {
               globeKeyIsRecording = false;
+              globeLastStopTime = Date.now();
               debugLogger?.debug("[Globe] Stopping dictation (push release)");
               windowManager.sendStopDictation();
+              windowManager.notifyHoldDictationEnded("dictation", downTime);
             } else {
-              windowManager.sendCancelDictationPreparation();
-              windowManager.hideDictationPanel();
+              // Quick tap: the gesture keeps the preparation warm through the
+              // double-press window before cancelling.
+              windowManager.handlePushGestureQuickRelease("dictation");
             }
           }
         }
       }
+
+      // Agent/translation Globe sessions run on the shared native machine.
+      windowManager.handleNativePushKeyUp("GLOBE");
 
       // Fn release also stops compound push-to-talk for Fn+F-key hotkeys
       windowManager.handleMacPushModifierUp("fn");
@@ -1457,6 +1732,23 @@ async function startApp() {
     // Only the bare-Fn path uses globeKeyDownTime/globeKeyIsRecording, so compound
     // Fn-hotkey push-to-talk and tap mode are untouched.
     globeKeyManager.on("globe-interrupted", () => {
+      // The Fn press was a navigation combo: a hands-free stop pending on its
+      // release is called off — the dictation keeps running.
+      globePendingHandsFreeStop = null;
+      // A globe-keyed agent/translation Hold session (shared native machine)
+      // and any pending double-press gesture on a globe-bound slot unwind
+      // first — the quick tap that primed them was the start of an Fn combo.
+      windowManager.interruptNativePushSession("GLOBE");
+      const globeGestureKinds = [
+        ["dictation", "dictation"],
+        ["voiceAgent", "assistant"],
+        ["translation", "translation"],
+      ];
+      for (const [slotName, inputKind] of globeGestureKinds) {
+        if (hotkeyManager.getSlotHotkeys(slotName).some(isGlobeLikeHotkey)) {
+          windowManager.interruptPushGesture(inputKind);
+        }
+      }
       if (globeKeyDownTime === 0 && !globeKeyIsRecording) {
         return;
       }
@@ -1488,10 +1780,14 @@ async function startApp() {
     globeKeyManager.on("right-modifier-down", async (modifier) => {
       // Check voice agent slot for right-modifier
       if (hotkeyManager.slotHasHotkey("voiceAgent", modifier)) {
-        windowManager.sendToggleVoiceAgent();
+        dispatchMacSlotPress("voiceAgent", "assistant", modifier, () =>
+          windowManager.sendToggleVoiceAgent()
+        );
       }
       if (hotkeyManager.slotHasHotkey("translation", modifier)) {
-        windowManager.sendToggleTranslation();
+        dispatchMacSlotPress("translation", "translation", modifier, () =>
+          windowManager.sendToggleTranslation()
+        );
       }
 
       if (!hotkeyManager.slotHasHotkey("dictation", modifier)) return;
@@ -1502,6 +1798,12 @@ async function startApp() {
       if (textEditMonitor) textEditMonitor.captureTargetPid();
       if (activationMode === "push") {
         if (rightModActiveKey && rightModActiveKey !== modifier) return;
+        const verdict = windowManager.handlePushGestureDown("dictation");
+        if (verdict === "stop-hands-free") {
+          rightModLastStopTime = Date.now();
+          return;
+        }
+        if (verdict !== "proceed") return;
         const now = Date.now();
         if (now - rightModLastStopTime < POST_STOP_COOLDOWN_MS) return;
         windowManager.showDictationPanel();
@@ -1532,19 +1834,23 @@ async function startApp() {
             // must not cancel preparation or hide the thinking pill.
             debugLogger?.debug("[RightMod] Release without a registered press — ignored");
           } else {
+            const downTime = rightModDownTime;
             rightModActiveKey = null;
             rightModDownTime = 0;
-            rightModLastStopTime = Date.now();
             if (rightModIsRecording) {
               rightModIsRecording = false;
+              rightModLastStopTime = Date.now();
               windowManager.sendStopDictation();
+              windowManager.notifyHoldDictationEnded("dictation", downTime);
             } else {
-              windowManager.sendCancelDictationPreparation();
-              windowManager.hideDictationPanel();
+              windowManager.handlePushGestureQuickRelease("dictation");
             }
           }
         }
       }
+
+      // Agent/translation right-modifier sessions run on the native machine.
+      windowManager.handleNativePushKeyUp(modifier);
 
       const rightModToBase = {
         RightCommand: "command",
@@ -1564,6 +1870,9 @@ async function startApp() {
         hotkeyManager.getMacNativeListenerConfig(MAC_NATIVE_HOTKEY_SLOTS)
       );
     };
+    // Mode changes re-derive the watched plain keys (windowManager's
+    // reconcileNativeKeyListeners is the platform-neutral entry point).
+    windowManager.onMacListenerReconcile = syncMacNativeHotkeyConfiguration;
 
     // Mouse Button 4/5 handling (e.g., Logitech MX Master side buttons)
     let mouseButtonDownTime = 0;
@@ -1576,10 +1885,14 @@ async function startApp() {
       if (!isMouseButtonHotkey(button)) return;
 
       if (hotkeyManager.slotHasHotkey("voiceAgent", button)) {
-        windowManager.sendToggleVoiceAgent();
+        dispatchMacSlotPress("voiceAgent", "assistant", button, () =>
+          windowManager.sendToggleVoiceAgent()
+        );
       }
       if (hotkeyManager.slotHasHotkey("translation", button)) {
-        windowManager.sendToggleTranslation();
+        dispatchMacSlotPress("translation", "translation", button, () =>
+          windowManager.sendToggleTranslation()
+        );
       }
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
@@ -1591,6 +1904,12 @@ async function startApp() {
 
       if (activationMode === "push") {
         if (mouseButtonActiveButton && mouseButtonActiveButton !== button) return;
+        const verdict = windowManager.handlePushGestureDown("dictation");
+        if (verdict === "stop-hands-free") {
+          mouseButtonLastStopTime = Date.now();
+          return;
+        }
+        if (verdict !== "proceed") return;
         const now = Date.now();
         if (now - mouseButtonLastStopTime < POST_STOP_COOLDOWN_MS) return;
         windowManager.showDictationPanel();
@@ -1614,6 +1933,9 @@ async function startApp() {
       if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
 
+      // Agent/translation mouse-button sessions run on the native machine.
+      windowManager.handleNativePushKeyUp(button);
+
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
 
@@ -1629,16 +1951,44 @@ async function startApp() {
         } else {
           mouseButtonActiveButton = null;
           mouseButtonDownTime = 0;
-          mouseButtonLastStopTime = Date.now();
           if (mouseButtonIsRecording) {
             mouseButtonIsRecording = false;
+            mouseButtonLastStopTime = Date.now();
             windowManager.sendStopDictation();
           } else {
-            windowManager.sendCancelDictationPreparation();
-            windowManager.hideDictationPanel();
+            windowManager.handlePushGestureQuickRelease("dictation");
           }
         }
       }
+    });
+
+    // Plain keys on a Hold slot are watched by the listener's event tap (a
+    // Carbon hot key would hide their release), and ride the same native push
+    // machine as the Windows/Linux hooks.
+    globeKeyManager.on("key-down", (key) => {
+      if (hotkeyManager.isInListeningMode()) return;
+      if (!isLiveWindow(windowManager.mainWindow)) return;
+      const slotName = hotkeyManager.findSlotByHotkey(key);
+      debugLogger.debug("[Push-to-Talk] macOS watched key-down", { key, slot: slotName }, "ptt");
+      if (slotName === "dictation") {
+        if (windowManager.getActivationMode() === "push") {
+          windowManager.startNativePushToTalk(key);
+        } else {
+          windowManager.sendToggleDictation();
+        }
+      } else if (slotName === "voiceAgent") {
+        dispatchMacSlotPress("voiceAgent", "assistant", key, () =>
+          windowManager.sendToggleVoiceAgent()
+        );
+      } else if (slotName === "translation") {
+        dispatchMacSlotPress("translation", "translation", key, () =>
+          windowManager.sendToggleTranslation()
+        );
+      }
+    });
+    globeKeyManager.on("key-up", (key) => {
+      if (hotkeyManager.isInListeningMode()) return;
+      windowManager.handleNativePushKeyUp(key);
     });
 
     // If accessibility is missing, notify the normal control panel after the
@@ -1692,6 +2042,8 @@ async function startApp() {
 
     // Reset native key state when hotkey changes
     ipcMain.on("hotkey-changed", (_event, _newHotkey) => {
+      windowManager.resetNativePushState();
+      globePendingHandsFreeStop = null;
       globeKeyDownTime = 0;
       globeKeyIsRecording = false;
       globeLastStopTime = 0;
@@ -1705,97 +2057,7 @@ async function startApp() {
     });
   }
 
-  // Windows and Linux share the same native low-level key listener model: one hook
-  // process per watched key (Electron globalShortcut can't see modifier-only or
-  // right-side-modifier combos), routed to the owning slot here. macOS is handled
-  // separately above via globeKeyManager.
-  if (process.platform === "win32" || process.platform === "linux") {
-    const isWindows = process.platform === "win32";
-    const nativeKeyManager = isWindows ? windowsKeyManager : linuxKeyManager;
-    debugLogger.debug("[Push-to-Talk] Native key listener setup starting");
-
-    // Dictation supports push-to-talk and needs the overlay window; meeting
-    // drives other windows (matching their globalShortcut callbacks and macOS).
-    const dispatchNativeKeyDown = (key) => {
-      if (hotkeyManager.slotHasHotkey("dictation", key)) {
-        if (!isLiveWindow(windowManager.mainWindow)) return;
-        if (windowManager.getActivationMode() === "push") {
-          windowManager.startWindowsPushToTalk(key);
-        } else {
-          windowManager.sendToggleDictation();
-        }
-        return;
-      }
-      if (hotkeyManager.slotHasHotkey("voiceAgent", key)) {
-        windowManager.sendToggleVoiceAgent();
-      } else if (hotkeyManager.slotHasHotkey("translation", key)) {
-        windowManager.sendToggleTranslation();
-      } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        windowManager.startManualMeeting();
-      }
-    };
-
-    // Only dictation drives push-to-talk, so only its key-up matters.
-    const dispatchNativeKeyUp = (key) => {
-      if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
-      if (windowManager.winPushState?.active) {
-        windowManager.handleWindowsPushKeyUp(key);
-      } else if (
-        isLiveWindow(windowManager.mainWindow) &&
-        windowManager.getActivationMode() === "push"
-      ) {
-        windowManager.handleWindowsPushKeyUp(key);
-      }
-    };
-
-    nativeKeyManager.on("key-down", dispatchNativeKeyDown);
-    nativeKeyManager.on("key-up", dispatchNativeKeyUp);
-
-    nativeKeyManager.on("error", (error) => {
-      debugLogger.warn("[Push-to-Talk] Native key listener error", { error: error.message });
-      if (isWindows && isLiveWindow(windowManager.mainWindow)) {
-        windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
-          reason: "error",
-          message: error.message,
-        });
-      }
-    });
-
-    nativeKeyManager.on("unavailable", () => {
-      debugLogger.debug(
-        "[Push-to-Talk] Native key listener unavailable - falling back to toggle mode"
-      );
-      if (isWindows && isLiveWindow(windowManager.mainWindow)) {
-        windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
-          reason: "binary_not_found",
-          message: i18nMain.t("windows.pttUnavailable"),
-        });
-      }
-    });
-
-    nativeKeyManager.on("ready", () => {
-      debugLogger.debug("[Push-to-Talk] Native key listener ready and listening");
-    });
-
-    if (!isWindows) {
-      nativeKeyManager.on("permission-denied", () => {
-        debugLogger.warn(
-          "[Push-to-Talk] Linux key listener has no permission to access input devices"
-        );
-        if (isLiveWindow(windowManager.mainWindow)) {
-          windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
-        }
-      });
-    }
-
-    const STARTUP_DELAY_MS = 3000;
-    setTimeout(() => windowManager.reconcileNativeKeyListeners(), STARTUP_DELAY_MS);
-
-    ipcMain.on("hotkey-changed", () => {
-      windowManager.resetWindowsPushState();
-      windowManager.reconcileNativeKeyListeners();
-    });
-  }
+  windowManager.reconcileNativeKeyListeners();
 }
 
 ipcMain.on("mac-accessibility-features-ready", (_event, expectedAccountScope) => {

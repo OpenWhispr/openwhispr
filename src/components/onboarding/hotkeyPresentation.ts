@@ -106,7 +106,22 @@ export const formatRecommendedHotkey = (value: string) =>
   isGlobeLikeHotkey(value) ? "Globe/Fn" : formatHotkeyInstruction(value);
 
 export const MACOS_DEFAULT_ONBOARDING_HOTKEY = "RightOption";
-export const DEFAULT_ASSISTANT_ONBOARDING_HOTKEY = "CommandOrControl+Shift+Space";
+
+/**
+ * The chord the assistant step suggests. Nothing in main or Settings registers
+ * a Voice Agent chord — the slot stays empty until the user accepts this step —
+ * so the preset is onboarding's to own and this is the only place it is applied.
+ * - Windows: Alt+Super+Space (Win+Alt+Space). Decided 2026-09-10 from a
+ *   researched candidate table (Titan: windows-voice-agent-default-hotkey). It
+ *   carries a regular key, so the low-level hook fires on Space rather than the
+ *   moment two modifiers meet; it shares no Ctrl with the dictation default
+ *   Control+Super, so that modifier-only chord cannot fire first; it is absent
+ *   from Microsoft's Windows shortcut list; and with no Ctrl in it the AltGr
+ *   (= Ctrl+Alt) trap on non-US layouts cannot reach it.
+ * - macOS and Linux: the long-standing CommandOrControl+Shift+Space.
+ */
+export const getDefaultAssistantOnboardingHotkey = (platform: Platform): string =>
+  platform === "win32" ? "Alt+Super+Space" : "CommandOrControl+Shift+Space";
 
 /**
  * The chord the dictation step opens on.
@@ -138,12 +153,12 @@ export const resolveOnboardingDictationHotkey = ({
 };
 
 /**
- * The chord the assistant step opens on. `voiceAgentKey` is opt-in with no
- * platform default and nothing auto-registers it, so anything saved is the user's
- * own pick and there is no substitution to make.
+ * The chord the assistant step opens on. Nothing auto-registers `voiceAgentKey`,
+ * so anything saved is the user's own pick and there is no substitution to make;
+ * an empty slot opens on the platform's preset above.
  */
-export const resolveOnboardingAssistantHotkey = (savedHotkey: string): string =>
-  savedHotkey || DEFAULT_ASSISTANT_ONBOARDING_HOTKEY;
+export const resolveOnboardingAssistantHotkey = (platform: Platform, savedHotkey: string): string =>
+  savedHotkey || getDefaultAssistantOnboardingHotkey(platform);
 
 /**
  * One-key picks lead where the platform has a spare key: right Option on macOS,
