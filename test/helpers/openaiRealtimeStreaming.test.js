@@ -556,8 +556,7 @@ test("BYOK session.update is byte-for-byte today's payload when no VAD/language/
   const connected = streaming.connect({
     apiKey: "sk-test",
     model: "gpt-4o-mini-transcribe",
-    // Phase 1 will add these; today connect() must ignore them entirely.
-    language: "en",
+    // keyterms stay ignored: the dictionary has no realtime channel yet.
     keyterms: ["OpenWhispr"],
     sampleRate: 24000,
     createSocket: async () => socket,
@@ -591,6 +590,61 @@ test("BYOK session.update is byte-for-byte today's payload when no VAD/language/
 
   socket.emit("message", JSON.stringify({ type: "session.updated" }));
   await connected;
+  streaming.cleanup();
+});
+
+// -- #2050: the dictation language reaches the BYOK transcription config --
+
+test("BYOK session.update pins the dictation language the caller selected (#2050)", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  await connectByok(streaming, socket, { model: "gpt-4o-mini-transcribe", language: "de" });
+
+  const [update] = sentEvents(socket, "session.update");
+  assert.deepEqual(update.session.audio.input.transcription, {
+    model: "gpt-4o-mini-transcribe",
+    language: "de",
+  });
+  streaming.cleanup();
+});
+
+test("BYOK session.update sends the base ISO-639-1 code and omits language for auto/blank", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const cases = [
+    ["zh-TW", "zh"],
+    [" PT ", "pt"],
+    ["auto", undefined],
+    ["", undefined],
+    [undefined, undefined],
+  ];
+  for (const [language, expected] of cases) {
+    const streaming = new OpenAIRealtimeStreaming();
+    const socket = makeFakeSocket(WS.CONNECTING);
+    await connectByok(streaming, socket, { model: "gpt-4o-mini-transcribe", language });
+
+    const [update] = sentEvents(socket, "session.update");
+    assert.equal(update.session.audio.input.transcription.language, expected, String(language));
+    assert.equal(
+      "language" in update.session.audio.input.transcription,
+      expected !== undefined,
+      `${String(language)} must not leave a language key on the wire`
+    );
+    streaming.cleanup();
+  }
+});
+
+test("a later connect() without a language does not inherit the previous session's pin", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const first = makeFakeSocket(WS.CONNECTING);
+  await connectByok(streaming, first, { model: "gpt-4o-mini-transcribe", language: "de" });
+  streaming.cleanup();
+
+  const second = makeFakeSocket(WS.CONNECTING);
+  await connectByok(streaming, second, { model: "gpt-4o-mini-transcribe" });
+  const [update] = sentEvents(second, "session.update");
+  assert.equal("language" in update.session.audio.input.transcription, false);
   streaming.cleanup();
 });
 

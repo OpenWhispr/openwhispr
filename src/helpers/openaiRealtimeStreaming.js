@@ -52,6 +52,15 @@ async function createSocketWithTimeout(createSocket, timeoutMs) {
   }
 }
 
+// Realtime transcription takes ISO-639-1 like the batch endpoint, so a
+// registry code such as "zh-TW" is reduced to its base; "auto" means no pin.
+function normalizeLanguage(language) {
+  if (typeof language !== "string") return null;
+  const trimmed = language.trim().toLowerCase();
+  if (!trimmed || trimmed === "auto") return null;
+  return trimmed.split("-")[0];
+}
+
 class OpenAIRealtimeStreaming {
   constructor() {
     this.ws = null;
@@ -83,6 +92,7 @@ class OpenAIRealtimeStreaming {
     this.speechStartedCount = 0;
     this._vadEventCount = 0;
     this.model = "gpt-4o-mini-transcribe";
+    this.language = null;
     this.inputRate = SAMPLE_RATE;
     this.captureRate = SAMPLE_RATE;
     this.coldStartBuffer = [];
@@ -110,6 +120,7 @@ class OpenAIRealtimeStreaming {
     const {
       apiKey,
       model,
+      language,
       preconfigured,
       inputRate,
       captureRate,
@@ -130,6 +141,7 @@ class OpenAIRealtimeStreaming {
 
     this.isConnecting = true;
     this.model = model || "gpt-4o-mini-transcribe";
+    this.language = normalizeLanguage(language);
     this.preconfigured = !!preconfigured;
     this.inputRate = inputRate || SAMPLE_RATE;
     this.captureRate = captureRate || this.inputRate;
@@ -254,6 +266,7 @@ class OpenAIRealtimeStreaming {
               `${this.providerLabel} session created, sending configuration`,
               this._logContext({
                 model: this.model,
+                language: this.language,
                 vadThreshold: this.vadThreshold,
               })
             );
@@ -266,7 +279,9 @@ class OpenAIRealtimeStreaming {
                   audio: {
                     input: {
                       format: { type: "audio/pcm", rate: this.inputRate },
-                      transcription: { model: this.model },
+                      transcription: this.language
+                        ? { model: this.model, language: this.language }
+                        : { model: this.model },
                       turn_detection: turnDetectionFor(this.model, this.vadThreshold),
                     },
                   },
@@ -666,3 +681,4 @@ class OpenAIRealtimeStreaming {
 }
 
 module.exports = OpenAIRealtimeStreaming;
+module.exports.normalizeLanguage = normalizeLanguage;
