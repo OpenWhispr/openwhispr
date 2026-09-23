@@ -2267,7 +2267,9 @@ declare global {
         platform: string;
         source: "system" | "unavailable";
       }>;
-      checkSystemAudioAccess?: () => Promise<SystemAudioAccessResult>;
+      checkSystemAudioAccess?: (options?: {
+        systemAudioSource?: SystemAudioSource;
+      }) => Promise<SystemAudioAccessResult>;
       requestSystemAudioAccess?: () => Promise<SystemAudioAccessResult>;
       openMicrophoneSettings?: () => Promise<{ success: boolean; error?: string }>;
       openSoundInputSettings?: () => Promise<{ success: boolean; error?: string }>;
@@ -2904,6 +2906,7 @@ declare global {
         provider?: string;
         model?: string;
         language?: string;
+        systemAudioSource?: SystemAudioSource;
         noteId?: number | null;
         sessionId: string;
         autoEndEligible: boolean;
