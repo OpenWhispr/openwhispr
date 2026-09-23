@@ -12,6 +12,7 @@ import { StorageService } from '@/services/storage/StorageService';
 import { streamAgentText, type AgentMessage } from './AgentStreamClient';
 import { buildComposerSystemPrompt } from './composerPrompt';
 import type { KeyboardAgentJob } from '@/lib/keyboardAgentSync';
+import type { TextInferenceSnapshot } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -96,6 +97,11 @@ export interface AgentComposerConfig {
   setKeyboardStatus: (status: string, detail?: string) => void;
 }
 
+/** A keyboard job carries the agent route snapshotted when its recording started. */
+export interface AgentJobConfig
+  extends AgentComposerConfig,
+    Pick<TextInferenceSnapshot, 'agentRoute'> {}
+
 // ---------------------------------------------------------------------------
 // Module-level session map (in-memory; persisted via StorageService)
 // ---------------------------------------------------------------------------
@@ -172,13 +178,10 @@ function getSession(sessionId: string): AgentSession | null {
   return session;
 }
 
-function createSession(sessionId: string): AgentSession {
-  const { getInferenceSelection } =
-    require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
-  const selection = getInferenceSelection('agent');
+function createSession(sessionId: string, inferenceRoute: InferenceSelection): AgentSession {
   const session: AgentSession = {
     sessionId,
-    inferenceRoute: selection ? { ...selection } : { mode: 'openwhispr' },
+    inferenceRoute: { ...inferenceRoute },
     messages: [],
     versions: [],
     lastActivityAtMs: Date.now(),
@@ -354,16 +357,20 @@ async function runGeneration(params: {
 export async function generateForJob(
   job: KeyboardAgentJob,
   instruction: string,
-  config: AgentComposerConfig,
+  config: AgentJobConfig,
 ): Promise<void> {
-  const { setKeyboardStatus } = config;
+  const { setKeyboardStatus, agentRoute } = config;
   const { jobId, sessionId, kind, tone, selectedText, contextBefore, contextAfter } = job;
 
   let session: AgentSession;
   if (kind === 'compose') {
+    if (!agentRoute) {
+      setKeyboardStatus('agent_error', 'agent_setup_required');
+      return;
+    }
     // compose always gets a fresh session (idempotent: overwrite any stale one).
     sessions.get(sessionId)?.inFlightController?.abort();
-    session = createSession(sessionId);
+    session = createSession(sessionId, agentRoute);
   } else {
     const existing = getSession(sessionId);
     if (!existing) {

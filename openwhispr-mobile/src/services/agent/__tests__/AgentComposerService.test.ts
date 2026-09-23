@@ -1,5 +1,4 @@
 jest.mock('@/lib/inferenceRouting', () => ({
-  getInferenceSelection: jest.fn(() => undefined),
   resolveMobileProviderRoute: jest.fn(),
 }));
 
@@ -73,7 +72,7 @@ import {
   clearAllSessions,
   getActiveSession,
   MAX_WINDOW_TURNS,
-  type AgentComposerConfig,
+  type AgentJobConfig,
   type AgentAction,
   type PersistedAgentSession,
 } from '../AgentComposerService';
@@ -116,11 +115,11 @@ function makeComposeJob(overrides: Partial<KeyboardAgentJob> = {}): KeyboardAgen
   };
 }
 
-function makeConfig(): { setKeyboardStatus: jest.Mock; config: AgentComposerConfig } {
+function makeConfig(): { setKeyboardStatus: jest.Mock; config: AgentJobConfig } {
   const setKeyboardStatus = jest.fn<void, [string, string | undefined]>();
   return {
     setKeyboardStatus,
-    config: { setKeyboardStatus },
+    config: { setKeyboardStatus, agentRoute: { mode: 'openwhispr', scope: 'agent' } },
   };
 }
 
@@ -927,28 +926,33 @@ describe('clearAllSessions', () => {
 });
 
 it('persists the provider route so regenerate cannot switch destinations with settings', async () => {
-  const { getInferenceSelection, resolveMobileProviderRoute } = jest.requireMock(
-    '@/lib/inferenceRouting',
-  ) as {
-    getInferenceSelection: jest.Mock;
+  const { resolveMobileProviderRoute } = jest.requireMock('@/lib/inferenceRouting') as {
     resolveMobileProviderRoute: jest.Mock;
   };
   const route = {
-    mode: 'providers',
-    scope: 'agent',
+    mode: 'providers' as const,
+    scope: 'agent' as const,
     providerId: 'openai',
     modelId: 'gpt-4o-mini',
     endpoint: 'https://api.openai.com/v1',
     credentialRef: 'provider.openai',
   };
-  getInferenceSelection.mockReturnValueOnce(route);
   resolveMobileProviderRoute.mockResolvedValue(route);
   const job = makeComposeJob({ jobId: makeRequestId(Date.now(), 'compose') });
   mockReadKeyboardAgentJob.mockReturnValue(job);
   mockStreamAgentText.mockResolvedValue('draft');
-  await generateForJob(job, 'Write an email.', makeConfig().config);
+  await generateForJob(job, 'Write an email.', { ...makeConfig().config, agentRoute: route });
   expect(mockSaveAgentSessions.mock.calls.at(-1)?.[0][0].inferenceRoute).toEqual(route);
   await handleAgentAction(makeAction(), makeConfig().config);
   expect(mockStreamAgentText).toHaveBeenCalledTimes(2);
   expect(mockStreamAgentText.mock.calls.at(-1)?.[0].inferenceRoute).toEqual(route);
+});
+
+it('refuses a compose job whose recording had no agent route instead of using Cloud', async () => {
+  const job = makeComposeJob({ jobId: makeRequestId(Date.now(), 'compose') });
+  mockReadKeyboardAgentJob.mockReturnValue(job);
+  const { setKeyboardStatus } = makeConfig();
+  await generateForJob(job, 'Write an email.', { setKeyboardStatus });
+  expect(mockStreamAgentText).not.toHaveBeenCalled();
+  expect(setKeyboardStatus).toHaveBeenCalledWith('agent_error', 'agent_setup_required');
 });
