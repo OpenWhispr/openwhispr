@@ -3,6 +3,10 @@ export interface SpeechChunkerOptions {
   firstChunkMinChars?: number;
   /** A chunk with no boundary is cut at its last space once it grows past this length. */
   maxChunkChars?: number;
+  /** The first chunk is cut at a space sooner than that, so the first audio isn't held back. */
+  maxFirstChunkChars?: number;
+  /** Stop emitting after this many chunks; the rest stays on screen but isn't spoken. */
+  maxChunks?: number;
 }
 
 export interface SpeechChunker {
@@ -42,9 +46,12 @@ export function toSpeakableText(text: string): string {
 export function createSpeechChunker({
   firstChunkMinChars = 24,
   maxChunkChars = 220,
+  maxFirstChunkChars = 70,
+  maxChunks = Number.POSITIVE_INFINITY,
 }: SpeechChunkerOptions = {}): SpeechChunker {
   let buffer = "";
   let emittedAny = false;
+  let emittedCount = 0;
 
   const findBoundary = (): number => {
     for (let index = 0; index < buffer.length; index += 1) {
@@ -62,8 +69,9 @@ export function createSpeechChunker({
         return index + 1;
       }
     }
-    if (buffer.length > maxChunkChars) {
-      const lastSpace = buffer.slice(0, maxChunkChars + 1).lastIndexOf(" ");
+    const limit = emittedAny ? maxChunkChars : maxFirstChunkChars;
+    if (buffer.length > limit) {
+      const lastSpace = buffer.slice(0, limit + 1).lastIndexOf(" ");
       if (lastSpace > 0) return lastSpace;
     }
     return -1;
@@ -71,8 +79,9 @@ export function createSpeechChunker({
 
   const emit = (raw: string, out: string[]): void => {
     const speakable = toSpeakableText(raw);
-    if (!speakable) return;
+    if (!speakable || emittedCount >= maxChunks) return;
     emittedAny = true;
+    emittedCount += 1;
     out.push(speakable);
   };
 
@@ -101,6 +110,7 @@ export function createSpeechChunker({
     reset() {
       buffer = "";
       emittedAny = false;
+      emittedCount = 0;
     },
   };
 }

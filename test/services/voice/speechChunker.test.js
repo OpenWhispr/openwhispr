@@ -50,11 +50,35 @@ test("splits on newlines and question or exclamation marks", async () => {
 
 test("forces a split at the last space once a chunk exceeds the maximum length", async () => {
   const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({ firstChunkMinChars: 1000, maxChunkChars: 20 });
+  const chunker = createSpeechChunker({
+    firstChunkMinChars: 1000,
+    maxChunkChars: 20,
+    maxFirstChunkChars: 20,
+  });
   assert.deepEqual(pushAll(chunker, ["one two three four five six seven"]), [
     "one two three four",
   ]);
   assert.deepEqual(chunker.flush(), ["five six seven"]);
+});
+
+test("a long first sentence with no punctuation is cut at a space so speech can start", async () => {
+  const { createSpeechChunker } = await load();
+  const chunker = createSpeechChunker({ firstChunkMinChars: 24, maxFirstChunkChars: 40 });
+  const out = pushAll(chunker, ["The weather in Tokyo right now is mostly sunny with light winds from the east"]);
+  assert.equal(out.length, 1);
+  assert.ok(out[0].length <= 40);
+  assert.ok(!out[0].endsWith(" "));
+  // Later chunks keep waiting for real sentence boundaries.
+  assert.deepEqual(pushAll(chunker, [" and a high of twenty"]), []);
+});
+
+test("stops emitting after the spoken-sentence limit, until reset", async () => {
+  const { createSpeechChunker } = await load();
+  const chunker = createSpeechChunker({ firstChunkMinChars: 1000, maxChunks: 2 });
+  assert.deepEqual(pushAll(chunker, ["One. Two. Three. Four. "]), ["One.", "Two."]);
+  assert.deepEqual(chunker.flush(), []);
+  chunker.reset();
+  assert.deepEqual(pushAll(chunker, ["Fresh start. "]), ["Fresh start."]);
 });
 
 test("strips markdown and drops chunks with nothing speakable", async () => {

@@ -31,6 +31,9 @@ interface TurnMetrics {
 }
 
 const DEFAULT_PARAKEET_MODEL = "parakeet-unified-en-0.6b";
+// Spoken replies stop after three sentences; the panel keeps the full answer. Doing
+// this in code, not the prompt: brevity pressure in the prompt made the model skip tools.
+const MAX_SPOKEN_SENTENCES = 3;
 // Hands-free sessions end after 2.5 minutes with no speech in either direction.
 const IDLE_STOP_MS = 150_000;
 const SESSION_TICK_MS = 10_000;
@@ -51,7 +54,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
   const activeRef = useRef(false);
   const micRef = useRef<MicStream | null>(null);
   const playerRef = useRef<PcmPlayer | null>(null);
-  const chunkerRef = useRef(createSpeechChunker());
+  const chunkerRef = useRef(createSpeechChunker({ maxChunks: MAX_SPOKEN_SENTENCES }));
   const utteranceRef = useRef<string | null>(null);
   const responseDoneRef = useRef(false);
   const chunkIndexRef = useRef(0);

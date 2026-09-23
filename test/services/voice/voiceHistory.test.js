@@ -57,14 +57,41 @@ test("an already-sent newest turn (a retry) keeps its original context", async (
   assert.deepEqual(history, [{ role: "user", content: "[ctx-old] hi" }]);
 });
 
-test("only the last 20 messages are sent, like typed chat", async () => {
-  const { buildVoiceHistory } = await load();
-  const messages = Array.from({ length: 25 }, (_, index) => ({
+const conversation = (length) =>
+  Array.from({ length }, (_, index) => ({
     id: `m${index}`,
     role: index % 2 === 0 ? "user" : "assistant",
     content: `message ${index}`,
   }));
+
+test("short conversations are sent whole", async () => {
+  const { buildVoiceHistory } = await load();
+  assert.equal(buildVoiceHistory(conversation(19), new Map(), "", wrap).length, 19);
+  assert.equal(buildVoiceHistory(conversation(20), new Map(), "", wrap).length, 20);
+});
+
+// Dropping one message per turn changes the start of the prompt every turn and
+// forces a full re-read (6-11 s at ~8k tokens); dropping in blocks of 10 keeps
+// the prefix stable for ~5 turns at a time.
+test("old messages are dropped in blocks, so the window start rarely moves", async () => {
+  const { buildVoiceHistory } = await load();
+  const starts = [21, 22, 25, 29, 30, 31].map(
+    (length) => buildVoiceHistory(conversation(length), new Map(), "", wrap)[0].content
+  );
+  assert.deepEqual(starts, [
+    "message 10",
+    "message 10",
+    "message 10",
+    "message 10",
+    "message 10",
+    "message 20",
+  ]);
+});
+
+test("the window never starts on an assistant message", async () => {
+  const { buildVoiceHistory } = await load();
+  const messages = conversation(24);
+  messages.splice(1, 1); // odd gap shifts every later role by one index
   const history = buildVoiceHistory(messages, new Map(), "", wrap);
-  assert.equal(history.length, 20);
-  assert.equal(history[0].content, "message 5");
+  assert.equal(history[0].role, "user");
 });

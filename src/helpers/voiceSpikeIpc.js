@@ -14,9 +14,19 @@ const {
 // Local voice-conversation spike: dev-only, enabled with OPENWHISPR_VOICE_SPIKE=1.
 // The renderer streams echo-cancelled 16 kHz mic frames in; the worker's VAD
 // cuts turns, Parakeet transcribes them here, and TTS audio streams back out.
-function registerVoiceSpikeIpc({ parakeetManager }) {
+function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
   let sender = null;
   let session = null;
+
+  // A hands-free session holds the mic open; treat it like a dictation recording
+  // so meeting detection doesn't prompt "meeting detected" about our own session.
+  const setRecording = (active) => {
+    try {
+      getMeetingDetectionEngine?.()?.setUserRecording(active);
+    } catch (error) {
+      debugLogger.warn("voice spike could not update meeting detection", { error: error?.message });
+    }
+  };
   let configuredKind = null;
   let configuredSampleRate = null;
 
@@ -81,6 +91,7 @@ function registerVoiceSpikeIpc({ parakeetManager }) {
     } else {
       voiceWorker.notify("vad-reset", {});
     }
+    setRecording(true);
     session = {
       parakeetModel: resolveSpikeParakeetModel(options.parakeetModel, (name) =>
         parakeetManager.isModelDownloaded(name)
@@ -132,6 +143,7 @@ function registerVoiceSpikeIpc({ parakeetManager }) {
   );
 
   ipcMain.handle("voice-spike:stop", () => {
+    if (session) setRecording(false);
     session = null;
     voiceWorker.notify("vad-reset", {});
     return { stopped: true };

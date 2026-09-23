@@ -1354,7 +1354,10 @@ class IPCHandlers {
   }
 
   setupHandlers() {
-    require("./voiceSpikeIpc").registerVoiceSpikeIpc({ parakeetManager: this.parakeetManager });
+    require("./voiceSpikeIpc").registerVoiceSpikeIpc({
+      parakeetManager: this.parakeetManager,
+      getMeetingDetectionEngine: () => this.meetingDetectionEngine,
+    });
 
     ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
       this.windowManager.setOnboardingWindowMode(mode)

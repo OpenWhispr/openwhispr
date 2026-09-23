@@ -111,6 +111,8 @@ export function getAgentSystemPrompt(availableTools?: string[], noteContext?: st
 }
 
 // Voice spike: English-only for now; move into prompts.json per locale before shipping.
+// A stricter "one sentence, then stop" version cut tool recall from 9/10 to 5-7/10
+// in the spike eval without shortening answers; spoken length is capped in code instead.
 const VOICE_BREVITY =
   "Your reply will be spoken aloud in a live voice conversation. Answer in one or two short " +
   "sentences unless the user asks for more. Never use Markdown, lists, tables, headings, " +

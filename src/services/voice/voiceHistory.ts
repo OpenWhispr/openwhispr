@@ -1,4 +1,15 @@
 const HISTORY_LIMIT = 20;
+// Old messages leave in blocks, not one per turn: every drop changes the start of
+// the prompt and forces a full re-read, so it should happen once per ~5 turns.
+const HISTORY_DROP_STEP = 10;
+
+function windowStart(messages: StoredMessage[]): number {
+  const overflow = messages.length - HISTORY_LIMIT;
+  if (overflow <= 0) return 0;
+  let start = Math.ceil(overflow / HISTORY_DROP_STEP) * HISTORY_DROP_STEP;
+  while (start < messages.length && messages[start].role !== "user") start += 1;
+  return start;
+}
 
 interface StoredMessage {
   id: string;
@@ -24,7 +35,7 @@ export function buildVoiceHistory(
   turnContext: string,
   wrapWithContext: (text: string, context: string) => string
 ): VoiceHistoryMessage[] {
-  const recent = messages.slice(-HISTORY_LIMIT);
+  const recent = messages.slice(windowStart(messages));
   let newestUserIndex = -1;
   for (let index = recent.length - 1; index >= 0; index -= 1) {
     if (recent[index].role === "user") {

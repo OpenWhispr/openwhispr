@@ -38,6 +38,7 @@ const RAG_NOTE_SNIPPET_LENGTH = 500;
 const STREAM_FLUSH_INTERVAL_MS = 32;
 
 const LOCAL_TOOL_MIN_PARAMS_B = 4;
+const VOICE_MAX_OUTPUT_TOKENS = 200;
 
 function estimateModelSizeB(modelId: string): number {
   const match = modelId.match(/-([\d.]+)[bB]/);
@@ -523,6 +524,8 @@ export function useChatStreaming({
               customApiKey:
                 isCustomAgent || isLanAgent ? llmConfig.customApiKey || undefined : undefined,
               disableThinking: llmConfig.disableThinking,
+              // Backstop for spoken replies; the voice prompt keeps them far shorter.
+              ...(voiceTurn ? { maxTokens: VOICE_MAX_OUTPUT_TOKENS } : {}),
             },
             aiTools
           );
