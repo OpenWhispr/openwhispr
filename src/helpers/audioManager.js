@@ -4007,6 +4007,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async safePaste(text, options = {}) {
     try {
       const result = await window.electronAPI.pasteText(text, options);
+      if (
+        result?.success === false &&
+        result.code === "ACCESSIBILITY_PERMISSION_REQUIRED" &&
+        result.clipboardCopied === true
+      ) {
+        this.onError?.({
+          title: "Paste Error",
+          code: result.code,
+          clipboardCopied: true,
+          transcript: text,
+        });
+        return false;
+      }
       return result?.pasted === true;
     } catch (error) {
       const message =
@@ -4014,7 +4027,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         (typeof error?.toString === "function" ? error.toString() : String(error));
       this.onError?.({
         title: "Paste Error",
-        description: `Failed to paste text. Please check accessibility permissions. ${message}`,
+        code: "PASTE_FAILED",
+        description: message,
       });
       return false;
     }
