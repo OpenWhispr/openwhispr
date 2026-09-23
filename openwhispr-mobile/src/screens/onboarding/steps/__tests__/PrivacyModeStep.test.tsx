@@ -28,6 +28,21 @@ beforeEach(() => {
   jest.mocked(chooseOnboardingMode).mockResolvedValue(undefined);
   mockCancelActiveDownloads.mockResolvedValue(undefined);
 });
+it('describes each mode in a few short lines', () => {
+  const screen = render(<PrivacyModeStep />);
+  for (const text of [
+    'Everything runs on your device. Nothing is ever uploaded.',
+    'Works fully offline',
+    'Faster transcription',
+    'Higher quality',
+    'Automatic cleanup & formatting',
+  ]) {
+    expect(screen.getByText(text)).toBeTruthy();
+  }
+  expect(screen.queryByText(/tone/i)).toBeNull();
+  expect(screen.queryByText(/voice agent/i)).toBeNull();
+  expect(screen.queryByText(/Pro offer/i)).toBeNull();
+});
 it('shows the confirmed mode when revisiting the choice', () => {
   mockSelectedMode = 'private';
   const screen = render(<PrivacyModeStep />);

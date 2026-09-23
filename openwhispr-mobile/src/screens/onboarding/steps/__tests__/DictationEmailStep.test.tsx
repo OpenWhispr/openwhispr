@@ -52,6 +52,18 @@ beforeEach(() => {
   mockEnsureSession.mockResolvedValue(undefined);
 });
 
+const SAMPLE_EMAIL =
+  'Hey Tim, excited to chat. Are you free next Friday at 3pm… actually, 4pm? Thanks, Chad';
+
+it('lays the practice out as an email to Tim with the sample as the placeholder', () => {
+  const screen = render(<DictationEmailStep />);
+  for (const text of ['To', 'Tim', 'Subject', 'Quick sync', 'Read this aloud']) {
+    expect(screen.getByText(text)).toBeTruthy();
+  }
+  expect(screen.getByLabelText('Your dictated email').props.placeholder).toBe(SAMPLE_EMAIL);
+  expect(screen.getByText('works in any email app')).toBeTruthy();
+});
+
 it('shows recording and processing state, then displays the inserted result', async () => {
   const screen = render(<DictationEmailStep />);
   act(() => mockListener({ status: 'recording' }));
@@ -63,12 +75,12 @@ it('shows recording and processing state, then displays the inserted result', as
   expect(screen.getByText('Your email is ready')).toBeTruthy();
 });
 
-it('offers a labeled sample and retry after a recording failure', async () => {
+it('offers retry after a recording failure, without an example', async () => {
   const screen = render(<DictationEmailStep />);
   act(() => mockListener({ status: 'error', error: 'Network unavailable' }));
   expect(screen.getByText('Network unavailable')).toBeTruthy();
-  fireEvent.press(screen.getByText('Show an example'));
-  expect(screen.getByText('Example · not a live transcription')).toBeTruthy();
+  expect(screen.queryByText('Show an example')).toBeNull();
+  expect(screen.queryByText(/Example/)).toBeNull();
   fireEvent.press(screen.getByText('Retry'));
   await waitFor(() => expect(mockEnsureSession).toHaveBeenCalledTimes(1));
 });
@@ -78,7 +90,8 @@ it('keeps Local selected when revisiting practice', () => {
   const screen = render(<DictationEmailStep />);
   expect(mockSetMode).not.toHaveBeenCalled();
   expect(screen.getByLabelText('Your dictated email').props.editable).toBe(false);
-  expect(screen.getByText('Example · not a live transcription')).toBeTruthy();
+  expect(screen.getByText('Practice uses Cloud. Skip it to keep Local.')).toBeTruthy();
+  expect(screen.queryByText(/Example/)).toBeNull();
 });
 
 it('keeps offline practice skippable', async () => {
@@ -117,9 +130,9 @@ it('keeps the no-speech error until the next recording starts', () => {
   const screen = render(<DictationEmailStep />);
   act(() => mockListener({ status: 'no_speech' }));
   act(() => mockListener({ status: 'idle' }));
-  expect(screen.getByText('No speech detected. Try again or view the example.')).toBeTruthy();
+  expect(screen.getByText('No speech detected. Try again.')).toBeTruthy();
   act(() => mockListener({ status: 'recording' }));
-  expect(screen.queryByText('No speech detected. Try again or view the example.')).toBeNull();
+  expect(screen.queryByText('No speech detected. Try again.')).toBeNull();
 });
 
 // Replaying onboarding starts with no choice made, but the saved Local default still stands.
@@ -127,7 +140,7 @@ it('keeps a saved Local default when replaying onboarding', () => {
   mockSavedMode = 'private';
   const screen = render(<DictationEmailStep />);
   expect(mockSetMode).not.toHaveBeenCalled();
-  expect(screen.getByText('Example · not a live transcription')).toBeTruthy();
+  expect(screen.getByText('Practice uses Cloud. Skip it to keep Local.')).toBeTruthy();
 });
 
 it('explains why Cloud practice could not be retried', async () => {
@@ -135,6 +148,6 @@ it('explains why Cloud practice could not be retried', async () => {
   const screen = render(<DictationEmailStep />);
   fireEvent.press(screen.getByText('Retry'));
   expect(
-    await screen.findByText('Cloud practice needs a connection. You can view the example or skip.'),
+    await screen.findByText('Still no connection. Check it and try again, or skip for now.'),
   ).toBeTruthy();
 });
