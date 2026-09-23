@@ -159,6 +159,15 @@ function loadManagerWithRealFs() {
 const enoent = () => Object.assign(new Error("ENOENT"), { code: "ENOENT" });
 const eacces = () => Object.assign(new Error("EACCES"), { code: "EACCES" });
 
+// sysfs capability bitmaps as the kernel prints them: hex words, most
+// significant first, unpadded. A laptop keyboard's lowest key word has every bit
+// but KEY_RESERVED set, a value a double cannot hold exactly.
+const KEYBOARD_CAPABILITIES = {
+  ev: "120013",
+  key: "402000000 3803078f800d001 feffffdfffefffff fffffffffffffffe",
+};
+const GAMEPAD_CAPABILITIES = { ev: "20000b", key: "7cdb000000000000 0 0 0 0" };
+
 // Patch only the paths under test; everything else keeps the real behaviour so
 // node:test's own fs use is untouched.
 function stubBinaryFound(t, found) {
@@ -170,7 +179,7 @@ function stubBinaryFound(t, found) {
   });
 }
 
-function stubInputDir(t, { entries, readable = [] }) {
+function stubInputDir(t, { entries, readable = [], keyboards = readable, sysfs = true }) {
   const realReaddir = fs.readdirSync;
   t.mock.method(fs, "readdirSync", (target, ...rest) => {
     if (String(target) !== "/dev/input") return realReaddir.call(fs, target, ...rest);
@@ -182,6 +191,22 @@ function stubInputDir(t, { entries, readable = [] }) {
   t.mock.method(fs, "accessSync", (target, ...rest) => {
     if (!String(target).startsWith("/dev/input/")) return realAccess.call(fs, target, ...rest);
     if (!readable.includes(String(target))) throw eacces();
+  });
+
+  // Every /sys/class/input read is answered here, so a Linux runner's own
+  // devices never leak into the result.
+  const realReadFile = fs.readFileSync;
+  t.mock.method(fs, "readFileSync", (target, ...rest) => {
+    if (!String(target).startsWith("/sys/class/input/")) {
+      return realReadFile.call(fs, target, ...rest);
+    }
+    const match = /^\/sys\/class\/input\/(event\d+)\/device\/capabilities\/(ev|key)$/.exec(
+      String(target)
+    );
+    if (!sysfs || !match) throw enoent();
+    const [, node, bitmap] = match;
+    const isKeyboard = keyboards.includes(`/dev/input/${node}`);
+    return `${(isKeyboard ? KEYBOARD_CAPABILITIES : GAMEPAD_CAPABILITIES)[bitmap]}\n`;
   });
 }
 
@@ -227,6 +252,52 @@ test("checkAvailability does not block when /dev/input cannot be read", (t) => {
   const LinuxKeyManager = loadManagerWithRealFs();
   stubBinaryFound(t, true);
   stubInputDir(t, { entries: null });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
+});
+
+// systemd's uaccess rule (rules.d/70-uaccess.rules.in) grants the session user
+// every joystick node, so a gamepad is readable where keyboards are not. The C
+// listener skips it as a non-keyboard and prints NO_PERMISSION; the probe must
+// reach the same verdict.
+test("checkAvailability denies access when only a gamepad node is readable", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, {
+    entries: ["event0", "event1"],
+    readable: ["/dev/input/event1"],
+    keyboards: [],
+  });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), {
+    available: false,
+    reason: "input_access_denied",
+  });
+});
+
+test("checkAvailability finds a readable keyboard past a readable gamepad", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, {
+    entries: ["event0", "event1", "event2"],
+    readable: ["/dev/input/event0", "/dev/input/event2"],
+    keyboards: ["/dev/input/event2"],
+  });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
+});
+
+// Without /sys (some sandboxes) a readable node might be a keyboard, and a false
+// "denied" would refuse a hotkey the listener can serve.
+test("checkAvailability trusts a readable node when sysfs cannot describe it", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, {
+    entries: ["event0", "event1"],
+    readable: ["/dev/input/event1"],
+    keyboards: [],
+    sysfs: false,
+  });
 
   assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
 });

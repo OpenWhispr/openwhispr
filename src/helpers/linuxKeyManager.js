@@ -5,6 +5,28 @@ const fs = require("fs");
 const debugLogger = require("./debugLogger");
 
 const INPUT_DIR = "/dev/input";
+const INPUT_SYSFS_DIR = "/sys/class/input";
+// linux/input-event-codes.h
+const EV_KEY = 1n;
+const KEY_A = 30n;
+
+// is_keyboard_device() in linux-key-listener.c, read from sysfs, where the kernel
+// prints the capability bitmaps its ioctl returns: hex words, most significant
+// first, so the bits wanted here sit in the last word (BigInt, since a 64-bit
+// word overflows a double). When sysfs cannot say, as in a sandbox without /sys,
+// the node counts as a keyboard rather than refuse a hotkey it may serve.
+function couldBeKeyboard(device) {
+  const capabilities = path.join(INPUT_SYSFS_DIR, device, "device", "capabilities");
+  const hasBit = (bitmap, bit) => {
+    const words = fs.readFileSync(path.join(capabilities, bitmap), "utf8").trim().split(" ");
+    return ((BigInt(`0x${words.at(-1)}`) >> bit) & 1n) === 1n;
+  };
+  try {
+    return hasBit("ev", EV_KEY) && hasBit("key", KEY_A);
+  } catch {
+    return true;
+  }
+}
 
 // Key state comes from an evdev reader (resources/linux-key-listener.c) that reads
 // /dev/input directly, so it observes KEY_UP regardless of which window has focus
@@ -152,13 +174,13 @@ class LinuxKeyManager extends EventEmitter {
   }
 
   /**
-   * Whether the listener could actually run right now: binary present and at
-   * least one readable /dev/input/event* node (the listener itself also filters
-   * for keyboards; any readable node already proves the user can read input
-   * devices). Mirrors the C listener's own rule — it prints NO_PERMISSION only
-   * when it opened zero devices AND at least one node returned EACCES, so a
-   * missing or event-less /dev/input is not a failure there (it waits for
-   * hotplug) and must not be one here.
+   * Whether the listener could actually run right now: binary present and a
+   * readable keyboard among the /dev/input/event* nodes. Mirrors the C
+   * listener's own rule — it keeps only keyboards and prints NO_PERMISSION only
+   * when it kept none AND at least one node returned EACCES, so a missing or
+   * event-less /dev/input is not a failure there (it waits for hotplug) and
+   * must not be one here. Any other readable node proves nothing: systemd
+   * grants the session user every joystick.
    * Callers ask at registration time, because a hotkey only this listener can
    * serve must not report success when the listener cannot run.
    * @returns {{available: true} | {available: false, reason: "binary_missing" | "input_access_denied"}}
@@ -172,18 +194,19 @@ class LinuxKeyManager extends EventEmitter {
     } catch {
       return { available: true };
     }
-    if (devices.length === 0) return { available: true };
 
+    let denied = false;
     for (const device of devices) {
       try {
         fs.accessSync(path.join(INPUT_DIR, device), fs.constants.R_OK);
-        return { available: true };
       } catch {
+        denied = true;
         continue;
       }
+      if (couldBeKeyboard(device)) return { available: true };
     }
 
-    return { available: false, reason: "input_access_denied" };
+    return denied ? { available: false, reason: "input_access_denied" } : { available: true };
   }
 
   reportError(error) {
