@@ -9,6 +9,14 @@ const os = require("os");
 const STDERR_TAIL_CHARS = 16 * 1024;
 const MAX_REASON_LENGTH = 240;
 
+// Where the reason is saved: one .env key per backend beside WHISPER_GPU_FAILED,
+// set and cleared with it (ipcHandlers, whisperGpuUpgradeReset) and listed in
+// environment.js PERSISTED_KEYS so a .env rewrite keeps it.
+const WHISPER_GPU_FAILURE_REASON_KEYS = Object.freeze({
+  cuda: "WHISPER_GPU_FAILED_REASON_CUDA",
+  vulkan: "WHISPER_GPU_FAILED_REASON_VULKAN",
+});
+
 // Most specific first; the capture group is the reason. Formats are from the
 // pinned OpenWhispr/whisper.cpp tag.
 const CAUSE_PATTERNS = [
@@ -97,4 +105,8 @@ function extractWhisperGpuFailureReason({
   return null;
 }
 
-module.exports = { MAX_REASON_LENGTH, extractWhisperGpuFailureReason };
+module.exports = {
+  MAX_REASON_LENGTH,
+  WHISPER_GPU_FAILURE_REASON_KEYS,
+  extractWhisperGpuFailureReason,
+};
