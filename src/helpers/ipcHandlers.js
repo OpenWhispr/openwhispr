@@ -5865,9 +5865,12 @@ class IPCHandlers {
     // System audio is always capturable on Windows: via the native WASAPI
     // process-loopback helper when available (hears every output device),
     // otherwise via Chromium's default-device loopback in the renderer.
-    // "Default playback device only" (#1546) skips the helper entirely: it
-    // also records virtual outputs, such as a voice changer's, that can carry
-    // the user's own voice, so it is neither probed nor started.
+    // A check or plan for "Default playback device only" (#1546) never asks
+    // the helper, which also records virtual outputs, such as a voice
+    // changer's, that can carry the user's own voice. So a meeting on that
+    // choice neither probes nor starts it. Screens that check access without a
+    // source still read its capability, which re-probes once a failed probe's
+    // 30 s cache expires; capture never uses that answer.
     const getWindowsSystemAudioAccess = async ({
       refreshCapability = false,
       systemAudioSource,
