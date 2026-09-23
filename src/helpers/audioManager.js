@@ -4523,8 +4523,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (res.code === "FEATURE_NOT_ENABLED") this.invalidateSttConfig();
       this.streamingFallbackReason = fallbackReason;
       logger.warn(
-        "Managed Orukeet session refused, falling back to batch recording",
-        { code: res.code, status: res.status, reason: fallbackReason },
+        "Managed Orukeet session unavailable, falling back to batch recording",
+        { code: res.code, status: res.status, reason: fallbackReason, error: res.error },
         "streaming"
       );
       return { needsFallback: true };

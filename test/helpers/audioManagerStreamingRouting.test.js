@@ -258,6 +258,17 @@ test("a refused managed Orukeet session starts a batch recording instead of fail
   assert.throws(() => classify({ success: false, code: "AUTH_EXPIRED", status: 401 }), {
     code: "AUTH_EXPIRED",
   });
+
+  // A network error, timeout or WebSocket failure has no status or code: batch
+  // takes the dictation instead of it being lost behind an error.
+  manager.streamingFallbackReason = null;
+  assert.deepEqual(classify({ success: false, code: "NETWORK_ERROR" }), { needsFallback: true });
+  assert.equal(manager.streamingFallbackReason, "session_unavailable");
+  manager.streamingFallbackReason = null;
+  assert.deepEqual(classify({ success: false, error: "Orukeet connection closed" }), {
+    needsFallback: true,
+  });
+  assert.equal(manager.streamingFallbackReason, "session_unavailable");
   assert.equal(errors.length, 0);
 });
 

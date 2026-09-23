@@ -71,15 +71,34 @@ test("an unavailable session service falls back to batch as session_unavailable"
   }
 });
 
+test("a start that fails without a denial to act on falls back instead of losing the dictation", async () => {
+  const failures = [
+    // Network error or the 10 s session request timeout.
+    { success: false, code: "NETWORK_ERROR" },
+    { success: false, error: "The operation was aborted due to timeout" },
+    // WebSocket handshake failure or a rejected session body.
+    { success: false, error: "Orukeet connection closed before completion" },
+    { success: false, error: "Invalid Orukeet cloud session" },
+    // A cookie-only session with no bearer for the managed route.
+    { success: false, code: "AUTH_CONTEXT_UNVALIDATED", status: 0 },
+    { success: false, status: 429 },
+    { success: false },
+  ];
+  for (const result of failures) {
+    assert.equal(await orukeetStart(result), "session_unavailable", JSON.stringify(result));
+  }
+});
+
 test("denials the user must act on do not fall back", async () => {
   const denials = [
     { success: false, code: "AUTH_EXPIRED", status: 401 },
+    { success: false, code: "AUTH_REQUIRED" },
+    { success: false, code: "AUTH_CONTEXT_CHANGED", status: 0 },
     { success: false, code: "POLICY_MODE_BLOCKED", status: 403 },
+    { success: false, code: "POLICY_UNRESOLVABLE", status: 403 },
     { success: false, code: "ACCOUNT_REQUIRED", status: 403 },
     { success: false, code: "UPGRADE_REQUIRED", status: 426, minAppVersion: "2.0.0" },
-    { success: false, status: 429 },
-    { success: false, code: "NETWORK_ERROR" },
-    { success: false },
+    { success: false, code: "LIMIT_REACHED", status: 429 },
   ];
   for (const result of denials) {
     assert.equal(await orukeetStart(result), null, JSON.stringify(result));
