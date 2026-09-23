@@ -1,6 +1,4 @@
-const { withDangerousMod } = require('expo/config-plugins');
-const fs = require('fs');
-const path = require('path');
+const { withPodfile } = require('expo/config-plugins');
 
 // Pod resource-bundle targets (SDWebImage, Sentry, RevenueCat, ...) keep the
 // deployment target from their podspec, as low as 9.0. React Native's
@@ -9,9 +7,8 @@ const path = require('path');
 // target below the app's own deployment target, which CocoaPods resolves from
 // the Podfile's `platform :ios` line (expo-build-properties' ios.deploymentTarget).
 const POST_INSTALL_ANCHOR = 'post_install do |installer|';
-const MARKER = 'app_deployment_target = installer.aggregate_targets';
 const DEPLOYMENT_TARGET_SNIPPET = `
-    ${MARKER}.map { |target| target.platform.deployment_target }.min
+    app_deployment_target = installer.aggregate_targets.map { |target| target.platform.deployment_target }.min
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |build_configuration|
         pod_deployment_target = build_configuration.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
@@ -23,7 +20,7 @@ const DEPLOYMENT_TARGET_SNIPPET = `
 `;
 
 function addPodDeploymentTargetFloor(contents) {
-  if (contents.includes(MARKER)) return contents;
+  if (contents.includes(DEPLOYMENT_TARGET_SNIPPET)) return contents;
   if (!contents.includes(POST_INSTALL_ANCHOR)) {
     throw new Error(
       'withPodDeploymentTarget: post_install block not found in the generated Podfile',
@@ -33,16 +30,10 @@ function addPodDeploymentTargetFloor(contents) {
 }
 
 function withPodDeploymentTarget(config) {
-  return withDangerousMod(config, [
-    'ios',
-    (cfg) => {
-      const podfilePath = path.join(cfg.modRequest.platformProjectRoot, 'Podfile');
-      const contents = fs.readFileSync(podfilePath, 'utf8');
-      const next = addPodDeploymentTargetFloor(contents);
-      if (next !== contents) fs.writeFileSync(podfilePath, next);
-      return cfg;
-    },
-  ]);
+  return withPodfile(config, (cfg) => {
+    cfg.modResults.contents = addPodDeploymentTargetFloor(cfg.modResults.contents);
+    return cfg;
+  });
 }
 
 module.exports = withPodDeploymentTarget;

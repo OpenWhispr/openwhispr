@@ -23,7 +23,7 @@ function postInstallBlock(podfile: string): string {
 }
 
 describe('withPodDeploymentTarget', () => {
-  it('raises every Pods target below the app deployment target inside the existing post_install block', () => {
+  it('adds the deployment-target floor inside the existing post_install block', () => {
     const podfile = addPodDeploymentTargetFloor(EXPO_TEMPLATE_PODFILE);
     const block = postInstallBlock(podfile);
 
