@@ -132,7 +132,10 @@ test("the custom dictionary rides gpt-transcribe's keywords[] channel, legacy mo
         if (language === "zh-CN") {
           assert.ok(sent.language, "zh-CN must send the language part");
           assert.match(sent.prompt, /^以下是简体中文。/, "the script bias must lead the prompt");
-          assert.ok(sent.prompt.endsWith(` ${overflow}`), "the overflow must follow the bias whole");
+          assert.ok(
+            sent.prompt.endsWith(` ${overflow}`),
+            "the overflow must follow the bias whole"
+          );
         } else {
           assert.equal(sent.prompt, overflow);
         }
@@ -140,21 +143,24 @@ test("the custom dictionary rides gpt-transcribe's keywords[] channel, legacy mo
     );
   }
 
-  await t.test("an overflow past OpenAI's 65,536-char prompt limit is cut between terms", async (st) => {
-    // 900 keywords plus 7,000 twelve-character terms: ~98k chars of overflow.
-    const terms = Array.from({ length: 7900 }, (_, i) => `Term${String(i).padStart(8, "0")}`);
-    const sent = captureSerialized(st);
+  await t.test(
+    "an overflow past OpenAI's 65,536-char prompt limit is cut between terms",
+    async (st) => {
+      // 900 keywords plus 7,000 twelve-character terms: ~98k chars of overflow.
+      const terms = Array.from({ length: 7900 }, (_, i) => `Term${String(i).padStart(8, "0")}`);
+      const sent = captureSerialized(st);
 
-    await manager("gpt-transcribe", {
-      getCustomDictionaryPrompt: () => terms.join(", "),
-    }).processWithOpenAIAPI(audioBlob, {});
+      await manager("gpt-transcribe", {
+        getCustomDictionaryPrompt: () => terms.join(", "),
+      }).processWithOpenAIAPI(audioBlob, {});
 
-    assert.equal(sent.keywords.length, 900);
-    assert.ok(sent.prompt.length <= 65_536, `prompt of ${sent.prompt.length} chars is rejected`);
-    assert.ok(sent.prompt.length > 65_000, "the cut must use the budget, not a smaller one");
-    const promptTerms = sent.prompt.split(", ");
-    assert.deepEqual(promptTerms, terms.slice(900, 900 + promptTerms.length));
-  });
+      assert.equal(sent.keywords.length, 900);
+      assert.ok(sent.prompt.length <= 65_536, `prompt of ${sent.prompt.length} chars is rejected`);
+      assert.ok(sent.prompt.length > 65_000, "the cut must use the budget, not a smaller one");
+      const promptTerms = sent.prompt.split(", ");
+      assert.deepEqual(promptTerms, terms.slice(900, 900 + promptTerms.length));
+    }
+  );
 
   await t.test("whisper-1 keeps the prompt and never streams", async () => {
     const requests = captureRequests(t);
