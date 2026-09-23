@@ -19,8 +19,12 @@ const INSTRUCTIONS: Record<Phase, string> = {
   done: 'That’s your voice agent.',
 };
 
-// The agent reports this once an anonymous user's free tries are used up; only an account clears it.
-const ACCOUNT_REQUIRED = 'account_required';
+// Errors a retry can't clear: an anonymous user's free tries are used up (only an account clears
+// it) or the weekly word limit is reached (only its reset clears it).
+const FINAL_ERROR_NOTES: Record<string, string> = {
+  account_required: 'You’ve used the free tries. Sign in at the end to keep using the agent.',
+  usage_limit: 'You’ve reached the weekly word limit. Try the agent again once it resets.',
+};
 
 export function VoiceAgentStep(): ReactElement {
   const { goNext, goBack, progress } = useOnboardingStep('voice-agent');
@@ -28,22 +32,32 @@ export function VoiceAgentStep(): ReactElement {
   const user = useAuthStore((state) => state.user);
   const input = useRef<TextInput>(null);
   const draftsReady = useRef(0);
+  const lastDraftAt = useRef<string | undefined>(undefined);
   const [phase, setPhase] = useState<Phase>('start');
   const [value, setValue] = useState('');
   const [agentError, setAgentError] = useState<string | null>(null);
-  const liveAvailable = !localSelected && !!user && !agentError;
+  // A failed refinement leaves the earlier draft on the keyboard's card, so the field stays up for
+  // inserting it.
+  const hasDraft = phase === 'first-draft' || phase === 'refined';
+  const liveAvailable = !localSelected && !!user && (!agentError || hasDraft);
+  const errorIsFinal = !!agentError && agentError in FINAL_ERROR_NOTES;
 
   useEffect(() => {
     const subscription = addKeyboardStatusChangedListener((event) => {
       if (event.status === 'recording') {
         setPhase((current) => (current === 'start' ? 'asking' : current));
       } else if (event.status === 'agent_ready') {
+        // The native module emits each status directly and again from its own Darwin notification;
+        // both copies carry the same updatedAtMs.
+        if (event.updatedAtMs && event.updatedAtMs === lastDraftAt.current) return;
+        lastDraftAt.current = event.updatedAtMs;
         draftsReady.current += 1;
         const next: Phase = draftsReady.current >= 2 ? 'refined' : 'first-draft';
         setPhase((current) => (current === 'done' ? current : next));
+        setAgentError(null);
       } else if (event.status === 'agent_error') {
         setAgentError(event.error || 'agent_error');
-        Keyboard.dismiss();
+        if (draftsReady.current === 0) Keyboard.dismiss();
       }
     });
     return () => subscription?.remove();
@@ -57,13 +71,17 @@ export function VoiceAgentStep(): ReactElement {
     input.current?.focus();
   };
 
+  const errorNote = agentError
+    ? (FINAL_ERROR_NOTES[agentError] ??
+      (hasDraft
+        ? 'The change didn’t go through. You can still insert this draft.'
+        : 'The agent couldn’t finish. Try again or skip for now.'))
+    : null;
   const fallbackNote = localSelected
     ? 'The voice agent uses Cloud. Here’s an example instead.'
     : !user
       ? 'The voice agent needs a connection. Here’s an example instead.'
-      : agentError === ACCOUNT_REQUIRED
-        ? 'You’ve used the free tries. Sign in at the end to keep using the agent.'
-        : 'The agent couldn’t finish. Try again or skip for now.';
+      : errorNote;
 
   return (
     <OnboardingShell
@@ -76,7 +94,7 @@ export function VoiceAgentStep(): ReactElement {
       onSkip={goNext}
       ctaLabel="Continue"
       onCta={goNext}
-      secondaryCtaLabel={agentError && agentError !== ACCOUNT_REQUIRED ? 'Retry' : undefined}
+      secondaryCtaLabel={agentError && !errorIsFinal ? 'Retry' : undefined}
       onSecondaryCta={retry}
     >
       <ScrollView
@@ -97,9 +115,19 @@ export function VoiceAgentStep(): ReactElement {
                 accessibilityLiveRegion="polite"
                 className="flex-1 text-[16px] leading-[22px] text-label"
               >
-                {INSTRUCTIONS[phase]}
+                {INSTRUCTIONS[agentError ? 'refined' : phase]}
               </Text>
             </View>
+            {errorNote ? (
+              <Text
+                accessibilityRole="alert"
+                className={`text-[14px] leading-[20px] ${
+                  errorIsFinal ? 'text-secondaryLabel' : 'text-systemRed'
+                }`}
+              >
+                {errorNote}
+              </Text>
+            ) : null}
             <View className="rounded-2xl border border-separator bg-secondarySystemGroupedBackground px-4 pb-4 pt-3">
               <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
                 To: Sam
@@ -114,6 +142,7 @@ export function VoiceAgentStep(): ReactElement {
                   // doesn't count.
                   if (text.trim() && draftsReady.current > 0 && phase !== 'done') {
                     setPhase('done');
+                    setAgentError(null);
                     Keyboard.dismiss();
                   }
                 }}
@@ -132,9 +161,7 @@ export function VoiceAgentStep(): ReactElement {
             <Text
               accessibilityRole={agentError ? 'alert' : undefined}
               className={`text-[14px] leading-[20px] ${
-                agentError && agentError !== ACCOUNT_REQUIRED
-                  ? 'text-systemRed'
-                  : 'text-secondaryLabel'
+                agentError && !errorIsFinal ? 'text-systemRed' : 'text-secondaryLabel'
               }`}
             >
               {fallbackNote}

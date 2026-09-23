@@ -5,7 +5,7 @@ jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
-let mockListener: (event: { status?: string; error?: string }) => void;
+let mockListener: (event: { status?: string; error?: string; updatedAtMs?: string }) => void;
 jest.mock('../../../../../modules/app-group-storage/src', () => ({
   addKeyboardStatusChangedListener: (listener: typeof mockListener) => {
     mockListener = listener;
@@ -47,8 +47,8 @@ const FOLLOW_UP = 'Now tap Ask for changes and say: “Make this more concise.�
 const INSERT = 'Tap ✓ to insert it.';
 const DONE = 'That’s your voice agent.';
 
-const emit = (status: string, error?: string): void => {
-  act(() => mockListener({ status, error }));
+const emit = (status: string, error?: string, updatedAtMs?: string): void => {
+  act(() => mockListener({ status, error, updatedAtMs }));
 };
 
 beforeEach(() => {
@@ -93,6 +93,73 @@ it('does not count ordinary dictation as trying the agent', () => {
   expect(screen.getByText(ASK)).toBeTruthy();
 });
 
+it('counts a draft once when the keyboard reports it twice', () => {
+  // The native module emits each status directly and again from its own Darwin
+  // notification; both copies carry the same updatedAtMs.
+  const screen = render(<VoiceAgentStep />);
+  emit('recording');
+  emit('agent_ready', undefined, '1000');
+  emit('agent_ready', undefined, '1000');
+  expect(screen.getByText(FOLLOW_UP)).toBeTruthy();
+  emit('agent_ready', undefined, '2000');
+  expect(screen.getByText(INSERT)).toBeTruthy();
+});
+
+it('keeps the first draft insertable when the refinement fails', () => {
+  // The keyboard keeps the first draft on its card after a failed refinement.
+  const screen = render(<VoiceAgentStep />);
+  emit('recording');
+  emit('agent_ready', undefined, '1000');
+  emit('recording');
+  emit('agent_error', 'Network request failed');
+  expect(
+    screen.getByText('The change didn’t go through. You can still insert this draft.'),
+  ).toBeTruthy();
+  expect(screen.getByText(INSERT)).toBeTruthy();
+  expect(screen.getByText('Retry')).toBeTruthy();
+  expect(screen.queryByText('Example request')).toBeNull();
+  fireEvent.changeText(screen.getByLabelText('Your message'), 'Hey Sam, lunch tomorrow at noon?');
+  expect(screen.getByText(DONE)).toBeTruthy();
+  expect(screen.queryByText('Retry')).toBeNull();
+});
+
+it('keeps the draft insertable when the free tries run out during the refinement', () => {
+  const screen = render(<VoiceAgentStep />);
+  emit('recording');
+  emit('agent_ready', undefined, '1000');
+  emit('agent_error', 'account_required');
+  expect(
+    screen.getByText('You’ve used the free tries. Sign in at the end to keep using the agent.'),
+  ).toBeTruthy();
+  expect(screen.getByLabelText('Your message')).toBeTruthy();
+  expect(screen.getByText(INSERT)).toBeTruthy();
+  expect(screen.queryByText('Retry')).toBeNull();
+});
+
+it('clears a failed refinement once another draft arrives', () => {
+  const screen = render(<VoiceAgentStep />);
+  emit('recording');
+  emit('agent_ready', undefined, '1000');
+  emit('agent_error', 'Network request failed');
+  emit('agent_ready', undefined, '2000');
+  expect(screen.getByText(INSERT)).toBeTruthy();
+  expect(
+    screen.queryByText('The change didn’t go through. You can still insert this draft.'),
+  ).toBeNull();
+  expect(screen.queryByText('Retry')).toBeNull();
+});
+
+it('does not offer a retry once the weekly word limit is reached', () => {
+  const screen = render(<VoiceAgentStep />);
+  emit('recording');
+  emit('agent_error', 'usage_limit');
+  expect(
+    screen.getByText('You’ve reached the weekly word limit. Try the agent again once it resets.'),
+  ).toBeTruthy();
+  expect(screen.getByText('Example request')).toBeTruthy();
+  expect(screen.queryByText('Retry')).toBeNull();
+});
+
 it('uses Cloud for the live try before a mode is chosen', () => {
   render(<VoiceAgentStep />);
   expect(mockSetMode).toHaveBeenCalledWith('cloud', true);
@@ -109,17 +176,26 @@ it('falls back to the example once the free tries are used up', () => {
   expect(screen.queryByText('Retry')).toBeNull();
 });
 
-it('offers a retry and the example after another agent error', () => {
+it('offers a retry and the example when the agent fails before a draft', () => {
   const screen = render(<VoiceAgentStep />);
   emit('recording');
-  emit('agent_ready');
   emit('agent_error', 'Network request failed');
   expect(screen.getByText('The agent couldn’t finish. Try again or skip for now.')).toBeTruthy();
   expect(screen.getByText('Example request')).toBeTruthy();
   fireEvent.press(screen.getByText('Retry'));
   expect(screen.getByText(START)).toBeTruthy();
-  // A draft from before the error no longer counts toward the follow-up.
-  emit('agent_ready');
+  expect(screen.getByLabelText('Your message')).toBeTruthy();
+});
+
+it('starts the try over when retrying after a failed refinement', () => {
+  const screen = render(<VoiceAgentStep />);
+  emit('recording');
+  emit('agent_ready', undefined, '1000');
+  emit('agent_error', 'Network request failed');
+  fireEvent.press(screen.getByText('Retry'));
+  expect(screen.getByText(START)).toBeTruthy();
+  // A draft from before the retry no longer counts toward the follow-up.
+  emit('agent_ready', undefined, '2000');
   expect(screen.getByText(FOLLOW_UP)).toBeTruthy();
 });
 
