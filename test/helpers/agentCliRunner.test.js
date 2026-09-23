@@ -107,13 +107,12 @@ test("Devin uses a 0600 prompt file and removes all temporary data", async () =>
   const runner = new AgentCliRunner({
     spawn(command, args, options) {
       assert.equal(command, "devin");
-      assert.deepEqual(args.slice(0, 7), [
+      assert.deepEqual(args.slice(0, 6), [
         "-p",
         "--model",
         "swe",
         "--permission-mode",
         "auto",
-        "--sandbox",
         "--prompt-file",
       ]);
       promptPath = args[args.indexOf("--prompt-file") + 1];

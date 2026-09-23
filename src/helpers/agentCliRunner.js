@@ -204,7 +204,6 @@ class AgentCliRunner {
       model,
       "--permission-mode",
       "auto",
-      "--sandbox",
       "--prompt-file",
       promptPath,
     ];
