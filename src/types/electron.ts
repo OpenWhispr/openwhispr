@@ -792,6 +792,9 @@ export interface SystemAudioAccessResult {
   error?: string;
 }
 
+/** Windows only: which playback devices note recording captures (#1546). */
+export type SystemAudioSource = "all-devices" | "default-device";
+
 export interface ScreenRecordingAccessResult {
   granted: boolean;
   status: "granted" | "denied" | "not-determined" | "restricted" | "unknown" | "unsupported";

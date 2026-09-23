@@ -10,6 +10,7 @@ import type {
   LocalTranscriptionProvider,
   InferenceMode,
   SelfHostedType,
+  SystemAudioSource,
 } from "../types/electron";
 import type { CalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
@@ -37,6 +38,10 @@ import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { recordTinfoilModelSwitch } from "./tinfoilModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
+import {
+  DEFAULT_SYSTEM_AUDIO_SOURCE,
+  normalizeSystemAudioSource,
+} from "../helpers/systemAudioSource";
 import {
   getTranscriptionSelection,
   isScreenContextAllowed,
@@ -875,6 +880,7 @@ export interface SettingsState
   appleCalendarConnected: boolean;
   meetingProcessDetection: boolean;
   speakerDiarizationEnabled: boolean;
+  systemAudioSource: SystemAudioSource;
   dictationSileroEnabled: boolean;
   noteRecordingSileroEnabled: boolean;
   meetingSileroEnabled: boolean;
@@ -1160,6 +1166,7 @@ export interface SettingsState
   setMicrophoneSelectionMode: (mode: MicrophoneSelectionMode) => void;
   setSelectedMicDevice: (deviceId: string, label: string) => void;
   setMicWarmHoldSeconds: (seconds: number) => void;
+  setSystemAudioSource: (source: SystemAudioSource) => void;
 
   setTheme: (value: "light" | "dark" | "auto") => void;
   setCloudBackupEnabled: (value: boolean) => void;
@@ -1578,6 +1585,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   selectedMicDeviceId: readString("selectedMicDeviceId", ""),
   selectedMicDeviceLabel: readString("selectedMicDeviceLabel", ""),
   micWarmHoldSeconds: snapMicWarmHold(readNumber("micWarmHoldSeconds", 0)),
+  systemAudioSource: normalizeSystemAudioSource(
+    readString("systemAudioSource", DEFAULT_SYSTEM_AUDIO_SOURCE)
+  ),
 
   theme: (() => {
     const v = readString("theme", "auto");
@@ -2342,6 +2352,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const snapped = snapMicWarmHold(value);
     if (isBrowser) localStorage.setItem("micWarmHoldSeconds", String(snapped));
     set({ micWarmHoldSeconds: snapped });
+  },
+  setSystemAudioSource: (source: SystemAudioSource) => {
+    const normalized = normalizeSystemAudioSource(source);
+    if (isBrowser) localStorage.setItem("systemAudioSource", normalized);
+    set({ systemAudioSource: normalized });
   },
   setAudioRetentionDays: createNumberSetter("audioRetentionDays"),
   setTranscriptRetentionDays: createNumberSetter("transcriptRetentionDays"),
