@@ -47,41 +47,19 @@ function wasLaunchedHidden({ platform, argv, loginItemSettings }) {
 
 // A relaunch must not replay how this process was launched: --hidden would put the
 // restarted app in the tray, and startup would handle a cold-start deep link again
-// (a sign-in link would restore the session a reset just cleared). An AppImage and
-// the Windows portable build run from a directory that is gone once this process
-// exits (the FUSE mount; the stub's %TEMP% unpack dir), so app.relaunch() cannot
-// bring them back: getRelaunchWaiter() starts the on-disk file from outside instead.
-function getRelaunchOptions({ argv, protocol, appImagePath, portableExecutablePath }) {
+// (a sign-in link would restore the session a reset just cleared). An AppImage runs
+// from a FUSE mount that is gone once this process exits, so app.relaunch() cannot
+// bring it back: getRelaunchWaiter() starts the on-disk file from outside instead.
+function getRelaunchOptions({ argv, protocol, appImagePath }) {
   const args = argv
     .slice(1)
     .filter((arg) => arg !== HIDDEN_LAUNCH_FLAG && !arg.startsWith(`${protocol}://`));
-  const launcherPath = appImagePath || portableExecutablePath;
-  return launcherPath ? { launcherPath, args } : { args };
+  return appImagePath ? { launcherPath: appImagePath, args } : { args };
 }
 
-// The portable stub deletes its unpack dir only after the app exits, so on Windows the
-// waiter must outlive the stub (this process's parent), not just this process.
-function getRelaunchWaiter({
-  platform,
-  launcherPath,
-  args,
-  pid,
-  ppid,
-  systemRoot = "C:\\Windows",
-}) {
-  if (platform === "win32") {
-    const quote = (value) => `'${String(value).replace(/'/g, "''")}'`;
-    const argumentList = args.length ? ` -ArgumentList ${args.map(quote).join(",")}` : "";
-    return {
-      file: `${systemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`,
-      args: [
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        `Wait-Process -Id ${ppid}; Start-Process -FilePath ${quote(launcherPath)}${argumentList}`,
-      ],
-    };
-  }
+// Polls until the pid exits (and the FUSE mount with it), then execs the AppImage
+// with the surviving args.
+function getRelaunchWaiter({ launcherPath, args, pid }) {
   return {
     file: "/bin/sh",
     args: [

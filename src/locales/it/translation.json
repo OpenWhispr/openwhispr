@@ -702,6 +702,11 @@
       "title": "Modelli richiesti mancanti",
       "description": "La tua organizzazione richiede questi modelli su questo dispositivo: {{models}}.",
       "download": "Scarica"
+    },
+    "cloudNudge": {
+      "title": "Accesso effettuato",
+      "description": "La dettatura usa ancora la tua configurazione. Puoi passare a OpenWhispr Cloud in qualsiasi momento.",
+      "action": "Apri Impostazioni"
     }
   },
   "reasoning": {

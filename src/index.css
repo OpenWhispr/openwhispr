@@ -1674,7 +1674,10 @@ a:hover {
 .rich-text-editor-content {
   outline: none;
   unicode-bidi: plaintext;
-  padding: 0.75rem 1.25rem 5rem;
+  padding-block: 0.75rem 5rem;
+  /* Centers the text in the page column (PAGE_CONTENT_WIDTH_CLASS) with padding, not a
+     max-width, so the editable area spans the pane and a margin click places the caret. */
+  padding-inline: max(1.25rem, calc((100% - var(--container-5xl)) / 2 + 1.25rem));
   font-size: 0.875rem;
   line-height: 1.7;
   color: var(--color-foreground);

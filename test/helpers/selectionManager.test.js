@@ -142,7 +142,7 @@ test("a terminal-flagged target is refused as a caret destination without probin
     textEditMonitor: {
       isFocusedEditable: async (target) => {
         probes.push(target);
-        return true;
+        return "editable";
       },
     },
     platform: "win32",
@@ -182,7 +182,7 @@ test("a Linux AT-SPI terminal pid never becomes a caret delivery target", async 
     textEditMonitor: {
       isFocusedEditable: async (target) => {
         probes.push(target);
-        return true;
+        return "editable";
       },
     },
     platform: "linux",
@@ -562,7 +562,7 @@ test("a terminal target reads as no selection", async () => {
   };
   const manager = new SelectionManager({
     clipboardManager,
-    textEditMonitor: { isFocusedEditable: async () => true },
+    textEditMonitor: { isFocusedEditable: async () => "editable" },
     platform: "linux",
     now: () => 1000,
   });
@@ -646,6 +646,122 @@ test("a macOS line copy in a line-copy editor reads as no selection", async () =
     copied: "const x = 1;\n",
   });
   assert.equal((await manager.captureSelectedText()).status, "none");
+});
+
+test("an unverifiable macOS field with no selection stays on the panel route", async () => {
+  const { manager } = makeMacClipboardHarness({ copied: null });
+  manager.textEditMonitor.isFocusedEditable = async () => "unknown";
+
+  const result = await manager.captureSelectedText({ probeEditable: true });
+  assert.equal(result.status, "none");
+  assert.equal(result.sessionId, undefined);
+});
+
+test("a confirmed non-editable macOS focus stays on the panel route", async () => {
+  const { manager } = makeMacClipboardHarness({ copied: null });
+  manager.textEditMonitor.isFocusedEditable = async () => "not_editable";
+
+  assert.equal((await manager.captureSelectedText({ probeEditable: true })).status, "none");
+});
+
+test("an unknown verdict in a terminal is still refused as a caret", async () => {
+  const { manager } = makeMacClipboardHarness({ copyOutput: "COPY_OK 42 Ghostty", copied: null });
+  manager.textEditMonitor.isFocusedEditable = async () => "unknown";
+
+  assert.equal((await manager.captureSelectedText({ probeEditable: true })).status, "none");
+});
+
+// COPY_OK reports the app name best-effort; when it is missing, the executable
+// must be resolved before an unnamed terminal can be trusted as a caret.
+test("an unnamed macOS target resolves the executable before trusting a caret", async () => {
+  const { manager } = makeMacClipboardHarness({ copyOutput: "COPY_OK 42", copied: null });
+  manager.textEditMonitor.isFocusedEditable = async () => "editable";
+  manager._readExecutablePath = async () => "/Applications/Ghostty.app/Contents/MacOS/ghostty";
+
+  assert.equal((await manager.captureSelectedText({ probeEditable: true })).status, "none");
+});
+
+test("a caret verified after clipboard capture delivers the assistant response", async () => {
+  const { manager } = makeMacClipboardHarness({ copied: null });
+  const pastes = [];
+  manager.textEditMonitor.isFocusedEditable = async () => "editable";
+  manager.clipboardManager._pasteText = async (text, options) => {
+    pastes.push({ text, options });
+    return { restoreComplete: Promise.resolve() };
+  };
+
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+  assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
+    success: true,
+  });
+  assert.equal(pastes[0].text, "Agent response");
+});
+
+for (const { name, appName, copied } of [
+  { name: "selection matches the clipboard", appName: "Dia", copied: "user clipboard" },
+  { name: "selection is a full code line", appName: "Code", copied: "const value = 1;\n" },
+  { name: "focus moves to an integrated terminal", appName: "Code", copied: null },
+  { name: "focus moves to a browser page", appName: "Chrome", copied: null },
+]) {
+  test(`a verified caret stops delivery when AX becomes unknown and ${name}`, async () => {
+    const { manager } = makeMacClipboardHarness({ copyOutput: `COPY_OK 42 ${appName}`, copied });
+    const pastes = [];
+    manager.textEditMonitor.getSelectedText = async () => ({ state: "none", editable: true });
+    manager._readExecutablePath = async () => appName;
+    manager.clipboardManager._pasteText = async (text) => {
+      pastes.push(text);
+      return { restoreComplete: Promise.resolve() };
+    };
+    const capture = await manager.captureSelectedText({ probeEditable: true });
+    assert.equal(capture.status, "editable");
+
+    // The app/PID is unchanged, but the focused field is no longer inspectable.
+    manager.textEditMonitor.getSelectedText = async () => ({ state: "unknown" });
+    manager.textEditMonitor.isFocusedEditable = async () => "unknown";
+
+    assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
+      success: false,
+      code: "target_changed",
+    });
+    assert.deepEqual(pastes, []);
+  });
+}
+
+test("an assistant answer remains available when a dormant browser has no input", async () => {
+  const { createAssistantResponseDelivery, deliverAssistantResponse } =
+    await import("../../src/helpers/assistantResponseDelivery.ts");
+  const { manager } = makeMacClipboardHarness({ copyOutput: "COPY_OK 42 Chrome" });
+  const pastes = [];
+  const writes = [];
+  manager.textEditMonitor.getSelectedText = async () => ({ state: "unknown" });
+  manager.textEditMonitor.isFocusedEditable = async () => "unknown";
+  // Posting Cmd+V succeeds even when there is no field to receive it.
+  manager.clipboardManager._pasteText = async (text) => {
+    pastes.push(text);
+    return { restoreComplete: Promise.resolve() };
+  };
+
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+  const delivery = createAssistantResponseDelivery({
+    autoPasteEnabled: true,
+    deliverySessionId: capture.sessionId,
+    restoreClipboard: true,
+    allowClipboardFallback: false,
+  });
+  const result = await deliverAssistantResponse(delivery, "Agent response", {
+    electronAPI: {
+      pasteAtCapturedTarget: (...args) => manager.pasteAtCapturedTarget(...args),
+      writeClipboard: async (text) => {
+        writes.push(text);
+        return { success: true };
+      },
+    },
+    clipboard: {},
+  });
+
+  assert.deepEqual(result, { pasted: false, copied: true });
+  assert.deepEqual(pastes, []);
+  assert.deepEqual(writes, ["Agent response"]);
 });
 
 test("a failed macOS copy stays non-fatal so the command still runs", async () => {

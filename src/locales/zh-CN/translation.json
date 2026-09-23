@@ -702,6 +702,11 @@
       "title": "缺少必需的模型",
       "description": "您的组织要求在此设备上安装这些模型：{{models}}。",
       "download": "下载"
+    },
+    "cloudNudge": {
+      "title": "你已登录",
+      "description": "听写仍在使用你自己的配置。你可以随时切换到 OpenWhispr Cloud。",
+      "action": "打开设置"
     }
   },
   "reasoning": {

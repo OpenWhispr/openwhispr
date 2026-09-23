@@ -336,9 +336,10 @@ class SelectionManager {
       };
     }
     // Chromium browsers (and any app whose accessibility tree stays dormant)
-    // never resolve a focused element, so the read above cannot tell a selection
-    // from an empty field. A synthetic copy still can — the same route Windows
-    // and Linux take by default.
+    // never resolve a focused element — or resolve only the bare window (the
+    // native read's "unknown" state) — so the read above cannot tell a
+    // selection from an empty field. A synthetic copy still can — the same
+    // route Windows and Linux take by default.
     return this._readMacSelectionViaClipboard(pid, expectedTarget, probeEditable);
   }
 
@@ -498,8 +499,24 @@ class SelectionManager {
     // to match — so resolve the executable name before a Wayland terminal's
     // empty prompt can read as a writable caret.
     if (target.kind === "atspi-pid" && (await this._isTerminalPid(target.id))) return capture;
-    const editable = await this.textEditMonitor?.isFocusedEditable?.(target);
-    return editable ? { status: "editable", target } : capture;
+    // macOS targets normally carry the copier's NSWorkspace app name, already
+    // matched above; only an unnamed target needs its executable resolved so a
+    // terminal cannot become a caret destination. Never resolve a
+    // named one — `ps` reports bundle paths like "Visual Studio Code" whose
+    // "st" substring would misread editors as terminals.
+    if (
+      target.kind === "mac-pid" &&
+      !this._targetSignature(target) &&
+      (await this._isTerminalPid(target.pid))
+    ) {
+      return capture;
+    }
+    const verdict = await this.textEditMonitor?.isFocusedEditable?.(target);
+    if (verdict === "editable") return { status: "editable", target };
+    // An empty copy cannot distinguish a caret from an integrated terminal or
+    // a page without an input; it can also hide a selection matching the clipboard.
+    // Unknown accessibility must keep the panel fallback, including on revalidation.
+    return capture;
   }
 
   _isTerminalTarget(...targets) {
@@ -630,9 +647,8 @@ class SelectionManager {
     // Wayland) still holds pre-copy content; snapshot it so stale text can't
     // be mistaken for the copied selection. Known limitation: a clipboard that
     // already held exactly the selected text reads as "no selection". The
-    // command then falls back to the Assistant panel — never to a caret paste,
-    // because the editable probe reads the focused element's own selection
-    // state and refuses a field with a live selection.
+    // editable probe must independently verify an empty writable field before
+    // caret delivery; a live selection or unknown accessibility keeps the panel.
     const baseline = new Set([...beforeWrite, ...this.clipboardManager._readClipboardTextAll()]);
 
     const copyResult = await sendCopy();

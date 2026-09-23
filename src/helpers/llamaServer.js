@@ -720,9 +720,10 @@ class LlamaServerManager {
       stream: false,
     };
 
-    // Without this, Qwen chat templates leave `message.content` empty and
-    // route output into `reasoning_content`. Non-Qwen templates ignore it.
-    if (options.disableThinking !== false) {
+    // Without this, Qwen chat templates think into `reasoning_content` first
+    // and can spend the whole budget there. Non-Qwen templates ignore it.
+    const suppressThinking = options.disableThinking !== false;
+    if (suppressThinking) {
       requestBody.chat_template_kwargs = { enable_thinking: false };
     }
 
@@ -761,18 +762,24 @@ class LlamaServerManager {
 
             try {
               const response = JSON.parse(data);
-              if (
-                options.requireCompleteOutput &&
-                ["length", "max_tokens"].includes(response.choices?.[0]?.finish_reason)
-              ) {
+              const choice = response.choices?.[0];
+              const message = choice?.message;
+              const truncated = ["length", "max_tokens"].includes(choice?.finish_reason);
+              // A cut-off reply with no content spent its whole budget reasoning
+              // (#2187): there is no answer to return, whichever field the
+              // reasoning sits in. Lenient callers still accept a partial answer.
+              if (truncated && (options.requireCompleteOutput || !message?.content?.trim())) {
                 // The renderer maps the code to the cleanup toast's wording (#2091).
                 const error = new Error("Model output was truncated");
                 error.code = "OUTPUT_TRUNCATED";
                 reject(error);
                 return;
               }
-              const message = response.choices?.[0]?.message;
-              const text = message?.content || message?.reasoning_content || "";
+              // Some builds still route a suppressed-thinking answer into
+              // `reasoning_content` (#809). With thinking on, that field is the
+              // reasoning itself, which must never stand in for the answer.
+              const text =
+                message?.content || (suppressThinking && message?.reasoning_content) || "";
               resolve(text.trim());
             } catch (e) {
               reject(new Error(`Failed to parse llama-server response: ${e.message}`));

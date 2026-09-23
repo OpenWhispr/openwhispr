@@ -2731,15 +2731,15 @@ class IPCHandlers {
 
         const { dialog } = require("electron");
         const fs = require("fs");
-        const ext = format === "txt" ? "txt" : "md";
+        const exportFormat =
+          format === "txt"
+            ? { name: "Text", extension: "txt" }
+            : { name: "Markdown", extension: "md" };
         const safeName = (note.title || "Untitled").replace(/[/\\?%*:|"<>]/g, "-");
 
         const result = await dialog.showSaveDialog({
-          defaultPath: `${safeName}.${ext}`,
-          filters: [
-            { name: "Markdown", extensions: ["md"] },
-            { name: "Text", extensions: ["txt"] },
-          ],
+          defaultPath: `${safeName}.${exportFormat.extension}`,
+          filters: [{ name: exportFormat.name, extensions: [exportFormat.extension] }],
         });
 
         if (result.canceled || !result.filePath) return { success: false };
@@ -2777,18 +2777,18 @@ class IPCHandlers {
 
         const { dialog } = require("electron");
         const fs = require("fs");
-        const extMap = { srt: "srt", json: "json", md: "md" };
-        const ext = extMap[format] || "txt";
+        const exportFormats = {
+          txt: { name: "Text", extension: "txt" },
+          srt: { name: "SubRip Subtitles", extension: "srt" },
+          json: { name: "JSON", extension: "json" },
+          md: { name: "Markdown", extension: "md" },
+        };
+        const exportFormat = exportFormats[format] || exportFormats.txt;
         const safeName = (note.title || "Untitled").replace(/[/\\?%*:|"<>]/g, "-");
 
         const result = await dialog.showSaveDialog({
-          defaultPath: `${safeName}.${ext}`,
-          filters: [
-            { name: "Text", extensions: ["txt"] },
-            { name: "SubRip Subtitles", extensions: ["srt"] },
-            { name: "JSON", extensions: ["json"] },
-            { name: "Markdown", extensions: ["md"] },
-          ],
+          defaultPath: `${safeName}.${exportFormat.extension}`,
+          filters: [{ name: exportFormat.name, extensions: [exportFormat.extension] }],
         });
 
         if (result.canceled || !result.filePath) return { success: false };
@@ -3891,17 +3891,9 @@ class IPCHandlers {
         argv: process.argv,
         protocol: this.oauthProtocol,
         appImagePath: process.env.APPIMAGE,
-        portableExecutablePath: process.env.PORTABLE_EXECUTABLE_FILE,
       });
       if (launcherPath) {
-        const waiter = getRelaunchWaiter({
-          platform: process.platform,
-          launcherPath,
-          args,
-          pid: process.pid,
-          ppid: process.ppid,
-          systemRoot: process.env.SystemRoot,
-        });
+        const waiter = getRelaunchWaiter({ launcherPath, args, pid: process.pid });
         require("child_process")
           .spawn(waiter.file, waiter.args, {
             detached: true,
@@ -6334,6 +6326,7 @@ class IPCHandlers {
             ? preferredLanguage.split("-")[0]
             : undefined;
         const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+        const { convertBufferToWav, isWavFormat } = require("./ffmpegUtils");
         // Renderer pre-flight owns policy; retry re-routes stored audio through
         // whatever is selected NOW.
         const route = resolveTranscriptionRoute({
@@ -6522,8 +6515,35 @@ class IPCHandlers {
             throw new Error(`${provider} API key not configured`);
           }
 
+          // The renderer re-encodes WebM before uploading to a Custom endpoint
+          // (src/utils/audioContainer.ts); retries re-upload stored audio from
+          // the main process, so without the same step here every retry of a
+          // dictation that failed for that reason fails again -- which is the
+          // exact recovery a user reaches for after hitting it.
+          let uploadBuffer = buffer;
+          let uploadType = "audio/webm";
+          let uploadName = "audio.webm";
+          if (provider === "custom" && buffer.length && !isWavFormat(buffer)) {
+            try {
+              const wavBuffer = await convertBufferToWav(buffer);
+              // Match fresh dictation: PCM expansion must not break an upload
+              // that the endpoint could accept in its original container.
+              if (wavBuffer.length <= route.sizeCapBytes) {
+                uploadBuffer = wavBuffer;
+                uploadType = "audio/wav";
+                uploadName = "audio.wav";
+              }
+            } catch (conversionError) {
+              // Fail open, matching the renderer: an unconverted retry is no
+              // worse than today's behaviour.
+              debugLogger.warn("WAV re-encode failed on retry; uploading stored container", {
+                error: conversionError?.message,
+              });
+            }
+          }
+
           const formData = new FormData();
-          formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
+          formData.append("file", new Blob([uploadBuffer], { type: uploadType }), uploadName);
           if (provider === "xai") {
             // xAI STT does not accept a model field; the route pre-filters language
             if (route.language) {

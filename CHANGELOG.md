@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Assistant selection capture handles dormant macOS accessibility trees.** When accessibility exposes only a browser or Electron window, selection capture now tries a synthetic copy instead of assuming nothing is selected. The caret probe also waits long enough for its native retries to finish. Automatic answer delivery still requires a verified writable field at capture and delivery time: an unknown target keeps the answer in the panel and, with Auto-Paste enabled, copies it for manual paste. Dormant inputs still require manual paste because an empty copy cannot distinguish them from an integrated terminal, a page without an input, or some live selections. (#1952)
+
 ## [1.10.2] - 2026-09-15
 
 A hotfix for 1.10.1. Generate AI Summary with your own API key or an enterprise provider no longer times out on a real transcript, a recording with nothing substantive in it gets a one-line summary instead of a blank page and an error, and OpenRouter models can read screenshots again.
@@ -63,6 +67,7 @@ A follow-up to 1.10.0 built from everything that landed since. Notes open straig
 
 ### Transcription
 
+- **Local transcription now uses sherpa-onnx 1.13.8.** Cohere Transcribe now returns an empty result for silent audio instead of hallucinating a sentence; the bundled ONNX Runtime also moves to 1.28.2. (#1951, thanks @emanuelet)
 - **Long local dictations transcribe faster.** Parakeet and Orukeet decode audio in 15-second segments, and the app sent them to the local server one after another even though the server decodes on three threads. Segments now decode side by side, one per server thread and sized to the machine's cores, so a one-minute dictation no longer waits on four serial passes. Dictations under 15 seconds are unchanged. (#2178)
 - **Local dictation skips a decode step after you stop.** The app records in compressed WebM/Opus and used to hand that to FFmpeg to unpack before Parakeet, Orukeet, Cohere Transcribe or whisper.cpp could start, about half a second on Windows and a few milliseconds on macOS. The microphone now also keeps a raw 16 kHz copy from the moment it opens, pre-roll included, and the local engine decodes that directly. The WebM is still saved to history and remains what cloud providers, very long recordings and any fallback receive. Transcripts are unchanged: on the real engine, raw and Opus-decoded audio differed in about one word in a hundred, in the raw copy's favour. whisper.cpp also no longer needs FFmpeg present for a ready WAV. (#2179)
 - **Your own Deepgram key works again.** Every Deepgram connection failed with `Unexpected server response: 401`, even though the same key tested fine in Settings and worked against Deepgram directly. Deepgram accepts a raw API key only under its `Token` authorization scheme and reserves `Bearer` for the short-lived tokens OpenWhispr Cloud mints on your behalf — and the app was presenting your key as a `Bearer`. This broke bring-your-own-key dictation as well as Note Recording. (#2140, thanks @nikhilmaddirala)
