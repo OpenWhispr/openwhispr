@@ -23,6 +23,7 @@ import {
 } from "../../helpers/agentToolPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
+import type { AssistantSpeechTap } from "../../services/voice/types";
 import {
   normalizeAgentSelectionContext,
   type AgentSelectionContext,
@@ -79,6 +80,8 @@ interface AssistantPanelProps {
   onResponseContent: () => void;
   onConversationReset: () => void;
   onSelectionContextChange: (context: AgentSelectionContext | null) => void;
+  /** Local voice spike: speaks the streamed answer and lets barge-in cancel it. */
+  speechTap?: AssistantSpeechTap | null;
 }
 
 // Avoid reparsing Markdown when only the selection indicator changes.
@@ -102,6 +105,7 @@ export function AssistantPanel({
   onResponseContent,
   onConversationReset,
   onSelectionContextChange,
+  speechTap = null,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -119,9 +123,22 @@ export function AssistantPanel({
     inferenceScope: "dictationAgent",
     onStreamComplete: (_assistantId, content, toolCalls) => {
       void persistence.saveAssistantMessage(content, toolCalls);
+      speechTap?.onResponseDone();
     },
     onResponseContent,
+    onContentDelta: speechTap?.onContentDelta,
+    onToolCall: speechTap?.onToolCall,
+    voiceReplies: speechTap !== null,
   });
+
+  useEffect(() => {
+    if (!speechTap) return undefined;
+    const { cancelRef } = speechTap;
+    cancelRef.current = streaming.cancelStream;
+    return () => {
+      if (cancelRef.current === streaming.cancelStream) cancelRef.current = null;
+    };
+  }, [speechTap, streaming.cancelStream]);
 
   const createConversation = useCallback(
     (text: string) => {

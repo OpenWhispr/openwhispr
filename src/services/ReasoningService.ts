@@ -84,7 +84,9 @@ export type AgentStreamChunk =
       displayText: string;
       metadata?: ToolMetadata;
     }
-  | { type: "done"; finishReason?: string };
+  | { type: "done"; finishReason?: string }
+  /** The turn's messages exactly as the model saw them, when it used tools. */
+  | { type: "tool_steps"; messages: Array<{ role: string; content: unknown }> };
 
 function resolveLlmDispatchMode(
   provider: string,
@@ -947,6 +949,11 @@ class ReasoningService extends BaseReasoningService {
         } else if (chunk.type === "finish") {
           const trailing = finishFilteredText();
           if (trailing) yield { type: "content", text: trailing };
+          if (config.captureToolSteps && !abortController.signal.aborted) {
+            const { messages: stepMessages } = await result.response;
+            // A plain answer replays fine from its text; only tool turns need their steps.
+            if (stepMessages.length > 1) yield { type: "tool_steps", messages: stepMessages };
+          }
           yield { type: "done", finishReason: chunk.finishReason };
         }
       }

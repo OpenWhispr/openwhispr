@@ -1766,6 +1766,32 @@ declare global {
       getGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;
       dismissGpuPackMigrationNotice: () => Promise<{ success: boolean }>;
 
+      // Local voice-conversation spike (dev-only, OPENWHISPR_VOICE_SPIKE=1)
+      voiceSpike?: {
+        isEnabled: () => Promise<boolean>;
+        start: (options: {
+          parakeetModel?: string;
+          language?: string;
+        }) => Promise<{ ttsKind: string; sampleRate: number; loadMs: number }>;
+        sendMic: (samples: Float32Array) => void;
+        keepModelWarm: (modelId: string) => Promise<{ warmed: boolean; reason?: string }>;
+        speak: (request: {
+          utteranceId: string;
+          chunkIndex: number;
+          text: string;
+        }) => Promise<{
+          queueWaitMs?: number;
+          firstAudioMs?: number | null;
+          totalMs?: number;
+          cancelled?: boolean;
+        }>;
+        cancelSpeech: (utteranceId: string) => Promise<{ cancelled: boolean }>;
+        stop: () => Promise<{ stopped: boolean }>;
+        onEvent: (
+          callback: (event: import("../services/voice/types").VoiceSpikeEvent) => void
+        ) => () => void;
+      };
+
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
         audioBlob: ArrayBuffer,

@@ -95,6 +95,7 @@
     "**/node_modules/ps-list/**/*",
     "**/node_modules/better-sqlite3/**/*",
     "**/node_modules/onnxruntime-node/**/*",
+    "**/node_modules/sherpa-onnx-*/**/*",
     "**/node_modules/@napi-rs/keyring/**/*",
     "src/workers/**/*"
   ],

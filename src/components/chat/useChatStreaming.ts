@@ -15,9 +15,14 @@ import { usePolicyStore } from "../../stores/policyStore";
 import {
   appendDictionarySuffix,
   appendScreenContextSuffix,
+  buildVoiceTurnMessage,
   getAgentSystemPrompt,
+  getAgentSystemPromptParts,
+  getVoiceReplyInstructions,
 } from "../../config/prompts";
 import { getDictionaryHintWords } from "../../utils/snippets";
+import { buildVoiceHistory, type VoiceHistoryMessage } from "../../services/voice/voiceHistory";
+import { compactToolResultForVoice } from "../../services/voice/voiceTools";
 import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
@@ -85,6 +90,34 @@ interface UseChatStreamingOptions {
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
   /** Fires exactly once when displayable assistant content or tool activity becomes available. */
   onResponseContent?: () => void;
+  /** Receives each streamed content delta as it arrives (the voice spike speaks them). */
+  onContentDelta?: (delta: string) => void;
+  /**
+   * Voice spike: ask for short spoken replies and keep per-turn context out of the
+   * system prompt so a local model's prompt cache survives between turns.
+   */
+  voiceReplies?: boolean;
+  /** Voice spike: fires when a voice turn starts calling tools, so a filler line can play. */
+  onToolCall?: (toolNames: string[]) => void;
+}
+
+/** Voice turns get compacted tool results (see compactToolResultForVoice). */
+function compactVoiceToolResults(
+  tools: ReturnType<ToolRegistry["toAISDKFormat"]> | undefined
+): ReturnType<ToolRegistry["toAISDKFormat"]> | undefined {
+  if (!tools) return tools;
+  const compacted: ReturnType<ToolRegistry["toAISDKFormat"]> = {};
+  for (const [name, tool] of Object.entries(tools)) {
+    const execute = tool.execute;
+    compacted[name] = execute
+      ? ({
+          ...tool,
+          execute: async (...args: Parameters<typeof execute>) =>
+            compactToolResultForVoice(name, await execute(...args)),
+        } as typeof tool)
+      : tool;
+  }
+  return compacted;
 }
 
 export interface SendToAIOptions {
@@ -134,8 +167,21 @@ export function useChatStreaming({
   searchScope,
   onStreamComplete,
   onResponseContent,
+  onContentDelta,
+  onToolCall,
+  voiceReplies = false,
 }: UseChatStreamingOptions): ChatStreaming {
   const { t } = useTranslation();
+  const onContentDeltaRef = useRef(onContentDelta);
+  onContentDeltaRef.current = onContentDelta;
+  const voiceRepliesRef = useRef(voiceReplies);
+  voiceRepliesRef.current = voiceReplies;
+  // Voice turns: each user message exactly as sent, and each tool-using answer's
+  // steps, so later turns replay them verbatim and the prompt cache holds.
+  const voiceSentContentRef = useRef(new Map<string, string>());
+  const voiceStepsRef = useRef(new Map<string, VoiceHistoryMessage[]>());
+  const onToolCallRef = useRef(onToolCall);
+  onToolCallRef.current = onToolCall;
   const [agentState, setAgentState] = useState<AgentState>("idle");
   const [toolStatus, setToolStatus] = useState("");
   const [activeToolName, setActiveToolName] = useState("");
@@ -323,20 +369,30 @@ export function useChatStreaming({
       const ragContext = await buildRAGContext(userText, scope);
       if (cancelled() || !mountedRef.current) return;
       const combinedContext = [noteContextRef.current, ragContext].filter(Boolean).join("\n\n");
+      const toolNames = registry?.getAll().map((t) => t.name);
+      const voiceTurn = voiceRepliesRef.current;
+      const promptParts = voiceTurn
+        ? getAgentSystemPromptParts(toolNames, combinedContext || undefined)
+        : null;
       // The user's dictionary rides on every conversation so replies use their
       // jargon — same suffix the dictation prompts carry.
       let systemPrompt = appendDictionarySuffix(
-        getAgentSystemPrompt(
-          registry?.getAll().map((t) => t.name),
-          combinedContext || undefined
-        ),
+        promptParts
+          ? `${promptParts.stable}\n\n${getVoiceReplyInstructions(toolNames)}`
+          : getAgentSystemPrompt(toolNames, combinedContext || undefined),
         getDictionaryHintWords(settings),
         settings.uiLanguage
       );
 
-      const history: HistoryMessage[] = allMessages
-        .slice(-20)
-        .map((m) => ({ role: m.role, content: m.content }));
+      const history: HistoryMessage[] = promptParts
+        ? buildVoiceHistory(
+            allMessages,
+            voiceSentContentRef.current,
+            promptParts.turnContext,
+            buildVoiceTurnMessage,
+            voiceStepsRef.current
+          )
+        : allMessages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
 
       const selectedContext = options?.selectedContext;
       if (selectedContext) {
@@ -449,7 +505,9 @@ export function useChatStreaming({
             ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
           });
         } else {
-          const aiTools = registry?.toAISDKFormat();
+          const aiTools = voiceTurn
+            ? compactVoiceToolResults(registry?.toAISDKFormat())
+            : registry?.toAISDKFormat();
           stream = ReasoningService.processTextStreamingAI(
             llmMessages,
             llmConfig.model,
@@ -466,6 +524,7 @@ export function useChatStreaming({
               customApiKey:
                 isCustomAgent || isLanAgent ? llmConfig.customApiKey || undefined : undefined,
               disableThinking: llmConfig.disableThinking,
+              captureToolSteps: voiceTurn,
             },
             aiTools
           );
@@ -479,12 +538,16 @@ export function useChatStreaming({
           if (chunk.type === "content") {
             if (chunk.text) announceResponse();
             fullContent += chunk.text;
+            if (chunk.text) onContentDeltaRef.current?.(chunk.text);
             scheduleContentFlush();
           } else if (chunk.type === "tool_calls") {
             // Text that arrived before a tool step must be on screen before the
             // step appears, not an interval after it.
             flushContentNow();
             if (chunk.calls.length > 0) announceResponse();
+            if (voiceTurn && chunk.calls.length > 0) {
+              onToolCallRef.current?.(chunk.calls.map((call) => call.name));
+            }
             for (const call of chunk.calls) {
               setAgentState("tool-executing");
               beginToolActivity(
@@ -532,6 +595,8 @@ export function useChatStreaming({
             );
             setAgentState("streaming");
             completeToolActivity();
+          } else if (chunk.type === "tool_steps" && voiceTurn) {
+            voiceStepsRef.current.set(assistantId, chunk.messages as VoiceHistoryMessage[]);
           }
         }
 

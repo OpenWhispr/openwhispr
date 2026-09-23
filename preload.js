@@ -461,6 +461,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getGpuPackMigrationNotice: () => ipcRenderer.invoke("get-gpu-pack-migration-notice"),
   dismissGpuPackMigrationNotice: () => ipcRenderer.invoke("dismiss-gpu-pack-migration-notice"),
 
+  // Local voice-conversation spike (dev-only, OPENWHISPR_VOICE_SPIKE=1)
+  voiceSpike: {
+    isEnabled: () => ipcRenderer.invoke("voice-spike:enabled"),
+    start: (options) => ipcRenderer.invoke("voice-spike:start", options),
+    sendMic: (samples) => ipcRenderer.send("voice-spike:mic", samples),
+    keepModelWarm: (modelId) => ipcRenderer.invoke("voice-spike:keep-model-warm", modelId),
+    speak: (request) => ipcRenderer.invoke("voice-spike:speak", request),
+    cancelSpeech: (utteranceId) => ipcRenderer.invoke("voice-spike:cancel-speech", { utteranceId }),
+    stop: () => ipcRenderer.invoke("voice-spike:stop"),
+    onEvent: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on("voice-spike:event", listener);
+      return () => ipcRenderer.removeListener("voice-spike:event", listener);
+    },
+  },
+
   // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>
     ipcRenderer.invoke("transcribe-local-parakeet", audioBlob, options),

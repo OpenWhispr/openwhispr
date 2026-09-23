@@ -1354,6 +1354,8 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    require("./voiceSpikeIpc").registerVoiceSpikeIpc({ parakeetManager: this.parakeetManager });
+
     ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
       this.windowManager.setOnboardingWindowMode(mode)
     );

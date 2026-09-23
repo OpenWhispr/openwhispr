@@ -72,7 +72,14 @@ export const useAudioRecording = (toast, options = {}) => {
     onShowTranscript,
     onDemoEvent,
     assistantOpenRef,
+    interceptVoiceAgentToggle,
   } = options;
+
+  // Voice spike: when it returns true, the voice-agent hotkey is handled elsewhere.
+  const interceptVoiceAgentToggleRef = useRef(interceptVoiceAgentToggle);
+  useEffect(() => {
+    interceptVoiceAgentToggleRef.current = interceptVoiceAgentToggle;
+  });
 
   useEffect(() => {
     onDemoEventRef.current = onDemoEvent;
@@ -774,6 +781,7 @@ export const useAudioRecording = (toast, options = {}) => {
     });
 
     const disposeVoiceAgentToggle = window.electronAPI.onToggleVoiceAgent?.(() => {
+      if (interceptVoiceAgentToggleRef.current?.()) return;
       handleToggle({ voiceAgentRequested: true });
       onToggle?.();
     });
