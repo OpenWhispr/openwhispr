@@ -4,13 +4,17 @@ import type { InferenceRoute } from '@shared/ai/routing';
 import { isTranscriptionScope } from '@shared/ai/routing';
 import { buildApiUrl, isSecureHttpEndpoint, normalizeBaseUrl } from '@shared/ai/endpoints';
 import modelCatalog from '@shared/ai/modelRegistryData.json';
-import { MOBILE_PROVIDER_IDS } from '@/lib/mobileProviders';
+import { MOBILE_PROVIDER_IDS, getMobileProvidersForScope } from '@/lib/mobileProviders';
 import {
   getProviderCredential,
   getProviderCredentialReference,
   type ProviderCredential,
 } from './ProviderCredentials';
-import { requestProviderFileNative, requestProviderNative } from './NativeProviderTransport';
+import {
+  abortError,
+  requestProviderFileNative,
+  requestProviderNative,
+} from './NativeProviderTransport';
 
 type ProviderRoute = Extract<InferenceRoute, { mode: 'providers' }>;
 
@@ -69,6 +73,8 @@ export interface ProviderExecution {
 export interface ProviderSetupInput {
   route: ProviderRoute;
   signal?: AbortSignal;
+  /** A key typed on the setup screen, checked before it is saved. */
+  apiKey?: string;
 }
 
 export interface ProviderModelDiscovery {
@@ -82,6 +88,15 @@ export interface ProviderConnectionResult {
   providerId: string;
   modelId: string;
   scope: ProviderRoute['scope'];
+}
+
+// Error copy names the provider the way the settings screen does.
+function providerName(providerId: string): string {
+  if (providerId === 'custom') return 'Custom server';
+  return (
+    getMobileProvidersForScope('cleanup').find((provider) => provider.id === providerId)?.name ??
+    providerId
+  );
 }
 
 export class ProviderExecutionError extends Error {
@@ -106,41 +121,41 @@ function errorForStatus(providerId: string, status: number): ProviderExecutionEr
   if (status === 401 || status === 403) {
     return new ProviderExecutionError(
       'INVALID_CREDENTIAL',
-      `${providerId} rejected the configured credential.`,
+      `${providerName(providerId)} rejected the configured credential.`,
       { status },
     );
   }
   if (status === 402) {
     return new ProviderExecutionError(
       'PROVIDER_QUOTA_EXCEEDED',
-      `${providerId} reports a billing or quota problem for this key.`,
+      `${providerName(providerId)} reports a billing or quota problem for this key.`,
       { status },
     );
   }
   if (status === 404) {
     return new ProviderExecutionError(
       'MODEL_NOT_FOUND',
-      `${providerId} did not find the selected model or endpoint.`,
+      `${providerName(providerId)} did not find the selected model or endpoint.`,
       { status },
     );
   }
   if (status === 429) {
     return new ProviderExecutionError(
       'PROVIDER_RATE_LIMITED',
-      `${providerId} is rate limited. Try again later.`,
+      `${providerName(providerId)} is rate limited. Try again later.`,
       { status },
     );
   }
   if (status >= 500) {
     return new ProviderExecutionError(
       'PROVIDER_UNAVAILABLE',
-      `${providerId} is temporarily unavailable.`,
+      `${providerName(providerId)} is temporarily unavailable.`,
       { status, retryable: true },
     );
   }
   return new ProviderExecutionError(
     'PROVIDER_REQUEST_FAILED',
-    `${providerId} rejected the request (${status}).`,
+    `${providerName(providerId)} rejected the request (${status}).`,
     { status },
   );
 }
@@ -149,7 +164,7 @@ function assertSupportedProvider(route: ProviderRoute): void {
   if (!MOBILE_PROVIDER_IDS.includes(route.providerId)) {
     throw new ProviderExecutionError(
       'PROVIDER_UNSUPPORTED',
-      `${route.providerId} is not available on this device.`,
+      `${providerName(route.providerId)} is not available on this device.`,
     );
   }
 }
@@ -174,7 +189,7 @@ async function apiKeyForRoute(
     if (route.providerId === 'custom') return null;
     throw new ProviderExecutionError(
       'CREDENTIAL_MISSING',
-      `Configure credentials for ${route.providerId}.`,
+      `Configure credentials for ${providerName(route.providerId)}.`,
     );
   }
   const expectedReference = await getProviderCredentialReference(route.providerId, route.endpoint);
@@ -188,7 +203,7 @@ async function apiKeyForRoute(
   if (!credential) {
     throw new ProviderExecutionError(
       'CREDENTIAL_MISSING',
-      `Configure credentials for ${route.providerId}.`,
+      `Configure credentials for ${providerName(route.providerId)}.`,
     );
   }
   return credential.apiKey;
@@ -230,11 +245,24 @@ async function safeRequest(
   return checkResponse(route, url, response);
 }
 
+// Native failures that retrying cannot fix, with fixed copy so no native detail
+// reaches the UI.
+const FINAL_NATIVE_FAILURES: Record<string, string> = {
+  PROVIDER_HTTPS_REQUIRED: 'iOS only allows this server over HTTPS. Use an HTTPS address.',
+  PROVIDER_AUDIO_UNAVAILABLE: 'The recorded audio is unavailable. Record again.',
+  PROVIDER_RECOVERY_UNAVAILABLE:
+    'The recording could not be saved for recovery. The original audio is retained.',
+  PROVIDER_TRANSPORT_UNAVAILABLE: 'Update OpenWhispr to use your own provider key.',
+};
+
 function normalizeTransportFailure(error: unknown, providerId: string): Error {
   if (error instanceof ProviderExecutionError) return error;
   if (error instanceof Error && error.name === 'AbortError') return error;
   const nativeCode = objectValue(error)?.code;
-  if (nativeCode === 'PROVIDER_CANCELLED') return new DOMException('Aborted', 'AbortError');
+  if (nativeCode === 'PROVIDER_CANCELLED') return abortError();
+  if (typeof nativeCode === 'string' && FINAL_NATIVE_FAILURES[nativeCode]) {
+    return new ProviderExecutionError(nativeCode, FINAL_NATIVE_FAILURES[nativeCode]);
+  }
   if (nativeCode === 'PROVIDER_LOCAL_NETWORK_ERROR') {
     return new ProviderExecutionError(
       'PROVIDER_LOCAL_NETWORK_ERROR',
@@ -244,9 +272,13 @@ function normalizeTransportFailure(error: unknown, providerId: string): Error {
   if (nativeCode === 'PROVIDER_INVALID_URL' || nativeCode === 'PROVIDER_INVALID_REQUEST') {
     return new ProviderExecutionError('ENDPOINT_INVALID', 'The provider endpoint is invalid.');
   }
-  return new ProviderExecutionError('PROVIDER_NETWORK_ERROR', `Unable to reach ${providerId}.`, {
-    retryable: true,
-  });
+  return new ProviderExecutionError(
+    'PROVIDER_NETWORK_ERROR',
+    `Unable to reach ${providerName(providerId)}.`,
+    {
+      retryable: true,
+    },
+  );
 }
 
 async function parseJson(response: Response, providerId: string): Promise<unknown> {
@@ -255,7 +287,7 @@ async function parseJson(response: Response, providerId: string): Promise<unknow
   } catch {
     throw new ProviderExecutionError(
       'PROVIDER_RESPONSE_INVALID',
-      `${providerId} returned an invalid response.`,
+      `${providerName(providerId)} returned an invalid response.`,
     );
   }
 }
@@ -274,7 +306,7 @@ function requireText(text: string | null, providerId: string): string {
   if (text) return text;
   throw new ProviderExecutionError(
     'PROVIDER_RESPONSE_INVALID',
-    `${providerId} returned an empty or malformed response.`,
+    `${providerName(providerId)} returned an empty or malformed response.`,
   );
 }
 
@@ -367,7 +399,11 @@ async function transcribe(
       fileUri: input.audioUri,
       fileFieldName: 'file',
       fileMimeType: input.mimeType || 'audio/m4a',
-      fileName: input.fileName || input.audioUri.split('/').pop() || 'recording.m4a',
+      // The native multipart writer refuses quotes, backslashes and line breaks here.
+      fileName: (input.fileName || input.audioUri.split('/').pop() || 'recording.m4a').replace(
+        /["\\\r\n]/g,
+        '_',
+      ),
       parameters,
       headers: authHeaders(apiKey),
       routeSnapshot: input.routeSnapshot,
@@ -378,8 +414,13 @@ async function transcribe(
     throw normalizeTransportFailure(error, route.providerId);
   }
   const payload = await parseJson(checkResponse(route, url, response), route.providerId);
+  const text = objectValue(payload)?.text;
+  // Silence comes back as an empty transcript; report it the way Cloud does.
+  if (typeof text === 'string' && !text.trim()) {
+    throw new ProviderExecutionError('NO_SPEECH', 'No speech detected');
+  }
   return {
-    text: requireText(nonEmptyText(objectValue(payload)?.text), route.providerId),
+    text: requireText(nonEmptyText(text), route.providerId),
     duration: transcriptionDuration(payload),
   };
 }
@@ -410,7 +451,7 @@ async function discoverModels(
   if (!models.length) {
     throw new ProviderExecutionError(
       'PROVIDER_RESPONSE_INVALID',
-      `${route.providerId} returned no usable models.`,
+      `${providerName(route.providerId)} returned no usable models.`,
     );
   }
   return { models, verification: 'catalog-only' };
@@ -426,7 +467,6 @@ async function testConnection(
       route,
       text: 'Reply with OK.',
       systemPrompt: 'This is a provider connection test. Reply only with OK.',
-      maxTokens: 8,
       signal: input.signal,
     });
     return {
@@ -478,15 +518,24 @@ export function createProviderExecution(
     };
     return scope.run(() => operation(scoped, scope.signal)).finally(scope.dispose);
   };
+  const withTypedKey = (
+    scoped: ProviderExecutionDependencies,
+    apiKey: string | undefined,
+  ): ProviderExecutionDependencies =>
+    apiKey ? { ...scoped, getCredential: async () => ({ apiKey }) } : scoped;
   return {
     processProviderText: (input) =>
       execute(input, (scoped, signal) => processText(scoped, { ...input, signal })),
     transcribeWithProvider: (input) =>
       execute(input, (scoped, signal) => transcribe(scoped, { ...input, signal })),
     discoverProviderModels: (input) =>
-      execute(input, (scoped, signal) => discoverModels(scoped, { ...input, signal })),
+      execute(input, (scoped, signal) =>
+        discoverModels(withTypedKey(scoped, input.apiKey), { ...input, signal }),
+      ),
     testProviderConnection: (input) =>
-      execute(input, (scoped, signal) => testConnection(scoped, { ...input, signal })),
+      execute(input, (scoped, signal) =>
+        testConnection(withTypedKey(scoped, input.apiKey), { ...input, signal }),
+      ),
   };
 }
 

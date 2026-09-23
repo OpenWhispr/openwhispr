@@ -12,6 +12,14 @@ jest.mock('../ProviderCredentials', () => ({
 afterEach(() => {
   expect(mockCredentialListeners.size).toBe(0);
 });
+// Hermes has no DOMException global; run the abort paths the way the device does.
+const nodeDOMException = globalThis.DOMException;
+beforeAll(() => {
+  delete (globalThis as { DOMException?: unknown }).DOMException;
+});
+afterAll(() => {
+  globalThis.DOMException = nodeDOMException;
+});
 import type { InferenceRoute } from '@shared/ai/routing';
 import {
   createProviderExecution,
@@ -184,6 +192,29 @@ describe('ProviderExecution batch transcription adapters', () => {
       expect(fileRequests[0]?.headers.Authorization).toBe('Bearer fixture-key');
     },
   );
+
+  test('reports an empty transcript as no speech rather than a provider failure', async () => {
+    const execution = createProviderExecution(makeDependencies([jsonResponse({ text: ' ' })], []));
+    await expect(
+      execution.transcribeWithProvider({
+        route: route({ scope: 'dictation', modelId: 'whisper-1' }),
+        audioUri: 'file:///recording.m4a',
+      }),
+    ).rejects.toMatchObject({ message: 'No speech detected', retryable: false });
+  });
+
+  test('sends a file name the native multipart writer accepts', async () => {
+    const fileRequests: FileRequest[] = [];
+    const execution = createProviderExecution(
+      makeDependencies([jsonResponse({ text: 'words' })], [], fileRequests),
+    );
+    await execution.transcribeWithProvider({
+      route: route({ scope: 'upload', modelId: 'whisper-1' }),
+      audioUri: 'file:///import.m4a',
+      fileName: 'Team "sync"\\notes.m4a',
+    });
+    expect(fileRequests[0]?.fileName).toBe('Team _sync__notes.m4a');
+  });
 
   test.each(['deepgram', 'assemblyai'])(
     '%s rejects batch audio before touching the file',
@@ -359,6 +390,43 @@ describe('ProviderExecution security and errors', () => {
   });
 
   test.each([
+    ['PROVIDER_HTTPS_REQUIRED', 'iOS only allows this server over HTTPS. Use an HTTPS address.'],
+    ['PROVIDER_AUDIO_UNAVAILABLE', 'The recorded audio is unavailable. Record again.'],
+    [
+      'PROVIDER_RECOVERY_UNAVAILABLE',
+      'The recording could not be saved for recovery. The original audio is retained.',
+    ],
+    ['PROVIDER_TRANSPORT_UNAVAILABLE', 'Update OpenWhispr to use your own provider key.'],
+  ])('reports native %s as a final, readable failure', async (code, message) => {
+    const execution = createProviderExecution({
+      ...makeDependencies([], []),
+      request: async () => {
+        throw Object.assign(new Error('native detail'), { code });
+      },
+    });
+    await expect(
+      execution.processProviderText({ route: route(), text: 'input', systemPrompt: 'system' }),
+    ).rejects.toMatchObject({ code, message, retryable: false });
+  });
+
+  test.each([
+    ['openai', 'OpenAI rejected the configured credential.'],
+    ['custom', 'Custom server rejected the configured credential.'],
+  ])('names %s the way the settings screen does in error copy', async (providerId, message) => {
+    const execution = createProviderExecution(makeDependencies([jsonResponse({}, 401)], []));
+    await expect(
+      execution.processProviderText({
+        route: route({
+          providerId,
+          ...(providerId === 'custom' ? { endpoint: 'https://lan.example/v1' } : {}),
+        }),
+        text: 'input',
+        systemPrompt: 'system',
+      }),
+    ).rejects.toMatchObject({ message });
+  });
+
+  test.each([
     [401, 'INVALID_CREDENTIAL'],
     [429, 'PROVIDER_RATE_LIMITED'],
     [503, 'PROVIDER_UNAVAILABLE'],
@@ -402,17 +470,37 @@ describe('ProviderExecution setup checks', () => {
   });
 
   test('text connection testing performs a minimal inference and identifies its scope', async () => {
+    const requests: Array<{ url: string; init: RequestInit }> = [];
     const execution = createProviderExecution(
-      makeDependencies([jsonResponse({ choices: [{ message: { content: 'OK' } }] })], []),
+      makeDependencies([jsonResponse({ choices: [{ message: { content: 'OK' } }] })], requests),
     );
 
-    await expect(execution.testProviderConnection({ route: route() })).resolves.toEqual({
+    await expect(
+      execution.testProviderConnection({ route: route({ modelId: 'gpt-6-astra' }) }),
+    ).resolves.toEqual({
       ok: true,
       verification: 'inference',
       providerId: 'openai',
-      modelId: 'gpt-4o-mini',
+      modelId: 'gpt-6-astra',
       scope: 'cleanup',
     });
+    // Reasoning models spend a small output cap on hidden reasoning and return
+    // no text, which would fail a valid key.
+    const body = JSON.parse(String(requests[0]?.init.body));
+    expect(body).not.toHaveProperty('max_completion_tokens');
+    expect(body).not.toHaveProperty('max_tokens');
+  });
+
+  test('connection checks can try a typed key before it is saved', async () => {
+    const requests: Array<{ url: string; init: RequestInit }> = [];
+    const getCredential = jest.fn();
+    const execution = createProviderExecution({
+      ...makeDependencies([jsonResponse({ choices: [{ message: { content: 'OK' } }] })], requests),
+      getCredential,
+    });
+    await execution.testProviderConnection({ route: route(), apiKey: 'typed-key' });
+    expect(new Headers(requests[0]?.init.headers).get('Authorization')).toBe('Bearer typed-key');
+    expect(getCredential).not.toHaveBeenCalled();
   });
 
   test('transcription connection testing reports catalog access rather than inference', async () => {
@@ -470,7 +558,7 @@ describe('ProviderExecutionError retry metadata', () => {
     await expect(
       network.processProviderText({ route: route(), text: 'input', systemPrompt: 'system' }),
     ).rejects.toEqual(
-      new ProviderExecutionError('PROVIDER_NETWORK_ERROR', 'Unable to reach openai.', {
+      new ProviderExecutionError('PROVIDER_NETWORK_ERROR', 'Unable to reach OpenAI.', {
         retryable: true,
       }),
     );
@@ -499,6 +587,25 @@ test('deleting a credential aborts ordinary HTTP and rejects without waiting for
   mockCredentialListeners.forEach((listener) => listener('provider.openai'));
   await expect(result).rejects.toMatchObject({ name: 'AbortError' });
   expect(activeSignal?.aborted).toBe(true);
+});
+test('a credential change that lands as the response arrives still rejects', async () => {
+  let finishRequest!: (response: Response) => void;
+  const request = jest.fn(
+    (): Promise<Response> =>
+      new Promise((resolve) => {
+        finishRequest = resolve;
+      }),
+  );
+  const execution = createProviderExecution({ ...makeDependencies([], []), request });
+  const result = execution.processProviderText({
+    route: route(),
+    text: 'words',
+    systemPrompt: 'Clean',
+  });
+  for (let index = 0; index < 10 && !request.mock.calls.length; index++) await Promise.resolve();
+  mockCredentialListeners.forEach((listener) => listener('provider.openai'));
+  finishRequest(jsonResponse({ choices: [{ message: { content: 'output' } }] }));
+  await expect(result).rejects.toMatchObject({ name: 'AbortError' });
 });
 test('credential reset during a key read prevents a later HTTP request', async () => {
   let finishCredential!: (value: { apiKey: string }) => void;

@@ -992,6 +992,14 @@ export class TranscriptionService {
           language,
           prompt: prompt || undefined,
           routeSnapshot,
+        }).catch((error: unknown) => {
+          // Silence leaves nothing to recover, and every caller discards the audio.
+          if (recoveryJobId && (error as { code?: unknown })?.code === 'NO_SPEECH') {
+            const { clearKeyboardProviderRecovery } =
+              require('@/lib/keyboardInferenceRoute') as typeof import('@/lib/keyboardInferenceRoute');
+            clearKeyboardProviderRecovery(recoveryJobId);
+          }
+          throw error;
         });
         return { ...result, provider: 'byok', inferenceRoute: route, endpoint: route.providerId };
       }

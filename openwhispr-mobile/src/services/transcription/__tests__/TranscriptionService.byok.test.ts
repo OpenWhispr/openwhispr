@@ -72,6 +72,11 @@ jest.mock(
   { virtual: true },
 );
 
+const mockClearRecovery = jest.fn();
+jest.mock('@/lib/keyboardInferenceRoute', () => ({
+  clearKeyboardProviderRecovery: (jobId: string) => mockClearRecovery(jobId),
+}));
+
 const mockTranscribeWithProvider = transcribeWithProvider as jest.MockedFunction<
   typeof transcribeWithProvider
 >;
@@ -196,4 +201,20 @@ test('BYOK keeps a 2000-char dictionary intact for gpt-4o-transcribe', async ():
   });
 
   expect(mockTranscribeWithProvider.mock.calls[0]?.[0]?.prompt).toBe(padded);
+});
+
+test('BYOK silence clears the recovery entry, since callers discard the audio', async (): Promise<void> => {
+  mockTranscribeWithProvider.mockRejectedValueOnce(
+    Object.assign(new Error('No speech detected'), { code: 'NO_SPEECH' }),
+  );
+  await expect(
+    TranscriptionService.transcribe({
+      audioUri: 'file:///recording.wav',
+      provider: 'byok',
+      requestContext: 'recording',
+      jobId: 'recording-7',
+      inferenceRoute: mockProviderRoute,
+    }),
+  ).rejects.toThrow('No speech detected');
+  expect(mockClearRecovery).toHaveBeenCalledWith('recording-7');
 });

@@ -75,7 +75,9 @@ export const BackgroundUploader = {
 
   async requestProvider(options: ProviderRequestOptions): Promise<ProviderRequestResult> {
     if (!NativeModule?.requestProvider)
-      throw new Error('Provider requests require an updated iOS native build');
+      throw Object.assign(new Error('Provider requests require an updated iOS native build'), {
+        code: 'PROVIDER_TRANSPORT_UNAVAILABLE',
+      });
     return NativeModule.requestProvider(options);
   },
 

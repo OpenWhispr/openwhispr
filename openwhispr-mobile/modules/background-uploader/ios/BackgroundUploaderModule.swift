@@ -379,7 +379,10 @@ public class BackgroundUploaderModule: Module {
     DispatchQueue.main.async {
       var backgroundTask: UIBackgroundTaskIdentifier = .invalid
       backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Provider request") {
+        // iOS terminates the app unless the task ends inside this handler.
         self.providerTransport.cancel(requestId: request.requestId)
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
       }
       self.providerTransport.request(requestId: request.requestId, url: url, method: request.method, headers: headers, body: request.body.map { Data($0.utf8) }, bodyFileURL: bodyFileURL, timeout: request.timeoutSeconds) { result in
         DispatchQueue.main.async {

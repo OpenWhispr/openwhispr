@@ -127,7 +127,10 @@ it('refuses a persisted selection for a provider the mobile build does not ship'
       modelId: 'nova-3',
       credentialRef: 'provider.deepgram',
     }),
-  ).rejects.toThrow('This provider does not support the selected workflow.');
+  ).rejects.toMatchObject({
+    message: 'This provider does not support the selected workflow.',
+    retryable: false,
+  });
 });
 
 it('marks text stages unavailable for an unsupported provider instead of falling back', () => {

@@ -23,6 +23,11 @@ export function getTranscriptionProvider(scope: InferenceScope): TranscriptionPr
   return 'cloud';
 }
 
+// Route refusals are configuration problems; retrying the request cannot fix them.
+function routeRefusal(message: string): Error {
+  return Object.assign(new Error(message), { retryable: false });
+}
+
 export async function resolveMobileProviderRoute(
   scope: InferenceScope,
   snapshot?: InferenceSelection,
@@ -32,7 +37,7 @@ export async function resolveMobileProviderRoute(
   const configuredSelection = snapshot ?? getInferenceSelection(scope);
   const selection = configuredSelection ? { ...configuredSelection } : undefined;
   if (!selection || selection.mode !== 'providers') {
-    throw new Error('Choose a provider and model in AI Models before using your own key.');
+    throw routeRefusal('Choose a provider and model in AI Models before using your own key.');
   }
   // Load policy only when direct provider execution is actually requested.
   const { getProviderPolicy } =
@@ -57,9 +62,9 @@ export async function resolveMobileProviderRoute(
       CREDENTIAL_REQUIRED: 'Add your provider credentials in AI Models.',
       ENDPOINT_INVALID: 'Use HTTPS or a private-network HTTP endpoint.',
     };
-    throw new Error(messages[result.code]);
+    throw routeRefusal(messages[result.code]);
   }
-  if (result.route.mode !== 'providers') throw new Error('A provider route is required.');
+  if (result.route.mode !== 'providers') throw routeRefusal('A provider route is required.');
   return result.route;
 }
 
@@ -75,7 +80,8 @@ export function snapshotTextInference(provider: TranscriptionProvider): TextInfe
     if (provider === 'local') {
       result[routeKey] = { mode: 'local', scope };
     } else if (!selection && provider === 'byok') {
-      result[errorKey] = `Choose a ${scope} provider in AI Models. Your raw transcript is saved.`;
+      result[errorKey] =
+        `Choose ${scope === 'agent' ? 'an agent' : 'a cleanup'} provider in AI Models. Your raw transcript is saved.`;
     } else if (selection?.mode === 'providers') {
       const resolved = resolveMobileInferenceRoute({
         scope,

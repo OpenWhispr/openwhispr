@@ -13,6 +13,7 @@ enum ProviderTransportError: Error {
   case cancelled
   case network
   case localNetwork
+  case httpsRequired
 
   var code: String {
     switch self {
@@ -21,6 +22,7 @@ enum ProviderTransportError: Error {
     case .cancelled: return "PROVIDER_CANCELLED"
     case .network: return "PROVIDER_NETWORK_ERROR"
     case .localNetwork: return "PROVIDER_LOCAL_NETWORK_ERROR"
+    case .httpsRequired: return "PROVIDER_HTTPS_REQUIRED"
     }
   }
 
@@ -31,6 +33,7 @@ enum ProviderTransportError: Error {
     case .cancelled: return "Provider request cancelled."
     case .network: return "Unable to reach the provider. Check your connection and try again."
     case .localNetwork: return "Unable to reach the local server. Check Local Network permission in Settings and the server address."
+    case .httpsRequired: return "iOS only allows this server over HTTPS. Use an HTTPS address."
     }
   }
 }
@@ -115,6 +118,8 @@ final class ProviderRequestTransport: NSObject, URLSessionTaskDelegate {
       self?.lock.unlock()
       if let error = error as NSError? {
         if error.code == NSURLErrorCancelled { completion(.failure(.cancelled)) }
+        // App Transport Security refuses plain HTTP to hosts it does not treat as local.
+        else if error.code == NSURLErrorAppTransportSecurityRequiresSecureConnection { completion(.failure(.httpsRequired)) }
         else if Self.isPrivateHost(url.host?.lowercased() ?? "") { completion(.failure(.localNetwork)) }
         else { completion(.failure(.network)) }
         return
