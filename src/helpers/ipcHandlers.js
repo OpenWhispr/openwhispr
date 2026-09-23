@@ -4315,9 +4315,10 @@ class IPCHandlers {
           ? null
           : hotkeyManager.getPushToTalkUnavailableReason(hotkey),
         // Lets the renderer show the setup box outside push mode, where the
-        // disabled-Hold tooltip is the only other place this surfaces.
+        // disabled-Hold tooltip is the only other place this surfaces. Desktop
+        // backends see their own hotkeys, so access matters only without one.
         linuxInputAccessDenied:
-          process.platform === "linux" &&
+          hotkeyManager.reliesOnLinuxKeyListener() &&
           this.linuxKeyManager?.checkAvailability?.().reason === "input_access_denied",
       };
     });

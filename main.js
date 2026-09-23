@@ -1785,6 +1785,9 @@ async function startApp() {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"
         );
+        // GNOME, KDE and Hyprland run this listener only as a spare release
+        // source in Hold; their own shortcut still presses and releases.
+        if (!hotkeyManager.reliesOnLinuxKeyListener()) return;
         // Settings owns the recovery (toast, Hold disabled, back to Tap) and it
         // renders in the control panel, not the pill this event used to reach.
         for (const browserWindow of BrowserWindow.getAllWindows()) {
