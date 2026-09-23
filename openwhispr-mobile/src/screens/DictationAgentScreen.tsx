@@ -102,8 +102,9 @@ export function DictationAgentScreen(): React.JSX.Element {
         </SettingsSection>
         <View className="mx-4 -mt-5 mb-7 px-4">
           <Text className="text-[13px] text-secondaryLabel">
-            Say this name anywhere while dictating to trigger the agent. The name is automatically
-            added to your transcription hints so the speech model recognises it.
+            Start with this name, or say &quot;Hey&quot; and the name, to trigger the agent. A
+            mention mid-sentence is transcribed as usual. The name is automatically added to your
+            transcription hints so the speech model recognises it.
           </Text>
         </View>
 

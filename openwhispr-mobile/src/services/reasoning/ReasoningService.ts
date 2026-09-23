@@ -150,18 +150,9 @@ export class ReasoningService {
     const localRequired =
       localSelected ||
       (usesProviders ? privateContent : !!routing && isLocalReasoningRequired(routing));
-    // buildProviderPrompt already folds language, tone and dictionary into the
-    // system prompt; drop the raw fields so the local path does not append them again.
     const localRequest =
       (usesProviders || localSelected) && !systemPrompt
-        ? {
-            ...request,
-            ...buildProviderPrompt(request),
-            language: undefined,
-            locale: undefined,
-            tone: undefined,
-            customDictionary: undefined,
-          }
+        ? { ...request, ...buildProviderPrompt(request) }
         : request;
 
     if (localRequired) {

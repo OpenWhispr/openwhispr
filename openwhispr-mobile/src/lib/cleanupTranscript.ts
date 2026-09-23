@@ -91,7 +91,9 @@ export async function cleanupTranscript(
   }
   const configuredRoute = snapshottedRoute ?? cfg?.inference?.[scope];
   if (options.requireProvider && !snapshottedRoute && configuredRoute?.mode !== 'providers') {
-    options.onSkipped?.(`Choose a ${scope} provider in AI Models. Your raw transcript is saved.`);
+    options.onSkipped?.(
+      `Choose ${scope === 'agent' ? 'an agent' : 'a cleanup'} provider in AI Models. Your raw transcript is saved.`,
+    );
     return rawText;
   }
   if (

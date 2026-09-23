@@ -1,45 +1,11 @@
 import { AppleLLM } from '@/lib/appleLLM';
 import { LOCAL_OUTPUT_TOKEN_RESERVE, toLocalReasoningError } from '@/lib/localReasoning';
-import type { KeyboardTone, ReasoningRequest, ReasoningResponse } from '@/types';
+import type { ReasoningRequest, ReasoningResponse } from '@/types';
 
-const TONE_INSTRUCTIONS: Partial<Record<KeyboardTone, string>> = {
-  formal: 'Use a formal, polished tone.',
-  casual: 'Use a casual, conversational tone.',
-  very_casual: 'Use a very casual, relaxed tone.',
-  excited: 'Use an upbeat, enthusiastic tone.',
-};
-
-function appendInstruction(parts: string[], value: string | undefined | null): void {
-  const trimmed = value?.trim();
-  if (trimmed) parts.push(trimmed);
-}
-
+// Callers fold language, tone and dictionary into the system prompt first
+// (buildProviderPrompt), so the instructions are that prompt alone.
 export function buildLocalReasoningInstructions(request: ReasoningRequest): string {
-  const parts: string[] = [];
-  appendInstruction(parts, request.systemPrompt);
-
-  if (request.language || request.locale) {
-    appendInstruction(
-      parts,
-      `Prefer ${request.language ?? request.locale} language conventions when editing or generating text.`,
-    );
-  }
-
-  if (request.tone && request.tone !== 'default') {
-    appendInstruction(parts, TONE_INSTRUCTIONS[request.tone]);
-  }
-
-  if (request.customDictionary && request.customDictionary.length > 0) {
-    const words = request.customDictionary.map((word) => word.trim()).filter(Boolean);
-    if (words.length > 0) {
-      appendInstruction(
-        parts,
-        `Custom Dictionary: preserve these spellings exactly when they appear: ${words.join(', ')}.`,
-      );
-    }
-  }
-
-  return parts.join('\n\n');
+  return request.systemPrompt?.trim() ?? '';
 }
 
 export class LocalReasoningService {

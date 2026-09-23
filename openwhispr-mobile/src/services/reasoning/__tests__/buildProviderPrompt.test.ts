@@ -1,4 +1,12 @@
+import mobileRegistry from '@/config/languageRegistry.json';
+import desktopRegistry from '../../../../../src/config/languageRegistry.json';
 import { buildProviderPrompt } from '../buildProviderPrompt';
+
+// Language instructions come from this copy and the server shares the desktop
+// one, so drift would change what providers are told.
+it('keeps the language registry identical to the desktop copy', () => {
+  expect(mobileRegistry).toEqual(desktopRegistry);
+});
 
 it('builds cleanup prompts locally with language, dictionary, tone and agent-name substitution', () => {
   const prompt = buildProviderPrompt({
@@ -11,9 +19,12 @@ it('builds cleanup prompts locally with language, dictionary, tone and agent-nam
   expect(prompt.systemPrompt).toContain('transcript cleanup engine');
   expect(prompt.systemPrompt).toContain('Aria');
   expect(prompt.systemPrompt).not.toContain('{{agentName}}');
-  expect(prompt.systemPrompt).toContain('Prefer fr language conventions');
-  expect(prompt.systemPrompt).toContain('OpenWhispr');
-  expect(prompt.systemPrompt).toContain('formal, polished tone');
+  expect(prompt.systemPrompt).toContain('You MUST write your entire output in French');
+  expect(prompt.systemPrompt).toContain(
+    'Custom Dictionary (use these exact spellings when they appear in the text): OpenWhispr',
+  );
+  expect(prompt.systemPrompt).toContain('formal, professional tone');
+  expect(prompt.systemPrompt).toContain('Restyle only; do not add or remove information.');
   expect(prompt.text).toBe(
     '<transcript>\num hello\n</transcript>\n\nOutput only the cleaned transcript.',
   );
@@ -24,11 +35,11 @@ it('keeps custom cleanup prompts as cleanup transforms with contextual instructi
     text: 'hello',
     customPrompt: 'Be concise, {{agentName}}.',
     agentName: 'Aria',
-    locale: 'de',
+    language: 'de',
     tone: 'casual',
   });
   expect(prompt.systemPrompt).toContain('Be concise, Aria.');
-  expect(prompt.systemPrompt).toContain('Prefer de language conventions');
+  expect(prompt.systemPrompt).toContain('You MUST write your entire output in German');
   expect(prompt.systemPrompt).toContain('casual, conversational tone');
   expect(prompt.text).toContain('<transcript>');
 });

@@ -56,7 +56,7 @@ it('adds language, tone and dictionary instructions exactly once on the On-Devic
     inferenceScope: 'cleanup',
   });
   const count = (needle: string): number => result.text.split(needle).length - 1;
-  expect(count('Prefer fr language conventions')).toBe(1);
+  expect(count('You MUST write your entire output in French')).toBe(1);
   expect(count('Custom Dictionary')).toBe(1);
 });
 
