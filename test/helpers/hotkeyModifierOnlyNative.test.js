@@ -65,7 +65,9 @@ test("a right-side single modifier also reaches the native listener on linux", a
 // The listener backing those hotkeys needs its binary and read access to
 // /dev/input. When it cannot run, registration must fail like a refused
 // globalShortcut.register so the startup fallback, the Settings error and the
-// slot rollback all still happen.
+// slot rollback all still happen. The managers stay uninitialized on purpose: a
+// saved hotkey registers from .env inside initializeHotkey, before isInitialized
+// is set, and must be refused there too.
 const denyProbe = (reason) => () => ({ available: false, reason });
 
 for (const hotkey of ["Control+Super", "RightControl"]) {

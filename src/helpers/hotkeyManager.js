@@ -456,13 +456,18 @@ class HotkeyManager extends EventEmitter {
       : i18nMain.t("windows.pttUnavailable");
   }
 
-  // Without a desktop-native backend, Linux push-to-talk runs entirely through
-  // the bundled evdev listener, so a probe failure means Hold cannot work at
-  // all. Returns the reason to show the user, or null when nothing blocks it.
+  // GNOME, KDE and Hyprland deliver press and release themselves, so Linux
+  // depends on the bundled evdev listener only once initializeHotkey has settled
+  // on none of them. Startup restores the saved activation mode before that, so
+  // until then nothing may be refused on the listener's account.
+  reliesOnLinuxKeyListener() {
+    return process.platform === "linux" && this.isInitialized && !this.isUsingNativeShortcut();
+  }
+
+  // Where Linux relies on the listener, a probe failure means Hold cannot work
+  // at all. Returns the reason to show the user, or null when nothing blocks it.
   _pushToTalkListenerBlockReason() {
-    if (process.platform !== "linux" || this.isUsingNativeShortcut() || !this.nativeListenerProbe) {
-      return null;
-    }
+    if (!this.reliesOnLinuxKeyListener() || !this.nativeListenerProbe) return null;
     const { available, reason } = this.nativeListenerProbe();
     return available ? null : this._nativeListenerFailureMessage(reason);
   }
