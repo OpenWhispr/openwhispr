@@ -195,3 +195,65 @@ test("an unanswered card expires after ten minutes", async (t) => {
   assert.deepEqual(await outcome, { state: "not_sent", reason: "expired" });
   assert.deepEqual(electron.calls.cancel, [{ actionId: "a7", reason: "expired" }]);
 });
+
+test("a commit result with the wrong key settles as unknown instead of hanging", async (t) => {
+  const electron = fakeElectron(() => ({ status: "sent", url: "https://slack.test/p/10" }));
+  installBrowserGlobals(t, { window: { electronAPI: electron.api } });
+  const store = await freshStore();
+  const outcome = store.requestApproval(context("call-10").value, {
+    actionId: "a10",
+    connectorId: "slack",
+    preview: PREVIEW,
+  });
+
+  await store.approveAction("call-10");
+
+  assert.deepEqual(await outcome, { state: "unknown" });
+  assert.equal(store.useConnectorApprovalStore.getState().entries["call-10"].state, "unknown");
+});
+
+test("a commit result that resolves undefined settles as unknown", async (t) => {
+  const electron = fakeElectron(() => undefined);
+  installBrowserGlobals(t, { window: { electronAPI: electron.api } });
+  const store = await freshStore();
+  const outcome = store.requestApproval(context("call-11").value, {
+    actionId: "a11",
+    connectorId: "slack",
+    preview: PREVIEW,
+  });
+
+  await store.approveAction("call-11");
+
+  assert.deepEqual(await outcome, { state: "unknown" });
+  assert.equal(store.useConnectorApprovalStore.getState().entries["call-11"].state, "unknown");
+});
+
+test("a duplicate request for the same tool call cancels the new action and leaves the first alone", async (t) => {
+  const electron = fakeElectron();
+  installBrowserGlobals(t, { window: { electronAPI: electron.api } });
+  const store = await freshStore();
+  const ctx = context("call-12");
+  const firstOutcome = store.requestApproval(ctx.value, {
+    actionId: "a12-first",
+    connectorId: "slack",
+    preview: PREVIEW,
+  });
+
+  const secondOutcome = store.requestApproval(ctx.value, {
+    actionId: "a12-second",
+    connectorId: "slack",
+    preview: PREVIEW,
+  });
+
+  assert.deepEqual(await secondOutcome, { state: "not_sent", reason: "duplicate_tool_call" });
+  assert.deepEqual(electron.calls.cancel, [{ actionId: "a12-second", reason: "cancelled_by_user" }]);
+
+  const entry = store.useConnectorApprovalStore.getState().entries["call-12"];
+  assert.equal(entry.state, "pending");
+  assert.equal(entry.actionId, "a12-first");
+
+  await store.approveAction("call-12");
+
+  assert.deepEqual(await firstOutcome, { state: "sent", url: "https://slack.test/p/1" });
+  assert.deepEqual(electron.calls.commit, [{ actionId: "a12-first", edits: { body: "Hello team" } }]);
+});

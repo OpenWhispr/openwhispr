@@ -50,6 +50,22 @@ interface PendingResolution {
 // Promise resolvers stay outside zustand state: they are not renderable.
 const resolutions = new Map<string, PendingResolution>();
 
+const COMMIT_RESULT_STATES = new Set(["sent", "failed", "unknown", "not_sent"]);
+
+// Main passes an untyped CommonJS connector's result straight through, so a
+// malformed commit result (wrong key, unrecognized state, or no result at
+// all) must never be trusted at face value — it would otherwise leave the
+// switch below with no matching case, and the approval would hang forever.
+function isConnectorCommitResult(value: unknown): value is ConnectorCommitResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "state" in value &&
+    typeof (value as { state: unknown }).state === "string" &&
+    COMMIT_RESULT_STATES.has((value as { state: string }).state)
+  );
+}
+
 function entryFor(toolCallId: string): ApprovalEntry | undefined {
   return useConnectorApprovalStore.getState().entries[toolCallId];
 }
@@ -94,6 +110,14 @@ export function requestApproval(
   if (signal.aborted) {
     void window.electronAPI?.connectorCancel?.(request.actionId, "conversation_ended");
     return Promise.resolve({ state: "not_sent", reason: "conversation_ended" });
+  }
+  // A second request for the same tool call must never steal the first
+  // card's resolver, timer or entry — that would cross-wire two actions:
+  // the first card would show the second action's outcome (or vice versa)
+  // and the loser's promise would never resolve.
+  if (resolutions.has(toolCallId)) {
+    void window.electronAPI?.connectorCancel?.(request.actionId, "cancelled_by_user");
+    return Promise.resolve({ state: "not_sent", reason: "duplicate_tool_call" });
   }
   return new Promise((resolve) => {
     const onAbort = (): void => withdraw(toolCallId, "conversation_ended");
@@ -152,15 +176,17 @@ export async function approveAction(toolCallId: string): Promise<void> {
     pending.detach();
   }
 
-  let result: ConnectorCommitResult;
+  let raw: unknown;
   try {
-    result = (await window.electronAPI?.connectorCommit?.(entry.actionId, edits)) ?? {
-      state: "unknown",
-    };
+    raw = await window.electronAPI?.connectorCommit?.(entry.actionId, edits);
   } catch {
     // The request may have reached main and been sent; never claim it wasn't.
-    result = { state: "unknown" };
+    raw = undefined;
   }
+  // A missing result, or one that doesn't match a state the switch below
+  // understands (wrong key, unrecognized state), is exactly as uncertain as
+  // a thrown IPC call — never let it fall through with no case to settle.
+  const result: ConnectorCommitResult = isConnectorCommitResult(raw) ? raw : { state: "unknown" };
 
   const finalText = entry.draft.body !== entry.preview.body ? entry.draft.body : undefined;
   switch (result.state) {
