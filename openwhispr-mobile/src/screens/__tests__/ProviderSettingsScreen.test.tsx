@@ -1,10 +1,12 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
 const mockSetActiveMode = jest.fn();
 const mockSetCredential = jest.fn().mockResolvedValue(undefined);
 const mockRemoveCredential = jest.fn().mockResolvedValue(undefined);
+const mockClearCredentials = jest.fn().mockResolvedValue(undefined);
 const mockTestConnection = jest.fn();
 const mockDiscoverModels = jest.fn();
 const mockPolicy = jest.fn();
@@ -39,6 +41,7 @@ jest.mock('@/services/providers/ProviderCredentials', () => ({
   getProviderCredentialStatus: (...args: unknown[]) => mockCredentialStatus(...args),
   setProviderCredential: (...args: unknown[]) => mockSetCredential(...args),
   removeProviderCredential: (...args: unknown[]) => mockRemoveCredential(...args),
+  clearProviderCredentials: (...args: unknown[]) => mockClearCredentials(...args),
 }));
 
 import { ProviderSettingsScreen } from '../ProviderSettingsScreen';
@@ -222,8 +225,21 @@ it('reports catalog-only checks without claiming inference access or changing th
       }),
     }),
   );
+  expect(mockTestConnection).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'test-key' }));
+  expect(mockSetCredential).not.toHaveBeenCalled();
   expect(mockUpdateConfig).not.toHaveBeenCalled();
   expect(mockSetActiveMode).not.toHaveBeenCalled();
+});
+
+it('offers to replace or remove a saved key that can no longer be read', async () => {
+  mockCredentialStatus.mockRejectedValue(new Error('unreadable'));
+  render(<ProviderSettingsScreen />);
+  enableProviders();
+  await screen.findByText('Remove credential');
+  fireEvent.changeText(screen.getByLabelText('API key'), 'replacement-key');
+  fireEvent.press(screen.getByText('Save selection'));
+  await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
+  expect(mockSetCredential).toHaveBeenCalledWith('provider.openai', { apiKey: 'replacement-key' });
 });
 
 it('blocks diagnostic network calls when organization policy is unresolved', async () => {
@@ -234,6 +250,41 @@ it('blocks diagnostic network calls when organization policy is unresolved', asy
   fireEvent.press(screen.getByText('Check connection'));
   await screen.findByText('Organization policy does not currently permit this provider check.');
   expect(mockTestConnection).not.toHaveBeenCalled();
+});
+
+it('checks a provider from On-Device mode, since a check sends no user content', async () => {
+  mockActiveMode = 'private';
+  render(<ProviderSettingsScreen />);
+  enableProviders();
+  fireEvent.changeText(screen.getByLabelText('API key'), 'test-key');
+  fireEvent.press(screen.getByText('Check connection'));
+  await screen.findByText(
+    'Model catalog accessible. Transcription and inference access have not been verified.',
+  );
+  expect(mockTestConnection).toHaveBeenCalled();
+});
+
+it('shows cleanup as waiting for a provider when Providers dictation will skip it', async () => {
+  mockConfig = {
+    defaultMode: 'providers',
+    inference: { dictation: { mode: 'providers', providerId: 'openai', modelId: 'whisper-1' } },
+  };
+  mockActiveMode = 'providers';
+  render(<ProviderSettingsScreen />);
+  fireEvent.press(screen.getByText('Workflow'));
+  fireEvent.press(screen.getByText('Text Cleanup'));
+  expect(screen.getByText('Providers')).toBeTruthy();
+  expect(screen.queryByText('OpenWhispr Cloud')).toBeNull();
+  expect(
+    screen.getByText('Not saved yet. Cleanup is skipped until you save a selection.'),
+  ).toBeTruthy();
+});
+
+it('shows a guest held in On-Device mode as On-Device, not a stale Cloud preference', () => {
+  mockConfig = { defaultMode: 'cloud' };
+  mockActiveMode = 'private';
+  render(<ProviderSettingsScreen />);
+  expect(screen.getByText('On-Device')).toBeTruthy();
 });
 
 it('discovers custom models before choosing a model, without silently selecting one', async () => {
@@ -274,6 +325,41 @@ it('keeps uploads on the previous mode when dictation switches to Providers', as
   expect(saved.inference.upload).toEqual({ mode: 'local' });
 });
 
+it('releases the upload pin when dictation moves from Providers to Cloud', async () => {
+  mockConfig = {
+    defaultMode: 'providers',
+    inference: {
+      dictation: { mode: 'providers', providerId: 'openai', modelId: 'whisper-1' },
+      upload: { mode: 'local' },
+    },
+  };
+  mockActiveMode = 'providers';
+  render(<ProviderSettingsScreen />);
+  fireEvent.press(screen.getByText('Inference mode'));
+  fireEvent.press(screen.getByText('OpenWhispr Cloud'));
+  fireEvent.press(screen.getByText('Save selection'));
+  await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
+  const saved = mockUpdateConfig.mock.calls[0][0] as {
+    inference: Record<string, { mode: string } | undefined>;
+  };
+  expect(saved.inference.dictation).toEqual({ mode: 'openwhispr' });
+  expect(saved.inference.upload).toBeUndefined();
+});
+
+it('pins uploads to the mode the app is in, not a stale saved Cloud preference', async () => {
+  mockConfig = { defaultMode: 'cloud' };
+  mockActiveMode = 'private';
+  mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+  render(<ProviderSettingsScreen />);
+  enableProviders();
+  fireEvent.press(screen.getByText('Save selection'));
+  await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
+  const saved = mockUpdateConfig.mock.calls[0][0] as {
+    inference: Record<string, { mode: string }>;
+  };
+  expect(saved.inference.upload).toEqual({ mode: 'local' });
+});
+
 it('keeps an existing BYOK user uploads on Cloud when dictation is re-saved as Providers', async () => {
   mockConfig = {
     defaultMode: 'providers',
@@ -297,4 +383,14 @@ it('keeps an existing BYOK user uploads on Cloud when dictation is re-saved as P
     inference: Record<string, { mode: string }>;
   };
   expect(saved.inference.upload).toEqual({ mode: 'openwhispr' });
+});
+
+it('removes every saved provider key after confirmation', async () => {
+  jest
+    .spyOn(Alert, 'alert')
+    .mockImplementation((_title, _message, buttons) => buttons?.[1]?.onPress?.());
+  render(<ProviderSettingsScreen />);
+  fireEvent.press(screen.getByText('Remove all provider keys'));
+  await screen.findByText('All provider keys were removed.');
+  expect(mockClearCredentials).toHaveBeenCalledTimes(1);
 });

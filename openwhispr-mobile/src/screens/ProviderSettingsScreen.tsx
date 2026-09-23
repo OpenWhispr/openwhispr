@@ -7,13 +7,16 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import type { UserConfig } from '@/types';
+import type { ProcessingMode, UserConfig } from '@/types';
 import {
+  clearProviderCredentials,
   getProviderCredentialReference,
   getProviderCredentialStatus,
   removeProviderCredential,
   setProviderCredential,
 } from '@/services/providers/ProviderCredentials';
+import { confirmDestructive } from '@/lib/alerts';
+import { dictationModeConfig } from '@/lib/inferenceModes';
 import {
   discoverProviderModels,
   testProviderConnection,
@@ -48,8 +51,23 @@ const PROVIDER_SETUP_URLS: Record<string, string> = {
   openrouter: 'https://openrouter.ai/keys',
 };
 
-function legacyMode(config: UserConfig | null | undefined): InferenceSelection {
-  return { mode: config?.defaultMode === 'private' ? 'local' : 'openwhispr' };
+// Providers dictation skips these workflows until a selection is saved for them.
+const UNSET_PROVIDER_NOTES: Partial<Record<MobileInferenceScope, string>> = {
+  cleanup: 'Not saved yet. Cleanup is skipped until you save a selection.',
+  agent:
+    'Not saved yet. Voice commands are skipped until you save a selection; note chat uses OpenWhispr Cloud.',
+};
+
+// What a workflow with no saved selection runs: On-Device mode keeps everything
+// local, and Providers dictation waits for a provider before cleanup or the agent.
+function unsetSelection(
+  scope: MobileInferenceScope,
+  activeMode: ProcessingMode,
+): InferenceSelection {
+  if (activeMode === 'private') return { mode: 'local' };
+  if (activeMode === 'providers' && (scope === 'dictation' || UNSET_PROVIDER_NOTES[scope]))
+    return { mode: 'providers' };
+  return { mode: 'openwhispr' };
 }
 
 export function ProviderSettingsScreen(): React.JSX.Element {
@@ -59,8 +77,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   const activeMode = useProcessingModeStore((state) => state.activeMode);
   const [scope, setScope] = useState<MobileInferenceScope>('dictation');
   const [selection, setSelection] = useState<InferenceSelection>(
-    config?.inference?.dictation ??
-      (config?.defaultMode === 'providers' ? { mode: 'providers' } : legacyMode(config)),
+    config?.inference?.dictation ?? unsetSelection('dictation', activeMode),
   );
   const remembered = useRef<Record<string, InferenceSelection>>({});
   const [picker, setPicker] = useState<Picker | null>(null);
@@ -83,6 +100,10 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   const modelId = selection.modelId ?? pickDefaultModelId(provider);
   const providerId = provider?.id;
   const models = provider?.models.length ? provider.models : discoveredModels;
+  const unsetNote =
+    activeMode === 'providers' && !config?.inference?.[scope]
+      ? UNSET_PROVIDER_NOTES[scope]
+      : undefined;
 
   function clearInputs(): void {
     setApiKey('');
@@ -95,7 +116,10 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     setConfigured(false);
     if (Platform.OS === 'ios' && selection.mode === 'providers' && providerId) {
       getProviderCredentialReference(providerId, selection.endpoint)
-        .then(getProviderCredentialStatus)
+        .then((reference) =>
+          // An unreadable saved key still exists, so offer to remove it.
+          getProviderCredentialStatus(reference).catch(() => ({ reference, isConfigured: true })),
+        )
         .then((status) => {
           if (!cancelled) setConfigured(status.isConfigured);
         })
@@ -116,7 +140,9 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     remembered.current[scope] = selection;
     setScope(next);
     setDiscoveredModels([]);
-    setSelection(remembered.current[next] ?? config?.inference?.[next] ?? legacyMode(config));
+    setSelection(
+      remembered.current[next] ?? config?.inference?.[next] ?? unsetSelection(next, activeMode),
+    );
     setPicker(null);
     clearInputs();
   }
@@ -137,7 +163,10 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     clearInputs();
   }
 
-  async function prepareSelection(requireModel = true): Promise<InferenceSelection | null> {
+  async function prepareSelection(
+    requireModel = true,
+    saveCredential = true,
+  ): Promise<InferenceSelection | null> {
     let saved: InferenceSelection = { mode: selection.mode };
     if (selection.mode === 'providers') {
       if (!provider || (requireModel && !modelId.trim())) {
@@ -160,10 +189,10 @@ export function ProviderSettingsScreen(): React.JSX.Element {
       }
       const reference = await getProviderCredentialReference(provider.id, endpoint);
       const hasNewCredential = !!apiKey.trim();
-      let hasCredential = (await getProviderCredentialStatus(reference)).isConfigured;
-      if (hasNewCredential) {
+      const hasCredential =
+        hasNewCredential || (await getProviderCredentialStatus(reference)).isConfigured;
+      if (hasNewCredential && saveCredential) {
         await setProviderCredential(reference, { apiKey: apiKey.trim() });
-        hasCredential = true;
         clearInputs();
         setConfigured(true);
       }
@@ -192,6 +221,17 @@ export function ProviderSettingsScreen(): React.JSX.Element {
       const processingMode =
         saved.mode === 'local' ? 'private' : saved.mode === 'providers' ? 'providers' : 'cloud';
       const currentConfig = useConfigStore.getState().config;
+      const inference: UserConfig['inference'] =
+        scope === 'dictation' && processingMode !== 'providers'
+          ? dictationModeConfig(currentConfig, processingMode).inference
+          : {
+              ...currentConfig?.inference,
+              // Pin uploads to the mode dictation is leaving for Providers.
+              ...(scope === 'dictation' && !currentConfig?.inference?.upload
+                ? { upload: { mode: activeMode === 'private' ? 'local' : 'openwhispr' } }
+                : {}),
+              [scope]: saved,
+            };
       await updateConfig({
         ...(saved.providerId
           ? {
@@ -204,15 +244,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
               },
             }
           : {}),
-        inference: {
-          ...currentConfig?.inference,
-          ...(scope === 'dictation' &&
-          saved.mode === 'providers' &&
-          !currentConfig?.inference?.upload
-            ? { upload: legacyMode(currentConfig) }
-            : {}),
-          [scope]: saved,
-        },
+        inference,
         ...(scope === 'dictation' ? { defaultMode: processingMode } : {}),
       });
       if (useConfigStore.getState().error) {
@@ -238,21 +270,19 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     const controller = new AbortController();
     diagnosticController.current = controller;
     try {
-      const draft = await prepareSelection(action === 'test');
+      const draft = await prepareSelection(action === 'test', false);
       if (!draft) return;
       const resolved = resolveMobileInferenceRoute({
         scope,
         selection: draft,
+        // A check sends no user content, so On-Device mode does not block it.
         policy: await getProviderPolicy(),
-        privateContent: activeMode === 'private',
       });
       if (!resolved.ok || resolved.route.mode !== 'providers') {
         setError(
-          !resolved.ok && resolved.code === 'PRIVATE_CONTENT'
-            ? 'Turn off Private mode before contacting a remote provider.'
-            : !resolved.ok && resolved.code.startsWith('POLICY')
-              ? 'Organization policy does not currently permit this provider check.'
-              : 'Check your provider, model, and endpoint before testing.',
+          !resolved.ok && resolved.code.startsWith('POLICY')
+            ? 'Organization policy does not currently permit this provider check.'
+            : 'Check your provider, model, and endpoint before testing.',
         );
         return;
       }
@@ -260,6 +290,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         const result = await discoverProviderModels({
           route: resolved.route,
           signal: controller.signal,
+          apiKey: apiKey.trim() || undefined,
         });
         if (controller.signal.aborted) return;
         setDiscoveredModels(result.models);
@@ -272,6 +303,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         const result = await testProviderConnection({
           route: resolved.route,
           signal: controller.signal,
+          apiKey: apiKey.trim() || undefined,
         });
         if (controller.signal.aborted) return;
         setNotice(
@@ -309,6 +341,29 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     } finally {
       setBusy(false);
     }
+  }
+
+  function removeAllCredentials(): void {
+    confirmDestructive(
+      'Remove all provider keys?',
+      'Every provider key saved on this iPhone is deleted, including keys for Custom endpoints you no longer use. Workflows that use them stop until you add a key again.',
+      async (): Promise<void> => {
+        setBusy(true);
+        setError(null);
+        setNotice(null);
+        try {
+          await clearProviderCredentials();
+          setConfigured(false);
+          clearInputs();
+          setNotice('All provider keys were removed.');
+        } catch {
+          setError('Unable to remove every provider key. Please try again.');
+        } finally {
+          setBusy(false);
+        }
+      },
+      { destructiveLabel: 'Remove' },
+    );
   }
 
   function choice(title: string, selected: boolean, onPress: () => void): React.JSX.Element {
@@ -381,6 +436,9 @@ export function ProviderSettingsScreen(): React.JSX.Element {
             }),
           )}
       </SettingsSection>
+      {unsetNote ? (
+        <Text className="-mt-4 mb-6 px-8 text-[13px] text-secondaryLabel">{unsetNote}</Text>
+      ) : null}
       {selection.mode === 'providers' && provider ? (
         <>
           <SettingsSection title="Connection">
@@ -489,8 +547,9 @@ export function ProviderSettingsScreen(): React.JSX.Element {
           <SettingsSection borderless title="Verify access">
             <View className="gap-3 p-1">
               <Text className="text-[13px] text-secondaryLabel">
-                Checks save the credential entered above. Text checks send a short test prompt and
-                may incur provider charges; transcription checks verify catalog access only.
+                Checks use the key entered above without saving it. Text checks send a short test
+                prompt and may incur provider charges; transcription checks verify catalog access
+                only.
               </Text>
               <Button variant="outline" disabled={busy} onPress={() => diagnose('test')}>
                 Check connection
@@ -517,6 +576,9 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         ) : null}
         <Button loading={busy} onPress={save}>
           Save selection
+        </Button>
+        <Button variant="ghost" disabled={busy} onPress={removeAllCredentials}>
+          Remove all provider keys
         </Button>
       </View>
     </SettingsScreen>
