@@ -2,9 +2,8 @@
 // path, plus the decoder window the dictionary UI warns against. One place, so
 // the request bound and the warning cannot drift apart.
 
-// Groq rejects prompts > 896 chars (incl. when reached via a custom endpoint);
-// 890 leaves margin for UTF-16 vs codepoint counting drift.
-export const GROQ_PROMPT_CHARS = 890;
+// Groq calls this a character limit, but validates the encoded UTF-8 bytes.
+export const GROQ_PROMPT_BYTES = 896;
 
 // Whisper-family decoders (whisper-1, Groq's whisper-large-v3, whisper.cpp) read
 // at most 223 prompt tokens and keep the TAIL of anything longer, silently. 900
@@ -26,13 +25,23 @@ export const WHISPER_DECODER_PROMPT_CHARS = 550;
 // absurd list crowding out a long dictation, not a limit anyone should hit.
 export const TRANSCRIBE_PROMPT_CHARS = 8000;
 
+export function usesGroqPromptByteLimit({ provider = "", endpoint = "" } = {}) {
+  if (provider === "groq") return true;
+  try {
+    return new URL(endpoint).hostname === "api.groq.com";
+  } catch {
+    return false;
+  }
+}
+
 // Only the 4o transcribe family is known to read past a Whisper decoder's
 // prompt window, so it alone earns the generous budget. Everything else falls
 // back to the Whisper budget on purpose: custom and self-hosted endpoints take
 // whatever model name the user typed, and most of those servers are
 // Whisper-family under a name that never says "whisper".
+// Groq's budget is encoded bytes; the other provider budgets are characters.
 export function dictionaryPromptLimit({ provider = "", endpoint = "", model = "" } = {}) {
-  if (provider === "groq" || endpoint.includes("api.groq.com")) return GROQ_PROMPT_CHARS;
+  if (usesGroqPromptByteLimit({ provider, endpoint })) return GROQ_PROMPT_BYTES;
   if (model.toLowerCase().startsWith("gpt-4o")) return TRANSCRIBE_PROMPT_CHARS;
   return WHISPER_PROMPT_CHARS;
 }
@@ -51,6 +60,43 @@ export function trimDictionaryPrompt(prompt, maxChars) {
   return {
     prompt: lastComma > 0 ? head.slice(0, lastComma) : head,
     originalLength: prompt.length,
+    truncated: true,
+  };
+}
+
+export function trimGroqDictionaryPrompt(prompt) {
+  const originalLength = prompt ? prompt.length : 0;
+  // FormData converts strings to well-formed Unicode and expands lone CR/LF.
+  // Measure that representation, or serialization can exceed the budget later.
+  const normalized = prompt ? prompt.toWellFormed().replace(/\r\n|\r|\n/g, "\r\n") : prompt;
+  const encoder = new TextEncoder();
+  const originalBytes = normalized ? encoder.encode(normalized).length : 0;
+  if (originalBytes <= GROQ_PROMPT_BYTES) {
+    return {
+      prompt: normalized,
+      originalLength,
+      originalBytes,
+      byteLength: originalBytes,
+      truncated: false,
+    };
+  }
+
+  let head = "";
+  let bytes = 0;
+  // A cut inside a CRLF pair would leave a lone CR that FormData expands again.
+  for (const [unit] of normalized.matchAll(/\r\n|[\s\S]/gu)) {
+    const size = encoder.encode(unit).length;
+    if (bytes + size > GROQ_PROMPT_BYTES) break;
+    head += unit;
+    bytes += size;
+  }
+  const lastComma = head.lastIndexOf(",");
+  const trimmed = lastComma > 0 ? head.slice(0, lastComma) : head;
+  return {
+    prompt: trimmed,
+    originalLength,
+    originalBytes,
+    byteLength: encoder.encode(trimmed).length,
     truncated: true,
   };
 }

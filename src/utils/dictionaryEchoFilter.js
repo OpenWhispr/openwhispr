@@ -98,6 +98,15 @@ export function analyzeDictionaryPromptFragment(text, dictionaryPrompt) {
   };
 }
 
+// A shortened hint list may contain only a few ordinary words, so vocabulary
+// overlap alone cannot establish that its prompt was echoed.
+export function matchesExactDictionaryPrompt(text, dictionaryPrompt) {
+  if (!text || !dictionaryPrompt) return false;
+
+  const normalizedText = normalize(text);
+  return normalizedText !== "" && normalizedText === normalize(dictionaryPrompt);
+}
+
 export function matchesDictionaryPrompt(text, dictionaryPrompt) {
   if (!text || !dictionaryPrompt) return false;
 
