@@ -186,9 +186,13 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
 
   const routing = { isPrivateNote: note.isPrivate === 1 };
   const canUseCloud = canUseCloudForMeetingNote(note);
-  const providerSelected = useConfigStore.getState().config?.inference?.notes?.mode === 'providers';
+  const notesMode = useConfigStore.getState().config?.inference?.notes?.mode;
+  // On-Device notes take the chunked local path: a whole meeting rarely fits
+  // the on-device context in one request.
   const canUseLocal =
-    (!providerSelected || !canUseCloud) && (await shouldUseLocalReasoning(routing));
+    notesMode === 'local'
+      ? (await getLocalReasoningReadiness()).status === 'ready'
+      : (notesMode !== 'providers' || !canUseCloud) && (await shouldUseLocalReasoning(routing));
   const systemPrompt = buildActionSystemPrompt({
     actionPrompt: action.prompt,
     inputKind: 'meeting-transcript',
