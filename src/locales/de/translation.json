@@ -3969,6 +3969,28 @@
       "description": "OpenWhispr erfasst Audio direkt von deinem System — es nimmt niemals als Teilnehmer an deinen Meetings teil. Verbinde einfach deinen Kalender und mach Notizen wie gewohnt."
     }
   },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "An {{destination}} senden"
+      },
+      "identity": "Als {{account}}",
+      "identityWithWorkspace": "Als {{account}} in {{workspace}}",
+      "send": "Senden",
+      "edit": "Bearbeiten",
+      "doneEditing": "Bearbeitung fertig",
+      "cancel": "Abbrechen",
+      "titleLabel": "Titel",
+      "bodyLabel": "Nachricht",
+      "sending": "Wird gesendet…",
+      "sent": "An {{destination}} gesendet.",
+      "open": "Öffnen",
+      "failed": "Senden fehlgeschlagen: {{message}}",
+      "unknown": "Konnte nicht bestätigt werden. Bitte {{destination}} prüfen.",
+      "cancelled": "Abgebrochen. Es wurde nichts gesendet.",
+      "notSent": "Nicht gesendet."
+    }
+  },
   "notesView": {
     "searchPlaceholder": "Notizen durchsuchen…",
     "newNote": "Neue Notiz",

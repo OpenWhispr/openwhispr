@@ -3800,6 +3800,28 @@
       "description": "OpenWhispr cattura l'audio direttamente dal tuo sistema — non entra mai nelle tue riunioni come partecipante. Basta collegare il calendario e prendere appunti normalmente."
     }
   },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Invia a {{destination}}"
+      },
+      "identity": "Come {{account}}",
+      "identityWithWorkspace": "Come {{account}} in {{workspace}}",
+      "send": "Invia",
+      "edit": "Modifica",
+      "doneEditing": "Modifica completata",
+      "cancel": "Annulla",
+      "titleLabel": "Titolo",
+      "bodyLabel": "Messaggio",
+      "sending": "Invio in corso…",
+      "sent": "Inviato a {{destination}}.",
+      "open": "Apri",
+      "failed": "Invio non riuscito: {{message}}",
+      "unknown": "Impossibile confermare l'invio. Controlla {{destination}}.",
+      "cancelled": "Annullato. Non è stato inviato nulla.",
+      "notSent": "Non inviato."
+    }
+  },
   "calendar": {
     "title": "Google Calendar",
     "status": "Stato",

@@ -3800,6 +3800,28 @@
       "description": "O OpenWhispr captura áudio diretamente do seu sistema — ele nunca entra nas suas reuniões como participante. Basta conectar seu calendário e fazer anotações normalmente."
     }
   },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Enviar para {{destination}}"
+      },
+      "identity": "Como {{account}}",
+      "identityWithWorkspace": "Como {{account}} em {{workspace}}",
+      "send": "Enviar",
+      "edit": "Editar",
+      "doneEditing": "Edição concluída",
+      "cancel": "Cancelar",
+      "titleLabel": "Título",
+      "bodyLabel": "Mensagem",
+      "sending": "Enviando…",
+      "sent": "Enviado para {{destination}}.",
+      "open": "Abrir",
+      "failed": "Não foi possível enviar: {{message}}",
+      "unknown": "Não foi possível confirmar o envio. Verifique {{destination}}.",
+      "cancelled": "Cancelado. Nada foi enviado.",
+      "notSent": "Não enviado."
+    }
+  },
   "calendar": {
     "title": "Google Agenda",
     "status": "Status",

@@ -3969,6 +3969,28 @@
       "description": "OpenWhispr captures audio directly from your system — it never joins your meetings as a participant. Just connect your calendar and take notes as normal."
     }
   },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Send to {{destination}}"
+      },
+      "identity": "As {{account}}",
+      "identityWithWorkspace": "As {{account}} in {{workspace}}",
+      "send": "Send",
+      "edit": "Edit",
+      "doneEditing": "Done editing",
+      "cancel": "Cancel",
+      "titleLabel": "Title",
+      "bodyLabel": "Message",
+      "sending": "Sending…",
+      "sent": "Sent to {{destination}}.",
+      "open": "Open",
+      "failed": "Couldn't send: {{message}}",
+      "unknown": "Couldn't confirm it was sent. Check {{destination}}.",
+      "cancelled": "Cancelled. Nothing was sent.",
+      "notSent": "Not sent."
+    }
+  },
   "notesView": {
     "searchPlaceholder": "Search notes…",
     "newNote": "New Note",

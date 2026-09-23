@@ -3800,6 +3800,28 @@
       "description": "OpenWhispr はシステムから直接オーディオをキャプチャします — 参加者としてミーティングに参加することはありません。カレンダーを接続して、通常通りノートを取るだけです。"
     }
   },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "{{destination}} に送信"
+      },
+      "identity": "{{account}} として",
+      "identityWithWorkspace": "{{workspace}} の {{account}} として",
+      "send": "送信",
+      "edit": "編集",
+      "doneEditing": "編集完了",
+      "cancel": "キャンセル",
+      "titleLabel": "タイトル",
+      "bodyLabel": "メッセージ",
+      "sending": "送信中…",
+      "sent": "{{destination}} に送信しました。",
+      "open": "開く",
+      "failed": "送信できませんでした: {{message}}",
+      "unknown": "送信されたか確認できませんでした。{{destination}} を確認してください。",
+      "cancelled": "キャンセルしました。何も送信されていません。",
+      "notSent": "送信されていません。"
+    }
+  },
   "calendar": {
     "title": "Google カレンダー",
     "status": "ステータス",

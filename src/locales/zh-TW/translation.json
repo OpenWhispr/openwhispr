@@ -3800,6 +3800,28 @@
       "description": "OpenWhispr 直接從您的系統擷取音訊 — 它不會以參與者身分加入您的會議。只需連接日曆，正常記錄筆記即可。"
     }
   },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "傳送至 {{destination}}"
+      },
+      "identity": "以 {{account}} 身分",
+      "identityWithWorkspace": "以 {{account}}（{{workspace}}）身分",
+      "send": "傳送",
+      "edit": "編輯",
+      "doneEditing": "編輯完成",
+      "cancel": "取消",
+      "titleLabel": "標題",
+      "bodyLabel": "訊息",
+      "sending": "傳送中…",
+      "sent": "已傳送至 {{destination}}。",
+      "open": "開啟",
+      "failed": "無法傳送：{{message}}",
+      "unknown": "無法確認是否已傳送，請檢查 {{destination}}。",
+      "cancelled": "已取消，未傳送任何內容。",
+      "notSent": "未傳送。"
+    }
+  },
   "calendar": {
     "title": "Google 日曆",
     "status": "狀態",

@@ -6,6 +6,8 @@ import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import type { ToolCallInfo } from "./types";
 import { extractNoteCards } from "./noteCards";
 import { toolIcons } from "./toolIcons";
+import { ApprovalCard } from "./ApprovalCard";
+import { useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -170,6 +172,7 @@ export function ChatMessage({
   onOpenNote,
 }: ChatMessageProps) {
   const { t } = useTranslation();
+  const approvals = useConnectorApprovalStore((state) => state.entries);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -225,9 +228,13 @@ export function ChatMessage({
               (hasContent || noteCards.length > 0) && "mb-2 pb-1.5 border-b border-border/70"
             )}
           >
-            {toolCalls.map((tc) => (
-              <ToolCallStep key={tc.id} toolCall={tc} />
-            ))}
+            {toolCalls.map((tc) =>
+              approvals[tc.id] ? (
+                <ApprovalCard key={tc.id} entry={approvals[tc.id]} />
+              ) : (
+                <ToolCallStep key={tc.id} toolCall={tc} />
+              )
+            )}
           </div>
         )}
 

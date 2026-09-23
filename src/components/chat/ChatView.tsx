@@ -52,22 +52,29 @@ export default function ChatView() {
       persistence.saveAssistantMessage(content, toolCalls);
     },
   });
+  // useChatStreaming returns a fresh object every render, so depending on
+  // `streaming` itself would recreate these callbacks (and re-subscribe the
+  // Cmd/Ctrl+N listener) on every render. The stream-cancel function is
+  // stable, so bind it once and depend on that instead.
+  const { cancelStream } = streaming;
 
   const handleSelectConversation = useCallback(
     async (id: number) => {
       if (id === activeConversationId) return;
+      cancelStream();
       setActiveConversationId(id);
       setIsNewChat(false);
       await persistence.loadConversation(id);
     },
-    [activeConversationId, persistence]
+    [activeConversationId, cancelStream, persistence]
   );
 
   const handleNewChat = useCallback(() => {
+    cancelStream();
     setActiveConversationId(null);
     setIsNewChat(true);
     persistence.handleNewChat();
-  }, [persistence]);
+  }, [cancelStream, persistence]);
 
   const createConversation = useCallback(
     async (text: string) => {

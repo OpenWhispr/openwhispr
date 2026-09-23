@@ -3844,6 +3844,28 @@
       "description": "OpenWhispr захватывает аудио напрямую из вашей системы — он никогда не присоединяется к встречам как участник. Просто подключите календарь и делайте заметки как обычно."
     }
   },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Отправить в {{destination}}"
+      },
+      "identity": "От имени {{account}}",
+      "identityWithWorkspace": "От имени {{account}} в {{workspace}}",
+      "send": "Отправить",
+      "edit": "Изменить",
+      "doneEditing": "Готово",
+      "cancel": "Отмена",
+      "titleLabel": "Заголовок",
+      "bodyLabel": "Сообщение",
+      "sending": "Отправка…",
+      "sent": "Отправлено в {{destination}}.",
+      "open": "Открыть",
+      "failed": "Не удалось отправить: {{message}}",
+      "unknown": "Не удалось подтвердить отправку. Проверьте {{destination}}.",
+      "cancelled": "Отменено. Ничего не отправлено.",
+      "notSent": "Не отправлено."
+    }
+  },
   "calendar": {
     "title": "Google Календарь",
     "status": "Статус",

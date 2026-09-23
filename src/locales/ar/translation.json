@@ -697,6 +697,28 @@
       "description": "يلتقط OpenWhispr الصوت مباشرة من نظامك — فهو لا ينضم أبدًا إلى اجتماعاتك كمشارك. ما عليك سوى ربط التقويم الخاص بك وتدوين الملاحظات كالمعتاد."
     }
   },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "إرسال إلى {{destination}}"
+      },
+      "identity": "بصفتك {{account}}",
+      "identityWithWorkspace": "بصفتك {{account}} في {{workspace}}",
+      "send": "إرسال",
+      "edit": "تعديل",
+      "doneEditing": "تم التعديل",
+      "cancel": "إلغاء",
+      "titleLabel": "العنوان",
+      "bodyLabel": "الرسالة",
+      "sending": "جارٍ الإرسال…",
+      "sent": "تم الإرسال إلى {{destination}}.",
+      "open": "فتح",
+      "failed": "تعذّر الإرسال: {{message}}",
+      "unknown": "تعذّر تأكيد الإرسال. تحقق من {{destination}}.",
+      "cancelled": "تم الإلغاء. لم يتم إرسال شيء.",
+      "notSent": "لم يُرسل."
+    }
+  },
   "auth": {
     "cloudNotConfigured": "السحابة غير مهيأة",
     "common": {

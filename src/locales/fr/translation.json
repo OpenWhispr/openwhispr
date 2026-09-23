@@ -3969,6 +3969,28 @@
       "description": "OpenWhispr capture l'audio directement depuis votre système — il ne rejoint jamais vos réunions en tant que participant. Connectez simplement votre calendrier et prenez vos notes normalement."
     }
   },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Envoyer à {{destination}}"
+      },
+      "identity": "En tant que {{account}}",
+      "identityWithWorkspace": "En tant que {{account}} dans {{workspace}}",
+      "send": "Envoyer",
+      "edit": "Modifier",
+      "doneEditing": "Modification terminée",
+      "cancel": "Annuler",
+      "titleLabel": "Titre",
+      "bodyLabel": "Message",
+      "sending": "Envoi en cours…",
+      "sent": "Envoyé à {{destination}}.",
+      "open": "Ouvrir",
+      "failed": "Échec de l'envoi : {{message}}",
+      "unknown": "Impossible de confirmer l'envoi. Vérifiez {{destination}}.",
+      "cancelled": "Annulé. Rien n'a été envoyé.",
+      "notSent": "Non envoyé."
+    }
+  },
   "notesView": {
     "searchPlaceholder": "Rechercher des notes…",
     "newNote": "Nouvelle note",
