@@ -7361,6 +7361,14 @@ class IPCHandlers {
       return { mode, strategy: "unsupported" };
     };
 
+    // The plan's mode without its strategy, for callers that only decide
+    // whether a system stream opens. Windows always opens one, so this never
+    // probes its helper, which "default-device" must not touch (#1546).
+    const getMeetingSystemAudioPlanMode = async () =>
+      process.platform === "win32"
+        ? getMeetingSystemAudioMode()
+        : (await getMeetingSystemAudioPlan()).mode;
+
     const hasNativeMeetingSystemAudio = () => getMeetingSystemAudioMode() === "native";
 
     const isMeetingStreamingConnected = (systemAudioMode = getMeetingSystemAudioCapabilityMode()) =>
@@ -7390,7 +7398,7 @@ class IPCHandlers {
         keyterms: options.keyterms,
         sampleRate: MEETING_STREAM_SAMPLE_RATE,
       };
-      const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
+      const systemAudioMode = await getMeetingSystemAudioPlanMode();
       let pairs;
       if (systemAudioMode !== "unsupported") {
         const secrets = await fetchRealtimeToken(event, options, { streams: 2 });
@@ -8481,7 +8489,7 @@ class IPCHandlers {
         return { success: true };
       }
 
-      const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
+      const systemAudioMode = await getMeetingSystemAudioPlanMode();
       const requestedConnectionKey = getMeetingConnectionKey(options);
 
       if (

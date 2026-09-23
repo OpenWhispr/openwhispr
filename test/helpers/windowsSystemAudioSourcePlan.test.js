@@ -5,11 +5,12 @@ const path = require("node:path");
 const vm = require("node:vm");
 const createWatchdog = require("../../src/helpers/meetingSystemAudioWatchdog");
 
-// Runs the real access-check, plan and start closures from ipcHandlers.js, the
-// way meetingAudioTimeline.test.js does, with only the helper process, the
-// window and the platform replaced. #1546: "Default playback device only" must
-// reach renderer loopback without touching the helper, and every other value
-// must keep today's helper-first path exactly.
+// Runs the real access-check, plan, cloud connect/prepare and start closures
+// from ipcHandlers.js, the way meetingAudioTimeline.test.js does, with only the
+// helper process, the streaming sockets, the window and the platform replaced.
+// #1546: "Default playback device only" must reach renderer loopback without
+// touching the helper, and every other value must keep today's helper-first
+// path exactly.
 const ipcPath = path.join(__dirname, "../../src/helpers/ipcHandlers.js");
 const source = fs.readFileSync(ipcPath, "utf8");
 
@@ -20,14 +21,26 @@ function section(from, to) {
   return source.slice(start, end);
 }
 
-async function harness({ platform = "win32", helperAvailable = true, startFails = false } = {}) {
+async function harness({
+  platform = "win32",
+  helperAvailable = true,
+  startFails = false,
+  linuxPortalAvailable = true,
+} = {}) {
   const sourceHelpers = await import("../../src/helpers/systemAudioSource.js");
+  const { ALLOWED_MEETING_PROVIDERS, getMeetingConnectionKey } =
+    await import("../../src/helpers/meetingStreamingProviders.js");
   const calls = { capability: [], start: 0, stop: 0 };
   const sent = [];
+  const streams = [];
   const handlers = new Map();
   let onWarning = null;
   const context = {
     ...sourceHelpers,
+    ALLOWED_MEETING_PROVIDERS,
+    getMeetingConnectionKey,
+    setTimeout,
+    clearTimeout,
     process: { platform },
     ipcMain: { handle: (channel, handler) => handlers.set(channel, handler), on() {} },
     BrowserWindow: {
@@ -58,7 +71,7 @@ async function harness({ platform = "win32", helperAvailable = true, startFails 
     },
     linuxPortalAudioManager: {
       getCapability: async () => ({
-        available: true,
+        available: linuxPortalAvailable,
         supportsSystemAudio: true,
         supportsNativeCapture: true,
         portalVersion: 5,
@@ -68,10 +81,36 @@ async function harness({ platform = "win32", helperAvailable = true, startFails 
     meetingSystemAudioDegraded: false,
     meetingSystemAudioHeard: false,
     sendMeetingAudio() {},
+    // Cloud streaming, with the sockets replaced by a client that records
+    // which source (mic, system) it connected.
+    MEETING_STREAM_SAMPLE_RATE: 24000,
+    meetingConnectionKey: null,
+    meetingTranscriptionPrepareInProgress: false,
+    meetingTranscriptionStartInProgress: false,
+    meetingTranscriptionPreparePromise: null,
+    getMeetingStreamingClient: () =>
+      class {
+        async connect({ source }) {
+          streams.push(source);
+          this.isConnected = true;
+        }
+        async disconnect() {
+          this.isConnected = false;
+        }
+      },
+    attachMeetingStreamingHandlers() {},
+    withMeetingSourceConnectOpts: (connectOpts, source) => ({ ...connectOpts, source }),
+    fetchRealtimeToken: async (_event, _options, { streams: count = 1 } = {}) =>
+      count > 1 ? ["mic-token", "system-token"] : "mic-token",
+    toPolicyFailure: (error) => ({ success: false, error: error.message }),
   };
   const closures = [
     ["const buildSystemAudioAccess =", 'ipcMain.handle("request-system-audio-access"'],
-    ["const getMeetingSystemAudioCapabilityMode =", "const hasNativeMeetingSystemAudio ="],
+    ["const getMeetingSystemAudioCapabilityMode =", "const MEETING_MIC_REFERENCE_ALIGNMENT_MS ="],
+    [
+      'ipcMain.handle("meeting-transcription-prepare"',
+      'ipcMain.handle("meeting-transcription-cancel"',
+    ],
     ["const degradeMeetingSystemAudioToLoopback =", "const stopMeetingTranscription ="],
   ].map(([from, to]) => section(from, to));
   vm.createContext(context);
@@ -79,6 +118,7 @@ async function harness({ platform = "win32", helperAvailable = true, startFails 
     `
     ${closures.join("\n")}
     globalThis.plan = getMeetingSystemAudioPlan;
+    globalThis.connect = (options) => connectRealtimeStreaming({ sender: {} }, options);
     globalThis.startSystemAudio = (strategy) =>
       startMeetingSystemAudio({ sender: {} }, "loopback", strategy, "in realtime mode");
     `,
@@ -87,11 +127,15 @@ async function harness({ platform = "win32", helperAvailable = true, startFails 
   // Objects built inside the vm carry its own Object.prototype, which
   // deepStrictEqual rejects, so results are copied into this realm.
   const handler = handlers.get("check-system-audio-access");
+  const prepareHandler = handlers.get("meeting-transcription-prepare");
   return {
     calls,
     sent,
+    streams,
     check: async (options) => ({ ...(await handler({ sender: {} }, options)) }),
     plan: async (options) => ({ ...(await context.plan(options)) }),
+    connect: (options) => context.connect(options),
+    prepare: async (options) => ({ ...(await prepareHandler({ sender: {} }, options)) }),
     startSystemAudio: async (strategy) => ({ ...(await context.startSystemAudio(strategy)) }),
     warn: (code) => onWarning?.({ code, message: code }),
   };
@@ -118,6 +162,25 @@ test("default playback device only goes to renderer loopback without the helper"
   // Not even a capability probe: the helper never runs for this user.
   assert.deepEqual(h.calls.capability, []);
   assert.equal(h.calls.start, 0);
+});
+
+const CLOUD = { provider: "deepgram-realtime", mode: "byok" };
+
+test("cloud connect and prepare open both streams without asking the helper", async () => {
+  // Both need only to know whether a system stream opens. Asking the helper
+  // for a strategy they ignore can spawn its probe (cold or expired capability
+  // cache), holding a default-device start for up to the probe's 5 s timeout.
+  const start = await harness();
+  await start.connect({ ...CLOUD, systemAudioSource: "default-device" });
+
+  // The renderer's prepare call carries no system audio source.
+  const prepare = await harness();
+  assert.equal((await prepare.prepare(CLOUD)).success, true);
+
+  for (const h of [start, prepare]) {
+    assert.deepEqual(h.streams, ["mic", "system"]);
+    assert.deepEqual(h.calls.capability, []);
+  }
 });
 
 test("every other value keeps the native helper exactly as before", async () => {
@@ -191,6 +254,16 @@ test("macOS and Linux ignore the Windows-only choice", async () => {
   });
 
   assert.deepEqual([...mac.calls.capability, ...linux.calls.capability], []);
+});
+
+test("Linux cloud connect still opens a system stream only with a working portal", async () => {
+  const withPortal = await harness({ platform: "linux" });
+  await withPortal.connect(CLOUD);
+  assert.deepEqual(withPortal.streams, ["mic", "system"]);
+
+  const withoutPortal = await harness({ platform: "linux", linuxPortalAvailable: false });
+  await withoutPortal.connect(CLOUD);
+  assert.deepEqual(withoutPortal.streams, ["mic"]);
 });
 
 test("meeting start plans with the renderer's choice and logs the outcome", () => {
