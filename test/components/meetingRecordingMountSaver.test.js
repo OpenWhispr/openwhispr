@@ -11,7 +11,7 @@ const {
 
 // The 30-second crash-safety save lives in the always-mounted Mount, so it
 // keeps running whichever view is open. It writes through the store's
-// persistLiveTranscript: the same save the unload and sign-out flushes make.
+// persistLiveTranscript: the same save the unload flush makes.
 
 const NOTE_ID = 11;
 const START_ARGS = {

@@ -102,7 +102,7 @@ async function loadStore(t, api) {
     const results = unloadListeners().map((listener) => listener(event));
     return { event, results };
   };
-  return { store, unload, unloadListeners };
+  return { store, unload, unloadListeners, vite };
 }
 
 const transcriptWrites = (writes) =>
@@ -266,16 +266,32 @@ test("a resumed recording's unload keeps the transcript it resumed from", async 
   await store.stopRecording();
 });
 
-// Sign-out awaits this save, so a failure must never escape and abort sign-out.
-test("a failed live save is logged, never thrown", async (t) => {
-  const { api, listeners } = createElectronAPI();
-  api.updateNote = async () => {
-    throw new Error("database closed");
-  };
-  const { store } = await loadStore(t, api);
-  assert.equal(await store.startRecording(START_ARGS), true);
-  listeners.segment(final("said as the database closed"));
+// The 30-second saver fires this without awaiting, so a failure must never escape.
+for (const [name, updateNote] of [
+  [
+    "a thrown live save",
+    async () => {
+      throw new Error("database closed");
+    },
+  ],
+  ["a refused live save", async () => ({ success: false, error: "Note not found" })],
+]) {
+  test(`${name} is logged, never thrown`, async (t) => {
+    const { api, listeners } = createElectronAPI();
+    api.updateNote = updateNote;
+    const { store, vite } = await loadStore(t, api);
+    const { default: logger } = await vite.ssrLoadModule("/utils/logger.ts");
+    const logged = t.mock.method(logger, "error", () => {});
+    assert.equal(await store.startRecording(START_ARGS), true);
+    listeners.segment(final("said as the save failed"));
 
-  await assert.doesNotReject(store.persistLiveTranscript());
-  await store.stopRecording();
-});
+    await assert.doesNotReject(store.persistLiveTranscript());
+    assert.ok(
+      logged.mock.calls.some(
+        ({ arguments: [message] }) => message === "Failed to persist live meeting transcript"
+      ),
+      "the failed save is logged"
+    );
+    await store.stopRecording();
+  });
+}

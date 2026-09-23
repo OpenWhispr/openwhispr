@@ -46,7 +46,6 @@ const MOCKS = {
     export const useToast = () => ({ toast, dismiss() {} });
   `,
   "/icons": `export const Plus = () => null; export const Sparkles = () => null;`,
-  "lucide-react": `export const Plus = () => null; export const Sparkles = () => null;`,
   "./NoteEditor": `
     import { useEffect } from "react";
     export default function NoteEditor(props) {

@@ -144,7 +144,7 @@ import {
 } from "../stores/policyRules";
 import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
-import { persistLiveTranscript } from "../stores/meetingRecordingStore";
+import { stopRecording } from "../stores/meetingRecordingStore";
 import { requestSignIn } from "../utils/requestSignIn";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
@@ -1958,9 +1958,9 @@ export default function SettingsPage({
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
     try {
-      // Save a live meeting's transcript while its note is still in scope:
-      // signing out clears the account scope before the reload's own flush runs.
-      await persistLiveTranscript();
+      // End a live meeting while its note is still in scope: signing out clears
+      // the account scope, and anything said after that could not be saved.
+      await stopRecording();
       // Clear account-scoped renderer/session state before ending the session.
       // Workspace-owned rows remain cached behind their membership boundary.
       await syncService.purgeTeamSpacesForSignOut();

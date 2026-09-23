@@ -1434,7 +1434,7 @@ declare global {
           updated_by_user_id?: string | null;
           left_team?: number;
         }
-      ) => Promise<{ success: boolean; note?: NoteItem }>;
+      ) => Promise<{ success: boolean; note?: NoteItem; error?: string }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
       exportNote: (
         noteId: number,

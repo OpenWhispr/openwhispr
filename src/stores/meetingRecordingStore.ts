@@ -1544,7 +1544,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
 // Writes the live segments to the recording's note, serialized exactly as the
 // stop path writes them. Shared by the 30-second crash-safety save and the
-// flushes before an unload or a sign-out. A no-op once a stop has begun: that
+// flush before an unload. A no-op once a stop has begun: that
 // stop has already written the final transcript (or will write main's, for a
 // recording with no segments), and a second write could overwrite it.
 export async function persistLiveTranscript(): Promise<void> {
@@ -1554,9 +1554,16 @@ export async function persistLiveTranscript(): Promise<void> {
   try {
     // Posted before the first await: during beforeunload nothing after it is
     // guaranteed to run.
-    await window.electronAPI?.updateNote?.(recordingNoteId, {
+    const result = await window.electronAPI?.updateNote?.(recordingNoteId, {
       transcript: serializeTranscriptSegments(segments),
     });
+    if (result && !result.success) {
+      logger.error(
+        "Failed to persist live meeting transcript",
+        { error: result.error, noteId: recordingNoteId },
+        "meeting"
+      );
+    }
   } catch (err) {
     logger.error(
       "Failed to persist live meeting transcript",
