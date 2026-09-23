@@ -33,6 +33,7 @@ async function harness({
   const calls = { capability: [], start: 0, stop: 0 };
   const sent = [];
   const streams = [];
+  const logs = [];
   const handlers = new Map();
   let onWarning = null;
   const context = {
@@ -49,7 +50,12 @@ async function harness({
         webContents: { send: (channel) => sent.push(channel) },
       }),
     },
-    debugLogger: { warn() {}, debug() {}, error() {}, info() {} },
+    debugLogger: {
+      warn() {},
+      debug() {},
+      error() {},
+      info: (message, meta, scope) => logs.push({ message, meta: { ...meta }, scope }),
+    },
     // `this.<manager>` in the closures resolves through the context's global.
     windowsLoopbackAudioManager: {
       getCapability: async (options) => {
@@ -103,6 +109,30 @@ async function harness({
     fetchRealtimeToken: async (_event, _options, { streams: count = 1 } = {}) =>
       count > 1 ? ["mic-token", "system-token"] : "mic-token",
     toPolicyFailure: (error) => ({ success: false, error: error.message }),
+    // The start handler's session bookkeeping, and the stages it runs that
+    // key on mode alone (AEC, live speaker identification, the timers).
+    meetingDetectionEngine: {
+      endRecordingSession() {},
+      setUserRecording() {},
+      beginRecordingSession: async () => {},
+    },
+    meetingEchoLeakDetector: { reset() {} },
+    meetingLocalMode: false,
+    meetingStartedAt: null,
+    meetingConnectionOptions: null,
+    meetingConnectionWin: null,
+    meetingReconnectCount: 0,
+    meetingFatalErrorSent: false,
+    meetingOneOnOneAttendee: null,
+    meetingOneOnOneProfileBound: false,
+    meetingNoteId: null,
+    resolveOneOnOneAttendeeForNote: () => null,
+    _resolveInitialMeetingSpeakerConfig: () => null,
+    startMeetingAec: async () => {},
+    startLiveSpeakerIdentification: async () => {},
+    armMeetingSystemAudioSilenceTimer() {},
+    startMeetingSystemAudioWatchdog() {},
+    rollbackMeetingTranscriptionStart: async () => {},
   };
   const closures = [
     ["const buildSystemAudioAccess =", 'ipcMain.handle("request-system-audio-access"'],
@@ -111,6 +141,7 @@ async function harness({
       'ipcMain.handle("meeting-transcription-prepare"',
       'ipcMain.handle("meeting-transcription-cancel"',
     ],
+    ["const startMeetingTranscription = async", "const sendMeetingAudio ="],
     ["const degradeMeetingSystemAudioToLoopback =", "const stopMeetingTranscription ="],
   ].map(([from, to]) => section(from, to));
   vm.createContext(context);
@@ -119,6 +150,8 @@ async function harness({
     ${closures.join("\n")}
     globalThis.plan = getMeetingSystemAudioPlan;
     globalThis.connect = (options) => connectRealtimeStreaming({ sender: {} }, options);
+    globalThis.startTranscription = (options) =>
+      startMeetingTranscription({ sender: {} }, options);
     globalThis.startSystemAudio = (strategy) =>
       startMeetingSystemAudio({ sender: {} }, "loopback", strategy, "in realtime mode");
     `,
@@ -132,10 +165,12 @@ async function harness({
     calls,
     sent,
     streams,
+    logs,
     check: async (options) => ({ ...(await handler({ sender: {} }, options)) }),
     plan: async (options) => ({ ...(await context.plan(options)) }),
     connect: (options) => context.connect(options),
     prepare: async (options) => ({ ...(await prepareHandler({ sender: {} }, options)) }),
+    start: async (options) => ({ ...(await context.startTranscription(options)) }),
     startSystemAudio: async (strategy) => ({ ...(await context.startSystemAudio(strategy)) }),
     warn: (code) => onWarning?.({ code, message: code }),
   };
@@ -266,23 +301,49 @@ test("Linux cloud connect still opens a system stream only with a working portal
   assert.deepEqual(withoutPortal.streams, ["mic"]);
 });
 
-test("meeting start plans with the renderer's choice and logs the outcome", () => {
-  // startMeetingTranscription needs the whole meeting closure, so its wiring is
-  // pinned at the source level like meetingStreamingWiring.test.js.
-  const start = section("const startMeetingTranscription = async", "const sendMeetingAudio =");
+test("a meeting start captures from the renderer's choice and logs what started", async () => {
+  const cases = [
+    {
+      systemAudioSource: "default-device",
+      helperStarts: 0,
+      capability: [],
+      systemAudioStrategy: "loopback",
+    },
+    {
+      systemAudioSource: "all-devices",
+      helperStarts: 1,
+      capability: [{ force: true }],
+      systemAudioStrategy: "wasapi-loopback",
+    },
+    // The log reports what main actually started, not what it planned.
+    {
+      systemAudioSource: "all-devices",
+      startFails: true,
+      helperStarts: 1,
+      capability: [{ force: true }],
+      systemAudioStrategy: "loopback",
+    },
+  ];
 
-  assert.match(
-    start,
-    /const systemAudioSource = normalizeSystemAudioSource\(options\.systemAudioSource\);/
-  );
-  assert.match(
-    start,
-    /getMeetingSystemAudioPlan\(\{\s*refreshWindowsCapability: true,\s*systemAudioSource,?\s*\}\)/
-  );
-  // The log names the choice and the strategy that actually started.
-  const log = start.slice(start.indexOf('"Meeting system audio source"'));
-  assert.match(
-    log,
-    /^"Meeting system audio source",\s*\{ systemAudioSource, systemAudioStrategy: result\./
-  );
+  for (const { systemAudioSource, startFails, helperStarts, capability, ...rest } of cases) {
+    const label = `${systemAudioSource}${startFails ? " (helper fails)" : ""}`;
+    const h = await harness({ startFails });
+    const result = await h.start({ ...CLOUD, sessionId: "session-1", systemAudioSource });
+
+    assert.equal(result.success, true, label);
+    assert.equal(result.systemAudioStrategy, rest.systemAudioStrategy, label);
+    assert.equal(h.calls.start, helperStarts, label);
+    assert.deepEqual(h.calls.capability, capability, label);
+    assert.deepEqual(
+      h.logs.filter(({ message }) => message === "Meeting system audio source"),
+      [
+        {
+          message: "Meeting system audio source",
+          meta: { systemAudioSource, systemAudioStrategy: rest.systemAudioStrategy },
+          scope: "meeting",
+        },
+      ],
+      label
+    );
+  }
 });

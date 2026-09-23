@@ -41,12 +41,13 @@ function installDisplayCaptureGlobals(t, { displayFails = false } = {}) {
 // Stands in for main: the opt-in means renderer loopback, anything else the helper.
 const strategyFor = (source) => (source === "default-device" ? "loopback" : "wasapi-loopback");
 
-function createElectronAPI() {
+function createElectronAPI({ onCheck } = {}) {
   const seen = { check: [], start: [], systemAudioAvailable: [] };
   const noopListener = () => () => {};
   const api = {
     checkSystemAudioAccess: async (options) => {
       seen.check.push(options);
+      onCheck?.();
       return {
         granted: true,
         status: "granted",
@@ -80,9 +81,10 @@ function createElectronAPI() {
   return { api, seen };
 }
 
-async function startWith(t, storedSource, { displayFails = false } = {}) {
+async function startWith(t, storedSource, { displayFails = false, onCheck } = {}) {
   const calls = installDisplayCaptureGlobals(t, { displayFails });
-  const { api, seen } = createElectronAPI();
+  let settings;
+  const { api, seen } = createElectronAPI({ onCheck: onCheck && (() => onCheck(settings)) });
   installBrowserGlobals(t, {
     initialStorage: storedSource === undefined ? {} : { systemAudioSource: storedSource },
     window: { electronAPI: api, setTimeout: (fn, ms) => setTimeout(fn, ms) },
@@ -91,9 +93,10 @@ async function startWith(t, storedSource, { displayFails = false } = {}) {
     cachePrefix: "openwhispr-system-audio-source-start-test-",
   });
   const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  ({ useSettingsStore: settings } = await vite.ssrLoadModule("/stores/settingsStore.ts"));
 
   assert.equal(await store.startRecording(START_ARGS), true);
-  return { calls, seen, store, vite };
+  return { calls, seen, store };
 }
 
 async function recordOnce(t, storedSource) {
@@ -145,16 +148,24 @@ test("a failed Chromium capture leaves an opted-in user on the microphone", asyn
   await store.stopRecording();
 });
 
-test("changing the choice mid-recording waits for the next recording", async (t) => {
-  const { calls, seen, store, vite } = await startWith(t, "default-device");
-  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+test("a change during a start waits for the next recording", async (t) => {
+  // Flipped while the access check is in flight: a start that read the setting
+  // again for main would send it a different choice than the check was given.
+  const { calls, seen, store } = await startWith(t, "default-device", {
+    onCheck: (settings) => settings.getState().setSystemAudioSource("all-devices"),
+  });
 
-  useSettingsStore.getState().setSystemAudioSource("all-devices");
-
-  // The running capture is left alone; nothing re-plans until the next start.
-  assert.equal(seen.check.length, 1);
+  assert.deepEqual(seen.check, [{ systemAudioSource: "default-device" }]);
   assert.equal(seen.start.length, 1);
+  assert.equal(seen.start[0].systemAudioSource, "default-device");
   assert.equal(calls.getDisplayMedia, 1);
+  await store.stopRecording();
 
+  // The next recording reads the new choice and sends it to both calls, so
+  // main's helper captures and the renderer opens nothing of its own.
+  assert.equal(await store.startRecording(START_ARGS), true);
+  assert.deepEqual(seen.check[1], { systemAudioSource: "all-devices" });
+  assert.equal(seen.start[1].systemAudioSource, "all-devices");
+  assert.equal(calls.getDisplayMedia, 1);
   await store.stopRecording();
 });
