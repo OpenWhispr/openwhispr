@@ -34,6 +34,9 @@ export function VoiceAgentStep(): ReactElement {
   const input = useRef<TextInput>(null);
   const draftsReady = useRef(0);
   const lastDraftAt = useRef<string | undefined>(undefined);
+  // Once a draft is inserted the step is finished, so a later agent error (another regenerate, a
+  // refused try) must not take it away.
+  const inserted = useRef(false);
   const [phase, setPhase] = useState<Phase>('start');
   const [value, setValue] = useState('');
   const [agentError, setAgentError] = useState<string | null>(null);
@@ -57,6 +60,7 @@ export function VoiceAgentStep(): ReactElement {
         setPhase((current) => (current === 'done' ? current : next));
         setAgentError(null);
       } else if (event.status === 'agent_error') {
+        if (inserted.current) return;
         setAgentError(event.error || 'agent_error');
         if (draftsReady.current === 0) Keyboard.dismiss();
       }
@@ -142,6 +146,7 @@ export function VoiceAgentStep(): ReactElement {
                   // Only an inserted agent draft finishes the try; plain dictation into the field
                   // doesn't count.
                   if (text.trim() && draftsReady.current > 0 && phase !== 'done') {
+                    inserted.current = true;
                     setPhase('done');
                     setAgentError(null);
                     Keyboard.dismiss();

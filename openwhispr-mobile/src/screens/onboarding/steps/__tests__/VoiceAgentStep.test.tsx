@@ -135,6 +135,19 @@ it('keeps the draft insertable when the refinement needs an account', () => {
   expect(screen.queryByText('Retry')).toBeNull();
 });
 
+it('keeps the finished step when an agent error arrives after inserting the draft', () => {
+  // Tapping regenerate again after inserting can hit a refused try.
+  const screen = render(<VoiceAgentStep />);
+  emit('recording');
+  emit('agent_ready', undefined, '1000');
+  fireEvent.changeText(screen.getByLabelText('Your message'), 'Hey Sam, lunch tomorrow at noon?');
+  emit('agent_error', 'account_required');
+  expect(screen.getByText(DONE)).toBeTruthy();
+  expect(screen.getByDisplayValue('Hey Sam, lunch tomorrow at noon?')).toBeTruthy();
+  expect(screen.queryByText(ACCOUNT_REQUIRED)).toBeNull();
+  expect(screen.queryByText('Example request')).toBeNull();
+});
+
 it('clears a failed refinement once another draft arrives', () => {
   const screen = render(<VoiceAgentStep />);
   emit('recording');
