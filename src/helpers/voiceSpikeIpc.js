@@ -1,5 +1,6 @@
 const os = require("os");
 const path = require("path");
+const { EventEmitter } = require("events");
 const { ipcMain } = require("electron");
 const debugLogger = require("./debugLogger");
 const voiceWorker = require("./voiceWorkerClient");
@@ -29,6 +30,7 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
   };
   let configuredKind = null;
   let configuredSampleRate = null;
+  const spikeEvents = new EventEmitter();
 
   const send = (payload, transfer) => {
     if (!sender || sender.isDestroyed()) return;
@@ -73,6 +75,26 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
 
   ipcMain.handle("voice-spike:enabled", () => process.env.OPENWHISPR_VOICE_SPIKE === "1");
 
+  // End-to-end harness: the renderer reports each finished turn; the runner
+  // (voiceHarnessRunner.js) waits on these to score scripted conversations.
+  const harnessEnabled =
+    process.env.OPENWHISPR_VOICE_SPIKE === "1" && process.env.OPENWHISPR_VOICE_SPIKE_HARNESS === "1";
+  ipcMain.handle("voice-spike:harness-enabled", () => harnessEnabled);
+  ipcMain.on("voice-spike:turn-report", (_event, report) => spikeEvents.emit("turn-report", report));
+  ipcMain.on("voice-spike:turn-event", (_event, turnEvent) => spikeEvents.emit("turn-event", turnEvent));
+  if (harnessEnabled) {
+    require("./voiceHarnessRunner")
+      .runVoiceHarness({
+        voiceWorker,
+        spikeEvents,
+        getSession: () => session,
+        sendToRenderer: (channel) => {
+          if (sender && !sender.isDestroyed()) sender.send(channel);
+        },
+      })
+      .catch((error) => debugLogger.error("voice harness failed", { error: error?.message }));
+  }
+
   ipcMain.handle("voice-spike:start", async (event, options = {}) => {
     sender = event.sender;
     const config = buildVoiceWorkerConfig({
@@ -98,7 +120,11 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
       ),
       language: options.language,
       sampleRate,
+      ttsKind: config.ttsKind,
+      brainModel: options.brainModel,
+      harness: !!options.harness,
     };
+    spikeEvents.emit("session-started", session);
     // Warm Parakeet now: a cold server start (~3 s) would otherwise land on the first turn.
     parakeetManager.startServer(session.parakeetModel, session.language).catch((error) => {
       debugLogger.warn("voice spike Parakeet warm-up failed", { error: error?.message });

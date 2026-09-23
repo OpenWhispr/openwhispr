@@ -1772,7 +1772,13 @@ declare global {
         start: (options: {
           parakeetModel?: string;
           language?: string;
+          brainModel?: string;
+          harness?: boolean;
         }) => Promise<{ ttsKind: string; sampleRate: number; loadMs: number }>;
+        isHarness: () => Promise<boolean>;
+        reportTurn: (report: import("../services/voice/types").VoiceTurnReport) => void;
+        reportTurnEvent: (turnEvent: { type: "first-audio" | "flushed"; at: number }) => void;
+        onHarnessDone: (callback: () => void) => () => void;
         sendMic: (samples: Float32Array) => void;
         keepModelWarm: (modelId: string) => Promise<{ warmed: boolean; reason?: string }>;
         speak: (request: {

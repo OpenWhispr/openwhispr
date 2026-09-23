@@ -470,6 +470,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     speak: (request) => ipcRenderer.invoke("voice-spike:speak", request),
     cancelSpeech: (utteranceId) => ipcRenderer.invoke("voice-spike:cancel-speech", { utteranceId }),
     stop: () => ipcRenderer.invoke("voice-spike:stop"),
+    isHarness: () => ipcRenderer.invoke("voice-spike:harness-enabled"),
+    reportTurn: (report) => ipcRenderer.send("voice-spike:turn-report", report),
+    reportTurnEvent: (turnEvent) => ipcRenderer.send("voice-spike:turn-event", turnEvent),
+    onHarnessDone: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on("voice-spike:harness-done", listener);
+      return () => ipcRenderer.removeListener("voice-spike:harness-done", listener);
+    },
     onEvent: (callback) => {
       const listener = (_event, payload) => callback(payload);
       ipcRenderer.on("voice-spike:event", listener);

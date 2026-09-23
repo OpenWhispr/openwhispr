@@ -128,6 +128,8 @@ export function AssistantPanel({
     onResponseContent,
     onContentDelta: speechTap?.onContentDelta,
     onToolCall: speechTap?.onToolCall,
+    onToolsAvailable: speechTap?.onToolsAvailable,
+    voiceDryRunWrites: speechTap?.dryRunWrites ?? false,
     voiceReplies: speechTap !== null,
   });
 

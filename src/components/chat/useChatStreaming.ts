@@ -100,11 +100,21 @@ interface UseChatStreamingOptions {
   voiceReplies?: boolean;
   /** Voice spike: fires when a voice turn starts calling tools, so a filler line can play. */
   onToolCall?: (toolNames: string[]) => void;
+  /** Voice spike: the tools offered to the model for this voice turn. */
+  onToolsAvailable?: (toolNames: string[]) => void;
+  /** Voice spike harness: write tools report success without changing anything. */
+  voiceDryRunWrites?: boolean;
 }
 
-/** Voice turns get compacted tool results (see compactToolResultForVoice). */
+const DRY_RUN_RESULT = { success: true, dryRun: true, note: "Test run: nothing was changed." };
+
+/**
+ * Voice turns get compacted tool results (see compactToolResultForVoice); in the
+ * harness, the tools named in `dryRunNames` return a canned success instead.
+ */
 function compactVoiceToolResults(
-  tools: ReturnType<ToolRegistry["toAISDKFormat"]> | undefined
+  tools: ReturnType<ToolRegistry["toAISDKFormat"]> | undefined,
+  dryRunNames: Set<string> = new Set()
 ): ReturnType<ToolRegistry["toAISDKFormat"]> | undefined {
   if (!tools) return tools;
   const compacted: ReturnType<ToolRegistry["toAISDKFormat"]> = {};
@@ -114,7 +124,9 @@ function compactVoiceToolResults(
       ? ({
           ...tool,
           execute: async (...args: Parameters<typeof execute>) =>
-            compactToolResultForVoice(name, await execute(...args)),
+            dryRunNames.has(name)
+              ? DRY_RUN_RESULT
+              : compactToolResultForVoice(name, await execute(...args)),
         } as typeof tool)
       : tool;
   }
@@ -170,6 +182,8 @@ export function useChatStreaming({
   onResponseContent,
   onContentDelta,
   onToolCall,
+  onToolsAvailable,
+  voiceDryRunWrites = false,
   voiceReplies = false,
 }: UseChatStreamingOptions): ChatStreaming {
   const { t } = useTranslation();
@@ -183,6 +197,10 @@ export function useChatStreaming({
   const voiceSentContentRef = useRef(new Map<string, string>());
   const onToolCallRef = useRef(onToolCall);
   onToolCallRef.current = onToolCall;
+  const onToolsAvailableRef = useRef(onToolsAvailable);
+  onToolsAvailableRef.current = onToolsAvailable;
+  const voiceDryRunWritesRef = useRef(voiceDryRunWrites);
+  voiceDryRunWritesRef.current = voiceDryRunWrites;
   const [agentState, setAgentState] = useState<AgentState>("idle");
   const [toolStatus, setToolStatus] = useState("");
   const [activeToolName, setActiveToolName] = useState("");
@@ -375,6 +393,7 @@ export function useChatStreaming({
       const promptParts = voiceTurn
         ? getAgentSystemPromptParts(toolNames, combinedContext || undefined)
         : null;
+      if (voiceTurn) onToolsAvailableRef.current?.(toolNames ?? []);
       // The user's dictionary rides on every conversation so replies use their
       // jargon — same suffix the dictation prompts carry.
       let systemPrompt = appendDictionarySuffix(
@@ -505,8 +524,13 @@ export function useChatStreaming({
             ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
           });
         } else {
+          const dryRunNames = new Set(
+            voiceTurn && voiceDryRunWritesRef.current
+              ? (registry?.getAll() ?? []).filter((tool) => !tool.readOnly).map((tool) => tool.name)
+              : []
+          );
           const aiTools = voiceTurn
-            ? compactVoiceToolResults(registry?.toAISDKFormat())
+            ? compactVoiceToolResults(registry?.toAISDKFormat(), dryRunNames)
             : registry?.toAISDKFormat();
           stream = ReasoningService.processTextStreamingAI(
             llmMessages,

@@ -28,6 +28,11 @@ interface TurnMetrics {
   ttsQueueWaitMs?: number | null;
   ttsGenerateMs?: number | null;
   chunks: number;
+  /** For the harness report. */
+  transcript: string;
+  calledTools: string[];
+  availableTools: string[];
+  answer: string;
 }
 
 const DEFAULT_PARAKEET_MODEL = "parakeet-unified-en-0.6b";
@@ -59,6 +64,9 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
   const responseDoneRef = useRef(false);
   const chunkIndexRef = useRef(0);
   const pendingSpeaksRef = useRef(0);
+  const harnessRef = useRef(false);
+  const [harnessAvailable, setHarnessAvailable] = useState(false);
+  const [harnessActive, setHarnessActive] = useState(false);
   const lastActivityRef = useRef(0);
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const turnRef = useRef<TurnMetrics | null>(null);
@@ -75,32 +83,42 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       ?.isEnabled()
       .then((value: boolean) => setEnabled(Boolean(value)))
       .catch(() => {});
+    void api
+      ?.isHarness()
+      .then((value: boolean) => setHarnessAvailable(Boolean(value)))
+      .catch(() => {});
   }, [api]);
 
   const logTurn = useCallback((outcome: string) => {
     const turn = turnRef.current;
     if (!turn) return;
     turnRef.current = null;
-    logger.info(
-      "Voice spike turn",
-      {
+    const metrics = {
+      speechMs: turn.speechMs,
+      sttMs: turn.sttMs,
+      transcriptToFirstDeltaMs: since(turn.transcriptAt, turn.firstDeltaAt),
+      firstDeltaToFirstChunkMs: turn.firstDeltaAt
+        ? since(turn.firstDeltaAt, turn.firstChunkSentAt)
+        : null,
+      firstChunkToFirstAudioMs: turn.firstChunkSentAt
+        ? since(turn.firstChunkSentAt, turn.firstAudioAt)
+        : null,
+      speechEndToFirstAudioMs: since(turn.endedAt, turn.firstAudioAt),
+      ttsQueueWaitMs: turn.ttsQueueWaitMs ?? null,
+      ttsGenerateMs: turn.ttsGenerateMs ?? null,
+      chunks: turn.chunks,
+    };
+    logger.info("Voice spike turn", { outcome, ...metrics }, "voice-spike");
+    if (harnessRef.current) {
+      window.electronAPI?.voiceSpike?.reportTurn({
         outcome,
-        speechMs: turn.speechMs,
-        sttMs: turn.sttMs,
-        transcriptToFirstDeltaMs: since(turn.transcriptAt, turn.firstDeltaAt),
-        firstDeltaToFirstChunkMs: turn.firstDeltaAt
-          ? since(turn.firstDeltaAt, turn.firstChunkSentAt)
-          : null,
-        firstChunkToFirstAudioMs: turn.firstChunkSentAt
-          ? since(turn.firstChunkSentAt, turn.firstAudioAt)
-          : null,
-        speechEndToFirstAudioMs: since(turn.endedAt, turn.firstAudioAt),
-        ttsQueueWaitMs: turn.ttsQueueWaitMs ?? null,
-        ttsGenerateMs: turn.ttsGenerateMs ?? null,
-        chunks: turn.chunks,
-      },
-      "voice-spike"
-    );
+        transcript: turn.transcript,
+        calledTools: turn.calledTools,
+        availableTools: turn.availableTools,
+        answer: turn.answer,
+        metrics,
+      });
+    }
   }, []);
 
   // A turn ends only when the answer is complete, every chunk is synthesized and
@@ -148,6 +166,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
     chunkerRef.current.reset();
     playerRef.current?.flush();
     if (utteranceId) {
+      if (harnessRef.current) api?.reportTurnEvent({ type: "flushed", at: Date.now() });
       if (!responseDoneRef.current) cancelRef.current?.();
       void api?.cancelSpeech(utteranceId);
       logTurn("barge-in");
@@ -174,20 +193,27 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
           sttMs: event.sttMs,
           transcriptAt: Date.now(),
           chunks: 0,
+          transcript: event.text,
+          calledTools: [],
+          availableTools: [],
+          answer: "",
         };
         setState("thinking");
         onUserTurnRef.current(event.text);
       } else if (event.type === "tts-audio") {
         if (event.utteranceId !== utteranceRef.current) return;
         const turn = turnRef.current;
-        if (turn && turn.firstAudioAt === undefined) turn.firstAudioAt = Date.now();
+        if (turn && turn.firstAudioAt === undefined) {
+          turn.firstAudioAt = Date.now();
+          if (harnessRef.current) api?.reportTurnEvent({ type: "first-audio", at: turn.firstAudioAt });
+        }
         playerRef.current?.enqueue(event.samples);
       } else if (event.type === "error") {
         logger.warn("Voice spike error", { stage: event.stage, message: event.message }, "voice-spike");
         onErrorRef.current?.(event.message);
       }
     },
-    [bargeIn]
+    [api, bargeIn]
   );
 
   const handleEventRef = useRef(handleEvent);
@@ -213,14 +239,21 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
     logger.info("Voice spike stopped", {}, "voice-spike");
   }, [api, bargeIn]);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (harness = false) => {
     if (activeRef.current || !api) return;
     activeRef.current = true;
+    harnessRef.current = harness;
+    setHarnessActive(harness);
     setState("starting");
     try {
       const settings = getSettings();
+      const { config: voiceModel } = resolveChatStreamingInference(settings, {
+        inferenceScope: "dictationAgent",
+      });
       const info = await api.start({
         parakeetModel: settings.parakeetModel || DEFAULT_PARAKEET_MODEL,
+        brainModel: voiceModel.model,
+        harness,
       });
       playerRef.current = createPcmPlayer({
         // Kokoro, Kitten and Pocket all synthesize at 24 kHz.
@@ -232,9 +265,10 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         },
       });
       // One diagnostic line ~2 s in: proves frames flow and the mic isn't silent.
+      // The harness plays synthesized speech into the VAD instead of the mic.
       let frames = 0;
       let peak = 0;
-      micRef.current = await startMicStream({
+      micRef.current = harness ? null : await startMicStream({
         deviceId: settings.selectedMicDeviceId || null,
         onFrame: (frame) => {
           frames += 1;
@@ -252,9 +286,6 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
 
       // Keep a local voice model loaded for the whole session: warm it now so the
       // first turn skips the cold start, then beat llama-server's 5-minute idle stop.
-      const { config: voiceModel } = resolveChatStreamingInference(settings, {
-        inferenceScope: "dictationAgent",
-      });
       const keepWarm = () => {
         if (voiceModel.provider === "local" && voiceModel.model) {
           void api.keepModelWarm(voiceModel.model).catch(() => {});
@@ -312,7 +343,10 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       onContentDelta: (delta) => {
         if (!utteranceRef.current) return;
         const turn = turnRef.current;
-        if (turn) turn.firstDeltaAt ??= Date.now();
+        if (turn) {
+          turn.firstDeltaAt ??= Date.now();
+          turn.answer += delta;
+        }
         for (const chunk of chunkerRef.current.push(delta)) speakChunk(chunk);
       },
       onResponseDone: () => {
@@ -323,6 +357,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       },
       onToolCall: (toolNames) => {
         if (!utteranceRef.current) return;
+        turnRef.current?.calledTools.push(...toolNames);
         // Speak whatever the model said before calling the tool ("Let me check…");
         // if it said nothing yet, cover the wait with a short filler line.
         const pending = chunkerRef.current.flush();
@@ -332,11 +367,34 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
           speakChunk(voiceToolFiller(toolNames));
         }
       },
+      onToolsAvailable: (toolNames) => {
+        if (turnRef.current) turnRef.current.availableTools = toolNames;
+      },
+      dryRunWrites: harnessActive,
       cancelRef,
     }),
-    [finishUtteranceIfDrained, speakChunk]
+    [finishUtteranceIfDrained, harnessActive, speakChunk]
   );
 
+  useEffect(() => {
+    if (!api) return undefined;
+    return api.onHarnessDone(() => {
+      logger.info("Voice spike harness finished", {}, "voice-spike");
+      void stopRef.current();
+    });
+  }, [api]);
+
+  const startHarness = useCallback(() => start(true), [start]);
+
   const active = state !== "off";
-  return { enabled, active, state, toggle, stop, speechTap: active ? speechTap : null };
+  return {
+    enabled,
+    harnessAvailable,
+    active,
+    state,
+    toggle,
+    stop,
+    startHarness,
+    speechTap: active ? speechTap : null,
+  };
 }

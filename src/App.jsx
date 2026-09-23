@@ -204,6 +204,20 @@ export default function App() {
     voiceConversation.toggle();
     return true;
   }, [openAssistantPanel, voiceConversation]);
+  // Voice spike harness: open the panel and start a mic-less session once, after
+  // the app has settled; the main process then plays the scripted conversation.
+  const startHarnessRef = React.useRef(null);
+  startHarnessRef.current = () => {
+    void openAssistantPanel();
+    void voiceConversation.startHarness();
+  };
+  const { harnessAvailable } = voiceConversation;
+  React.useEffect(() => {
+    if (!harnessAvailable) return undefined;
+    const timer = setTimeout(() => startHarnessRef.current?.(), 4000);
+    return () => clearTimeout(timer);
+  }, [harnessAvailable]);
+
   const handleAssistantClose = React.useCallback(() => {
     void voiceConversation.stop();
     assistant.handleClose();
