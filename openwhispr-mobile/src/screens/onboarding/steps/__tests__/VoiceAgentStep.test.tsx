@@ -46,6 +46,7 @@ const ASK = 'Say: “Write a message inviting Sam to lunch tomorrow at noon.”'
 const FOLLOW_UP = 'Now tap Ask for changes and say: “Make this more concise.”';
 const INSERT = 'Tap ✓ to insert it.';
 const DONE = 'That’s your voice agent.';
+const ACCOUNT_REQUIRED = 'The live try isn’t available. Sign in at the end to use the agent.';
 
 const emit = (status: string, error?: string, updatedAtMs?: string): void => {
   act(() => mockListener({ status, error, updatedAtMs }));
@@ -123,14 +124,12 @@ it('keeps the first draft insertable when the refinement fails', () => {
   expect(screen.queryByText('Retry')).toBeNull();
 });
 
-it('keeps the draft insertable when the free tries run out during the refinement', () => {
+it('keeps the draft insertable when the refinement needs an account', () => {
   const screen = render(<VoiceAgentStep />);
   emit('recording');
   emit('agent_ready', undefined, '1000');
   emit('agent_error', 'account_required');
-  expect(
-    screen.getByText('You’ve used the free tries. Sign in at the end to keep using the agent.'),
-  ).toBeTruthy();
+  expect(screen.getByText(ACCOUNT_REQUIRED)).toBeTruthy();
   expect(screen.getByLabelText('Your message')).toBeTruthy();
   expect(screen.getByText(INSERT)).toBeTruthy();
   expect(screen.queryByText('Retry')).toBeNull();
@@ -165,13 +164,13 @@ it('uses Cloud for the live try before a mode is chosen', () => {
   expect(mockSetMode).toHaveBeenCalledWith('cloud', true);
 });
 
-it('falls back to the example once the free tries are used up', () => {
+it('falls back to the example when the live try needs an account', () => {
+  // Used-up tries, the word limit, or a server without the live try all look the same here, so the
+  // note must not claim the user spent anything.
   const screen = render(<VoiceAgentStep />);
   emit('recording');
   emit('agent_error', 'account_required');
-  expect(
-    screen.getByText('You’ve used the free tries. Sign in at the end to keep using the agent.'),
-  ).toBeTruthy();
+  expect(screen.getByText(ACCOUNT_REQUIRED)).toBeTruthy();
   expect(screen.getByText('Example request')).toBeTruthy();
   expect(screen.queryByText('Retry')).toBeNull();
 });

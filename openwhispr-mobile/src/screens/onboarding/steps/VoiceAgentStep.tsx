@@ -19,10 +19,11 @@ const INSTRUCTIONS: Record<Phase, string> = {
   done: 'That’s your voice agent.',
 };
 
-// Errors a retry can't clear: an anonymous user's free tries are used up (only an account clears
-// it) or the weekly word limit is reached (only its reset clears it).
+// Errors a retry can't clear: the server wants an account (the free tries are used up, the guest
+// word quota is spent, or the server has no live try yet; only an account clears it) or the weekly
+// word limit is reached (only its reset clears it).
 const FINAL_ERROR_NOTES: Record<string, string> = {
-  account_required: 'You’ve used the free tries. Sign in at the end to keep using the agent.',
+  account_required: 'The live try isn’t available. Sign in at the end to use the agent.',
   usage_limit: 'You’ve reached the weekly word limit. Try the agent again once it resets.',
 };
 
