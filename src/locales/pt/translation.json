@@ -930,8 +930,7 @@
         "copyFailed": "Falha ao copiar"
       },
       "pasteFailed": {
-        "title": "Não foi possível colar automaticamente",
-        "description": "Clique em um campo de texto editável no aplicativo e tente novamente."
+        "title": "Não foi possível colar automaticamente"
       }
     },
     "clipboard": {

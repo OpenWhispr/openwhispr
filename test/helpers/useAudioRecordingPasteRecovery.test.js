@@ -216,6 +216,39 @@ test("Settings failures retain a persistent manual path and exact-text copy", as
   assert.equal(h.toasts.length, count, "fallback action remains usable");
 });
 
+test("a start that does not begin recording leaves the permission card working", async (t) => {
+  const h = await mount(t);
+  await h.error();
+  const card = h.toasts.at(-1);
+  h.manager.startRecording = async () => false;
+  await React.act(async () => assert.equal(await h.recording().startRecording(), false));
+  assert.deepEqual(h.dismissed, []);
+  await card.actions[0].onClick();
+  assert.equal(h.settingsCalls(), 1);
+  assert.equal(await card.actions[1].onClick(), true);
+  assert.deepEqual(h.writes, [finalText]);
+});
+
+test("a Settings failure during a recording start does not re-show the card", async (t) => {
+  const h = await mount(t);
+  await h.error();
+  const card = h.toasts.at(-1);
+  const started = deferred();
+  h.manager.startRecording = () => started.promise;
+  h.api.openAccessibilitySettings = async () => ({ success: false });
+  let starting;
+  await React.act(async () => {
+    starting = h.recording().startRecording();
+  });
+  await card.actions[0].onClick();
+  assert.equal(h.toasts.length, 1);
+  await React.act(async () => {
+    started.resolve(true);
+    await starting;
+  });
+  assert.equal(h.dismissed.length, 1);
+});
+
 for (const transition of ["close", "newer error", "start", "complete", "unmount"]) {
   test(`late Settings and Copy results cannot survive ${transition}`, async (t) => {
     const h = await mount(t);
@@ -277,17 +310,15 @@ for (const transition of ["close", "newer error", "start", "complete", "unmount"
   });
 }
 
-test("generic errors retain Retry and transcript behavior with neutral paste wording", async (t) => {
+test("generic errors retain Retry, transcript and the platform's paste guidance", async (t) => {
   const h = await mount(t);
-  await h.error({
-    title: "Paste Error",
-    code: "PASTE_FAILED",
-    description: "accessibility internal details",
-  });
+  const guidance = "Please install xdotool or paste manually with Ctrl+V.";
+  await h.error({ title: "Paste Error", code: "PASTE_FAILED", description: guidance });
   const card = h.toasts.at(-1);
+  assert.equal(card.title, "Couldn't paste automatically");
   assert.equal(card.actions[0].icon, "retry");
   assert.equal(card.actions[1].icon, "transcript");
-  assert.doesNotMatch(card.description, /accessibility|internal/i);
+  assert.equal(card.description, guidance);
   assert.equal(card.duration, undefined);
   assert.equal(card.dismissible, undefined);
   card.actions[1].onClick();

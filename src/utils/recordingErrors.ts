@@ -39,7 +39,6 @@ export function getRecordingErrorDescription(error: RecordingError, t: TFunction
   if (error.code === "ACCESSIBILITY_PERMISSION_REQUIRED") {
     return t("hooks.audioRecording.pastePermission.description");
   }
-  if (error.code === "PASTE_FAILED") return t("hooks.audioRecording.pasteFailed.description");
   if (error.messageKey) return t(error.messageKey);
   return error.description ?? "";
 }

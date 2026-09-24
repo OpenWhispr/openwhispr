@@ -951,8 +951,7 @@
         "copyFailed": "複製失敗"
       },
       "pasteFailed": {
-        "title": "無法自動貼上",
-        "description": "請點擊應用程式中可編輯的文字欄位，然後再試一次。"
+        "title": "無法自動貼上"
       }
     },
     "clipboard": {

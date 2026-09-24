@@ -4028,7 +4028,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onError?.({
         title: "Paste Error",
         code: "PASTE_FAILED",
-        description: message,
+        // Keep the platform's guidance, without Electron's IPC wrapper around it.
+        description: message.replace(/^Error invoking remote method '[^']+': (?:\w*Error: )?/, ""),
       });
       return false;
     }

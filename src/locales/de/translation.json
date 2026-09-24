@@ -951,8 +951,7 @@
         "copyFailed": "Kopieren fehlgeschlagen"
       },
       "pasteFailed": {
-        "title": "Automatisches Einfügen fehlgeschlagen",
-        "description": "Klicke auf ein bearbeitbares Textfeld in deiner App und versuche es erneut."
+        "title": "Automatisches Einfügen fehlgeschlagen"
       }
     },
     "clipboard": {

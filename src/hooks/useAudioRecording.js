@@ -143,7 +143,6 @@ export const useAudioRecording = (toast, options = {}) => {
         }
 
         if (!canStartDictation(audioManagerRef.current.getState())) return false;
-        dictationErrorGenerationRef.current += 1;
 
         const assistantSelectionContext = voiceAgentRequested
           ? (getAssistantSelectionContextRef.current?.() ?? null)
@@ -228,7 +227,10 @@ export const useAudioRecording = (toast, options = {}) => {
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
         recordingStarted = didStart;
-        if (didStart) dismissDictationError?.();
+        if (didStart) {
+          dictationErrorGenerationRef.current += 1;
+          dismissDictationError?.();
+        }
 
         // A stop that landed while the start was still awaiting the mic open was
         // dropped (isRecording was still false), leaving a runaway recording
@@ -369,7 +371,9 @@ export const useAudioRecording = (toast, options = {}) => {
               } finally {
                 settingsOpening = false;
               }
-              if (!opened && isCurrent()) {
+              // A recording that is starting owns the pill; re-showing the card now would
+              // dismiss that recording's live transcript.
+              if (!opened && isCurrent() && !startLockRef.current) {
                 showDictationError({
                   title,
                   description,

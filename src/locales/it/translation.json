@@ -951,8 +951,7 @@
         "copyFailed": "Copia non riuscita"
       },
       "pasteFailed": {
-        "title": "Impossibile incollare automaticamente",
-        "description": "Fai clic su un campo di testo modificabile nella tua app e riprova."
+        "title": "Impossibile incollare automaticamente"
       }
     },
     "clipboard": {

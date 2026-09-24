@@ -951,8 +951,7 @@
         "copyFailed": "Échec de la copie"
       },
       "pasteFailed": {
-        "title": "Collage automatique impossible",
-        "description": "Cliquez dans un champ de texte modifiable de votre application et réessayez."
+        "title": "Collage automatique impossible"
       }
     },
     "clipboard": {

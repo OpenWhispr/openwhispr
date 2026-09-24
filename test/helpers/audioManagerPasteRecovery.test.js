@@ -52,4 +52,19 @@ test("safePaste preserves exact final text only for confirmed permission recover
       description: "accessibility in an unrelated error",
     },
   ]);
+
+  errors.length = 0;
+  window.electronAPI.pasteText = async () => {
+    throw new Error(
+      "Error invoking remote method 'paste-text': Error: Please install xdotool or paste manually with Ctrl+V."
+    );
+  };
+  assert.equal(await manager.safePaste(text), false);
+  assert.equal(errors[0].description, "Please install xdotool or paste manually with Ctrl+V.");
+
+  window.electronAPI.pasteText = async () => {
+    throw new Error("Error invoking remote method 'paste-text': TypeError: bad input");
+  };
+  await manager.safePaste(text);
+  assert.equal(errors[1].description, "bad input");
 });

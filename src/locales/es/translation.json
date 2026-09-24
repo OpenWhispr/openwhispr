@@ -951,8 +951,7 @@
         "copyFailed": "Error al copiar"
       },
       "pasteFailed": {
-        "title": "No se pudo pegar automáticamente",
-        "description": "Haz clic en un campo de texto editable de tu aplicación e inténtalo de nuevo."
+        "title": "No se pudo pegar automáticamente"
       }
     },
     "clipboard": {

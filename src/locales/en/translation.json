@@ -951,8 +951,7 @@
         "copyFailed": "Copy failed"
       },
       "pasteFailed": {
-        "title": "Couldn't paste automatically",
-        "description": "Click an editable text field in your app and try again."
+        "title": "Couldn't paste automatically"
       }
     },
     "clipboard": {
