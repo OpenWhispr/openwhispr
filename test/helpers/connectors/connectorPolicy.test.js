@@ -82,4 +82,8 @@ test("only a resolved managed policy reports connectors as turned off by the org
   for (const status of ["idle", "loading", "error", "unmanaged"]) {
     assert.equal(isConnectorsBlockedByOrg({ status, appVersion: "1.10.0", policy: null }), false, status);
   }
+  // An org that only requires a newer build hasn't turned connectors off; the
+  // update banner explains why they're unavailable.
+  const outdated = { status: "managed", appVersion: "1.10.0", policy: { ...policy({}), minAppVersion: "1.11.0" } };
+  assert.equal(isConnectorsBlockedByOrg(outdated), false);
 });

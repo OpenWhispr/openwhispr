@@ -226,10 +226,11 @@ export function isConnectorsAllowed(state: PolicyDecisionSnapshot): boolean {
 /**
  * Whether a resolved org policy turned connectors off. Unlike
  * isConnectorsAllowed, a policy that is still loading or failed to load is not
- * reported as an org decision.
+ * reported as an org decision, and neither is one that only requires a newer
+ * app version (the update banner says that).
  */
 export function isConnectorsBlockedByOrg(state: PolicyDecisionSnapshot): boolean {
-  return state.status === "managed" && !isConnectorsAllowed(state);
+  return state.status === "managed" && isPolicyActionAllowed(state) && !isConnectorsAllowed(state);
 }
 
 const warnedUnknownRequiredModelIds = new Set<string>();
