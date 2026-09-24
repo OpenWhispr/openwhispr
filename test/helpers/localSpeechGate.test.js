@@ -72,3 +72,24 @@ test("allows sustained speech-like energy through", async () => {
     maxConsecutiveSpeechWindows: 3,
   });
 });
+
+test("measures a PCM16 chunk as one window", async () => {
+  const { createLocalSpeechGateState, recordPcm16SpeechWindow, getLocalSpeechGateDecision } =
+    await import("../../src/helpers/localSpeechGate.js");
+
+  const silent = createLocalSpeechGateState();
+  recordPcm16SpeechWindow(silent, new Int16Array(800).buffer);
+  assert.equal(getLocalSpeechGateDecision(silent).reason, "silence");
+
+  const speech = createLocalSpeechGateState();
+  recordPcm16SpeechWindow(speech, new Int16Array([16384, -16384, 16384, -16384]).buffer);
+  assert.deepEqual(getLocalSpeechGateDecision(speech), {
+    skip: false,
+    reason: "speech_detected",
+    peakRms: 0.5,
+    peakAmplitude: 0.5,
+    windowCount: 1,
+    speechWindowCount: 1,
+    maxConsecutiveSpeechWindows: 1,
+  });
+});

@@ -275,3 +275,23 @@ test("a refusal after ready still raises a stream error", async (t) => {
   adapter.sendAudio(Buffer.from([1, 0]));
   assert.equal((await raised).message, "Busy");
 });
+
+test("a server closing a completed socket raises no stream error", async (t) => {
+  // Orukeet closes a finished socket right after its final when the account
+  // already holds a warm one.
+  const { adapter, options } = await fixture(t, (socket, event) => {
+    if (event.type === "commit") {
+      socket.send(JSON.stringify({ type: "final", text: "" }));
+      socket.close();
+    }
+  });
+  const errors = [];
+  adapter.onError = (error) => errors.push(error);
+  await adapter.connect(options);
+  const closed = once(adapter.ws, "close");
+  adapter.sendAudio(Buffer.from([1, 0]));
+
+  assert.equal((await adapter.finalize()).text, "");
+  await closed;
+  assert.deepEqual(errors, []);
+});

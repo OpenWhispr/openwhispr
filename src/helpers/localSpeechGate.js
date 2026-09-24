@@ -36,6 +36,20 @@ export const recordLocalSpeechWindow = (state, rms, peak) => {
   return state;
 };
 
+// The streaming worklet's PCM16 chunks, normalized like the analyser samples above.
+export const recordPcm16SpeechWindow = (state, buffer) => {
+  const samples = new Int16Array(buffer);
+  if (!samples.length) return state;
+  let sum = 0;
+  let peak = 0;
+  for (const sample of samples) {
+    const value = sample / 0x8000;
+    sum += value * value;
+    peak = Math.max(peak, Math.abs(value));
+  }
+  return recordLocalSpeechWindow(state, Math.sqrt(sum / samples.length), peak);
+};
+
 export const getLocalSpeechGateDecision = (state) => {
   if (!state?.windowCount) {
     return { skip: false, reason: "unavailable" };

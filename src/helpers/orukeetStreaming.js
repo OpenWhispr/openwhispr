@@ -255,6 +255,10 @@ class OrukeetStreaming {
 
   fail(error) {
     if (this.failure) return;
+    // The final already completed this recording. Orukeet closes a finished
+    // socket when the account holds another warm one, so a later close or
+    // error only ends the connection.
+    if (this.result) return this.close();
     this.failure = error;
     // Before `ready`, the rejected connect() is the report and the start falls
     // back on it; onError is for an established stream, so a refused socket

@@ -14,6 +14,7 @@ import {
   createLocalSpeechGateState,
   getLocalSpeechGateDecision,
   recordLocalSpeechWindow,
+  recordPcm16SpeechWindow,
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
 import { isMicWarm, WARMUP_ACQUIRE_TIMEOUT_MS } from "./micWarmState";
@@ -154,6 +155,15 @@ const cleanupFailureFromError = (error) => ({
   ...(error?.copyCommand ? { copyCommand: error.copyCommand } : {}),
   ...(error?.technicalDetails ? { technicalDetails: error.technicalDetails } : {}),
 });
+
+const cloudSignInRequiredError = () => {
+  const err = new Error(
+    "OpenWhispr Cloud requires sign-in. Please sign in again or switch to BYOK mode."
+  );
+  err.code = "AUTH_REQUIRED";
+  err.messageKey = "hooks.audioRecording.errorDescriptions.sessionExpired";
+  return err;
+};
 
 const micDeviceKey = (settings) =>
   `${settings.microphoneSelectionMode}|${settings.selectedMicDeviceId}`;
@@ -635,6 +645,7 @@ class AudioManager {
     this.sttConfigFetchedAt = null;
     this.streamingFallbackReason = null;
     this._streamingFailoverReason = null;
+    this._streamingSpeechGateState = null;
     this.warmupFailureStreak = 0;
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
@@ -2051,14 +2062,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         }
       } else if (isOpenWhisprCloudMode) {
-        if (!isSignedIn) {
-          const err = new Error(
-            "OpenWhispr Cloud requires sign-in. Please sign in again or switch to BYOK mode."
-          );
-          err.code = "AUTH_REQUIRED";
-          err.messageKey = "hooks.audioRecording.errorDescriptions.sessionExpired";
-          throw err;
-        }
+        if (!isSignedIn) throw cloudSignInRequiredError();
         activeModel = "openwhispr-cloud";
         result = await this.processWithOpenWhisprCloud(audioBlob, metadata, wasCancelled);
       } else {
@@ -4599,6 +4603,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._streamingSessionGeneration = sessionId;
       this.streamingFallbackReason = null;
       this._streamingFailoverReason = null;
+      this._streamingSpeechGateState = createLocalSpeechGateState();
       this._activeStreamingSessionId = sessionId;
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
@@ -4673,6 +4678,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           this._streamingFlushResolve?.();
           return;
         }
+        // Measured from the first chunk: a recording that fails over later
+        // still has its opening words in the gate.
+        recordPcm16SpeechWindow(this._streamingSpeechGateState, event.data);
         if (!this._streamingFailoverReason) provider.send(event.data);
       };
 
@@ -5429,9 +5437,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let batchFallbackResult = null;
     let failoverError = null;
     const failoverReason = this._streamingFailoverReason;
+    // No stream will transcribe a failed-over recording, so it uploads at any
+    // length, unless it was the silence the batch speech gate skips.
+    const failoverSilent =
+      Boolean(failoverReason) &&
+      getLocalSpeechGateDecision(this._streamingSpeechGateState).reason === "silence";
+    if (failoverSilent) {
+      logger.info("Speech gate skipped the failed-over upload", { failoverReason }, "streaming");
+    }
+    // A failed-over recording has no other transcript, so it ends as a batch
+    // recording would: its audio is kept for retry.
+    const keepFailoverAudio = (error) =>
+      this.saveFailedTranscription(error.message, error.code || null, {
+        durationSeconds,
+        analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+      });
     if (
       !finalText &&
-      (failoverReason || (!finalAcknowledged && durationSeconds > 2)) &&
+      (failoverReason ? !failoverSilent : !finalAcknowledged && durationSeconds > 2) &&
       fallbackBlob?.size > 0
     ) {
       const target = resolveStreamingFallbackTarget(getSettings());
@@ -5441,6 +5464,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           {},
           "streaming"
         );
+        if (failoverReason) {
+          failoverError = cloudSignInRequiredError();
+          keepFailoverAudio(failoverError);
+        }
       } else {
         logger.info(
           "Streaming produced no text, falling back to batch transcription",
@@ -5457,8 +5484,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                     durationSeconds,
                     analyticsOccurredAt: analyticsOccurredAt.toISOString(),
                     // The tag feeds the Orukeet rollout's fallback rate; other
-                    // providers still fall back, just untagged.
-                    ...(this.getStreamingProviderName() === "orukeet"
+                    // providers still fall back, just untagged. Only managed
+                    // Orukeet fails over, and its reason outlives the cached
+                    // config a refused start drops.
+                    ...(failoverReason || this.getStreamingProviderName() === "orukeet"
                       ? { streamingFallbackReason: failoverReason || "stream_no_final" }
                       : {}),
                   },
@@ -5474,15 +5503,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
           }
         } catch (fallbackErr) {
+          // The cancelled upload's rejection is the expected outcome.
+          if (wasCancelled()) return true;
           logger.error("Batch fallback failed", { error: fallbackErr.message }, "streaming");
-          // A failed-over recording has no other transcript: keep it for retry
-          // and report the failure, as the batch recording it replaces would.
-          if (failoverReason && fallbackErr.message !== "No audio detected") {
-            failoverError = fallbackErr;
-            this.saveFailedTranscription(fallbackErr.message, fallbackErr.code || null, {
-              durationSeconds,
-              analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-            });
+          if (failoverReason) {
+            // Silence is no failure; an echo of the dictionary prompt reads as
+            // silence but still keeps its audio (#1547).
+            const noAudio = fallbackErr.message === "No audio detected";
+            if (!noAudio) failoverError = fallbackErr;
+            if (!noAudio || fallbackErr.code === DICTIONARY_ECHO_CODE) {
+              keepFailoverAudio(fallbackErr);
+            }
           }
         }
       }
@@ -5516,6 +5547,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         source: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
         clientTranscriptionId,
         analyticsOccurredAt: resultAnalyticsOccurredAt,
+        // The upgrade prompt opens on these, as after a batch recording.
+        ...(batchFallbackResult?.limitReached
+          ? {
+              limitReached: true,
+              wordsUsed: batchFallbackResult.wordsUsed,
+              wordsRemaining: batchFallbackResult.wordsRemaining,
+            }
+          : {}),
         ...this._takePendingResultExtras(),
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
