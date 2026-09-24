@@ -273,7 +273,7 @@ describe('useModelDownloadStore', () => {
     });
 
     it('requires room for the whole install, not just the installed model', async () => {
-      // Enough for the ~600 MB installed model, not for the zip + extraction + compile peak.
+      // Enough for the ~1.2 GB installed cache, not for the zip + extraction + compile peak.
       mockGetFreeDiskStorage.mockResolvedValue(1200 * MB);
       await useModelDownloadStore.getState().startDownload('orukeet');
 
@@ -284,9 +284,9 @@ describe('useModelDownloadStore', () => {
     });
 
     it('credits an archive a previous attempt already staged against that peak', async () => {
-      // The whole pinned zip is staged, so only extraction + compile (~1.2 GB) still needs room.
+      // The pinned zip is staged: extraction + compile plus installed-size headroom needs ~1.5 GB.
       mockParakeet.stagedDownloadBytes.mockResolvedValue(554_985_744);
-      mockGetFreeDiskStorage.mockResolvedValue(1400 * MB);
+      mockGetFreeDiskStorage.mockResolvedValue(1500 * MB);
       await useModelDownloadStore.getState().startDownload('orukeet');
 
       expect(mockParakeet.stagedDownloadBytes).toHaveBeenCalledWith('orukeet');

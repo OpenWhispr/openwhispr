@@ -112,9 +112,13 @@ describe('LOCAL_MODEL_INSTALL_PEAK_BYTES', () => {
     const archiveBytes = 554_985_744;
     const extractedBytes = 632_017_564;
     const compiledBytes = 632_191_599;
-    expect(LOCAL_MODEL_SIZE_BYTES.orukeet).toBeGreaterThanOrEqual(compiledBytes);
+    expect(LOCAL_MODEL_SIZE_BYTES.orukeet).toBeGreaterThanOrEqual(compiledBytes + archiveBytes);
     expect(LOCAL_MODEL_INSTALL_PEAK_BYTES.orukeet).toBeGreaterThanOrEqual(
       archiveBytes + extractedBytes + compiledBytes,
+    );
+    // The retained ZIP replaces extracted packages, rather than adding to this phase's peak.
+    expect(LOCAL_MODEL_INSTALL_PEAK_BYTES.orukeet).toBeLessThan(
+      archiveBytes + extractedBytes + LOCAL_MODEL_SIZE_BYTES.orukeet,
     );
   });
 });

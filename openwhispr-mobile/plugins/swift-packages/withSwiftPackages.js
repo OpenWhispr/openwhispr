@@ -33,8 +33,8 @@ const FLUIDAUDIO_GIT = 'https://github.com/Oruk-AI/FluidAudio.git';
 // Tag 0.15.5-orukeet.1, the version Orukeet's Package.swift requires.
 const FLUIDAUDIO_COMMIT = 'ddc95f4d03d5be12bf84eeb6e4bde5b724356d88';
 const ORUKEET_GIT = 'https://github.com/Oruk-AI/orukeet.git';
-// Head of Oruk-AI/orukeet PR #10 (codex/openwhispr-ios-20260920), reviewed 2026-09-22.
-const ORUKEET_COMMIT = 'db30e0b1c27ea0c88ae789473fff6704fc3b4445';
+// CoreML mobile release candidate from Oruk-AI/orukeet PR #10, reviewed 2026-09-24.
+const ORUKEET_COMMIT = '6c37c587fabcef8b0e932584fbf22a79fcb9d89e';
 
 const SPM_PLUGIN_LINE = `plugin 'cocoapods-spm'`;
 const SPM_PKG_LINES = [

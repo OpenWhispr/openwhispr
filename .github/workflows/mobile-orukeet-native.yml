@@ -1,0 +1,87 @@
+name: Mobile Orukeet native build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'openwhispr-mobile/modules/parakeet-asr/ios/**'
+      - 'openwhispr-mobile/plugins/swift-packages/**'
+      - '.github/workflows/mobile-orukeet-native.yml'
+  pull_request:
+    paths:
+      - 'openwhispr-mobile/modules/parakeet-asr/ios/**'
+      - 'openwhispr-mobile/plugins/swift-packages/**'
+      - '.github/workflows/mobile-orukeet-native.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-orukeet-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      EXPO_NO_DOTENV: '1'
+      OPENWHISPR_APP_ENV: development
+      SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+      RCT_NO_LAUNCH_PACKAGER: '1'
+    defaults:
+      run:
+        working-directory: openwhispr-mobile
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: openwhispr-mobile/.nvmrc
+      - uses: ruby/setup-ruby@762794c140bbeda0f1224786aa33b4b46783a6c1
+        with:
+          ruby-version: '3.3'
+          working-directory: openwhispr-mobile
+          bundler-cache: true
+      - name: Select an installed Xcode 26 toolchain
+        run: |
+          XCODE_APP=$(python3 - <<'PY'
+          from pathlib import Path
+          import re
+          apps = [p for p in Path('/Applications').glob('Xcode_26*.app')
+                  if re.fullmatch(r'Xcode_26(?:\.\d+)*\.app', p.name)]
+          assert apps, 'Xcode 26 is required by the mobile project'
+          print(max(apps, key=lambda p: tuple(map(int, re.findall(r'\d+', p.name)))))
+          PY
+          )
+          echo "DEVELOPER_DIR=$XCODE_APP/Contents/Developer" >> "$GITHUB_ENV"
+      - name: Install locked JavaScript dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node_modules/.bin/patch-package --error-on-fail
+      - name: Check native model install and deletion races
+        run: python3 scripts/check-orukeet-installer.py --mutation-check
+      - name: Generate native project and install the pinned Swift packages
+        run: |
+          node_modules/.bin/expo prebuild -p ios --no-install
+          cd ios
+          bundle exec pod install
+      - name: Compile the complete unsigned app for iOS Simulator
+        run: |
+          set -o pipefail
+          WORKSPACE=$(find ios -maxdepth 1 -name '*.xcworkspace' -print -quit)
+          SCHEME=$(python3 - <<'PY'
+          from pathlib import Path
+          schemes = list(Path('ios').glob('*.xcodeproj/xcshareddata/xcschemes/*.xcscheme'))
+          assert len(schemes) == 1, [str(p) for p in schemes]
+          print(schemes[0].stem)
+          PY
+          )
+          xcodebuild build -workspace "$WORKSPACE" -scheme "$SCHEME" \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/openwhispr-native-build" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee "$RUNNER_TEMP/openwhispr-native-build.log"

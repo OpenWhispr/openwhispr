@@ -7,6 +7,11 @@ import {
 
 export type LocalModelKey = 'whisper-base' | 'parakeet-v2' | 'parakeet-v3' | 'orukeet';
 
+/** Pinned archive, extracted packages and measured compiled cache (bytes). */
+const ORUKEET_ARCHIVE_BYTES = 554_985_744;
+const ORUKEET_EXTRACTED_BYTES = 632_017_564;
+const ORUKEET_COMPILED_BYTES = 603 * 1024 * 1024;
+
 /**
  * Nominal on-disk sizes shown before download (whisper from its published ggml size; Parakeet
  * measured on-device by the benchmark spike). Used for display and the pre-download
@@ -16,24 +21,24 @@ export const LOCAL_MODEL_SIZE_BYTES: Record<LocalModelKey, number> = {
   'whisper-base': 142 * 1024 * 1024,
   'parakeet-v2': 443 * 1024 * 1024,
   'parakeet-v3': 461 * 1024 * 1024,
-  // Compiled install of the pinned archive: 632,191,599 bytes.
-  orukeet: 603 * 1024 * 1024,
+  // The verified archive is retained for offline recompilation after an iOS update.
+  orukeet: ORUKEET_COMPILED_BYTES + ORUKEET_ARCHIVE_BYTES,
 };
-
-/** Orukeet's pinned zip, and what its entries extract to (from its central directory). */
-const ORUKEET_ARCHIVE_BYTES = 554_985_744;
-const ORUKEET_EXTRACTED_BYTES = 632_017_564;
 
 /**
  * Most disk a download needs at once, for the free-space check. Models fetched straight into
  * place peak at their installed size. Orukeet's zip, its extracted packages and the compiled
- * models coexist until its install finishes.
+ * models coexist during compilation. The SDK removes extracted packages before retaining its
+ * own archive copy. Keeping installed size separate avoids counting that copy twice at the peak.
  */
 export const LOCAL_MODEL_INSTALL_PEAK_BYTES: Record<LocalModelKey, number> = {
   'whisper-base': LOCAL_MODEL_SIZE_BYTES['whisper-base'],
   'parakeet-v2': LOCAL_MODEL_SIZE_BYTES['parakeet-v2'],
   'parakeet-v3': LOCAL_MODEL_SIZE_BYTES['parakeet-v3'],
-  orukeet: ORUKEET_ARCHIVE_BYTES + ORUKEET_EXTRACTED_BYTES + LOCAL_MODEL_SIZE_BYTES.orukeet,
+  orukeet:
+    ORUKEET_ARCHIVE_BYTES +
+    ORUKEET_COMPILED_BYTES +
+    Math.max(ORUKEET_EXTRACTED_BYTES, ORUKEET_ARCHIVE_BYTES),
 };
 
 const PARAKEET_VERSION_BY_KEY: Record<LocalModelKey, ParakeetVersion | null> = {

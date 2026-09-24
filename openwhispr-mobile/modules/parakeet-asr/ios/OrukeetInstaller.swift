@@ -10,11 +10,14 @@ import OrukeetCoreML
 /// `models` root and, beside it, the staging directory the JS download writes the archive into.
 actor OrukeetInstaller {
   nonisolated let modelsRoot: URL
+  nonisolated let stagingDirectory: URL
   private let store: OrukeetModelStore
-  private var running: Task<URL, Error>?
+  private var running: Task<URL?, Error>?
+  private var deleting: Task<Void, Error>?
 
   init(home: URL) {
     modelsRoot = home.appendingPathComponent("models", isDirectory: true)
+    stagingDirectory = URL(fileURLWithPath: modelsRoot.path + ".downloading", isDirectory: true)
     store = OrukeetModelStore(rootDirectory: modelsRoot)
     do {
       try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
@@ -29,9 +32,9 @@ actor OrukeetInstaller {
 
   /// The verified install, or nil. Also nil while an install runs, rather than waiting for it.
   func installedDirectory() async -> URL? {
-    guard running == nil else { return nil }
+    guard running == nil, deleting == nil else { return nil }
     do {
-      return try await store.installedDirectory()
+      return try await findInstalled(prune: false)
     } catch {
       NSLog("[ParakeetASR] Orukeet install is not usable: %@", error.localizedDescription)
       return nil
@@ -43,8 +46,9 @@ actor OrukeetInstaller {
   func install(
     fromArchive archive: URL, progress: @escaping @Sendable (OrukeetModelStore.State) -> Void
   ) async throws -> URL {
-    guard running == nil else { throw OrukeetModelStore.StoreError.busy }
-    let task = Task { [store, modelsRoot] in
+    guard running == nil, deleting == nil else { throw OrukeetModelStore.StoreError.busy }
+    try Task.checkCancellation()
+    let task = Task<URL?, Error> { [store, modelsRoot] in
       do {
         _ = try await store.installedDirectory()
       } catch OrukeetModelStore.StoreError.invalidInstallation(let detail) {
@@ -54,12 +58,21 @@ actor OrukeetInstaller {
         try FileManager.default.removeItem(at: modelsRoot)
       }
       let installed = try await store.install(fromArchive: archive, progress: progress)
+      try Task.checkCancellation()
       Self.removeEverything(in: modelsRoot, except: installed)
       return installed
     }
     running = task
     defer { running = nil }
-    return try await task.value
+    let installed = try await withTaskCancellationHandler {
+      try await task.value
+    } onCancel: {
+      task.cancel()
+    }
+    guard let installed else {
+      throw OrukeetModelStore.StoreError.invalidInstallation("Install returned no model directory")
+    }
+    return installed
   }
 
   /// Stop a running install at its next checkpoint and wait for it to unwind.
@@ -69,20 +82,64 @@ actor OrukeetInstaller {
     _ = await running.result
   }
 
-  /// Reclaim caches this build can never load: ones keyed to an earlier iOS build and work
-  /// directories an interrupted install left behind. Nothing is removed while an install runs,
-  /// or when the install on disk can't be read (it might be valid).
+  /// Cancel and join all work before deleting model files. Keep deletion inside
+  /// this actor: a separate cancel-then-delete call permits another availability
+  /// check to start recompiling in the gap. The dedicated home stays in place so
+  /// its backup exclusion also covers a later JS staging download.
+  func deleteModelsAndStaging() async throws {
+    if let deleting {
+      try await deleting.value
+      return
+    }
+    try Task.checkCancellation()
+    let active = running
+    let task = Task<Void, Error> { [modelsRoot, stagingDirectory] in
+      active?.cancel()
+      if let active { _ = await active.result }
+      try Task.checkCancellation()
+      let files = FileManager.default
+      for directory in [modelsRoot, stagingDirectory] where files.fileExists(atPath: directory.path) {
+        try files.removeItem(at: directory)
+      }
+    }
+    deleting = task
+    defer { deleting = nil }
+    try await withTaskCancellationHandler {
+      try await task.value
+    } onCancel: {
+      task.cancel()
+    }
+  }
+
+  /// Recompile from the retained portable archive after an iOS update, then reclaim the old
+  /// compiled cache and interrupted work. A failed recovery preserves the source for a retry.
   func removeUnusableCaches() async {
-    guard running == nil else { return }
-    let installed: URL?
+    guard running == nil, deleting == nil else { return }
     do {
-      installed = try await store.installedDirectory()
+      _ = try await findInstalled(prune: true)
     } catch {
       return
     }
-    // An install may have started while the store answered.
-    guard running == nil else { return }
-    Self.removeEverything(in: modelsRoot, except: installed)
+  }
+
+  /// Directory lookup can now compile models after an OS update. Track it just like an install:
+  /// concurrent availability checks remain non-blocking, and Delete waits for it to unwind.
+  private func findInstalled(prune: Bool) async throws -> URL? {
+    guard running == nil, deleting == nil else { return nil }
+    try Task.checkCancellation()
+    let task = Task<URL?, Error> { [store, modelsRoot] in
+      let installed = try await store.installedDirectory()
+      try Task.checkCancellation()
+      if prune { Self.removeEverything(in: modelsRoot, except: installed) }
+      return installed
+    }
+    running = task
+    defer { running = nil }
+    return try await withTaskCancellationHandler {
+      try await task.value
+    } onCancel: {
+      task.cancel()
+    }
   }
 
   private static func removeEverything(in root: URL, except keep: URL?) {
