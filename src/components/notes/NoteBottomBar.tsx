@@ -89,13 +89,13 @@ export default function NoteBottomBar({
         <div
           aria-hidden={hideInput}
           className={cn(
-            "flex-1 min-w-0 flex items-center h-16 gap-2 rounded-full",
+            "flex-1 min-w-0 flex items-center h-12 gap-2 rounded-full",
             isRecording ? RECORDING_SURFACE : "bg-background shadow-sm",
             "border",
             "transition-[max-width,opacity,padding,border-color,box-shadow] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
             hideInput
               ? "max-w-0 opacity-0 ps-0 pe-0 border-transparent shadow-none pointer-events-none"
-              : "max-w-[600px] opacity-100 ps-6 pe-4",
+              : "max-w-[600px] opacity-100 ps-4 pe-2",
             isExpanded
               ? "border-black/15 dark:border-white/22 ring-[3px] ring-primary/8"
               : !hideInput && "border-black/10 dark:border-white/14"
@@ -114,7 +114,7 @@ export default function NoteBottomBar({
             placeholder={t("chat.inputPlaceholder")}
             className={cn(
               "input-inline flex-1 bg-transparent outline-none min-w-0 p-0 caret-primary",
-              "text-lg text-foreground",
+              "text-sm text-foreground",
               "placeholder:text-muted-foreground"
             )}
           />
@@ -127,7 +127,7 @@ export default function NoteBottomBar({
             onClick={handleSubmit}
             disabled={!hasText || askDisabled}
             className={cn(
-              "flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground",
+              "flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground",
               "transition-colors duration-150",
               "enabled:hover:bg-muted/80 enabled:hover:text-foreground enabled:active:scale-95",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
