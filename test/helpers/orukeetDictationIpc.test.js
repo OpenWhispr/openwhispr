@@ -28,6 +28,7 @@ const cloudSession = {
 const { once, EventEmitter } = require("node:events");
 const { WebSocket, WebSocketServer } = require("ws");
 const { OrukeetStreaming } = require("../../src/helpers/orukeetStreaming");
+const AgentStreamRequestRegistry = require("../../src/helpers/agentStreamRequestRegistry");
 let server,
   target,
   opened = 0;
@@ -36,6 +37,19 @@ let commitCount = 0;
 const messages = [];
 const event = { sender: new EventEmitter() };
 event.sender.send = (channel, text) => messages.push([channel, text]);
+event.sender.id = 1;
+const backendFetch = async (url, options) => {
+  assert.ok(
+    [
+      "https://api.openwhispr.test/api/stt/orukeet/session",
+      "https://api.openwhispr.test/api/reason",
+      "https://api.openwhispr.test/api/streaming-usage",
+      "https://api.openwhispr.test/api/transcribe",
+    ].includes(url)
+  );
+  assert.equal(options.headers.Authorization, "Bearer account-a");
+  return backendResponse(url, options);
+};
 const managedOptions = {
   provider: "orukeet",
   mode: "openwhispr",
@@ -57,18 +71,7 @@ const electronStub = {
     on: (channel, fn) => handlers.set(channel, fn),
     removeHandler: () => {},
   },
-  net: {
-    fetch: async (url, options) => {
-      assert.ok(
-        [
-          "https://api.openwhispr.test/api/stt/orukeet/session",
-          "https://api.openwhispr.test/api/reason",
-        ].includes(url)
-      );
-      assert.equal(options.headers.Authorization, "Bearer account-a");
-      return backendResponse(url, options);
-    },
-  },
+  net: { fetch: backendFetch },
   BrowserWindow: class BrowserWindow {
     static getAllWindows() {
       return [];
@@ -81,7 +84,13 @@ const electronStub = {
   dialog: {},
   screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
   systemPreferences: { getMediaAccessStatus: () => "granted" },
-  session: { fromPartition: () => ({}) },
+  // Cloud uploads go through a dedicated session partition.
+  session: {
+    fromPartition: () => ({
+      webRequest: { onBeforeSendHeaders: () => {} },
+      fetch: backendFetch,
+    }),
+  },
   clipboard: {},
   nativeImage: {},
   globalShortcut: {},
@@ -145,6 +154,7 @@ function buildFakeThis() {
     _dictationStreaming: null,
     _dictationConnectPromise: null,
     _dictationIdleTimer: null,
+    _cloudTranscriptionRequests: new AgentStreamRequestRegistry(),
   };
   return new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
@@ -338,6 +348,76 @@ test("cloud cleanup forwards fallback telemetry to its combined log request", as
   }
   assert.equal(requests.length, 2);
   assert.equal(Object.hasOwn(requests[1], "streamingFallbackReason"), false);
+});
+
+const DETECTED = {
+  sttDetectedLanguage: "ja",
+  sttDetectedLanguageConfidence: 0.97,
+  sttDetectedLanguageAudioSeconds: 6,
+  sttDetectedLanguageStatus: "detected",
+};
+
+test("cloud cleanup forwards the detected language to its combined log request", async () => {
+  const requests = [];
+  backendResponse = async (url, options) => {
+    requests.push(JSON.parse(options.body));
+    return Response.json({ text: "clean transcript" });
+  };
+  await handlers.get("cloud-reason")(event, "raw", {
+    purpose: "cleanup",
+    sttProvider: "orukeet",
+    ...DETECTED,
+  });
+  await handlers.get("cloud-reason")(event, "raw", { purpose: "cleanup", sttProvider: "orukeet" });
+  assert.deepEqual(
+    Object.fromEntries(Object.keys(DETECTED).map((key) => [key, requests[0][key]])),
+    DETECTED
+  );
+  for (const key of Object.keys(DETECTED)) {
+    assert.equal(Object.hasOwn(requests[1], key), false, key);
+  }
+});
+
+test("streaming usage forwards the detected language", async () => {
+  const requests = [];
+  backendResponse = async (url, options) => {
+    assert.match(url, /\/api\/streaming-usage$/);
+    requests.push(JSON.parse(options.body));
+    return Response.json({
+      recorded: true,
+      wordCount: 1,
+      wordsUsed: 1,
+      wordsRemaining: 10,
+      limitReached: false,
+    });
+  };
+  await handlers.get("cloud-streaming-usage")(event, "hello", 4, {
+    sttProvider: "orukeet",
+    sttDetectedLanguageStatus: "unknown",
+  });
+  assert.equal(requests[0].sttDetectedLanguageStatus, "unknown");
+  assert.equal(Object.hasOwn(requests[0], "sttDetectedLanguage"), false);
+});
+
+test("the language fallback upload carries the fallback reason and detection, and no language", async () => {
+  const bodies = [];
+  backendResponse = async (url, options) => {
+    assert.match(url, /\/api\/transcribe$/);
+    bodies.push(Buffer.from(options.body).toString("latin1"));
+    return Response.json({ text: "日本語", wordsUsed: 1, wordsRemaining: 10 });
+  };
+  const result = await handlers.get("cloud-transcribe")(event, new Uint8Array(64).buffer, {
+    streamingFallbackReason: "language_detected_unsupported",
+    ...DETECTED,
+  });
+  assert.equal(result.success, true);
+  const body = bodies[0];
+  assert.match(body, /name="streamingFallbackReason"\r\n\r\nlanguage_detected_unsupported\r\n/);
+  assert.match(body, /name="sttDetectedLanguage"\r\n\r\nja\r\n/);
+  assert.match(body, /name="sttDetectedLanguageConfidence"\r\n\r\n0\.97\r\n/);
+  assert.match(body, /name="sttDetectedLanguageAudioSeconds"\r\n\r\n6\r\n/);
+  assert.match(body, /name="sttDetectedLanguageStatus"\r\n\r\ndetected\r\n/);
+  assert.doesNotMatch(body, /name="language"/);
 });
 
 test("warmups landing together mint one session and share its unused socket", async () => {
