@@ -180,7 +180,7 @@ test("find_contact returns matches and guidance for zero or several", async (t) 
   assert.equal(several.displayText, "Contacts found: 2");
 });
 
-test("find_contact keeps its turn out of the user's document only when the user must answer", async (t) => {
+test("find_contact keeps its turn out of the user's document, whatever it finds", async (t) => {
   const one = [{ name: "Gabe Torres", email: "gabe@example.com", lastMet: null }];
   const two = [...one, { name: "Gabriel Stone", email: "gabriel@acme.test", lastMet: null }];
   const responses = [{ contacts: [] }, { contacts: two }, { contacts: one }];
@@ -197,8 +197,9 @@ test("find_contact keeps its turn out of the user's document only when the user 
 
   assert.equal(await holdsFor("Zed"), 1);
   assert.equal(await holdsFor("Gab"), 1);
-  // "What's Gabe's email?" answered with one address can still be pasted.
-  assert.equal(await holdsFor("Gabe Torres"), 0);
+  // One match is usually followed by a question ("What should it say?"),
+  // which must not be pasted at the caret either.
+  assert.equal(await holdsFor("Gabe Torres"), 1);
 });
 
 test("connector plan eligibility uses usage data, then the persisted isSubscribed flag", async () => {
