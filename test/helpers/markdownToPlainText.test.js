@@ -19,6 +19,10 @@ test("emphasis markers are removed and the words kept", async () => {
     "bold and em and b and e and s"
   );
   assert.equal(markdownToPlainText("**x**"), "x");
+  assert.equal(
+    markdownToPlainText("**A** or **B**, *x* or *y*, __a__ or __b__, ~~a~~ or ~~b~~, _a_ or _b_"),
+    "A or B, x or y, a or b, a or b, a or b"
+  );
 });
 
 test("headings lose their marks", async () => {

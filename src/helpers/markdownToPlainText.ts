@@ -146,15 +146,15 @@ function stripInline(text: string): string {
     // non-word close that is also not `(`, so dunder identifiers such as
     // `__init__` (immediately followed by a call's `(`) are never mistaken
     // for emphasis, while `__bold__ word` still strips.
-    .replace(/(?<!\\)\*\*(\S(?:.*?\S)?)\*\*/g, "$1")
-    .replace(/(?<![\w\\])__(\S(?:.*?\S)?)__(?![\w(])/g, "$1")
-    .replace(/(?<!\\)~~(\S(?:.*?\S)?)~~/g, "$1")
+    .replace(/(?<!\\)\*\*(\S(?:.*?\S)??)\*\*/g, "$1")
+    .replace(/(?<![\w\\])__(\S(?:.*?\S)??)__(?![\w(])/g, "$1")
+    .replace(/(?<!\\)~~(\S(?:.*?\S)??)~~/g, "$1")
     // Markers must hug non-space on the inside, not sit inside a word on the
     // outside, and not be escaped — so `2 * 3`, snake_case and `\*` survive.
     // The single-underscore content also may not start or end with `_` itself,
     // so a dunder like `__init__` is never absorbed as `_` + `_init_` + `_`.
-    .replace(/(?<![\w*\\])\*(\S(?:.*?\S)?)\*(?![\w*])/g, "$1")
-    .replace(/(?<![\w_\\])_(?!_)(\S(?:.*?[^\s_])?)_(?![\w_])/g, "$1");
+    .replace(/(?<![\w*\\])\*(\S(?:.*?\S)??)\*(?![\w*])/g, "$1")
+    .replace(/(?<![\w_\\])_(?!_)(\S(?:.*?[^\s_])??)_(?![\w_])/g, "$1");
 
   // A literal can itself hold placeholders (a code span inside a link destination).
   const placeholder = new RegExp(`${placeholderPrefix}(\\d+)`, "g");
