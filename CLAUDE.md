@@ -167,7 +167,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - `connectorManager.js` owns every outside action: `prepare` → ApprovalCard → `commit` for anything other people see, `runDirect` for private drafts. The model can never reach `commit`
   - `pendingActions.js`: pending → committing → sent/failed/unknown; actions are bound to the connection (account, workspace, `generation`) they were prepared on
   - `connector_actions` (SQLite) is the durable receipt: destination labels, states and links only, never content. Interrupted rows are reconciled on launch (committing → unknown)
-  - Policy fails closed (`connectorPolicy.js`'s `connectorPolicyState`): only a successful, well-formed snapshot allows; unresolvable, any error code, or >1.5s → unavailable; org switch `features.connectorsEnabled`
+  - Policy fails closed (`connectorPolicy.js`'s `connectorPolicyState` classifies the snapshot; `connectorIpc.js`'s `createConnectorPolicyResolver` enforces the 1.5s deadline): only a successful, well-formed snapshot allows; unresolvable, any error code, or >1.5s → unavailable; org switch `features.connectorsEnabled`
   - `emailConnector.js` opens Gmail/Outlook/mailto compose windows (`emailCompose.js`, shared ESM); a body that won't fit the 2,000-char compose URL goes to the clipboard instead, then the subject too if it's still too long; a recipient list that alone doesn't fit is refused
 - **postMigrationDetector.js**: Detects users returning from the pre-Gizmo bundle ID via a `.bundle-migrated` sentinel in userData; consumed by `ipcHandlers.js` to drive the `PostMigrationOnboarding` modal
 
