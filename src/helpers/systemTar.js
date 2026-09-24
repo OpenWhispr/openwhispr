@@ -116,7 +116,24 @@ function runSystemTar(
   });
 }
 
+// Windows' bsdtar can lack bz2 support (runSystemTar rejects there), so the
+// bundled JS extractor is the fallback everywhere.
+async function extractTarBz2(archivePath, destDir) {
+  try {
+    await runSystemTar(archivePath, destDir);
+    return;
+  } catch {
+    // Fall through to the JS extractor.
+  }
+  const fs = require("fs");
+  const unbzip2 = require("unbzip2-stream");
+  const tar = require("tar");
+  const { pipeline } = require("stream/promises");
+  await pipeline(fs.createReadStream(archivePath), unbzip2(), tar.x({ cwd: destDir }));
+}
+
 module.exports = {
   resolveSystemTarExecutable,
   runSystemTar,
+  extractTarBz2,
 };
