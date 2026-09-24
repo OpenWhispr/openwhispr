@@ -8,9 +8,13 @@ jest.mock('expo-file-system/legacy', () => ({
   writeAsStringAsync: jest.fn(async () => undefined),
 }));
 jest.mock('../../../../modules/parakeet-asr/src', () => ({
+  ARCHIVE_VERIFICATION_ERROR_CODE: 'ARCHIVE_VERIFICATION_ERROR',
   ParakeetASR: {
     isAvailable: jest.fn(() => true),
+    installFromArchive: jest.fn(async () => undefined),
+    addInstallProgressListener: jest.fn(() => ({ remove: jest.fn() })),
     modelSpec: jest.fn(async () => ({
+      kind: 'hf-tree',
       repo: 'FluidInference/parakeet-tdt-0.6b-v2-coreml',
       directory: '/AppSupport/FluidAudio/Models/parakeet-tdt-0.6b-v2-coreml',
       stagingDirectory: '/AppSupport/FluidAudio/Models/parakeet-tdt-0.6b-v2-coreml.downloading',
@@ -41,6 +45,23 @@ const MARKER = `${STAGING}/.revision`;
 const MODEL_API = `https://huggingface.co/api/models/${REPO}`;
 const TREE_BASE = `${MODEL_API}/tree/${REVISION}`;
 const WEIGHT = `${STAGING}/Decoder.mlmodelc/weights/weight.bin`;
+
+/** Orukeet ships as one pinned archive instead of a HuggingFace tree. */
+const ARCHIVE_URL =
+  'https://huggingface.co/oruk/orukeet/resolve/419d7f79/coreml/orukeet-int8.zip?download=true';
+const ARCHIVE_BYTES = 2000;
+const ARCHIVE_SHA256 = '24df9ff76f00f86f9ae1fd601cbbcab1d1eac98c7e8107de67444a7858d88b8b';
+const ARCHIVE_STAGING_PATH = '/AppSupport/OpenWhispr/orukeet.downloading';
+const ARCHIVE_STAGING = `file://${ARCHIVE_STAGING_PATH}`;
+const ARCHIVE_ZIP = `${ARCHIVE_STAGING}/model.zip`;
+const ARCHIVE_SPEC = {
+  kind: 'archive',
+  archiveUrl: ARCHIVE_URL,
+  archiveBytes: ARCHIVE_BYTES,
+  archiveSha256: ARCHIVE_SHA256,
+  stagingDirectory: ARCHIVE_STAGING_PATH,
+  installedDirectory: null,
+} as const;
 /** One stall window plus one watchdog tick: exactly enough fake time for a single kick. */
 const ONE_KICK_MS = STALL_WINDOW_MS + 10_000;
 
@@ -108,6 +129,8 @@ const mockWriteAsStringAsync = FileSystem.writeAsStringAsync as jest.MockedFunct
   typeof FileSystem.writeAsStringAsync
 >;
 const mockParakeetASR = ParakeetASR as jest.Mocked<typeof ParakeetASR>;
+const mockInstallFromArchive = mockParakeetASR.installFromArchive;
+const mockAddInstallProgressListener = mockParakeetASR.addInstallProgressListener;
 
 /** Bytes "on disk" per destination uri, shared by the fake downloads and the getInfoAsync mock. */
 const written = new Map<string, number>();
@@ -119,7 +142,7 @@ function fakeFileInfo(
   uri: string,
   size: number | undefined = written.get(uri),
 ): FileSystem.FileInfo {
-  if (uri === MARKER) {
+  if (uri.endsWith('/.revision')) {
     return (
       markerContent === null
         ? { exists: false, uri, isDirectory: false }
@@ -133,6 +156,12 @@ function fakeFileInfo(
 
 function remotePathOf(destination: string): string {
   return destination.slice(`${STAGING}/`.length);
+}
+
+function expectedSizeOf(destination: string): number {
+  return destination === ARCHIVE_ZIP
+    ? ARCHIVE_BYTES
+    : (REMOTE_SIZES[remotePathOf(destination)] ?? 0);
 }
 
 /** Resolvers for every pauseAsync the fake is currently holding open (one per watchdog kick). */
@@ -193,7 +222,7 @@ function installResumableFactory(options: FakeResumableOptions = {}): void {
   mockCreateDownloadResumable.mockImplementation((_url, destination, _opts, callback) => {
     const attempt = (attempts.get(destination) ?? 0) + 1;
     attempts.set(destination, attempt);
-    const expected = REMOTE_SIZES[remotePathOf(destination)] ?? 0;
+    const expected = expectedSizeOf(destination);
     let pending: ((value: undefined | null) => void) | null = null;
     let failPending: ((error: Error) => void) | null = null;
     let cancelled = false;
@@ -306,17 +335,17 @@ describe('parakeetModelDownloader', () => {
     mockGetInfoAsync.mockImplementation(async (uri: string) => fakeFileInfo(uri));
     mockReadAsStringAsync.mockImplementation(async () => markerContent ?? '');
     mockWriteAsStringAsync.mockImplementation(async (uri: string, contents: string) => {
-      if (uri === MARKER) {
+      if (uri.endsWith('/.revision')) {
         markerContent = contents;
       } else {
         written.set(uri, 0);
       }
     });
     mockDeleteAsync.mockImplementation(async (uri: string) => {
-      if (uri === STAGING) {
+      if (uri === STAGING || uri === ARCHIVE_STAGING) {
         markerContent = null;
         [...written.keys()]
-          .filter((key) => key.startsWith(`${STAGING}/`))
+          .filter((key) => key.startsWith(`${uri}/`))
           .forEach((key) => written.delete(key));
       } else {
         written.delete(uri);
@@ -1002,6 +1031,247 @@ describe('parakeetModelDownloader', () => {
     expect(mockMoveAsync).toHaveBeenCalledTimes(1);
     expect(mockCreateDownloadResumable).toHaveBeenCalledTimes(3);
   });
+
+  describe('archive models', () => {
+    const installedPath = `${ARCHIVE_STAGING_PATH}/model.zip`;
+    /** The HuggingFace API must never be consulted for a commit-pinned archive. */
+    const noListing = (): typeof fetch => jest.fn() as unknown as typeof fetch;
+
+    beforeEach(() => {
+      mockParakeetASR.modelSpec.mockResolvedValue(ARCHIVE_SPEC);
+      mockInstallFromArchive.mockResolvedValue(undefined);
+      mockAddInstallProgressListener.mockReturnValue({ remove: jest.fn() });
+      // Nothing is staged for this pin unless a test says so.
+      markerContent = null;
+    });
+
+    afterEach(() => {
+      mockParakeetASR.modelSpec.mockReset();
+      mockParakeetASR.modelSpec.mockResolvedValue({
+        kind: 'hf-tree',
+        repo: REPO,
+        directory: INSTALL.slice('file://'.length),
+        stagingDirectory: STAGING.slice('file://'.length),
+        entries: ['Decoder.mlmodelc', 'parakeet_vocab.json'],
+      });
+    });
+
+    /** Paths deleted after the native install was invoked (staging is also reset before transfer). */
+    const deletedAfterInstall = (): string[] => {
+      const [installOrder] = mockInstallFromArchive.mock.invocationCallOrder;
+      return mockDeleteAsync.mock.calls
+        .filter((_call, index) => mockDeleteAsync.mock.invocationCallOrder[index] > installOrder)
+        .map((call) => call[0]);
+    };
+
+    it('downloads the pinned archive in one resumable transfer, installs it natively, then clears staging', async () => {
+      installResumableFactory();
+      const onProgress = jest.fn();
+      const httpClient = noListing();
+
+      await downloadParakeetModel('orukeet', { onProgress, httpClient });
+
+      expect(httpClient).not.toHaveBeenCalled();
+      expect(mockCreateDownloadResumable).toHaveBeenCalledTimes(1);
+      expect(mockCreateDownloadResumable.mock.calls[0][0]).toBe(ARCHIVE_URL);
+      expect(mockCreateDownloadResumable.mock.calls[0][1]).toBe(ARCHIVE_ZIP);
+      // The staging marker pins the archive by its checksum, written before any bytes move.
+      expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
+        `${ARCHIVE_STAGING}/.revision`,
+        ARCHIVE_SHA256,
+      );
+      expect(mockWriteAsStringAsync.mock.invocationCallOrder[0]).toBeLessThan(
+        downloadMocks[0].mock.invocationCallOrder[0],
+      );
+
+      const values = onProgress.mock.calls.map((call) => call[0] as number);
+      expect(values).toContain(0.5);
+      expect(values[values.length - 1]).toBe(1);
+
+      expect(mockInstallFromArchive).toHaveBeenCalledWith('orukeet', installedPath);
+      expect(deletedAfterInstall()).toEqual([ARCHIVE_STAGING]);
+      expect(mockMoveAsync).not.toHaveBeenCalled();
+    });
+
+    it("forwards each phase change of this version's native install once", async () => {
+      installResumableFactory();
+      const remove = jest.fn();
+      let listener: ((event: never) => void) | undefined;
+      mockAddInstallProgressListener.mockImplementation((callback) => {
+        listener = callback as never;
+        return { remove };
+      });
+      mockInstallFromArchive.mockImplementation(async () => {
+        listener?.({ version: 'orukeet', phase: 'verifying', fraction: null } as never);
+        // Extraction reports every chunk; only the phase change matters to the UI.
+        listener?.({ version: 'orukeet', phase: 'extracting', fraction: 0.1 } as never);
+        listener?.({ version: 'orukeet', phase: 'extracting', fraction: 0.2 } as never);
+        listener?.({ version: 'v3', phase: 'compiling', fraction: null } as never);
+        listener?.({ version: 'orukeet', phase: 'compiling', fraction: null } as never);
+      });
+      const onInstallPhase = jest.fn();
+
+      await downloadParakeetModel('orukeet', { onInstallPhase, httpClient: noListing() });
+
+      expect(onInstallPhase.mock.calls.map((call) => call[0])).toEqual([
+        'verifying',
+        'extracting',
+        'compiling',
+      ]);
+      expect(remove).toHaveBeenCalledTimes(1);
+    });
+
+    it('installs a complete archive left staged by an earlier attempt without downloading it again', async () => {
+      installResumableFactory();
+      markerContent = ARCHIVE_SHA256;
+      written.set(ARCHIVE_ZIP, ARCHIVE_BYTES);
+      const onProgress = jest.fn();
+
+      await downloadParakeetModel('orukeet', { onProgress, httpClient: noListing() });
+
+      expect(mockCreateDownloadResumable).not.toHaveBeenCalled();
+      expect(onProgress).toHaveBeenLastCalledWith(1);
+      expect(mockInstallFromArchive).toHaveBeenCalledWith('orukeet', installedPath);
+    });
+
+    it('discards an archive staged for a different pin', async () => {
+      installResumableFactory();
+      markerContent = 'sha-of-an-older-archive';
+      written.set(ARCHIVE_ZIP, ARCHIVE_BYTES);
+
+      await downloadParakeetModel('orukeet', { httpClient: noListing() });
+
+      expect(mockDeleteAsync).toHaveBeenCalledWith(ARCHIVE_STAGING, { idempotent: true });
+      expect(mockCreateDownloadResumable).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the downloaded archive staged for a retry when installation fails', async () => {
+      installResumableFactory();
+      mockInstallFromArchive.mockRejectedValue(new Error('Core ML compilation failed'));
+
+      await expect(downloadParakeetModel('orukeet', { httpClient: noListing() })).rejects.toThrow(
+        'Core ML compilation failed',
+      );
+
+      expect(written.get(ARCHIVE_ZIP)).toBe(ARCHIVE_BYTES);
+      expect(deletedAfterInstall()).toEqual([]);
+    });
+
+    it('discards an archive that fails verification so a retry downloads it again', async () => {
+      installResumableFactory();
+      mockInstallFromArchive.mockRejectedValue(
+        Object.assign(new Error('The downloaded model failed verification.'), {
+          code: 'ARCHIVE_VERIFICATION_ERROR',
+        }),
+      );
+
+      await expect(downloadParakeetModel('orukeet', { httpClient: noListing() })).rejects.toThrow(
+        /failed verification/,
+      );
+
+      expect(deletedAfterInstall()).toEqual([ARCHIVE_ZIP]);
+      expect(written.has(ARCHIVE_ZIP)).toBe(false);
+    });
+
+    it('rejects a transfer whose size differs from the pinned archive and never installs it', async () => {
+      installResumableFactory();
+      mockGetInfoAsync.mockImplementation(async (uri: string) =>
+        fakeFileInfo(uri, uri === ARCHIVE_ZIP ? ARCHIVE_BYTES - 1 : undefined),
+      );
+
+      await expect(downloadParakeetModel('orukeet', { httpClient: noListing() })).rejects.toThrow(
+        /incomplete/,
+      );
+
+      expect(mockDeleteAsync).toHaveBeenCalledWith(ARCHIVE_ZIP, { idempotent: true });
+      expect(mockInstallFromArchive).not.toHaveBeenCalled();
+    });
+
+    it('cancel aborts the archive transfer, removes staging and never installs', async () => {
+      installResumableFactory({ hang: (destination) => destination === ARCHIVE_ZIP });
+
+      const download = downloadParakeetModel('orukeet', { httpClient: noListing() });
+      await flush();
+      expect(mockCreateDownloadResumable).toHaveBeenCalledTimes(1);
+
+      await cancelParakeetDownload('orukeet');
+
+      expect(cancelMocks[0]).toHaveBeenCalledTimes(1);
+      expect(mockDeleteAsync).toHaveBeenCalledWith(ARCHIVE_STAGING, { idempotent: true });
+      await expect(download).rejects.toThrow(/cancelled/i);
+      expect(mockInstallFromArchive).not.toHaveBeenCalled();
+    });
+
+    it('reports a cancellation, not an install failure, when cancel lands during installation', async () => {
+      installResumableFactory();
+      let failInstall: ((error: Error) => void) | undefined;
+      mockInstallFromArchive.mockImplementation(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            failInstall = reject;
+          }),
+      );
+
+      const download = downloadParakeetModel('orukeet', { httpClient: noListing() });
+      await flush();
+      expect(mockInstallFromArchive).toHaveBeenCalled();
+
+      await cancelParakeetDownload('orukeet');
+      failInstall?.(new Error('The file couldn’t be opened.'));
+
+      await expect(download).rejects.toThrow(/cancelled/i);
+    });
+
+    it('reports a cancellation when cancel lands while an installation is succeeding', async () => {
+      installResumableFactory();
+      let finishInstall: (() => void) | undefined;
+      mockInstallFromArchive.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            finishInstall = resolve;
+          }),
+      );
+
+      const download = downloadParakeetModel('orukeet', { httpClient: noListing() });
+      await flush();
+      expect(mockInstallFromArchive).toHaveBeenCalled();
+
+      await cancelParakeetDownload('orukeet');
+      finishInstall?.();
+
+      await expect(download).rejects.toThrow(/cancelled/i);
+    });
+
+    it('neither downloads nor installs a model that is already installed', async () => {
+      mockParakeetASR.modelSpec.mockResolvedValue({
+        ...ARCHIVE_SPEC,
+        installedDirectory: '/Library/Application Support/OpenWhispr/orukeet/models/int8-24df',
+      });
+      installResumableFactory();
+      const onProgress = jest.fn();
+
+      await downloadParakeetModel('orukeet', { onProgress, httpClient: noListing() });
+
+      expect(mockCreateDownloadResumable).not.toHaveBeenCalled();
+      expect(mockInstallFromArchive).not.toHaveBeenCalled();
+      expect(onProgress).toHaveBeenLastCalledWith(1);
+    });
+
+    it('kicks a stalled archive transfer with pause/resume like any other file', async () => {
+      jest.useFakeTimers();
+      installResumableFactory({ hang: (destination) => destination === ARCHIVE_ZIP });
+
+      const download = downloadParakeetModel('orukeet', { httpClient: noListing() });
+      await flush();
+      await jest.advanceTimersByTimeAsync(ONE_KICK_MS);
+      await flush();
+
+      expect(pauseMocks[0]).toHaveBeenCalledTimes(1);
+      expect(resumeMocks[0]).toHaveBeenCalledTimes(1);
+      await download;
+      expect(mockInstallFromArchive).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe('stagedParakeetBytes', () => {
@@ -1053,5 +1323,20 @@ describe('stagedParakeetBytes', () => {
 
     await expect(stagedParakeetBytes('v2')).resolves.toBe(0);
     expect(mockParakeetASR.modelSpec).not.toHaveBeenCalled();
+  });
+
+  it('reports the staged archive bytes, without the marker', async () => {
+    mockParakeetASR.modelSpec.mockResolvedValueOnce(ARCHIVE_SPEC);
+    mockGetInfoAsync.mockImplementation(async (uri: string) => {
+      if (uri === ARCHIVE_STAGING) {
+        return { exists: true, uri, size: 1500 + 64, isDirectory: true, modificationTime: 0 };
+      }
+      if (uri === `${ARCHIVE_STAGING}/.revision`) {
+        return { exists: true, uri, size: 64, isDirectory: false, modificationTime: 0 };
+      }
+      return { exists: false, uri, isDirectory: false };
+    });
+
+    await expect(stagedParakeetBytes('orukeet')).resolves.toBe(1500);
   });
 });

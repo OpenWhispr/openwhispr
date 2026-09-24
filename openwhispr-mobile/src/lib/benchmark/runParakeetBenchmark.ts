@@ -1,4 +1,9 @@
-import { ParakeetASR, type ParakeetTranscribeResult } from '../../../modules/parakeet-asr/src';
+import {
+  ParakeetASR,
+  type ParakeetTranscribeResult,
+  type ParakeetVersion,
+} from '../../../modules/parakeet-asr/src';
+import { parakeetVersionForKey, type LocalModelKey } from '@/lib/localModelCatalog';
 import { LocalWhisperService } from '@/services/transcription/LocalWhisperService';
 import { LocalParakeetService } from '@/services/transcription/LocalParakeetService';
 
@@ -9,7 +14,8 @@ import { LocalParakeetService } from '@/services/transcription/LocalParakeetServ
 //
 // The two numbers that decide the migration: warm-median RTF and peak memory on real iPhone hardware.
 
-export type BenchEngine = 'parakeet-v3' | 'parakeet-v2' | 'whisper-base';
+/** Every downloadable local model can be benchmarked. */
+export type BenchEngine = LocalModelKey;
 
 export interface EngineRunResult {
   engine: BenchEngine;
@@ -17,6 +23,8 @@ export interface EngineRunResult {
   ok: boolean;
   error?: string;
   modelSizeBytes?: number;
+  /** An archive model's on-device verify, extract and compile, when this run downloaded it. */
+  installMs?: number;
   /** Model load + engine build time (excluded from RTF). */
   loadMs?: number;
   coldInferMs?: number;
@@ -33,6 +41,7 @@ export interface EngineRunResult {
 export const ENGINE_LABEL: Record<BenchEngine, string> = {
   'parakeet-v3': 'Parakeet v3 (int8)',
   'parakeet-v2': 'Parakeet v2 (English)',
+  orukeet: 'Orukeet r3 (int8)',
   'whisper-base': 'Whisper base',
 };
 
@@ -54,30 +63,40 @@ interface RunOptions {
 }
 
 async function runParakeetEngine(
-  engine: 'parakeet-v3' | 'parakeet-v2',
+  engine: BenchEngine,
+  version: ParakeetVersion,
   wavUri: string,
   warmRuns: number,
   report: (message: string) => void,
 ): Promise<EngineRunResult> {
   const label = ENGINE_LABEL[engine];
-  const version = engine === 'parakeet-v3' ? 'v3' : 'v2';
 
   // prepare() is load-only in production, so the download is a separate, separately-timed step —
   // this is what splits network cost from CoreML's one-time ANE compile (visible as a large
   // first-ever loadMs that collapses on subsequent prepares).
+  // An archive model installs on device once its transfer ends; its first install phase splits
+  // the two.
   let downloadMs: number | undefined;
+  let installMs: number | undefined;
   if (!(await ParakeetASR.isModelDownloaded(version))) {
     report(`${label} · downloading model…`);
     const downloadStart = Date.now();
-    await LocalParakeetService.downloadModel(version);
-    downloadMs = Date.now() - downloadStart;
+    let installStart: number | undefined;
+    await LocalParakeetService.downloadModel(version, undefined, () => {
+      if (installStart !== undefined) return;
+      installStart = Date.now();
+      report(`${label} · installing model…`);
+    });
+    const downloadEnd = Date.now();
+    downloadMs = (installStart ?? downloadEnd) - downloadStart;
+    installMs = installStart === undefined ? undefined : downloadEnd - installStart;
   }
 
   report(`${label} · loading model…`);
   const { loadMs, modelSizeBytes } = await ParakeetASR.prepare(version);
   if (__DEV__) {
     console.log(
-      `[parakeet-bench] ${label} downloadMs=${downloadMs ?? 0} loadMs=${Math.round(loadMs)}`,
+      `[parakeet-bench] ${label} downloadMs=${downloadMs ?? 0} installMs=${installMs ?? 0} loadMs=${Math.round(loadMs)}`,
     );
   }
 
@@ -98,6 +117,7 @@ async function runParakeetEngine(
     label,
     ok: true,
     modelSizeBytes,
+    installMs,
     loadMs,
     coldInferMs: cold.inferMs,
     warmMedianInferMs: warmMedian,
@@ -183,10 +203,11 @@ export async function runBenchmark(
   let clipSeconds: number | undefined;
   for (const engine of ordered) {
     try {
+      const version = parakeetVersionForKey(engine);
       const result =
-        engine === 'whisper-base'
+        version === null
           ? await runWhisperBase(wavUri, warmRuns, clipSeconds, report)
-          : await runParakeetEngine(engine, wavUri, warmRuns, report);
+          : await runParakeetEngine(engine, version, wavUri, warmRuns, report);
       clipSeconds = clipSeconds ?? result.audioSeconds;
       results.push(result);
     } catch (error) {

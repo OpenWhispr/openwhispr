@@ -20,12 +20,13 @@ Pod::Spec.new do |s|
 
   s.dependency 'ExpoModulesCore'
 
-  # FluidAudio is consumed as a Swift Package compiled from source via the cocoapods-spm plugin.
-  # The package SOURCE (git url + pinned version 0.15.4) is declared ONCE in the Podfile by
-  # plugins/speaker-diarization/withSpeakerDiarization.js — this module reuses that same declaration
-  # (both diarization and ASR ship in the single FluidAudio product), so NO new config plugin is needed.
-  # Per cocoapods-spm, the podspec must NOT restate the source here.
+  # FluidAudio and OrukeetCoreML are consumed as Swift Packages compiled from source via the
+  # cocoapods-spm plugin. The package SOURCES (git urls + commit pins: Oruk AI's FluidAudio fork
+  # at 0.15.5-orukeet.1, Orukeet at a reviewed commit) are declared ONCE in the Podfile by
+  # plugins/swift-packages/withSwiftPackages.js — diarization and ASR share the single FluidAudio
+  # declaration. Per cocoapods-spm, the podspec must NOT restate the source here.
   s.spm_dependency 'FluidAudio/FluidAudio'
+  s.spm_dependency 'Orukeet/OrukeetCoreML'
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',

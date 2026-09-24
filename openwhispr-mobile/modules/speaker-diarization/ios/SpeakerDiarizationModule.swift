@@ -10,7 +10,7 @@ import FluidAudio
 // Audio is fed via `process(_ url:)` — FluidAudio's memory-mapped/streaming disk source — so a long
 // meeting recording is NOT loaded into a full [Float] buffer (avoids OOM on real-length audio).
 //
-// Verified against FluidAudio 0.15.4: OfflineDiarizerConfig.default, .withSpeakers(exactly:),
+// Verified against FluidAudio 0.15.5-orukeet.1: OfflineDiarizerConfig.default, .withSpeakers(exactly:),
 // OfflineDiarizerManager(config:)/initialize(models:)/process(_:) async -> DiarizationResult,
 // OfflineDiarizerModels.load() (auto-downloads the offline-variant models) + .defaultModelsDirectory().
 public class SpeakerDiarizationModule: Module {
@@ -103,10 +103,10 @@ public class SpeakerDiarizationModule: Module {
   // Whether the OFFLINE diarization weights are fully on disk (so diarize() needs no network).
   // Requires ALL of the offline model artifacts to be present — a partial/interrupted download
   // returns false (so the consent prompt re-runs) rather than passing readiness and then
-  // downloading mid-diarize. Filenames are the offline variant (FluidAudio 0.15.4 `ModelNames.OfflineDiarizer`);
-  // the files land under Models/ or a repo subfolder, so each is searched across the candidate dirs.
-  // The offline-variant artifacts (FluidAudio 0.15.4 `ModelNames.OfflineDiarizer`). Shared by the
-  // readiness check and deleteModel() so they stay in sync. `.mlmodelc` entries are directories.
+  // downloading mid-diarize. Filenames are the offline variant (FluidAudio 0.15.5
+  // `ModelNames.OfflineDiarizer`); the files land under Models/ or a repo subfolder, so each is
+  // searched across the candidate dirs. Shared by the readiness check and deleteModel() so they
+  // stay in sync. `.mlmodelc` entries are directories.
   static let requiredModelArtifacts = [
     "Segmentation.mlmodelc",
     "FBank.mlmodelc",

@@ -42,10 +42,12 @@ export function getParakeetNudge(input: ParakeetNudgeInput): ParakeetNudge | nul
   const preferred = preferredEngineForLanguages(languages);
 
   if (preferred.engine === 'parakeet') {
+    // An installed Orukeet already serves every selection Parakeet v2/v3 would.
     const downloaded =
-      preferred.version === 'v2'
+      availability.orukeetDownloaded ||
+      (preferred.version === 'v2'
         ? availability.parakeetV2Downloaded
-        : availability.parakeetV3Downloaded;
+        : availability.parakeetV3Downloaded);
     if (downloaded || config.parakeetUpgradeNudgeDismissedAt) {
       return null;
     }

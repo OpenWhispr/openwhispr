@@ -69,6 +69,9 @@ plugins/keyboard-extension Expo config plugin + iOS keyboard target
 
 - [`modules/app-group-storage`](./modules/app-group-storage/README.md) — iOS App Group `UserDefaults` bridge
 - [`plugins/keyboard-extension`](./plugins/keyboard-extension/README.md) — system-wide iOS dictation keyboard
+- `modules/parakeet-asr` — on-device transcription with Parakeet v2/v3 and the optional Orukeet model (FluidAudio, OrukeetCoreML)
+- `modules/speaker-diarization` — on-device speaker diarization for meeting notes (FluidAudio)
+- `plugins/swift-packages` — declares the FluidAudio (Oruk AI fork) and OrukeetCoreML Swift packages in the Podfile through `cocoapods-spm`
 
 ## Environment variables
 

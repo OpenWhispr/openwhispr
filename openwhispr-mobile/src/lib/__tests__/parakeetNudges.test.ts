@@ -8,6 +8,8 @@ const availability = (
   parakeetV2Downloaded: false,
   parakeetV3Downloaded: false,
   whisperDownloaded: true,
+  orukeetSupported: true,
+  orukeetDownloaded: false,
   ...overrides,
 });
 
@@ -50,6 +52,16 @@ describe('getParakeetNudge', () => {
       kind: 'faster-model',
       suggestedLanguageCode: 'de',
     });
+  });
+
+  it('stays silent when Orukeet already serves the selection, even without the dismissal flag', () => {
+    for (const languages of [['en'], ['de']]) {
+      expect(
+        getParakeetNudge(
+          input({ languages, availability: availability({ orukeetDownloaded: true }) }),
+        ),
+      ).toBeNull();
+    }
   });
 
   it('stays silent once the routed Parakeet model is installed', () => {

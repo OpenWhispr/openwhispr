@@ -78,7 +78,7 @@
       "./plugins/keyboard-extension/withKeyboardExtension",
       "./plugins/activity-extension/withActivityExtension",
       "./plugins/settings-bundle/withSettingsBundle",
-      "./plugins/speaker-diarization/withSpeakerDiarization",
+      "./plugins/swift-packages/withSwiftPackages",
       "expo-web-browser",
       "expo-image",
       "expo-video",

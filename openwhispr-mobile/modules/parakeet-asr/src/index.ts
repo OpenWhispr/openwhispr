@@ -1,8 +1,15 @@
 import { requireNativeModule } from 'expo';
 import { Platform } from 'react-native';
 
-/** The two shipped Parakeet variants. Precision is fixed at int8 (applies to v3 only; v2 ignores it). */
-export type ParakeetVersion = 'v2' | 'v3';
+type EventSubscription = {
+  remove(): void;
+};
+
+/**
+ * The shipped models. Precision is fixed at int8 (applies to v3 only; v2 ignores it). Orukeet is
+ * a fine-tune of the v3 architecture served by the same runtime; only its install path differs.
+ */
+export type ParakeetVersion = 'v2' | 'v3' | 'orukeet';
 
 /** Word-piece timing from the TDT decoder. Times are seconds from the start of the clip. */
 export interface ParakeetTokenTiming {
@@ -47,8 +54,9 @@ export interface ParakeetPrepareResult {
   modelSizeBytes: number;
 }
 
-/** What the JS downloader needs to fetch one version into the layout FluidAudio loads from. */
-export interface ParakeetModelSpec {
+/** A version fetched file by file from a HuggingFace repo tree into the layout FluidAudio loads from. */
+export interface HfTreeModelSpec {
+  kind: 'hf-tree';
   /** HuggingFace repo id, e.g. "FluidInference/parakeet-tdt-0.6b-v2-coreml". */
   repo: string;
   /** Absolute path (no file:// scheme) of the directory FluidAudio loads this version from. */
@@ -61,6 +69,48 @@ export interface ParakeetModelSpec {
   /** Top-level entries FluidAudio requires inside `directory`: `.mlmodelc` bundles + the vocab json. */
   entries: string[];
 }
+
+/**
+ * A version shipped as one pinned zip that JS downloads and the native installer verifies,
+ * extracts and compiles on device (`installFromArchive`).
+ */
+export interface ArchiveModelSpec {
+  kind: 'archive';
+  /** Immutable, commit-pinned download URL. */
+  archiveUrl: string;
+  archiveBytes: number;
+  /** Lowercase hex SHA-256 the native installer verifies before extracting. */
+  archiveSha256: string;
+  /** Absolute path (no file:// scheme) JS downloads the zip into. */
+  stagingDirectory: string;
+  /** Absolute path (no file:// scheme) of the verified install, or null until one exists. */
+  installedDirectory: string | null;
+}
+
+/** What the JS downloader needs to fetch one version. */
+export type ParakeetModelSpec = HfTreeModelSpec | ArchiveModelSpec;
+
+/** Installer phases, in order, as reported by `installFromArchive`. */
+export type ParakeetInstallPhase =
+  | 'checkingCache'
+  | 'verifying'
+  | 'extracting'
+  | 'compiling'
+  | 'ready';
+
+export interface ParakeetInstallProgressEvent {
+  version: ParakeetVersion;
+  phase: ParakeetInstallPhase;
+  /** Fraction of the current phase in [0, 1]; null where the phase is indeterminate. */
+  fraction: number | null;
+}
+
+/** Native `installFromArchive` rejects with this code when the archive fails its size or SHA-256 check. */
+export const ARCHIVE_VERIFICATION_ERROR_CODE = 'ARCHIVE_VERIFICATION_ERROR';
+
+type ParakeetASREvents = {
+  parakeetInstallProgress: (event: ParakeetInstallProgressEvent) => void;
+};
 
 export interface DeviceInfo {
   /** Hardware identifier, e.g. "iPhone17,1". */
@@ -78,6 +128,7 @@ export interface MemorySample {
 interface NativeParakeetASR {
   isModelDownloaded(version: ParakeetVersion): Promise<boolean>;
   modelSpec(version: ParakeetVersion): Promise<ParakeetModelSpec>;
+  installFromArchive(version: ParakeetVersion, archivePath: string): Promise<void>;
   deleteModel(version: ParakeetVersion): Promise<void>;
   modelSizeBytes(version: ParakeetVersion): Promise<number>;
   deviceInfo(): Promise<DeviceInfo>;
@@ -90,6 +141,11 @@ interface NativeParakeetASR {
   release(): Promise<void>;
   startMemorySampling(): Promise<void>;
   stopMemorySampling(): Promise<MemorySample>;
+  // Expo native modules are event emitters (SDK 52+).
+  addListener<EventName extends keyof ParakeetASREvents>(
+    eventName: EventName,
+    listener: ParakeetASREvents[EventName],
+  ): EventSubscription;
 }
 
 // iOS-only (FluidAudio runs on the Neural Engine). Returns null off-iOS or when the native module
@@ -115,13 +171,37 @@ export const ParakeetASR = {
     return NativeModule !== null;
   },
 
-  async isModelDownloaded(version: ParakeetVersion): Promise<boolean> {
-    return NativeModule ? NativeModule.isModelDownloaded(version) : false;
+  /**
+   * Whether this binary's native module can serve a version. JS can reach a binary older than
+   * itself through an OTA update, and binaries without `installFromArchive` reject 'orukeet'.
+   */
+  supportsVersion(version: ParakeetVersion): boolean {
+    if (!NativeModule) return false;
+    return version !== 'orukeet' || typeof NativeModule.installFromArchive === 'function';
   },
 
-  /** Repo id, install and staging directories, and required entries for a version, from FluidAudio's own model tables. */
+  async isModelDownloaded(version: ParakeetVersion): Promise<boolean> {
+    return this.supportsVersion(version) ? requireNative().isModelDownloaded(version) : false;
+  },
+
+  /** How to fetch a version: its HuggingFace tree, or its pinned archive (see ParakeetModelSpec). */
   async modelSpec(version: ParakeetVersion): Promise<ParakeetModelSpec> {
     return requireNative().modelSpec(version);
+  },
+
+  /**
+   * Verify, extract and compile a downloaded archive (absolute path, no file:// scheme) into the
+   * version's install directory. Never modifies or deletes the archive.
+   */
+  async installFromArchive(version: ParakeetVersion, archivePath: string): Promise<void> {
+    return requireNative().installFromArchive(version, archivePath);
+  },
+
+  /** Phases of a running `installFromArchive`. Null without the native module. */
+  addInstallProgressListener(
+    listener: (event: ParakeetInstallProgressEvent) => void,
+  ): EventSubscription | null {
+    return NativeModule ? NativeModule.addListener('parakeetInstallProgress', listener) : null;
   },
 
   async deleteModel(version: ParakeetVersion): Promise<void> {

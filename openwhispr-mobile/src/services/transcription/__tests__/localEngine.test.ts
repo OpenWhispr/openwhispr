@@ -1,5 +1,6 @@
 import {
-  PARAKEET_V3_LANGUAGES,
+  PARAKEET_FAMILY_LANGUAGES,
+  parakeetModelLabel,
   preferredEngineForLanguages,
   selectLocalEngine,
   type LocalEngineAvailability,
@@ -10,6 +11,9 @@ const all = (overrides: Partial<LocalEngineAvailability> = {}): LocalEngineAvail
   parakeetV2Downloaded: true,
   parakeetV3Downloaded: true,
   whisperDownloaded: true,
+  orukeetSupported: true,
+  // Orukeet is opt-in: absent unless a test downloads it.
+  orukeetDownloaded: false,
   ...overrides,
 });
 
@@ -55,9 +59,9 @@ describe('preferredEngineForLanguages', () => {
   });
 
   it('covers exactly the 25 official v3 languages', () => {
-    expect(PARAKEET_V3_LANGUAGES.size).toBe(25);
-    expect(PARAKEET_V3_LANGUAGES.has('he')).toBe(false);
-    expect(PARAKEET_V3_LANGUAGES.has('sr')).toBe(false);
+    expect(PARAKEET_FAMILY_LANGUAGES.size).toBe(25);
+    expect(PARAKEET_FAMILY_LANGUAGES.has('he')).toBe(false);
+    expect(PARAKEET_FAMILY_LANGUAGES.has('sr')).toBe(false);
   });
 });
 
@@ -103,5 +107,69 @@ describe('selectLocalEngine', () => {
       engine: 'none',
       preferred: 'whisper',
     });
+  });
+});
+
+describe('selectLocalEngine with Orukeet downloaded (opt-in)', () => {
+  const withOrukeet = (overrides: Partial<LocalEngineAvailability> = {}): LocalEngineAvailability =>
+    all({ orukeetDownloaded: true, ...overrides });
+
+  it('uses Orukeet for English even when Parakeet v2 is installed', () => {
+    expect(selectLocalEngine(['en'], withOrukeet())).toEqual({
+      engine: 'parakeet',
+      version: 'orukeet',
+    });
+  });
+
+  it('uses Orukeet for in-set selections even when Parakeet v3 is installed', () => {
+    expect(selectLocalEngine(['de'], withOrukeet())).toEqual({
+      engine: 'parakeet',
+      version: 'orukeet',
+    });
+    expect(selectLocalEngine(['de', 'fr'], withOrukeet())).toEqual({
+      engine: 'parakeet',
+      version: 'orukeet',
+    });
+  });
+
+  it('serves in-set selections when it is the only local model', () => {
+    const onlyOrukeet = withOrukeet({
+      parakeetV2Downloaded: false,
+      parakeetV3Downloaded: false,
+      whisperDownloaded: false,
+    });
+    expect(selectLocalEngine(['en-US'], onlyOrukeet)).toEqual({
+      engine: 'parakeet',
+      version: 'orukeet',
+    });
+  });
+
+  it('never handles auto or out-of-set selections', () => {
+    expect(selectLocalEngine([], withOrukeet())).toEqual({ engine: 'whisper' });
+    expect(selectLocalEngine(['auto'], withOrukeet())).toEqual({ engine: 'whisper' });
+    expect(selectLocalEngine(['en', 'he'], withOrukeet())).toEqual({ engine: 'whisper' });
+    expect(selectLocalEngine(['ja'], withOrukeet({ whisperDownloaded: false }))).toEqual({
+      engine: 'none',
+      preferred: 'whisper',
+    });
+  });
+
+  it('is ignored when the native module is unsupported', () => {
+    expect(selectLocalEngine(['en'], withOrukeet({ parakeetSupported: false }))).toEqual({
+      engine: 'whisper',
+    });
+  });
+
+  it('leaves the preferred engine (and so every recommendation) unchanged', () => {
+    expect(preferredEngineForLanguages(['en'])).toEqual({ engine: 'parakeet', version: 'v2' });
+    expect(preferredEngineForLanguages(['de'])).toEqual({ engine: 'parakeet', version: 'v3' });
+  });
+});
+
+describe('parakeetModelLabel', () => {
+  it('names every shipped model for display and error messages', () => {
+    expect(parakeetModelLabel('v2')).toBe('Parakeet v2');
+    expect(parakeetModelLabel('v3')).toBe('Parakeet v3');
+    expect(parakeetModelLabel('orukeet')).toBe('Orukeet');
   });
 });
