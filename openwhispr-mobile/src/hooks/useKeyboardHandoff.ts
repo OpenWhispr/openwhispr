@@ -1052,9 +1052,11 @@ export function useKeyboardHandoff() {
             discardJob();
             return;
           }
-          writePendingTranscript(finalText, jobId);
+          const delivered = writePendingTranscript(finalText, jobId);
           await Clipboard.setStringAsync(finalText);
 
+          // Once the keyboard has the text, a failed history save must not keep the
+          // recovery entry: its retry would repeat paid cleanup and insert the text again.
           await addTranscript({
             id: transcriptId,
             text: finalText,
@@ -1073,6 +1075,12 @@ export function useKeyboardHandoff() {
             requestContext: 'keyboard',
             keyboardTone,
             jobId,
+          }).catch((error: unknown) => {
+            if (!delivered) throw error;
+            console.warn(
+              '[keyboard-handoff] transcript delivered but not saved to history:',
+              error,
+            );
           });
           clearKeyboardProviderRecovery(jobId);
           cleanup({ resetStatus: false });

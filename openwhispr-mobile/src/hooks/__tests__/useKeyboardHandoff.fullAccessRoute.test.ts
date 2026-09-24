@@ -203,6 +203,7 @@ beforeEach(() => {
   (readKeyboardInferenceRoute as jest.Mock).mockImplementation(() => ({ provider: 'cloud' }));
   (readKeyboardAgentJob as jest.Mock).mockReturnValue(null);
   storage.getItem.mockReturnValue(null);
+  storage.setItem.mockReset().mockReturnValue(true);
   storage.startNativeRecording.mockReturnValue(true);
   mockCleanupTranscript.mockResolvedValue('clean transcript');
   mockTranscribeAndCleanup.mockResolvedValue({
@@ -617,6 +618,44 @@ describe('provider job lifecycle', () => {
     });
     expect(mockAddTranscript).not.toHaveBeenCalled();
     expect(clearKeyboardProviderRecovery).toHaveBeenCalledWith('100-job');
+  });
+
+  it('finishes a delivered dictation even when history cannot be saved', async () => {
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    mockTranscribeAndCleanup.mockResolvedValueOnce({
+      text: 'clean transcript',
+      originalText: 'raw transcript',
+      transcription: { text: 'raw transcript', duration: 1, provider: 'byok' },
+    });
+    mockAddTranscript.mockRejectedValueOnce(
+      new Error('Transcript history is unavailable. Try again.'),
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+    expect(storage.setItem).toHaveBeenCalledWith('keyboard_pending_transcript', 'clean transcript');
+    // A kept recovery entry would run cleanup again and insert the text a second time.
+    expect(clearKeyboardProviderRecovery).toHaveBeenCalledWith('100-job');
+    expect(storage.setKeyboardStatus).not.toHaveBeenCalledWith('error', expect.anything());
+    expect(mockAddFailedTranscript).not.toHaveBeenCalled();
+  });
+
+  it('keeps recovery when neither the keyboard nor history received the text', async () => {
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    storage.setItem.mockImplementation((key: string) => key !== 'keyboard_pending_transcript');
+    mockAddTranscript.mockRejectedValueOnce(
+      new Error('Transcript history is unavailable. Try again.'),
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+    expect(clearKeyboardProviderRecovery).not.toHaveBeenCalled();
   });
 
   it('returns to the previous app when the recording route cannot be set up', async () => {
