@@ -3011,7 +3011,7 @@
     "searchDescription": "Rechercher dans toutes vos conversations",
     "inputPlaceholder": "Posez une question sur votre note",
     "starters": {
-      "todos": "Mes tâches récentes",
+      "todos": "Liste mes tâches récentes",
       "meeting": "Prépare-moi pour ma prochaine réunion",
       "sharedNotes": "Mets en avant mes notes partagées"
     }

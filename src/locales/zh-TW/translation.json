@@ -3482,7 +3482,7 @@
     "searchDescription": "搜尋所有對話",
     "inputPlaceholder": "詢問關於筆記的任何問題",
     "starters": {
-      "todos": "最近的待辦事項",
+      "todos": "列出我最近的待辦事項",
       "meeting": "幫我準備下一場會議",
       "sharedNotes": "突顯我的共享筆記"
     }

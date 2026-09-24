@@ -20,9 +20,6 @@ class GoogleCalendarOAuth {
   }
 
   startOAuthFlow() {
-    if (!this.getClientId()) {
-      throw new Error("GOOGLE_CALENDAR_CLIENT_ID is not configured");
-    }
     return runOAuthLoopbackFlow({
       errorParam: "gcal_error",
       buildAuthUrl: (redirectUri, state, codeChallenge) => {

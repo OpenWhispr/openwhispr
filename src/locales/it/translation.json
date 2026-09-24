@@ -3482,7 +3482,7 @@
     "searchDescription": "Cerca in tutte le conversazioni",
     "inputPlaceholder": "Chiedi qualcosa sulla tua nota",
     "starters": {
-      "todos": "Le mie attività recenti",
+      "todos": "Elenca le mie attività recenti",
       "meeting": "Preparami per la prossima riunione",
       "sharedNotes": "Evidenzia le mie note condivise"
     }

@@ -70,7 +70,10 @@ test("in-view chat expands the existing capsule around one composer", async (t) 
 
   assert.ok(html.includes("rounded-3xl"));
   assert.ok(html.includes("max-w-[600px]"));
-  assert.ok(!html.includes("rounded-full border-black/10"), "the panel keeps one radius throughout expansion");
+  assert.ok(
+    !html.includes("rounded-full border-black/10"),
+    "the panel keeps one radius throughout expansion"
+  );
   assert.ok(!html.includes("border-radius,box-shadow"), "height changes do not morph the corners");
   assert.ok(!html.includes("border-t border-border/70"), "the composer has no outer divider");
   assert.ok(!html.includes("bg-surface-1/70"), "the composer has no tinted footer");

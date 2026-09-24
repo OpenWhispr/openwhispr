@@ -51,7 +51,7 @@ export function ContainerOverview({
   const isTreeLoading = useIsTreeLoading();
   const [spaceNotes, setSpaceNotes] = useState<NoteItem[] | null>(null);
   const [spaceNotesError, setSpaceNotesError] = useState(false);
-  const [folderNotesError, setFolderNotesError] = useState(false);
+  const [failedFolderKey, setFailedFolderKey] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
@@ -84,10 +84,10 @@ export function ContainerOverview({
     let stale = false;
     void ensureContainerLoaded(key)
       .then(() => {
-        if (!stale) setFolderNotesError(false);
+        if (!stale) setFailedFolderKey(null);
       })
       .catch(() => {
-        if (!stale) setFolderNotesError(true);
+        if (!stale) setFailedFolderKey(key);
       });
     return () => {
       stale = true;
@@ -95,10 +95,12 @@ export function ContainerOverview({
   }, [folder, notesByContainer]);
 
   const notes = folder ? containerNotes : (spaceNotes ?? []);
-  const isLoaded =
-    !isTreeLoading &&
-    (folder ? notesByContainer[folderContainerKey(folder.id)] !== undefined : spaceNotes !== null);
-  const loadFailed = folder ? folderNotesError : spaceNotesError && spaceNotes === null;
+  const folderKey = folder ? folderContainerKey(folder.id) : null;
+  const folderNotesLoaded = folderKey !== null && notesByContainer[folderKey] !== undefined;
+  const isLoaded = !isTreeLoading && (folder ? folderNotesLoaded : spaceNotes !== null);
+  const loadFailed = folder
+    ? failedFolderKey === folderKey && !folderNotesLoaded
+    : spaceNotesError && spaceNotes === null;
 
   const chat = useContainerChat({ space, folder, notes });
 
@@ -139,11 +141,9 @@ export function ContainerOverview({
         {loadFailed && (
           <button
             onClick={() => {
-              if (folder) {
-                setFolderNotesError(false);
-                void ensureContainerLoaded(folderContainerKey(folder.id)).catch(() =>
-                  setFolderNotesError(true)
-                );
+              if (folderKey) {
+                setFailedFolderKey(null);
+                void ensureContainerLoaded(folderKey).catch(() => setFailedFolderKey(folderKey));
               } else {
                 setSpaceNotes(null);
                 setSpaceNotesError(false);

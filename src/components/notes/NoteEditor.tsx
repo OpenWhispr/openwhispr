@@ -1297,8 +1297,6 @@ export default function NoteEditor({
                   onModeChange={handleChatModeChange}
                   messages={embeddedChat.messages}
                   agentState={embeddedChat.agentState}
-                  draftText={chatDraft}
-                  onDraftChange={setChatDraft}
                   onTextSubmit={embeddedChat.sendMessage}
                   onCancel={embeddedChat.cancelStream}
                   noteConversations={embeddedChat.noteConversations}

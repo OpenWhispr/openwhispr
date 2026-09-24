@@ -3482,7 +3482,7 @@
     "searchDescription": "搜索所有对话",
     "inputPlaceholder": "询问关于笔记的任何问题",
     "starters": {
-      "todos": "最近的待办事项",
+      "todos": "列出我最近的待办事项",
       "meeting": "帮我准备下一场会议",
       "sharedNotes": "突出显示我的共享笔记"
     }

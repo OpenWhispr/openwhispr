@@ -3535,7 +3535,7 @@
     "searchDescription": "Buscar en todas tus conversaciones",
     "inputPlaceholder": "Pregunta sobre tu nota",
     "starters": {
-      "todos": "Mis tareas recientes",
+      "todos": "Enumera mis tareas recientes",
       "meeting": "Prepárame para mi próxima reunión",
       "sharedNotes": "Destaca mis notas compartidas"
     }

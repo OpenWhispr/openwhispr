@@ -29,8 +29,8 @@ interface EmbeddedChatProps {
   onModeChange: (mode: EmbeddedChatMode) => void;
   messages: Message[];
   agentState: AgentState;
-  draftText: string;
-  onDraftChange: (text: string) => void;
+  draftText?: string;
+  onDraftChange?: (text: string) => void;
   onTextSubmit: (text: string) => void;
   onCancel: () => void;
   noteConversations?: ContainerConversationItem[];

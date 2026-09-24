@@ -3482,7 +3482,7 @@
     "searchDescription": "すべての会話を検索",
     "inputPlaceholder": "ノートについて何でも質問",
     "starters": {
-      "todos": "最近の To Do",
+      "todos": "最近のTo Doを一覧にして",
       "meeting": "次の会議に備えさせて",
       "sharedNotes": "共有ノートのハイライトを見せて"
     }
