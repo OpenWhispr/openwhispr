@@ -32,7 +32,12 @@ interface EmbeddedChatProps {
 function EmptyState({ floating }: { floating: boolean }) {
   const { t } = useTranslation();
   return (
-    <div className="flex h-full min-h-40 flex-col items-center justify-center gap-3 px-4 text-center select-none">
+    <div
+      className={cn(
+        "flex h-full flex-col items-center justify-center gap-3 px-4 text-center select-none",
+        floating ? "min-h-48" : "min-h-40"
+      )}
+    >
       {floating ? (
         <BrandMarkIcon size={36} className="text-foreground/20 dark:text-muted-foreground/35" />
       ) : (
@@ -150,6 +155,9 @@ export default function EmbeddedChat({
           messages={messages}
           emptyState={<EmptyState floating={mode === "floating"} />}
           onOpenNote={handleOpenNote}
+          scrollClassName={
+            mode === "floating" && messages.length === 0 ? "scrollbar-hidden" : undefined
+          }
         />
       </div>
     </>

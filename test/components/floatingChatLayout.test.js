@@ -151,7 +151,7 @@ test("the in-view chat grows with its content and stops at the available note he
   let disconnected = false;
 
   const cleanup = observeFloatingChatSize(
-    { panel, container, header, messageContent, composer, isEmpty: false },
+    { panel, container, header, messageContent, composer, isEmpty: false, hasConversation: false },
     (callback) => {
       onResize = callback;
       return {
@@ -165,12 +165,12 @@ test("the in-view chat grows with its content and stops at the available note he
     }
   );
 
-  assert.equal(panel.style.height, "276px");
+  assert.equal(panel.style.height, "278px");
   assert.deepEqual(observed, [container, header, messageContent, composer]);
 
   composer.offsetHeight = 104;
   onResize();
-  assert.equal(panel.style.height, "316px", "a multiline draft grows the panel upward");
+  assert.equal(panel.style.height, "318px", "a multiline draft grows the panel upward");
 
   messageContent.scrollHeight = 800;
   onResize();
@@ -178,10 +178,43 @@ test("the in-view chat grows with its content and stops at the available note he
 
   messageContent.scrollHeight = 100;
   onResize();
-  assert.equal(panel.style.height, "256px", "switching chats shrinks the panel again");
+  assert.equal(panel.style.height, "258px", "switching chats shrinks the panel again");
 
   cleanup();
   assert.equal(disconnected, true);
+});
+
+test("an empty new chat fits without a scrollbar while a selected chat keeps the earlier minimum height", async () => {
+  const { observeFloatingChatSize } = await load();
+  const panel = { style: { height: "" } };
+  const container = { clientHeight: 600 };
+  const header = { offsetHeight: 36 };
+  const messageContent = { scrollHeight: 500 };
+  const composer = { offsetHeight: 48 };
+
+  const stopEmpty = observeFloatingChatSize(
+    { panel, container, header, messageContent, composer, isEmpty: true, hasConversation: false },
+    () => ({ observe() {}, disconnect() {} })
+  );
+  assert.equal(panel.style.height, "294px", "the empty panel includes its border and padding");
+  stopEmpty();
+
+  messageContent.scrollHeight = 160;
+  let onResize;
+  const stopSelected = observeFloatingChatSize(
+    { panel, container, header, messageContent, composer, isEmpty: false, hasConversation: true },
+    (callback) => {
+      onResize = callback;
+      return { observe() {}, disconnect() {} };
+    }
+  );
+  assert.equal(panel.style.height, "400px", "a selected chat starts at the earlier minimum");
+
+  container.clientHeight = 900;
+  messageContent.scrollHeight = 100;
+  onResize();
+  assert.equal(panel.style.height, "600px", "a selected chat keeps a two-thirds minimum");
+  stopSelected();
 });
 
 function createLayoutHarness(observeFloatingChatLayout, { scroller }) {

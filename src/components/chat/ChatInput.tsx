@@ -29,7 +29,7 @@ interface ChatInputProps {
   onEscape?: () => void;
   trailingContent?: React.ReactNode;
   focusOnIdle?: boolean;
-  fillHeight?: boolean;
+  expandOnFocus?: boolean;
   disabled?: boolean;
 }
 
@@ -77,7 +77,7 @@ export function ChatInput({
   onEscape,
   trailingContent,
   focusOnIdle = true,
-  fillHeight = false,
+  expandOnFocus = false,
   disabled = false,
 }: ChatInputProps) {
   const { t } = useTranslation();
@@ -137,13 +137,13 @@ export function ChatInput({
   useLayoutEffect(() => {
     const input = inputRef.current;
     if (!input) return;
-    if (fillHeight) {
+    if (expandOnFocus) {
       input.style.height = "100%";
     } else {
       input.style.height = "auto";
       input.style.height = `${input.scrollHeight}px`;
     }
-  }, [inputText, isVoiceRecording, isVoiceTranscribing, fillHeight]);
+  }, [inputText, isVoiceRecording, isVoiceTranscribing, expandOnFocus]);
 
   useEffect(() => {
     if (isIdle && focusOnIdle) {
@@ -162,8 +162,8 @@ export function ChatInput({
               ? "min-h-12 bg-transparent"
               : GLASS_SURFACE,
           variant === "note" ? "border-0" : "border border-black/10 dark:border-white/14",
-          fillHeight
-            ? "h-[min(40vh,16rem)] items-end"
+          expandOnFocus
+            ? "h-12 items-end focus-within:h-[min(40vh,16rem)] transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none"
             : "transition-[border-color,box-shadow] duration-200",
           isIdle &&
             (variant === "assistant"
@@ -246,7 +246,7 @@ export function ChatInput({
         )}
 
         {(isIdle || isBusy) && !isVoiceRecording && !isVoiceTranscribing && (
-          <div className={cn("flex items-end gap-2 w-full", fillHeight && "h-full")}>
+          <div className={cn("flex items-end gap-2 w-full", expandOnFocus && "h-full")}>
             <textarea
               dir="auto"
               ref={inputRef}
@@ -263,7 +263,7 @@ export function ChatInput({
                 variant === "assistant" || variant === "note" ? "text-sm" : "text-[13px]",
                 "text-foreground placeholder:text-muted-foreground/70",
                 "min-w-0 min-h-8 max-h-32 resize-none overflow-y-auto border-0 px-0 py-1.5 leading-5",
-                fillHeight && "min-h-0 max-h-none",
+                expandOnFocus && "min-h-0 max-h-none",
                 (isBusy || disabled) && "text-muted-foreground/70 cursor-not-allowed"
               )}
             />

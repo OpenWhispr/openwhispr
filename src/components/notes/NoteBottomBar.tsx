@@ -21,6 +21,7 @@ interface NoteBottomBarProps {
   chatOpen?: boolean;
   chatContent?: React.ReactNode;
   hasChatMessages?: boolean;
+  hasSelectedConversation?: boolean;
   agentState?: AgentState;
   onCancel?: () => void;
   floatingPanelRef?: (panel: HTMLDivElement | null) => void | (() => void);
@@ -40,6 +41,7 @@ export default function NoteBottomBar({
   chatOpen = false,
   chatContent,
   hasChatMessages = false,
+  hasSelectedConversation = false,
   agentState = "idle",
   onCancel,
   floatingPanelRef,
@@ -67,6 +69,7 @@ export default function NoteBottomBar({
         messageContent,
         composer,
         isEmpty: !hasChatMessages,
+        hasConversation: hasSelectedConversation,
       });
       const stopLayout = floatingPanelRef?.(panel);
 
@@ -75,7 +78,7 @@ export default function NoteBottomBar({
         if (typeof stopLayout === "function") stopLayout();
       };
     },
-    [chatOpen, floatingPanelRef, hasChatMessages]
+    [chatOpen, floatingPanelRef, hasChatMessages, hasSelectedConversation]
   );
 
   return (
@@ -98,7 +101,7 @@ export default function NoteBottomBar({
         className={cn(
           "pointer-events-auto relative mx-auto flex w-full max-w-[600px] flex-col border",
           chatOpen || hideInput ? "overflow-hidden" : "overflow-visible",
-          "transition-[height,border-radius,box-shadow,max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+          "transition-[height,border-radius,box-shadow,max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none",
           isRecording && !chatOpen ? RECORDING_SURFACE : "bg-background shadow-sm",
           chatOpen
             ? "rounded-3xl border-black/10 shadow-elevated dark:border-white/14"
@@ -111,8 +114,8 @@ export default function NoteBottomBar({
           aria-hidden={!chatOpen}
           inert={!chatOpen}
           className={cn(
-            "flex min-h-0 flex-1 flex-col overflow-hidden transition-[opacity,transform] duration-200 motion-reduce:transition-none",
-            chatOpen ? "translate-y-0 opacity-100 delay-75" : "translate-y-2 opacity-0"
+            "flex min-h-0 flex-1 flex-col overflow-hidden transition-[opacity,transform] duration-300 motion-reduce:transition-none",
+            chatOpen ? "translate-y-0 opacity-100 delay-100" : "translate-y-2 opacity-0"
           )}
         >
           {chatContent}

@@ -36,7 +36,7 @@ function NewChatEmptyState({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex h-full min-h-80 flex-col items-center justify-center px-4 pb-[var(--chat-composer-inset,18rem)] text-center">
+    <div className="flex h-full min-h-80 flex-col items-center justify-center px-4 pb-[calc(min(40vh,16rem)+1.5rem)] text-center">
       <BrandMarkIcon size={64} className="text-foreground/15 dark:text-muted-foreground/35" />
       {showSuggestions && (
         <div className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
@@ -221,10 +221,10 @@ export default function ChatView() {
                   partialTranscript=""
                   onTextSubmit={handleTextSubmit}
                   onCancel={streaming.cancelStream}
-                  autoFocus={isNewChat}
+                  focusOnIdle={false}
                   placeholder={t("chat.inputPlaceholder")}
                   variant="assistant"
-                  fillHeight
+                  expandOnFocus
                 />
               </div>
             </>
