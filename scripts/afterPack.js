@@ -22,6 +22,10 @@ const {
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
 } = require("./download-sherpa-onnx");
+const {
+  privatizeOnnxRuntimeDir,
+  verifyOnnxRuntimePrivatizedDir,
+} = require("./lib/privatize-onnxruntime");
 
 // ---------------------------------------------------------------------------
 // macOS resource binary signing
@@ -297,6 +301,38 @@ function verifyUnpackedBinaries(context) {
 }
 
 // ---------------------------------------------------------------------------
+// Voice conversation dependencies (sherpa-onnx-node + Smart Turn onnxruntime-web)
+// ---------------------------------------------------------------------------
+
+// The voice worker loads sherpa-onnx-node (native, per-platform package) and
+// Smart Turn on onnxruntime-web, whose WASM threads load from real files.
+function prepareVoiceDependencies(context) {
+  const modulesDir = path.join(resolveResourcesDir(context), "app.asar.unpacked", "node_modules");
+  const sherpaDirs = fs.existsSync(modulesDir)
+    ? fs.readdirSync(modulesDir).filter((name) => /^sherpa-onnx-(win|darwin|linux)-/.test(name))
+    : [];
+  if (sherpaDirs.length === 0) {
+    throw new Error(
+      `afterPack: no sherpa-onnx platform package in ${modulesDir}; voice conversation would fail to load`
+    );
+  }
+  const wasmPath = path.join(modulesDir, "onnxruntime-web", "dist", "ort-wasm-simd-threaded.wasm");
+  if (!fs.existsSync(wasmPath)) {
+    throw new Error(`afterPack: missing ${wasmPath}; Smart Turn would fall back to silence-only turns`);
+  }
+  if (context.electronPlatformName === "win32") {
+    for (const name of sherpaDirs) {
+      const dir = path.join(modulesDir, name);
+      const { patched } = privatizeOnnxRuntimeDir(dir);
+      console.log(
+        `  afterPack: privatized ONNX Runtime in ${name} (patched ${patched.join(", ") || "nothing"})`
+      );
+      verifyOnnxRuntimePrivatizedDir(dir);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main hook
 // ---------------------------------------------------------------------------
 
@@ -304,6 +340,7 @@ exports.default = async function (context) {
   stripOnnxruntimeBinaries(context);
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
+  prepareVoiceDependencies(context);
   verifyUnpackedBinaries(context);
   registerMacResourceBinariesForSigning(context);
 };
