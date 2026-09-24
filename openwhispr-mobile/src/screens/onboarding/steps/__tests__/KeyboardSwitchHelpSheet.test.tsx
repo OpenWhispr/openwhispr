@@ -12,8 +12,12 @@ jest.mock('react-native-gesture-handler', () => {
     GestureDetector: ({ children }: { children: React.ReactNode }) => children,
   };
 });
+const mockDrag = jest.fn((_visible: boolean, _onClose: () => void) => ({
+  dragGesture: {},
+  sheetStyle: {},
+}));
 jest.mock('@/hooks/useSheetDragToDismiss', () => ({
-  useSheetDragToDismiss: () => ({ dragGesture: {}, sheetStyle: {} }),
+  useSheetDragToDismiss: (visible: boolean, onClose: () => void) => mockDrag(visible, onClose),
 }));
 jest.mock('react-native-reanimated', () => ({
   __esModule: true,
@@ -54,5 +58,12 @@ it('closes', () => {
   const onClose = jest.fn();
   renderSheet(onClose);
   fireEvent.press(screen.getByText('Close'));
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+it('closes when pulled down', () => {
+  const onClose = jest.fn();
+  renderSheet(onClose);
+  mockDrag.mock.calls.at(-1)![1]();
   expect(onClose).toHaveBeenCalledTimes(1);
 });
