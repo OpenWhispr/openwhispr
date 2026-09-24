@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { policyRefusal } = require("./connectorPolicy");
 
 const CANCEL_REASONS = new Set(["cancelled_by_user", "conversation_ended", "expired"]);
 const COMMIT_RESULT_STATES = new Set(["sent", "failed", "unknown"]);
@@ -19,11 +20,6 @@ function normalizeCommitResult(result) {
 function normalizeDirectResult(result) {
   if (result && typeof result === "object" && DIRECT_RESULT_STATES.has(result.state)) return result;
   return { state: "failed", errorCode: "invalid_result", message: "That action didn't complete." };
-}
-
-function policyRefusal(policyState) {
-  if (policyState === "allowed") return null;
-  return policyState === "blocked" ? "policy_blocked" : "policy_unavailable";
 }
 
 function sanitizeEdits(edits) {

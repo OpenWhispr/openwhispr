@@ -15,4 +15,10 @@ function connectorPolicyState(snapshot) {
     : "allowed";
 }
 
-module.exports = { connectorPolicyState };
+// The reason a connector call reports for a verdict other than "allowed".
+function policyRefusal(policyState) {
+  if (policyState === "allowed") return null;
+  return policyState === "blocked" ? "policy_blocked" : "policy_unavailable";
+}
+
+module.exports = { connectorPolicyState, policyRefusal };

@@ -293,6 +293,20 @@ test("find_contact returns matches and guidance for zero or several", async (t) 
   assert.equal(several.displayText, "Contacts found: 2");
 });
 
+test("find_contact reports an org policy refusal instead of an empty result", async (t) => {
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorFindContacts: async () => ({ contacts: [], unavailableReason: "policy_blocked" }),
+      },
+    },
+  });
+  const { findContactTool } = await loadContact();
+  const result = await findContactTool.execute({ name: "Gabe" });
+  assert.equal(result.data.status, "unavailable");
+  assert.equal(result.data.reason, "policy_blocked");
+});
+
 test("find_contact keeps its turn out of the user's document, whatever it finds", async (t) => {
   const one = [{ name: "Gabe Torres", email: "gabe@example.com", lastMet: null }];
   const two = [...one, { name: "Gabriel Stone", email: "gabriel@acme.test", lastMet: null }];

@@ -1,6 +1,6 @@
 import i18n from "../../../i18n";
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from "../ToolRegistry";
-import { needsClarificationResult } from "./toolOutcome";
+import { needsClarificationResult, unavailableResult } from "./toolOutcome";
 
 export const findContactTool: ToolDefinition = {
   name: "find_contact",
@@ -28,6 +28,7 @@ export const findContactTool: ToolDefinition = {
     if (!name) return needsClarificationResult("Ask the user whose email address to look up.");
 
     const response = await window.electronAPI?.connectorFindContacts?.(name);
+    if (response?.unavailableReason) return unavailableResult(response.unavailableReason);
     const contacts = response?.contacts ?? [];
     const guidance =
       contacts.length === 0

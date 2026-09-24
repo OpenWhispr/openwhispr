@@ -213,16 +213,15 @@ test("the deadline covers the auth-header lookup too", async () => {
   assert.equal(await throwingAuth({}), "unavailable");
 });
 
-test("contact lookup trims the query and never needs policy", async () => {
+test("contact lookup trims the query and returns nothing the org policy doesn't allow", async () => {
   const { registerConnectorIpc } = await load();
   const ipcMain = fakeIpcMain();
   const queries = [];
+  const policies = ["allowed", "blocked", "unavailable"];
   registerConnectorIpc({
     ipcMain,
     manager: fakeManager(),
-    getPolicyState: async () => {
-      throw new Error("must not be called");
-    },
+    getPolicyState: async () => policies.shift(),
     findContacts: (query) => {
       queries.push(query);
       return [{ name: "Gabe", email: "gabe@example.com", lastMet: null }];
@@ -232,6 +231,14 @@ test("contact lookup trims the query and never needs policy", async () => {
   assert.deepEqual(await handler({}, "  Gabe "), {
     contacts: [{ name: "Gabe", email: "gabe@example.com", lastMet: null }],
   });
+  assert.deepEqual(await handler({}, "Gabe"), { contacts: [], unavailableReason: "policy_blocked" });
+  assert.deepEqual(await handler({}, "Gabe"), {
+    contacts: [],
+    unavailableReason: "policy_unavailable",
+  });
+  // Malformed or oversized queries never reach the policy lookup or the search.
   assert.deepEqual(await handler({}, 42), { contacts: [] });
+  assert.deepEqual(await handler({}, "a".repeat(201)), { contacts: [] });
   assert.deepEqual(queries, ["Gabe"]);
+  assert.equal(policies.length, 0);
 });
