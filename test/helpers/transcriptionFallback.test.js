@@ -58,6 +58,18 @@ test("a disabled Orukeet rollout falls back to batch as feature_disabled", async
   );
 });
 
+test("a language exclusion keeps the feature_disabled batch fallback", async () => {
+  assert.equal(
+    await orukeetStart({
+      success: false,
+      code: "FEATURE_NOT_ENABLED",
+      status: 403,
+      reason: "language_unsupported",
+    }),
+    "feature_disabled"
+  );
+});
+
 test("an exhausted session mint window falls back to batch as rate_limited", async () => {
   assert.equal(
     await orukeetStart({ success: false, code: "RATE_LIMITED", status: 429 }),
