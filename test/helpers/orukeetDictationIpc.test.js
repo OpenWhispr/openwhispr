@@ -393,10 +393,18 @@ test("streaming usage forwards the detected language", async () => {
   };
   await handlers.get("cloud-streaming-usage")(event, "hello", 4, {
     sttProvider: "orukeet",
+    ...DETECTED,
+  });
+  await handlers.get("cloud-streaming-usage")(event, "hello", 4, {
+    sttProvider: "orukeet",
     sttDetectedLanguageStatus: "unknown",
   });
-  assert.equal(requests[0].sttDetectedLanguageStatus, "unknown");
-  assert.equal(Object.hasOwn(requests[0], "sttDetectedLanguage"), false);
+  assert.deepEqual(
+    Object.fromEntries(Object.keys(DETECTED).map((key) => [key, requests[0][key]])),
+    DETECTED
+  );
+  assert.equal(requests[1].sttDetectedLanguageStatus, "unknown");
+  assert.equal(Object.hasOwn(requests[1], "sttDetectedLanguage"), false);
 });
 
 test("the language fallback upload carries the fallback reason and detection, and no language", async () => {

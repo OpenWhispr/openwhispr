@@ -547,6 +547,42 @@ test("the language fallback upload declares auto, never the detected language", 
   assert.equal(captured[0].sttDetectedLanguageStatus, "detected");
 });
 
+test("a voice assistant upload writes its own log, since no cleanup call does", async (t) => {
+  const { manager, window } = await loadCloudPipeline(t, {
+    translationRequested: false,
+    useCleanupModel: true,
+    cleanupCloudMode: "openwhispr",
+    preferredLanguage: "auto",
+  });
+  const agentCommands = [];
+  Object.assign(manager, {
+    voiceAgentRequested: true,
+    consumeScreenContext: async () => null,
+    processAgentCommand: async (text) => {
+      agentCommands.push(text);
+      return text;
+    },
+  });
+  const uploads = [];
+  window.electronAPI.cloudTranscribe = async (_audio, opts) => {
+    uploads.push(opts);
+    return { success: true, text: "明日の会議", sttProvider: "openai" };
+  };
+  const reasonCalls = [];
+  window.electronAPI.cloudReason = async (...args) => {
+    reasonCalls.push(args);
+    return { success: true, text: "" };
+  };
+  await manager.processWithOpenWhisprCloud(new Blob([new Uint8Array(16)]), {
+    streamingFallbackReason: "language_detected_unsupported",
+    detectedLanguageFields: JA_DETECTION,
+  });
+  assert.deepEqual(agentCommands, ["明日の会議"]);
+  assert.equal(reasonCalls.length, 0);
+  assert.equal(Object.hasOwn(uploads[0], "sendLogs"), false);
+  assert.equal(uploads[0].sttDetectedLanguage, "ja");
+});
+
 for (const translationRequested of [false, true]) {
   test(`with cloud ${translationRequested ? "translation " : ""}cleanup the combined log request carries the detection`, async (t) => {
     const { manager, window } = await loadCloudPipeline(t, {

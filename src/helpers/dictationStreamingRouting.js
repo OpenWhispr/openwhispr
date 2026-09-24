@@ -17,8 +17,8 @@ const ORUKEET_LANGUAGES = new Set(
 // 92% of unsupported FLEURS clips at 6 s and 62.5% at 3 s while flagging 0.4%
 // / 1.2% of supported ones. A false flag costs one batch round trip; a miss
 // pastes nonsense. See docs/orukeet-streaming-language.md.
-export const ORUKEET_LANGUAGE_FALLBACK_MIN_CONFIDENCE = 0.9;
-export const ORUKEET_LANGUAGE_FALLBACK_MIN_AUDIO_SECONDS = 3;
+const ORUKEET_LANGUAGE_FALLBACK_MIN_CONFIDENCE = 0.9;
+const ORUKEET_LANGUAGE_FALLBACK_MIN_AUDIO_SECONDS = 3;
 
 export function isOrukeetLanguage(code) {
   if (typeof code !== "string" || !code) return false;
