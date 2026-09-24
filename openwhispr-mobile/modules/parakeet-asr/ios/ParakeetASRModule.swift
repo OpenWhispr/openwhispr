@@ -219,9 +219,9 @@ public class ParakeetASRModule: Module {
 
     // --- Engine lifecycle + transcription ---
 
-    // Load already-downloaded weights + build the warm AsrManager. The first load after a download
-    // is where CoreML's one-time ANE compile happens (~seconds), and the download UI owns that wait
-    // ("Preparing model…") — a dictation tap must never pay it. This module never downloads;
+    // Load already-downloaded weights and prepare the reusable AsrManager. Orukeet also runs its
+    // first prediction here, while the download UI shows "Preparing model…", and discards the
+    // silence result/state. loadMs includes that preparation. This module never downloads;
     // FluidAudio's loader can (see the header note on AsrModels.load).
     AsyncFunction("prepare") { (version: String, promise: Promise) in
       Task {
@@ -234,6 +234,14 @@ public class ParakeetASRModule: Module {
           let (models, directory) = try await Self.loadModels(model)
           let manager = AsrManager()
           try await manager.loadModels(models)
+          if model == .orukeet {
+            do {
+              try await OrukeetWarmup.run(on: manager)
+            } catch {
+              await manager.cleanup()
+              throw error
+            }
+          }
           let loadMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
 
           self.asr = manager

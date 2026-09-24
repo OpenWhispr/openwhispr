@@ -23,6 +23,11 @@ promptly while it runs; the model picker waits with its loading indicator so it
 does not offer another download. Delete cancels and joins recovery before removing
 the model and staging directory. Failed recovery preserves its source for retry.
 
+Orukeet preparation runs one bounded 300 ms silence prediction before making the
+manager available, while the UI still shows preparation. Its text and decoder
+state are discarded; each real recording creates a fresh decoder state. The
+reported `loadMs` includes this warmup.
+
 ## Verification
 
 Run `python3 scripts/check-orukeet-installer.py --mutation-check` from the mobile
@@ -40,4 +45,8 @@ cold download/compile/load, airplane-mode relaunch, short and long microphone
 recordings, cancellation/retry/delete/reinstall, repeated sessions, and two-speaker
 diarization. Record peak RAM, thermals and latency against the existing Parakeet
 models. Simulator builds and Mac timings do not establish those device results.
+The separate [SDK conversion evaluation](https://huggingface.co/oruk/orukeet/blob/b3421ca5ec4d3b0ad3c6d0bc58be4e2fbf5dc61f/coreml/QUALIFICATION-20260924.md)
+covers all 20,146 FLEURS recordings in 25 languages and documents remaining
+Slovenian script errors. It does not by itself qualify the app's complete
+`AsrManager` integration or physical-device behavior.
 Keep Orukeet opt-in while model accuracy and physical-device acceptance are open.
