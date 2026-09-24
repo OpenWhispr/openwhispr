@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   useSettingsStore,
@@ -18,6 +18,7 @@ import {
   effectiveAudioRetentionDays,
   effectiveLocalHistoryEnabled,
   isLocalHistoryPolicyResolved,
+  isPolicySettled,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import { usePolicySnapshot } from "./usePolicy";
@@ -236,6 +237,17 @@ function useSettingsInternal() {
   const localServerPrefs = useSettingsStore(
     useShallow((state) => selectLocalServerPrefs(state, policySnapshot))
   );
+  const policySettled = isPolicySettled(policySnapshot);
+  // A sign-out before the policy fetch starts leaves the policy idle, so only
+  // the account scope change says this window's deferred sync can now apply.
+  const [accountScopeChanges, setAccountScopeChanges] = useState(0);
+  useEffect(
+    () =>
+      window.electronAPI?.onActiveAccountScopeChanged?.(() =>
+        setAccountScopeChanges((count) => count + 1)
+      ),
+    []
+  );
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.syncStartupPreferences) return;
@@ -253,8 +265,7 @@ function useSettingsInternal() {
         model: model || undefined,
         language: preferredLanguage || undefined,
         ...localServerPrefs,
-        // idle/loading means a signed-in window hasn't applied its policy yet.
-        policySettled: policySnapshot.status !== "idle" && policySnapshot.status !== "loading",
+        policySettled,
       })
       .catch((err) =>
         logger.warn(
@@ -271,7 +282,8 @@ function useSettingsInternal() {
     cohereModel,
     preferredLanguage,
     localServerPrefs,
-    policySnapshot.status,
+    policySettled,
+    accountScopeChanges,
   ]);
 
   return {
