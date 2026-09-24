@@ -26,11 +26,20 @@ export function assertValidCleanupOutput(rawText: string, output: string): void 
 
   const halfLength = tokens.length / 2;
   if (!Number.isInteger(halfLength) || halfLength < 6) return;
-  if (!tokens.slice(0, halfLength).every((token, index) => token === tokens[index + halfLength])) {
-    return;
+  const copy = tokens.slice(0, halfLength);
+  if (!copy.every((token, index) => token === tokens[index + halfLength])) return;
+  // A speaker who really said it twice said most of its words twice: each word
+  // in the copy uses up two of its occurrences in the raw transcript.
+  const rawCounts = new Map<string, number>();
+  for (const token of originalTokens) rawCounts.set(token, (rawCounts.get(token) ?? 0) + 1);
+  let saidTwice = 0;
+  for (const token of copy) {
+    const remaining = rawCounts.get(token) ?? 0;
+    if (remaining < 2) continue;
+    rawCounts.set(token, remaining - 2);
+    saidTwice++;
   }
-  // A speaker who really said it twice has at least as many raw words as the cleanup.
-  if (tokens.length <= originalTokens.length) return;
+  if (saidTwice * 2 > halfLength) return;
 
   logger.logReasoning("CLEANUP_OUTPUT_REJECTED", {
     reason: "duplicated_transcript",

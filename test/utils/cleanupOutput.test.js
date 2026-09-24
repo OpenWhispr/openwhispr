@@ -3,6 +3,10 @@ const assert = require("node:assert/strict");
 
 const RAW = "um so can you uh send me the report by friday";
 const CLEAN = "Can you send me the report by Friday?";
+const LONG_RAW =
+  "the team wants to ship the release next week but the team also wants the tests to pass first so the release might slip to the week after";
+const LONG_CLEAN =
+  "The team wants to ship the release next week, but the team also wants the tests to pass first, so the release might slip to the week after.";
 
 // #2225: these synthetic cases cover duplication. CUS-227's original raw/final
 // pair and configuration are still missing, so example substitution is unverified.
@@ -13,6 +17,8 @@ test("cleanup rejects whole-output duplication without requiring a match to raw 
     `Cleaned transcript:\n${CLEAN}\n\n${CLEAN}`,
     `**Cleaned transcript:**\n${CLEAN}\n**Cleaned transcript:**\n${CLEAN}`,
     `**Cleaned transcript**:\n${CLEAN}\n${CLEAN}`,
+    `Can you send me\nCleaned transcript:\nthe report by Friday? ${CLEAN}`,
+    `${CLEAN}\n${CLEAN}\nCleaned transcript:`,
     "CAN YOU SEND ME THE REPORT BY FRIDAY!\ncan you send me the report by Friday?",
     "Ｃａｎ you send me the report by Friday?\nCan you send me the report by Friday?",
     "Please send the updated report tomorrow. Please send the updated report tomorrow.",
@@ -27,6 +33,16 @@ test("cleanup rejects whole-output duplication without requiring a match to raw 
       },
       output
     );
+  }
+  // Filler-heavy speech can be as long as its cleanup said twice, and longer
+  // speech repeats common words without being said twice.
+  for (const [raw, output] of [
+    ["um so uh basically can you uh like send me the report by friday um yeah", CLEAN],
+    [LONG_RAW, LONG_CLEAN],
+  ]) {
+    assert.throws(() => assertValidCleanupOutput(raw, `${output} ${output}`), {
+      code: "CLEANUP_OUTPUT_INVALID",
+    });
   }
 });
 
@@ -50,6 +66,15 @@ test("cleanup leaves legitimate, ambiguous, and out-of-scope output alone", asyn
     [
       "um please send the report by friday please send the report by friday",
       "Please send the report by Friday. Please send the report by Friday.",
+    ],
+    [
+      "im gonna send the report to marie tomorrow im gonna send the report to marie tomorrow",
+      "I'm going to send the report to Marie tomorrow. I'm going to send the report to Marie tomorrow.",
+    ],
+    [`${LONG_RAW} ${LONG_RAW}`, `${LONG_CLEAN} ${LONG_CLEAN}`],
+    [
+      "were gonna ship it on friday for sure um were gonna ship it on friday for sure",
+      "We're going to ship it on Friday for sure. We're going to ship it on Friday for sure.",
     ],
   ]) {
     assert.doesNotThrow(() => assertValidCleanupOutput(raw, output), output);
