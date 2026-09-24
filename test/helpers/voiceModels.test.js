@@ -65,6 +65,25 @@ test("a partly extracted Pocket archive does not count as downloaded", (t) => {
   assert.deepEqual(status.missing, ["pocket-tts"]);
 });
 
+test("resuming a partly extracted Pocket download finishes only that model", async (t) => {
+  const dir = tempDir(t);
+  touch(dir, "silero_vad.onnx");
+  touch(dir, "smart-turn-v3.2-cpu.onnx");
+  const pocket = VOICE_MODELS.find((model) => model.id === "pocket-tts");
+  for (const file of pocket.requiredFiles.slice(0, -1)) touch(dir, file);
+  const { deps, downloads } = fakeDeps(dir);
+
+  const status = await downloadVoiceModels({ modelsDir: dir, deps });
+
+  assert.equal(downloads.length, 1);
+  assert.ok(downloads[0].endsWith(`${pocket.target}.tar.bz2`));
+  assert.equal(status.ready, true);
+  assert.deepEqual(status.missing, []);
+  for (const file of pocket.requiredFiles) {
+    assert.ok(fs.existsSync(path.join(dir, file)), `expected ${file} to exist`);
+  }
+});
+
 test("download fetches only what is missing and reports ready", async (t) => {
   const dir = tempDir(t);
   touch(dir, "silero_vad.onnx");
