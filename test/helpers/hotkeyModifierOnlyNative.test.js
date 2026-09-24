@@ -127,3 +127,23 @@ test("a failing probe is ignored off linux", async () => {
   assert.equal(result.success, true);
   assert.deepEqual(mgr.getSlotHotkeys("dictation"), ["Control+Super"]);
 });
+
+// GNOME, KDE and Hyprland register through their own shortcut systems, which
+// need a regular key and never start the listener in Tap. A lone right modifier
+// must be refused with a reason instead of failing there as a format error.
+for (const backend of ["useGnome", "useKDE", "useHyprland"]) {
+  test(`a right-side single modifier is refused with a reason when ${backend} is active`, async () => {
+    setPlatform("linux");
+    const mgr = new HotkeyManager();
+    mgr[backend] = true;
+
+    const slotResult = await mgr.registerSlot("voiceAgent", "RightControl", noop);
+    const updateResult = await mgr.updateHotkey("RightControl", noop);
+
+    assert.equal(slotResult.success, false);
+    assert.match(slotResult.error, /regular key/);
+    assert.equal(updateResult.success, false);
+    assert.match(updateResult.message, /regular key/);
+    assert.equal(registered.size, 0);
+  });
+}

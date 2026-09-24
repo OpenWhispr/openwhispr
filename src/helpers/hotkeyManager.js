@@ -212,6 +212,14 @@ class HotkeyManager extends EventEmitter {
     }
     // Native Linux backends bind only the primary hotkey.
     const hotkey = hotkeys[0];
+    // GNOME, KDE and Hyprland shortcuts need a regular key; only the evdev
+    // listener, which those desktops do not use, can watch a lone right modifier.
+    if (this.isUsingNativeShortcut() && isRightSideModifier(hotkey)) {
+      return {
+        success: false,
+        error: i18nMain.t("hotkey.errors.rightModifierNeedsListener", { hotkey }),
+      };
+    }
     if (
       hotkeys.length > 1 &&
       (((this.useGnome || this.useHyprland) && LINUX_NATIVE_TAP_SLOTS.has(slotName)) ||
@@ -1419,6 +1427,13 @@ class HotkeyManager extends EventEmitter {
         return {
           success: false,
           message: this.getPushToTalkUnavailableReason(primary),
+        };
+      }
+
+      if (this.isUsingNativeShortcut() && isRightSideModifier(primary)) {
+        return {
+          success: false,
+          message: i18nMain.t("hotkey.errors.rightModifierNeedsListener", { hotkey: primary }),
         };
       }
 
