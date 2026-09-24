@@ -8,11 +8,20 @@ import {
   resolveMobileInferenceRoute,
 } from '@/lib/mobileProviders';
 import type { TranscriptionProvider, TranscriptionRequest, TextInferenceSnapshot } from '@/types';
+import { isLocalModelKey, type LocalModelKey } from '@/lib/localModelCatalog';
 
 export type ProviderRoute = Extract<InferenceRoute, { mode: 'providers' }>;
 
 export function getInferenceSelection(scope: InferenceScope): InferenceSelection | undefined {
   return useConfigStore.getState().config?.inference?.[scope];
+}
+
+// The on-device model the user picked for a workflow; undefined means Automatic.
+export function getPickedLocalModel(scope: 'dictation' | 'upload'): LocalModelKey | undefined {
+  const selection = getInferenceSelection(scope);
+  return selection?.mode === 'local' && isLocalModelKey(selection.modelId)
+    ? selection.modelId
+    : undefined;
 }
 
 export function getTranscriptionProvider(scope: InferenceScope): TranscriptionProvider {

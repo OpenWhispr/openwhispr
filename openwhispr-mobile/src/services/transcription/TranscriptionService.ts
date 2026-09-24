@@ -852,9 +852,12 @@ export class TranscriptionService {
     // prompt, so on-device/private transcription recognizes them too. (Parakeet has
     // no prompt input; the facade drops it on that branch.)
     const hintWords = buildDictationHints(isDictationContext(requestContext));
+    const { getPickedLocalModel } =
+      require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
     const response = await LocalTranscriptionService.transcribe(audioUri, {
       language,
       prompt: hintWords.length > 0 ? hintWords.join(', ') : undefined,
+      model: getPickedLocalModel(requestContext === 'file' ? 'upload' : 'dictation'),
     });
     if (__DEV__) {
       console.log(
@@ -1044,7 +1047,9 @@ export class TranscriptionService {
     if (!LocalTranscriptionService.isAvailable()) {
       return;
     }
-    await LocalTranscriptionService.prepareForLanguage(language);
+    const { getPickedLocalModel } =
+      require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+    await LocalTranscriptionService.prepareForLanguage(language, getPickedLocalModel('dictation'));
   }
 }
 

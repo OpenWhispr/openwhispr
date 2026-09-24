@@ -70,7 +70,7 @@ function scopesToPin(leavingMode: ProcessingMode): MobileInferenceScope[] {
   return leavingMode === 'private' ? ['upload', 'notes', 'agent'] : ['upload', 'notes'];
 }
 
-// The Home toggle and the Speech-to-Text picker both own the dictation mode;
+// The Home toggle and the Dictation & Keyboard page both own the dictation mode;
 // writing the scope selection alongside defaultMode keeps routing and UI in step.
 export function dictationModeConfig(
   config: UserConfig | null,
@@ -86,7 +86,14 @@ export function dictationModeConfig(
   );
   return {
     defaultMode: mode,
-    inference: { ...inference, dictation: { mode: mode === 'private' ? 'local' : 'openwhispr' } },
+    inference: {
+      ...inference,
+      // On-Device restores the model picked on the Dictation & Keyboard page.
+      dictation:
+        mode === 'private'
+          ? (config?.rememberedInference?.dictation?.local ?? { mode: 'local' })
+          : { mode: 'openwhispr' },
+    },
     ...(config?.pinnedInference ? { pinnedInference: undefined } : {}),
   };
 }

@@ -5,6 +5,16 @@ import {
 
 export type LocalModelKey = 'whisper-base' | 'parakeet-v2' | 'parakeet-v3';
 
+export const LOCAL_MODEL_TITLES: Record<LocalModelKey, string> = {
+  'parakeet-v2': 'Parakeet v2',
+  'parakeet-v3': 'Parakeet v3',
+  'whisper-base': 'Whisper base',
+};
+
+export function isLocalModelKey(value: unknown): value is LocalModelKey {
+  return typeof value === 'string' && Object.keys(LOCAL_MODEL_TITLES).includes(value);
+}
+
 /**
  * Nominal on-disk sizes shown before download (whisper from its published ggml size; Parakeet
  * measured on-device by the benchmark spike). Used for display and the pre-download
@@ -49,7 +59,7 @@ export function getLocalModelCatalog(
     {
       key: 'parakeet-v2',
       engineName: 'Parakeet',
-      title: 'Parakeet v2',
+      title: LOCAL_MODEL_TITLES['parakeet-v2'],
       description: 'Fastest and most accurate for English dictation.',
       languagesNote: 'English only',
       sizeBytes: LOCAL_MODEL_SIZE_BYTES['parakeet-v2'],
@@ -59,7 +69,7 @@ export function getLocalModelCatalog(
     {
       key: 'parakeet-v3',
       engineName: 'Parakeet',
-      title: 'Parakeet v3',
+      title: LOCAL_MODEL_TITLES['parakeet-v3'],
       description: 'Fast transcription with automatic language detection.',
       languagesNote: '25 European languages',
       sizeBytes: LOCAL_MODEL_SIZE_BYTES['parakeet-v3'],
@@ -69,7 +79,7 @@ export function getLocalModelCatalog(
     {
       key: 'whisper-base',
       engineName: 'Whisper',
-      title: 'Whisper base',
+      title: LOCAL_MODEL_TITLES['whisper-base'],
       description: 'Broad language coverage — the fallback for everything Parakeet doesn’t cover.',
       languagesNote: '~99 languages incl. auto-detect',
       sizeBytes: LOCAL_MODEL_SIZE_BYTES['whisper-base'],
