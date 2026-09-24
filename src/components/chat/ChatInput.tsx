@@ -31,6 +31,7 @@ interface ChatInputProps {
   trailingContent?: React.ReactNode;
   focusOnIdle?: boolean;
   expandOnFocus?: boolean;
+  expandOnFocusSize?: "standard" | "compact";
   disabled?: boolean;
 }
 
@@ -80,6 +81,7 @@ export function ChatInput({
   trailingContent,
   focusOnIdle = true,
   expandOnFocus = false,
+  expandOnFocusSize = "standard",
   disabled = false,
 }: ChatInputProps) {
   const { t } = useTranslation();
@@ -180,7 +182,12 @@ export function ChatInput({
               : "border-0"
             : "border border-black/10 dark:border-white/14",
           expandOnFocus
-            ? "h-12 items-end focus-within:h-[min(40vh,16rem)] transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none"
+            ? cn(
+                "h-12 items-end transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none",
+                expandOnFocusSize === "compact"
+                  ? "focus-within:h-[min(36vh,14rem)]"
+                  : "focus-within:h-[min(40vh,16rem)]"
+              )
             : "transition-[border-color,box-shadow] duration-200",
           isIdle &&
             (variant === "assistant"
