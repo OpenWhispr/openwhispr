@@ -31,6 +31,8 @@ const { OrukeetStreaming } = require("../../src/helpers/orukeetStreaming");
 let server,
   target,
   opened = 0;
+let refuseCommit = false;
+let commitCount = 0;
 const messages = [];
 const event = { sender: new EventEmitter() };
 event.sender.send = (channel, text) => messages.push([channel, text]);
@@ -93,11 +95,15 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "./orukeetStreaming")
       return {
         OrukeetStreaming: class extends OrukeetStreaming {
-          constructor() {
+          constructor(options) {
             super({
+              ...options,
               createSocket: (url, options, protocols) => {
                 assert.equal(url, cloudSession.websocketUrl);
-                assert.equal(options.headers.Authorization, undefined);
+                assert.equal(
+                  options.headers.Authorization,
+                  protocols ? undefined : "Bearer test-key"
+                );
                 opened++;
                 return new WebSocket(`ws://127.0.0.1:${server.address().port}`, protocols, options);
               },
@@ -163,6 +169,12 @@ test.before(async () => {
     socket.on("message", (data, binary) => {
       if (binary) bytes += data.length;
       else if (JSON.parse(data).type === "commit") {
+        commitCount++;
+        if (refuseCommit) {
+          if (refuseCommit === "once") refuseCommit = false;
+          socket.send(JSON.stringify({ type: "error", code: "capacity", retry_after_ms: 100 }));
+          return;
+        }
         socket.send(
           JSON.stringify({ type: "language", language: "en", language_confidence: 0.99 })
         );
@@ -212,6 +224,63 @@ test("registered managed IPC streams startup audio and returns exactly one compl
   assert.equal(messages.filter(([channel]) => channel === "dictation-realtime-final").length, 1);
   assert.equal((await handlers.get("dictation-realtime-stop")()).text, final.text);
   assert.equal(tokenListeners.size, 0);
+});
+
+test(
+  "managed IPC closes a capacity-refused commit without retrying",
+  { timeout: 1000 },
+  async (t) => {
+    refuseCommit = true;
+    const before = commitCount;
+    const messagesBefore = messages.length;
+    t.after(async () => {
+      refuseCommit = false;
+      await handlers.get("dictation-realtime-stop")();
+    });
+
+    assert.equal(
+      (await handlers.get("dictation-realtime-start")(event, managedOptions)).success,
+      true
+    );
+    const streaming = target._dictationStreaming;
+    const closed = once(streaming.ws, "close");
+    handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+    const final = await handlers.get("dictation-realtime-finalize")();
+
+    assert.deepEqual(final, { success: false, error: "Orukeet transcription failed: capacity" });
+    assert.equal(streaming.intentionalClose, true, "the refused attempt is closed before fallback");
+    assert.equal(streaming.retryTimer, undefined, "no delayed commit can outlive fallback");
+    assert.equal(streaming.finalResolve, null);
+    assert.deepEqual(messages.slice(messagesBefore), [
+      ["dictation-realtime-error", "Orukeet transcription failed: capacity"],
+    ]);
+    await closed;
+    assert.equal(commitCount - before, 1);
+  }
+);
+
+test("self-hosted IPC still retries a capacity-refused commit without re-uploading", async (t) => {
+  refuseCommit = "once";
+  const before = commitCount;
+  target.environmentManager = { getCustomTranscriptionKey: () => "test-key" };
+  t.after(async () => {
+    refuseCommit = false;
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+
+  const start = await handlers.get("dictation-realtime-start")(event, {
+    ...managedOptions,
+    mode: "byok",
+    baseUrl: cloudSession.baseUrl,
+  });
+  assert.equal(start.success, true);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  const final = await handlers.get("dictation-realtime-finalize")();
+
+  assert.equal(final.success, true);
+  assert.equal(final.text, "Recorded 640 bytes");
+  assert.equal(commitCount - before, 2);
 });
 
 test("stop during token fetch cancels the real main-process connection", async () => {

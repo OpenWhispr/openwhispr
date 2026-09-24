@@ -1,5 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { once } = require("node:events");
+const { WebSocketServer } = require("ws");
+const { OrukeetStreaming } = require("../../src/helpers/orukeetStreaming");
 const { loadAudioManager } = require("./harness/audioManager");
 
 async function loadManagerClass(t) {
@@ -911,6 +914,82 @@ test("opening words streamed before a mid-recording drop still count as speech",
   await manager.stopStreamingRecording();
 
   assert.deepEqual(uploads, [{ audio: "opening words", reason: "stream_no_final" }]);
+});
+
+test("a capacity-refused managed commit closes and uploads the whole short capture once", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  await once(server, "listening");
+  let commits = 0;
+  server.on("connection", (socket) => {
+    socket.send(
+      JSON.stringify({
+        type: "ready",
+        channels: 1,
+        sample_rate: 16000,
+        encoding: "pcm_s16le",
+        max_seconds: 600,
+      })
+    );
+    socket.on("message", (data, binary) => {
+      if (!binary && JSON.parse(data).type === "commit") {
+        commits++;
+        // A busy gateway keeps the PCM and socket until the client retries or closes.
+        socket.send(JSON.stringify({ type: "error", code: "capacity", retry_after_ms: 100 }));
+      }
+    });
+  });
+  const adapter = new OrukeetStreaming({ timeoutMs: 500, retryCapacity: false });
+  t.after(async () => {
+    await adapter.disconnect();
+    for (const socket of server.clients) socket.terminate();
+    await new Promise((resolve) => server.close(resolve));
+  });
+  const provider = startingOrukeetProvider({
+    start: async () => {
+      await adapter.connect({
+        baseUrl: `http://127.0.0.1:${server.address().port}`,
+        apiKey: "test-key",
+      });
+      return { success: true };
+    },
+    send: (pcm) => adapter.sendAudio(pcm),
+    onError: (listener) => {
+      adapter.onError = (error) => listener(error.message);
+      return () => {
+        adapter.onError = null;
+      };
+    },
+    finalize: async () => {
+      try {
+        return { success: true, ...(await adapter.finalize()) };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    },
+    stop: async () => ({ success: true, ...(await adapter.disconnect()) }),
+  });
+  const { manager, errors, uploads } = createStartingManager(AudioManager, {
+    providerName: "orukeet",
+    provider,
+  });
+  const upload = manager.processWithOpenWhisprCloud;
+  manager.processWithOpenWhisprCloud = async (...args) => {
+    assert.equal(adapter.intentionalClose, true);
+    assert.equal(adapter.retryTimer, undefined);
+    assert.match(adapter.failure.message, /capacity/);
+    return upload(...args);
+  };
+
+  await manager.startStreamingRecording();
+  manager.streamingProcessor.port.onmessage({ data: speechPcm() });
+  await Promise.all([manager.stopStreamingRecording(), manager.stopStreamingRecording()]);
+
+  assert.equal(commits, 1);
+  assert.deepEqual(uploads, [{ audio: "opening words", reason: "stream_no_final" }]);
+  assert.deepEqual(errors, []);
 });
 
 test("other streaming providers still surface a dropped stream and auto-stop", async (t) => {

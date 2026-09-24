@@ -8393,8 +8393,12 @@ class IPCHandlers {
         // default lives here, at the boundary, so the token allowlist stays
         // fail-closed for genuinely unknown providers (#1624).
         const provider = options.provider ?? "openai-realtime";
+        // Managed Cloud retains the capture for batch fallback. A refused
+        // commit must close this attempt instead of retrying for 30 seconds.
         const streaming =
-          provider === "orukeet" ? new OrukeetStreaming() : new OpenAIRealtimeStreaming();
+          provider === "orukeet"
+            ? new OrukeetStreaming({ retryCapacity: !isCloud })
+            : new OpenAIRealtimeStreaming();
         setupDictationCallbacks(streaming, event);
         // Assign before the token fetch (a real network round trip) so
         // dictation-realtime-send has a live instance to buffer into instead

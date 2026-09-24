@@ -58,9 +58,11 @@ class OrukeetStreaming {
   constructor({
     createSocket = (url, options, protocols) => new WebSocket(url, protocols, options),
     timeoutMs = 30000,
+    retryCapacity = true,
   } = {}) {
     this.createSocket = createSocket;
     this.timeoutMs = timeoutMs;
+    this.retryCapacity = retryCapacity;
     this.ws = null;
     this.isConnected = false;
     this.pendingAudio = [];
@@ -178,7 +180,7 @@ class OrukeetStreaming {
       this.finalResolve?.(this.result);
       this.clearFinal();
     } else if (message.type === "error") {
-      if (message.code === "capacity" && this.finalResolve) {
+      if (message.code === "capacity" && this.finalResolve && this.retryCapacity) {
         clearTimeout(this.retryTimer);
         this.retryTimer = setTimeout(() => {
           if (this.finalResolve) this.sendControl({ type: "commit" });
