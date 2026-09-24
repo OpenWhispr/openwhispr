@@ -170,7 +170,7 @@ export default function DictionaryView() {
   const emptyState = (
     <div className="flex min-h-64 items-start px-6 py-6">
       <div className="relative z-10 w-full min-w-0 md:w-3/5">
-        <h2 className="text-xl font-medium text-foreground">{t("dictionary.emptyTitle")}</h2>
+        <h2 className="text-xl font-normal text-foreground">{t("dictionary.emptyTitle")}</h2>
         <p className="mt-3 max-w-xl text-base leading-relaxed text-foreground/50 dark:text-foreground/65">
           {t("dictionary.emptyDescription", { agentName })}
         </p>
