@@ -2673,7 +2673,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // (the panel re-decides for its own request).
       screenContext: config?.rawScreenContext ?? null,
       ...(selectedContext ? { selectedContext } : {}),
-      // The verdict only means something next to a caret session.
       ...(deliverySessionId ? { deliverySessionId, deliveryAcceptsMarkdown } : {}),
     };
   }
@@ -2754,12 +2753,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       captureDisposition === "caret" && getSettings().autoPasteEnabled
         ? capture.sessionId
         : undefined;
-    // True when the caret sits in a markdown-friendly app (Obsidian, an AI
-    // prompt box), so the panel neither asks for plain prose nor strips the
-    // answer. Meaningless without a caret delivery, so undefined then.
-    const deliveryAcceptsMarkdown = deliverySessionId
-      ? capture.acceptsMarkdown === true
-      : undefined;
+    const deliveryAcceptsMarkdown = capture?.acceptsMarkdown === true;
 
     if (!config?.selectionEditReachable) {
       // No in-place editor: the panel never types, so only a readable

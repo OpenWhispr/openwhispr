@@ -45,11 +45,11 @@ test("links keep their text and their url; images keep their alt text", async ()
   assert.equal(markdownToPlainText("![a chart](chart.png)"), "a chart");
 });
 
-test("star and plus bullets become dashes; dashes and numbers stay as typed", async () => {
+test("star bullets become dashes; plus, dashes and numbers stay as typed", async () => {
   const { markdownToPlainText } = await helperModule;
   assert.equal(
     markdownToPlainText("* one\n+ two\n- three\n1. four"),
-    "- one\n- two\n- three\n1. four"
+    "- one\n+ two\n- three\n1. four"
   );
 });
 
@@ -87,7 +87,8 @@ test("markdown escapes resolve to the escaped character", async () => {
 
 test("plain-text conventions a human would type are never altered", async () => {
   const { markdownToPlainText } = await helperModule;
-  const answer = "2 * 3 * 4 = 24\nsnake_case_name stays\na lone * star\n#hashtag\nx > y";
+  const answer =
+    "2 * 3 * 4 = 24\nsnake_case_name stays\na lone * star\n#hashtag\nx > y\n+ 5 points";
   assert.equal(markdownToPlainText(answer), answer);
 });
 

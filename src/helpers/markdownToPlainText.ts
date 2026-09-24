@@ -219,7 +219,7 @@ export function markdownToPlainText(markdown: string): string {
     const block = line
       .replace(/^(\s{0,3}>\s?)+/, "")
       .replace(/^\s{0,3}#{1,6}\s+/, "")
-      .replace(/^(\s*)[*+]\s+/, "$1- ");
+      .replace(/^(\s*)\*\s+/, "$1- ");
     lines.push(stripInline(block).replace(/[ \t]+$/, ""));
   }
 
