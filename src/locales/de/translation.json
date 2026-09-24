@@ -1176,6 +1176,7 @@
     "joinAndTranscribe": "Beitreten & transkribieren",
     "takeNotes": "Notizen machen",
     "noEventsToday": "Heute keine Termine",
+    "emptyDayDescription": "Genieße die Pause oder plane eine Besprechung.",
     "noUpcomingEvents": "Keine anstehenden Termine",
     "moreCalendarsHint": "Weitere Kalender gewünscht?",
     "connectHere": "Hier verbinden",
@@ -2990,6 +2991,9 @@
     "search": "Unterhaltungen suchen...",
     "archived": "Archiviert",
     "noConversations": "Starten Sie Ihre erste Unterhaltung",
+    "noConversationsDescription": "Deine Chats mit dem Assistenten erscheinen hier.",
+    "noArchived": "Keine archivierten Chats",
+    "loadFailed": "Chats konnten nicht geladen werden",
     "selectChat": "Wählen Sie eine Unterhaltung oder starten Sie eine neue",
     "noResults": "Keine passenden Unterhaltungen",
     "today": "Heute",
@@ -3005,7 +3009,12 @@
     "searchChats": "Chats suchen",
     "searchTitle": "Unterhaltungen suchen",
     "searchDescription": "In allen Unterhaltungen suchen",
-    "newChatEmpty": "Fragen Sie zu Ihren Notizen, Transkripten oder anderem"
+    "newChatEmpty": "Fragen Sie zu Ihren Notizen, Transkripten oder anderem",
+    "starters": {
+      "todos": "Liste meine letzten Aufgaben auf",
+      "meeting": "Bereite mich auf mein nächstes Meeting vor",
+      "sharedNotes": "Zeige mir geteilte Notizen"
+    }
   },
   "referral": {
     "title": "Empfehlen und Belohnungen erhalten",
@@ -3150,6 +3159,7 @@
       "undo": "Rückgängig",
       "emptySpace": "Noch keine Notizen. Notizen hier sind für alle in {{space}} sichtbar.",
       "emptyTeamHint": "Mit Ihnen geteilte Bereiche erscheinen hier.",
+      "emptyTeamTitle": "Keine geteilten Bereiche",
       "noteCount_one": "{{count}} Notiz",
       "noteCount_other": "{{count}} Notizen",
       "accessRevoked": "Du hast keinen Zugriff mehr auf {{space}}",

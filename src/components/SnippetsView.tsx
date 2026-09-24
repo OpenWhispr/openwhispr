@@ -19,7 +19,7 @@ import { useSettings } from "../hooks/useSettings";
 import { getCachedPlatform } from "../utils/platform";
 import type { Snippet } from "../utils/snippets";
 
-const EXAMPLE_KEYS = ["linkedin", "rewrite", "intro", "signoff"] as const;
+const EXAMPLE_KEYS = ["linkedin", "intro"] as const;
 
 interface EditSnippetDialogProps {
   snippet: Snippet | null;
@@ -256,32 +256,43 @@ export default function SnippetsView() {
         )}
 
         {snippets.length === 0 ? (
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-5 px-2 py-6">
-            <div className="flex-1 min-w-[220px]">
-              <h4 className="text-sm font-semibold text-foreground leading-snug">
+          <div className="flex min-h-52 flex-wrap items-center justify-between gap-6 px-3 py-5">
+            <div className="max-w-md flex-1">
+              <h2 className="text-lg font-semibold text-foreground leading-snug">
                 {t("dictionary.snippets.emptyTitle")}{" "}
                 <span className="text-primary">{t("dictionary.snippets.emptyTitleAccent")}</span>
-              </h4>
-              <p className="mt-1.5 text-xs text-foreground/45 leading-relaxed">
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                 {t("dictionary.snippets.emptyDescription")}
               </p>
-              <Button size="sm" className="mt-4" onClick={() => triggerInputRef.current?.focus()}>
-                <Plus size={12} />
+              <Button
+                className="mt-5 rounded-full px-5"
+                onClick={() => triggerInputRef.current?.focus()}
+              >
+                <Plus size={14} />
                 {t("dictionary.snippets.new")}
               </Button>
             </div>
-            <div className="flex-1 min-w-[260px] rounded-md border border-foreground/8 dark:border-white/10 bg-foreground/[0.02] dark:bg-white/[0.03] px-3.5 py-3 flex flex-col gap-2.5">
-              {EXAMPLE_KEYS.map((key) => (
-                <div key={key} className="flex items-start gap-2">
-                  <span className="shrink-0 inline-flex items-center gap-1 rounded-[5px] bg-primary/10 dark:bg-primary/15 border border-primary/15 dark:border-primary/20 px-1.5 py-0.5 text-xs text-primary">
-                    <Mic size={9} />
-                    {t(`dictionary.snippets.examples.${key}Trigger`)}
-                  </span>
-                  <span className="shrink-0 text-xs text-foreground/45 mt-0.5">→</span>
-                  <span className="min-w-0 text-xs text-foreground/45 leading-relaxed">
-                    {t(`dictionary.snippets.examples.${key}Text`)}
-                  </span>
-                </div>
+            <div
+              aria-hidden="true"
+              className="relative hidden h-44 min-w-64 flex-1 items-center justify-center overflow-hidden md:flex"
+            >
+              <span className="absolute h-40 w-40 rounded-full border border-dashed border-primary/20" />
+              <span className="absolute h-28 w-28 rounded-full border border-dashed border-primary/20" />
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Mic size={25} strokeWidth={1.5} />
+              </span>
+              {EXAMPLE_KEYS.map((key, index) => (
+                <span
+                  key={key}
+                  className={cn(
+                    "absolute max-w-44 truncate rounded-xl border border-border bg-card px-3 py-2 text-xs text-primary shadow-sm",
+                    index === 0 ? "start-0 top-1" : "end-0 bottom-1"
+                  )}
+                >
+                  {t(`dictionary.snippets.examples.${key}Trigger`)} →{" "}
+                  {t(`dictionary.snippets.examples.${key}Text`)}
+                </span>
               ))}
             </div>
           </div>

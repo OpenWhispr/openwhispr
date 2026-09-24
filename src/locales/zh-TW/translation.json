@@ -2807,6 +2807,7 @@
       "undo": "復原",
       "emptySpace": "還沒有筆記。這裡的筆記對 {{space}} 中的所有人可見。",
       "emptyTeamHint": "與你共享的空間將顯示在這裡。",
+      "emptyTeamTitle": "尚無共享空間",
       "noteCount_one": "{{count}} 則筆記",
       "noteCount_other": "{{count}} 則筆記",
       "accessRevoked": "你已無法存取 {{space}}",
@@ -3469,6 +3470,9 @@
     "search": "搜尋對話...",
     "archived": "已封存",
     "noConversations": "開始你的第一個對話",
+    "noConversationsDescription": "與助理的聊天會顯示在這裡。",
+    "noArchived": "尚無已封存的聊天",
+    "loadFailed": "無法載入聊天紀錄",
     "selectChat": "選擇一個對話或開始新的對話",
     "noResults": "沒有符合的對話",
     "today": "今天",
@@ -3484,7 +3488,12 @@
     "searchChats": "搜尋聊天",
     "searchTitle": "搜尋對話",
     "searchDescription": "搜尋所有對話",
-    "newChatEmpty": "詢問關於筆記、轉錄或其他任何內容"
+    "newChatEmpty": "詢問關於筆記、轉錄或其他任何內容",
+    "starters": {
+      "todos": "列出我最近的待辦事項",
+      "meeting": "幫我準備下一場會議",
+      "sharedNotes": "找出與我分享的筆記"
+    }
   },
   "support": {
     "documentation": "文件",
@@ -3830,6 +3839,7 @@
     "joinAndTranscribe": "加入並轉錄",
     "takeNotes": "記筆記",
     "noEventsToday": "今天沒有行程",
+    "emptyDayDescription": "享受片刻空閒，或安排一場會議。",
     "noUpcomingEvents": "暫無即將開始的行程",
     "moreCalendarsHint": "想連接更多日曆？",
     "connectHere": "在這裡連接",

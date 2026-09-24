@@ -116,25 +116,42 @@ export default function DictionaryView() {
   }, [customDictionary, toast, t]);
 
   const emptyState = (
-    <div className="flex flex-col items-center text-center py-8">
-      <div className="w-10 h-10 rounded-[10px] bg-gradient-to-b from-primary/8 to-primary/4 dark:from-primary/12 dark:to-primary/6 border border-primary/10 dark:border-primary/15 flex items-center justify-center mb-3.5">
-        <BookOpen size={17} strokeWidth={1.5} className="text-primary/50 dark:text-primary/60" />
+    <div className="flex min-h-52 flex-wrap items-center justify-between gap-6 px-3 py-5">
+      <div className="max-w-md flex-1">
+        <h2 className="text-lg font-semibold text-foreground">{t("dictionary.emptyTitle")}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          {t("dictionary.emptyDescription", { agentName })}
+        </p>
+        <Button className="mt-5 rounded-full px-5" onClick={() => addInputRef.current?.focus()}>
+          <Plus size={14} />
+          {t("dictionary.addFirstWord")}
+        </Button>
+        <button
+          onClick={() => setShowBulkImport(true)}
+          className="ms-4 inline-flex items-center gap-1.5 text-xs text-primary hover:underline focus-visible:underline"
+        >
+          <Upload size={11} />
+          {t("dictionary.importList")}
+        </button>
       </div>
-      <h4 className="text-xs font-semibold text-foreground mb-1">{t("dictionary.emptyTitle")}</h4>
-      <p className="text-xs text-foreground/45 leading-relaxed max-w-[240px] mb-4">
-        {t("dictionary.emptyDescription", { agentName })}
-      </p>
-      <Button size="sm" onClick={() => addInputRef.current?.focus()}>
-        <Plus size={12} />
-        {t("dictionary.addFirstWord")}
-      </Button>
-      <button
-        onClick={() => setShowBulkImport(true)}
-        className="mt-3 flex items-center gap-1.5 text-xs text-foreground/45 hover:text-foreground/60 transition-colors"
+      <div
+        aria-hidden="true"
+        className="relative hidden h-44 min-w-56 flex-1 items-center justify-center overflow-hidden md:flex"
       >
-        <Upload size={11} />
-        {t("dictionary.importList")}
-      </button>
+        <span className="absolute h-40 w-40 rounded-full border border-dashed border-primary/20" />
+        <span className="absolute h-28 w-28 rounded-full border border-dashed border-primary/20" />
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <BookOpen size={25} strokeWidth={1.5} />
+        </span>
+        <span className="absolute start-0 top-2 flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 shadow-sm">
+          <span className="h-1.5 w-10 rounded-full bg-muted-foreground/25" />
+          <span className="h-1.5 w-16 rounded-full bg-primary/50" />
+        </span>
+        <span className="absolute end-0 bottom-2 flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 shadow-sm">
+          <span className="h-1.5 w-12 rounded-full bg-muted-foreground/25" />
+          <span className="h-1.5 w-14 rounded-full bg-primary/50" />
+        </span>
+      </div>
     </div>
   );
 

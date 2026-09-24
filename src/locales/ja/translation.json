@@ -2735,6 +2735,7 @@
       "undo": "元に戻す",
       "emptySpace": "まだノートがありません。ここのノートは{{space}}の全員に表示されます。",
       "emptyTeamHint": "共有されたスペースはここに表示されます。",
+      "emptyTeamTitle": "共有スペースはありません",
       "noteCount_one": "{{count}} 件のノート",
       "noteCount_other": "{{count}} 件のノート",
       "accessRevoked": "{{space}} へのアクセス権がなくなりました",
@@ -3469,6 +3470,9 @@
     "search": "会話を検索...",
     "archived": "アーカイブ済み",
     "noConversations": "最初の会話を始めましょう",
+    "noConversationsDescription": "アシスタントとのチャットはここに表示されます。",
+    "noArchived": "アーカイブ済みのチャットはありません",
+    "loadFailed": "チャットを読み込めませんでした",
     "selectChat": "会話を選択するか、新しく始めてください",
     "noResults": "該当する会話がありません",
     "today": "今日",
@@ -3484,7 +3488,12 @@
     "searchChats": "チャットを検索",
     "searchTitle": "会話を検索",
     "searchDescription": "すべての会話を検索",
-    "newChatEmpty": "ノートや文字起こし、その他なんでも聞いてください"
+    "newChatEmpty": "ノートや文字起こし、その他なんでも聞いてください",
+    "starters": {
+      "todos": "最近の To Do を一覧表示して",
+      "meeting": "次の会議の準備を手伝って",
+      "sharedNotes": "共有されたノートをまとめて"
+    }
   },
   "support": {
     "documentation": "ドキュメント",
@@ -3830,6 +3839,7 @@
     "joinAndTranscribe": "参加して文字起こし",
     "takeNotes": "メモを取る",
     "noEventsToday": "今日の予定はありません",
+    "emptyDayDescription": "休憩を楽しむか、会議を予定しましょう。",
     "noUpcomingEvents": "今後の予定はありません",
     "moreCalendarsHint": "他のカレンダーも連携しますか？",
     "connectHere": "ここから連携",

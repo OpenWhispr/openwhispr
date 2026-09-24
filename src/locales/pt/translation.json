@@ -2807,6 +2807,7 @@
       "undo": "Desfazer",
       "emptySpace": "Nenhuma nota ainda. As notas aqui são visíveis para todos em {{space}}.",
       "emptyTeamHint": "Os espaços compartilhados com você aparecerão aqui.",
+      "emptyTeamTitle": "Nenhum espaço compartilhado",
       "noteCount_one": "{{count}} nota",
       "noteCount_other": "{{count}} notas",
       "accessRevoked": "Você não tem mais acesso a {{space}}",
@@ -3469,6 +3470,9 @@
     "search": "Pesquisar conversas...",
     "archived": "Arquivadas",
     "noConversations": "Inicie sua primeira conversa",
+    "noConversationsDescription": "Suas conversas com o Assistente aparecerão aqui.",
+    "noArchived": "Nenhuma conversa arquivada",
+    "loadFailed": "Não foi possível carregar as conversas",
     "selectChat": "Selecione uma conversa ou inicie uma nova",
     "noResults": "Nenhuma conversa encontrada",
     "today": "Hoje",
@@ -3484,7 +3488,12 @@
     "searchChats": "Pesquisar chats",
     "searchTitle": "Pesquisar conversas",
     "searchDescription": "Pesquisar em todas as conversas",
-    "newChatEmpty": "Pergunte sobre suas notas, transcrições ou qualquer coisa"
+    "newChatEmpty": "Pergunte sobre suas notas, transcrições ou qualquer coisa",
+    "starters": {
+      "todos": "Liste minhas tarefas recentes",
+      "meeting": "Prepare-me para a próxima reunião",
+      "sharedNotes": "Destaque as notas compartilhadas comigo"
+    }
   },
   "support": {
     "documentation": "Documentação",
@@ -3830,6 +3839,7 @@
     "joinAndTranscribe": "Entrar e transcrever",
     "takeNotes": "Fazer anotações",
     "noEventsToday": "Nenhum evento hoje",
+    "emptyDayDescription": "Aproveite a pausa ou agende uma reunião.",
     "noUpcomingEvents": "Nenhum evento próximo",
     "moreCalendarsHint": "Quer calendários adicionais?",
     "connectHere": "Conecte-os aqui",

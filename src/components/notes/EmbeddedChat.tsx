@@ -4,6 +4,7 @@ import { X, PanelRight, PanelRightClose } from "../icons";
 import { cn } from "../lib/utils";
 import { ChatMessages } from "../chat/ChatMessages";
 import { ChatInput } from "../chat/ChatInput";
+import { ChatEmptyIllustration } from "../chat/ChatEmptyIllustration";
 import type { Message, AgentState } from "../chat/types";
 import { setActiveNoteId, setActiveFolderId } from "../../stores/noteStore";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
@@ -30,10 +31,11 @@ interface EmbeddedChatProps {
 function EmptyState() {
   const { t } = useTranslation();
   return (
-    <div className="flex items-center justify-center h-full select-none">
-      <p className="text-xs text-foreground/45 dark:text-foreground/45 text-center max-w-44">
-        {t("embeddedChat.emptyState")}
-      </p>
+    <div className="flex h-full min-h-40 flex-col items-center justify-center gap-3 px-4 text-center select-none">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-card dark:border-white/10">
+        <ChatEmptyIllustration size={38} />
+      </div>
+      <p className="max-w-44 text-xs text-muted-foreground">{t("embeddedChat.emptyState")}</p>
     </div>
   );
 }

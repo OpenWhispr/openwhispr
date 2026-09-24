@@ -1398,6 +1398,7 @@
     "joinAndTranscribe": "انضمام وتفريغ صوتي",
     "takeNotes": "تدوين ملاحظات",
     "noEventsToday": "لا توجد أحداث اليوم",
+    "emptyDayDescription": "استمتع بالاستراحة أو جدولة اجتماع.",
     "noUpcomingEvents": "لا توجد أحداث قادمة",
     "moreCalendarsHint": "هل تريد تقاويم إضافية؟",
     "connectHere": "قم بربطها هنا",
@@ -1479,6 +1480,7 @@
       "undo": "تراجع",
       "emptySpace": "لا توجد ملاحظات بعد. الملاحظات هنا مرئية للجميع في {{space}}.",
       "emptyTeamHint": "ستظهر المساحات المشتركة معك هنا.",
+      "emptyTeamTitle": "لا توجد مساحات مشتركة",
       "noteCount_zero": "{{count}} ملاحظات",
       "noteCount_one": "{{count}} ملاحظة",
       "noteCount_two": "{{count}} ملاحظتان",
@@ -4070,6 +4072,9 @@
     "search": "البحث في المحادثات...",
     "archived": "مؤرشفة",
     "noConversations": "ابدأ محادثتك الأولى",
+    "noConversationsDescription": "ستظهر محادثاتك مع المساعد هنا.",
+    "noArchived": "لا توجد محادثات مؤرشفة",
+    "loadFailed": "تعذر تحميل المحادثات",
     "selectChat": "حدد محادثة أو ابدأ محادثة جديدة",
     "noResults": "لا توجد محادثات مطابقة",
     "today": "اليوم",
@@ -4085,7 +4090,12 @@
     "searchChats": "البحث في المحادثات",
     "searchTitle": "البحث في المحادثات",
     "searchDescription": "البحث في جميع محادثاتك",
-    "newChatEmpty": "اسأل عن ملاحظاتك أو نصوصك المفرَّغة أو أي شيء آخر"
+    "newChatEmpty": "اسأل عن ملاحظاتك أو نصوصك المفرَّغة أو أي شيء آخر",
+    "starters": {
+      "todos": "اعرض مهامي الأخيرة",
+      "meeting": "ساعدني في الاستعداد لاجتماعي القادم",
+      "sharedNotes": "أبرز الملاحظات التي تمت مشاركتها معي"
+    }
   },
   "support": {
     "documentation": "الوثائق",

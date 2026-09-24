@@ -2807,6 +2807,7 @@
       "undo": "撤销",
       "emptySpace": "还没有笔记。这里的笔记对 {{space}} 中的所有人可见。",
       "emptyTeamHint": "与你共享的空间将显示在这里。",
+      "emptyTeamTitle": "暂无共享空间",
       "noteCount_one": "{{count}} 条笔记",
       "noteCount_other": "{{count}} 条笔记",
       "accessRevoked": "你已无法访问 {{space}}",
@@ -3469,6 +3470,9 @@
     "search": "搜索对话...",
     "archived": "已归档",
     "noConversations": "开始你的第一个对话",
+    "noConversationsDescription": "与助手的聊天会显示在这里。",
+    "noArchived": "暂无已归档的聊天",
+    "loadFailed": "无法加载聊天记录",
     "selectChat": "选择一个对话或开始新的对话",
     "noResults": "没有匹配的对话",
     "today": "今天",
@@ -3484,7 +3488,12 @@
     "searchChats": "搜索聊天",
     "searchTitle": "搜索对话",
     "searchDescription": "搜索所有对话",
-    "newChatEmpty": "询问关于笔记、转录或其他任何内容"
+    "newChatEmpty": "询问关于笔记、转录或其他任何内容",
+    "starters": {
+      "todos": "列出我最近的待办事项",
+      "meeting": "帮我准备下一场会议",
+      "sharedNotes": "找出与我共享的笔记"
+    }
   },
   "support": {
     "documentation": "文档",
@@ -3830,6 +3839,7 @@
     "joinAndTranscribe": "加入并转录",
     "takeNotes": "记笔记",
     "noEventsToday": "今天没有日程",
+    "emptyDayDescription": "享受片刻空闲，或安排一场会议。",
     "noUpcomingEvents": "暂无即将开始的日程",
     "moreCalendarsHint": "想连接更多日历？",
     "connectHere": "在这里连接",

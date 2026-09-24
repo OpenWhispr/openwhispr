@@ -66,7 +66,9 @@ import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
 import NoteRecordControl, { RecordingWave } from "./NoteRecordControl";
-import EmptyStateCard from "../ui/EmptyStateCard";
+import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
+import transcriptsEmptyLight from "../../assets/empty-states/notes-transcripts-light.svg";
+import transcriptsEmptyDark from "../../assets/empty-states/notes-transcripts-dark.svg";
 import { Button } from "../ui/button";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
@@ -1195,19 +1197,35 @@ export default function NoteEditor({
             ) : viewMode === "transcript" && hasMeetingTranscript ? (
               <RichTextEditor value={note.transcript || ""} disabled />
             ) : viewMode === "transcript" ? (
-              <EmptyStateCard
-                icon={Mic}
-                title={t("notes.editor.transcriptEmptyTitle")}
-                description={t("notes.editor.transcriptEmptyDescription")}
-                className={cn(PAGE_CONTENT_WIDTH_CLASS, "mt-2")}
+              <div
+                className={cn(
+                  PAGE_CONTENT_WIDTH_CLASS,
+                  "flex min-h-80 flex-col items-center px-4 pt-12 text-center"
+                )}
               >
+                <ThemedEmptyIllustration
+                  light={transcriptsEmptyLight}
+                  dark={transcriptsEmptyDark}
+                  width={590}
+                  height={77}
+                />
+                <h2 className="mt-8 text-lg font-semibold text-foreground">
+                  {t("notes.editor.transcriptEmptyTitle")}
+                </h2>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+                  {t("notes.editor.transcriptEmptyDescription")}
+                </p>
                 {canEditNote && recordingAllowed && (
-                  <Button size="sm" onClick={onStartRecording} disabled={isProcessing}>
+                  <Button
+                    className="mt-5 rounded-full px-5"
+                    onClick={onStartRecording}
+                    disabled={isProcessing}
+                  >
                     <Mic size={13} />
                     {t("notes.editor.startRecording")}
                   </Button>
                 )}
-              </EmptyStateCard>
+              </div>
             ) : viewMode === "enhanced" && enhancement ? (
               <RichTextEditor
                 value={enhancement.content}

@@ -69,12 +69,14 @@ export default function ConversationList({
   const { t } = useTranslation();
   const [conversations, setConversations] = useState<ConversationPreview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const showSkeletonTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
 
   const loadConversations = useCallback(async () => {
+    setLoadError(false);
     try {
       const [active, archived] = await Promise.all([
         window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, false),
@@ -97,7 +99,7 @@ export default function ConversationList({
       });
       setConversations([...(active ?? []).map(toPreview), ...(archived ?? []).map(toPreview)]);
     } catch {
-      // silently fail
+      setLoadError(true);
     } finally {
       setIsLoading(false);
       setShowSkeleton(false);
@@ -229,8 +231,15 @@ export default function ConversationList({
         )}
       </div>
 
-      {flatItems.length === 0 ? (
-        <EmptyConversationList onNewChat={onNewChat} />
+      {loadError || flatItems.length === 0 ? (
+        <EmptyConversationList
+          state={loadError ? "error" : showArchived ? "archived" : "active"}
+          onRetry={() => {
+            setIsLoading(true);
+            setShowSkeleton(true);
+            void loadConversations();
+          }}
+        />
       ) : (
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           <div

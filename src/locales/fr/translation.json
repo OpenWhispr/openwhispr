@@ -1176,6 +1176,7 @@
     "joinAndTranscribe": "Rejoindre et transcrire",
     "takeNotes": "Prendre des notes",
     "noEventsToday": "Aucun événement aujourd'hui",
+    "emptyDayDescription": "Profitez de cette pause ou planifiez une réunion.",
     "noUpcomingEvents": "Aucun événement à venir",
     "moreCalendarsHint": "Vous voulez d'autres calendriers ?",
     "connectHere": "Connectez-les ici",
@@ -2990,6 +2991,9 @@
     "search": "Rechercher des conversations...",
     "archived": "Archivées",
     "noConversations": "Démarrez votre première conversation",
+    "noConversationsDescription": "Vos discussions avec l’assistant apparaîtront ici.",
+    "noArchived": "Aucune discussion archivée",
+    "loadFailed": "Impossible de charger les discussions",
     "selectChat": "Sélectionnez une conversation ou démarrez-en une nouvelle",
     "noResults": "Aucune conversation correspondante",
     "today": "Aujourd'hui",
@@ -3005,7 +3009,12 @@
     "searchChats": "Rechercher",
     "searchTitle": "Rechercher des conversations",
     "searchDescription": "Rechercher dans toutes vos conversations",
-    "newChatEmpty": "Posez des questions sur vos notes, transcriptions ou autre"
+    "newChatEmpty": "Posez des questions sur vos notes, transcriptions ou autre",
+    "starters": {
+      "todos": "Liste mes tâches récentes",
+      "meeting": "Prépare-moi pour ma prochaine réunion",
+      "sharedNotes": "Montre les notes partagées avec moi"
+    }
   },
   "referral": {
     "title": "Parrainez et gagnez des récompenses",
@@ -3150,6 +3159,7 @@
       "undo": "Annuler",
       "emptySpace": "Aucune note pour le moment. Les notes ici sont visibles par tous les membres de {{space}}.",
       "emptyTeamHint": "Les espaces partagés avec vous apparaîtront ici.",
+      "emptyTeamTitle": "Aucun espace partagé",
       "noteCount_one": "{{count}} note",
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "Vous n'avez plus accès à {{space}}",

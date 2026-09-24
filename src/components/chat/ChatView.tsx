@@ -12,19 +12,52 @@ import { ConfirmDialog } from "../ui/dialog";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
+import { Check, FileText, Video } from "../icons";
 
 const CommandSearch = lazy(() => import("../CommandSearch"));
 
 const platform = getCachedPlatform();
 
-function NewChatEmptyState() {
+const STARTER_PROMPTS = [
+  { key: "chat.starters.todos", icon: Check },
+  { key: "chat.starters.meeting", icon: Video },
+  { key: "chat.starters.sharedNotes", icon: FileText },
+] as const;
+
+function NewChatEmptyState({
+  onPrompt,
+  showSuggestions,
+  disabled,
+}: {
+  onPrompt: (prompt: string) => void;
+  showSuggestions: boolean;
+  disabled: boolean;
+}) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col items-center justify-center h-full -mt-6 select-none">
-      <ChatEmptyIllustration />
-      <p className="text-xs text-foreground/50 dark:text-foreground/45 text-center max-w-48 mt-4">
-        {t("chat.newChatEmpty")}
-      </p>
+    <div className="flex h-full min-h-80 flex-col items-center justify-center px-4 text-center">
+      <div className="flex h-20 w-20 items-center justify-center rounded-full border border-border bg-card shadow-sm dark:border-white/10">
+        <ChatEmptyIllustration size={58} />
+      </div>
+      <p className="mt-4 text-sm text-muted-foreground">{t("chat.newChatEmpty")}</p>
+      {showSuggestions && (
+        <div className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
+          {STARTER_PROMPTS.map(({ key, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              disabled={disabled}
+              onClick={() => onPrompt(t(key))}
+              className="flex min-h-28 flex-col items-start justify-between rounded-2xl border border-border bg-card p-4 text-start text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <Icon size={16} />
+              </span>
+              <span>{t(key)}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -166,7 +199,13 @@ export default function ChatView() {
             <>
               <ChatMessages
                 messages={persistence.messages}
-                emptyState={<NewChatEmptyState />}
+                emptyState={
+                  <NewChatEmptyState
+                    onPrompt={(prompt) => void handleTextSubmit(prompt)}
+                    showSuggestions={isNewChat}
+                    disabled={streaming.agentState !== "idle"}
+                  />
+                }
                 contentClassName={PAGE_CONTENT_WIDTH_CLASS}
               />
               <div className="px-3 pb-3 pt-1">
