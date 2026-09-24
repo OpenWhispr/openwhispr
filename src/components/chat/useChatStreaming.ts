@@ -298,7 +298,8 @@ export function useChatStreaming({
         const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
         // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
         const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
-        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}`;
+        const gmailEmail = settings.gmailConnected ? settings.gmailEmail : "";
+        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${gmailEmail}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
@@ -315,6 +316,7 @@ export function useChatStreaming({
               getSnippets: () => getSettings().snippets,
               setSnippets: (snippets) => useSettingsStore.getState().setSnippets(snippets),
             },
+            gmailEmail,
           });
           toolRegistryRef.current = { key: cacheKey, registry };
         }
