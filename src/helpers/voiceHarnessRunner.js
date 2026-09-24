@@ -1,4 +1,4 @@
-// End-to-end harness for the voice spike (OPENWHISPR_VOICE_SPIKE_HARNESS=1).
+// End-to-end harness for local voice conversation (OPENWHISPR_VOICE_HARNESS=1).
 // The renderer opens a session with no mic; this runner synthesizes each
 // scripted question, plays it into the worker's VAD at real-time pace, and
 // collects the renderer's per-turn report. Everything after the VAD is the live
@@ -100,8 +100,8 @@ function toResult(scenario, report, extra = {}) {
   };
 }
 
-async function runVoiceHarness({ voiceWorker, spikeEvents, getSession, sendToRenderer }) {
-  const started = await waitFor(spikeEvents, "session-started", 120_000);
+async function runVoiceHarness({ voiceWorker, conversationEvents, getSession, sendToRenderer }) {
+  const started = await waitFor(conversationEvents, "session-started", 120_000);
   if (!started) {
     debugLogger.error("voice harness: no voice session started within 2 minutes");
     return null;
@@ -124,19 +124,19 @@ async function runVoiceHarness({ voiceWorker, spikeEvents, getSession, sendToRen
   const results = [];
   for (const [index, scenario] of HARNESS_SCENARIOS.entries()) {
     debugLogger.info("voice harness: scenario", { id: scenario.id, say: scenario.say });
-    const report = waitFor(spikeEvents, "turn-report", TURN_TIMEOUT_MS);
+    const report = waitFor(conversationEvents, "turn-report", TURN_TIMEOUT_MS);
     if (!scenario.bargeIn) {
       await playIntoVad(voiceWorker, audio[index].main);
       results.push(toResult(scenario, await report));
     } else {
-      const firstAudio = waitFor(spikeEvents, "turn-event", TURN_TIMEOUT_MS, (e) => e.type === "first-audio");
+      const firstAudio = waitFor(conversationEvents, "turn-event", TURN_TIMEOUT_MS, (e) => e.type === "first-audio");
       await playIntoVad(voiceWorker, audio[index].main);
       await firstAudio;
       await delay(BARGE_IN_AFTER_AUDIO_MS);
-      const flushed = waitFor(spikeEvents, "turn-event", 10_000, (e) => e.type === "flushed");
+      const flushed = waitFor(conversationEvents, "turn-event", 10_000, (e) => e.type === "flushed");
       const followUp = (async () => {
         await report;
-        return waitFor(spikeEvents, "turn-report", TURN_TIMEOUT_MS);
+        return waitFor(conversationEvents, "turn-report", TURN_TIMEOUT_MS);
       })();
       const { speechStartedAt } = await playIntoVad(voiceWorker, audio[index].bargeIn);
       const flush = await flushed;
@@ -173,8 +173,8 @@ async function runVoiceHarness({ voiceWorker, spikeEvents, getSession, sendToRen
   // Visible in the terminal that launched the app, whatever the log level.
   process.stdout.write(`\nVoice harness report: ${reportPath}\n`);
 
-  sendToRenderer("voice-spike:harness-done");
-  if (process.env.OPENWHISPR_VOICE_SPIKE_HARNESS_QUIT === "1") {
+  sendToRenderer("voice-conversation:harness-done");
+  if (process.env.OPENWHISPR_VOICE_HARNESS_QUIT === "1") {
     setTimeout(() => app.quit(), 1000);
   }
   return { reportPath, summary };

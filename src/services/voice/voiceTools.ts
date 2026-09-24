@@ -21,7 +21,7 @@ export function compactToolResultForVoice(toolName: string, data: unknown): unkn
   }));
 }
 
-// Voice spike: English-only for now; needs translation before shipping.
+// Voice conversation: English-only for now; needs translation before shipping.
 export function voiceToolFiller(toolNames: string[]): string {
   if (toolNames.includes("web_search")) return "Let me look that up.";
   if (toolNames.some((name) => name === "search_notes" || name === "get_note")) {

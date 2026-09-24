@@ -117,7 +117,7 @@ test("every GPU ladder rung inherits the requested context and cache bounds", as
 });
 
 // Gemma 4 needs --swa-full for llama-server's prompt cache to reuse a prefix
-// past its 512-token sliding window (voice-spike model comparison, 2026-09-23).
+// past its 512-token sliding window (voice conversation model comparison, 2026-09-23).
 test("model-specific server args are appended; anything that isn't a flag list is ignored", () => {
   const manager = new LlamaServerManager();
   const withFlag = manager._buildBaseArgs("/models/gemma.gguf", 8221, { extraArgs: ["--swa-full"] });

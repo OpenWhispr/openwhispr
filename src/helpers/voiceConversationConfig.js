@@ -53,9 +53,9 @@ const PARAKEET_FALLBACK_ORDER = [
 
 /**
  * The settings' Parakeet model may not be downloaded (e.g. cloud transcription
- * users), so the spike uses the first downloaded candidate instead.
+ * users), so voice conversation uses the first downloaded candidate instead.
  */
-function resolveSpikeParakeetModel(requested, isDownloaded) {
+function resolveVoiceParakeetModel(requested, isDownloaded) {
   if (requested && isDownloaded(requested)) return requested;
   return PARAKEET_FALLBACK_ORDER.find((name) => isDownloaded(name)) || requested;
 }
@@ -72,6 +72,6 @@ function float32ToPcm16Buffer(samples) {
 module.exports = {
   VAD_SAMPLE_RATE,
   buildVoiceWorkerConfig,
-  resolveSpikeParakeetModel,
+  resolveVoiceParakeetModel,
   float32ToPcm16Buffer,
 };

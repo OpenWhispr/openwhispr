@@ -9,13 +9,13 @@ const {
   VAD_SAMPLE_RATE,
   buildVoiceWorkerConfig,
   float32ToPcm16Buffer,
-  resolveSpikeParakeetModel,
-} = require("./voiceSpikeConfig");
+  resolveVoiceParakeetModel,
+} = require("./voiceConversationConfig");
 
-// Local voice-conversation spike: dev-only, enabled with OPENWHISPR_VOICE_SPIKE=1.
-// The renderer streams echo-cancelled 16 kHz mic frames in; the worker's VAD
-// cuts turns, Parakeet transcribes them here, and TTS audio streams back out.
-function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
+// Local voice conversation: the renderer streams echo-cancelled 16 kHz mic frames in;
+// the worker's VAD + Smart Turn cut turns, Parakeet transcribes them here, and Pocket
+// TTS audio streams back out. Gated in the renderer by the voiceConversationEnabled setting.
+function registerVoiceConversationIpc({ parakeetManager, getMeetingDetectionEngine }) {
   let sender = null;
   let session = null;
 
@@ -25,17 +25,19 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
     try {
       getMeetingDetectionEngine?.()?.setUserRecording(active);
     } catch (error) {
-      debugLogger.warn("voice spike could not update meeting detection", { error: error?.message });
+      debugLogger.warn("voice conversation could not update meeting detection", {
+        error: error?.message,
+      });
     }
   };
   let configuredKey = null;
   let configuredSampleRate = null;
   let configuredSmartTurn = false;
-  const spikeEvents = new EventEmitter();
+  const conversationEvents = new EventEmitter();
 
   const send = (payload, transfer) => {
     if (!sender || sender.isDestroyed()) return;
-    sender.send("voice-spike:event", payload, transfer);
+    sender.send("voice-conversation:event", payload, transfer);
   };
 
   voiceWorker.on("speech-start", () => {
@@ -61,7 +63,7 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
         endpoint: endpoint || null,
       });
     } catch (error) {
-      debugLogger.error("voice spike transcription failed", { error: error?.message });
+      debugLogger.error("voice conversation transcription failed", { error: error?.message });
       send({ type: "error", stage: "stt", message: error?.message || String(error) });
     }
   });
@@ -75,26 +77,27 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
     if (session) send({ type: "error", stage: "worker", message: `voice worker exited (${code})` });
   });
 
-  ipcMain.handle("voice-spike:enabled", () => process.env.OPENWHISPR_VOICE_SPIKE === "1");
-
   // End-to-end harness: the renderer reports each finished turn; the runner
   // (voiceHarnessRunner.js) waits on these to score scripted conversations.
-  const harnessEnabled =
-    process.env.OPENWHISPR_VOICE_SPIKE === "1" && process.env.OPENWHISPR_VOICE_SPIKE_HARNESS === "1";
-  ipcMain.handle("voice-spike:harness-enabled", () => harnessEnabled);
+  const harnessEnabled = process.env.OPENWHISPR_VOICE_HARNESS === "1";
+  ipcMain.handle("voice-conversation:harness-enabled", () => harnessEnabled);
   // Local model id that answers voice turns instead of the Voice Assistant setting,
   // so harness comparisons neither depend on nor change the user's settings.
   ipcMain.handle(
-    "voice-spike:brain-override",
-    () => (process.env.OPENWHISPR_VOICE_SPIKE_BRAIN || "").trim() || null
+    "voice-conversation:brain-override",
+    () => (process.env.OPENWHISPR_VOICE_HARNESS_BRAIN || "").trim() || null
   );
-  ipcMain.on("voice-spike:turn-report", (_event, report) => spikeEvents.emit("turn-report", report));
-  ipcMain.on("voice-spike:turn-event", (_event, turnEvent) => spikeEvents.emit("turn-event", turnEvent));
+  ipcMain.on("voice-conversation:turn-report", (_event, report) =>
+    conversationEvents.emit("turn-report", report)
+  );
+  ipcMain.on("voice-conversation:turn-event", (_event, turnEvent) =>
+    conversationEvents.emit("turn-event", turnEvent)
+  );
   if (harnessEnabled) {
     require("./voiceHarnessRunner")
       .runVoiceHarness({
         voiceWorker,
-        spikeEvents,
+        conversationEvents,
         getSession: () => session,
         sendToRenderer: (channel) => {
           if (sender && !sender.isDestroyed()) sender.send(channel);
@@ -103,7 +106,7 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
       .catch((error) => debugLogger.error("voice harness failed", { error: error?.message }));
   }
 
-  ipcMain.handle("voice-spike:start", async (event, options = {}) => {
+  ipcMain.handle("voice-conversation:start", async (event, options = {}) => {
     sender = event.sender;
     if (!voiceModels.getVoiceModelStatus().ready) throw new Error("voice-models-missing");
     const config = buildVoiceWorkerConfig({ modelPaths: voiceModels.getVoiceModelPaths() });
@@ -122,7 +125,7 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
     }
     setRecording(true);
     session = {
-      parakeetModel: resolveSpikeParakeetModel(options.parakeetModel, (name) =>
+      parakeetModel: resolveVoiceParakeetModel(options.parakeetModel, (name) =>
         parakeetManager.isModelDownloaded(name)
       ),
       language: options.language,
@@ -130,12 +133,12 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
       brainModel: options.brainModel,
       harness: !!options.harness,
     };
-    spikeEvents.emit("session-started", session);
+    conversationEvents.emit("session-started", session);
     // Warm Parakeet now: a cold server start (~3 s) would otherwise land on the first turn.
     parakeetManager.startServer(session.parakeetModel, session.language).catch((error) => {
-      debugLogger.warn("voice spike Parakeet warm-up failed", { error: error?.message });
+      debugLogger.warn("voice conversation Parakeet warm-up failed", { error: error?.message });
     });
-    debugLogger.info("voice spike started", {
+    debugLogger.info("voice conversation started", {
       smartTurn: configuredSmartTurn,
       minSilenceMs: Math.round(config.vad.sileroVad.minSilenceDuration * 1000),
       maxSilenceMs: config.smartTurn?.maxSilenceMs ?? null,
@@ -149,7 +152,7 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
   // Starts the voice model if needed and resets llama-server's 5-minute idle
   // timer, which a plain start() on a running server does not do. Called at
   // session start (so the first turn skips the cold start) and every minute after.
-  ipcMain.handle("voice-spike:keep-model-warm", async (_event, modelId) => {
+  ipcMain.handle("voice-conversation:keep-model-warm", async (_event, modelId) => {
     try {
       const modelManager = require("./modelManagerBridge").default;
       modelManager.ensureInitialized();
@@ -161,22 +164,24 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
       modelManager.serverManager.resetIdleTimer();
       return { warmed: true };
     } catch (error) {
-      debugLogger.warn("voice spike model warm-up failed", { error: error?.message });
+      debugLogger.warn("voice conversation model warm-up failed", { error: error?.message });
       return { warmed: false, reason: error?.message };
     }
   });
 
-  ipcMain.on("voice-spike:mic", (_event, samples) => {
+  ipcMain.on("voice-conversation:mic", (_event, samples) => {
     if (session) voiceWorker.notify("vad-feed", { samples });
   });
 
-  ipcMain.handle("voice-spike:speak", (_event, request) => voiceWorker.request("speak", request));
+  ipcMain.handle("voice-conversation:speak", (_event, request) =>
+    voiceWorker.request("speak", request)
+  );
 
-  ipcMain.handle("voice-spike:cancel-speech", (_event, { utteranceId }) =>
+  ipcMain.handle("voice-conversation:cancel-speech", (_event, { utteranceId }) =>
     voiceWorker.running ? voiceWorker.request("cancel", { utteranceId }) : { cancelled: true }
   );
 
-  ipcMain.handle("voice-spike:stop", () => {
+  ipcMain.handle("voice-conversation:stop", () => {
     if (session) setRecording(false);
     session = null;
     voiceWorker.notify("vad-reset", {});
@@ -184,4 +189,4 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
   });
 }
 
-module.exports = { registerVoiceSpikeIpc };
+module.exports = { registerVoiceConversationIpc };

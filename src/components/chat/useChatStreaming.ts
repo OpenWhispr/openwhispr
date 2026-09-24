@@ -87,20 +87,20 @@ interface UseChatStreamingOptions {
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
   /** Fires exactly once when displayable assistant content or tool activity becomes available. */
   onResponseContent?: () => void;
-  /** Receives each streamed content delta as it arrives (the voice spike speaks them). */
+  /** Receives each streamed content delta as it arrives (voice conversation speaks them). */
   onContentDelta?: (delta: string) => void;
   /**
-   * Voice spike: ask for short spoken replies and keep per-turn context out of the
+   * Voice conversation: ask for short spoken replies and keep per-turn context out of the
    * system prompt so a local model's prompt cache survives between turns.
    */
   voiceReplies?: boolean;
-  /** Voice spike: fires when a voice turn starts calling tools, so a filler line can play. */
+  /** Voice conversation: fires when a voice turn starts calling tools, so a filler line can play. */
   onToolCall?: (toolNames: string[]) => void;
-  /** Voice spike: the tools offered to the model for this voice turn. */
+  /** Voice conversation: the tools offered to the model for this voice turn. */
   onToolsAvailable?: (toolNames: string[]) => void;
-  /** Voice spike harness: write tools report success without changing anything. */
+  /** Voice conversation harness: write tools report success without changing anything. */
   voiceDryRunWrites?: boolean;
-  /** Voice spike harness: local model id that answers voice turns instead of the setting. */
+  /** Voice conversation harness: local model id that answers voice turns instead of the setting. */
   voiceModelOverride?: string | null;
 }
 
@@ -308,7 +308,7 @@ export function useChatStreaming({
         hasScreenContext: !!options?.attachment,
         isProviderImageWired: providerSupportsImages,
       });
-      // Voice spike harness: pin voice turns to a local model (OPENWHISPR_VOICE_SPIKE_BRAIN)
+      // Voice conversation harness: pin voice turns to a local model (OPENWHISPR_VOICE_HARNESS_BRAIN)
       // so model comparisons don't depend on, or change, the user's settings.
       const voiceModelOverride = voiceRepliesRef.current ? voiceModelOverrideRef.current : null;
       const llmConfig = voiceModelOverride

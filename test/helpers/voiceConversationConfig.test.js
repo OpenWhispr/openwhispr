@@ -5,14 +5,14 @@ const path = require("path");
 const {
   buildVoiceWorkerConfig,
   float32ToPcm16Buffer,
-  resolveSpikeParakeetModel,
-} = require("../../src/helpers/voiceSpikeConfig");
+  resolveVoiceParakeetModel,
+} = require("../../src/helpers/voiceConversationConfig");
 const { getVoiceModelPaths } = require("../../src/helpers/voiceModels");
 
 test("keeps the requested Parakeet model when it is downloaded", () => {
   const downloaded = new Set(["parakeet-tdt-0.6b-v3", "parakeet-unified-en-0.6b"]);
   assert.equal(
-    resolveSpikeParakeetModel("parakeet-tdt-0.6b-v3", (name) => downloaded.has(name)),
+    resolveVoiceParakeetModel("parakeet-tdt-0.6b-v3", (name) => downloaded.has(name)),
     "parakeet-tdt-0.6b-v3"
   );
 });
@@ -20,17 +20,17 @@ test("keeps the requested Parakeet model when it is downloaded", () => {
 test("falls back to the first downloaded candidate when the requested model is missing", () => {
   const downloaded = new Set(["parakeet-unified-en-0.6b"]);
   assert.equal(
-    resolveSpikeParakeetModel("parakeet-tdt-0.6b-v3", (name) => downloaded.has(name)),
+    resolveVoiceParakeetModel("parakeet-tdt-0.6b-v3", (name) => downloaded.has(name)),
     "parakeet-unified-en-0.6b"
   );
   assert.equal(
-    resolveSpikeParakeetModel(undefined, (name) => downloaded.has(name)),
+    resolveVoiceParakeetModel(undefined, (name) => downloaded.has(name)),
     "parakeet-unified-en-0.6b"
   );
 });
 
 test("returns the requested model when nothing is downloaded, so the error names it", () => {
-  assert.equal(resolveSpikeParakeetModel("parakeet-tdt-0.6b-v3", () => false), "parakeet-tdt-0.6b-v3");
+  assert.equal(resolveVoiceParakeetModel("parakeet-tdt-0.6b-v3", () => false), "parakeet-tdt-0.6b-v3");
 });
 
 test("config uses Pocket and Smart Turn from the voice models directory", () => {

@@ -195,7 +195,8 @@ export default function App() {
   const voiceConversation = useVoiceConversation({
     onUserTurn: (text) =>
       assistant.handleCommand({ text, attachment: null, selectedContext: null, delivery: null }),
-    onError: (message) => toast({ title: "Voice spike", description: message, variant: "destructive" }),
+    onError: (message) =>
+      toast({ title: t("voiceConversation.title"), description: message, variant: "destructive" }),
   });
   const interceptVoiceAgentToggle = React.useCallback(() => {
     if (!voiceConversation.enabled) return false;
@@ -204,7 +205,7 @@ export default function App() {
     voiceConversation.toggle();
     return true;
   }, [openAssistantPanel, voiceConversation]);
-  // Voice spike harness: open the panel and start a mic-less session once, after
+  // Voice conversation harness: open the panel and start a mic-less session once, after
   // the app has settled; the main process then plays the scripted conversation.
   const startHarnessRef = React.useRef(null);
   startHarnessRef.current = () => {

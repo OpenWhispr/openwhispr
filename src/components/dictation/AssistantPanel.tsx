@@ -80,7 +80,7 @@ interface AssistantPanelProps {
   onResponseContent: () => void;
   onConversationReset: () => void;
   onSelectionContextChange: (context: AgentSelectionContext | null) => void;
-  /** Local voice spike: speaks the streamed answer and lets barge-in cancel it. */
+  /** Local voice conversation: speaks the streamed answer and lets barge-in cancel it. */
   speechTap?: AssistantSpeechTap | null;
 }
 

@@ -10,7 +10,7 @@ export interface AssistantSpeechTap {
   onToolsAvailable: (toolNames: string[]) => void;
   /** Harness mode: write tools report success without changing anything. */
   dryRunWrites: boolean;
-  /** OPENWHISPR_VOICE_SPIKE_BRAIN: local model that answers voice turns, or null. */
+  /** OPENWHISPR_VOICE_HARNESS_BRAIN: local model that answers voice turns, or null. */
   brainOverride: string | null;
   /** Filled by the panel with its cancel function, so barge-in can stop the answer. */
   cancelRef: MutableRefObject<(() => void) | null>;
@@ -37,7 +37,7 @@ export interface VoiceTurnEndpoint {
   inferenceMs: number | null;
 }
 
-export type VoiceSpikeEvent =
+export type VoiceConversationEvent =
   | { type: "speech-start"; at: number }
   | {
       type: "transcript";

@@ -1,4 +1,4 @@
-// Pure pieces of the voice spike's end-to-end harness: the scripted scenarios,
+// Pure pieces of voice conversation's end-to-end harness: the scripted scenarios,
 // audio shaping, scoring, and the report. The runner (voiceHarnessRunner.js)
 // drives them through the live app.
 
@@ -116,7 +116,7 @@ const cell = (text) => String(text ?? "").replace(/\|/g, "/").replace(/\s+/g, " 
 function formatHarnessReport({ results, summary, environment }) {
   const scoredTotal = summary.passed + summary.failed;
   const lines = [
-    "# Voice spike harness report",
+    "# Voice conversation harness report",
     "",
     `- Machine: ${environment.machine}, ${environment.memoryGb} GB`,
     `- Brain: ${environment.brain} · Voice: ${environment.tts} · Run: ${environment.startedAt ?? ""}`,

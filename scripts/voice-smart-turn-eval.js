@@ -1,9 +1,9 @@
-// Offline end-of-turn evaluation for the voice spike: Silero-only vs Smart Turn.
+// Offline end-of-turn evaluation for local voice conversation: Silero-only vs Smart Turn.
 //
-//   ELECTRON_RUN_AS_NODE=1 ./node_modules/.bin/electron scripts/voice-spike-smart-turn-eval.js [outDir]
+//   ELECTRON_RUN_AS_NODE=1 ./node_modules/.bin/electron scripts/voice-smart-turn-eval.js [outDir]
 //
-// Synthesizes utterances with the spike's sherpa TTS voices, splices silent pauses
-// into the middle of some of them (at the quietest point, so the prosody before
+// Synthesizes utterances with voice conversation's Pocket TTS voice, splices silent
+// pauses into the middle of some of them (at the quietest point, so the prosody before
 // the pause still "continues"), adds a faint noise floor, then streams each clip
 // through the worker's exact VAD config + endpointer in 512-sample frames. The
 // classifier runs for real; its result is delivered to the endpointer only after
@@ -12,9 +12,12 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const sherpa = require("sherpa-onnx-node");
-const { buildVoiceWorkerConfig } = require("../src/helpers/voiceSpikeConfig");
+const { buildVoiceWorkerConfig } = require("../src/helpers/voiceConversationConfig");
+const { getVoiceModelPaths } = require("../src/helpers/voiceModels");
 const { createTurnEndpointer, createSampleRing } = require("../src/helpers/voiceTurnEndpointer");
 const { createSmartTurnSession } = require("../src/workers/smartTurnSession");
+
+const modelPaths = getVoiceModelPaths();
 
 const RATE = 16000;
 const FRAME = 512;
@@ -75,11 +78,7 @@ const LONG = [
     clause: "we",
   },
 ];
-const VOICES = [
-  { id: "pocket-bria", kind: "pocket" },
-  { id: "kokoro-sarah", kind: "kokoro", sid: 3 },
-  { id: "kokoro-george", kind: "kokoro", sid: 9 },
-];
+const VOICES = [{ id: "pocket-bria" }];
 
 const METHODS = [
   { id: "silero-500", silenceMs: 500, smartTurn: false },
@@ -280,7 +279,7 @@ async function synthesizeAll() {
   }
   const utterances = [];
   for (const voice of VOICES) {
-    const config = buildVoiceWorkerConfig({ cacheDir: CACHE_DIR, ttsKind: voice.kind });
+    const config = buildVoiceWorkerConfig({ modelPaths });
     const tts = await sherpa.OfflineTts.createAsync(config.tts);
     const extras = {};
     if (config.pocketVoiceWav) {
@@ -293,7 +292,7 @@ async function synthesizeAll() {
     for (const entry of [...COMPLETE.map((text) => ({ text })), ...LONG]) {
       const audio = await tts.generateAsync({
         text: entry.text,
-        sid: voice.sid || 0,
+        sid: 0,
         speed: 1.0,
         enableExternalBuffer: false,
         ...extras,
@@ -316,10 +315,13 @@ async function synthesizeAll() {
 const vads = new Map();
 function vadFor(method) {
   if (!vads.has(method.id)) {
-    const vadConfig = buildVoiceWorkerConfig({
-      cacheDir: CACHE_DIR,
-      silenceMs: method.silenceMs,
-    }).vad;
+    // Silero-only baseline / varied-silence methods: copy the shared config and
+    // override just the pause duration the worker would otherwise fix at 200 ms.
+    const { vad: baseVad } = buildVoiceWorkerConfig({ modelPaths });
+    const vadConfig = {
+      ...baseVad,
+      sileroVad: { ...baseVad.sileroVad, minSilenceDuration: method.silenceMs / 1000 },
+    };
     vads.set(method.id, new sherpa.Vad(vadConfig, 60));
   }
   const vad = vads.get(method.id);
@@ -398,10 +400,7 @@ const toMs = (samples) => Math.round((samples / RATE) * 1000);
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const utterances = await synthesizeAll();
-  const smartTurnConfig = buildVoiceWorkerConfig({
-    cacheDir: CACHE_DIR,
-    smartTurn: true,
-  }).smartTurn;
+  const smartTurnConfig = buildVoiceWorkerConfig({ modelPaths }).smartTurn;
   const classifier = await createSmartTurnSession(smartTurnConfig);
 
   const aligner = createAligner();

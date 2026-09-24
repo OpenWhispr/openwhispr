@@ -461,28 +461,29 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getGpuPackMigrationNotice: () => ipcRenderer.invoke("get-gpu-pack-migration-notice"),
   dismissGpuPackMigrationNotice: () => ipcRenderer.invoke("dismiss-gpu-pack-migration-notice"),
 
-  // Local voice-conversation spike (dev-only, OPENWHISPR_VOICE_SPIKE=1)
-  voiceSpike: {
-    isEnabled: () => ipcRenderer.invoke("voice-spike:enabled"),
-    start: (options) => ipcRenderer.invoke("voice-spike:start", options),
-    sendMic: (samples) => ipcRenderer.send("voice-spike:mic", samples),
-    keepModelWarm: (modelId) => ipcRenderer.invoke("voice-spike:keep-model-warm", modelId),
-    speak: (request) => ipcRenderer.invoke("voice-spike:speak", request),
-    cancelSpeech: (utteranceId) => ipcRenderer.invoke("voice-spike:cancel-speech", { utteranceId }),
-    stop: () => ipcRenderer.invoke("voice-spike:stop"),
-    isHarness: () => ipcRenderer.invoke("voice-spike:harness-enabled"),
-    brainOverride: () => ipcRenderer.invoke("voice-spike:brain-override"),
-    reportTurn: (report) => ipcRenderer.send("voice-spike:turn-report", report),
-    reportTurnEvent: (turnEvent) => ipcRenderer.send("voice-spike:turn-event", turnEvent),
+  // Local voice conversation, gated by the voiceConversationEnabled setting
+  // (the dev harness runs without it — see OPENWHISPR_VOICE_HARNESS)
+  voiceConversation: {
+    start: (options) => ipcRenderer.invoke("voice-conversation:start", options),
+    sendMic: (samples) => ipcRenderer.send("voice-conversation:mic", samples),
+    keepModelWarm: (modelId) => ipcRenderer.invoke("voice-conversation:keep-model-warm", modelId),
+    speak: (request) => ipcRenderer.invoke("voice-conversation:speak", request),
+    cancelSpeech: (utteranceId) =>
+      ipcRenderer.invoke("voice-conversation:cancel-speech", { utteranceId }),
+    stop: () => ipcRenderer.invoke("voice-conversation:stop"),
+    isHarness: () => ipcRenderer.invoke("voice-conversation:harness-enabled"),
+    brainOverride: () => ipcRenderer.invoke("voice-conversation:brain-override"),
+    reportTurn: (report) => ipcRenderer.send("voice-conversation:turn-report", report),
+    reportTurnEvent: (turnEvent) => ipcRenderer.send("voice-conversation:turn-event", turnEvent),
     onHarnessDone: (callback) => {
       const listener = () => callback();
-      ipcRenderer.on("voice-spike:harness-done", listener);
-      return () => ipcRenderer.removeListener("voice-spike:harness-done", listener);
+      ipcRenderer.on("voice-conversation:harness-done", listener);
+      return () => ipcRenderer.removeListener("voice-conversation:harness-done", listener);
     },
     onEvent: (callback) => {
       const listener = (_event, payload) => callback(payload);
-      ipcRenderer.on("voice-spike:event", listener);
-      return () => ipcRenderer.removeListener("voice-spike:event", listener);
+      ipcRenderer.on("voice-conversation:event", listener);
+      return () => ipcRenderer.removeListener("voice-conversation:event", listener);
     },
   },
 

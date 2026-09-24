@@ -1,4 +1,4 @@
-// End-of-turn policy for the voice spike, clocked in samples so it is pure and
+// End-of-turn policy for voice conversation, clocked in samples so it is pure and
 // replayable offline. Silence-only mode commits each Silero segment. Smart Turn
 // mode treats a (short) Silero segment end as a candidate pause: the classifier
 // decides whether the turn is complete, and max silence commits it regardless.

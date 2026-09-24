@@ -4153,5 +4153,8 @@
     },
     "start": "開始記錄",
     "join": "加入並轉錄"
+  },
+  "voiceConversation": {
+    "title": "語音對話"
   }
 }

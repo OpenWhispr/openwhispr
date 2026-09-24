@@ -76,7 +76,7 @@ export const useAudioRecording = (toast, options = {}) => {
     interceptVoiceAgentToggle,
   } = options;
 
-  // Voice spike: when it returns true, the voice-agent hotkey is handled elsewhere.
+  // Voice conversation: when it returns true, the voice-agent hotkey is handled elsewhere.
   const interceptVoiceAgentToggleRef = useRef(interceptVoiceAgentToggle);
   useEffect(() => {
     interceptVoiceAgentToggleRef.current = interceptVoiceAgentToggle;

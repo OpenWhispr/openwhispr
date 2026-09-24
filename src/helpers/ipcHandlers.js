@@ -1356,7 +1356,7 @@ class IPCHandlers {
   }
 
   setupHandlers() {
-    require("./voiceSpikeIpc").registerVoiceSpikeIpc({
+    require("./voiceConversationIpc").registerVoiceConversationIpc({
       parakeetManager: this.parakeetManager,
       getMeetingDetectionEngine: () => this.meetingDetectionEngine,
     });

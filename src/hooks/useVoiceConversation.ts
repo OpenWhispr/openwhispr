@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getSettings } from "../stores/settingsStore";
+import { getSettings, useSettingsStore } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { createSpeechChunker } from "../services/voice/speechChunker";
 import { createPcmPlayer, type PcmPlayer } from "../services/voice/pcmPlayer";
 import { startMicStream, type MicStream } from "../services/voice/micStream";
 import type {
   AssistantSpeechTap,
-  VoiceSpikeEvent,
+  VoiceConversationEvent,
   VoiceTurnEndpoint,
 } from "../services/voice/types";
 import { shouldStopForIdle, voiceToolFiller } from "../services/voice/voiceTools";
@@ -54,12 +54,11 @@ const since = (from: number, to: number | undefined) =>
   to === undefined ? null : Math.round(to - from);
 
 /**
- * Local voice-conversation spike: an always-listening loop that turns each VAD
- * turn into an assistant command and speaks the streamed answer back, with
- * barge-in. Dev-only, enabled with OPENWHISPR_VOICE_SPIKE=1.
+ * Hands-free local voice conversation: an always-listening loop that turns each VAD
+ * turn into an assistant command and speaks the streamed answer back, with barge-in.
+ * Enabled by the voiceConversationEnabled setting.
  */
 export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationOptions) {
-  const [enabled, setEnabled] = useState(false);
   const [state, setState] = useState<VoiceConversationState>("off");
   const activeRef = useRef(false);
   const micRef = useRef<MicStream | null>(null);
@@ -82,13 +81,13 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
 
-  const api = window.electronAPI?.voiceSpike;
+  const api = window.electronAPI?.voiceConversation;
+
+  const settingEnabled = useSettingsStore((state) => state.voiceConversationEnabled);
+  // The harness runs without the setting so comparisons never depend on user settings.
+  const enabled = settingEnabled || harnessAvailable;
 
   useEffect(() => {
-    void api
-      ?.isEnabled()
-      .then((value: boolean) => setEnabled(Boolean(value)))
-      .catch(() => {});
     void api
       ?.isHarness()
       .then((value: boolean) => setHarnessAvailable(Boolean(value)))
@@ -129,9 +128,9 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       chunks: turn.chunks,
     };
     const endpointReason = turn.endpoint?.reason ?? null;
-    logger.info("Voice spike turn", { outcome, endpointReason, ...metrics }, "voice-spike");
+    logger.info("Voice conversation turn", { outcome, endpointReason, ...metrics }, "voice-conversation");
     if (harnessRef.current) {
-      window.electronAPI?.voiceSpike?.reportTurn({
+      window.electronAPI?.voiceConversation?.reportTurn({
         outcome,
         transcript: turn.transcript,
         calledTools: turn.calledTools,
@@ -171,7 +170,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
           }
         })
         .catch((error: Error) => {
-          logger.warn("Voice spike TTS failed", { error: error.message }, "voice-spike");
+          logger.warn("Voice conversation TTS failed", { error: error.message }, "voice-conversation");
         })
         .finally(() => {
           pendingSpeaksRef.current -= 1;
@@ -195,7 +194,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
   }, [api, logTurn]);
 
   const handleEvent = useCallback(
-    (event: VoiceSpikeEvent) => {
+    (event: VoiceConversationEvent) => {
       if (!activeRef.current) return;
       if (event.type !== "error") lastActivityRef.current = Date.now();
       if (event.type === "speech-start") {
@@ -231,7 +230,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         }
         playerRef.current?.enqueue(event.samples);
       } else if (event.type === "error") {
-        logger.warn("Voice spike error", { stage: event.stage, message: event.message }, "voice-spike");
+        logger.warn("Voice conversation error", { stage: event.stage, message: event.message }, "voice-conversation");
         onErrorRef.current?.(event.message);
       }
     },
@@ -243,7 +242,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
 
   useEffect(() => {
     if (!api) return undefined;
-    return api.onEvent((event: VoiceSpikeEvent) => handleEventRef.current(event));
+    return api.onEvent((event: VoiceConversationEvent) => handleEventRef.current(event));
   }, [api]);
 
   const stop = useCallback(async () => {
@@ -258,7 +257,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
     playerRef.current = null;
     await api?.stop().catch(() => {});
     setState("off");
-    logger.info("Voice spike stopped", {}, "voice-spike");
+    logger.info("Voice conversation stopped", {}, "voice-conversation");
   }, [api, bargeIn]);
 
   const start = useCallback(async (harness = false) => {
@@ -297,14 +296,14 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
           if (frames <= 64) {
             for (const sample of frame) peak = Math.max(peak, Math.abs(sample));
             if (frames === 64) {
-              logger.info("Voice spike mic check", { frames, peak: peak.toFixed(4) }, "voice-spike");
+              logger.info("Voice conversation mic check", { frames, peak: peak.toFixed(4) }, "voice-conversation");
             }
           }
           api.sendMic(frame);
         },
       });
       setState("listening");
-      logger.info("Voice spike started", info, "voice-spike");
+      logger.info("Voice conversation started", info, "voice-conversation");
 
       // Keep a local voice model loaded for the whole session: warm it now so the
       // first turn skips the cold start, then beat llama-server's 5-minute idle stop.
@@ -330,7 +329,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
             idleMs: IDLE_STOP_MS,
           })
         ) {
-          logger.info("Voice spike idle stop", { idleMs: IDLE_STOP_MS }, "voice-spike");
+          logger.info("Voice conversation idle stop", { idleMs: IDLE_STOP_MS }, "voice-conversation");
           void stopRef.current();
         }
       }, SESSION_TICK_MS);
@@ -339,9 +338,9 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       const message =
         failure?.message || [failure?.name, failure?.constraint].filter(Boolean).join(": ") || String(error);
       logger.error(
-        "Voice spike failed to start",
+        "Voice conversation failed to start",
         { error: message, name: failure?.name, constraint: failure?.constraint },
-        "voice-spike"
+        "voice-conversation"
       );
       onErrorRef.current?.(message);
       await stop();
@@ -404,7 +403,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
   useEffect(() => {
     if (!api) return undefined;
     return api.onHarnessDone(() => {
-      logger.info("Voice spike harness finished", {}, "voice-spike");
+      logger.info("Voice conversation harness finished", {}, "voice-conversation");
       void stopRef.current();
     });
   }, [api]);

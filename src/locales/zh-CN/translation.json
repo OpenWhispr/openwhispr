@@ -4153,5 +4153,8 @@
     },
     "start": "开始记录",
     "join": "加入并转录"
+  },
+  "voiceConversation": {
+    "title": "语音对话"
   }
 }

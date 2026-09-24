@@ -12,7 +12,7 @@ const SAMPLE_RATE = 16000;
 const FRAME_SIZE = 512;
 
 const WORKLET_SOURCE = `
-class VoiceSpikeFrameProcessor extends AudioWorkletProcessor {
+class VoiceConversationFrameProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.frame = new Float32Array(${FRAME_SIZE});
@@ -37,7 +37,7 @@ class VoiceSpikeFrameProcessor extends AudioWorkletProcessor {
     return true;
   }
 }
-registerProcessor("voice-spike-frames", VoiceSpikeFrameProcessor);
+registerProcessor("voice-conversation-frames", VoiceConversationFrameProcessor);
 `;
 
 /**
@@ -80,7 +80,7 @@ export async function startMicStream({ deviceId, onFrame }: MicStreamOptions): P
     URL.revokeObjectURL(url);
   }
   const source = context.createMediaStreamSource(stream);
-  const node = new AudioWorkletNode(context, "voice-spike-frames");
+  const node = new AudioWorkletNode(context, "voice-conversation-frames");
   node.port.onmessage = (event: MessageEvent<Float32Array>) => onFrame(event.data);
   source.connect(node);
 

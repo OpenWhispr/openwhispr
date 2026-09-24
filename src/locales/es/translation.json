@@ -4153,5 +4153,8 @@
     },
     "start": "Tomar notas",
     "join": "Unirse y transcribir"
+  },
+  "voiceConversation": {
+    "title": "Conversación de voz"
   }
 }
