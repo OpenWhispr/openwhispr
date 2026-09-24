@@ -38,3 +38,14 @@ The rollout applies to dictation. Local Orukeet, meetings and existing BYOK prov
 Automated tests cover real WebSocket transport, the registered Electron IPC handlers, startup buffering, token authentication, endpoint pinning, allowance and policy denials, account changes, cancellation, duplicate finals, silence, capture flush ordering, retry and timeout. [Streaming benchmark results](orukeet-benchmarks.md) report the deployed infrastructure measurements separately from desktop tests.
 
 Before enabling the flag, accept the private backend route and metering, then verify microphone, hotkey, cleanup and single-paste behavior on signed macOS, Windows and Linux release builds. Automated Electron-boundary tests do not claim native OS acceptance. Roll back by restoring the previous `streamingProvider`; let active recordings finish. Track setup, stop-to-final, release-to-paste, queue time and fallback rate separately.
+
+## Routing policy (OpenWhispr)
+
+Orukeet transcribes 25 languages (`bg cs da de el en es et fi fr hr hu it lt lv mt nl pl pt ro ru sk sl sv uk`) and renders any other language as confident nonsense. Those dictations stay on the existing Cloud batch provider:
+
+- An explicitly selected language outside the 25 never starts an Orukeet stream. The dictation records in batch, tagged `language_unsupported`.
+- With the language set to "auto", the desktop reads the estimate in Orukeet's `final` message, never the early `language` events. An estimate outside the 25 with a score of at least 0.90 on at least 3 seconds of audio discards Orukeet's text. The retained recording is uploaded to `/api/transcribe`, tagged `language_detected_unsupported`. The upload still declares "auto", never the detected language, because `/api/transcribe` picks its model by declared language. Cleanup runs once, on the batch transcript. If the upload fails, Orukeet's text is kept. This applies to managed OpenWhispr Cloud dictation only.
+- Every Orukeet dictation reports the final estimate as `sttDetectedLanguage`, `sttDetectedLanguageConfidence`, `sttDetectedLanguageAudioSeconds` and `sttDetectedLanguageStatus` on its usage, cleanup or batch request. A final without a `language` key (an older gateway) reports nothing.
+- The backend stores the estimate in `transcription_logs.metadata`. When at least 2 of a user's newest 20 language-bearing rows from the last 30 days are outside the 25, `/api/stt-config` stops offering Orukeet and `/api/stt/orukeet/session` refuses with 403 `FEATURE_NOT_ENABLED` and `reason: "language_unsupported"`. The desktop treats that refusal as its `feature_disabled` batch fallback. Allowlisted testers skip this gate.
+
+The 0.90 threshold is Oruk's classifier score, not a calibrated probability. It caught 92% of unsupported FLEURS clips at 6 seconds and 62.5% at 3 seconds, while flagging 0.4% and 1.2% of supported ones. See [streaming language metadata](orukeet-streaming-language.md).

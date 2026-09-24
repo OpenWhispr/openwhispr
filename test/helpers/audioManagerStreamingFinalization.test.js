@@ -5,7 +5,7 @@ const { WebSocketServer } = require("ws");
 const { OrukeetStreaming } = require("../../src/helpers/orukeetStreaming");
 const { loadAudioManager } = require("./harness/audioManager");
 
-async function loadManagerClass(t) {
+async function loadManagerClass(t, mockModules) {
   const { AudioManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-streaming-finalization-test-",
     settingsKey: "__streamingFinalizationSettings",
@@ -15,6 +15,7 @@ async function loadManagerClass(t) {
       cloudTranscriptionMode: "byok",
       cloudTranscriptionProvider: "openai",
     },
+    mockModules,
   });
   return AudioManager;
 }
@@ -1247,4 +1248,282 @@ test("a managed Orukeet session fails over even if its route changes mid-recordi
   assert.deepEqual(errors, []);
   assert.equal(manager._streamingStopPromise, null, "the recording is not cut off");
   await manager.stopStreamingRecording();
+});
+
+const JA_FINAL = {
+  success: true,
+  text: "ashita no kaigi",
+  model: "orukeet-v0.1.0",
+  language: "ja",
+  languageConfidence: 0.97,
+  languageAudioSeconds: 6,
+};
+
+const JA_DETECTION = {
+  sttDetectedLanguage: "ja",
+  sttDetectedLanguageConfidence: 0.97,
+  sttDetectedLanguageAudioSeconds: 6,
+  sttDetectedLanguageStatus: "detected",
+};
+
+const detectionFields = (opts) =>
+  Object.fromEntries(Object.entries(opts).filter(([key]) => key.startsWith("sttDetected")));
+
+function orukeetProvider(final) {
+  return {
+    finalizeAcknowledged: true,
+    finalize: async () => final,
+    stop: async () => ({ success: true, text: "" }),
+  };
+}
+
+// Stops a managed Cloud dictation whose provider acknowledged `final`, and
+// records what reached Cloud: batch uploads, cleanup requests, streaming usage
+// and the published result.
+async function stopManagedDictation(
+  AudioManager,
+  { final, providerName = "orukeet", language = "auto", upload, settings = {}, overrides = {} }
+) {
+  globalThis.__streamingFinalizationSettings = {
+    ...globalThis.__streamingFinalizationSettings,
+    cloudTranscriptionMode: "openwhispr",
+    isSignedIn: true,
+    ...settings,
+  };
+  const { manager } = createFinalizingManager(AudioManager);
+  manager.recordingStartTime = Date.now() - 8000;
+  manager.mergeRecordedSegments = async () => new Blob([new Uint8Array(100)]);
+  manager.getStreamingProvider = () => orukeetProvider(final);
+  manager.getStreamingProviderName = () => providerName;
+  manager.getEffectiveSttLanguage = () => language;
+  Object.assign(manager, overrides);
+  const uploads = [];
+  if (upload) {
+    manager.processWithOpenWhisprCloud = async (_blob, metadata) => {
+      uploads.push(metadata);
+      return upload(manager);
+    };
+  }
+  const reasonCalls = [];
+  globalThis.window.electronAPI.cloudReason = async (text, opts) => {
+    reasonCalls.push([text, opts]);
+    return { success: true, text: `${text}。` };
+  };
+  const usage = [];
+  globalThis.window.electronAPI.cloudStreamingUsage = async (_text, _seconds, opts) => {
+    usage.push(opts);
+    return { success: true };
+  };
+  let usageSettled;
+  const settled = new Promise((resolve) => {
+    usageSettled = resolve;
+  });
+  globalThis.window.dispatchEvent = () => usageSettled();
+  const published = [];
+  manager.onTranscriptionComplete = (result) => published.push(result);
+  const errors = [];
+  manager.onError = (error) => errors.push(error);
+  const stopResult = await manager.stopStreamingRecording();
+  // Usage settles only after a non-empty transcript is published.
+  if (published.some((result) => result.text)) await settled;
+  return { manager, uploads, reasonCalls, usage, published, errors, stopResult };
+}
+
+test("a confident unsupported estimate re-transcribes the kept recording through Cloud", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { uploads, usage, published } = await stopManagedDictation(AudioManager, {
+    final: JA_FINAL,
+    upload: async () => ({ text: "明日の会議", rawText: "明日の会議" }),
+  });
+  assert.equal(uploads.length, 1);
+  assert.equal(uploads[0].streamingFallbackReason, "language_detected_unsupported");
+  assert.deepEqual(uploads[0].detectedLanguageFields, JA_DETECTION);
+  assert.equal(Object.hasOwn(uploads[0], "language"), false);
+  assert.equal(published[0].text, "明日の会議");
+  assert.equal(published[0].rawText, "明日の会議");
+  // /api/transcribe metered the re-transcription; the stream is not metered too.
+  assert.equal(usage.length, 0);
+});
+
+test("language re-transcription skips streaming cleanup", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/stores/settingsStore": `
+      export const getSettings = () => globalThis.__streamingFinalizationSettings;
+      export const getEffectiveCleanupModel = () => null;
+      export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
+      export const isCloudCleanupMode = () => true;
+      export const isCloudDictationAgentMode = () => false;
+      export const isCloudTranslationMode = () => false;
+    `,
+  });
+  const originalNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", { value: { onLine: true }, configurable: true });
+  t.after(() =>
+    Object.defineProperty(globalThis, "navigator", {
+      value: originalNavigator,
+      configurable: true,
+    })
+  );
+  const transcribeOpts = [];
+  globalThis.window.electronAPI.cloudTranscribe = async (_audio, opts) => {
+    transcribeOpts.push(opts);
+    return { success: true, text: "明日の会議", sttProvider: "openai" };
+  };
+  const { reasonCalls, usage, published } = await stopManagedDictation(AudioManager, {
+    final: JA_FINAL,
+    settings: { useCleanupModel: true, cleanupCloudMode: "openwhispr", customPrompts: {} },
+    overrides: {
+      isDictionaryEcho: () => false,
+      getWhisperPrompt: () => null,
+      finalizeChineseScript: async (text) => text,
+    },
+  });
+  // The real batch path ran: an "auto" upload that never declares the estimate.
+  assert.equal(transcribeOpts.length, 1);
+  assert.equal(Object.hasOwn(transcribeOpts[0], "language"), false);
+  assert.equal(transcribeOpts[0].streamingFallbackReason, "language_detected_unsupported");
+  assert.equal(transcribeOpts[0].sttDetectedLanguage, "ja");
+  // One cleanup, on the Cloud transcript; Orukeet's text never reaches /api/reason.
+  assert.deepEqual(
+    reasonCalls.map(([text]) => text),
+    ["明日の会議"]
+  );
+  assert.equal(reasonCalls[0][1].sttDetectedLanguage, "ja");
+  assert.equal(published[0].text, "明日の会議。");
+  assert.equal(usage.length, 0);
+});
+
+test("a low score, short window, supported or unknown estimate keeps the Orukeet text", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  for (const [final, expected] of [
+    [
+      { ...JA_FINAL, languageConfidence: 0.89 },
+      { ...JA_DETECTION, sttDetectedLanguageConfidence: 0.89 },
+    ],
+    [
+      { ...JA_FINAL, languageAudioSeconds: 2 },
+      { ...JA_DETECTION, sttDetectedLanguageAudioSeconds: 2 },
+    ],
+    [
+      { ...JA_FINAL, language: "de" },
+      { ...JA_DETECTION, sttDetectedLanguage: "de" },
+    ],
+    [
+      { ...JA_FINAL, language: null, languageConfidence: null },
+      { sttDetectedLanguageStatus: "unknown" },
+    ],
+  ]) {
+    const { uploads, usage, published } = await stopManagedDictation(AudioManager, {
+      final,
+      upload: async () => assert.fail("must not re-transcribe"),
+    });
+    assert.equal(uploads.length, 0);
+    assert.equal(published[0].text, "ashita no kaigi");
+    assert.equal(usage.length, 1);
+    assert.deepEqual(detectionFields(usage[0]), expected);
+  }
+});
+
+test("an explicit language setting never re-transcribes", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { uploads, usage, published } = await stopManagedDictation(AudioManager, {
+    final: JA_FINAL,
+    language: "en",
+    upload: async () => assert.fail("must not re-transcribe"),
+  });
+  assert.equal(uploads.length, 0);
+  assert.equal(published[0].text, "ashita no kaigi");
+  assert.deepEqual(detectionFields(usage[0]), JA_DETECTION);
+});
+
+test("an older gateway sends no detection fields", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { uploads, usage, published } = await stopManagedDictation(AudioManager, {
+    final: { success: true, text: "hello there" },
+    upload: async () => assert.fail("must not re-transcribe"),
+  });
+  assert.equal(uploads.length, 0);
+  assert.equal(published[0].text, "hello there");
+  assert.deepEqual(detectionFields(usage[0]), {});
+});
+
+test("a failed re-transcription keeps the Orukeet text and reports usage", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  for (const upload of [
+    async () => {
+      throw new Error("Cloud transcription failed");
+    },
+    async () => ({ text: "" }),
+  ]) {
+    const { uploads, usage, published } = await stopManagedDictation(AudioManager, {
+      final: JA_FINAL,
+      upload,
+    });
+    assert.equal(uploads.length, 1);
+    assert.equal(published[0].text, "ashita no kaigi");
+    assert.equal(usage.length, 1);
+    assert.deepEqual(detectionFields(usage[0]), JA_DETECTION);
+  }
+});
+
+test("a non-Orukeet provider is untouched", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { uploads, usage, published } = await stopManagedDictation(AudioManager, {
+    final: JA_FINAL,
+    providerName: "deepgram",
+    upload: async () => assert.fail("must not re-transcribe"),
+  });
+  assert.equal(uploads.length, 0);
+  assert.equal(published[0].text, "ashita no kaigi");
+  assert.deepEqual(detectionFields(usage[0]), {});
+});
+
+test("an empty Orukeet final with a confident unsupported estimate still re-transcribes", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { uploads, usage, published } = await stopManagedDictation(AudioManager, {
+    final: { ...JA_FINAL, text: "" },
+    upload: async () => ({ text: "明日の会議", rawText: "明日の会議" }),
+  });
+  assert.equal(uploads.length, 1);
+  assert.equal(published[0].text, "明日の会議");
+  assert.equal(usage.length, 0);
+});
+
+test("a selection edit that fails during the language re-transcription surfaces its error", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const selectionEditFailure = () =>
+    Object.assign(new Error("Selection edit failed"), {
+      selectionEditFatal: true,
+      code: "SELECTION_EDIT_REASONING_FAILED",
+    });
+  const { reasonCalls, usage, published, errors, stopResult } = await stopManagedDictation(
+    AudioManager,
+    {
+      final: JA_FINAL,
+      upload: async () => {
+        throw selectionEditFailure();
+      },
+    }
+  );
+  assert.equal(stopResult, false);
+  assert.deepEqual(
+    errors.map(({ title, code }) => [title, code]),
+    [["Selection Edit Failed", "SELECTION_EDIT_REASONING_FAILED"]]
+  );
+  // Orukeet's discarded text is neither published nor edited with.
+  assert.deepEqual(published, []);
+  assert.deepEqual(reasonCalls, []);
+  assert.deepEqual(usage, []);
+
+  // A cancelled dictation ends quietly instead.
+  const cancelled = await stopManagedDictation(AudioManager, {
+    final: JA_FINAL,
+    upload: async (manager) => {
+      manager._requestStreamingCancellation();
+      throw selectionEditFailure();
+    },
+  });
+  assert.equal(cancelled.stopResult, true);
+  assert.deepEqual(cancelled.errors, []);
+  assert.deepEqual(cancelled.published, []);
 });
