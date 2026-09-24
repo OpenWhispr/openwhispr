@@ -111,11 +111,7 @@ export default function NoteBottomBar({
         </div>
         {!hideInput && (
           <ChatInput
-            className={cn(
-              "w-full min-w-0",
-              chatOpen &&
-                "border-t border-border/70 bg-surface-1/70 px-2 py-1 dark:border-white/10 dark:bg-surface-2/70"
-            )}
+            className={cn("w-full min-w-0", chatOpen && "px-2 py-1")}
             variant="note"
             outlined={chatOpen}
             agentState={agentState}
