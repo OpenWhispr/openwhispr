@@ -63,7 +63,7 @@ const clipboardModulePath = require.resolve("../../src/helpers/clipboard");
 
 const originalLoad = Module._load;
 
-function loadClipboardManager({ spawn } = {}) {
+function loadClipboardManager({ spawn, spawnSync, fileSystem } = {}) {
   delete require.cache[clipboardModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
@@ -75,9 +75,10 @@ function loadClipboardManager({ spawn } = {}) {
         },
       };
     }
-    if (request === "child_process" && spawn) {
-      return { ...childProcess, spawn };
+    if (request === "child_process" && (spawn || spawnSync)) {
+      return { ...childProcess, ...(spawn && { spawn }), ...(spawnSync && { spawnSync }) };
     }
+    if (request === "fs" && fileSystem) return { ...require("node:fs"), ...fileSystem };
     return originalLoad.call(this, request, parent, isMain);
   };
 
@@ -296,7 +297,7 @@ test("Hyprland paste uses the current symbolic shortcut dispatcher", async () =>
   const manager = new TestClipboardManager();
   manager.commandExists = (command) => command === "hyprctl";
   manager.resolveLinuxFastPasteBinary = () => null;
-  manager._detectHyprlandWindowClass = () => "kitty";
+  manager._detectHyprlandWindow = () => ({ windowClass: "kitty", pid: null });
 
   await withWaylandEnvironment("Hyprland", () => manager.pasteLinux(null));
 
@@ -311,6 +312,150 @@ test("Hyprland paste uses the current symbolic shortcut dispatcher", async () =>
   ]);
 });
 
+// X11's active window can remain set to an unrelated client while a native
+// Wayland window has focus. A successful key injection does not mean that the
+// chosen shortcut was appropriate for the actual target.
+for (const [nativeClass, staleClass, modifiers, key] of [
+  ["kitty", "sublime_text", "CTRL SHIFT", "V"],
+  ["kitty", "electron", "CTRL SHIFT", "V"],
+  ["sublime_text", "kitty", "CTRL", "V"],
+  ["vivaldi-stable", "kitty", "CTRL", "V"],
+  ["org.mozilla.firefox", "kitty", "CTRL", "V"],
+  ["konsole", "sublime_text", "SHIFT", "Insert"],
+  ["st", "sublime_text", "CTRL SHIFT", "V"],
+  ["st-256color", "sublime_text", "CTRL SHIFT", "V"],
+  [null, "sublime_text", "SHIFT", "Insert"],
+]) {
+  for (const useWtype of [true, false]) {
+    test(`Hyprland ${useWtype ? "wtype" : "sendshortcut"} uses ${nativeClass ?? "unknown target"} instead of stale ${staleClass}`, async () => {
+      const spawnCalls = [];
+      const x11Calls = [];
+      const TestClipboardManager = loadClipboardManager({
+        spawn: createSpawn(spawnCalls, [0], { stdout: ["ok\n"] }),
+        spawnSync(command, args) {
+          assert.equal(command, "xdotool");
+          x11Calls.push(args);
+          const output =
+            args[0] === "getactivewindow"
+              ? "123"
+              : args[0] === "getwindowclassname"
+                ? staleClass
+                : "";
+          return { status: 0, stdout: Buffer.from(output) };
+        },
+      });
+      const manager = new TestClipboardManager();
+      manager.commandExists = (command) =>
+        ["hyprctl", "xdotool", ...(useWtype ? ["wtype"] : [])].includes(command);
+      manager.resolveLinuxFastPasteBinary = () => null;
+      manager._detectHyprlandWindow = () => ({ windowClass: nativeClass, pid: null });
+
+      await withWaylandEnvironment("Hyprland", async () => {
+        process.env.DISPLAY = ":1";
+        await manager.pasteLinux(null);
+      });
+
+      if (useWtype) {
+        const mods = modifiers.toLowerCase().split(" ");
+        assert.deepEqual(spawnCalls, [
+          {
+            command: "wtype",
+            args: [
+              ...mods.flatMap((mod) => ["-M", mod]),
+              "-k",
+              key === "V" ? "v" : key,
+              ...mods.reverse().flatMap((mod) => ["-m", mod]),
+            ],
+          },
+        ]);
+      } else {
+        assert.deepEqual(spawnCalls, [
+          {
+            command: "hyprctl",
+            args: [
+              "dispatch",
+              `hl.dsp.send_shortcut({ mods = "${modifiers}", key = "${key}", window = "activewindow" })`,
+            ],
+          },
+        ]);
+      }
+      // Do not combine the compositor's class with an unrelated X11 PID or
+      // Electron flag, and never reactivate an unrelated X11 window later.
+      assert.deepEqual(x11Calls, []);
+    });
+  }
+}
+
+test("Hyprland reads class and PID together and keeps Electron terminal paste support", async () => {
+  const spawnCalls = [];
+  const syncCalls = [];
+  const procReads = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+    spawnSync(command, args) {
+      syncCalls.push({ command, args });
+      return { status: 0, stdout: Buffer.from(JSON.stringify({ class: "Code", pid: 456 })) };
+    },
+    fileSystem: {
+      readFileSync(file) {
+        procReads.push(file);
+        return "code";
+      },
+      readlinkSync(file) {
+        procReads.push(file);
+        return "/opt/code/code";
+      },
+      existsSync: (file) =>
+        file === require("node:path").join("/opt/code", "resources", "app.asar"),
+    },
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => ["hyprctl", "xdotool", "wtype"].includes(command);
+  manager.resolveLinuxFastPasteBinary = () => null;
+  await withWaylandEnvironment("Hyprland", async () => {
+    process.env.DISPLAY = ":1";
+    await manager.pasteLinux(null);
+  });
+  assert.deepEqual(syncCalls, [{ command: "hyprctl", args: ["activewindow", "-j"] }]);
+  assert.deepEqual(procReads, ["/proc/456/comm", "/proc/456/exe"]);
+  assert.deepEqual(spawnCalls, [
+    {
+      command: "wtype",
+      args: ["-M", "shift", "-k", "Insert", "-m", "shift"],
+    },
+  ]);
+});
+
+for (const result of [
+  { status: 1, stdout: Buffer.from("") },
+  { status: 0, stdout: Buffer.from("invalid JSON") },
+  { status: 0, stdout: Buffer.from("{}") },
+]) {
+  test(`Hyprland detection failure uses Shift+Insert without querying X11: ${result.stdout || result.status}`, async () => {
+    const spawnCalls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSuccessfulSpawn(spawnCalls),
+      spawnSync(command) {
+        assert.equal(command, "hyprctl");
+        return result;
+      },
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => ["hyprctl", "xdotool", "wtype"].includes(command);
+    manager.resolveLinuxFastPasteBinary = () => null;
+    await withWaylandEnvironment("Hyprland", async () => {
+      process.env.DISPLAY = ":1";
+      await manager.pasteLinux(null);
+    });
+    assert.deepEqual(spawnCalls, [
+      {
+        command: "wtype",
+        args: ["-M", "shift", "-k", "Insert", "-m", "shift"],
+      },
+    ]);
+  });
+}
+
 test("Hyprland paste falls back to the legacy symbolic shortcut dispatcher", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({
@@ -321,7 +466,7 @@ test("Hyprland paste falls back to the legacy symbolic shortcut dispatcher", asy
   const manager = new TestClipboardManager();
   manager.commandExists = (command) => command === "hyprctl";
   manager.resolveLinuxFastPasteBinary = () => null;
-  manager._detectHyprlandWindowClass = () => null;
+  manager._detectHyprlandWindow = () => null;
 
   await withWaylandEnvironment("Hyprland", () => manager.pasteLinux(null));
 
@@ -345,7 +490,7 @@ test("Hyprland prefers wtype over sendshortcut when installed", async () => {
   const manager = new TestClipboardManager();
   manager.commandExists = (command) => command === "hyprctl" || command === "wtype";
   manager.resolveLinuxFastPasteBinary = () => null;
-  manager._detectHyprlandWindowClass = () => null;
+  manager._detectHyprlandWindow = () => null;
 
   await withWaylandEnvironment("Hyprland", () => manager.pasteLinux(null));
 
@@ -363,7 +508,7 @@ test("failed wtype on Hyprland continues to sendshortcut", async () => {
   const manager = new TestClipboardManager();
   manager.commandExists = (command) => command === "hyprctl" || command === "wtype";
   manager.resolveLinuxFastPasteBinary = () => null;
-  manager._detectHyprlandWindowClass = () => null;
+  manager._detectHyprlandWindow = () => null;
 
   await withWaylandEnvironment("Hyprland", () => manager.pasteLinux(null));
 
@@ -696,7 +841,7 @@ test("successful Wayland dispatch starts clipboard restoration", async () => {
   let restoreCalled = false;
   manager.commandExists = (command) => command === "hyprctl";
   manager.resolveLinuxFastPasteBinary = () => null;
-  manager._detectHyprlandWindowClass = () => null;
+  manager._detectHyprlandWindow = () => null;
   manager._runLinuxPasteCommand = async () => {};
   manager._restoreClipboardAfterDelay = () => {
     restoreCalled = true;
