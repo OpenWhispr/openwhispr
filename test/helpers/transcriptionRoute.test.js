@@ -445,3 +445,14 @@ test("an enterprise transcription mode WITH a managed resolution takes the manag
   assert.equal(route.provider, "azure");
   assert.equal(route.deployment, "gpt-4o-transcribe");
 });
+
+test("Orukeet fallback preserves the custom Bearer key", async () => {
+  const route = await resolve({
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl: "https://orukeet.gizmovoice.ai/v1",
+    remoteTranscriptionModel: "orukeet-v0.1.0",
+    cloudTranscriptionProvider: "custom",
+  });
+  assert.equal(route.endpoint, "https://orukeet.gizmovoice.ai/v1/audio/transcriptions");
+  assert.deepEqual(route.auth, { scheme: "bearer", keyRef: "custom" });
+});

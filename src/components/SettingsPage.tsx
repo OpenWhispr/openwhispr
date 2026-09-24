@@ -1581,6 +1581,7 @@ export default function SettingsPage({
     hyprlandConfigStatus,
     supportsPushToTalk,
     pushToTalkUnavailableReason,
+    linuxInputAccessDenied,
   } = useHotkeyModeInfo("settings", dictationKey);
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
@@ -4034,9 +4035,12 @@ EOF`,
                         }
                       />
                     </div>
-                    {getCachedPlatform() === "linux" && activationMode === "push" && (
-                      <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
-                    )}
+                    {getCachedPlatform() === "linux" &&
+                      (activationMode === "push" || linuxInputAccessDenied) && (
+                        <LinuxPttSetupInfo
+                          isAvailable={!linuxInputAccessDenied && linuxPttAvailable}
+                        />
+                      )}
                   </SettingsPanelRow>
                 )}
               </SettingsPanel>

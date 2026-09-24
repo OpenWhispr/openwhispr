@@ -9,6 +9,7 @@ import type {
   ChineseScriptPreference,
   LocalTranscriptionProvider,
   InferenceMode,
+  LocalServerPrefs,
   SelfHostedType,
 } from "../types/electron";
 import type { CalendarAccount } from "../types/calendar";
@@ -509,6 +510,29 @@ function migrateUploadTranscription() {
 
 migrateUploadTranscription();
 
+// One-time seed of the upload self-hosted server. These keys arrived after
+// migrateUploadTranscription() had latched (1.7.3), and until then the Upload
+// tab edited dictation's server (#2049), so copy the values a profile has been
+// uploading with; the tab then shows the server it actually uses. Fresh installs
+// have nothing to copy, and an upload key the user already set is kept.
+const UPLOAD_SELF_HOSTED_PAIRS: ReadonlyArray<[string, string]> = [
+  ["remoteTranscriptionUrl", "uploadRemoteTranscriptionUrl"],
+  ["remoteTranscriptionModel", "uploadRemoteTranscriptionModel"],
+];
+
+function migrateUploadSelfHosted() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("uploadSelfHostedMigrated") === "true") return;
+  for (const [src, dst] of UPLOAD_SELF_HOSTED_PAIRS) {
+    if (localStorage.getItem(dst) !== null) continue;
+    const v = localStorage.getItem(src);
+    if (v !== null) localStorage.setItem(dst, v);
+  }
+  localStorage.setItem("uploadSelfHostedMigrated", "true");
+}
+
+migrateUploadSelfHosted();
+
 // Dictation and upload render `*TranscriptionMode` in their picker but route on
 // `*UseLocalWhisper` (audioManager, fileTranscription) and `*CloudTranscriptionMode`
 // (the `isOpenWhisprCloud` test), so routing can disagree with what the user sees
@@ -921,6 +945,8 @@ export interface SettingsState
   uploadCloudTranscriptionModel: string;
   uploadCloudTranscriptionBaseUrl: string;
   uploadCloudTranscriptionMode: string;
+  uploadRemoteTranscriptionUrl: string;
+  uploadRemoteTranscriptionModel: string;
 
   /** Last model used per scope+provider (`"<context>:<providerId>"`), so switching providers restores it. */
   transcriptionModelByProvider: Record<string, string>;
@@ -1027,6 +1053,8 @@ export interface SettingsState
   setUploadCloudTranscriptionModel: (value: string) => void;
   setUploadCloudTranscriptionBaseUrl: (value: string) => void;
   setUploadCloudTranscriptionMode: (value: string) => void;
+  setUploadRemoteTranscriptionUrl: (value: string) => void;
+  setUploadRemoteTranscriptionModel: (value: string) => void;
 
   setNoteFormattingMode: (mode: InferenceMode) => void;
   setNoteFormattingProvider: (value: string) => void;
@@ -1728,6 +1756,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uploadCloudTranscriptionModel: readString("uploadCloudTranscriptionModel", ""),
   uploadCloudTranscriptionBaseUrl: readString("uploadCloudTranscriptionBaseUrl", ""),
   uploadCloudTranscriptionMode: readString("uploadCloudTranscriptionMode", ""),
+  uploadRemoteTranscriptionUrl: readString("uploadRemoteTranscriptionUrl", ""),
+  uploadRemoteTranscriptionModel: readString("uploadRemoteTranscriptionModel", ""),
 
   noteFormattingMode: (() => {
     const v = readString("noteFormattingMode", "openwhispr");
@@ -1822,6 +1852,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setUploadCloudTranscriptionModel: createStringSetter("uploadCloudTranscriptionModel"),
   setUploadCloudTranscriptionBaseUrl: createStringSetter("uploadCloudTranscriptionBaseUrl"),
   setUploadCloudTranscriptionMode: createStringSetter("uploadCloudTranscriptionMode"),
+  setUploadRemoteTranscriptionUrl: createStringSetter("uploadRemoteTranscriptionUrl"),
+  setUploadRemoteTranscriptionModel: createStringSetter("uploadRemoteTranscriptionModel"),
 
   setNoteFormattingMode: createStringSetter("noteFormattingMode") as (mode: InferenceMode) => void,
   setNoteFormattingProvider: createStringSetter("noteFormattingProvider"),
@@ -2758,6 +2790,8 @@ export interface ResolvedUploadTranscription {
   cloudTranscriptionBaseUrl: string;
   cloudTranscriptionMode: string;
   transcriptionMode: InferenceMode;
+  remoteTranscriptionUrl: string;
+  remoteTranscriptionModel: string;
 }
 
 // Audio upload is batch (not streaming), so unset values fall back to the base
@@ -2765,6 +2799,9 @@ export interface ResolvedUploadTranscription {
 // A realtime-only dictation provider is the exception: it has no batch route, so
 // inheriting it would fail every upload closed. Uploads take the default provider
 // instead, and the dictation model stays behind with the provider it belongs to.
+// The self-hosted server is the exception the other way: it never inherits, so
+// uploads go only to the server the Upload tab shows (#2049).
+// migrateUploadSelfHosted() seeds it once for profiles from before the tab had its own.
 export const selectResolvedUploadTranscription = (
   state: SettingsState
 ): ResolvedUploadTranscription => {
@@ -2787,6 +2824,8 @@ export const selectResolvedUploadTranscription = (
       state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
     cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
     transcriptionMode: state.uploadTranscriptionMode,
+    remoteTranscriptionUrl: state.uploadRemoteTranscriptionUrl,
+    remoteTranscriptionModel: state.uploadRemoteTranscriptionModel,
   };
 };
 
@@ -2922,6 +2961,36 @@ export function setResolvedLLMConfig(
 
 export function isCloudChatAgentMode() {
   return selectIsCloudChatAgentMode(getSettings());
+}
+
+// What resolveLocalServerNeeds (main process) decides the shared llama-server
+// from. The policy-effective resolved configs carry fallback inheritance,
+// enterprise overrides and policy clamps, so they match what requests run on.
+export function selectLocalServerPrefs(
+  rawState: SettingsState,
+  policyState: PolicyDecisionSnapshot
+): LocalServerPrefs {
+  const state = selectPolicyEffectiveSettings(rawState, policyState);
+  const cleanup = selectResolvedLLMConfig(state, "dictationCleanup");
+  const dictationAgent = selectResolvedLLMConfig(state, "dictationAgent");
+  const noteFormatting = selectResolvedLLMConfig(state, "noteFormatting");
+  const chat = selectResolvedLLMConfig(state, "chatIntelligence");
+  const translation = selectResolvedLLMConfig(state, "dictationTranslation");
+  return {
+    useCleanupModel: state.useCleanupModel,
+    cleanupMode: cleanup.mode,
+    cleanupModel: cleanup.model,
+    useDictationAgent: state.useDictationAgent,
+    dictationAgentMode: dictationAgent.mode,
+    dictationAgentModel: dictationAgent.model,
+    noteFormattingMode: noteFormatting.mode,
+    noteFormattingModel: noteFormatting.model,
+    chatAgentMode: chat.mode,
+    chatAgentModel: chat.model,
+    useDictationTranslation: state.useDictationTranslation,
+    translationMode: translation.mode,
+    translationModel: translation.model,
+  };
 }
 
 // --- Convenience getters for non-React code ---

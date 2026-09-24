@@ -1,12 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
-const {
-  createRendererServer,
-  installBrowserGlobals,
-  installInteractiveDom,
-  findElement,
-} = require("../lib/rendererTestHarness");
+const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
 
 function click(element) {
   element.dispatchEvent({

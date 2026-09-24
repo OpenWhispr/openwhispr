@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef } from "react";
-import { RotateCcw, ScrollText } from "../icons";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { RotateCcw, ScrollText, Settings, Copy, Check, X } from "../icons";
 import { ASSISTANT_PANEL_SIZE_LIMITS } from "../../helpers/voiceSurfaceGeometry.mjs";
 import { cn } from "../lib/utils";
 import type { ToastActionConfig } from "../ui/useToast";
@@ -7,8 +8,10 @@ import type { ToastActionConfig } from "../ui/useToast";
 interface DictationErrorCardProps {
   title?: string;
   description?: string;
+  descriptionHotkey?: string;
+  onDismiss?: () => void;
   actions: ToastActionConfig[];
-  onAction: (action: ToastActionConfig) => void;
+  onAction: (action: ToastActionConfig) => ReturnType<ToastActionConfig["onClick"]>;
   onPreferredHeightChange?: (height: number) => void;
   progressDuration?: number;
   progressPaused?: boolean;
@@ -18,12 +21,120 @@ interface DictationErrorCardProps {
 const ACTION_ICONS = {
   retry: RotateCcw,
   transcript: ScrollText,
+  settings: Settings,
+  copy: Copy,
 };
+
+function ErrorAction({
+  action,
+  primary,
+  onAction,
+}: {
+  action: ToastActionConfig;
+  primary: boolean;
+  onAction: DictationErrorCardProps["onAction"];
+}) {
+  const [pending, setPending] = useState(false);
+  const [result, setResult] = useState<boolean | undefined>();
+  const pendingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(resetTimer.current);
+    };
+  }, []);
+
+  const handleClick = async () => {
+    if (!action.feedback) {
+      return onAction(action);
+    }
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true);
+    setResult(undefined);
+    clearTimeout(resetTimer.current);
+    let outcome: void | boolean;
+    try {
+      outcome = await onAction(action);
+    } catch {
+      outcome = false;
+    } finally {
+      pendingRef.current = false;
+      if (mountedRef.current) setPending(false);
+    }
+    if (!mountedRef.current || typeof outcome !== "boolean") return;
+    setResult(outcome);
+    resetTimer.current = setTimeout(() => setResult(undefined), 1800);
+  };
+
+  const Icon = result === true ? Check : action.icon ? ACTION_ICONS[action.icon] : null;
+  const label =
+    result === true
+      ? action.feedback?.successLabel
+      : result === false
+        ? action.feedback?.failureLabel
+        : action.label;
+  return (
+    <button
+      type="button"
+      onClick={() => void handleClick()}
+      disabled={pending}
+      className={cn(
+        "inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-full px-4",
+        "text-sm font-medium transition-[background-color,color,transform] duration-150",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98] disabled:cursor-wait",
+        primary
+          ? "bg-foreground text-background hover:bg-foreground/90"
+          : "bg-foreground/15 text-foreground hover:bg-foreground/20"
+      )}
+    >
+      {Icon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
+      <span className="truncate" aria-live={action.feedback ? "polite" : undefined}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
+function ErrorDescription({ text, hotkey }: { text: string; hotkey?: string }) {
+  const start = hotkey ? text.indexOf(hotkey) : -1;
+  if (!hotkey || start < 0) return text;
+  return (
+    <>
+      {text.slice(0, start)}
+      <span
+        dir="ltr"
+        role="img"
+        aria-label={hotkey}
+        className="inline-flex items-center gap-1 whitespace-nowrap align-baseline"
+      >
+        {hotkey.split("+").map((key, index) => (
+          <span
+            key={`${key}-${index}`}
+            aria-hidden="true"
+            className="inline-flex items-center gap-1"
+          >
+            {index > 0 && <span className="text-xs">+</span>}
+            <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-surface-raised px-1 font-sans text-[11px] font-medium text-foreground shadow-sm">
+              {key === "Cmd" ? "⌘" : key}
+            </kbd>
+          </span>
+        ))}
+      </span>
+      {text.slice(start + hotkey.length)}
+    </>
+  );
+}
 
 /** Shared one/two-action error surface for the floating dictation window. */
 export function DictationErrorCard({
   title,
   description,
+  descriptionHotkey,
+  onDismiss,
   actions,
   onAction,
   onPreferredHeightChange,
@@ -31,6 +142,7 @@ export function DictationErrorCard({
   progressPaused = false,
   ready = true,
 }: DictationErrorCardProps) {
+  const { t } = useTranslation();
   const cardRef = useRef<HTMLElement | null>(null);
   const lastPreferredHeightRef = useRef(0);
   const hasSecondaryAction = actions.length > 1;
@@ -84,38 +196,29 @@ export function DictationErrorCard({
 
   const text = (
     <div className="min-w-0 flex-1 break-words px-2 py-1">
-      {title && <p className="text-base font-normal leading-snug text-foreground">{title}</p>}
+      {title && (
+        <p
+          className={cn("text-base font-normal leading-snug text-foreground", onDismiss && "pe-7")}
+        >
+          {title}
+        </p>
+      )}
       {description && (
         <p className="mt-1 whitespace-pre-wrap text-sm leading-snug text-muted-foreground">
-          {description}
+          <ErrorDescription text={description} hotkey={descriptionHotkey} />
         </p>
       )}
     </div>
   );
 
-  const renderAction = (action: ToastActionConfig, index: number) => {
-    const Icon = action.icon ? ACTION_ICONS[action.icon] : null;
-    const primary = index === 0;
-
-    return (
-      <button
-        key={`${action.label}-${index}`}
-        type="button"
-        onClick={() => onAction(action)}
-        className={cn(
-          "inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-full px-4",
-          "text-sm font-medium transition-[background-color,color,transform] duration-150",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]",
-          primary
-            ? "bg-foreground text-background hover:bg-foreground/90"
-            : "bg-foreground/15 text-foreground hover:bg-foreground/20"
-        )}
-      >
-        {Icon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
-        <span className="truncate">{action.label}</span>
-      </button>
-    );
-  };
+  const renderAction = (action: ToastActionConfig, index: number) => (
+    <ErrorAction
+      key={`${action.label}-${index}`}
+      action={action}
+      primary={index === 0}
+      onAction={onAction}
+    />
+  );
 
   return (
     <section
@@ -151,6 +254,16 @@ export function DictationErrorCard({
             }}
           />
         </svg>
+      )}
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label={t("common.close")}
+          className="absolute end-2 top-2 z-10 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        >
+          <X className="size-3.5" aria-hidden="true" />
+        </button>
       )}
       {hasSecondaryAction ? (
         <div className="px-2 py-3">

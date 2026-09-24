@@ -33,6 +33,23 @@ export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcr
 
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
 
+/** Each LLM scope's resolved mode and model, from which the main process decides the shared llama-server. */
+export interface LocalServerPrefs {
+  useCleanupModel: boolean;
+  cleanupMode: InferenceMode;
+  cleanupModel: string;
+  useDictationAgent: boolean;
+  dictationAgentMode: InferenceMode;
+  dictationAgentModel: string;
+  noteFormattingMode: InferenceMode;
+  noteFormattingModel: string;
+  chatAgentMode: InferenceMode;
+  chatAgentModel: string;
+  useDictationTranslation: boolean;
+  translationMode: InferenceMode;
+  translationModel: string;
+}
+
 export type SelfHostedType = "openai-compatible" | "lan";
 
 export type TranscriptionStatus = "completed" | "failed" | "pending" | "discarded";
@@ -65,6 +82,7 @@ export interface NoteRecordingProvider {
 // renderers (#1624).
 export interface DictationRealtimeSessionOptions {
   provider: string;
+  baseUrl?: string;
   model?: string;
   mode?: "byok" | "openwhispr";
   language?: string;
@@ -73,6 +91,12 @@ export interface DictationRealtimeSessionOptions {
   environment?: string;
   tenant?: string;
   preview?: boolean;
+}
+
+export interface DictationLanguageMetadata {
+  language: string | null;
+  languageConfidence: number | null;
+  languageAudioSeconds?: number;
 }
 
 export type NoteRecordingConfigFailure = { success: false } & PolicyFailureMetadata;
@@ -1114,7 +1138,15 @@ declare global {
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
         }
-      ) => Promise<{ success: true; pasted: boolean }>;
+      ) => Promise<
+        | { success: true; pasted: boolean }
+        | {
+            success: false;
+            pasted: false;
+            code: "ACCESSIBILITY_PERMISSION_REQUIRED";
+            clipboardCopied: true;
+          }
+      >;
       captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
@@ -1675,18 +1707,15 @@ declare global {
       saveUiLanguage: (language: string) => Promise<{ success: boolean; language: string }>;
       setUiLanguage: (language: string) => Promise<{ success: boolean; language: string }>;
       saveAllKeysToEnv: () => Promise<{ success: boolean; path: string }>;
-      syncStartupPreferences: (prefs: {
-        useLocalWhisper: boolean;
-        localTranscriptionProvider: LocalTranscriptionProvider;
-        model?: string;
-        language?: string;
-        useCleanupModel: boolean;
-        cleanupMode: InferenceMode;
-        cleanupModel?: string;
-        useDictationAgent: boolean;
-        dictationAgentMode: InferenceMode;
-        dictationAgentModel?: string;
-      }) => Promise<void>;
+      syncStartupPreferences: (
+        prefs: LocalServerPrefs & {
+          useLocalWhisper: boolean;
+          localTranscriptionProvider: LocalTranscriptionProvider;
+          model?: string;
+          language?: string;
+          policySettled: boolean;
+        }
+      ) => Promise<void>;
 
       // Clipboard operations
       checkAccessibilityPermission: (silent?: boolean) => Promise<boolean>;
@@ -1925,7 +1954,6 @@ declare global {
       llamaServerStart: (
         modelId: string
       ) => Promise<{ success: boolean; port?: number; error?: string }>;
-      llamaServerStop: () => Promise<{ success: boolean; error?: string }>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
@@ -2026,6 +2054,7 @@ declare global {
         isUsingNativeShortcut: boolean;
         supportsPushToTalk: boolean;
         pushToTalkUnavailableReason: string | null;
+        linuxInputAccessDenied?: boolean;
       }>;
       getHyprlandConfigStatus?: () => Promise<{ canWrite: boolean; path: string } | null>;
 
@@ -2343,6 +2372,8 @@ declare global {
           diarization?: boolean;
           localDate?: string;
           analyticsOccurredAt?: string;
+          // Why a managed-streaming user's dictation went batch (rollout metric).
+          streamingFallbackReason?: string;
         }
       ) => Promise<
         {
@@ -2370,6 +2401,7 @@ declare global {
           screenContext?: ScreenContextImage;
           language?: string;
           locale?: string;
+          streamingFallbackReason?: string;
         }
       ) => Promise<{
         success: boolean;
@@ -3104,9 +3136,19 @@ declare global {
         options: DictationRealtimeSessionOptions
       ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
+      dictationRealtimeFinalize?: () => Promise<
+        {
+          success: boolean;
+          text?: string;
+          error?: string;
+        } & Partial<DictationLanguageMetadata>
+      >;
       dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;
+      onDictationRealtimeLanguage?: (
+        callback: (metadata: DictationLanguageMetadata) => void
+      ) => () => void;
       onDictationRealtimeError?: (callback: (error: string) => void) => () => void;
       onDictationRealtimeSessionEnd?: (callback: (data: { text: string }) => void) => () => void;
 

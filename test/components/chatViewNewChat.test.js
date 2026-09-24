@@ -1,11 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
-const {
-  createRendererServer,
-  installBrowserGlobals,
-  installInteractiveDom,
-} = require("../lib/rendererTestHarness");
+const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { installInteractiveDom } = require("../lib/interactiveDom");
 
 // ChatView with its real message sender (and its submission lock), the
 // streaming hook replaced by one whose send stays pending until the test

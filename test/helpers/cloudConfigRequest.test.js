@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createCloudConfigRequestHandler } = require("../../src/helpers/cloudConfigRequest");
+const { withPolicyRequestHeaders } = require("../../src/helpers/policyRequestHeaders");
 
 test("the config handler preserves policy and upgrade response metadata", async () => {
   const handler = createCloudConfigRequestHandler({
@@ -97,4 +98,30 @@ test("the note-recording-config handler returns a structured policy failure inst
   assert.equal(result.code, "POLICY_RESTRICTED");
   assert.equal(result.status, 403);
   assert.equal(result.error, "Blocked by workspace policy");
+});
+
+test("every config refetch bypasses the HTTP cache and declares the client capabilities", async () => {
+  const requests = [];
+  for (const configPath of ["stt-config", "note-recording-config"]) {
+    const handler = createCloudConfigRequestHandler({
+      getApiUrl: () => "https://api.openwhispr.test",
+      getAuthHeader: async () => ({ Authorization: "Bearer token-a" }),
+      proxyFetch: async (url, options) => {
+        requests.push({ url, cache: options.cache, headers: options.headers });
+        return new Response("{}", { status: 200 });
+      },
+      withPolicyHeaders: (headers) => withPolicyRequestHeaders(headers, "1.8.1"),
+      logger: { error() {} },
+      configPath,
+    });
+    await handler({ sender: {} });
+  }
+
+  assert.deepEqual(
+    requests.map(({ url, cache, headers }) => [url, cache, headers["x-openwhispr-capabilities"]]),
+    [
+      ["https://api.openwhispr.test/api/stt-config", "no-store", "orukeet"],
+      ["https://api.openwhispr.test/api/note-recording-config", "no-store", "orukeet"],
+    ]
+  );
 });

@@ -1659,7 +1659,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold),
       forImageIn: .normal
     )
-    agentButton.accessibilityLabel = "Ask the dictation agent"
+    agentButton.accessibilityLabel = "Ask the voice assistant"
     let agentPress = UILongPressGestureRecognizer(
       target: self,
       action: #selector(handleAgentButtonPress(_:))

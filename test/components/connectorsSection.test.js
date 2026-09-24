@@ -4,11 +4,8 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 
 const { createElement } = React;
-const {
-  createRendererServer,
-  installBrowserGlobals,
-  installInteractiveDom,
-} = require("../lib/rendererTestHarness");
+const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { installInteractiveDom } = require("../lib/interactiveDom");
 
 const MOCKS = {
   "/stores/policyStore": `

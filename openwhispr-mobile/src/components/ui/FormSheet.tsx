@@ -1,19 +1,14 @@
-import { type ReactNode, useEffect } from 'react';
-import { Dimensions, Modal, Pressable, ScrollView, View, type ViewStyle } from 'react-native';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import { type ReactNode } from 'react';
+import { Modal, Pressable, ScrollView, View, type ViewStyle } from 'react-native';
+import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { GlassIconButton } from '@/components/ui/GlassIconButton';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+import { useSheetDragToDismiss } from '@/hooks/useSheetDragToDismiss';
 
 const SHEET_RADIUS = 28;
 // Gap below the safe-area inset, leaving a sliver of the dimmed screen above the
@@ -21,10 +16,6 @@ const SHEET_RADIUS = 28;
 const SHEET_TOP_PEEK = 8;
 // Breathing room between the primary button and the keyboard's top edge.
 const BUTTON_KEYBOARD_GAP = 10;
-// Drag distance / fling velocity past which a downward pull dismisses the sheet.
-const DISMISS_DISTANCE = 110;
-const DISMISS_VELOCITY = 800;
-const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 const SUBMIT_SHADOW: ViewStyle = {
   shadowColor: '#2457D6',
@@ -68,30 +59,7 @@ export function FormSheet({
 }: FormSheetProps) {
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight(visible);
-  const translateY = useSharedValue(0);
-
-  useEffect(() => {
-    if (visible) translateY.value = 0;
-  }, [visible, translateY]);
-
-  const dragGesture = Gesture.Pan()
-    .activeOffsetY(10)
-    .onUpdate((event) => {
-      translateY.value = Math.max(0, event.translationY);
-    })
-    .onEnd((event) => {
-      if (event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY) {
-        translateY.value = withTiming(SCREEN_HEIGHT, { duration: 200 }, () => {
-          runOnJS(onClose)();
-        });
-      } else {
-        translateY.value = withSpring(0, { damping: 20, stiffness: 220 });
-      }
-    });
-
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+  const { dragGesture, sheetStyle } = useSheetDragToDismiss(visible, onClose);
 
   const bottomPad =
     keyboardHeight > 0 ? keyboardHeight + BUTTON_KEYBOARD_GAP : Math.max(insets.bottom, 16);
