@@ -82,6 +82,12 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
   const harnessEnabled =
     process.env.OPENWHISPR_VOICE_SPIKE === "1" && process.env.OPENWHISPR_VOICE_SPIKE_HARNESS === "1";
   ipcMain.handle("voice-spike:harness-enabled", () => harnessEnabled);
+  // Local model id that answers voice turns instead of the Voice Assistant setting,
+  // so harness comparisons neither depend on nor change the user's settings.
+  ipcMain.handle(
+    "voice-spike:brain-override",
+    () => (process.env.OPENWHISPR_VOICE_SPIKE_BRAIN || "").trim() || null
+  );
   ipcMain.on("voice-spike:turn-report", (_event, report) => spikeEvents.emit("turn-report", report));
   ipcMain.on("voice-spike:turn-event", (_event, turnEvent) => spikeEvents.emit("turn-event", turnEvent));
   if (harnessEnabled) {

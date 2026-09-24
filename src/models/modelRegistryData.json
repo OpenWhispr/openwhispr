@@ -1205,6 +1205,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/google_gemma-4-E4B-it-GGUF",
+          "llamaServerArgs": ["--swa-full"],
           "descriptionKey": "models.descriptions.local.gemma_gemma_4_e4b_it_q4_k_m"
         },
         {

@@ -100,6 +100,9 @@ function summarizeHarness(results) {
     failed: scored.filter(({ score }) => score.status === "fail").length,
     skipped: scored.filter(({ score }) => score.status === "skipped").length,
     failures: scored.filter(({ score }) => score.status === "fail").map(({ item }) => item.id),
+    // The full wait the user feels: turn-end detection, then the pipeline.
+    userStop: stats(metric("userStopToFirstAudioMs")),
+    endpoint: stats(metric("endpointMs")),
     firstAudio: stats(metric("speechEndToFirstAudioMs")),
     firstWord: stats(metric("transcriptToFirstDeltaMs")),
     ttsFirstAudio: stats(metric("firstChunkToFirstAudioMs")),
@@ -120,6 +123,8 @@ function formatHarnessReport({ results, summary, environment }) {
     "",
     "| Measure | p50 | p90 | n |",
     "| --- | --- | --- | --- |",
+    `| You stop talking → first sound | ${seconds(summary.userStop.p50)} | ${seconds(summary.userStop.p90)} | ${summary.userStop.n} |`,
+    `| Turn-end detection (speech end → turn committed) | ${seconds(summary.endpoint.p50)} | ${seconds(summary.endpoint.p90)} | ${summary.endpoint.n} |`,
     `| First audio (speech end → first sound) | ${seconds(summary.firstAudio.p50)} | ${seconds(summary.firstAudio.p90)} | ${summary.firstAudio.n} |`,
     `| Model first word (transcript → first token) | ${seconds(summary.firstWord.p50)} | ${seconds(summary.firstWord.p90)} | ${summary.firstWord.n} |`,
     `| TTS first audio | ${seconds(summary.ttsFirstAudio.p50)} | ${seconds(summary.ttsFirstAudio.p90)} | ${summary.ttsFirstAudio.n} |`,

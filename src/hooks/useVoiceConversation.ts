@@ -72,6 +72,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
   const harnessRef = useRef(false);
   const [harnessAvailable, setHarnessAvailable] = useState(false);
   const [harnessActive, setHarnessActive] = useState(false);
+  const [brainOverride, setBrainOverride] = useState<string | null>(null);
   const lastActivityRef = useRef(0);
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const turnRef = useRef<TurnMetrics | null>(null);
@@ -91,6 +92,10 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
     void api
       ?.isHarness()
       .then((value: boolean) => setHarnessAvailable(Boolean(value)))
+      .catch(() => {});
+    void api
+      ?.brainOverride()
+      .then((value: string | null) => setBrainOverride(value || null))
       .catch(() => {});
   }, [api]);
 
@@ -269,7 +274,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       });
       const info = await api.start({
         parakeetModel: settings.parakeetModel || DEFAULT_PARAKEET_MODEL,
-        brainModel: voiceModel.model,
+        brainModel: brainOverride || voiceModel.model,
         harness,
       });
       playerRef.current = createPcmPlayer({
@@ -304,8 +309,10 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       // Keep a local voice model loaded for the whole session: warm it now so the
       // first turn skips the cold start, then beat llama-server's 5-minute idle stop.
       const keepWarm = () => {
-        if (voiceModel.provider === "local" && voiceModel.model) {
-          void api.keepModelWarm(voiceModel.model).catch(() => {});
+        const localModel =
+          brainOverride || (voiceModel.provider === "local" ? voiceModel.model : null);
+        if (localModel) {
+          void api.keepModelWarm(localModel).catch(() => {});
         }
       };
       keepWarm();
@@ -339,7 +346,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       onErrorRef.current?.(message);
       await stop();
     }
-  }, [api, finishUtteranceIfDrained, stop]);
+  }, [api, brainOverride, finishUtteranceIfDrained, stop]);
 
   const stopRef = useRef(stop);
   stopRef.current = stop;
@@ -388,9 +395,10 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         if (turnRef.current) turnRef.current.availableTools = toolNames;
       },
       dryRunWrites: harnessActive,
+      brainOverride,
       cancelRef,
     }),
-    [finishUtteranceIfDrained, harnessActive, speakChunk]
+    [brainOverride, finishUtteranceIfDrained, harnessActive, speakChunk]
   );
 
   useEffect(() => {

@@ -471,6 +471,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     cancelSpeech: (utteranceId) => ipcRenderer.invoke("voice-spike:cancel-speech", { utteranceId }),
     stop: () => ipcRenderer.invoke("voice-spike:stop"),
     isHarness: () => ipcRenderer.invoke("voice-spike:harness-enabled"),
+    brainOverride: () => ipcRenderer.invoke("voice-spike:brain-override"),
     reportTurn: (report) => ipcRenderer.send("voice-spike:turn-report", report),
     reportTurnEvent: (turnEvent) => ipcRenderer.send("voice-spike:turn-event", turnEvent),
     onHarnessDone: (callback) => {

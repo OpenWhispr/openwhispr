@@ -1805,6 +1805,7 @@ declare global {
           harness?: boolean;
         }) => Promise<{ ttsKind: string; sampleRate: number; loadMs: number }>;
         isHarness: () => Promise<boolean>;
+        brainOverride: () => Promise<string | null>;
         reportTurn: (report: import("../services/voice/types").VoiceTurnReport) => void;
         reportTurnEvent: (turnEvent: { type: "first-audio" | "flushed"; at: number }) => void;
         onHarnessDone: (callback: () => void) => () => void;

@@ -116,6 +116,21 @@ test("every GPU ladder rung inherits the requested context and cache bounds", as
   }
 });
 
+// Gemma 4 needs --swa-full for llama-server's prompt cache to reuse a prefix
+// past its 512-token sliding window (voice-spike model comparison, 2026-09-23).
+test("model-specific server args are appended; anything that isn't a flag list is ignored", () => {
+  const manager = new LlamaServerManager();
+  const withFlag = manager._buildBaseArgs("/models/gemma.gguf", 8221, { extraArgs: ["--swa-full"] });
+  assert.ok(withFlag.includes("--swa-full"));
+  assert.ok(withFlag.indexOf("--swa-full") > withFlag.indexOf("--jinja"));
+
+  const plain = manager._buildBaseArgs("/models/qwen.gguf", 8221, {});
+  assert.equal(plain.includes("--swa-full"), false);
+
+  const bogus = manager._buildBaseArgs("/models/qwen.gguf", 8221, { extraArgs: "--swa-full" });
+  assert.equal(bogus.includes("--swa-full"), false);
+});
+
 // --- context-overflow errors --------------------------------------------
 
 test("a context overflow is reported as a typed error, not as llama.cpp JSON", async () => {

@@ -32,6 +32,7 @@ import {
   buildAgentRequestText,
   type AgentSelectionContext,
 } from "../../utils/agentSelectionContext";
+import { estimateModelSizeB } from "../../utils/localModelSize";
 
 const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
@@ -39,11 +40,6 @@ const STREAM_FLUSH_INTERVAL_MS = 32;
 
 const LOCAL_TOOL_MIN_PARAMS_B = 4;
 const VOICE_MAX_OUTPUT_TOKENS = 200;
-
-function estimateModelSizeB(modelId: string): number {
-  const match = modelId.match(/-([\d.]+)[bB]/);
-  return match ? parseFloat(match[1]) : 0;
-}
 
 async function buildRAGContext(userText: string, scope?: ContainerScope): Promise<string> {
   if (!window.electronAPI?.semanticSearchNotes) return "";
@@ -104,6 +100,8 @@ interface UseChatStreamingOptions {
   onToolsAvailable?: (toolNames: string[]) => void;
   /** Voice spike harness: write tools report success without changing anything. */
   voiceDryRunWrites?: boolean;
+  /** Voice spike harness: local model id that answers voice turns instead of the setting. */
+  voiceModelOverride?: string | null;
 }
 
 const DRY_RUN_RESULT = { success: true, dryRun: true, note: "Test run: nothing was changed." };
@@ -184,6 +182,7 @@ export function useChatStreaming({
   onToolCall,
   onToolsAvailable,
   voiceDryRunWrites = false,
+  voiceModelOverride = null,
   voiceReplies = false,
 }: UseChatStreamingOptions): ChatStreaming {
   const { t } = useTranslation();
@@ -201,6 +200,8 @@ export function useChatStreaming({
   onToolsAvailableRef.current = onToolsAvailable;
   const voiceDryRunWritesRef = useRef(voiceDryRunWrites);
   voiceDryRunWritesRef.current = voiceDryRunWrites;
+  const voiceModelOverrideRef = useRef(voiceModelOverride);
+  voiceModelOverrideRef.current = voiceModelOverride;
   const [agentState, setAgentState] = useState<AgentState>("idle");
   const [toolStatus, setToolStatus] = useState("");
   const [activeToolName, setActiveToolName] = useState("");
@@ -302,11 +303,17 @@ export function useChatStreaming({
         if (!options?.suppressResponseContent) onResponseContent?.();
       };
       const settings = getSettings();
-      const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
+      const { config: resolvedConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
         inferenceScope,
         hasScreenContext: !!options?.attachment,
         isProviderImageWired: providerSupportsImages,
       });
+      // Voice spike harness: pin voice turns to a local model (OPENWHISPR_VOICE_SPIKE_BRAIN)
+      // so model comparisons don't depend on, or change, the user's settings.
+      const voiceModelOverride = voiceRepliesRef.current ? voiceModelOverrideRef.current : null;
+      const llmConfig = voiceModelOverride
+        ? { ...resolvedConfig, mode: "local" as const, provider: "local", model: voiceModelOverride }
+        : resolvedConfig;
       const requestedAttachment = attachScreenContext ? (options?.attachment ?? null) : null;
       const llmMode = llmConfig.mode || "openwhispr";
       const policyState = usePolicyStore.getState();

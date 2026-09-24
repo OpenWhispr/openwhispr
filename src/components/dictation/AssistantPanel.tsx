@@ -130,6 +130,7 @@ export function AssistantPanel({
     onToolCall: speechTap?.onToolCall,
     onToolsAvailable: speechTap?.onToolsAvailable,
     voiceDryRunWrites: speechTap?.dryRunWrites ?? false,
+    voiceModelOverride: speechTap?.brainOverride ?? null,
     voiceReplies: speechTap !== null,
   });
 

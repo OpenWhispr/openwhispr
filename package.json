@@ -67,6 +67,7 @@
     "download:qdrant": "node scripts/download-qdrant.js --current",
     "download:qdrant:all": "node scripts/download-qdrant.js --all",
     "download:embedding-model": "node scripts/download-minilm.js",
+    "download:voice-models": "node scripts/download-voice-models.js",
     "download:diarization-models": "node scripts/download-diarization-models.js",
     "download:whisper-vad-model": "node scripts/download-whisper-vad-model.js",
     "download:brand-fonts": "node scripts/download-brand-fonts.js",

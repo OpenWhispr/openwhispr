@@ -229,6 +229,13 @@ class LlamaServerManager {
     // it rather than disabling it: 0 forces a full re-prefill every request.
     if (options.cacheRamMiB) args.push("--cache-ram", String(options.cacheRamMiB));
 
+    // Per-model flags from the registry (llamaServerArgs), e.g. Gemma 4's
+    // --swa-full, without which the prompt cache can't reuse a prefix that
+    // reaches past its sliding window.
+    if (Array.isArray(options.extraArgs)) {
+      args.push(...options.extraArgs.filter((arg) => typeof arg === "string" && arg.startsWith("--")));
+    }
+
     return args;
   }
 

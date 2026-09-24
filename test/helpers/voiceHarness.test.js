@@ -93,6 +93,15 @@ test("summary counts pass/fail/skip and reports latency percentiles", () => {
   assert.deepEqual(summary.failures, ["b"]);
 });
 
+test("summary includes the full wait the user feels: turn-end detection plus first audio", () => {
+  const summary = summarizeHarness([
+    result({ metrics: { speechEndToFirstAudioMs: 1000, endpointMs: 260, userStopToFirstAudioMs: 1260 } }),
+    result({ metrics: { speechEndToFirstAudioMs: 2000, endpointMs: 1200, userStopToFirstAudioMs: 3200 } }),
+  ]);
+  assert.equal(summary.userStop.p50, 1260);
+  assert.equal(summary.endpoint.p90, 1200);
+});
+
 test("the report names the machine, the headline numbers and each scenario", () => {
   const results = [result({ id: "weather", said: "Weather in Tokyo?", calledTools: ["web_search"], expectTools: ["web_search"] })];
   const report = formatHarnessReport({
@@ -102,6 +111,7 @@ test("the report names the machine, the headline numbers and each scenario", () 
   });
   assert.match(report, /Apple M5 Pro/);
   assert.match(report, /First audio/);
+  assert.match(report, /You stop talking → first sound/);
   assert.match(report, /\| weather \|/);
   assert.match(report, /web_search/);
 });

@@ -10,6 +10,8 @@ export interface AssistantSpeechTap {
   onToolsAvailable: (toolNames: string[]) => void;
   /** Harness mode: write tools report success without changing anything. */
   dryRunWrites: boolean;
+  /** OPENWHISPR_VOICE_SPIKE_BRAIN: local model that answers voice turns, or null. */
+  brainOverride: string | null;
   /** Filled by the panel with its cancel function, so barge-in can stop the answer. */
   cancelRef: MutableRefObject<(() => void) | null>;
 }
