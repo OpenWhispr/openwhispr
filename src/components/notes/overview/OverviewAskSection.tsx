@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { Sparkles } from "../../icons";
 import { useTranslation } from "react-i18next";
 import { ChatMessages } from "../../chat/ChatMessages";
@@ -39,7 +39,9 @@ export function OverviewAskSection({
 }: OverviewAskSectionProps) {
   const { t } = useTranslation();
   const hasMessages = messages.length > 0;
+  const composerElementRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useCallback((composer: HTMLDivElement | null) => {
+    composerElementRef.current = composer;
     const container = composer?.parentElement?.parentElement;
     if (!composer || !container) return;
     return observeChatComposerInset(composer, container);
@@ -75,7 +77,11 @@ export function OverviewAskSection({
               {PROMPT_CHIP_KEYS.map((key) => (
                 <button
                   key={key}
-                  onClick={() => onTextSubmit(t(key))}
+                  onClick={() => {
+                    // The chips unmount once the message lands; keep focus in the composer.
+                    composerElementRef.current?.querySelector("textarea")?.focus();
+                    onTextSubmit(t(key));
+                  }}
                   disabled={agentState !== "idle"}
                   className="inline-flex shrink-0 items-center gap-1.5 px-2.5 h-7 whitespace-nowrap rounded-full border border-border/70 bg-card shadow-sm dark:border-white/10 text-[11px] text-foreground/55 hover:text-foreground/80 hover:border-border/70 hover:bg-surface-3 disabled:text-foreground/30 disabled:pointer-events-none transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
                 >

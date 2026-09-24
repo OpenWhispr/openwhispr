@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, lazy, Suspense } from "react";
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatPersistence } from "./useChatPersistence";
 import { useChatStreaming } from "./useChatStreaming";
@@ -164,7 +164,9 @@ export default function ChatView() {
   const hasActiveChat =
     activeConversationId !== null || persistence.messages.length > 0 || isNewChat;
 
+  const composerElementRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useCallback((composer: HTMLDivElement | null) => {
+    composerElementRef.current = composer;
     const container = composer?.parentElement;
     if (!composer || !container) return;
     return observeChatComposerInset(composer, container);
@@ -209,7 +211,12 @@ export default function ChatView() {
                 messages={persistence.messages}
                 emptyState={
                   <NewChatEmptyState
-                    onPrompt={(prompt) => void handleTextSubmit(prompt)}
+                    onPrompt={(prompt) => {
+                      // The starter card unmounts once the message lands; move focus to the
+                      // composer first so it isn't dropped.
+                      composerElementRef.current?.querySelector("textarea")?.focus();
+                      void handleTextSubmit(prompt);
+                    }}
                     showSuggestions={isNewChat}
                     disabled={streaming.agentState !== "idle"}
                   />
