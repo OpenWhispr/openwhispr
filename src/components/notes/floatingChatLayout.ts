@@ -10,9 +10,7 @@ export const FLOATING_CHAT_MAX_HEIGHT_CSS = "calc(100% - 7rem)";
 
 const SCROLL_BOTTOM_THRESHOLD_PX = 80;
 const FLOATING_CHAT_TOP_CLEARANCE_PX = 112;
-const FLOATING_CHAT_EMPTY_CONTENT_HEIGHT_PX = 192;
-const FLOATING_CHAT_MESSAGE_PADDING_PX = 16;
-const FLOATING_CHAT_BORDER_PX = 2;
+const FLOATING_CHAT_NEW_CONVERSATION_HEIGHT_PX = 294;
 
 export type { ScrollMetrics };
 
@@ -37,51 +35,25 @@ interface FloatingChatLayoutDependencies {
 interface FloatingChatSizeOptions {
   panel: HTMLElement;
   container: HTMLElement;
-  header: HTMLElement;
-  messageContent: HTMLElement;
-  composer: HTMLElement;
-  isEmpty: boolean;
   hasConversation: boolean;
 }
 
 export function observeFloatingChatSize(
-  {
-    panel,
-    container,
-    header,
-    messageContent,
-    composer,
-    isEmpty,
-    hasConversation,
-  }: FloatingChatSizeOptions,
+  { panel, container, hasConversation }: FloatingChatSizeOptions,
   createResizeObserver: (callback: () => void) => ResizeObserverHandle = (callback) =>
     new ResizeObserver(callback)
 ): () => void {
   const updateHeight = (): void => {
-    const contentHeight = isEmpty
-      ? FLOATING_CHAT_EMPTY_CONTENT_HEIGHT_PX
-      : messageContent.scrollHeight;
     const availableHeight = Math.max(0, container.clientHeight - FLOATING_CHAT_TOP_CLEARANCE_PX);
-    const conversationMinimum = hasConversation ? (container.clientHeight * 2) / 3 : 0;
-    panel.style.height = `${Math.min(
-      Math.max(
-        header.offsetHeight +
-          contentHeight +
-          FLOATING_CHAT_MESSAGE_PADDING_PX +
-          FLOATING_CHAT_BORDER_PX +
-          composer.offsetHeight,
-        conversationMinimum
-      ),
-      availableHeight
-    )}px`;
+    const targetHeight = hasConversation
+      ? (container.clientHeight * 2) / 3
+      : FLOATING_CHAT_NEW_CONVERSATION_HEIGHT_PX;
+    panel.style.height = `${Math.min(targetHeight, availableHeight)}px`;
   };
 
   updateHeight();
   const observer = createResizeObserver(updateHeight);
   observer.observe(container);
-  observer.observe(header);
-  observer.observe(messageContent);
-  observer.observe(composer);
 
   return (): void => observer.disconnect();
 }

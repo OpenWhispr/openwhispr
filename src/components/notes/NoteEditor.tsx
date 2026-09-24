@@ -1276,7 +1276,6 @@ export default function NoteEditor({
             onInputFocus={handleChatInputFocus}
             onInputEscape={() => setChatMode("hidden")}
             chatOpen={chatMode === "floating"}
-            hasChatMessages={embeddedChat.messages.some((message) => message.role !== "tool")}
             hasSelectedConversation={embeddedChat.activeConversationId !== null}
             agentState={chatMode === "floating" ? embeddedChat.agentState : "idle"}
             onCancel={embeddedChat.cancelStream}

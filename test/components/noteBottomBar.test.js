@@ -65,13 +65,12 @@ test("the ask capsule never transitions its surface between the two states", asy
 test("in-view chat expands the existing capsule around one composer", async (t) => {
   const html = await renderBottomBar(t, {
     chatOpen: true,
-    chatContent: createElement("div", { "data-note-chat-header": "" }, "Chat"),
+    chatContent: createElement("div", null, "Chat"),
   });
 
   assert.ok(html.includes("rounded-3xl"));
   assert.ok(html.includes("max-w-[600px]"));
   assert.ok(!html.includes("rounded-full border-black/10"), "the panel keeps one radius throughout expansion");
   assert.ok(!html.includes("border-radius,box-shadow"), "height changes do not morph the corners");
-  assert.ok(html.includes("data-note-chat-header"));
   assert.equal((html.match(/<textarea/g) ?? []).length, 1);
 });

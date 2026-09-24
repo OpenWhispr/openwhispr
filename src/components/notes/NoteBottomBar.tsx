@@ -20,7 +20,6 @@ interface NoteBottomBarProps {
   hideInput?: boolean;
   chatOpen?: boolean;
   chatContent?: React.ReactNode;
-  hasChatMessages?: boolean;
   hasSelectedConversation?: boolean;
   agentState?: AgentState;
   onCancel?: () => void;
@@ -40,7 +39,6 @@ export default function NoteBottomBar({
   hideInput = false,
   chatOpen = false,
   chatContent,
-  hasChatMessages = false,
   hasSelectedConversation = false,
   agentState = "idle",
   onCancel,
@@ -57,18 +55,11 @@ export default function NoteBottomBar({
       }
 
       const container = panel.parentElement?.parentElement;
-      const header = panel.querySelector<HTMLElement>("[data-note-chat-header]");
-      const messageContent = panel.querySelector<HTMLElement>(".agent-chat-scroll > :first-child");
-      const composer = panel.lastElementChild as HTMLElement | null;
-      if (!container || !header || !messageContent || !composer) return;
+      if (!container) return;
 
       const stopSizing = observeFloatingChatSize({
         panel,
         container,
-        header,
-        messageContent,
-        composer,
-        isEmpty: !hasChatMessages,
         hasConversation: hasSelectedConversation,
       });
       const stopLayout = floatingPanelRef?.(panel);
@@ -78,7 +69,7 @@ export default function NoteBottomBar({
         if (typeof stopLayout === "function") stopLayout();
       };
     },
-    [chatOpen, floatingPanelRef, hasChatMessages, hasSelectedConversation]
+    [chatOpen, floatingPanelRef, hasSelectedConversation]
   );
 
   return (

@@ -110,7 +110,6 @@ export default function EmbeddedChat({
 
   const header = (
     <div
-      data-note-chat-header={mode === "floating" ? "" : undefined}
       className={cn(
         "h-9 flex items-center px-3 shrink-0",
         mode === "sidebar" && "border-b border-border/70 dark:border-white/10"
