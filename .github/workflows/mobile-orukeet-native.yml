@@ -6,11 +6,17 @@ on:
     paths:
       - 'openwhispr-mobile/modules/parakeet-asr/ios/**'
       - 'openwhispr-mobile/plugins/swift-packages/**'
+      - 'openwhispr-mobile/Gemfile*'
+      - 'openwhispr-mobile/scripts/*orukeet*'
+      - 'openwhispr-mobile/scripts/orukeet-installer-regression/**'
       - '.github/workflows/mobile-orukeet-native.yml'
   pull_request:
     paths:
       - 'openwhispr-mobile/modules/parakeet-asr/ios/**'
       - 'openwhispr-mobile/plugins/swift-packages/**'
+      - 'openwhispr-mobile/Gemfile*'
+      - 'openwhispr-mobile/scripts/*orukeet*'
+      - 'openwhispr-mobile/scripts/orukeet-installer-regression/**'
       - '.github/workflows/mobile-orukeet-native.yml'
 
 permissions:
