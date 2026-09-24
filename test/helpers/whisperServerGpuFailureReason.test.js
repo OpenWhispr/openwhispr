@@ -6,6 +6,7 @@ const childProcess = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { getSystemErrorMap } = require("node:util");
 const {
   VULKAN_DEVICE_LOST_STDERR,
   CUDA_OUT_OF_MEMORY_STDERR,
@@ -29,7 +30,7 @@ const BINARY = {
 const behaviours = new Map();
 const warnings = [];
 
-function fakeWhisperServer({ stderr = "", exit = null, healthy = false } = {}) {
+function fakeWhisperServer({ stderr = "", exit = null, launchError = null, healthy = false } = {}) {
   const child = new EventEmitter();
   child.pid = 4242;
   child.killed = false;
@@ -50,6 +51,17 @@ function fakeWhisperServer({ stderr = "", exit = null, healthy = false } = {}) {
     setImmediate(() => close(null, signal));
     return true;
   };
+  if (launchError) {
+    // What Node does when spawn fails: no pid, an "error" event, then "close"
+    // with the negative error number as the exit code
+    const [errno] = [...getSystemErrorMap()].find(([, [name]]) => name === launchError);
+    child.pid = undefined;
+    setImmediate(() => {
+      child.emit("error", Object.assign(new Error(`spawn ${launchError}`), { code: launchError }));
+      close(errno, null);
+    });
+    return child;
+  }
   // Output lands after _doStart attaches its handlers; then the process ends.
   setImmediate(() => {
     if (stderr) child.stderr.emit("data", Buffer.from(stderr));
@@ -156,4 +168,32 @@ test("a GPU server that never answers is reported as a startup timeout", async (
   await manager.start(modelPath, { useVulkan: true });
 
   assert.deepEqual(events, [{ reason: "startup timed out after 120 s" }]);
+});
+
+test("a GPU binary that cannot be launched reports its error, not exit code -2", async (t) => {
+  const manager = createManager(t);
+  // A pack whose binary went missing: Node saved this as "exit code -2"
+  behaviours.set(BINARY.cuda, { launchError: "ENOENT" });
+  const events = [];
+  manager.on("cuda-fallback", (payload) => events.push(payload));
+
+  await manager.start(modelPath, { useCuda: true });
+
+  assert.equal(manager.useCuda, false, "the CPU server took over");
+  assert.deepEqual(events, [{ reason: "could not launch (ENOENT)" }]);
+});
+
+test("a Vulkan server that crashes on Windows reports the status code in hex", async (t) => {
+  const manager = createManager(t);
+  // A driver access violation prints nothing and exits with STATUS_ACCESS_VIOLATION
+  behaviours.set(BINARY.vulkan, {
+    stderr: "ggml_vulkan: Found 1 Vulkan devices:\n",
+    exit: { code: 0xc0000005 },
+  });
+  const events = [];
+  manager.on("gpu-fallback", (payload) => events.push(payload));
+
+  await manager.start(modelPath, { useVulkan: true });
+
+  assert.deepEqual(events, [{ reason: "exit code 0xC0000005" }]);
 });
