@@ -3302,9 +3302,7 @@
         }
       },
       "invite": "Invitar",
-      "list": {
-        "empty": "Aún no hay notas aquí"
-      },
+      "list": {},
       "author": {
         "you": "Tú"
       }
@@ -4009,7 +4007,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Pregunta algo...",
-    "send": "Enviar",
     "title": "Chat",
     "emptyState": "Haz una pregunta sobre esta nota",
     "dock": "Anclar a la barra lateral",

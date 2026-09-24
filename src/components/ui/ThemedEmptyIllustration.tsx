@@ -22,6 +22,8 @@ export default function ThemedEmptyIllustration({
         width={width}
         height={height}
         alt=""
+        decoding="async"
+        draggable={false}
         className="block h-auto max-w-full dark:hidden"
       />
       <img
@@ -29,6 +31,8 @@ export default function ThemedEmptyIllustration({
         width={width}
         height={height}
         alt=""
+        decoding="async"
+        draggable={false}
         className="hidden h-auto max-w-full dark:block"
       />
     </span>

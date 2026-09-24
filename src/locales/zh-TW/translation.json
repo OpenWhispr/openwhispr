@@ -3249,9 +3249,7 @@
         }
       },
       "invite": "邀請",
-      "list": {
-        "empty": "這裡還沒有筆記"
-      },
+      "list": {},
       "author": {
         "you": "你"
       }
@@ -4009,7 +4007,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "隨便問點什麼...",
-    "send": "傳送",
     "title": "聊天",
     "emptyState": "就這條筆記提個問題",
     "dock": "固定到側邊欄",

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   CornerDownLeft,
@@ -40,7 +40,6 @@ export default function DictionaryView() {
   const [editingWord, setEditingWord] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
-  const addInputRef = useRef<HTMLInputElement>(null);
 
   const pendingImportCount = useMemo(() => parseDictionaryImportText(bulkText).length, [bulkText]);
 
@@ -134,7 +133,6 @@ export default function DictionaryView() {
     <div className="relative">
       <Input
         dir="auto"
-        ref={addInputRef}
         autoFocus={userWords.length === 0}
         placeholder={t("dictionary.addPlaceholder")}
         value={newWord}

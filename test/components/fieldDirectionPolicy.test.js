@@ -167,7 +167,7 @@ test("representative prose, identity, secret, and rich-editor surfaces keep thei
   );
   assert.match(
     source("src/components/DictionaryView.tsx"),
-    /<Input\s+dir="auto"\s+ref=\{addInputRef\}/
+    /<Input\s+dir="auto"\s+autoFocus=\{userWords\.length === 0\}/
   );
   assert.match(
     source("src/components/notes/UploadAudioView.tsx"),

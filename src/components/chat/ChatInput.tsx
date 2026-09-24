@@ -158,7 +158,8 @@ export function ChatInput({
   }, [inputText, isVoiceRecording, isVoiceTranscribing, expandOnFocus, variant, isCompactNote]);
 
   // The input is disabled while a reply streams, which drops its focus; hand it back when the
-  // reply ends, even where focusOnIdle is off so the composer doesn't grab focus on mount.
+  // reply ends, even where focusOnIdle is off so the composer doesn't grab focus on mount,
+  // unless the user has since focused something else.
   const wasBusyRef = useRef(false);
   useEffect(() => {
     if (isBusy) wasBusyRef.current = true;
@@ -167,7 +168,10 @@ export function ChatInput({
     wasBusyRef.current = false;
     if (!focusOnIdle && !replyFinished) return;
     const frameId = requestAnimationFrame(() => {
-      if (allowDeferredFocusRef.current) inputRef.current?.focus();
+      if (!allowDeferredFocusRef.current) return;
+      const focusMovedOn = document.activeElement && document.activeElement !== document.body;
+      if (!focusOnIdle && focusMovedOn) return;
+      inputRef.current?.focus();
     });
     return () => cancelAnimationFrame(frameId);
   }, [isIdle, isBusy, focusOnIdle]);

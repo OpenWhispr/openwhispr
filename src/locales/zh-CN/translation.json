@@ -3249,9 +3249,7 @@
         }
       },
       "invite": "邀请",
-      "list": {
-        "empty": "这里还没有笔记"
-      },
+      "list": {},
       "author": {
         "you": "你"
       }
@@ -4009,7 +4007,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "随便问点什么...",
-    "send": "发送",
     "title": "聊天",
     "emptyState": "就这条笔记提个问题",
     "dock": "固定到侧边栏",

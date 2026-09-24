@@ -104,6 +104,13 @@ test("a composer that skips idle focus still gets focus back when a reply ends",
   textarea.focus = () => focusCount++;
   for (const frame of frames.values()) frame();
   assert.equal(focusCount, 1, "the input is refocused after the reply");
+
+  frames.clear();
+  await render("streaming");
+  globalThis.document.activeElement = { localName: "div" };
+  await render("idle");
+  for (const frame of frames.values()) frame();
+  assert.equal(focusCount, 1, "focus the user moved elsewhere during the reply stays there");
 });
 
 test("a long Notes draft scrolls inside the compact composer after closing chat", async (t) => {

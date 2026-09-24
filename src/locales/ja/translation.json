@@ -3177,9 +3177,7 @@
         }
       },
       "invite": "招待",
-      "list": {
-        "empty": "まだノートがありません"
-      },
+      "list": {},
       "author": {
         "you": "自分"
       }
@@ -4009,7 +4007,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "何でも聞いてください...",
-    "send": "送信",
     "title": "チャット",
     "emptyState": "このノートについて質問してください",
     "dock": "サイドバーに固定",

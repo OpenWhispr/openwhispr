@@ -3601,9 +3601,7 @@
         }
       },
       "invite": "Einladen",
-      "list": {
-        "empty": "Hier gibt es noch keine Notizen"
-      },
+      "list": {},
       "author": {
         "you": "Du"
       }
@@ -4085,7 +4083,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Frag etwas...",
-    "send": "Senden",
     "title": "Chat",
     "emptyState": "Stelle eine Frage zu dieser Notiz",
     "dock": "In Seitenleiste andocken",

@@ -3601,9 +3601,7 @@
         }
       },
       "invite": "Invite",
-      "list": {
-        "empty": "No notes here yet"
-      },
+      "list": {},
       "author": {
         "you": "You"
       }
@@ -4085,7 +4083,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Ask anything...",
-    "send": "Send",
     "title": "Chat",
     "emptyState": "Ask a question about this note",
     "dock": "Dock to sidebar",
