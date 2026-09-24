@@ -67,6 +67,9 @@ test("voice instructions push tools first, naming only the tools this session ha
   assert.match(all, /never just say that you will check/i);
   assert.ok(all.indexOf("web_search") < all.indexOf("one or two short sentences"));
 
+  // The harness caught "I've added Kubernetes to your dictionary" with no tool call.
+  assert.match(all, /never say you did something unless a tool call for it succeeded in this turn/i);
+
   const offline = getVoiceReplyInstructions(["search_notes"]);
   assert.doesNotMatch(offline, /web_search/);
   assert.doesNotMatch(offline, /calendar/);

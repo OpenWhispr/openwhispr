@@ -145,6 +145,11 @@ export function getVoiceReplyInstructions(availableTools: string[] = []): string
       "web_search rather than answering from memory.";
   }
   guidance += " When you decide to use a tool, call it in the same response; never just say that you will check.";
+  // The harness caught "I've added Kubernetes to your dictionary" with no tool call:
+  // earlier confirmations in the conversation make the model imitate them.
+  guidance +=
+    " Never say you did something unless a tool call for it succeeded in this turn; " +
+    "if the user asks for an action, call the tool again even if a similar one ran earlier.";
   return `${guidance}\n\n${VOICE_BREVITY}`;
 }
 
