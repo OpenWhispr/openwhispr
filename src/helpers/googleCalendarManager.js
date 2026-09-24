@@ -231,6 +231,8 @@ class GoogleCalendarManager {
     const toUpsert = [];
     const toRemove = [];
     const contactsToUpsert = [];
+    const notContacts = [];
+    const ownEmail = (accountEmail || "").toLowerCase();
 
     for (const item of allItems) {
       if (item.status === "cancelled") {
@@ -272,8 +274,10 @@ class GoogleCalendarManager {
 
       if (item.attendees) {
         for (const a of item.attendees) {
-          if (a.email && !a.resource)
-            contactsToUpsert.push({ email: a.email, displayName: a.displayName || null });
+          if (!a.email) continue;
+          // Rooms and the user's own address aren't people to write to.
+          if (a.resource || a.email.toLowerCase() === ownEmail) notContacts.push(a.email);
+          else contactsToUpsert.push({ email: a.email, displayName: a.displayName || null });
         }
       }
     }
@@ -294,6 +298,9 @@ class GoogleCalendarManager {
       this.databaseManager.updateCalendarSyncToken(calendar.id, nextSyncToken, tokenExpiresAt);
     }
     if (contactsToUpsert.length > 0) this.databaseManager.upsertContacts(contactsToUpsert);
+    // Older builds stored rooms and the user's own address as contacts, and
+    // nothing else prunes that table.
+    if (notContacts.length > 0) this.databaseManager.removeContacts(notContacts);
   }
 
   onWakeFromSleep() {

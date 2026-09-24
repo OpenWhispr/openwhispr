@@ -237,6 +237,8 @@ class MicrosoftCalendarManager {
 
     const toUpsert = [];
     const contactsToUpsert = [];
+    const notContacts = [];
+    const ownEmail = (accountEmail || "").toLowerCase();
     for (const item of events) {
       // An occurrence still stripped after backfill (master fetch failed) has no
       // subject, attendees, or join link. Overwriting a row a previous sync
@@ -247,11 +249,13 @@ class MicrosoftCalendarManager {
       }
       toUpsert.push(this._mapEvent(item, calendar));
       for (const a of item.attendees || []) {
-        if (a.emailAddress?.address && a.type !== "resource") {
-          contactsToUpsert.push({
-            email: a.emailAddress.address,
-            displayName: a.emailAddress.name || null,
-          });
+        const address = a.emailAddress?.address;
+        if (!address) continue;
+        // Rooms and the user's own address aren't people to write to.
+        if (a.type === "resource" || address.toLowerCase() === ownEmail) {
+          notContacts.push(address);
+        } else {
+          contactsToUpsert.push({ email: address, displayName: a.emailAddress.name || null });
         }
       }
     }
@@ -272,6 +276,9 @@ class MicrosoftCalendarManager {
       this.databaseManager.updateMicrosoftCalendarSyncToken(calendar.id, deltaLink, tokenExpiresAt);
     }
     if (contactsToUpsert.length > 0) this.databaseManager.upsertContacts(contactsToUpsert);
+    // Older builds stored rooms and the user's own address as contacts, and
+    // nothing else prunes that table.
+    if (notContacts.length > 0) this.databaseManager.removeContacts(notContacts);
   }
 
   // Merges each stripped occurrence with its series master (fetched once per

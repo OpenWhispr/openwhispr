@@ -288,10 +288,11 @@ test("_syncCalendar preserves meeting links from Google event location and descr
   );
 });
 
-test("_syncCalendar flags rooms and resources and keeps them out of contacts", async () => {
+test("_syncCalendar flags rooms and resources and keeps them and the user out of contacts", async () => {
   const GoogleCalendarManager = loadManagerModule();
   const upsertedEvents = [];
   const contacts = [];
+  const removed = [];
   const databaseManager = {
     getGoogleAccounts: () => [],
     removeStaleCalendarEvents: () => {},
@@ -299,6 +300,7 @@ test("_syncCalendar flags rooms and resources and keeps them out of contacts", a
     removeCalendarEvents: () => {},
     updateCalendarSyncToken: () => {},
     upsertContacts: (rows) => contacts.push(...rows),
+    removeContacts: (emails) => removed.push(...emails),
   };
   const manager = new GoogleCalendarManager(databaseManager, null, {
     scheduleNextMeeting: () => {},
@@ -313,6 +315,7 @@ test("_syncCalendar flags rooms and resources and keeps them out of contacts", a
         attendees: [
           { email: "ana@example.com", displayName: "Ana", responseStatus: "accepted" },
           { email: "boardroom@corp.test", displayName: "Boardroom", resource: true },
+          { email: "Me@example.com", displayName: "Me", self: true },
         ],
       },
     ],
@@ -328,4 +331,6 @@ test("_syncCalendar flags rooms and resources and keeps them out of contacts", a
     contacts.map((contact) => contact.email),
     ["ana@example.com"]
   );
+  // Rows older builds stored for the room and the user are purged.
+  assert.deepEqual(removed, ["boardroom@corp.test", "Me@example.com"]);
 });

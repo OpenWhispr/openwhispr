@@ -145,6 +145,7 @@ function createManager(MicrosoftCalendarManager, upserted, contacts = [], overri
       removeCalendarEvents: () => {},
       updateMicrosoftCalendarSyncToken: () => {},
       upsertContacts: (rows) => contacts.push(...rows),
+      removeContacts: () => {},
       getCalendarEventById: () => null,
       ...overrides,
     },
@@ -201,7 +202,7 @@ test("_syncCalendar backfills stripped recurring occurrences from their series m
       organizer: { emailAddress: { address: "organizer@example.com" } },
       attendees: [
         {
-          emailAddress: { address: "me@example.com", name: "Me" },
+          emailAddress: { address: "teammate@example.com", name: "Teammate" },
           status: { response: "accepted" },
         },
       ],
@@ -221,7 +222,7 @@ test("_syncCalendar backfills stripped recurring occurrences from their series m
   assert.equal(occurrence.attendees_count, 1);
   assert.equal(upserted.find((event) => event.id === "occ-2").summary, "Standup");
   assert.equal(upserted.find((event) => event.id === "evt-1").summary, "One-off");
-  assert.ok(contacts.some((contact) => contact.email === "me@example.com"));
+  assert.ok(contacts.some((contact) => contact.email === "teammate@example.com"));
   assert.ok(tokenWrites[0].expiresAt > Date.now() + 6 * 24 * 60 * 60 * 1000);
 });
 
@@ -309,11 +310,14 @@ test("_syncCalendar keeps the stored row when a stripped occurrence's master fet
   assert.deepEqual(staleKeepLists, [["occ-1", "evt-1"]]);
 });
 
-test("_syncCalendar flags rooms and resources and keeps them out of contacts", async () => {
+test("_syncCalendar flags rooms and resources and keeps them and the user out of contacts", async () => {
   const MicrosoftCalendarManager = loadManagerModule();
   const upserted = [];
   const contacts = [];
-  const manager = createManager(MicrosoftCalendarManager, upserted, contacts);
+  const removed = [];
+  const manager = createManager(MicrosoftCalendarManager, upserted, contacts, {
+    removeContacts: (emails) => removed.push(...emails),
+  });
   manager._apiGet = async () => ({
     "@odata.deltaLink": "delta-link",
     value: [
@@ -333,6 +337,11 @@ test("_syncCalendar flags rooms and resources and keeps them out of contacts", a
             emailAddress: { address: "boardroom@example.com", name: "Boardroom" },
             status: { response: "accepted" },
           },
+          {
+            type: "required",
+            emailAddress: { address: "Me@example.com", name: "Me" },
+            status: { response: "organizer" },
+          },
         ],
       },
     ],
@@ -347,4 +356,6 @@ test("_syncCalendar flags rooms and resources and keeps them out of contacts", a
     contacts.map((contact) => contact.email),
     ["ana@example.com"]
   );
+  // Rows older builds stored for the room and the user are purged.
+  assert.deepEqual(removed, ["boardroom@example.com", "Me@example.com"]);
 });

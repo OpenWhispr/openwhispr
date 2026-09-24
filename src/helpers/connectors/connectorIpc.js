@@ -111,7 +111,7 @@ function registerConnectorIpc({ ipcMain, manager, getPolicyState, findContacts }
       }
       const refusal = policyRefusal(await getPolicyState(event));
       if (refusal) return { contacts: [], unavailableReason: refusal };
-      return { contacts: findContacts(query.trim()) };
+      return findContacts(query.trim());
     });
   }
 }

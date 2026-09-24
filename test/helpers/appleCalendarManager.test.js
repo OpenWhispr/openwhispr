@@ -105,15 +105,17 @@ test("_mapEvent preserves EventKit availability and the current user's response"
   assert.equal(mapped.self_response_status, "declined");
 });
 
-test("rooms and resources are flagged in attendees and kept out of contacts", () => {
+test("rooms and resources are flagged in attendees and kept, with the user, out of contacts", () => {
   const AppleCalendarManager = loadManager();
   const saved = [];
   const contacts = [];
+  const removed = [];
   const manager = new AppleCalendarManager(
     {
       saveAppleCalendars: () => {},
       replaceAppleCalendarEvents: (events) => saved.push(...events),
       upsertContacts: (rows) => contacts.push(...rows),
+      removeContacts: (emails) => removed.push(...emails),
     },
     { reconcileProvider: () => {}, scheduleNextMeeting: () => {} }
   );
@@ -131,6 +133,7 @@ test("rooms and resources are flagged in attendees and kept out of contacts", ()
         attendees: [
           { email: "ana@example.com", name: "Ana", status: "accepted", self: false },
           { email: "boardroom@example.com", name: "Boardroom", status: "accepted", self: false, resource: true },
+          { email: "me@icloud.com", name: "Me", status: "accepted", self: true },
         ],
       },
     ],
@@ -143,4 +146,6 @@ test("rooms and resources are flagged in attendees and kept out of contacts", ()
     contacts.map((contact) => contact.email),
     ["ana@example.com"]
   );
+  // Rows older builds stored for the room and the user are purged.
+  assert.deepEqual(removed, ["boardroom@example.com", "me@icloud.com"]);
 });

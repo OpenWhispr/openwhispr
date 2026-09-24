@@ -52,7 +52,7 @@ const SOURCES = {
 
 const search = async (query, options = {}) => {
   const { searchContacts } = await load();
-  return searchContacts(SOURCES, query, { now: NOW, ...options });
+  return searchContacts(SOURCES, query, { now: NOW, ...options }).contacts;
 };
 
 test("a first name finds every matching person, the nearest meeting first", async () => {
@@ -97,7 +97,49 @@ test("accents, email local parts and spoken name forms match", async () => {
   assert.equal((await search("obrien"))[0].name, "Miles O'Brien");
 });
 
-test("an empty query and the limit are respected", async () => {
-  assert.deepEqual(await search("   "), []);
-  assert.equal((await search("example", { limit: 1 })).length, 1);
+test("an empty query and the limit are respected, and a cut-off list says so", async () => {
+  const { searchContacts } = await load();
+  assert.deepEqual(searchContacts(SOURCES, "   ", { now: NOW }), { contacts: [], hasMore: false });
+  const limited = searchContacts(SOURCES, "example", { now: NOW, limit: 1 });
+  assert.equal(limited.contacts.length, 1);
+  assert.equal(limited.hasMore, true);
+  assert.equal(searchContacts(SOURCES, "priya", { now: NOW }).hasMore, false);
+});
+
+test("people seen only in contacts keep the most recently synced first", async () => {
+  const { searchContacts } = await load();
+  // getContactLookupSources returns contacts newest first.
+  const sources = {
+    contacts: [
+      { email: "josh.recent@example.com", display_name: "Josh Recent" },
+      { email: "josh.old@example.com", display_name: "Josh Old" },
+    ],
+  };
+  assert.deepEqual(
+    searchContacts(sources, "josh", { now: NOW }).contacts.map((person) => person.email),
+    ["josh.recent@example.com", "josh.old@example.com"]
+  );
+});
+
+test("an all-day meeting starts at local midnight, not UTC midnight", async () => {
+  const { searchContacts } = await load();
+  const tomorrow = new Date(2026, 8, 25);
+  const tomorrowDate = "2026-09-25";
+  const sources = {
+    meetings: [
+      {
+        provider: "google",
+        start_time: tomorrowDate,
+        is_all_day: 1,
+        attendees: JSON.stringify([{ email: "offsite@example.com", displayName: "Offsite Host" }]),
+      },
+    ],
+  };
+  // An hour before it starts locally it hasn't happened yet, whatever the zone.
+  const [host] = searchContacts(sources, "offsite", { now: tomorrow.getTime() - 60 * 60 * 1000 })
+    .contacts;
+  assert.equal(host.lastMet, null);
+  const [later] = searchContacts(sources, "offsite", { now: tomorrow.getTime() + 60 * 60 * 1000 })
+    .contacts;
+  assert.equal(later.lastMet, tomorrowDate);
 });

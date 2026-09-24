@@ -293,6 +293,21 @@ test("find_contact returns matches and guidance for zero or several", async (t) 
   assert.equal(several.displayText, "Contacts found: 2");
 });
 
+test("find_contact asks for a last name when more people match than it lists", async (t) => {
+  const contacts = Array.from({ length: 5 }, (_, i) => ({
+    name: `Josh ${i}`,
+    email: `josh${i}@example.com`,
+    lastMet: null,
+  }));
+  installBrowserGlobals(t, {
+    window: { electronAPI: { connectorFindContacts: async () => ({ contacts, hasMore: true }) } },
+  });
+  const { findContactTool } = await loadContact();
+  const result = await findContactTool.execute({ name: "Josh" });
+  assert.equal(result.data.contacts.length, 5);
+  assert.match(result.data.guidance, /last name/);
+});
+
 test("find_contact reports an org policy refusal instead of an empty result", async (t) => {
   installBrowserGlobals(t, {
     window: {

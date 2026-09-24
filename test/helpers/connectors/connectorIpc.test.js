@@ -224,12 +224,13 @@ test("contact lookup trims the query and returns nothing the org policy doesn't 
     getPolicyState: async () => policies.shift(),
     findContacts: (query) => {
       queries.push(query);
-      return [{ name: "Gabe", email: "gabe@example.com", lastMet: null }];
+      return { contacts: [{ name: "Gabe", email: "gabe@example.com", lastMet: null }], hasMore: false };
     },
   });
   const handler = ipcMain.handlers.get("connector-find-contacts");
   assert.deepEqual(await handler({}, "  Gabe "), {
     contacts: [{ name: "Gabe", email: "gabe@example.com", lastMet: null }],
+    hasMore: false,
   });
   assert.deepEqual(await handler({}, "Gabe"), { contacts: [], unavailableReason: "policy_blocked" });
   assert.deepEqual(await handler({}, "Gabe"), {

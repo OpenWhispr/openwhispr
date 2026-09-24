@@ -1,3 +1,5 @@
+const { parseEventTime } = require("../calendarAvailability");
+
 // Rooms, resources, groups and holiday calendars Google lists as attendees.
 const NON_PERSON_ADDRESS = /@(?:[^@]+\.)?calendar\.google\.com$/i;
 
@@ -27,7 +29,7 @@ function collectPeople({ meetings = [], contacts = [], accountEmails = [] }, now
   const excluded = new Set(accountEmails.map((email) => String(email).toLowerCase()));
   const people = new Map();
 
-  const remember = (email, name, startTime) => {
+  const remember = (email, name, startTime, isAllDay) => {
     if (typeof email !== "string" || !email.includes("@") || NON_PERSON_ADDRESS.test(email)) return;
     const key = email.toLowerCase();
     let person = people.get(key);
@@ -36,8 +38,9 @@ function collectPeople({ meetings = [], contacts = [], accountEmails = [] }, now
       people.set(key, person);
     }
     if (!person.name && name) person.name = name;
-    const time = Date.parse(startTime);
-    if (Number.isNaN(time)) return;
+    // All-day starts are local dates, not UTC midnight.
+    const time = parseEventTime(startTime, isAllDay);
+    if (time === null) return;
     person.distance = Math.min(person.distance, Math.abs(time - now));
     if (time <= now && (person.lastMetTime === null || time > person.lastMetTime)) {
       person.lastMet = startTime;
@@ -57,12 +60,13 @@ function collectPeople({ meetings = [], contacts = [], accountEmails = [] }, now
       }
     }
     for (const attendee of attendees) {
-      remember(attendee?.email, attendee?.displayName, row.start_time);
+      remember(attendee?.email, attendee?.displayName, row.start_time, row.is_all_day);
     }
-    remember(row.organizer_email, null, row.start_time);
+    remember(row.organizer_email, null, row.start_time, row.is_all_day);
   }
   // Every sync adds its attendees here and nothing prunes them, so people
-  // whose meetings aged out of the calendar cache are still found.
+  // whose meetings aged out of the calendar cache are still found. They come
+  // most recently synced first, which is how ties between them are broken.
   for (const contact of contacts) remember(contact.email, contact.display_name, null);
   for (const email of excluded) people.delete(email);
   return [...people.values()];
@@ -88,19 +92,25 @@ function score(person, query, queryTokens) {
 
 /**
  * People matching a name or address in the user's calendar meetings and
- * synced contacts. Ties go to whoever the user meets closest to now; lastMet
- * is the most recent past meeting still on record, or null.
+ * synced contacts. Ties go to whoever the user meets closest to now, then to
+ * whoever was synced most recently; lastMet is the most recent past meeting
+ * still on record, or null. hasMore says the limit left matches out, so the
+ * model asks for a last name instead of offering the wrong few.
  */
 function searchContacts(sources, query, { limit = 5, now = Date.now() } = {}) {
   const normalizedQuery = normalize(query);
-  if (!normalizedQuery) return [];
+  if (!normalizedQuery) return { contacts: [], hasMore: false };
   const queryTokens = normalizedQuery.split(" ");
-  return collectPeople(sources, now)
+  const matches = collectPeople(sources, now)
     .map((person) => ({ person, score: score(person, normalizedQuery, queryTokens) }))
     .filter((match) => match.score > 0)
-    .sort((a, b) => b.score - a.score || a.person.distance - b.person.distance)
-    .slice(0, limit)
-    .map(({ person }) => ({ name: person.name, email: person.email, lastMet: person.lastMet }));
+    .sort((a, b) => b.score - a.score || a.person.distance - b.person.distance);
+  return {
+    contacts: matches
+      .slice(0, limit)
+      .map(({ person }) => ({ name: person.name, email: person.email, lastMet: person.lastMet })),
+    hasMore: matches.length > limit,
+  };
 }
 
 module.exports = { searchContacts };

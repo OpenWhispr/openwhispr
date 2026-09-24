@@ -126,7 +126,13 @@ test("contact lookup sources cover meetings, synced contacts and the user's acco
   });
   const soon = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   const later = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString();
-  db.upsertCalendarEvents([event("evt-later", later, "later@example.com"), event("evt-soon", soon, "soon@example.com")]);
+  db.upsertCalendarEvents([
+    event("evt-later", later, "later@example.com"),
+    event("evt-soon", soon, "soon@example.com"),
+    // A meeting the user never had can't count as meeting anyone.
+    { ...event("evt-cancelled", soon, "cancelled@example.com"), status: "cancelled" },
+    { ...event("evt-declined", soon, "declined@example.com"), self_response_status: "declined" },
+  ]);
   db.upsertContacts([{ email: "Priya@Example.com", displayName: "Priya Shah" }]);
   db.saveGoogleCalendars([{ id: "primary", summary: "Chad" }], "chad@example.com");
   db.saveMicrosoftCalendars([{ id: "work", summary: "Calendar" }], "chad@corp.test");
@@ -143,4 +149,47 @@ test("contact lookup sources cover meetings, synced contacts and the user's acco
   assert.deepEqual(sources.contacts, [{ email: "priya@example.com", display_name: "Priya Shah" }]);
   assert.deepEqual([...sources.accountEmails].sort(), ["chad@corp.test", "chad@example.com"]);
   db.db.close();
+});
+
+test("contacts come most recently synced first, and removeContacts purges addresses", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.upsertContacts([
+    { email: "old@example.com", displayName: "Josh Old" },
+    { email: "new@example.com", displayName: "Josh New" },
+  ]);
+  db.db.prepare("UPDATE contacts SET updated_at = '2020-01-01 00:00:00' WHERE email = ?").run("old@example.com");
+
+  assert.deepEqual(
+    db.getContactLookupSources().contacts.map((row) => row.email),
+    ["new@example.com", "old@example.com"]
+  );
+  db.removeContacts(["New@Example.com"]);
+  assert.deepEqual(
+    db.getContactLookupSources().contacts.map((row) => row.email),
+    ["old@example.com"]
+  );
+  db.db.close();
+});
+
+test("upgrading to user_version 3 forces a full calendar re-sync", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.saveGoogleCalendars([{ id: "primary", summary: "Chad" }], "chad@example.com");
+  db.saveMicrosoftCalendars([{ id: "work", summary: "Calendar" }], "chad@corp.test");
+  db.updateCalendarSyncToken("primary", "google-token", Date.now() + 60_000);
+  db.updateMicrosoftCalendarSyncToken("work", "microsoft-token", Date.now() + 60_000);
+  db.db.pragma("user_version = 2");
+  db.db.close();
+
+  // Same user data directory: the next launch runs the migration.
+  const reopened = new DatabaseManager();
+  const tokens = reopened.db
+    .prepare(
+      "SELECT sync_token FROM google_calendars UNION ALL SELECT sync_token FROM microsoft_calendars"
+    )
+    .all();
+  assert.deepEqual(tokens, [{ sync_token: null }, { sync_token: null }]);
+  assert.equal(reopened.db.pragma("user_version", { simple: true }), 3);
+  reopened.db.close();
 });

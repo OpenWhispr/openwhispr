@@ -33,9 +33,11 @@ export const findContactTool: ToolDefinition = {
     const guidance =
       contacts.length === 0
         ? "No match. Ask the user for the email address."
-        : contacts.length > 1
-          ? "Several people match. Ask the user which one unless the request makes it clear."
-          : undefined;
+        : response?.hasMore
+          ? `More than ${contacts.length} people match and only the closest are listed. Unless one is clearly meant, ask the user for the last name or email address.`
+          : contacts.length > 1
+            ? "Several people match. Ask the user which one unless the request makes it clear."
+            : undefined;
 
     return {
       success: true,

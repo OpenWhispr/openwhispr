@@ -683,6 +683,18 @@ class DatabaseManager {
         this.db.pragma("user_version = 2");
       }
 
+      // One-time reset (user_version 3): older builds stored rooms without a
+      // resource flag, and incremental syncs never resend unchanged events; a
+      // forced full sync stores them flagged and purges the rooms those builds
+      // wrote to contacts.
+      if (this.db.pragma("user_version", { simple: true }) < 3) {
+        this.db.exec("UPDATE google_calendars SET sync_token = NULL, sync_token_expires_at = NULL");
+        this.db.exec(
+          "UPDATE microsoft_calendars SET sync_token = NULL, sync_token_expires_at = NULL"
+        );
+        this.db.pragma("user_version = 3");
+      }
+
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS calendar_events (
           id TEXT PRIMARY KEY,
@@ -4760,21 +4772,28 @@ class DatabaseManager {
   // What find_contact searches. calendar_events only holds a sync window
   // (about two days back to a month ahead), so the meetings nearest to now go
   // first, and the contacts table (every synced attendee, never pruned) covers
-  // older ones. The connected calendar accounts are the user's own addresses.
+  // older ones, most recently seen first. A cancelled or declined meeting is
+  // one the user never had, so it can't count as meeting someone; its people
+  // are still in contacts. The connected calendar accounts are the user's own
+  // addresses.
   getContactLookupSources(meetingLimit = 1000) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const meetings = this.db
         .prepare(
-          `SELECT provider, start_time, organizer_email, attendees
+          `SELECT provider, start_time, is_all_day, organizer_email, attendees
              FROM calendar_events
-            WHERE attendees IS NOT NULL OR organizer_email IS NOT NULL
+            WHERE (attendees IS NOT NULL OR organizer_email IS NOT NULL)
+              AND status IN ('confirmed', 'tentative')
+              AND self_response_status != 'declined'
             ORDER BY ABS(julianday(start_time) - julianday('now')) IS NULL,
                      ABS(julianday(start_time) - julianday('now'))
             LIMIT ?`
         )
         .all(meetingLimit);
-      const contacts = this.db.prepare("SELECT email, display_name FROM contacts").all();
+      const contacts = this.db
+        .prepare("SELECT email, display_name FROM contacts ORDER BY updated_at DESC")
+        .all();
       const accountEmails = this.db
         .prepare(
           `SELECT account_email FROM google_calendars WHERE account_email IS NOT NULL
@@ -4830,6 +4849,21 @@ class DatabaseManager {
       return { success: true };
     } catch (error) {
       debugLogger.error("Error upserting contacts", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  removeContacts(emails) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const stmt = this.db.prepare("DELETE FROM contacts WHERE email = ?");
+      const transaction = this.db.transaction((list) => {
+        for (const email of list) stmt.run(email.toLowerCase().trim());
+      });
+      transaction(emails);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error removing contacts", { error: error.message }, "database");
       throw error;
     }
   }

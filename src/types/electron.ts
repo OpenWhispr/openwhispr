@@ -2928,7 +2928,7 @@ declare global {
       ) => Promise<ConnectorActionRecord[]>;
       connectorFindContacts?: (
         query: string
-      ) => Promise<{ contacts: ContactMatch[]; unavailableReason?: string }>;
+      ) => Promise<{ contacts: ContactMatch[]; hasMore?: boolean; unavailableReason?: string }>;
       calendarGetAvailability?: (
         request: CalendarAvailabilityRequest
       ) => Promise<
