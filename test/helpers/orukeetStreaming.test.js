@@ -295,3 +295,19 @@ test("a server closing a completed socket raises no stream error", async (t) => 
   await closed;
   assert.deepEqual(errors, []);
 });
+
+test("a failure while the session token is minted raises no stream error", async () => {
+  // Main creates the adapter before minting the managed token, so it is
+  // connecting before connect() runs; the failed start reports this failure.
+  const adapter = new OrukeetStreaming({ timeoutMs: 300 });
+  const errors = [];
+  adapter.onError = (error) => errors.push(error);
+  adapter.beginConnecting();
+  adapter.sendAudio(Buffer.alloc(2 * 1024 * 1024 + 2));
+
+  await assert.rejects(
+    adapter.connect({ baseUrl: "http://127.0.0.1:9", apiKey: "test-key" }),
+    /new Orukeet adapter/
+  );
+  assert.deepEqual(errors, []);
+});

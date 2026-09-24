@@ -922,3 +922,58 @@ test("a silent failed-over tap is not uploaded", async (t) => {
   assert.deepEqual(errors, []);
   assert.deepEqual(completions, [{ success: true, text: "" }]);
 });
+
+test("a failed-over selection edit that fails is reported as a selection edit failure", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  const { manager, errors } = createStartingManager(AudioManager, {
+    providerName: "orukeet",
+    provider: refusedStartProvider(),
+  });
+  manager.saveFailedTranscription = async () => {};
+  manager.processWithOpenWhisprCloud = async () => {
+    throw Object.assign(new Error("Selection edit could not safely read the selection: gone"), {
+      code: "SELECTION_EDIT_CAPTURE_FAILED",
+      messageKey: "hooks.audioRecording.selectionEditing.unavailable",
+      selectionEditFatal: true,
+    });
+  };
+
+  await manager.startStreamingRecording();
+  await manager.stopStreamingRecording();
+
+  assert.deepEqual(errors, [
+    {
+      title: "Selection Edit Failed",
+      description: "Selection edit could not safely read the selection: gone",
+      code: "SELECTION_EDIT_CAPTURE_FAILED",
+      messageKey: "hooks.audioRecording.selectionEditing.unavailable",
+    },
+  ]);
+});
+
+test("a managed Orukeet session fails over even if its route changes mid-recording", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  let raise;
+  const { manager, errors } = createStartingManager(AudioManager, {
+    providerName: "orukeet",
+    provider: startingOrukeetProvider({
+      onError: (listener) => {
+        raise = listener;
+        return () => {};
+      },
+    }),
+  });
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  // A background stt-config refresh rolled the account off the Orukeet route.
+  manager.getStreamingProviderName = () => "deepgram";
+  raise("Account already has an active recording");
+
+  assert.deepEqual(errors, []);
+  assert.equal(manager._streamingStopPromise, null, "the recording is not cut off");
+  await manager.stopStreamingRecording();
+});

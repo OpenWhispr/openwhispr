@@ -83,6 +83,7 @@ import {
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription";
 import {
+  isManagedOrukeetStream,
   resolveStreamingFallbackTarget,
   resolveStreamingStartFallback,
 } from "./transcriptionFallback";
@@ -163,6 +164,29 @@ const cloudSignInRequiredError = () => {
   err.code = "AUTH_REQUIRED";
   err.messageKey = "hooks.audioRecording.errorDescriptions.sessionExpired";
   return err;
+};
+
+// How a transcription failure ends, for batch recordings and failed-over
+// streaming ones alike. Silence is not reported. A transcript discarded as an
+// echo of the dictionary prompt reads as silence, but its recording is kept for
+// a manual retry like any real failure's, or the utterance vanishes (#1547).
+const transcriptionFailureOutcome = (error) => {
+  if (error.code === DICTIONARY_ECHO_CODE) return { noAudio: true, keepAudio: true, report: null };
+  if (error.message === "No audio detected") {
+    return { noAudio: true, keepAudio: false, report: null };
+  }
+  return {
+    noAudio: false,
+    keepAudio: true,
+    report: {
+      title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
+      description: error.selectionEditFatal
+        ? error.message
+        : `Transcription failed: ${error.message}`,
+      code: error.code,
+      messageKey: error.messageKey,
+    },
+  };
 };
 
 const micDeviceKey = (settings) =>
@@ -2140,31 +2164,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "performance"
       );
 
-      if (error.code === DICTIONARY_ECHO_CODE) {
-        // The transcript was discarded as an echo of the dictionary prompt.
-        // Surface the shared soft no-audio outcome and keep the recording for
-        // a manual retry — otherwise the whole utterance disappears with no
-        // feedback (#1547).
-        noAudioDetected = true;
-        if (this.lastAudioBlob) {
-          this.saveFailedTranscription(error.message, error.code, metadata);
-        }
-      } else if (error.message === "No audio detected") {
-        noAudioDetected = true;
-      } else {
-        this.onError?.({
-          title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
-          description: error.selectionEditFatal
-            ? error.message
-            : `Transcription failed: ${error.message}`,
-          code: error.code,
-          messageKey: error.messageKey,
-        });
-
-        // Save failed transcription with audio so the user can retry later
-        if (this.lastAudioBlob) {
-          this.saveFailedTranscription(error.message, error.code || null, metadata);
-        }
+      const outcome = transcriptionFailureOutcome(error);
+      noAudioDetected = outcome.noAudio;
+      if (outcome.report) this.onError?.(outcome.report);
+      if (outcome.keepAudio && this.lastAudioBlob) {
+        this.saveFailedTranscription(error.message, error.code || null, metadata);
       }
     } finally {
       const shouldNotifyNoAudio =
@@ -4668,6 +4672,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
       const provider = this.getStreamingProvider();
+      // Decided once, with the provider, so a config refresh mid-recording
+      // cannot change how this session's stream errors are handled.
+      const managedOrukeet = isManagedOrukeetStream({
+        providerName: this.getStreamingProviderName(),
+        cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+      });
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
@@ -4724,10 +4734,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // and can drop a socket mid-recording. The fallback recorder has the
         // whole capture, so keep recording and let stop upload it to Cloud
         // rather than cutting the user off behind an error.
-        if (
-          this.getStreamingProviderName() === "orukeet" &&
-          getSettings().cloudTranscriptionMode === "openwhispr"
-        ) {
+        if (managedOrukeet) {
           this._streamingFailoverReason ??= "stream_no_final";
           return;
         }
@@ -5435,7 +5442,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let usedBatchFallback = false;
     let batchWarning = null;
     let batchFallbackResult = null;
-    let failoverError = null;
+    let failoverReport = null;
     const failoverReason = this._streamingFailoverReason;
     // No stream will transcribe a failed-over recording, so it uploads at any
     // length, unless it was the silence the batch speech gate skips.
@@ -5445,13 +5452,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (failoverSilent) {
       logger.info("Speech gate skipped the failed-over upload", { failoverReason }, "streaming");
     }
-    // A failed-over recording has no other transcript, so it ends as a batch
-    // recording would: its audio is kept for retry.
-    const keepFailoverAudio = (error) =>
-      this.saveFailedTranscription(error.message, error.code || null, {
-        durationSeconds,
-        analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-      });
+    // A failed-over recording has no other transcript, so a failure to
+    // transcribe it ends as a batch recording's would.
+    const failFailover = (error) => {
+      const outcome = transcriptionFailureOutcome(error);
+      failoverReport = outcome.report;
+      if (outcome.keepAudio) {
+        this.saveFailedTranscription(error.message, error.code || null, {
+          durationSeconds,
+          analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+        });
+      }
+    };
     if (
       !finalText &&
       (failoverReason ? !failoverSilent : !finalAcknowledged && durationSeconds > 2) &&
@@ -5464,10 +5476,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           {},
           "streaming"
         );
-        if (failoverReason) {
-          failoverError = cloudSignInRequiredError();
-          keepFailoverAudio(failoverError);
-        }
+        if (failoverReason) failFailover(cloudSignInRequiredError());
       } else {
         logger.info(
           "Streaming produced no text, falling back to batch transcription",
@@ -5506,15 +5515,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           // The cancelled upload's rejection is the expected outcome.
           if (wasCancelled()) return true;
           logger.error("Batch fallback failed", { error: fallbackErr.message }, "streaming");
-          if (failoverReason) {
-            // Silence is no failure; an echo of the dictionary prompt reads as
-            // silence but still keeps its audio (#1547).
-            const noAudio = fallbackErr.message === "No audio detected";
-            if (!noAudio) failoverError = fallbackErr;
-            if (!noAudio || fallbackErr.code === DICTIONARY_ECHO_CODE) {
-              keepFailoverAudio(fallbackErr);
-            }
-          }
+          if (failoverReason) failFailover(fallbackErr);
         }
       }
     }
@@ -5628,13 +5629,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     if (wasCancelled()) return true;
 
-    if (failoverError) {
-      this.onError?.({
-        title: "Transcription Error",
-        description: `Transcription failed: ${failoverError.message}`,
-        code: failoverError.code,
-        messageKey: failoverError.messageKey,
-      });
+    if (failoverReport) {
+      this.onError?.(failoverReport);
     } else if (!finalText) {
       // Match the batch pipeline: settle processing first, then publish the
       // empty outcome so the warning cannot interrupt the thinking transition.
