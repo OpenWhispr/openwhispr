@@ -56,7 +56,7 @@ function EmptyState({ floating }: { floating: boolean }) {
         </>
       ) : (
         <BrandMarkIcon
-          size={88}
+          size={72}
           className="text-foreground/10 drop-shadow-sm dark:text-foreground/15"
         />
       )}
@@ -124,7 +124,7 @@ export default function EmbeddedChat({
 
   const header = (
     <div
-      className={cn("flex items-center shrink-0", mode === "sidebar" ? "h-20 px-8" : "h-9 px-3")}
+      className={cn("flex items-center shrink-0", mode === "sidebar" ? "h-16 px-6" : "h-9 px-3")}
     >
       {headerTitle}
       <div className="flex-1" />
@@ -141,21 +141,21 @@ export default function EmbeddedChat({
         {mode === "sidebar" && onNewChat && (
           <button
             onClick={onNewChat}
-            className="flex size-9 items-center justify-center rounded-full text-foreground/65 transition-colors hover:bg-foreground/6 hover:text-foreground"
+            className="flex size-8 items-center justify-center rounded-full text-foreground/65 transition-colors hover:bg-foreground/6 hover:text-foreground"
             aria-label={t("embeddedChat.newChat")}
           >
-            <Plus size={22} />
+            <Plus size={18} />
           </button>
         )}
         <button
           onClick={() => onModeChange("hidden")}
           className={cn(
             "flex items-center justify-center text-foreground/45 transition-colors hover:bg-foreground/6 hover:text-foreground",
-            mode === "sidebar" ? "size-9 rounded-full" : "h-6 w-6 rounded-md"
+            mode === "sidebar" ? "size-8 rounded-full" : "h-6 w-6 rounded-md"
           )}
           aria-label={t("embeddedChat.close")}
         >
-          <X size={mode === "sidebar" ? 22 : 13} />
+          <X size={mode === "sidebar" ? 18 : 13} />
         </button>
       </div>
     </div>
@@ -197,17 +197,17 @@ export default function EmbeddedChat({
     <div className="flex min-h-0 w-1/2 min-w-80 max-w-2xl shrink-0 p-4" data-note-chat-panel>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-4xl border border-border/60 bg-surface-1 dark:border-white/10 dark:bg-surface-1">
         {chatBody}
-        <div className="mx-3 mb-3 shrink-0 overflow-hidden rounded-4xl bg-surface-3 dark:bg-surface-3">
-          <div className="scrollbar-hidden flex items-center gap-2 overflow-x-auto px-2 pt-2 pb-1">
+        <div className="mx-3 mb-3 shrink-0">
+          <div className="scrollbar-hidden flex items-center gap-1.5 overflow-x-auto px-1 pb-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
                   disabled={agentState !== "idle"}
                   aria-label={t("embeddedChat.quickActions")}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full border border-dashed border-foreground/35 bg-background text-foreground/55 transition-colors hover:text-foreground disabled:opacity-40 dark:bg-surface-2"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed border-foreground/35 bg-background text-foreground/55 transition-colors hover:text-foreground disabled:opacity-40 dark:bg-surface-2"
                 >
-                  <Plus size={17} />
+                  <Plus size={14} />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" sideOffset={8}>
@@ -225,15 +225,15 @@ export default function EmbeddedChat({
                 type="button"
                 onClick={() => onTextSubmit(t(key))}
                 disabled={agentState !== "idle"}
-                className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-border/70 bg-background px-3 text-sm text-foreground/65 transition-colors hover:text-foreground disabled:opacity-40 dark:border-white/10 dark:bg-surface-2"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background px-2.5 text-xs text-foreground/65 transition-colors hover:text-foreground disabled:opacity-40 dark:border-white/10 dark:bg-surface-2"
               >
-                <Icon size={16} className="text-primary" />
+                <Icon size={14} className="text-primary" />
                 {t(key)}
               </button>
             ))}
           </div>
           <ChatInput
-            className="w-full px-1 pb-1"
+            className="w-full"
             variant="sidebar"
             agentState={agentState}
             draftText={draftText}

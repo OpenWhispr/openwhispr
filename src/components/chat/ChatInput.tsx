@@ -170,7 +170,7 @@ export function ChatInput({
         className={cn(
           "flex items-center gap-2 min-h-11",
           variant === "sidebar"
-            ? "h-40 items-end rounded-4xl bg-background ps-4 pe-3 py-3 dark:bg-surface-2"
+            ? "h-14 items-end rounded-3xl bg-background ps-4 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-2"
             : "rounded-3xl ps-4 pe-1.5 py-1.5",
           variant === "assistant"
             ? "min-h-12 bg-card shadow-sm dark:bg-surface-2"
@@ -186,14 +186,16 @@ export function ChatInput({
                 ? "border border-border/70 dark:border-white/14"
                 : "border-0"
               : "border border-black/10 dark:border-white/14",
-          expandOnFocus
-            ? cn(
-                "h-12 items-end transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none",
-                expandOnFocusSize === "compact"
-                  ? "focus-within:h-[min(36vh,14rem)]"
-                  : "focus-within:h-[min(40vh,16rem)]"
-              )
-            : "transition-[border-color,box-shadow] duration-200",
+          variant === "sidebar"
+            ? "transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none"
+            : expandOnFocus
+              ? cn(
+                  "h-12 items-end transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none",
+                  expandOnFocusSize === "compact"
+                    ? "focus-within:h-[min(36vh,14rem)]"
+                    : "focus-within:h-[min(40vh,16rem)]"
+                )
+              : "transition-[border-color,box-shadow] duration-200",
           isIdle &&
             (variant === "assistant"
               ? "focus-within:border-foreground/15 focus-within:ring-2 focus-within:ring-foreground/5"
@@ -294,11 +296,7 @@ export function ChatInput({
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
                 "input-inline flex-1 outline-none bg-transparent caret-primary",
-                variant === "sidebar"
-                  ? "text-base"
-                  : variant === "assistant" || variant === "note"
-                    ? "text-sm"
-                    : "text-[13px]",
+                variant === "default" ? "text-[13px]" : "text-sm",
                 "text-foreground placeholder:text-muted-foreground/70",
                 "min-w-0 min-h-8 max-h-32 resize-none overflow-y-auto border-0 px-0 py-1.5 leading-5",
                 (expandOnFocus || variant === "sidebar") && "min-h-0 max-h-none",
@@ -339,13 +337,8 @@ export function ChatInput({
                 )}
               >
                 {variant === "assistant" || variant === "note" || variant === "sidebar" ? (
-                  <span
-                    className={cn(
-                      "flex items-center justify-center rounded-full bg-muted text-muted-foreground",
-                      variant === "sidebar" ? "size-10" : "size-8"
-                    )}
-                  >
-                    <ArrowRight size={variant === "sidebar" ? 20 : 18} className="-rotate-90" />
+                  <span className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <ArrowRight size={18} className="-rotate-90" />
                   </span>
                 ) : (
                   <SendIcon size={28} className="block rtl:scale-x-[-1]" />
