@@ -28,6 +28,7 @@ import {
   type InferenceScopeStoreKeys,
 } from "../config/inferenceScopes";
 import { normalizeChineseScriptPreference } from "../utils/chineseScript";
+import { isLocalLlmServerNeeded } from "../utils/localLlmServerPolicy";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import modelRegistryData from "../models/modelRegistryData.json";
 import { pickDefaultModelId } from "../models/providerDefaultModel";
@@ -2917,6 +2918,15 @@ export function setResolvedLLMConfig(
 
 export function isCloudChatAgentMode() {
   return selectIsCloudChatAgentMode(getSettings());
+}
+
+export function isLocalLlmServerInUse(): boolean {
+  const state = getSettings();
+  return isLocalLlmServerNeeded(
+    (Object.keys(INFERENCE_SCOPES) as InferenceScope[]).map((scope) =>
+      selectResolvedLLMConfig(state, scope)
+    )
+  );
 }
 
 // --- Convenience getters for non-React code ---
