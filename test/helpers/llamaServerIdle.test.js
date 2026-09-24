@@ -67,3 +67,33 @@ test("a server still generating an answer is not stopped mid-stream", async (t) 
   await settle();
   assert.equal(stops.length, 1, "it stops once the answer is done");
 });
+
+test("a server that cannot answer /slots is stopped as before", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  manager._requestJson = async () => null;
+
+  await manager.start("/models/main.gguf");
+  t.mock.timers.tick(5 * MINUTE + 1);
+  await settle();
+
+  assert.equal(stops.length, 1);
+});
+
+test("a request that arrives while /slots is checked keeps the server", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  let answerSlots;
+  manager._requestJson = () =>
+    new Promise((resolve) => {
+      answerSlots = resolve;
+    });
+
+  await manager.start("/models/main.gguf");
+  t.mock.timers.tick(5 * MINUTE + 1);
+  await manager.start("/models/main.gguf");
+  answerSlots([{ is_processing: false }]);
+  await settle();
+
+  assert.equal(stops.length, 0, "the newer request's timer owns the decision now");
+});
