@@ -11,6 +11,7 @@ import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy, httpError } from "../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../config/constants";
 import logger from "../utils/logger";
+import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
@@ -461,6 +462,11 @@ class ReasoningService extends BaseReasoningService {
     ({ model, config } = managed);
     const trimmedModel = model?.trim?.() || "";
     const settings = getSettings();
+    const validateCleanup =
+      config.inferenceScope === "dictationCleanup" &&
+      !config.systemPrompt &&
+      !config.requiresAgent &&
+      !settings.customPrompts.cleanup;
     const isImplicitCleanup =
       config.provider === undefined && config.baseUrl === undefined && config.lanUrl === undefined;
     const implicitProvider =
@@ -517,6 +523,8 @@ class ReasoningService extends BaseReasoningService {
         config: dispatchConfig,
         ctx: this.providerContext,
       });
+
+      if (validateCleanup) assertValidCleanupOutput(text, result);
 
       logger.logReasoning("PROVIDER_SUCCESS", {
         provider: providerId,

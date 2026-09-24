@@ -124,6 +124,7 @@ const {
   MEETING_MIC_SILENCE_RMS,
   MEETING_MIC_SILENCE_PEAK,
 } = require("./meetingMicGate");
+const { deriveDetectorPreferences } = require("./meetingDetectionPreferencePolicy");
 const { resolveDiarizationInput } = require("./meetingDiarizationInput");
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
@@ -621,7 +622,7 @@ class IPCHandlers {
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
     this.windowsLoopbackAudioManager = managers.windowsLoopbackAudioManager;
     this.meetingAecManager = managers.meetingAecManager;
-    this.getQdrantManager = managers.getQdrantManager;
+    this.getSemanticSearch = managers.getSemanticSearch;
     this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
@@ -661,6 +662,9 @@ class IPCHandlers {
     this._granolaImportPending = null;
     this._analyticsHistoryBackfillPromise = null;
     this.speakerDiarizationEnabled = true;
+    // Default for the saved process-detection toggle. The engine keeps both detectors
+    // off until the renderer syncs (see meetingDetectionPreferencePolicy.js).
+    this.meetingProcessDetection = true;
     this.activeMeetingSpeakerConfig = null;
     this.whisperVadSettings = {
       dictationSileroEnabled: false,
@@ -908,46 +912,10 @@ class IPCHandlers {
     };
   }
 
-  _asyncVectorUpsert(note) {
-    setImmediate(() => {
-      const vectorIndex = require("./vectorIndex");
-      if (!vectorIndex.isReady()) return;
-      const { LocalEmbeddings } = require("./localEmbeddings");
-      const text = LocalEmbeddings.noteEmbedText(note.title, note.content, note.enhanced_content);
-      vectorIndex
-        .upsertNote(note.id, text, { space_id: note.space_id, folder_id: note.folder_id ?? null })
-        .catch(() => {});
-    });
-  }
-
-  _asyncVectorDelete(noteId) {
-    setImmediate(() => {
-      const vectorIndex = require("./vectorIndex");
-      if (!vectorIndex.isReady()) return;
-      vectorIndex.deleteNote(noteId).catch(() => {});
-    });
-  }
-
-  // Space vector purges are persisted (pending_vector_purges) so a purge that
-  // lands while Qdrant is booting or down is retried once the index is ready.
-  drainPendingVectorPurges() {
-    setImmediate(() => {
-      void (async () => {
-        const vectorIndex = require("./vectorIndex");
-        if (!vectorIndex.isReady()) return;
-        for (const { space_id } of this.databaseManager.getPendingVectorPurges()) {
-          if (await vectorIndex.deleteBySpace(space_id)) {
-            this.databaseManager.clearPendingVectorPurge(space_id);
-          }
-        }
-      })().catch((error) => {
-        debugLogger.error(
-          "Pending vector purge drain failed",
-          { error: error?.message || String(error) },
-          "semantic-search"
-        );
-      });
-    });
+  // Note writes are journaled by SQLite triggers (pending_vector_changes); this
+  // only wakes an active semantic index to drain them.
+  notifyVectorChanges() {
+    this.getSemanticSearch?.()?.notifyChanges();
   }
 
   _mirrorDeleteFolderIfUnshared(folderName) {
@@ -2033,7 +2001,7 @@ class IPCHandlers {
         );
         if (result?.success && result?.note) {
           setImmediate(() => broadcastToWindows("note-added", result.note));
-          this._asyncVectorUpsert(result.note);
+          this.notifyVectorChanges();
           this._asyncMirrorWrite(result.note);
         }
         return result;
@@ -2056,7 +2024,7 @@ class IPCHandlers {
       const result = this.databaseManager.updateNote(id, updates);
       if (result?.success && result?.note) {
         setImmediate(() => broadcastToWindows("note-updated", result.note));
-        this._asyncVectorUpsert(result.note);
+        this.notifyVectorChanges();
         this._asyncMirrorWrite(result.note);
         if (updates.participants) {
           this._tryAutoLabelOneOnOne(id);
@@ -2077,11 +2045,6 @@ class IPCHandlers {
     ipcMain.handle(
       "db-semantic-search-notes",
       async (event, query, limit = 5, spaceId, folderId) => {
-        const vectorIndex = require("./vectorIndex");
-        if (!vectorIndex.isReady()) {
-          return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
-        }
-
         try {
           // Qdrant payload updates are best-effort. Use its space filter to
           // reduce the candidate set, then validate every scoped vector hit
@@ -2093,8 +2056,9 @@ class IPCHandlers {
               : undefined;
           const [ftsResults, vectorResults] = await Promise.all([
             this.databaseManager.searchNotes(query, overFetch, spaceId, folderId),
-            vectorIndex.search(query, overFetch, vectorFilter),
+            this.getSemanticSearch?.()?.search(query, overFetch, vectorFilter),
           ]);
+          if (vectorResults == null) return ftsResults.slice(0, limit);
           const scopedIds = new Set(
             this.databaseManager.getNoteIdsInScope(
               spaceId,
@@ -2141,20 +2105,6 @@ class IPCHandlers {
       }
     );
 
-    ipcMain.handle("db-semantic-reindex-all", async () => {
-      const vectorIndex = require("./vectorIndex");
-      if (!vectorIndex.isReady()) return { success: false, error: "Vector index not ready" };
-
-      const notes = this.databaseManager.getNotes(null, 100000);
-      let done = 0;
-      const { failed } = await vectorIndex.reindexAll(notes, (completed, total) => {
-        done = completed;
-        broadcastToWindows("semantic-reindex-progress", { done: completed, total });
-      });
-      // Report failed batches so callers only latch their done-flag on a clean pass.
-      return { success: failed === 0, indexed: done - failed };
-    });
-
     ipcMain.handle("db-update-note-cloud-id", async (event, id, cloudId) => {
       return this.databaseManager.updateNoteCloudId(id, cloudId);
     });
@@ -2189,9 +2139,7 @@ class IPCHandlers {
       const folderName = this._noteFilesEnabled ? this._getFolderName(id) : null;
       const result = this.databaseManager.deleteFolder(id);
       if (result?.success) {
-        for (const noteId of result.noteIds ?? []) {
-          this._asyncVectorDelete(noteId);
-        }
+        this.notifyVectorChanges();
         // Other accounts' notes were released to the space root; their mirror
         // files leave with the folder directory, so rewrite the live ones.
         for (const note of result.relocatedNotes ?? []) {
@@ -2223,10 +2171,8 @@ class IPCHandlers {
     ipcMain.handle("db-move-folder-to-space", async (event, id, spaceId) => {
       const result = this.databaseManager.moveFolderToSpace(id, spaceId);
       if (result?.success) {
-        // Qdrant payloads carry space_id — refresh the moved notes' vectors.
-        for (const note of result.notes ?? []) {
-          this._asyncVectorUpsert(note);
-        }
+        // Qdrant payloads carry space_id — the triggers journaled the moved notes.
+        this.notifyVectorChanges();
         if (result.folder) {
           setImmediate(() => broadcastToWindows("folder-synced", result.folder));
         }
@@ -2293,8 +2239,8 @@ class IPCHandlers {
       }
       try {
         const result = this.databaseManager.deleteAccountData(accountId);
+        this.notifyVectorChanges();
         for (const noteId of result.deletedNoteIds) {
-          this._asyncVectorDelete(noteId);
           this._asyncMirrorDelete(noteId);
         }
         return { success: true, ...result };
@@ -2325,10 +2271,10 @@ class IPCHandlers {
       const result = this.databaseManager.purgeSpace(id, options);
       if (result?.success) {
         if (!result.preservedForOtherAccounts) {
+          // The purge row and the relocated notes' trigger rows drain together.
           this.databaseManager.addPendingVectorPurge(result.spaceId);
-          this.drainPendingVectorPurges();
+          this.notifyVectorChanges();
           for (const note of result.relocatedNotes ?? []) {
-            this._asyncVectorUpsert(note);
             this._asyncMirrorWrite(note);
           }
           for (const noteId of result.noteIds ?? []) {
@@ -2511,7 +2457,7 @@ class IPCHandlers {
       const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId);
       if (note) {
         setImmediate(() => broadcastToWindows("note-synced", note));
-        this._asyncVectorUpsert(note);
+        this.notifyVectorChanges();
       }
       return note;
     });
@@ -2556,7 +2502,7 @@ class IPCHandlers {
     ipcMain.handle("db-hard-delete-note", (_, id) => {
       const result = this.databaseManager.hardDeleteNote(id);
       if (result?.success) {
-        this._asyncVectorDelete(id);
+        this.notifyVectorChanges();
         this._asyncMirrorDelete(id);
         setImmediate(() => broadcastToWindows("note-deleted", { id }));
       }
@@ -2597,8 +2543,8 @@ class IPCHandlers {
     ipcMain.handle("db-restore-folder-after-denied-delete", (_, id) => {
       const result = this.databaseManager.restoreFolderAfterDeniedDelete(id);
       if (result?.success) {
+        this.notifyVectorChanges();
         for (const note of result.notes ?? []) {
-          this._asyncVectorUpsert(note);
           this._asyncMirrorWrite(note);
         }
         setImmediate(() => {
@@ -2613,9 +2559,7 @@ class IPCHandlers {
     ipcMain.handle("db-hard-delete-folder", (_, id) => {
       const result = this.databaseManager.hardDeleteFolder(id);
       if (result?.success) {
-        for (const noteId of result.noteIds ?? []) {
-          this._asyncVectorDelete(noteId);
-        }
+        this.notifyVectorChanges();
         // Other accounts' notes were released to the space root; their mirror
         // files leave with the folder directory, so rewrite the live ones.
         for (const note of result.relocatedNotes ?? []) {
@@ -2631,14 +2575,13 @@ class IPCHandlers {
     ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder) => {
       const result = this.databaseManager.relocateRevokedFolder(id, privateSpaceId, preserveFolder);
       if (result?.success) {
-        // Qdrant payloads carry space_id and the markdown mirror files by
-        // folder — refresh relocated notes, drop the server-owned ones.
+        // The triggers journaled the relocated and deleted notes. Mirror files live by
+        // folder, so rewrite the relocated notes and drop the server-owned ones.
+        this.notifyVectorChanges();
         for (const note of result.relocatedNotes ?? []) {
-          this._asyncVectorUpsert(note);
           this._asyncMirrorWrite(note);
         }
         for (const noteId of result.deletedNoteIds ?? []) {
-          this._asyncVectorDelete(noteId);
           this._asyncMirrorDelete(noteId);
         }
         setImmediate(() => {
@@ -3967,7 +3910,7 @@ class IPCHandlers {
         errors.push(`Diarization stop: ${e.message}`);
       }
       try {
-        await this.getQdrantManager?.()?.stop();
+        await this.getSemanticSearch?.()?.stop();
       } catch (e) {
         errors.push(`Vector index stop: ${e.message}`);
       }
@@ -11607,23 +11550,6 @@ class IPCHandlers {
       return crypto.createHash("md5").update(text.toLowerCase().trim()).digest("hex");
     });
 
-    ipcMain.handle("meeting-detection-get-preferences", async () => {
-      try {
-        return { success: true, preferences: this.meetingDetectionEngine.getPreferences() };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle("meeting-detection-set-preferences", async (_event, prefs) => {
-      try {
-        this.meetingDetectionEngine.setPreferences(prefs);
-        return { success: true };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    });
-
     const NOTIFICATION_PREF_KEYS = new Set([
       "notificationsEnabled",
       "notifyMeetingDetection",
@@ -11635,17 +11561,23 @@ class IPCHandlers {
         if (!prefs || typeof prefs !== "object") {
           return { success: false, error: "Invalid preferences" };
         }
-        for (const [k, v] of Object.entries(prefs)) {
-          if (NOTIFICATION_PREF_KEYS.has(k)) {
-            this.windowManager.notificationPrefs[k] = !!v;
+        for (const [key, value] of Object.entries(prefs)) {
+          if (NOTIFICATION_PREF_KEYS.has(key)) {
+            this.windowManager.notificationPrefs[key] = !!value;
           }
         }
-        // Detection only serves the notification, so the toggle also gates the detector.
+        if (typeof prefs.meetingProcessDetection === "boolean") {
+          this.meetingProcessDetection = prefs.meetingProcessDetection;
+        }
         const { notificationsEnabled, notifyMeetingDetection } =
           this.windowManager.notificationPrefs;
-        this.meetingDetectionEngine?.setPreferences({
-          audioDetection: notificationsEnabled && notifyMeetingDetection,
-        });
+        this.meetingDetectionEngine?.setPreferences(
+          deriveDetectorPreferences({
+            notificationsEnabled,
+            notifyMeetingDetection,
+            meetingProcessDetection: this.meetingProcessDetection,
+          })
+        );
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -11917,23 +11849,12 @@ class IPCHandlers {
       try {
         const result = this.databaseManager.importNotes(pending.notes);
         if (result.imported > 0) {
-          const importedIds = result.noteIds;
-          // One-shot side effects: batched vector upsert of just the new notes
-          // and a single mirror rebuild — never per-note work (sync storm /
-          // O(notes × files) mirror scans).
+          // One-shot side effects: a single index wake-up (the SQLite triggers
+          // already journaled every imported note) and a single mirror rebuild —
+          // never per-note work (sync storm / O(notes × files) mirror scans).
           setImmediate(() => {
             try {
-              const vectorIndex = require("./vectorIndex");
-              if (vectorIndex.isReady()) {
-                const importedNotes = importedIds
-                  .map((id) => this.databaseManager.getNote(id))
-                  .filter(Boolean);
-                vectorIndex
-                  .reindexAll(importedNotes, (done, total) => {
-                    broadcastToWindows("semantic-reindex-progress", { done, total });
-                  })
-                  .catch(() => {});
-              }
+              this.notifyVectorChanges();
               if (this._noteFilesEnabled) this._rebuildMirror();
             } catch (sideEffectError) {
               debugLogger.error(
@@ -12544,7 +12465,7 @@ class IPCHandlers {
     const result = this.databaseManager.deleteNote(id);
     if (result?.success) {
       setImmediate(() => broadcastToWindows("note-deleted", { id }));
-      this._asyncVectorDelete(id);
+      this.notifyVectorChanges();
       this._asyncMirrorDelete(id);
     }
     return result;
