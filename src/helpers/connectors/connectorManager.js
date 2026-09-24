@@ -1,6 +1,25 @@
 const crypto = require("crypto");
 
 const CANCEL_REASONS = new Set(["cancelled_by_user", "conversation_ended", "expired"]);
+const COMMIT_RESULT_STATES = new Set(["sent", "failed", "unknown"]);
+const DIRECT_RESULT_STATES = new Set(["sent", "failed"]);
+
+// A connector is third-party code (or a stub in tests); never trust its
+// result shape before it gets written to the receipt or handed back. An
+// undefined result would otherwise throw reading `.state`, orphaning the
+// pending entry in "committing" forever.
+function normalizeCommitResult(result) {
+  if (result && typeof result === "object" && COMMIT_RESULT_STATES.has(result.state)) return result;
+  return { state: "unknown" };
+}
+
+// runDirect has no "unknown" state: the renderer's email tool treats
+// anything but "failed" as delivered, so a malformed result must fail
+// closed rather than land in a state the caller doesn't check for.
+function normalizeDirectResult(result) {
+  if (result && typeof result === "object" && DIRECT_RESULT_STATES.has(result.state)) return result;
+  return { state: "failed", errorCode: "invalid_result", message: "That action didn't complete." };
+}
 
 function policyRefusal(policyState) {
   if (policyState === "allowed") return null;
@@ -156,6 +175,7 @@ function createConnectorManager({
       );
       result = { state: "unknown" };
     }
+    result = normalizeCommitResult(result);
 
     pendingActions.finish(actionId, result.state);
     record(() =>
@@ -202,6 +222,7 @@ function createConnectorManager({
       logger.warn("connector direct action threw", { connectorId, action, error: error.message }, "connectors");
       result = { state: "failed", errorCode: "direct_failed", message: "That action didn't complete." };
     }
+    result = normalizeDirectResult(result);
     record(() =>
       actionLog.update(id, {
         state: result.state,

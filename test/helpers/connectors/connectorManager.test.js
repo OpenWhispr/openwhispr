@@ -187,6 +187,50 @@ test("a connector that throws during commit is recorded as unknown", async () =>
   assert.equal(log.rows.get(actionId).state, "unknown");
 });
 
+test("a connector commit resolving undefined is recorded as unknown and never orphans the entry", async () => {
+  const { manager, log } = await setup({
+    async commit() {
+      return undefined;
+    },
+  });
+  const { actionId } = await manager.prepare("fake", "post", { text: "x" }, "allowed");
+
+  assert.deepEqual(await manager.commit(actionId, {}, "allowed"), { state: "unknown" });
+  assert.equal(log.rows.get(actionId).state, "unknown");
+  // The entry must not be orphaned in "committing": a second commit finds no pending action.
+  assert.deepEqual(await manager.commit(actionId, {}, "allowed"), { state: "not_sent", reason: "not_found" });
+});
+
+test("a connector commit resolving an unrecognized state is recorded as unknown", async () => {
+  const { manager, log } = await setup({
+    async commit() {
+      return { state: "banana" };
+    },
+  });
+  const { actionId } = await manager.prepare("fake", "post", { text: "x" }, "allowed");
+
+  assert.deepEqual(await manager.commit(actionId, {}, "allowed"), { state: "unknown" });
+  assert.equal(log.rows.get(actionId).state, "unknown");
+});
+
+test("a runDirect resolving undefined is recorded as failed, matching the thrown-runDirect shape", async () => {
+  const { manager, log } = await setup({
+    async runDirect() {
+      return undefined;
+    },
+  });
+
+  const result = await manager.runDirect("fake", "draft", {}, "allowed", {});
+
+  assert.deepEqual(result, {
+    state: "failed",
+    errorCode: "invalid_result",
+    message: "That action didn't complete.",
+  });
+  const [row] = [...log.rows.values()];
+  assert.equal(row.state, "failed");
+});
+
 test("clarification and prepare failures create no pending action", async () => {
   const { manager, log } = await setup({
     async prepare() {
