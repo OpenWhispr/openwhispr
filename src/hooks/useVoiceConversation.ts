@@ -12,6 +12,7 @@ import type {
 } from "../services/voice/types";
 import { shouldStopForIdle, voiceToolFiller } from "../services/voice/voiceTools";
 import { resolveChatStreamingInference } from "../helpers/dictationAgentInference.js";
+import { findUnbackedActionClaim, UNBACKED_CLAIM_CORRECTION } from "../services/voice/actionClaims";
 
 export type VoiceConversationState = "off" | "starting" | "listening" | "thinking" | "speaking";
 
@@ -435,6 +436,12 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         if (!utteranceRef.current) return;
         responseDoneRef.current = true;
         for (const chunk of chunkerRef.current.flush()) speakChunk(chunk);
+        const turn = turnRef.current;
+        const claim = turn ? findUnbackedActionClaim(turn.answer, turn.succeededWrites) : null;
+        if (claim) {
+          logger.warn("Voice answer claimed an action without a tool call", { claim }, "voice-conversation");
+          speakChunk(UNBACKED_CLAIM_CORRECTION);
+        }
         finishUtteranceIfDrained();
       },
       onToolCall: (toolNames) => {
