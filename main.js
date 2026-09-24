@@ -186,11 +186,12 @@ function restoreHtmlHandlerIfChanged(original) {
   }
 }
 
-// Whether the MIME database xdg-open consults has any handler for openwhispr://.
-// It does not check which entry that is: deb/rpm/flatpak/AUR installs declare the
-// scheme in their packaged .desktop MimeType, and an AppImage/tar.gz run whose
-// registration was refused has already removed its own entry. Used to recover
-// from setAsDefaultProtocolClient's KDE false negative.
+// True source of truth for whether openwhispr:// resolves on Linux — the same
+// MIME database xdg-open consults. Returns true for deb/rpm/flatpak/AUR installs
+// (scheme registered via the packaged .desktop MimeType; registerLinuxUrlSchemeHandler
+// first takes it back from an AppImage/tar.gz entry) and false for AppImage/tar.gz
+// runs whose own registration failed, so we never enable a dead-end OAuth flow.
+// Used to recover from setAsDefaultProtocolClient's KDE false negative.
 function isOAuthSchemeRegistered() {
   if (process.platform !== "linux") return false;
   try {
@@ -441,9 +442,10 @@ function initializeCoreManagers() {
   debugLogger.ensureFileLogging();
   // Registration runs before app ready, when the logger cannot write its file yet.
   if (linuxSchemeHandler?.reason) {
-    debugLogger.warn("Could not register the URL scheme handler", {
+    debugLogger.warn("Could not register the Linux URL scheme handler entry", {
       protocol: OAUTH_PROTOCOL,
       reason: linuxSchemeHandler.reason,
+      protocolRegistered,
     });
   }
 
