@@ -16,16 +16,24 @@ const noop = () => {};
 async function renderAssistantPanel(
   t,
   messages,
-  { initialConversationId = null, agentState = "idle", activeToolName = null, locale = "en" } = {}
+  {
+    initialConversationId = null,
+    agentState = "idle",
+    activeToolName = null,
+    locale = "en",
+    approvals = {},
+  } = {}
 ) {
   installBrowserGlobals(t);
   globalThis.__assistantPanelMessages = messages;
   globalThis.__assistantPanelAgentState = agentState;
   globalThis.__assistantPanelActiveToolName = activeToolName;
+  globalThis.__assistantPanelApprovals = approvals;
   t.after(() => {
     delete globalThis.__assistantPanelMessages;
     delete globalThis.__assistantPanelAgentState;
     delete globalThis.__assistantPanelActiveToolName;
+    delete globalThis.__assistantPanelApprovals;
   });
 
   const vite = await createRendererServer(t, {
@@ -86,6 +94,17 @@ async function renderAssistantPanel(
       `,
       "/ui/useToast": `
         export function useToast() { return { toast() {} }; }
+      `,
+      "/stores/connectorApprovalStore": `
+        export function useConnectorApprovalStore(selector) {
+          return selector({ entries: globalThis.__assistantPanelApprovals || {} });
+        }
+      `,
+      "/chat/ApprovalCard": `
+        import React from "react";
+        export function ApprovalCard({ entry }) {
+          return React.createElement("div", { "data-approval-card": entry.toolCallId, "data-state": entry.state });
+        }
       `,
     },
   });
@@ -681,4 +700,85 @@ test("a follow-up into an open panel strips caret delivery and stays panel-first
     assistant.handleCommand({ text: "draft a reply", attachment: null, selectedContext: null, delivery });
   });
   assert.deepEqual(assistant.pendingCommand.delivery, delivery);
+});
+
+test("a pending approval shows in the panel and replaces the tool overlay", async (t) => {
+  const markup = await renderAssistantPanel(
+    t,
+    [
+      { id: "user-1", role: "user", content: "post the summary to eng", isStreaming: false },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+        toolCalls: [{ id: "call-1", name: "slack_send_message", arguments: "{}", status: "executing" }],
+      },
+    ],
+    {
+      agentState: "tool-executing",
+      activeToolName: "slack_send_message",
+      approvals: {
+        "call-1": {
+          toolCallId: "call-1",
+          actionId: "a1",
+          connectorId: "slack",
+          state: "pending",
+          preview: { verbKey: "default", destinationLabel: "#eng", accountLabel: "chad", body: "x" },
+        },
+      },
+    }
+  );
+
+  assert.match(markup, /data-approval-card="call-1"/);
+  assert.doesNotMatch(markup, /data-tool-invocation=/);
+});
+
+test("an approval request opens the hidden panel of a caret-delivered command", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-approval-open-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { createRoot } = require("react-dom/client");
+  let assistant;
+
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => {
+    assistant.handleCommand({
+      text: "post the summary to eng",
+      attachment: null,
+      selectedContext: null,
+      delivery: {
+        mode: "paste",
+        sessionId: "caret-session",
+        restoreClipboard: true,
+        allowClipboardFallback: false,
+      },
+    });
+  });
+  assert.equal(assistant.open, false);
+
+  // onApprovalRequested routes to the panel's onResponseContent handler.
+  await React.act(async () => {
+    assistant.handleResponseContent();
+  });
+
+  assert.equal(assistant.openRef.current, true);
+  assert.equal(assistant.thinking, false);
 });
