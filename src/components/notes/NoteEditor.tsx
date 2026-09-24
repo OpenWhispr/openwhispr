@@ -7,7 +7,6 @@ import {
   Sparkles,
   AlignLeft,
   MessageSquareText,
-  Mic,
   LinkIcon,
   Link2,
   Lock,
@@ -1200,7 +1199,7 @@ export default function NoteEditor({
               <div
                 className={cn(
                   PAGE_CONTENT_WIDTH_CLASS,
-                  "flex min-h-80 flex-col items-center px-4 pt-12 text-center"
+                  "flex min-h-80 flex-col items-center px-4 pt-16 text-center"
                 )}
               >
                 <ThemedEmptyIllustration
@@ -1209,19 +1208,18 @@ export default function NoteEditor({
                   width={590}
                   height={77}
                 />
-                <h2 className="mt-8 text-lg font-semibold text-foreground">
+                <h2 className="mt-12 text-xl font-semibold text-foreground">
                   {t("notes.editor.transcriptEmptyTitle")}
                 </h2>
-                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+                <p className="mt-2 max-w-xs text-base leading-6 text-muted-foreground">
                   {t("notes.editor.transcriptEmptyDescription")}
                 </p>
                 {canEditNote && recordingAllowed && (
                   <Button
-                    className="mt-5 rounded-full px-5"
+                    className="mt-6 rounded-full px-5 font-medium"
                     onClick={onStartRecording}
                     disabled={isProcessing}
                   >
-                    <Mic size={13} />
                     {t("notes.editor.startRecording")}
                   </Button>
                 )}
