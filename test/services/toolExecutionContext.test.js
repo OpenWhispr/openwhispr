@@ -132,6 +132,111 @@ test("turn slots are shared by a scope's calls and start over with each turn", a
   assert.equal(createToolExecutionScope().createContext("call-g").claimTurnSlot("draft", 2), true);
 });
 
+test("executeTool settles an aborted call at once and never runs one after the abort", async () => {
+  const { executeTool } = await loadRegistry();
+  const { createToolExecutionScope } = await loadScope();
+  let runs = 0;
+  const hanging = {
+    ...recordingTool([]),
+    execute: () => {
+      runs += 1;
+      // Ignores the signal, like a fetch with no timeout; rejects much later.
+      return new Promise((_resolve, reject) => setTimeout(() => reject(new Error("late")), 50));
+    },
+  };
+  const scope = createToolExecutionScope();
+
+  const pending = executeTool(hanging, {}, scope.createContext("call-h"));
+  scope.abort();
+  assert.deepEqual(await pending, { success: false, data: null, displayText: "" });
+  assert.deepEqual(await executeTool(hanging, {}, scope.createContext("call-i")), {
+    success: false,
+    data: null,
+    displayText: "",
+  });
+  assert.equal(runs, 1);
+  // The late rejection is swallowed rather than surfacing as unhandled.
+  await new Promise((resolve) => setTimeout(resolve, 80));
+});
+
+test("executeTool passes results and errors through while the turn is live", async () => {
+  const { executeTool } = await loadRegistry();
+  const { createToolExecutionScope } = await loadScope();
+  const context = createToolExecutionScope().createContext("call-j");
+  assert.deepEqual(await executeTool(recordingTool([]), { a: 1 }, context), {
+    success: true,
+    data: { ok: true },
+    displayText: "ok",
+  });
+  const failing = { ...recordingTool([]), execute: async () => Promise.reject(new Error("boom")) };
+  await assert.rejects(executeTool(failing, {}, context), /boom/);
+  assert.deepEqual(await executeTool(recordingTool([]), {}), {
+    success: true,
+    data: { ok: true },
+    displayText: "ok",
+  });
+});
+
+test("an aborted AI SDK turn ends even when a tool never settles", async () => {
+  const { streamText, stepCountIs } = require("ai");
+  const { MockLanguageModelV3, simulateReadableStream } = require("ai/test");
+  const { ToolRegistry } = await loadRegistry();
+  const { createToolExecutionScope } = await loadScope();
+  const registry = new ToolRegistry();
+  let started;
+  const toolStarted = new Promise((resolve) => {
+    started = resolve;
+  });
+  registry.register({
+    ...recordingTool([]),
+    name: "slow",
+    execute: () => {
+      started();
+      return new Promise(() => {});
+    },
+  });
+  const model = new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          { type: "stream-start", warnings: [] },
+          { type: "tool-call", toolCallId: "call-1", toolName: "slow", input: "{}" },
+          {
+            type: "finish",
+            finishReason: { unified: "tool-calls", raw: "tool_calls" },
+            usage: { inputTokens: { total: 1 }, outputTokens: { total: 1 } },
+          },
+        ],
+      }),
+    }),
+  });
+  const scope = createToolExecutionScope();
+  const streamAbort = new AbortController();
+  const result = streamText({
+    model,
+    messages: [{ role: "user", content: "hi" }],
+    tools: registry.toAISDKFormat(scope.createContext),
+    stopWhen: stepCountIs(5),
+    abortSignal: streamAbort.signal,
+  });
+  const drained = (async () => {
+    for await (const _chunk of result.fullStream);
+  })();
+
+  await toolStarted;
+  // Let the SDK settle into waiting on the tool, as it has by the time a user
+  // presses Esc; an abort in the same tick still ends the stream on its own.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  // What cancelStream does: abort the tool scope and the stream.
+  scope.abort();
+  streamAbort.abort();
+  const outcome = await Promise.race([
+    drained.then(() => "ended"),
+    new Promise((resolve) => setTimeout(() => resolve("still pending"), 2000)),
+  ]);
+  assert.equal(outcome, "ended");
+});
+
 test("a scope without handlers ignores approval and delivery notices", async () => {
   const { createToolExecutionScope } = await loadScope();
   const context = createToolExecutionScope().createContext("call-c");

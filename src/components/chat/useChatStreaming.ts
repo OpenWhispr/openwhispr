@@ -24,7 +24,7 @@ import {
 } from "../../config/prompts";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { createToolRegistry } from "../../services/tools";
-import type { ToolRegistry } from "../../services/tools/ToolRegistry";
+import { executeTool, type ToolRegistry } from "../../services/tools/ToolRegistry";
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { Message, AgentState, ChatImageAttachment, ToolCallInfo } from "./types";
@@ -480,7 +480,7 @@ export function useChatStreaming({
                       displayText: t("agentMode.tools.invalidArgs", { name }),
                     };
                   }
-                  const result = await tool.execute(args, toolScope.createContext(toolCallId));
+                  const result = await executeTool(tool, args, toolScope.createContext(toolCallId));
                   const data = result.success
                     ? typeof result.data === "string"
                       ? result.data
