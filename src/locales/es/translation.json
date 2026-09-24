@@ -3898,6 +3898,9 @@
       "actions": {
         "email_draft": "Borrador a {{destination}}"
       },
+      "unlabeledActions": {
+        "email_draft": "Borrador de correo"
+      },
       "states": {
         "pending": "Esperando",
         "committing": "En curso",
@@ -3906,6 +3909,20 @@
         "unknown": "Sin confirmar",
         "cancelled": "Cancelado",
         "expired": "Caducado"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Se abrió un borrador para {{destination}}.",
+      "draftOpenedBodyCopied": "Se abrió un borrador para {{destination}}. El cuerpo está en tu portapapeles.",
+      "draftOpenedSubjectCopied": "Se abrió un borrador para {{destination}}. El asunto y el cuerpo están en tu portapapeles.",
+      "needsDetails": "Faltan detalles.",
+      "unavailable": "Los conectores no están disponibles en este momento.",
+      "failed": "No funcionó.",
+      "contactsFound": "Contactos encontrados: {{total}}",
+      "errors": {
+        "open_failed": "No se pudo abrir tu aplicación de correo.",
+        "draft_too_long": "Demasiados destinatarios para un enlace de borrador.",
+        "invalid_address": "Se necesitan direcciones de correo completas."
       }
     }
   },

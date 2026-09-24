@@ -1,7 +1,13 @@
+import i18n from "../../../i18n";
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from "../ToolRegistry";
 import { isValidEmailAddress } from "../../../helpers/connectors/emailCompose";
 import type { EmailDraftTarget } from "../../../utils/emailDraftTarget";
-import { failedResult, needsClarificationResult, unavailableResult } from "./toolOutcome";
+import {
+  failedResult,
+  needsClarificationResult,
+  notSentResult,
+  unavailableResult,
+} from "./toolOutcome";
 
 function addressList(value: unknown): string[] {
   return Array.isArray(value)
@@ -32,7 +38,13 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
     },
     readOnly: false,
 
-    async execute(args: Record<string, unknown>, context?: ToolExecutionContext): Promise<ToolResult> {
+    async execute(
+      args: Record<string, unknown>,
+      context?: ToolExecutionContext
+    ): Promise<ToolResult> {
+      // Every outcome keeps the turn off the caret: an opened compose window
+      // takes focus, and a question back must not land in the user's document.
+      context?.onHoldDelivery();
       const to = addressList(args.to);
       const cc = addressList(args.cc);
       const invalid = [...to, ...cc].filter((address) => !isValidEmailAddress(address));
@@ -43,6 +55,7 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
         );
       }
 
+      if (context?.signal.aborted) return notSentResult("cancelled");
       const result = await window.electronAPI?.connectorRunDirect?.("email", "draft", {
         target,
         to,
@@ -56,8 +69,6 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
 
       const bodyCopied = Boolean(result.bodyCopied);
       const subjectCopied = Boolean(result.subjectCopied);
-      // Keep the turn's voice delivery from overwriting what we just copied.
-      if (bodyCopied || subjectCopied) context?.onClipboardReserved();
 
       return {
         success: true,
@@ -72,7 +83,14 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
               ? "The body was too long for a link, so it is on the user's clipboard. Tell them to paste it into the draft."
               : "Tell the user the draft is open for them to review and send.",
         },
-        displayText: `Opened a draft to ${result.destinationLabel}`,
+        displayText: i18n.t(
+          subjectCopied
+            ? "connectors.toolStatus.draftOpenedSubjectCopied"
+            : bodyCopied
+              ? "connectors.toolStatus.draftOpenedBodyCopied"
+              : "connectors.toolStatus.draftOpened",
+          { destination: result.destinationLabel }
+        ),
       };
     },
   };

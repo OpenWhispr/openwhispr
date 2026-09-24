@@ -4757,21 +4757,36 @@ class DatabaseManager {
     return { unknown, cancelled };
   }
 
-  getCalendarPeopleRows(limit = 1000) {
+  // What find_contact searches. calendar_events only holds a sync window
+  // (about two days back to a month ahead), so the meetings nearest to now go
+  // first, and the contacts table (every synced attendee, never pruned) covers
+  // older ones. The connected calendar accounts are the user's own addresses.
+  getContactLookupSources(meetingLimit = 1000) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return this.db
+      const meetings = this.db
         .prepare(
-          `SELECT start_time, organizer_email, attendees
+          `SELECT provider, start_time, organizer_email, attendees
              FROM calendar_events
             WHERE attendees IS NOT NULL OR organizer_email IS NOT NULL
-            ORDER BY start_time DESC
+            ORDER BY ABS(julianday(start_time) - julianday('now')) IS NULL,
+                     ABS(julianday(start_time) - julianday('now'))
             LIMIT ?`
         )
-        .all(limit);
+        .all(meetingLimit);
+      const contacts = this.db.prepare("SELECT email, display_name FROM contacts").all();
+      const accountEmails = this.db
+        .prepare(
+          `SELECT account_email FROM google_calendars WHERE account_email IS NOT NULL
+           UNION
+           SELECT account_email FROM microsoft_calendars WHERE account_email IS NOT NULL`
+        )
+        .all()
+        .map((row) => row.account_email);
+      return { meetings, contacts, accountEmails };
     } catch (error) {
-      debugLogger.error("Error reading calendar people", { error: error.message });
-      return [];
+      debugLogger.error("Error reading contact lookup sources", { error: error.message });
+      return { meetings: [], contacts: [], accountEmails: [] };
     }
   }
 

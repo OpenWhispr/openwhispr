@@ -7,10 +7,10 @@ const PENDING_TTL_MS = 10 * 60 * 1000;
 function bindingsMatch(a, b) {
   return Boolean(
     a &&
-      b &&
-      a.accountId === b.accountId &&
-      (a.workspaceId ?? null) === (b.workspaceId ?? null) &&
-      a.generation === b.generation
+    b &&
+    a.accountId === b.accountId &&
+    (a.workspaceId ?? null) === (b.workspaceId ?? null) &&
+    a.generation === b.generation
   );
 }
 

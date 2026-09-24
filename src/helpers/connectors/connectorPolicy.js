@@ -9,7 +9,10 @@ function connectorPolicyState(snapshot) {
   if (!snapshot.managed) return "allowed";
   const features = snapshot.policy?.features;
   if (!features || typeof features !== "object") return "unavailable";
-  return features.connectorsEnabled === false ? "blocked" : "allowed";
+  // Connectors are agent tools: an org that turns the agent off turns them off too.
+  return features.agentEnabled === false || features.connectorsEnabled === false
+    ? "blocked"
+    : "allowed";
 }
 
 module.exports = { connectorPolicyState };

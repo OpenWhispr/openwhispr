@@ -387,7 +387,23 @@ function createWorkspacePolicyManager({
     return pending;
   }
 
-  return { getPolicy };
+  // The verdict already held in memory for this identity, without a refresh,
+  // for callers with a hard deadline whose refresh is taking too long.
+  function peekPolicy(request) {
+    let identity;
+    try {
+      identity = captureIdentity(request ?? {});
+    } catch {
+      return null;
+    }
+    const current = snapshots.get(identityKey(identity));
+    if (!current || (current.data.managed === false && requiresManagedPolicy(identity))) {
+      return null;
+    }
+    return publicSnapshot(identity, current.data, "cached", current.revision);
+  }
+
+  return { getPolicy, peekPolicy };
 }
 
 // Main-process capture gate: block an explicit managed denial or an

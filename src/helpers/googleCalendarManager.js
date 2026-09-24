@@ -264,6 +264,7 @@ class GoogleCalendarManager {
                 displayName: a.displayName || null,
                 responseStatus: a.responseStatus || null,
                 self: a.self || false,
+                ...(a.resource ? { resource: true } : {}),
               }))
             )
           : null,
@@ -271,7 +272,7 @@ class GoogleCalendarManager {
 
       if (item.attendees) {
         for (const a of item.attendees) {
-          if (a.email)
+          if (a.email && !a.resource)
             contactsToUpsert.push({ email: a.email, displayName: a.displayName || null });
         }
       }

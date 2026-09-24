@@ -4014,6 +4014,9 @@
       "actions": {
         "email_draft": "Draft to {{destination}}"
       },
+      "unlabeledActions": {
+        "email_draft": "Email draft"
+      },
       "states": {
         "pending": "Waiting",
         "committing": "In progress",
@@ -4022,6 +4025,20 @@
         "unknown": "Not confirmed",
         "cancelled": "Cancelled",
         "expired": "Expired"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Opened a draft to {{destination}}.",
+      "draftOpenedBodyCopied": "Opened a draft to {{destination}}. The body is on your clipboard.",
+      "draftOpenedSubjectCopied": "Opened a draft to {{destination}}. The subject and body are on your clipboard.",
+      "needsDetails": "Needs more details.",
+      "unavailable": "Connectors aren't available right now.",
+      "failed": "That didn't work.",
+      "contactsFound": "Contacts found: {{total}}",
+      "errors": {
+        "open_failed": "Couldn't open your email app.",
+        "draft_too_long": "Too many recipients for a draft link.",
+        "invalid_address": "Needs full email addresses."
       }
     }
   },

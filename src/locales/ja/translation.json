@@ -3845,6 +3845,9 @@
       "actions": {
         "email_draft": "{{destination}} 宛ての下書き"
       },
+      "unlabeledActions": {
+        "email_draft": "メール下書き"
+      },
       "states": {
         "pending": "待機中",
         "committing": "処理中",
@@ -3853,6 +3856,20 @@
         "unknown": "未確認",
         "cancelled": "キャンセル済み",
         "expired": "期限切れ"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "{{destination}} 宛ての下書きを開きました。",
+      "draftOpenedBodyCopied": "{{destination}} 宛ての下書きを開きました。本文はクリップボードにあります。",
+      "draftOpenedSubjectCopied": "{{destination}} 宛ての下書きを開きました。件名と本文はクリップボードにあります。",
+      "needsDetails": "詳細が必要です。",
+      "unavailable": "現在コネクタを利用できません。",
+      "failed": "うまくいきませんでした。",
+      "contactsFound": "見つかった連絡先: {{total}}",
+      "errors": {
+        "open_failed": "メールアプリを開けませんでした。",
+        "draft_too_long": "下書きリンクには宛先が多すぎます。",
+        "invalid_address": "完全なメールアドレスが必要です。"
       }
     }
   },

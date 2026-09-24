@@ -3,6 +3,11 @@ const assert = require("node:assert/strict");
 const { installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 const loadOutcome = () => import("../../src/services/tools/connectors/toolOutcome.ts");
+// tsx loads the ESM default export of src/i18n.ts through CommonJS interop.
+const loadI18n = async () => {
+  const mod = await import("../../src/i18n.ts");
+  return mod.default.default ?? mod.default;
+};
 const loadRun = () => import("../../src/services/tools/connectors/runApprovalAction.ts");
 const loadStore = () => import("../../src/stores/connectorApprovalStore.ts");
 
@@ -97,4 +102,22 @@ test("runApprovalAction waits for the card and returns the send", async (t) => {
   const result = await pending;
   assert.equal(result.data.status, "sent");
   assert.equal(result.data.url, "https://slack.test/p/9");
+});
+
+test("tool steps show the user plain, localized outcomes instead of codes", async () => {
+  const { unavailableResult, failedResult, needsClarificationResult, notSentResult, approvalOutcomeResult } =
+    await loadOutcome();
+  // The UI language otherwise follows the machine's locale.
+  await (await loadI18n()).changeLanguage("en");
+
+  assert.equal(unavailableResult("policy_blocked").displayText, "Connectors are turned off by your organization.");
+  assert.equal(unavailableResult("policy_unavailable").displayText, "Connectors aren't available right now.");
+  assert.equal(failedResult("open_failed", "Couldn't open your email app.").displayText, "Couldn't open your email app.");
+  assert.equal(failedResult("not_in_channel", "raw provider text").displayText, "That didn't work.");
+  assert.equal(needsClarificationResult("Call find_contact first.").displayText, "Needs more details.");
+  assert.equal(notSentResult("cancelled").displayText, "Not sent.");
+  assert.equal(approvalOutcomeResult({ state: "sent", url: "u" }, "#eng").displayText, "Sent to #eng.");
+  // The model still gets the precise codes and guidance.
+  assert.equal(unavailableResult("policy_blocked").data.reason, "policy_blocked");
+  assert.equal(needsClarificationResult("Call find_contact first.").data.message, "Call find_contact first.");
 });

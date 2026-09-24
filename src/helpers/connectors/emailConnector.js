@@ -25,11 +25,14 @@ function createEmailConnector({ openExternal, writeClipboard }) {
       }
       const to = stringList(args.to);
       const cc = stringList(args.cc);
+      // Failures carry it too, so the receipt says whose draft didn't open.
+      const destinationLabel = to.join(", ");
       if (to.length === 0 || [...to, ...cc].some((address) => !isValidEmailAddress(address))) {
         return {
           state: "failed",
           errorCode: "invalid_address",
           message: "Every recipient must be a full email address.",
+          destinationLabel,
         };
       }
       const target = COMPOSE_TARGETS.includes(args.target) ? args.target : "mailto";
@@ -44,7 +47,9 @@ function createEmailConnector({ openExternal, writeClipboard }) {
         return {
           state: "failed",
           errorCode: "draft_too_long",
-          message: "There are too many recipients for a draft link. Ask the user to add some of them in their email app.",
+          message:
+            "There are too many recipients for a draft link. Ask the user to add some of them in their email app.",
+          destinationLabel,
         };
       }
 
@@ -58,12 +63,13 @@ function createEmailConnector({ openExternal, writeClipboard }) {
           state: "failed",
           errorCode: "open_failed",
           message: "Couldn't open your email app.",
+          destinationLabel,
         };
       }
       // The compose URL carries the body, so it is never returned or logged.
       return {
         state: "sent",
-        destinationLabel: to.join(", "),
+        destinationLabel,
         bodyCopied: request.clipboardText !== null,
         subjectCopied: request.subjectCopied,
       };

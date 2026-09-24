@@ -57,6 +57,9 @@ test("Edit, change, Done editing, Send: the reviewed text is what gets sent", as
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-approval-flow-test-",
     mockModules: {
+      // toolOutcome.ts localizes tool-step text through the app's i18n
+      // module, which would initialize react-i18next; keep keys as labels.
+      "/i18n": `export default { t: (key) => key };`,
       "/ui/button": `
         import React from "react";
         export function Button(props) { return React.createElement("button", props); }
@@ -80,7 +83,7 @@ test("Edit, change, Done editing, Send: the reviewed text is what gets sent", as
   let toolResult;
   await React.act(async () => {
     toolResult = runApprovalAction(
-      { toolCallId: "call-1", signal: controller.signal, onApprovalRequested() {}, onClipboardReserved() {} },
+      { toolCallId: "call-1", signal: controller.signal, onApprovalRequested() {}, onHoldDelivery() {} },
       "slack",
       "send_message",
       { destination: "#eng", text: "Original text" }

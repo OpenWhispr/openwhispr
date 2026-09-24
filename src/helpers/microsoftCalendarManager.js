@@ -247,7 +247,7 @@ class MicrosoftCalendarManager {
       }
       toUpsert.push(this._mapEvent(item, calendar));
       for (const a of item.attendees || []) {
-        if (a.emailAddress?.address) {
+        if (a.emailAddress?.address && a.type !== "resource") {
           contactsToUpsert.push({
             email: a.emailAddress.address,
             displayName: a.emailAddress.name || null,
@@ -337,6 +337,7 @@ class MicrosoftCalendarManager {
               displayName: a.emailAddress?.name || null,
               responseStatus: RESPONSE_STATUS_BY_GRAPH[a.status?.response] || "needsAction",
               self: (a.emailAddress?.address || "").toLowerCase() === accountEmail,
+              ...(a.type === "resource" ? { resource: true } : {}),
             }))
           )
         : null,

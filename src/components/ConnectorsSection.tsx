@@ -6,7 +6,7 @@ import { SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useSettingsStore } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
-import { isConnectorsAllowed } from "../stores/policyRules";
+import { isConnectorsBlockedByOrg } from "../stores/policyRules";
 import type { ConnectorActionRecord } from "../types/connectors";
 
 const EMAIL_TARGET_OPTIONS = ["auto", "gmail", "outlookWork", "outlookPersonal", "mailto"] as const;
@@ -26,13 +26,13 @@ interface ConnectorsSectionProps {
 
 export function ConnectorsSection({ isPaid, onUpgrade }: ConnectorsSectionProps): ReactElement {
   const { t } = useTranslation();
-  const allowed = usePolicyStore((state) => isConnectorsAllowed(state));
+  const blockedByOrg = usePolicyStore(isConnectorsBlockedByOrg);
   const emailDraftTarget = useSettingsStore((state) => state.emailDraftTarget);
   const setEmailDraftTarget = useSettingsStore((state) => state.setEmailDraftTarget);
   const [recent, setRecent] = useState<ConnectorActionRecord[]>([]);
 
   useEffect(() => {
-    if (!isPaid || !allowed) return undefined;
+    if (!isPaid || blockedByOrg) return undefined;
     let active = true;
     void window.electronAPI
       ?.connectorRecentActions?.("email", 10)
@@ -45,9 +45,9 @@ export function ConnectorsSection({ isPaid, onUpgrade }: ConnectorsSectionProps)
     return () => {
       active = false;
     };
-  }, [isPaid, allowed]);
+  }, [isPaid, blockedByOrg]);
 
-  if (!allowed) {
+  if (blockedByOrg) {
     return (
       <SettingsPanel>
         <SettingsPanelRow>
@@ -72,7 +72,10 @@ export function ConnectorsSection({ isPaid, onUpgrade }: ConnectorsSectionProps)
           </div>
           {isPaid ? (
             <Select value={emailDraftTarget} onValueChange={setEmailDraftTarget}>
-              <SelectTrigger className="w-48 shrink-0" aria-label={t("connectors.email.targetLabel")}>
+              <SelectTrigger
+                className="w-48 shrink-0"
+                aria-label={t("connectors.email.targetLabel")}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -97,11 +100,17 @@ export function ConnectorsSection({ isPaid, onUpgrade }: ConnectorsSectionProps)
             </p>
             <ul className="space-y-1">
               {recent.map((row) => (
-                <li key={row.id} className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                <li
+                  key={row.id}
+                  className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+                >
                   <span className="truncate" dir="auto">
-                    {t(`connectors.recent.actions.${row.connector}_${row.action}`, {
-                      destination: row.destinationLabel ?? "",
-                    })}
+                    {row.destinationLabel
+                      ? t(`connectors.recent.actions.${row.connector}_${row.action}`, {
+                          destination: row.destinationLabel,
+                        })
+                      : // A run interrupted by a quit never learned its destination.
+                        t(`connectors.recent.unlabeledActions.${row.connector}_${row.action}`)}
                   </span>
                   <span className="shrink-0">
                     {formatWhen(row.createdAt)} · {t(`connectors.recent.states.${row.state}`)}

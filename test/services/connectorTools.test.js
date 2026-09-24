@@ -6,6 +6,12 @@ const loadEmail = () => import("../../src/services/tools/connectors/emailDraftTo
 const loadContact = () => import("../../src/services/tools/connectors/findContactTool.ts");
 const loadEligibility = () => import("../../src/utils/connectorEligibility.ts");
 const loadRegistry = () => import("../../src/services/tools/index.ts");
+// Tool-step text is localized; the UI language otherwise follows the machine's locale.
+// (tsx loads its ESM default export through CommonJS interop.)
+const useEnglish = async () => {
+  const mod = await import("../../src/i18n.ts");
+  await (mod.default.default ?? mod.default).changeLanguage("en");
+};
 
 test("email_draft opens a draft through the main process", async (t) => {
   const calls = [];
@@ -46,7 +52,20 @@ test("email_draft asks for addresses instead of guessing", async (t) => {
   assert.equal(ran, 0);
 });
 
-test("email_draft reserves the clipboard and tells the model when content went there", async (t) => {
+function countingContext(signal = new AbortController().signal) {
+  const context = {
+    holds: 0,
+    toolCallId: "call-1",
+    signal,
+    onApprovalRequested() {},
+    onHoldDelivery() {
+      context.holds += 1;
+    },
+  };
+  return context;
+}
+
+test("email_draft tells the model when content went to the clipboard", async (t) => {
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -60,29 +79,25 @@ test("email_draft reserves the clipboard and tells the model when content went t
     },
   });
   const { createEmailDraftTool } = await loadEmail();
-  let reserved = 0;
-  const context = {
-    toolCallId: "call-1",
-    signal: new AbortController().signal,
-    onApprovalRequested() {},
-    onClipboardReserved() {
-      reserved += 1;
-    },
-  };
+  await useEnglish();
 
   const result = await createEmailDraftTool("mailto").execute(
     { to: ["a@example.com"], subject: "s", body: "b" },
-    context
+    countingContext()
   );
 
-  assert.equal(reserved, 1);
   assert.equal(result.data.bodyCopied, true);
   assert.equal(result.data.subjectCopied, true);
   assert.match(result.data.guidance, /clipboard/);
   assert.match(result.data.guidance, /subject/i);
+  // The tool step tells the user too, in case the model doesn't.
+  assert.equal(
+    result.displayText,
+    "Opened a draft to a@example.com. The subject and body are on your clipboard."
+  );
 });
 
-test("email_draft leaves the clipboard alone when everything fit in the link", async (t) => {
+test("email_draft keeps its turn out of the user's document, whatever the outcome", async (t) => {
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -91,19 +106,43 @@ test("email_draft leaves the clipboard alone when everything fit in the link", a
     },
   });
   const { createEmailDraftTool } = await loadEmail();
-  let reserved = 0;
-  await createEmailDraftTool("gmail").execute(
-    { to: ["a@example.com"], subject: "s", body: "b" },
-    {
-      toolCallId: "call-2",
-      signal: new AbortController().signal,
-      onApprovalRequested() {},
-      onClipboardReserved() {
-        reserved += 1;
+  const tool = createEmailDraftTool("gmail");
+
+  // The compose window takes focus, so pasting the confirmation at the caret
+  // would land in the draft or overwrite the clipboard.
+  const opened = countingContext();
+  await tool.execute({ to: ["a@example.com"], subject: "s", body: "b" }, opened);
+  // A question back to the user must not be pasted into their document.
+  const clarifying = countingContext();
+  await tool.execute({ to: ["Gabe"], subject: "s", body: "b" }, clarifying);
+
+  assert.equal(opened.holds, 1);
+  assert.equal(clarifying.holds, 1);
+});
+
+test("email_draft opens nothing once its turn is cancelled", async (t) => {
+  let ran = 0;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async () => {
+          ran += 1;
+          return { state: "sent", destinationLabel: "a@example.com" };
+        },
       },
-    }
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  const controller = new AbortController();
+  controller.abort();
+
+  const result = await createEmailDraftTool("gmail").execute(
+    { to: ["a@example.com"], subject: "s", body: "b" },
+    countingContext(controller.signal)
   );
-  assert.equal(reserved, 0);
+
+  assert.equal(ran, 0);
+  assert.equal(result.data.status, "not_sent");
 });
 
 test("email_draft reports a blocked policy without retrying", async (t) => {
@@ -130,6 +169,7 @@ test("find_contact returns matches and guidance for zero or several", async (t) 
     window: { electronAPI: { connectorFindContacts: async () => responses.shift() } },
   });
   const { findContactTool } = await loadContact();
+  await useEnglish();
 
   const none = await findContactTool.execute({ name: "Zed" });
   const several = await findContactTool.execute({ name: "Gab" });
@@ -137,9 +177,31 @@ test("find_contact returns matches and guidance for zero or several", async (t) 
   assert.match(none.data.guidance, /ask the user/i);
   assert.equal(several.data.contacts.length, 2);
   assert.match(several.data.guidance, /which one/i);
+  assert.equal(several.displayText, "Contacts found: 2");
 });
 
-test("connector plan eligibility uses usage data, then the shared paid-access flag", async () => {
+test("find_contact keeps its turn out of the user's document only when the user must answer", async (t) => {
+  const one = [{ name: "Gabe Torres", email: "gabe@example.com", lastMet: null }];
+  const two = [...one, { name: "Gabriel Stone", email: "gabriel@acme.test", lastMet: null }];
+  const responses = [{ contacts: [] }, { contacts: two }, { contacts: one }];
+  installBrowserGlobals(t, {
+    window: { electronAPI: { connectorFindContacts: async () => responses.shift() } },
+  });
+  const { findContactTool } = await loadContact();
+
+  const holdsFor = async (name) => {
+    const context = countingContext();
+    await findContactTool.execute({ name }, context);
+    return context.holds;
+  };
+
+  assert.equal(await holdsFor("Zed"), 1);
+  assert.equal(await holdsFor("Gab"), 1);
+  // "What's Gabe's email?" answered with one address can still be pasted.
+  assert.equal(await holdsFor("Gabe Torres"), 0);
+});
+
+test("connector plan eligibility uses usage data, then the persisted isSubscribed flag", async () => {
   const { hasConnectorPlan } = await loadEligibility();
   const success = (isSubscribed, isTrial) => ({
     status: "success",
@@ -149,29 +211,11 @@ test("connector plan eligibility uses usage data, then the shared paid-access fl
   });
   assert.equal(hasConnectorPlan(success(false, true), false), true);
   assert.equal(hasConnectorPlan(success(false, false), true), false);
-  // A fresh voice-window session: it never loads usage, so the flag the
-  // control panel wrote for a trial user is what grants access.
+  // A fresh voice-window session never loads usage, so the isSubscribed flag
+  // the control panel persisted (the API sets it for trials too) decides.
   assert.equal(hasConnectorPlan({ status: "idle", accountId: null }, true), true);
   assert.equal(hasConnectorPlan({ status: "idle", accountId: null }, false), false);
   assert.equal(hasConnectorPlan({ status: "loading", accountId: "acct" }, false), false);
-});
-
-test("connector paid-access flag falls back to either persisted flag before usage loads", async (t) => {
-  installBrowserGlobals(t, { initialStorage: { isSubscribed: "true" } });
-  const { readConnectorPaidAccessFlag } = await loadEligibility();
-  assert.equal(readConnectorPaidAccessFlag(), true);
-});
-
-test("connector paid-access flag reads hasPaidAccess when isSubscribed is unset", async (t) => {
-  installBrowserGlobals(t, { initialStorage: { hasPaidAccess: "true" } });
-  const { readConnectorPaidAccessFlag } = await loadEligibility();
-  assert.equal(readConnectorPaidAccessFlag(), true);
-});
-
-test("connector paid-access flag is false when neither persisted flag is set", async (t) => {
-  installBrowserGlobals(t, {});
-  const { readConnectorPaidAccessFlag } = await loadEligibility();
-  assert.equal(readConnectorPaidAccessFlag(), false);
 });
 
 test("connector tools register only when connectors are available", async () => {

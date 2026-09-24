@@ -20,9 +20,10 @@ interface CommandHandlers {
 
 /**
  * Send options for one voice command. Two tool events hold the turn in the
- * panel: an approval card must be visible, and content a tool put on the
- * clipboard (a long email body) must not be overwritten by delivery, which
- * copies the answer in clipboard mode and whenever a paste fails.
+ * panel instead of delivering it at the caret: an approval card must be
+ * visible, and a tool can ask for the hold (it opened a compose window that
+ * took focus, put content on the clipboard that delivery would overwrite, or
+ * needs the user to answer a question that must not land in their document).
  */
 export function buildAssistantCommandSendOptions(
   command: CommandInput,
@@ -42,7 +43,7 @@ export function buildAssistantCommandSendOptions(
       selectedContext: command.selectedContext ?? undefined,
       suppressResponseContent: delivery?.mode === "paste",
       onApprovalRequested: holdInPanel,
-      onClipboardReserved: holdInPanel,
+      onHoldDelivery: holdInPanel,
       onComplete: delivery
         ? async ({ content }) => {
             if (deliveryHeld) return;

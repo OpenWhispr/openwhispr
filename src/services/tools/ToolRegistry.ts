@@ -17,8 +17,12 @@ export interface ToolExecutionContext {
   signal: AbortSignal;
   /** Tells the chat surface an approval card needs the user's attention. */
   onApprovalRequested: () => void;
-  /** The tool put user content on the clipboard; the turn must not overwrite it. */
-  onClipboardReserved: () => void;
+  /**
+   * The turn's answer must stay in the chat surface instead of being pasted or
+   * copied at the user's caret: the tool opened something outside the app,
+   * put user content on the clipboard, or needs the user to answer.
+   */
+  onHoldDelivery: () => void;
 }
 
 export interface ToolDefinition {
@@ -44,8 +48,13 @@ export class ToolRegistry {
     return Array.from(this.tools.values());
   }
 
+  /**
+   * The AI SDK hands the stream only the model-facing output, so
+   * `onDisplayText` receives each call's displayText for its tool step.
+   */
   toAISDKFormat(
-    createContext?: (toolCallId: string) => ToolExecutionContext
+    createContext?: (toolCallId: string) => ToolExecutionContext,
+    onDisplayText?: (toolCallId: string, displayText: string) => void
   ): Record<string, Tool> {
     const result: Record<string, Tool> = {};
     for (const def of this.getAll()) {
@@ -58,6 +67,7 @@ export class ToolRegistry {
               args as Record<string, unknown>,
               createContext?.(options.toolCallId)
             );
+            onDisplayText?.(options.toolCallId, toolResult.displayText);
             return toolResult.success ? toolResult.data : { error: toolResult.displayText };
           } catch (error) {
             return { error: (error as Error).message || "Tool execution failed" };

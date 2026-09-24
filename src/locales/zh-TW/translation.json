@@ -3845,6 +3845,9 @@
       "actions": {
         "email_draft": "傳送給 {{destination}} 的草稿"
       },
+      "unlabeledActions": {
+        "email_draft": "郵件草稿"
+      },
       "states": {
         "pending": "等待中",
         "committing": "進行中",
@@ -3853,6 +3856,20 @@
         "unknown": "未確認",
         "cancelled": "已取消",
         "expired": "已過期"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "已開啟傳送給 {{destination}} 的草稿。",
+      "draftOpenedBodyCopied": "已開啟傳送給 {{destination}} 的草稿。內文已在剪貼簿中。",
+      "draftOpenedSubjectCopied": "已開啟傳送給 {{destination}} 的草稿。主旨和內文已在剪貼簿中。",
+      "needsDetails": "需要更多資訊。",
+      "unavailable": "連接器暫時無法使用。",
+      "failed": "操作未成功。",
+      "contactsFound": "找到的聯絡人：{{total}}",
+      "errors": {
+        "open_failed": "無法開啟您的郵件應用程式。",
+        "draft_too_long": "收件者太多，無法產生草稿連結。",
+        "invalid_address": "需要完整的電子郵件地址。"
       }
     }
   },

@@ -26,6 +26,9 @@ export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => v
     messages,
     setMessages,
     inferenceScope: "dictationAgent",
+    // The demo answers a sample email with text; a connector would reach the
+    // user's real contacts or open a real compose window during onboarding.
+    allowConnectors: false,
   });
 
   const reply = messages.find((message) => message.role === "assistant");

@@ -738,6 +738,9 @@
       "actions": {
         "email_draft": "مسودة إلى {{destination}}"
       },
+      "unlabeledActions": {
+        "email_draft": "مسودة بريد إلكتروني"
+      },
       "states": {
         "pending": "قيد الانتظار",
         "committing": "قيد التنفيذ",
@@ -746,6 +749,20 @@
         "unknown": "لم يتم التأكيد",
         "cancelled": "أُلغي",
         "expired": "منتهي الصلاحية"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "فُتحت مسودة إلى {{destination}}.",
+      "draftOpenedBodyCopied": "فُتحت مسودة إلى {{destination}}. نص الرسالة في الحافظة.",
+      "draftOpenedSubjectCopied": "فُتحت مسودة إلى {{destination}}. الموضوع ونص الرسالة في الحافظة.",
+      "needsDetails": "يلزم مزيد من التفاصيل.",
+      "unavailable": "الموصلات غير متاحة حاليًا.",
+      "failed": "لم ينجح ذلك.",
+      "contactsFound": "جهات الاتصال التي عُثر عليها: {{total}}",
+      "errors": {
+        "open_failed": "تعذّر فتح تطبيق البريد الإلكتروني.",
+        "draft_too_long": "عدد المستلمين كبير جدًا لرابط المسودة.",
+        "invalid_address": "يلزم إدخال عناوين بريد إلكتروني كاملة."
       }
     }
   },

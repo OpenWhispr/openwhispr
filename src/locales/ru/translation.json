@@ -3889,6 +3889,9 @@
       "actions": {
         "email_draft": "Черновик для {{destination}}"
       },
+      "unlabeledActions": {
+        "email_draft": "Черновик письма"
+      },
       "states": {
         "pending": "Ожидание",
         "committing": "Выполняется",
@@ -3897,6 +3900,20 @@
         "unknown": "Не подтверждено",
         "cancelled": "Отменено",
         "expired": "Истекло"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Открыт черновик для {{destination}}.",
+      "draftOpenedBodyCopied": "Открыт черновик для {{destination}}. Текст письма в буфере обмена.",
+      "draftOpenedSubjectCopied": "Открыт черновик для {{destination}}. Тема и текст письма в буфере обмена.",
+      "needsDetails": "Нужны уточнения.",
+      "unavailable": "Коннекторы сейчас недоступны.",
+      "failed": "Не получилось.",
+      "contactsFound": "Найдено контактов: {{total}}",
+      "errors": {
+        "open_failed": "Не удалось открыть почтовое приложение.",
+        "draft_too_long": "Слишком много получателей для ссылки на черновик.",
+        "invalid_address": "Нужны полные адреса электронной почты."
       }
     }
   },

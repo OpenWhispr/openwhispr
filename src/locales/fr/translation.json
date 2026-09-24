@@ -4014,6 +4014,9 @@
       "actions": {
         "email_draft": "Brouillon à {{destination}}"
       },
+      "unlabeledActions": {
+        "email_draft": "Brouillon d'e-mail"
+      },
       "states": {
         "pending": "En attente",
         "committing": "En cours",
@@ -4022,6 +4025,20 @@
         "unknown": "Non confirmé",
         "cancelled": "Annulé",
         "expired": "Expiré"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Brouillon ouvert pour {{destination}}.",
+      "draftOpenedBodyCopied": "Brouillon ouvert pour {{destination}}. Le corps du message est dans votre presse-papiers.",
+      "draftOpenedSubjectCopied": "Brouillon ouvert pour {{destination}}. L'objet et le corps du message sont dans votre presse-papiers.",
+      "needsDetails": "Il manque des précisions.",
+      "unavailable": "Les connecteurs ne sont pas disponibles pour le moment.",
+      "failed": "Cela n'a pas fonctionné.",
+      "contactsFound": "Contacts trouvés : {{total}}",
+      "errors": {
+        "open_failed": "Impossible d'ouvrir votre application de messagerie.",
+        "draft_too_long": "Trop de destinataires pour un lien de brouillon.",
+        "invalid_address": "Des adresses e-mail complètes sont nécessaires."
       }
     }
   },

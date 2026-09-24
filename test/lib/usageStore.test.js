@@ -417,31 +417,3 @@ test("an error is never cached: the next consumer retries", async (t) => {
   await loadUsage(async () => BUSINESS);
   assert.equal(getUsageState().status, "success");
 });
-
-test("paid access includes trials and is shared through its own flag", async (t) => {
-  t.after(reset);
-  reset();
-
-  setUsageAccount("user-a");
-  await loadUsage(async () => ({ plan: "free", status: "active", isTrial: true, limit: 2000 }));
-
-  assert.equal(localStorage.getItem("isSubscribed"), "false");
-  assert.equal(localStorage.getItem("hasPaidAccess"), "true");
-});
-
-test("the paid-access flag follows the same account lifecycle as isSubscribed", async (t) => {
-  t.after(reset);
-  reset();
-
-  setUsageAccount("user-a");
-  await loadUsage(async () => BUSINESS);
-  assert.equal(localStorage.getItem("hasPaidAccess"), "true");
-
-  setUsageAccount("user-b");
-  assert.equal(localStorage.getItem("hasPaidAccess"), null);
-
-  setUsageAccount("user-b");
-  await loadUsage(async () => BUSINESS);
-  setUsageAccount(null);
-  assert.equal(localStorage.getItem("hasPaidAccess"), null);
-});

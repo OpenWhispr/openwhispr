@@ -3845,6 +3845,9 @@
       "actions": {
         "email_draft": "Bozza a {{destination}}"
       },
+      "unlabeledActions": {
+        "email_draft": "Bozza email"
+      },
       "states": {
         "pending": "In attesa",
         "committing": "In corso",
@@ -3853,6 +3856,20 @@
         "unknown": "Non confermato",
         "cancelled": "Annullato",
         "expired": "Scaduto"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Bozza aperta per {{destination}}.",
+      "draftOpenedBodyCopied": "Bozza aperta per {{destination}}. Il testo è negli appunti.",
+      "draftOpenedSubjectCopied": "Bozza aperta per {{destination}}. L'oggetto e il testo sono negli appunti.",
+      "needsDetails": "Servono più dettagli.",
+      "unavailable": "I connettori non sono disponibili al momento.",
+      "failed": "Non ha funzionato.",
+      "contactsFound": "Contatti trovati: {{total}}",
+      "errors": {
+        "open_failed": "Impossibile aprire l'app email.",
+        "draft_too_long": "Troppi destinatari per un link di bozza.",
+        "invalid_address": "Servono indirizzi email completi."
       }
     }
   },

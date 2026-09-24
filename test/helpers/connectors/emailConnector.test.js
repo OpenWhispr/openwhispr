@@ -112,6 +112,8 @@ test("a failure to open the mail app is reported, not thrown", async () => {
   });
   const result = await connector.runDirect("draft", { target: "mailto", to: ["a@example.com"] }, {});
   assert.equal(result.errorCode, "open_failed");
+  // The receipt still says whose draft didn't open.
+  assert.equal(result.destinationLabel, "a@example.com");
 });
 
 test("the email connector is always connected and has no approval actions", async () => {

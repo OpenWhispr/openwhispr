@@ -13,26 +13,37 @@ function isPlainObject(value) {
 function createConnectorPolicyResolver({
   getAuthHeader,
   getPolicy,
+  peekPolicy,
   getAuthGeneration,
   timeoutMs = POLICY_TIMEOUT_MS,
 }) {
   // The deadline and the failure handling cover the whole resolution,
   // including the auth-header lookup: nothing here can hang or throw.
   return async (event) => {
+    let request = null;
     const resolution = (async () => {
       const authHeaders = (await getAuthHeader(event)) || {};
       // No account means no org policy can apply (same rule as screen context).
       if (!authHeaders.Authorization && !authHeaders.Cookie) return "allowed";
-      const snapshot = await getPolicy({ expectedAuthGeneration: getAuthGeneration(), authHeaders });
+      request = { expectedAuthGeneration: getAuthGeneration(), authHeaders };
+      const snapshot = await getPolicy(request);
       return connectorPolicyState(snapshot);
     })().catch(() => "unavailable");
 
     let timer;
     const deadline = new Promise((resolve) => {
-      timer = setTimeout(() => resolve("unavailable"), timeoutMs);
+      timer = setTimeout(() => resolve(null), timeoutMs);
     });
     try {
-      return await Promise.race([resolution, deadline]);
+      const state = await Promise.race([resolution, deadline]);
+      if (state !== null) return state;
+      // A refresh that outlives the deadline must not override the verdict
+      // already held for this account; with none held, fail closed.
+      try {
+        return request && peekPolicy ? connectorPolicyState(peekPolicy(request)) : "unavailable";
+      } catch {
+        return "unavailable";
+      }
     } finally {
       clearTimeout(timer);
     }

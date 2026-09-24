@@ -3845,6 +3845,9 @@
       "actions": {
         "email_draft": "Rascunho para {{destination}}"
       },
+      "unlabeledActions": {
+        "email_draft": "Rascunho de e-mail"
+      },
       "states": {
         "pending": "Aguardando",
         "committing": "Em andamento",
@@ -3853,6 +3856,20 @@
         "unknown": "Não confirmado",
         "cancelled": "Cancelado",
         "expired": "Expirado"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Rascunho aberto para {{destination}}.",
+      "draftOpenedBodyCopied": "Rascunho aberto para {{destination}}. O corpo está na sua área de transferência.",
+      "draftOpenedSubjectCopied": "Rascunho aberto para {{destination}}. O assunto e o corpo estão na sua área de transferência.",
+      "needsDetails": "Faltam detalhes.",
+      "unavailable": "Os conectores não estão disponíveis no momento.",
+      "failed": "Não funcionou.",
+      "contactsFound": "Contatos encontrados: {{total}}",
+      "errors": {
+        "open_failed": "Não foi possível abrir seu aplicativo de e-mail.",
+        "draft_too_long": "Destinatários demais para um link de rascunho.",
+        "invalid_address": "São necessários endereços de e-mail completos."
       }
     }
   },

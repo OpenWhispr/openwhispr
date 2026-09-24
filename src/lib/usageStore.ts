@@ -1,6 +1,5 @@
 import { CACHE_CONFIG } from "../config/constants.ts";
 import { clearIsSubscribed, writeIsSubscribed } from "./subscriptionFlag.ts";
-import { clearHasPaidAccess, writeHasPaidAccess } from "./paidAccessFlag.ts";
 
 const USAGE_ACCOUNT_KEY = "openwhispr:usageAccountId";
 const USAGE_CACHE_TTL = CACHE_CONFIG.API_KEY_TTL;
@@ -150,10 +149,7 @@ export function setUsageAccount(accountId: string | null): void {
   // would hand user B user A's entitlement.
   const store = storage();
   const previousAccountId = store?.getItem(USAGE_ACCOUNT_KEY) ?? null;
-  if (accountId === null || previousAccountId !== accountId) {
-    clearIsSubscribed();
-    clearHasPaidAccess();
-  }
+  if (accountId === null || previousAccountId !== accountId) clearIsSubscribed();
   if (accountId) store?.setItem(USAGE_ACCOUNT_KEY, accountId);
   else store?.removeItem(USAGE_ACCOUNT_KEY);
 
@@ -183,7 +179,6 @@ function startLoad(accountId: string, fetcher: UsageFetcher): Promise<void> {
       lastFetchAt = Date.now();
       retryAttempt = 0;
       writeIsSubscribed(data.isSubscribed);
-      writeHasPaidAccess(data.isSubscribed || data.isTrial);
       setState({ status: "success", accountId, data, isRefreshing: false });
     } catch (error) {
       if (requestGeneration !== generation) return;

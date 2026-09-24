@@ -53,7 +53,7 @@ test("an approval opens the hidden panel and cancels caret delivery", async () =
   assert.equal(built.wasDelivered(), false);
 });
 
-test("a tool that reserved the clipboard keeps it: no paste or copy, and the panel opens", async () => {
+test("a tool that holds delivery keeps the answer in the panel: no paste or copy", async () => {
   const { buildAssistantCommandSendOptions } = await load();
   for (const delivery of [PASTE, { mode: "clipboard" }]) {
     const h = handlers();
@@ -62,7 +62,7 @@ test("a tool that reserved the clipboard keeps it: no paste or copy, and the pan
       h.value
     );
 
-    built.options.onClipboardReserved();
+    built.options.onHoldDelivery();
     await built.options.onComplete({ assistantId: "a", content: "Draft opened; paste the body." });
 
     assert.equal(h.calls.opened, 1, delivery.mode);

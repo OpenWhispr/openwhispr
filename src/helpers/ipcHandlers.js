@@ -6098,9 +6098,11 @@ class IPCHandlers {
         getPolicyState: createConnectorPolicyResolver({
           getAuthHeader,
           getPolicy: (options) => workspacePolicyManager.getPolicy(options),
+          peekPolicy: (options) => workspacePolicyManager.peekPolicy(options),
           getAuthGeneration: () => tokenStore.getState().generation,
         }),
-        findContacts: (query) => searchContacts(this.databaseManager.getCalendarPeopleRows(), query),
+        findContacts: (query) =>
+          searchContacts(this.databaseManager.getContactLookupSources(), query),
       });
     }
     this.enterpriseIdentityManager = createEnterpriseIdentityManager({

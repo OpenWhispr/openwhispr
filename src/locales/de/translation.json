@@ -4014,6 +4014,9 @@
       "actions": {
         "email_draft": "Entwurf an {{destination}}"
       },
+      "unlabeledActions": {
+        "email_draft": "E-Mail-Entwurf"
+      },
       "states": {
         "pending": "Wartet",
         "committing": "Läuft",
@@ -4022,6 +4025,20 @@
         "unknown": "Nicht bestätigt",
         "cancelled": "Abgebrochen",
         "expired": "Abgelaufen"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Entwurf an {{destination}} geöffnet.",
+      "draftOpenedBodyCopied": "Entwurf an {{destination}} geöffnet. Der Text ist in deiner Zwischenablage.",
+      "draftOpenedSubjectCopied": "Entwurf an {{destination}} geöffnet. Betreff und Text sind in deiner Zwischenablage.",
+      "needsDetails": "Es fehlen Angaben.",
+      "unavailable": "Konnektoren sind gerade nicht verfügbar.",
+      "failed": "Das hat nicht funktioniert.",
+      "contactsFound": "Gefundene Kontakte: {{total}}",
+      "errors": {
+        "open_failed": "Deine E-Mail-App konnte nicht geöffnet werden.",
+        "draft_too_long": "Zu viele Empfänger für einen Entwurfslink.",
+        "invalid_address": "Vollständige E-Mail-Adressen erforderlich."
       }
     }
   },

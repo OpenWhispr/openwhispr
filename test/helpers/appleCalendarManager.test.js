@@ -104,3 +104,43 @@ test("_mapEvent preserves EventKit availability and the current user's response"
   assert.equal(mapped.availability_status, "free");
   assert.equal(mapped.self_response_status, "declined");
 });
+
+test("rooms and resources are flagged in attendees and kept out of contacts", () => {
+  const AppleCalendarManager = loadManager();
+  const saved = [];
+  const contacts = [];
+  const manager = new AppleCalendarManager(
+    {
+      saveAppleCalendars: () => {},
+      replaceAppleCalendarEvents: (events) => saved.push(...events),
+      upsertContacts: (rows) => contacts.push(...rows),
+    },
+    { reconcileProvider: () => {}, scheduleNextMeeting: () => {} }
+  );
+
+  manager._applySnapshot({
+    calendars: [{ id: "calendar-1" }],
+    events: [
+      {
+        id: "evt-room",
+        calendar_id: "calendar-1",
+        start: "2026-08-14T10:00:00Z",
+        end: "2026-08-14T10:30:00Z",
+        is_all_day: false,
+        status: "confirmed",
+        attendees: [
+          { email: "ana@example.com", name: "Ana", status: "accepted", self: false },
+          { email: "boardroom@example.com", name: "Boardroom", status: "accepted", self: false, resource: true },
+        ],
+      },
+    ],
+  });
+
+  const attendees = JSON.parse(saved[0].attendees);
+  assert.equal(attendees[0].resource, undefined);
+  assert.equal(attendees[1].resource, true);
+  assert.deepEqual(
+    contacts.map((contact) => contact.email),
+    ["ana@example.com"]
+  );
+});

@@ -10,13 +10,7 @@ import type {
 export const APPROVAL_TTL_MS = 10 * 60 * 1000;
 
 export type ApprovalState =
-  | "pending"
-  | "committing"
-  | "sent"
-  | "failed"
-  | "unknown"
-  | "cancelled"
-  | "not_sent";
+  "pending" | "committing" | "sent" | "failed" | "unknown" | "cancelled" | "not_sent";
 
 /** What the card shows and what Send commits; starts as the preview. */
 export interface ApprovalDraft {

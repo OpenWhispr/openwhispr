@@ -287,3 +287,45 @@ test("_syncCalendar preserves meeting links from Google event location and descr
     ]
   );
 });
+
+test("_syncCalendar flags rooms and resources and keeps them out of contacts", async () => {
+  const GoogleCalendarManager = loadManagerModule();
+  const upsertedEvents = [];
+  const contacts = [];
+  const databaseManager = {
+    getGoogleAccounts: () => [],
+    removeStaleCalendarEvents: () => {},
+    upsertCalendarEvents: (events) => upsertedEvents.push(...events),
+    removeCalendarEvents: () => {},
+    updateCalendarSyncToken: () => {},
+    upsertContacts: (rows) => contacts.push(...rows),
+  };
+  const manager = new GoogleCalendarManager(databaseManager, null, {
+    scheduleNextMeeting: () => {},
+    reset: () => {},
+  });
+  manager._apiGet = async () => ({
+    items: [
+      {
+        id: "event-room",
+        summary: "Planning",
+        start: { dateTime: "2026-08-12T10:00:00Z" },
+        attendees: [
+          { email: "ana@example.com", displayName: "Ana", responseStatus: "accepted" },
+          { email: "boardroom@corp.test", displayName: "Boardroom", resource: true },
+        ],
+      },
+    ],
+    nextSyncToken: "sync-token",
+  });
+
+  await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
+
+  const attendees = JSON.parse(upsertedEvents[0].attendees);
+  assert.equal(attendees[0].resource, undefined);
+  assert.equal(attendees[1].resource, true);
+  assert.deepEqual(
+    contacts.map((contact) => contact.email),
+    ["ana@example.com"]
+  );
+});

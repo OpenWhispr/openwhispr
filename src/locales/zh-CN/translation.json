@@ -3845,6 +3845,9 @@
       "actions": {
         "email_draft": "发送给 {{destination}} 的草稿"
       },
+      "unlabeledActions": {
+        "email_draft": "邮件草稿"
+      },
       "states": {
         "pending": "等待中",
         "committing": "进行中",
@@ -3853,6 +3856,20 @@
         "unknown": "未确认",
         "cancelled": "已取消",
         "expired": "已过期"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "已打开发送给 {{destination}} 的草稿。",
+      "draftOpenedBodyCopied": "已打开发送给 {{destination}} 的草稿。正文已在剪贴板中。",
+      "draftOpenedSubjectCopied": "已打开发送给 {{destination}} 的草稿。主题和正文已在剪贴板中。",
+      "needsDetails": "需要更多信息。",
+      "unavailable": "连接器暂时不可用。",
+      "failed": "操作未成功。",
+      "contactsFound": "找到的联系人：{{total}}",
+      "errors": {
+        "open_failed": "无法打开您的邮件应用。",
+        "draft_too_long": "收件人太多，无法生成草稿链接。",
+        "invalid_address": "需要完整的电子邮件地址。"
       }
     }
   },

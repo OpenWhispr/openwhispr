@@ -14,7 +14,8 @@ import {
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { getUsageState } from "../../lib/usageStore";
-import { hasConnectorPlan, readConnectorPaidAccessFlag } from "../../utils/connectorEligibility";
+import { readIsSubscribed } from "../../lib/subscriptionFlag";
+import { hasConnectorPlan } from "../../utils/connectorEligibility";
 import { resolveEmailDraftTarget } from "../../utils/emailDraftTarget";
 import {
   appendDictionarySuffix,
@@ -87,6 +88,8 @@ interface UseChatStreamingOptions {
   noteContext?: string;
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
+  /** Offer connector tools (email drafts, contact lookup) when the plan and policy allow them. */
+  allowConnectors?: boolean;
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
   /** Fires exactly once when displayable assistant content or tool activity becomes available. */
   onResponseContent?: () => void;
@@ -107,8 +110,8 @@ export interface SendToAIOptions {
   }) => void | Promise<void>;
   /** Fires when a tool shows an approval card, so a hidden panel can open. */
   onApprovalRequested?: () => void;
-  /** Fires when a tool put user content on the clipboard (e.g. a long email body). */
-  onClipboardReserved?: () => void;
+  /** Fires when this turn's answer must not be pasted at the caret (see ToolExecutionContext). */
+  onHoldDelivery?: () => void;
 }
 
 export interface ChatStreaming {
@@ -141,6 +144,7 @@ export function useChatStreaming({
   inferenceScope = "chatIntelligence",
   noteContext: externalNoteContext,
   searchScope,
+  allowConnectors = true,
   onStreamComplete,
   onResponseContent,
 }: UseChatStreamingOptions): ChatStreaming {
@@ -243,7 +247,7 @@ export function useChatStreaming({
       const cancelled = () => sendGeneration !== sendGenerationRef.current;
       const toolScope = createToolExecutionScope({
         onApprovalRequested: options?.onApprovalRequested,
-        onClipboardReserved: options?.onClipboardReserved,
+        onHoldDelivery: options?.onHoldDelivery,
       });
       toolScopeRef.current = toolScope;
       clearToolActivity();
@@ -296,7 +300,12 @@ export function useChatStreaming({
           announceResponse();
           setMessages((prev) => [
             ...prev,
-            { id: crypto.randomUUID(), role: "assistant", content: restriction, isStreaming: false },
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: restriction,
+              isStreaming: false,
+            },
           ]);
           return;
         }
@@ -331,8 +340,9 @@ export function useChatStreaming({
             settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
           const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
           const connectorsAvailable =
+            allowConnectors &&
             settings.isSignedIn &&
-            hasConnectorPlan(getUsageState(), readConnectorPaidAccessFlag()) &&
+            hasConnectorPlan(getUsageState(), readIsSubscribed()) &&
             isConnectorsAllowed(usePolicyStore.getState());
           const emailDraftTarget = resolveEmailDraftTarget(settings.emailDraftTarget, {
             gcalConnected: settings.gcalConnected,
@@ -448,6 +458,9 @@ export function useChatStreaming({
 
         try {
           let stream: AsyncGenerator<AgentStreamChunk>;
+          // Each call's own step text on the AI SDK path, whose tool results
+          // carry only the model-facing output (the cloud path yields it).
+          const toolDisplayTexts = new Map<string, string>();
 
           if (isCloudAgent) {
             const executeToolCall = registry
@@ -492,7 +505,9 @@ export function useChatStreaming({
               ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
             });
           } else {
-            const aiTools = registry?.toAISDKFormat(toolScope.createContext);
+            const aiTools = registry?.toAISDKFormat(toolScope.createContext, (id, text) =>
+              toolDisplayTexts.set(id, text)
+            );
             stream = ReasoningService.processTextStreamingAI(
               llmMessages,
               llmConfig.model,
@@ -564,7 +579,7 @@ export function useChatStreaming({
                             ? {
                                 ...tc,
                                 status: "completed" as const,
-                                result: chunk.displayText,
+                                result: toolDisplayTexts.get(chunk.callId) ?? chunk.displayText,
                                 ...(chunk.metadata ? { metadata: chunk.metadata } : {}),
                               }
                             : tc
@@ -668,6 +683,7 @@ export function useChatStreaming({
     },
     [
       inferenceScope,
+      allowConnectors,
       t,
       setMessages,
       onStreamComplete,

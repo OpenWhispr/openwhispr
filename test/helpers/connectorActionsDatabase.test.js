@@ -108,26 +108,39 @@ test("listRecent respects the limit", (t) => {
   db.db.close();
 });
 
-test("calendar people rows expose attendees and organizers", (t) => {
+test("contact lookup sources cover meetings, synced contacts and the user's accounts", (t) => {
   const db = createDb(t);
   if (!db) return;
-  db.upsertCalendarEvents([
-    {
-      id: "evt-1",
-      calendar_id: "primary",
-      provider: "google",
-      summary: "Lunch",
-      start_time: "2026-09-20T10:00:00Z",
-      end_time: "2026-09-20T11:00:00Z",
-      is_all_day: false,
-      status: "confirmed",
-      organizer_email: "gabe@example.com",
-      attendees_count: 1,
-      attendees: JSON.stringify([{ email: "gabe@example.com", displayName: "Gabe", self: false }]),
-    },
-  ]);
-  const [people] = db.getCalendarPeopleRows();
-  assert.equal(people.organizer_email, "gabe@example.com");
-  assert.match(people.attendees, /Gabe/);
+  const event = (id, startTime, organizer) => ({
+    id,
+    calendar_id: "primary",
+    provider: "google",
+    summary: "Lunch",
+    start_time: startTime,
+    end_time: startTime,
+    is_all_day: false,
+    status: "confirmed",
+    organizer_email: organizer,
+    attendees_count: 1,
+    attendees: JSON.stringify([{ email: organizer, displayName: "Someone", self: false }]),
+  });
+  const soon = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const later = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString();
+  db.upsertCalendarEvents([event("evt-later", later, "later@example.com"), event("evt-soon", soon, "soon@example.com")]);
+  db.upsertContacts([{ email: "Priya@Example.com", displayName: "Priya Shah" }]);
+  db.saveGoogleCalendars([{ id: "primary", summary: "Chad" }], "chad@example.com");
+  db.saveMicrosoftCalendars([{ id: "work", summary: "Calendar" }], "chad@corp.test");
+
+  const sources = db.getContactLookupSources();
+
+  // The meetings nearest to now come first, so a limit keeps the relevant ones.
+  assert.deepEqual(
+    sources.meetings.map((row) => row.organizer_email),
+    ["soon@example.com", "later@example.com"]
+  );
+  assert.match(sources.meetings[0].attendees, /Someone/);
+  assert.equal(sources.meetings[0].provider, "google");
+  assert.deepEqual(sources.contacts, [{ email: "priya@example.com", display_name: "Priya Shah" }]);
+  assert.deepEqual([...sources.accountEmails].sort(), ["chad@corp.test", "chad@example.com"]);
   db.db.close();
 });

@@ -308,3 +308,43 @@ test("_syncCalendar keeps the stored row when a stripped occurrence's master fet
   );
   assert.deepEqual(staleKeepLists, [["occ-1", "evt-1"]]);
 });
+
+test("_syncCalendar flags rooms and resources and keeps them out of contacts", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const upserted = [];
+  const contacts = [];
+  const manager = createManager(MicrosoftCalendarManager, upserted, contacts);
+  manager._apiGet = async () => ({
+    "@odata.deltaLink": "delta-link",
+    value: [
+      {
+        id: "evt-room",
+        subject: "Planning",
+        start: { dateTime: "2026-07-20T17:00:00.0000000" },
+        end: { dateTime: "2026-07-20T17:30:00.0000000" },
+        attendees: [
+          {
+            type: "required",
+            emailAddress: { address: "ana@example.com", name: "Ana" },
+            status: { response: "accepted" },
+          },
+          {
+            type: "resource",
+            emailAddress: { address: "boardroom@example.com", name: "Boardroom" },
+            status: { response: "accepted" },
+          },
+        ],
+      },
+    ],
+  });
+
+  await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
+
+  const attendees = JSON.parse(upserted[0].attendees);
+  assert.equal(attendees[0].resource, undefined);
+  assert.equal(attendees[1].resource, true);
+  assert.deepEqual(
+    contacts.map((contact) => contact.email),
+    ["ana@example.com"]
+  );
+});

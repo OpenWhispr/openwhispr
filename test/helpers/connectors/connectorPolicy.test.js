@@ -50,6 +50,11 @@ test("a valid snapshot allows unless a managed policy turns connectors off", asy
   );
 });
 
+test("turning off the agent turns connectors off too", async () => {
+  const { connectorPolicyState } = await loadState();
+  assert.equal(connectorPolicyState({ success: true, managed: true, policy: policy({ agentEnabled: false }) }), "blocked");
+});
+
 test("the desktop validator accepts the field when absent or boolean, and rejects other types", async () => {
   const { isValidPolicyShape } = await loadValidation();
   assert.equal(isValidPolicyShape(policy({})), true);
@@ -62,5 +67,19 @@ test("the renderer rule mirrors the switch", async () => {
   const managed = (features) => ({ status: "managed", appVersion: "1.10.0", policy: policy(features) });
   assert.equal(isConnectorsAllowed(managed({ connectorsEnabled: false })), false);
   assert.equal(isConnectorsAllowed(managed({})), true);
+  assert.equal(isConnectorsAllowed(managed({ agentEnabled: false })), false);
   assert.equal(isConnectorsAllowed({ status: "unmanaged", appVersion: "1.10.0", policy: null }), true);
+});
+
+test("only a resolved managed policy reports connectors as turned off by the org", async () => {
+  const { isConnectorsBlockedByOrg } = await loadRules();
+  const managed = (features) => ({ status: "managed", appVersion: "1.10.0", policy: policy(features) });
+  assert.equal(isConnectorsBlockedByOrg(managed({ connectorsEnabled: false })), true);
+  assert.equal(isConnectorsBlockedByOrg(managed({ agentEnabled: false })), true);
+  assert.equal(isConnectorsBlockedByOrg(managed({})), false);
+  // Still loading, or the fetch failed: actions fail closed, but nothing says
+  // an organization turned anything off.
+  for (const status of ["idle", "loading", "error", "unmanaged"]) {
+    assert.equal(isConnectorsBlockedByOrg({ status, appVersion: "1.10.0", policy: null }), false, status);
+  }
 });

@@ -46,3 +46,30 @@ test("any work account picks outlook work, regardless of order", async () => {
     "outlookPersonal"
   );
 });
+
+test("personal Microsoft domains are recognised in every country", async () => {
+  const { resolveEmailDraftTarget } = await load();
+  for (const email of [
+    "me@hotmail.de",
+    "me@outlook.fr",
+    "me@live.co.uk",
+    "me@hotmail.co.jp",
+    "me@outlook.com.br",
+    "me@windowslive.com",
+    "me@passport.com",
+  ]) {
+    assert.equal(
+      resolveEmailDraftTarget("auto", { gcalConnected: false, mcalAccountEmails: [email] }),
+      "outlookPersonal",
+      email
+    );
+  }
+  // A company domain that merely starts with one of those words is still work.
+  for (const email of ["a@live.nation.com", "a@outlookgroup.com", "a@hotmail-support.io"]) {
+    assert.equal(
+      resolveEmailDraftTarget("auto", { gcalConnected: false, mcalAccountEmails: [email] }),
+      "outlookWork",
+      email
+    );
+  }
+});

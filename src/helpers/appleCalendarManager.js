@@ -276,7 +276,9 @@ class AppleCalendarManager {
       const contacts = [];
       for (const event of events) {
         for (const attendee of event.attendees || []) {
-          if (attendee.email) contacts.push({ email: attendee.email, displayName: attendee.name });
+          if (attendee.email && !attendee.resource) {
+            contacts.push({ email: attendee.email, displayName: attendee.name });
+          }
         }
       }
       if (contacts.length > 0) this.databaseManager.upsertContacts(contacts);
@@ -333,6 +335,7 @@ class AppleCalendarManager {
               displayName: a.name || null,
               responseStatus: a.status || null,
               self: a.self || false,
+              ...(a.resource ? { resource: true } : {}),
             }))
           )
         : null,

@@ -130,6 +130,31 @@ test("a policy lookup that hangs or throws fails closed", async () => {
   assert.equal(await throttled({}), "unavailable");
 });
 
+test("a slow refresh falls back to the verdict already held for the account", async () => {
+  const { createConnectorPolicyResolver } = await load();
+  const peeked = [];
+  const slowRefresh = (held) =>
+    createConnectorPolicyResolver({
+      getAuthHeader: async () => ({ Authorization: "Bearer t" }),
+      getPolicy: () => new Promise(() => {}),
+      peekPolicy: (request) => {
+        peeked.push(request);
+        return held;
+      },
+      getAuthGeneration: () => 7,
+      timeoutMs: 20,
+    });
+
+  assert.equal(await slowRefresh({ success: true, managed: false, policy: null })({}), "allowed");
+  assert.equal(
+    await slowRefresh({ success: true, managed: true, policy: { features: { connectorsEnabled: false } } })({}),
+    "blocked"
+  );
+  // Nothing held yet (the session's first lookup): still fails closed.
+  assert.equal(await slowRefresh(null)({}), "unavailable");
+  assert.deepEqual(peeked[0], { expectedAuthGeneration: 7, authHeaders: { Authorization: "Bearer t" } });
+});
+
 test("the deadline covers the auth-header lookup too", async () => {
   const { createConnectorPolicyResolver } = await load();
   const hangingAuth = createConnectorPolicyResolver({

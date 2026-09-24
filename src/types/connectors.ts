@@ -37,7 +37,7 @@ export type ConnectorCommitResult =
 
 export type ConnectorDirectResult =
   | { state: "sent"; destinationLabel: string; bodyCopied?: boolean; subjectCopied?: boolean }
-  | { state: "failed"; errorCode: string; message: string }
+  | { state: "failed"; errorCode: string; message: string; destinationLabel?: string }
   | { state: "unavailable"; reason: string };
 
 export type ApprovalOutcome =

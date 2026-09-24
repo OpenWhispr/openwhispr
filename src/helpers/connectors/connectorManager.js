@@ -79,7 +79,10 @@ function createConnectorManager({
 
   async function status() {
     return Promise.all(
-      [...byId.values()].map(async (connector) => ({ id: connector.id, ...(await connector.getStatus()) }))
+      [...byId.values()].map(async (connector) => ({
+        id: connector.id,
+        ...(await connector.getStatus()),
+      }))
     );
   }
 
@@ -97,8 +100,16 @@ function createConnectorManager({
     try {
       prepared = await connector.prepare(action, args || {});
     } catch (error) {
-      logger.warn("connector prepare threw", { connectorId, action, error: error.message }, "connectors");
-      return { status: "failed", errorCode: "prepare_failed", message: "Couldn't prepare that action." };
+      logger.warn(
+        "connector prepare threw",
+        { connectorId, action, error: error.message },
+        "connectors"
+      );
+      return {
+        status: "failed",
+        errorCode: "prepare_failed",
+        message: "Couldn't prepare that action.",
+      };
     }
     if (prepared.status !== "ready") return prepared;
 
@@ -140,7 +151,9 @@ function createConnectorManager({
     const refusal = policyRefusal(policyState);
     if (refusal) {
       pendingActions.cancel(actionId);
-      record(() => actionLog.update(actionId, { state: "cancelled", errorCode: refusal }, "pending"));
+      record(() =>
+        actionLog.update(actionId, { state: "cancelled", errorCode: refusal }, "pending")
+      );
       return { state: "not_sent", reason: refusal };
     }
 
@@ -160,7 +173,13 @@ function createConnectorManager({
     );
     if (!recorded) {
       pendingActions.finish(actionId, "failed");
-      record(() => actionLog.update(actionId, { state: "cancelled", errorCode: "receipt_unavailable" }, "pending"));
+      record(() =>
+        actionLog.update(
+          actionId,
+          { state: "cancelled", errorCode: "receipt_unavailable" },
+          "pending"
+        )
+      );
       return { state: "not_sent", reason: "receipt_unavailable" };
     }
 
@@ -219,8 +238,16 @@ function createConnectorManager({
     try {
       result = await resolved.connector.runDirect(action, args || {}, runtime || {});
     } catch (error) {
-      logger.warn("connector direct action threw", { connectorId, action, error: error.message }, "connectors");
-      result = { state: "failed", errorCode: "direct_failed", message: "That action didn't complete." };
+      logger.warn(
+        "connector direct action threw",
+        { connectorId, action, error: error.message },
+        "connectors"
+      );
+      result = {
+        state: "failed",
+        errorCode: "direct_failed",
+        message: "That action didn't complete.",
+      };
     }
     result = normalizeDirectResult(result);
     record(() =>
@@ -236,7 +263,9 @@ function createConnectorManager({
   function invalidate(connectorId) {
     const removed = pendingActions.invalidateConnector(connectorId);
     for (const actionId of removed) {
-      record(() => actionLog.update(actionId, { state: "cancelled", errorCode: "connection_changed" }));
+      record(() =>
+        actionLog.update(actionId, { state: "cancelled", errorCode: "connection_changed" })
+      );
     }
     return removed;
   }

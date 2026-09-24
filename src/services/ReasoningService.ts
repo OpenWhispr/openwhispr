@@ -1096,7 +1096,11 @@ class ReasoningService extends BaseReasoningService {
     config: {
       systemPrompt: string;
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
-      executeToolCall?: (name: string, args: string, toolCallId: string) => Promise<ToolExecutionResult>;
+      executeToolCall?: (
+        name: string,
+        args: string,
+        toolCallId: string
+      ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
@@ -1110,7 +1114,11 @@ class ReasoningService extends BaseReasoningService {
     config: {
       systemPrompt: string;
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
-      executeToolCall?: (name: string, args: string, toolCallId: string) => Promise<ToolExecutionResult>;
+      executeToolCall?: (
+        name: string,
+        args: string,
+        toolCallId: string
+      ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
     },
     operationGeneration: number

@@ -35,6 +35,7 @@ export default function ChatView() {
   const [isNewChat, setIsNewChat] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
+  const [submissionInFlight, setSubmissionInFlight] = useState(false);
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
 
   const persistence = useChatPersistence({
@@ -90,6 +91,7 @@ export default function ChatView() {
     streaming,
     createConversation,
     onBeforeSend: markChatStarted,
+    onSendingChange: setSubmissionInFlight,
   });
 
   const handleArchive = useCallback(
@@ -179,7 +181,15 @@ export default function ChatView() {
               <div className="px-3 pb-3 pt-1">
                 <ChatInput
                   className={PAGE_CONTENT_WIDTH_CLASS}
-                  agentState={streaming.agentState}
+                  // New chat and switching cancel the stream at once, but the
+                  // cancelled send can hold the submission lock until an
+                  // in-flight tool returns; a message sent before then would
+                  // be dropped, so the input stays busy until it lets go.
+                  agentState={
+                    submissionInFlight && streaming.agentState === "idle"
+                      ? "thinking"
+                      : streaming.agentState
+                  }
                   partialTranscript=""
                   onTextSubmit={handleTextSubmit}
                   onCancel={streaming.cancelStream}

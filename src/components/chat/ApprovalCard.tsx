@@ -45,7 +45,9 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
               className="w-full rounded-md border border-border/70 bg-background px-2 py-1"
               dir="auto"
               value={draft.title}
-              onChange={(event) => updateApprovalDraft(entry.toolCallId, { title: event.target.value })}
+              onChange={(event) =>
+                updateApprovalDraft(entry.toolCallId, { title: event.target.value })
+              }
             />
           )}
           <textarea
@@ -53,7 +55,9 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
             className="min-h-24 w-full rounded-md border border-border/70 bg-background px-2 py-1"
             dir="auto"
             value={draft.body}
-            onChange={(event) => updateApprovalDraft(entry.toolCallId, { body: event.target.value })}
+            onChange={(event) =>
+              updateApprovalDraft(entry.toolCallId, { body: event.target.value })
+            }
           />
         </div>
       ) : (
