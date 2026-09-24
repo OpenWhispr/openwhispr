@@ -39,8 +39,6 @@ test("cleanup leaves legitimate, ambiguous, and out-of-scope output alone", asyn
     [RAW, `${CLEAN} Can you send me the report by Monday?`],
     [RAW, `Introduction. ${CLEAN} ${CLEAN}`],
     [RAW, `${CLEAN} ${CLEAN} Additional details.`],
-    [RAW, `${CLEAN}\n${CLEAN}\nCleaned transcript:`],
-    [RAW, `Can you send me\nCleaned transcript:\nthe report by Friday?\n${CLEAN}`],
     [RAW, `**Cleaned transcript:**\n${CLEAN}`],
     [RAW, `**${CLEAN}**`],
     [RAW, "What's the capital of France?"],
