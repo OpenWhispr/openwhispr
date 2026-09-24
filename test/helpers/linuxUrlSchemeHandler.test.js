@@ -8,10 +8,10 @@ const path = require("node:path");
 const helperPath = require.resolve("../../src/helpers/linuxUrlSchemeHandler");
 const originalLoad = Module._load;
 
-// Assigning undefined to process.env coerces to the string "undefined".
 const MANAGED_ENV = ["XDG_DATA_HOME", "APPIMAGE", "FLATPAK_ID"];
 const HANDLER_FILE = "openwhispr-url-handler.desktop";
 
+// Assigning undefined to process.env coerces to the string "undefined".
 function setEnv(name, value) {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
