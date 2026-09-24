@@ -14,8 +14,7 @@ import {
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { getUsageState } from "../../lib/usageStore";
-import { readHasPaidAccess } from "../../lib/paidAccessFlag";
-import { hasConnectorPlan } from "../../utils/connectorEligibility";
+import { hasConnectorPlan, readConnectorPaidAccessFlag } from "../../utils/connectorEligibility";
 import { resolveEmailDraftTarget } from "../../utils/emailDraftTarget";
 import {
   appendDictionarySuffix,
@@ -333,7 +332,7 @@ export function useChatStreaming({
           const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
           const connectorsAvailable =
             settings.isSignedIn &&
-            hasConnectorPlan(getUsageState(), readHasPaidAccess()) &&
+            hasConnectorPlan(getUsageState(), readConnectorPaidAccessFlag()) &&
             isConnectorsAllowed(usePolicyStore.getState());
           const emailDraftTarget = resolveEmailDraftTarget(settings.emailDraftTarget, {
             gcalConnected: settings.gcalConnected,

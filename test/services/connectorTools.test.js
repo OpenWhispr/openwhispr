@@ -156,6 +156,24 @@ test("connector plan eligibility uses usage data, then the shared paid-access fl
   assert.equal(hasConnectorPlan({ status: "loading", accountId: "acct" }, false), false);
 });
 
+test("connector paid-access flag falls back to either persisted flag before usage loads", async (t) => {
+  installBrowserGlobals(t, { initialStorage: { isSubscribed: "true" } });
+  const { readConnectorPaidAccessFlag } = await loadEligibility();
+  assert.equal(readConnectorPaidAccessFlag(), true);
+});
+
+test("connector paid-access flag reads hasPaidAccess when isSubscribed is unset", async (t) => {
+  installBrowserGlobals(t, { initialStorage: { hasPaidAccess: "true" } });
+  const { readConnectorPaidAccessFlag } = await loadEligibility();
+  assert.equal(readConnectorPaidAccessFlag(), true);
+});
+
+test("connector paid-access flag is false when neither persisted flag is set", async (t) => {
+  installBrowserGlobals(t, {});
+  const { readConnectorPaidAccessFlag } = await loadEligibility();
+  assert.equal(readConnectorPaidAccessFlag(), false);
+});
+
 test("connector tools register only when connectors are available", async () => {
   const { createToolRegistry } = await loadRegistry();
   const base = { isSignedIn: true, calendarConnected: false, cloudBackupEnabled: false, webSearchEnabled: false };
