@@ -183,8 +183,12 @@ class LlamaServerManager {
       this.modelPath === modelPath &&
       this.draftModelPath === requestedDraftPath &&
       requestedContextSize <= (this.contextSize || 0)
-    )
+    ) {
+      // Streaming chat reaches the port directly and never goes through
+      // inference(), so asking for the running server is its only activity.
+      this.resetIdleTimer();
       return;
+    }
 
     if (this.process) {
       await this.stop();
@@ -613,6 +617,8 @@ class LlamaServerManager {
       });
       this.stop();
     }, IDLE_TIMEOUT_MS);
+    // Freeing an idle server is housekeeping; it must never hold the process open.
+    this.idleTimer.unref();
   }
 
   clearIdleTimer() {
