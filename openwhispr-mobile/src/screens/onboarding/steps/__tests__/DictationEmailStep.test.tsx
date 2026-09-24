@@ -1,7 +1,8 @@
-import { Keyboard } from 'react-native';
+import { Keyboard, KeyboardAvoidingView } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { DictationEmailStep } from '../DictationEmailStep';
 
+jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
@@ -150,4 +151,9 @@ it('explains why Cloud practice could not be retried', async () => {
   expect(
     await screen.findByText('Still no connection. Check it and try again, or skip for now.'),
   ).toBeTruthy();
+});
+
+it('lets the keyboard cover the buttons', () => {
+  const screen = render(<DictationEmailStep />);
+  expect(screen.UNSAFE_queryByType(KeyboardAvoidingView)).toBeNull();
 });

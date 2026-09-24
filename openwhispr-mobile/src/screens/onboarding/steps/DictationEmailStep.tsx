@@ -89,7 +89,6 @@ export function DictationEmailStep(): ReactElement {
 
   return (
     <OnboardingShell
-      avoidKeyboard
       progress={progress}
       onSkip={busy ? undefined : goNext}
       title="Try dictating an email"

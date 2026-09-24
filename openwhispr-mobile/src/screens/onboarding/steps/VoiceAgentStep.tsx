@@ -90,7 +90,6 @@ export function VoiceAgentStep(): ReactElement {
 
   return (
     <OnboardingShell
-      avoidKeyboard
       title="Meet your voice agent."
       titleAccent="voice agent"
       subtitle="Ask for what you need, then refine it by voice."

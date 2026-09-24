@@ -35,7 +35,7 @@ it('restores confirmed languages and goes back without saving edits', async () =
   expect(screen.getByLabelText('Remove Spanish')).toBeTruthy();
   expect(screen.queryByLabelText('Remove English')).toBeNull();
   fireEvent.press(screen.getByLabelText('Remove French'));
-  fireEvent.press(screen.getByText('Back'));
+  fireEvent.press(screen.getByLabelText('Back'));
   await waitFor(() => expect(mockBack).toHaveBeenCalledTimes(1));
   expect(mockSave).not.toHaveBeenCalled();
 });

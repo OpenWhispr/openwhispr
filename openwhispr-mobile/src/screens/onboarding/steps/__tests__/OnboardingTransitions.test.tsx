@@ -1,5 +1,14 @@
+import type React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert, AppState, Linking } from 'react-native';
+import {
+  Alert,
+  AppState,
+  Keyboard,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  TextInput,
+} from 'react-native';
 import { NotificationsStep } from '../NotificationsStep';
 import { KeyboardIntroStep } from '../KeyboardIntroStep';
 import { MicrophoneStep } from '../MicrophoneStep';
@@ -8,6 +17,17 @@ import { KeyboardSwitchStep } from '../KeyboardSwitchStep';
 import { GetStartedStep } from '../GetStartedStep';
 
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+// The drag rule is covered by useSheetDragToDismiss's own test; the sheet only needs to render.
+jest.mock('react-native-gesture-handler', () => {
+  const { View } = require('react-native');
+  return {
+    GestureHandlerRootView: View,
+    GestureDetector: ({ children }: { children: React.ReactNode }) => children,
+  };
+});
+jest.mock('@/hooks/useSheetDragToDismiss', () => ({
+  useSheetDragToDismiss: () => ({ dragGesture: {}, sheetStyle: {} }),
+}));
 jest.mock('react-native-reanimated', () => ({
   __esModule: true,
   default: { View: require('react-native').View, Text: require('react-native').Text },
@@ -221,4 +241,33 @@ it('explains a failed continue from the blocked-microphone alert', async () => {
   const buttons = alert.mock.calls[0][2] ?? [];
   await act(async () => buttons.find((button) => button.text === 'Continue')?.onPress?.());
   expect(alert).toHaveBeenLastCalledWith('Could not continue', 'Could not save progress.');
+});
+
+it('lets the keyboard cover the switch step’s button, with help to get unstuck', () => {
+  const screen = render(<KeyboardSwitchStep />);
+  expect(screen.UNSAFE_queryByType(KeyboardAvoidingView)).toBeNull();
+
+  // iOS keeps the keyboard above a modal, so help has to put it away first.
+  const dismiss = jest.spyOn(Keyboard, 'dismiss');
+  fireEvent.press(screen.getByLabelText('Help'));
+  expect(dismiss).toHaveBeenCalled();
+  expect(screen.getByText('Can’t switch to OpenWhispr?')).toBeTruthy();
+  expect(screen.queryByText('Continue anyway')).toBeNull();
+});
+
+// iOS ignores a focus request while the sheet is still presented, so the keyboard comes back only
+// once the sheet has fully gone.
+it('brings the keyboard back after the help sheet has closed', async () => {
+  jest.useFakeTimers();
+  const screen = render(<KeyboardSwitchStep />);
+  act(() => jest.advanceTimersByTime(200));
+  const focus = jest.mocked(TextInput.prototype.focus);
+  focus.mockClear();
+
+  fireEvent.press(screen.getByLabelText('Help'));
+  fireEvent.press(screen.getByText('Close'));
+  expect(focus).not.toHaveBeenCalled();
+
+  act(() => screen.UNSAFE_getByType(Modal).props.onDismiss());
+  expect(focus).toHaveBeenCalledTimes(1);
 });

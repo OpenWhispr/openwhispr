@@ -243,7 +243,7 @@ it.each(['Continue', 'Skip'])('leaves the voice-agent step using %s', async (act
 it('can return to dictation practice', async () => {
   const screen = render(<VoiceAgentStep />);
   await act(async () => {
-    fireEvent.press(screen.getByText('Back'));
+    fireEvent.press(screen.getByLabelText('Back'));
   });
   expect(mockBack).toHaveBeenCalledTimes(1);
 });

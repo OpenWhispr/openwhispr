@@ -1,6 +1,6 @@
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, StyleSheet, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import Animated, {
   Easing,
@@ -19,6 +19,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { SpaceGrotesk } from '@/lib/fonts';
 import { useKeyboardHeartbeat } from '@/hooks/useKeyboardHeartbeat';
 import { describeOnboardingError } from '@/lib/onboardingErrors';
+import { KeyboardSwitchHelpSheet } from './KeyboardSwitchHelpSheet';
 
 // Worklet-safe color literals — `interpolateColor` runs on the UI thread, so
 // PlatformColor / iosColor() can't be used here. These match `systemBlue` and
@@ -36,6 +37,7 @@ export function KeyboardSwitchStep() {
   const { goNext, progress } = useOnboardingStep('keyboard-switch');
   const inputRef = useRef<TextInput>(null);
   const [advanceError, setAdvanceError] = useState<string | null>(null);
+  const [helpVisible, setHelpVisible] = useState(false);
   const advanceOnDetection = useCallback((): void => {
     goNext().catch((error: unknown) => {
       setAdvanceError(describeOnboardingError(error, 'Could not save progress.'));
@@ -53,11 +55,19 @@ export function KeyboardSwitchStep() {
 
   const titleNode = <KeyboardSwitchTitle />;
 
+  // The keyboard covers this step's button and iOS keeps it above a modal, so help puts it away
+  // while open and brings it back for another try once the sheet has gone.
+  const openHelp = (): void => {
+    Keyboard.dismiss();
+    setHelpVisible(true);
+  };
+  const closeHelp = (): void => setHelpVisible(false);
+
   return (
     <>
       <OnboardingShell
-        avoidKeyboard
         progress={progress}
+        onHelp={openHelp}
         title="Press and hold the globe icon in the bottom-left corner of your keyboard, then select OpenWhispr."
         titleNode={titleNode}
         ctaLabel={advanceError ? 'Retry' : 'I switched'}
@@ -86,6 +96,11 @@ export function KeyboardSwitchStep() {
         />
       </OnboardingShell>
 
+      <KeyboardSwitchHelpSheet
+        visible={helpVisible}
+        onClose={closeHelp}
+        onDismissed={() => inputRef.current?.focus()}
+      />
       {detected ? <KeyboardDetectedToast message="OpenWhispr keyboard is active" /> : null}
     </>
   );

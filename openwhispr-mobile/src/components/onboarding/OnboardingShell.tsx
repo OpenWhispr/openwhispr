@@ -1,15 +1,17 @@
 import { useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
+import { SystemIcon } from '@/components/ui/SystemIcon';
 import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 interface OnboardingShellProps {
   progress?: { current: number; total: number };
   onSkip?: () => void | Promise<unknown>;
   onBack?: () => void | Promise<unknown>;
-  avoidKeyboard?: boolean;
+  /** Shows a question-mark button in the top-right for steps a user can get stuck on. */
+  onHelp?: () => void;
   /** Label for the top-right dismiss affordance. Onboarding steps skip ahead;
    * standalone screens that reuse this shell close instead. */
   skipLabel?: string;
@@ -35,7 +37,7 @@ export function OnboardingShell({
   progress,
   onSkip,
   onBack,
-  avoidKeyboard = false,
+  onHelp,
   skipLabel = 'Skip',
   title,
   titleAccent,
@@ -76,11 +78,7 @@ export function OnboardingShell({
   };
   return (
     <SafeAreaView className="flex-1 bg-systemBackground" edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        className="flex-1"
-        enabled={avoidKeyboard}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <View className="flex-1">
         <View className="flex-row items-center justify-between px-6 pt-2">
           {onBack ? (
             <Pressable
@@ -88,9 +86,15 @@ export function OnboardingShell({
               disabled={busy}
               hitSlop={12}
               accessibilityRole="button"
+              accessibilityLabel="Back"
               className="mr-4 py-2"
             >
-              <Text className="text-[15px] font-medium text-secondaryLabel">Back</Text>
+              <SystemIcon
+                name="chevron.left"
+                mdName="ChevronLeft"
+                size={20}
+                color="secondaryLabel"
+              />
             </Pressable>
           ) : null}
           <View className="flex-1 pr-4">
@@ -100,6 +104,22 @@ export function OnboardingShell({
               </Text>
             ) : null}
           </View>
+          {onHelp ? (
+            <Pressable
+              onPress={onHelp}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Help"
+              className={onSkip ? 'mr-4' : undefined}
+            >
+              <SystemIcon
+                name="questionmark.circle"
+                mdName="CircleHelp"
+                size={22}
+                color="secondaryLabel"
+              />
+            </Pressable>
+          ) : null}
           {onSkip ? (
             <Pressable
               onPress={() => run('skip')}
@@ -182,7 +202,7 @@ export function OnboardingShell({
             )
           ) : null}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }

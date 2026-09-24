@@ -7,6 +7,7 @@ import { OnboardingShell } from '../OnboardingShell';
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/Button', () => {
   const { Pressable, Text } = require('react-native');
   return {
@@ -106,4 +107,30 @@ it('retries the action that failed, not the primary one', async () => {
   await act(async () => undefined);
   expect(onSecondaryCta).toHaveBeenCalledTimes(2);
   expect(onCta).not.toHaveBeenCalled();
+});
+
+it('shows Back as an arrow that screen readers still call Back', async () => {
+  const onBack = jest.fn();
+  render(<OnboardingShell title="Tone" ctaLabel="Continue" onCta={jest.fn()} onBack={onBack} />);
+
+  expect(screen.queryByText('Back')).toBeNull();
+  fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+
+  await act(async () => undefined);
+  expect(onBack).toHaveBeenCalledTimes(1);
+});
+
+it('offers a help button only on steps that provide help', () => {
+  const onHelp = jest.fn();
+  const { rerender } = render(
+    <OnboardingShell title="Switch" ctaLabel="I switched" onCta={jest.fn()} />,
+  );
+  expect(screen.queryByRole('button', { name: 'Help' })).toBeNull();
+
+  rerender(
+    <OnboardingShell title="Switch" ctaLabel="I switched" onCta={jest.fn()} onHelp={onHelp} />,
+  );
+  fireEvent.press(screen.getByRole('button', { name: 'Help' }));
+
+  expect(onHelp).toHaveBeenCalledTimes(1);
 });
