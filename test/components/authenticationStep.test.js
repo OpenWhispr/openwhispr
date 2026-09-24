@@ -182,9 +182,9 @@ async function createAuthenticationRenderer(t) {
         return children;
       }`,
       "/utils/logger": `export default { error() {} };`,
-      "/utils/platform": `export function getCachedPlatform() {
-        return globalThis.__authenticationStepHarness?.platform ?? "linux";
-      }`,
+      // Off-macOS on purpose: a platform gate around a provider fails the
+      // Apple sign-in test instead of passing on the Node default.
+      "/utils/platform": `export function getCachedPlatform() { return "linux"; }`,
       "/ForgotPasswordView": `export default function ForgotPasswordView() { return null; }`,
       "/OnboardingShell": `
         export function CompactOnboardingFrame(props) { return props.children; }
@@ -413,14 +413,20 @@ test("email authentication discovers accounts, restores drafts, and persists the
   ]);
 });
 
-test("Apple sign-in renders and dispatches on every desktop platform", async (t) => {
+test("Apple sign-in is offered off macOS and shares the browser sign-in gate", async (t) => {
   const { render } = await createAuthenticationRenderer(t);
-  for (const platform of ["darwin", "win32", "linux"]) {
-    const harness = createHarness();
-    harness.platform = platform;
-    const appleTile = providerTile(render(harness), "Apple");
-    assert.ok(appleTile, `Apple sign-in should render on ${platform}`);
-    await appleTile.props.onClick();
-    assert.deepEqual(harness.socialSignIns, ["apple"], `Apple should dispatch on ${platform}`);
-  }
+
+  const harness = createHarness();
+  const appleTile = providerTile(render(harness), "Apple");
+  assert.ok(appleTile, "Apple sign-in should render on Linux");
+  await appleTile.props.onClick();
+  assert.deepEqual(harness.socialSignIns, ["apple"]);
+
+  globalThis.window.electronAPI.getOAuthProtocolRegistered = async () => false;
+  const unregistered = createHarness();
+  render(unregistered);
+  await settleAsyncHandler();
+  const blockedTile = providerTile(render(unregistered), "Apple");
+  assert.equal(blockedTile.props.disabled, true);
+  assert.equal(blockedTile.props.title, "auth.social.protocolUnavailable");
 });
