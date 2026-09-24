@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { SquarePen, Search, Archive as ArchiveIcon } from "../icons";
+import { Plus, Search, Archive as ArchiveIcon } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../lib/utils";
@@ -189,30 +189,30 @@ export default function ConversationList({
 
   return (
     <div className="flex flex-col h-full" onKeyDown={handleKeyDown} tabIndex={-1}>
-      <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
+      <div className="shrink-0 space-y-1 px-4 pt-2 pb-1">
         <button
           onClick={onNewChat}
           className={cn(
-            "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
-            "text-muted-foreground/80 hover:text-foreground hover:bg-foreground/5",
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm",
+            "text-foreground hover:bg-foreground/5",
             "transition-colors duration-150",
             "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
           )}
         >
-          <SquarePen size={14} className="shrink-0" />
+          <Plus size={16} className="shrink-0" />
           {t("chat.newChat")}
         </button>
         <button
           onClick={onOpenSearch}
           className={cn(
-            "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
-            "text-muted-foreground/80 hover:text-foreground hover:bg-foreground/5",
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm",
+            "text-foreground hover:bg-foreground/5",
             "transition-colors duration-150",
             "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
           )}
         >
-          <Search size={14} className="shrink-0" />
-          {t("chat.searchChats")}
+          <Search size={16} className="shrink-0" />
+          {t("chat.searchChat")}
         </button>
         {conversations.some((c) => c.is_archived) && (
           <button

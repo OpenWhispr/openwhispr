@@ -3006,7 +3006,7 @@
     "deleteConfirm": "Diese Unterhaltung wird dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
     "editTitle": "Doppelklick zum Bearbeiten des Titels",
     "untitled": "Ohne Titel",
-    "searchChats": "Chats suchen",
+    "searchChat": "Chat suchen",
     "searchTitle": "Unterhaltungen suchen",
     "searchDescription": "In allen Unterhaltungen suchen",
     "inputPlaceholder": "Frag etwas zu deiner Notiz",

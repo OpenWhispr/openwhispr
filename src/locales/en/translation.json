@@ -2987,7 +2987,7 @@
     }
   },
   "chat": {
-    "newChat": "New chat",
+    "newChat": "New Chat",
     "search": "Search conversations...",
     "archived": "Archived",
     "noConversations": "No Assistant Chat",
@@ -3006,7 +3006,7 @@
     "deleteConfirm": "This conversation will be permanently deleted. This cannot be undone.",
     "editTitle": "Double-click to edit title",
     "untitled": "Untitled",
-    "searchChats": "Search chats",
+    "searchChat": "Search Chat",
     "searchTitle": "Search conversations",
     "searchDescription": "Search across all your conversations",
     "inputPlaceholder": "Ask anything about your note",

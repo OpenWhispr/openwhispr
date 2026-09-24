@@ -3538,7 +3538,7 @@
     "deleteConfirm": "Esta conversación se eliminará permanentemente. No se puede deshacer.",
     "editTitle": "Doble clic para editar el título",
     "untitled": "Sin título",
-    "searchChats": "Buscar chats",
+    "searchChat": "Buscar chat",
     "searchTitle": "Buscar conversaciones",
     "searchDescription": "Buscar en todas tus conversaciones",
     "inputPlaceholder": "Pregunta sobre tu nota",

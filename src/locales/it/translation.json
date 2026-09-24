@@ -3485,7 +3485,7 @@
     "deleteConfirm": "Questa conversazione verrà eliminata permanentemente. Non è possibile annullare.",
     "editTitle": "Doppio clic per modificare il titolo",
     "untitled": "Senza titolo",
-    "searchChats": "Cerca chat",
+    "searchChat": "Cerca chat",
     "searchTitle": "Cerca conversazioni",
     "searchDescription": "Cerca in tutte le conversazioni",
     "inputPlaceholder": "Chiedi qualcosa sulla tua nota",

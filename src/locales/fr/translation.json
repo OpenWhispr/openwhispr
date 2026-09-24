@@ -3006,7 +3006,7 @@
     "deleteConfirm": "Cette conversation sera définitivement supprimée. Cette action est irréversible.",
     "editTitle": "Double-cliquez pour modifier le titre",
     "untitled": "Sans titre",
-    "searchChats": "Rechercher",
+    "searchChat": "Rechercher un chat",
     "searchTitle": "Rechercher des conversations",
     "searchDescription": "Rechercher dans toutes vos conversations",
     "inputPlaceholder": "Posez une question sur votre note",

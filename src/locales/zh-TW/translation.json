@@ -3485,7 +3485,7 @@
     "deleteConfirm": "此對話將被永久刪除，無法復原。",
     "editTitle": "雙擊編輯標題",
     "untitled": "無標題",
-    "searchChats": "搜尋聊天",
+    "searchChat": "搜尋對話",
     "searchTitle": "搜尋對話",
     "searchDescription": "搜尋所有對話",
     "inputPlaceholder": "詢問關於筆記的任何問題",
