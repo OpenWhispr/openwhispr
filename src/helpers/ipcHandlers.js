@@ -78,7 +78,7 @@ const diarizationHost = (endpoint) => {
   } catch {}
   return null;
 };
-const { resolveLocalServerNeeds } = require("./localServerPolicy");
+const { resolveLocalServerNeeds, shouldStopLocalServer } = require("./localServerPolicy");
 const autoStart = require("./autoStart");
 const { getRelaunchOptions, getRelaunchWaiter } = require("./autoStartPolicy");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
@@ -5224,10 +5224,16 @@ class IPCHandlers {
         clearVars.push("DICTATION_AGENT_PROVIDER", "LOCAL_DICTATION_AGENT_MODEL");
       }
 
-      // Stop the shared llama-server only when neither scope still needs it, so
-      // the active scope keeps its server when the other one switches away.
-      if (localServer.stopServer) {
-        const modelManager = require("./modelManagerBridge").default;
+      // Stop the shared llama-server only when no scope still needs the model it
+      // holds, so the active scopes keep their server when another switches away.
+      const modelManager = require("./modelManagerBridge").default;
+      if (shouldStopLocalServer(localServer, modelManager.currentServerModelId)) {
+        if (modelManager.getServerStatus().running) {
+          debugLogger.debug("Stopping llama-server: no scope needs its model", {
+            loadedModel: modelManager.currentServerModelId,
+            neededModels: localServer.models,
+          });
+        }
         modelManager.stopServer().catch((err) => {
           debugLogger.error("Failed to stop llama-server on provider switch", {
             error: err.message,

@@ -9,6 +9,7 @@ import type {
   ChineseScriptPreference,
   LocalTranscriptionProvider,
   InferenceMode,
+  LocalServerPrefs,
   SelfHostedType,
 } from "../types/electron";
 import type { CalendarAccount } from "../types/calendar";
@@ -28,7 +29,6 @@ import {
   type InferenceScopeStoreKeys,
 } from "../config/inferenceScopes";
 import { normalizeChineseScriptPreference } from "../utils/chineseScript";
-import { isLocalLlmServerNeeded } from "../utils/localLlmServerPolicy";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import modelRegistryData from "../models/modelRegistryData.json";
 import { pickDefaultModelId } from "../models/providerDefaultModel";
@@ -2920,13 +2920,30 @@ export function isCloudChatAgentMode() {
   return selectIsCloudChatAgentMode(getSettings());
 }
 
-export function isLocalLlmServerInUse(): boolean {
-  const state = getSettings();
-  return isLocalLlmServerNeeded(
-    (Object.keys(INFERENCE_SCOPES) as InferenceScope[]).map((scope) =>
-      selectResolvedLLMConfig(state, scope)
-    )
-  );
+// What resolveLocalServerNeeds (main process) decides the shared llama-server
+// from. Pass policy-effective state: the resolved configs carry fallback
+// inheritance and enterprise overrides, so they match what requests run on.
+export function selectLocalServerPrefs(state: SettingsState): LocalServerPrefs {
+  const cleanup = selectResolvedLLMConfig(state, "dictationCleanup");
+  const dictationAgent = selectResolvedLLMConfig(state, "dictationAgent");
+  const noteFormatting = selectResolvedLLMConfig(state, "noteFormatting");
+  const chat = selectResolvedLLMConfig(state, "chatIntelligence");
+  const translation = selectResolvedLLMConfig(state, "dictationTranslation");
+  return {
+    useCleanupModel: state.useCleanupModel,
+    cleanupMode: cleanup.mode,
+    cleanupModel: cleanup.model,
+    useDictationAgent: state.useDictationAgent,
+    dictationAgentMode: dictationAgent.mode,
+    dictationAgentModel: dictationAgent.model,
+    noteFormattingMode: noteFormatting.mode,
+    noteFormattingModel: noteFormatting.model,
+    chatAgentMode: chat.mode,
+    chatAgentModel: chat.model,
+    useDictationTranslation: state.useDictationTranslation,
+    translationMode: translation.mode,
+    translationModel: translation.model,
+  };
 }
 
 // --- Convenience getters for non-React code ---

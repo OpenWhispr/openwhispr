@@ -5,7 +5,6 @@ import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from 
 import {
   LLM_ENTERPRISE_POLICY_PROVIDER_IDS,
   LLM_POLICY_PROVIDER_IDS,
-  isLocalLlmServerInUse,
   useSettingsStore,
   selectPolicyEffectiveSettings,
   selectResolvedLLMConfig,
@@ -149,14 +148,6 @@ export default function InferenceConfigEditor({
         patch.model = "";
       }
       setResolvedLLMConfig(scope, patch);
-
-      if (
-        (mode === "openwhispr" || mode === "self-hosted" || mode === "enterprise") &&
-        !isLocalLlmServerInUse()
-      ) {
-        window.electronAPI?.llamaServerStop?.();
-      }
-
       onModeChange?.(mode);
     },
     [scope, config.provider, effectiveMode, isSignedIn, onModeChange, isModeAllowed]

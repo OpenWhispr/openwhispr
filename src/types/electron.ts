@@ -23,6 +23,23 @@ export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcr
 
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
 
+/** Each LLM scope's resolved mode and model, from which the main process decides the shared llama-server. */
+export interface LocalServerPrefs {
+  useCleanupModel: boolean;
+  cleanupMode: InferenceMode;
+  cleanupModel: string;
+  useDictationAgent: boolean;
+  dictationAgentMode: InferenceMode;
+  dictationAgentModel: string;
+  noteFormattingMode: InferenceMode;
+  noteFormattingModel: string;
+  chatAgentMode: InferenceMode;
+  chatAgentModel: string;
+  useDictationTranslation: boolean;
+  translationMode: InferenceMode;
+  translationModel: string;
+}
+
 export type SelfHostedType = "openai-compatible" | "lan";
 
 export type TranscriptionStatus = "completed" | "failed" | "pending" | "discarded";
@@ -1665,18 +1682,14 @@ declare global {
       saveUiLanguage: (language: string) => Promise<{ success: boolean; language: string }>;
       setUiLanguage: (language: string) => Promise<{ success: boolean; language: string }>;
       saveAllKeysToEnv: () => Promise<{ success: boolean; path: string }>;
-      syncStartupPreferences: (prefs: {
-        useLocalWhisper: boolean;
-        localTranscriptionProvider: LocalTranscriptionProvider;
-        model?: string;
-        language?: string;
-        useCleanupModel: boolean;
-        cleanupMode: InferenceMode;
-        cleanupModel?: string;
-        useDictationAgent: boolean;
-        dictationAgentMode: InferenceMode;
-        dictationAgentModel?: string;
-      }) => Promise<void>;
+      syncStartupPreferences: (
+        prefs: LocalServerPrefs & {
+          useLocalWhisper: boolean;
+          localTranscriptionProvider: LocalTranscriptionProvider;
+          model?: string;
+          language?: string;
+        }
+      ) => Promise<void>;
 
       // Clipboard operations
       checkAccessibilityPermission: (silent?: boolean) => Promise<boolean>;

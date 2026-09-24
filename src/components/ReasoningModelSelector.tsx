@@ -25,7 +25,7 @@ import { useTinfoilModels } from "../hooks/useTinfoilModels";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
-import { isLocalLlmServerInUse, useSettingsStore } from "../stores/settingsStore";
+import { useSettingsStore } from "../stores/settingsStore";
 import {
   filterByokProviderOptionsByPolicy,
   isModeAllowedByPolicy,
@@ -498,10 +498,6 @@ export default function ReasoningModelSelector({
     if (!isProviderValidForMode(localReasoningProvider, inferenceMode)) {
       setLocalReasoningProvider("");
       setReasoningModel("");
-    }
-
-    if (newMode === "cloud" && !isLocalLlmServerInUse()) {
-      window.electronAPI?.llamaServerStop?.();
     }
   };
 

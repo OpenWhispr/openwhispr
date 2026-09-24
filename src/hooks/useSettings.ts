@@ -1,5 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef } from "react";
-import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
+import { useShallow } from "zustand/react/shallow";
+import {
+  useSettingsStore,
+  initializeSettings,
+  selectLocalServerPrefs,
+  selectPolicyEffectiveSettings,
+} from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
 import type {
@@ -15,6 +21,7 @@ import {
   isLocalHistoryPolicyResolved,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { usePolicySnapshot } from "./usePolicy";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -223,13 +230,15 @@ function useSettingsInternal() {
     parakeetModel,
     cohereModel,
     preferredLanguage,
-    useCleanupModel,
-    cleanupMode,
-    cleanupModel,
-    useDictationAgent,
-    dictationAgentMode,
-    dictationAgentModel,
   } = store;
+  // Every window runs this sync, and the main process stops the shared
+  // llama-server from it, so it must see every scope's resolved local model.
+  const policySnapshot = usePolicySnapshot();
+  const localServerPrefs = useSettingsStore(
+    useShallow((state) =>
+      selectLocalServerPrefs(selectPolicyEffectiveSettings(state, policySnapshot))
+    )
+  );
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.syncStartupPreferences) return;
@@ -246,12 +255,7 @@ function useSettingsInternal() {
         localTranscriptionProvider,
         model: model || undefined,
         language: preferredLanguage || undefined,
-        useCleanupModel,
-        cleanupMode,
-        cleanupModel,
-        useDictationAgent,
-        dictationAgentMode,
-        dictationAgentModel,
+        ...localServerPrefs,
       })
       .catch((err) =>
         logger.warn(
@@ -267,12 +271,7 @@ function useSettingsInternal() {
     parakeetModel,
     cohereModel,
     preferredLanguage,
-    useCleanupModel,
-    cleanupMode,
-    cleanupModel,
-    useDictationAgent,
-    dictationAgentMode,
-    dictationAgentModel,
+    localServerPrefs,
   ]);
 
   return {
