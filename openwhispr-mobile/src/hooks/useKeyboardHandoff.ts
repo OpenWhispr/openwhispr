@@ -13,6 +13,7 @@ import { useHandoffStore } from '@/store/useHandoffStore';
 import { useKeyboardRecoveryStore } from '@/store/useKeyboardRecoveryStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import {
   TranscriptionService,
   isLocalModelMissingError,
@@ -125,6 +126,46 @@ function resolveKeyboardRecordingFormat(activeMode: string): KeyboardRecordingFo
   }
 
   return 'wav';
+}
+
+// Failures only a change in AI Models can fix. The keyboard shows "Set up in
+// app" for these; "Try again" would fail the same way.
+const PROVIDER_SETUP_ERROR_CODES = new Set([
+  'CREDENTIAL_MISSING',
+  'CREDENTIAL_MISMATCH',
+  'CREDENTIAL_REQUIRED',
+  'INVALID_CREDENTIAL',
+  'ENDPOINT_INVALID',
+  'PROVIDER_HTTPS_REQUIRED',
+  'PROVIDER_CERTIFICATE_UNTRUSTED',
+  'PROVIDER_INVALID_RECOVERY_ROUTE',
+  'PROVIDER_UNSUPPORTED',
+  'MODEL_NOT_FOUND',
+  'MODEL_REQUIRED',
+  'MODEL_UNSUPPORTED',
+  'POLICY_BLOCKED',
+  'SELECTION_REQUIRED',
+]);
+
+function isProviderSetupError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return typeof code === 'string' && PROVIDER_SETUP_ERROR_CODES.has(code);
+}
+
+// Launch recovery runs before the session is restored; cleaning then would read
+// a signed-in user as signed out and skip OpenWhispr cleanup.
+function waitForAuthInitialized(): Promise<void> {
+  return new Promise((resolve) => {
+    if (useAuthStore.getState().isInitialized) {
+      resolve();
+      return;
+    }
+    const unsubscribe = useAuthStore.subscribe((state) => {
+      if (!state.isInitialized) return;
+      unsubscribe();
+      resolve();
+    });
+  });
 }
 
 export function useKeyboardHandoff() {
@@ -286,6 +327,16 @@ export function useKeyboardHandoff() {
 
     const processOrphanedRawTranscript = async (trigger: string) => {
       if (orphanCleanupInFlightRef.current || activeRef.current) return;
+      if (!useAuthStore.getState().isInitialized) {
+        orphanCleanupInFlightRef.current = true;
+        try {
+          await waitForAuthInitialized();
+        } finally {
+          orphanCleanupInFlightRef.current = false;
+        }
+        // A dictation that started meanwhile owns the slots; the watchdog retries.
+        if (activeRef.current) return;
+      }
       const providerJobId = readActiveJobId();
       // A provider request still running in this process delivers its own result.
       if (providerJobId && isProviderJobActive(providerJobId)) return;
@@ -554,7 +605,7 @@ export function useKeyboardHandoff() {
       try {
         snapshotKeyboardInferenceRoute(jobId);
       } catch {
-        setKeyboardStatus('error', 'Complete provider setup in AI Models.');
+        setKeyboardStatus('setup_required', 'Complete provider setup in AI Models.');
         cleanup({ resetStatus: false });
         if (!selfHosted) {
           AppGroupStorage.returnToPreviousApp();
@@ -706,7 +757,7 @@ export function useKeyboardHandoff() {
           if (!jobRoute) throw new Error('The recording route is unavailable.');
         } catch {
           setKeyboardStatus(
-            'error',
+            'setup_required',
             'This recording could not be routed. Check AI Models, then record again.',
           );
           cleanup({ resetStatus: false });
@@ -1040,6 +1091,12 @@ export function useKeyboardHandoff() {
           if (provider === 'local' && isLocalModelMissingError(error)) {
             await addFailedKeyboardTranscript(error);
             setKeyboardStatus('setup_required');
+            cleanup({ resetStatus: false });
+            return;
+          }
+          if (isProviderSetupError(error)) {
+            await addFailedKeyboardTranscript(error);
+            setKeyboardStatus('setup_required', toFriendlyTranscriptionErrorMessage(error));
             cleanup({ resetStatus: false });
             return;
           }

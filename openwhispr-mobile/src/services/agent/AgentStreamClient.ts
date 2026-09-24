@@ -9,6 +9,7 @@ import {
 } from '@/lib/apiClient';
 import { parseApiErrorBody } from '@/lib/apiErrorBody';
 import { withRetry } from '@/lib/retry';
+import { stripThinkingTags } from '@/services/reasoning/buildProviderPrompt';
 
 // Single budget for the entire streaming call: connect + receive.
 const AGENT_STREAM_TIMEOUT_MS = 55_000;
@@ -188,7 +189,9 @@ export async function streamAgentText(options: StreamAgentTextOptions): Promise<
           ? combineSignals(externalSignal, controller.signal)
           : controller.signal,
       });
-      return result.text;
+      const draft = stripThinkingTags(result.text);
+      if (!draft) throw new Error('The provider returned no text. Try again.');
+      return draft;
     } finally {
       clearTimeout(timeout);
     }

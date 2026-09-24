@@ -269,6 +269,10 @@ async function maybeRunAgentActionOnFusedResult(
         timeoutMs: AGENT_ACTION_TIMEOUT_MS,
         signal: controller.signal,
       });
+      if (!response.text.trim()) {
+        onSkipped('The voice assistant returned no text. Your transcript is saved.');
+        return undefined;
+      }
       return response.text;
     } finally {
       clearTimeout(timeout);

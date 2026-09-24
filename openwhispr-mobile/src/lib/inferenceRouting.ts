@@ -20,12 +20,21 @@ export function getTranscriptionProvider(scope: InferenceScope): TranscriptionPr
   const selection = getInferenceSelection(scope);
   if (selection?.mode === 'providers') return 'byok';
   if (selection?.mode === 'local') return 'local';
+  // Bring Your Own Key mode without a dictation choice must refuse (see
+  // snapshotTranscriptionJob), never quietly send the audio to Cloud. Uploads
+  // without their own choice still follow Cloud.
+  if (
+    !selection &&
+    scope === 'dictation' &&
+    useProcessingModeStore.getState().activeMode === 'providers'
+  )
+    return 'byok';
   return 'cloud';
 }
 
 // Route refusals are configuration problems; retrying the request cannot fix them.
-function routeRefusal(message: string): Error {
-  return Object.assign(new Error(message), { retryable: false });
+function routeRefusal(message: string, code?: RouteErrorCode | 'SELECTION_REQUIRED'): Error {
+  return Object.assign(new Error(message), { retryable: false, code });
 }
 
 export async function resolveMobileProviderRoute(
@@ -37,7 +46,10 @@ export async function resolveMobileProviderRoute(
   const configuredSelection = snapshot ?? getInferenceSelection(scope);
   const selection = configuredSelection ? { ...configuredSelection } : undefined;
   if (!selection || selection.mode !== 'providers') {
-    throw routeRefusal('Choose a provider and model in AI Models before using your own key.');
+    throw routeRefusal(
+      'Choose a provider and model in AI Models before using your own key.',
+      'SELECTION_REQUIRED',
+    );
   }
   // Load policy only when direct provider execution is actually requested.
   const { getProviderPolicy } =
@@ -62,7 +74,7 @@ export async function resolveMobileProviderRoute(
       CREDENTIAL_REQUIRED: 'Add your provider credentials in AI Models.',
       ENDPOINT_INVALID: 'Use HTTPS or a private-network HTTP endpoint.',
     };
-    throw routeRefusal(messages[result.code]);
+    throw routeRefusal(messages[result.code], result.code);
   }
   if (result.route.mode !== 'providers') throw routeRefusal('A provider route is required.');
   return result.route;
@@ -104,7 +116,8 @@ export function snapshotTranscriptionJob(scope: 'dictation' | 'upload'): Transcr
   const job: TranscriptionJobRoute = { provider, ...snapshotTextInference(provider) };
   if (provider === 'byok') {
     const selection = getInferenceSelection(scope);
-    if (!selection) throw new Error('Choose a transcription provider in AI Models.');
+    if (!selection)
+      throw routeRefusal('Choose a transcription provider in AI Models.', 'SELECTION_REQUIRED');
     const result = resolveMobileInferenceRoute({
       scope,
       selection,
@@ -112,7 +125,7 @@ export function snapshotTranscriptionJob(scope: 'dictation' | 'upload'): Transcr
       policy: { status: 'unmanaged' },
     });
     if (!result.ok || result.route.mode !== 'providers')
-      throw new Error('Complete provider setup in AI Models before recording.');
+      throw new Error('Complete provider setup in AI Models.');
     job.inferenceRoute = { ...result.route };
   }
   return job;

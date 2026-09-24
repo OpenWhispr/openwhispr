@@ -130,6 +130,7 @@ it('refuses a persisted selection for a provider the mobile build does not ship'
   ).rejects.toMatchObject({
     message: 'This provider does not support the selected workflow.',
     retryable: false,
+    code: 'PROVIDER_UNSUPPORTED',
   });
 });
 
@@ -165,4 +166,37 @@ it('re-snapshots Cloud text stages for a consented cloud fallback', () => {
     cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
     agentRoute: { mode: 'openwhispr', scope: 'agent' },
   });
+});
+
+it('refuses Bring Your Own Key dictation with no provider chosen instead of using Cloud', () => {
+  mockProcessing.activeMode = 'providers';
+  mockState.config.inference = {};
+  expect(getTranscriptionProvider('dictation')).toBe('byok');
+  expect(() => snapshotTranscriptionJob('dictation')).toThrow(
+    expect.objectContaining({
+      message: 'Choose a transcription provider in AI Models.',
+      retryable: false,
+    }),
+  );
+});
+
+it('marks text stages unavailable, never Cloud, for BYOK dictation with no text choice', () => {
+  mockProcessing.activeMode = 'providers';
+  mockState.config.inference = {
+    dictation: {
+      mode: 'providers',
+      providerId: 'groq',
+      modelId: 'whisper-large-v3-turbo',
+      credentialRef: 'provider.groq',
+    },
+  };
+  const snapshot = snapshotTranscriptionJob('dictation');
+  expect(snapshot.cleanupRoute).toBeUndefined();
+  expect(snapshot.agentRoute).toBeUndefined();
+  expect(snapshot.cleanupUnavailable).toBe(
+    'Choose a cleanup provider in AI Models. Your raw transcript is saved.',
+  );
+  expect(snapshot.agentUnavailable).toBe(
+    'Choose a voice assistant provider in AI Models. Your raw transcript is saved.',
+  );
 });

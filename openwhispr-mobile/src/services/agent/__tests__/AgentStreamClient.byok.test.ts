@@ -96,3 +96,19 @@ it('requires a system prompt for direct provider composition', async () => {
   expect(processProviderText).not.toHaveBeenCalled();
   expect(fetch).not.toHaveBeenCalled();
 });
+
+it('removes thinking blocks from a direct provider draft', async () => {
+  jest
+    .mocked(processProviderText)
+    .mockResolvedValue({ text: '<think>plan</think>\nFinal draft<think>more', model: 'm' });
+  await expect(
+    streamAgentText({ messages: [{ role: 'user', content: 'write' }], systemPrompt: 'Compose.' }),
+  ).resolves.toBe('Final draft');
+});
+
+it('fails a direct provider draft that was only thinking instead of returning nothing', async () => {
+  jest.mocked(processProviderText).mockResolvedValue({ text: '<think>still planning', model: 'm' });
+  await expect(
+    streamAgentText({ messages: [{ role: 'user', content: 'write' }], systemPrompt: 'Compose.' }),
+  ).rejects.toThrow('The provider returned no text. Try again.');
+});

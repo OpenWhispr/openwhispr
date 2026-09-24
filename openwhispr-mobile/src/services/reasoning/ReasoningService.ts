@@ -1,5 +1,5 @@
 import type { ReasoningRequest, ReasoningResponse } from '../../types';
-import { buildProviderPrompt } from './buildProviderPrompt';
+import { buildProviderPrompt, stripThinkingTags } from './buildProviderPrompt';
 import { api } from '../../lib/apiClient';
 import { buildChatOverNotePayload, type ChatOverNoteRequest } from '../../lib/notes/chatOverNote';
 import {
@@ -13,10 +13,6 @@ import {
   buildLocalReasoningInstructions,
   LocalReasoningService,
 } from '@/services/reasoning/LocalReasoningService';
-
-function stripThinkingTags(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-}
 
 interface ApiErrorLike {
   status?: number;

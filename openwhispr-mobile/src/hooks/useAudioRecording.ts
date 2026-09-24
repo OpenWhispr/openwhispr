@@ -319,7 +319,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
 
     const finalText = processedResult.text;
 
-    await addTranscript({
+    // The transcript is already paid for, so a history write failure must not lose it.
+    const saved = await addTranscript({
       id: retained.id,
       text: finalText,
       originalText: processedResult.originalText,
@@ -336,10 +337,14 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       cleanupWarning: processedResult.transcription.cleanupWarning,
       requestContext: 'recording',
       jobId: retained.id,
-    });
+    }).then(
+      () => true,
+      () => false,
+    );
 
     setCurrentText(finalText);
     options.onComplete?.(finalText);
+    if (!saved) options.onError?.(new Error('Your transcript could not be saved to history.'));
   };
 
   // Consented cloud transcription of an already-captured private-mode recording.

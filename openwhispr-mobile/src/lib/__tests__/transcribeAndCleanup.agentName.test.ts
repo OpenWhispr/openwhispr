@@ -272,3 +272,33 @@ describe('transcribeAndCleanup defensive agent path — privacy hint', () => {
     expect(req.routing).toEqual({ isPrivateNote: false });
   });
 });
+
+it('keeps the fused cleaned text when the voice assistant returns only thinking', async () => {
+  mockConfig = {
+    defaultMode: 'cloud',
+    cleanupEnabled: true,
+    dictationAgentEnabled: true,
+    dictationAgentName: 'OpenWhispr',
+  };
+  const rawText = 'hey OpenWhispr write a summary of this meeting';
+  mockFused.mockResolvedValue({
+    text: 'fused cleaned text',
+    originalText: rawText,
+    provider: 'cloud',
+    duration: 1,
+    cleanupApplied: true,
+    fusedCleanup: true,
+  });
+  mockReason.mockResolvedValueOnce({ text: '', model: 'm' });
+
+  const result = await transcribeAndCleanup({
+    audioUri: 'file://a.wav',
+    provider: 'cloud',
+    requestContext: 'keyboard',
+  });
+
+  expect(result.text).toBe('fused cleaned text');
+  expect(result.transcription.cleanupWarning).toBe(
+    'The voice assistant returned no text. Your transcript is saved.',
+  );
+});

@@ -22,7 +22,12 @@ const mockIsManagedTranscriptAudioUri = jest.fn();
 const mockIsWavAudioFile = jest.fn();
 const mockLogTranscriptionCompleted = jest.fn();
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
-const mockProcessingModeState = { activeMode: 'cloud' as 'cloud' | 'private' };
+const mockProcessingModeState = { activeMode: 'cloud' as 'cloud' | 'private' | 'providers' };
+const mockSnapshotTranscriptionJob = jest.fn();
+jest.mock('@/lib/inferenceRouting', () => ({
+  ...jest.requireActual('@/lib/inferenceRouting'),
+  snapshotTranscriptionJob: (scope: string): unknown => mockSnapshotTranscriptionJob(scope),
+}));
 
 jest.mock('@/services/storage/StorageService', () => ({
   StorageService: {
@@ -125,6 +130,7 @@ beforeEach(() => {
     transcripts: [],
     currentTranscript: null,
     isLoading: false,
+    isLoaded: true,
     error: null,
   });
 });
@@ -676,4 +682,276 @@ it('does not recover or clear a provider job still running during startup hydrat
   expect(mockGarbageCollectTranscriptAudio).toHaveBeenCalledWith([
     'file://docs/transcript-audio/running.m4a',
   ]);
+});
+
+describe('saving before history has loaded', () => {
+  const stored = [
+    failedTranscript({ id: 'old-1', status: 'completed', audioUrl: undefined }),
+    failedTranscript({ id: 'old-2', status: 'completed', audioUrl: undefined }),
+  ];
+  beforeEach(() => {
+    useTranscriptStore.setState({ transcripts: [], isLoaded: false });
+    mockGetTranscripts.mockResolvedValue(stored);
+  });
+
+  it('keeps stored history when a failed row is saved before the first load', async () => {
+    await useTranscriptStore.getState().addFailedTranscript({
+      id: 'recovered',
+      audioUrl: 'file://tmp/source.m4a',
+      provider: 'byok',
+      errorMessage: 'interrupted',
+    });
+    const saved = mockSaveTranscripts.mock.calls.at(-1)?.[0] as Transcript[];
+    expect(saved.map((row) => row.id)).toEqual(['old-1', 'old-2', 'recovered']);
+  });
+
+  it('keeps stored history when a completed row is saved before the first load', async () => {
+    await useTranscriptStore
+      .getState()
+      .addTranscript({ id: 'recovered', text: 'raw', provider: 'cloud' });
+    const saved = mockSaveTranscripts.mock.calls.at(-1)?.[0] as Transcript[];
+    expect(saved.map((row) => row.id)).toEqual(['old-1', 'old-2', 'recovered']);
+  });
+
+  it('shares one storage read between a concurrent load and an early save', async () => {
+    await Promise.all([
+      useTranscriptStore.getState().loadTranscripts(),
+      useTranscriptStore.getState().addTranscript({ id: 'new', text: 'raw', provider: 'cloud' }),
+    ]);
+    expect(mockGetTranscripts).toHaveBeenCalledTimes(1);
+    expect(useTranscriptStore.getState().transcripts.map((row) => row.id)).toEqual([
+      'old-1',
+      'old-2',
+      'new',
+    ]);
+  });
+
+  it('refuses to overwrite history it could not read', async () => {
+    mockGetTranscripts.mockRejectedValueOnce(new Error('disk unavailable'));
+    await expect(
+      useTranscriptStore.getState().addTranscript({ id: 'new', text: 'raw', provider: 'cloud' }),
+    ).rejects.toThrow();
+    expect(mockSaveTranscripts).not.toHaveBeenCalled();
+  });
+});
+
+describe('a reload while a write is in progress', () => {
+  it('never collects audio that a failed row is about to point at', async () => {
+    useTranscriptStore.setState({ transcripts: [], isLoaded: true });
+    let stored: Transcript[] = [];
+    mockGetTranscripts.mockImplementation(async () => stored);
+    mockSaveTranscripts.mockImplementation(async (rows: Transcript[]) => {
+      stored = rows;
+    });
+    let finishRetain!: (uri: string) => void;
+    mockRetainTranscriptAudio.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRetain = resolve;
+        }),
+    );
+    const write = useTranscriptStore.getState().addFailedTranscript({
+      id: 'new',
+      audioUrl: 'file://tmp/source.m4a',
+      provider: 'cloud',
+      errorMessage: 'network down',
+    });
+    for (let index = 0; index < 10 && !finishRetain; index++) await Promise.resolve();
+    const reload = useTranscriptStore.getState().loadTranscripts();
+    for (let index = 0; index < 10; index++) await Promise.resolve();
+    finishRetain('file://docs/transcript-audio/new.m4a');
+    await Promise.all([write, reload]);
+    for (const [keepUris] of mockGarbageCollectTranscriptAudio.mock.calls) {
+      expect(keepUris).toContain('file://docs/transcript-audio/new.m4a');
+    }
+    expect(mockGarbageCollectTranscriptAudio).toHaveBeenCalled();
+  });
+});
+
+describe('a write during a reload', () => {
+  it('keeps the written row when the reload read storage before the write', async () => {
+    useTranscriptStore.setState({ transcripts: [], isLoaded: true });
+    let finishRead!: (rows: Transcript[]) => void;
+    mockGetTranscripts.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRead = resolve;
+        }),
+    );
+    const reload = useTranscriptStore.getState().loadTranscripts();
+    for (let index = 0; index < 10 && !finishRead; index++) await Promise.resolve();
+    const write = useTranscriptStore
+      .getState()
+      .addTranscript({ id: 'new', text: 'raw', provider: 'cloud' });
+    for (let index = 0; index < 10; index++) await Promise.resolve();
+    finishRead([]);
+    await Promise.all([reload, write]);
+    expect(useTranscriptStore.getState().transcripts.map((row) => row.id)).toEqual(['new']);
+  });
+});
+
+describe('recovering a retry that was killed mid-request', () => {
+  const route = {
+    provider: 'byok',
+    inferenceRoute: {
+      mode: 'providers',
+      scope: 'dictation',
+      providerId: 'groq',
+      modelId: 'whisper-large-v3-turbo',
+      endpoint: 'https://api.groq.com/openai/v1',
+      credentialRef: 'provider.groq',
+    },
+  } as const;
+  const original = (): Transcript =>
+    failedTranscript({ id: 't1', jobId: 'job-1', provider: 'byok', updatedAt: Date.now() });
+
+  it('completes the original row with the recovered text instead of adding a row', async () => {
+    mockGetTranscripts.mockResolvedValueOnce([original()]);
+    mockListPendingProviderRecoveryJobs.mockReturnValue([
+      {
+        jobId: 'job-1-retry-1700000000000',
+        route,
+        requestContext: 'keyboard',
+        result: { text: 'recovered words', route },
+        audioUri: 'file://docs/transcript-audio/t1.m4a',
+      },
+    ]);
+    await useTranscriptStore.getState().loadTranscripts();
+    const rows = useTranscriptStore.getState().transcripts;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: 't1',
+      status: 'completed',
+      text: 'recovered words',
+      audioUrl: undefined,
+      errorMessage: undefined,
+    });
+    expect(mockClearKeyboardProviderRecovery).toHaveBeenCalledWith('job-1-retry-1700000000000');
+    expect(mockGarbageCollectTranscriptAudio).toHaveBeenCalledWith([]);
+  });
+
+  it('keeps one failed row for an interrupted retry instead of two sharing its audio', async () => {
+    mockGetTranscripts.mockResolvedValueOnce([original()]);
+    mockListPendingProviderRecoveryJobs.mockReturnValue([
+      {
+        jobId: 'job-1-retry-1700000000000',
+        route,
+        requestContext: 'keyboard',
+        audioUri: 'file://docs/transcript-audio/t1.m4a',
+      },
+    ]);
+    await useTranscriptStore.getState().loadTranscripts();
+    const rows = useTranscriptStore.getState().transcripts;
+    expect(rows).toEqual([
+      expect.objectContaining({
+        id: 't1',
+        status: 'failed',
+        audioUrl: 'file://docs/transcript-audio/t1.m4a',
+      }),
+    ]);
+    expect(mockClearKeyboardProviderRecovery).toHaveBeenCalledWith('job-1-retry-1700000000000');
+    expect(mockGarbageCollectTranscriptAudio).toHaveBeenCalledWith([
+      'file://docs/transcript-audio/t1.m4a',
+    ]);
+  });
+
+  it('matches a retry of a row without a job id by the row id', async () => {
+    mockGetTranscripts.mockResolvedValueOnce([{ ...original(), jobId: undefined }]);
+    mockListPendingProviderRecoveryJobs.mockReturnValue([
+      {
+        jobId: 't1-retry-1700000000000',
+        route,
+        requestContext: 'recording',
+        audioUri: 'file://docs/transcript-audio/t1.m4a',
+      },
+    ]);
+    await useTranscriptStore.getState().loadTranscripts();
+    expect(useTranscriptStore.getState().transcripts.map((row) => row.id)).toEqual(['t1']);
+  });
+});
+
+describe('retry destination in Bring Your Own Key mode', () => {
+  const currentRoute = {
+    provider: 'byok',
+    inferenceRoute: {
+      mode: 'providers',
+      scope: 'dictation',
+      providerId: 'openai',
+      modelId: 'gpt-4o-mini-transcribe',
+      endpoint: 'https://api.openai.com/v1',
+      credentialRef: 'provider.openai',
+    },
+    cleanupUnavailable: 'Choose a cleanup provider in AI Models. Your raw transcript is saved.',
+  } as const;
+  beforeEach(() => {
+    mockProcessingModeState.activeMode = 'providers';
+    mockSnapshotTranscriptionJob.mockReturnValue(currentRoute);
+  });
+
+  it('sends a Cloud recording to the current dictation provider, not back to Cloud', async () => {
+    useTranscriptStore.setState({
+      transcripts: [failedTranscript({ cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' } })],
+    });
+    await useTranscriptStore.getState().retryTranscript('t1');
+    expect(mockSnapshotTranscriptionJob).toHaveBeenCalledWith('dictation');
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'byok',
+        inferenceRoute: currentRoute.inferenceRoute,
+        cleanupRoute: undefined,
+        cleanupUnavailable: currentRoute.cleanupUnavailable,
+      }),
+    );
+  });
+
+  it('follows the current upload choice for a Cloud file upload', async () => {
+    mockSnapshotTranscriptionJob.mockReturnValue({
+      provider: 'cloud',
+      cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+    });
+    useTranscriptStore.setState({
+      transcripts: [failedTranscript({ provider: 'local', requestContext: 'file' })],
+    });
+    await useTranscriptStore.getState().retryTranscript('t1');
+    expect(mockSnapshotTranscriptionJob).toHaveBeenCalledWith('upload');
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'cloud', inferenceRoute: undefined }),
+    );
+  });
+
+  it('keeps a provider recording on its original route', async () => {
+    const original = {
+      mode: 'providers',
+      scope: 'dictation',
+      providerId: 'groq',
+      modelId: 'whisper-large-v3-turbo',
+      endpoint: 'https://api.groq.com/openai/v1',
+      credentialRef: 'provider.groq',
+    } as const;
+    useTranscriptStore.setState({
+      transcripts: [failedTranscript({ provider: 'byok', inferenceRoute: original })],
+    });
+    await useTranscriptStore.getState().retryTranscript('t1');
+    expect(mockSnapshotTranscriptionJob).not.toHaveBeenCalled();
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'byok', inferenceRoute: original }),
+    );
+  });
+
+  it('keeps a failed rerouted recording on its own route, so it follows the mode again', async () => {
+    useTranscriptStore.setState({ transcripts: [failedTranscript()] });
+    mockTranscribeAndCleanup.mockRejectedValueOnce(new Error('network down'));
+    await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toThrow();
+    const saved = useTranscriptStore.getState().transcripts[0];
+    expect(saved.provider).toBe(failedTranscript().provider);
+    expect(saved.inferenceRoute).toBeUndefined();
+    expect(saved.status).toBe('failed');
+
+    mockProcessingModeState.activeMode = 'cloud';
+    mockTranscribeAndCleanup.mockClear();
+    await useTranscriptStore.getState().retryTranscript('t1');
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'cloud', inferenceRoute: undefined }),
+    );
+  });
 });

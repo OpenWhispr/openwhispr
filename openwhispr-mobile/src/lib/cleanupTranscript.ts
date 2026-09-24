@@ -90,7 +90,9 @@ export async function cleanupTranscript(
     return rawText;
   }
   const configuredRoute = snapshottedRoute ?? cfg?.inference?.[scope];
-  if (options.requireProvider && !snapshottedRoute && configuredRoute?.mode !== 'providers') {
+  const requireProvider =
+    options.requireProvider || (!configuredRoute && activeMode === 'providers');
+  if (requireProvider && !snapshottedRoute && configuredRoute?.mode !== 'providers') {
     options.onSkipped?.(
       `Choose ${scope === 'agent' ? 'a voice assistant' : 'a cleanup'} provider in AI Models. Your raw transcript is saved.`,
     );
@@ -178,6 +180,12 @@ export async function cleanupTranscript(
     );
     if (__DEV__) {
       console.log(`[cleanup] elapsedMs=${Date.now() - startedAt} retries=${retryCount}`);
+    }
+    // A reasoning model can spend its whole reply thinking; an empty result
+    // would otherwise replace the transcript with nothing.
+    if (!result.text.trim()) {
+      options.onSkipped?.('Cleanup returned no text. Your raw transcript is saved.');
+      return rawText;
     }
     return result.text;
   } catch (err) {

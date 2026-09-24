@@ -159,3 +159,12 @@ it('keeps note chat on OpenWhispr Cloud when no provider or On-Device selection 
   ).resolves.toMatchObject({ text: 'cloud answer' });
   expect(api.post).toHaveBeenCalledTimes(1);
 });
+
+it('drops an unclosed thinking block from a truncated provider reply', async () => {
+  jest
+    .mocked(processProviderText)
+    .mockResolvedValue({ text: '<think>a</think>Clean result.<think>cut off', model: 'm' });
+  await expect(ReasoningService.processText({ text: 'um result', routing: {} })).resolves.toEqual(
+    expect.objectContaining({ text: 'Clean result.' }),
+  );
+});

@@ -158,3 +158,21 @@ it('refuses a stored route for a provider the mobile build no longer ships', () 
     'The original keyboard provider route is unavailable. Record again.',
   );
 });
+
+it('recovers a BYOK keyboard job with no text route as unavailable, never Cloud', () => {
+  mockStorage.set(
+    'keyboard_inference_route',
+    JSON.stringify({
+      version: 1,
+      jobId: 'byok-job',
+      route: { provider: 'byok', inferenceRoute: mockRoute.inferenceRoute },
+    }),
+  );
+  const route = readKeyboardInferenceRoute('byok-job');
+  expect(route?.cleanupRoute).toBeUndefined();
+  expect(route?.agentRoute).toBeUndefined();
+  expect(route?.cleanupUnavailable).toBe('Cleanup is unavailable. Your raw transcript is saved.');
+  expect(route?.agentUnavailable).toBe(
+    'The voice assistant is unavailable. Your raw transcript is saved.',
+  );
+});

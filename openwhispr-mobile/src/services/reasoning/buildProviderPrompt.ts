@@ -15,6 +15,12 @@ export interface ProviderPrompt {
 const DICTIONARY_PREFIX =
   'Custom Dictionary (use these exact spellings when they appear in the text): ';
 
+// Reasoning models wrap their thinking in <think> blocks. A reply cut off by the
+// token limit leaves the last block unclosed, so it runs to the end of the text.
+export function stripThinkingTags(text: string): string {
+  return text.replace(/<think>[\s\S]*?(?:<\/think>|$)/g, '').trim();
+}
+
 function languageInstruction(language: string | undefined): string | undefined {
   if (!language || language === 'en') return undefined;
   const entry: { code: string; instruction?: string } | undefined = languageRegistry.languages.find(

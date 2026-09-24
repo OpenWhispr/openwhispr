@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { AudioTools } from '../../modules/audio-tools/src';
 import {
   isOggOpus,
@@ -33,6 +34,43 @@ export interface UseFileUploadOptions {
 }
 
 const MAX_FILE_SIZE_MB = Math.round(MAX_FILE_SIZE / (1024 * 1024));
+
+// OpenAI-compatible transcription endpoints pick the decoder from the file
+// extension. A file the provider rejects would become a failed row whose retry
+// (pinned to the same provider) can never succeed, so it is refused up front.
+const PROVIDER_AUDIO_EXTENSIONS = new Set([
+  'flac',
+  'mp3',
+  'mp4',
+  'mpeg',
+  'mpga',
+  'm4a',
+  'ogg',
+  'wav',
+  'webm',
+]);
+
+async function assertProviderAcceptsFile(
+  file: DocumentPicker.DocumentPickerAsset,
+  extension: string | undefined,
+): Promise<void> {
+  if (!extension || !PROVIDER_AUDIO_EXTENSIONS.has(extension)) {
+    throw new Error(
+      'Your provider accepts FLAC, MP3, MP4, M4A, OGG, WAV, or WEBM audio. Choose a file in one of those formats.',
+    );
+  }
+  // The picker does not always report a size; the provider's limit is hard.
+  const size =
+    file.size ??
+    (await FileSystem.getInfoAsync(file.uri)
+      .then((info) => (info.exists ? info.size : undefined))
+      .catch(() => undefined));
+  if (size !== undefined && size > MAX_FILE_SIZE) {
+    throw new Error(
+      `Your provider accepts audio files up to ${MAX_FILE_SIZE_MB} MB. Choose a smaller file.`,
+    );
+  }
+}
 
 // The native module rejects unreadable/unsupported audio with these codes;
 // surface a clear instruction instead of the raw AVFoundation error.
@@ -100,6 +138,10 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
         throw new Error(
           `File is too large. Please select an audio file under ${MAX_FILE_SIZE_MB}MB.`,
         );
+      }
+
+      if (transcriptionProvider === 'byok') {
+        await assertProviderAcceptsFile(file, extension);
       }
 
       // On-device Opus decoding isn't supported yet; the cloud transcriber
