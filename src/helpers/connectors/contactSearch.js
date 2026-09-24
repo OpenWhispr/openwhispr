@@ -3,7 +3,7 @@ const NON_PERSON_DOMAIN = /(resource|group)\.calendar\.google\.com$/i;
 function normalize(text) {
   return String(text || "")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
 }
