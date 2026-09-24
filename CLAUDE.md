@@ -163,6 +163,12 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **windowConfig.js**: Centralized window configuration
 - **windowManager.js**: Window creation and lifecycle management
 - **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app. `POST /v1/transcribe` takes a file **path** (never audio) and runs the user's downloaded local model through `IPCHandlers.transcribeLocalFile`, approving the path with `approveAudioPath` first; `GET /v1/transcribe/models` lists local models with download state and the app's default (`localTranscriptionModels.js`, read from the `.env` pre-warm values).
+- **connectors/**: Agent connectors
+  - `connectorManager.js` owns every outside action: `prepare` → ApprovalCard → `commit` for anything other people see, `runDirect` for private drafts. The model can never reach `commit`
+  - `pendingActions.js`: pending → committing → sent/failed/unknown; actions are bound to the connection (account, workspace, `generation`) they were prepared on
+  - `connector_actions` (SQLite) is the durable receipt: destination labels, states and links only, never content. Interrupted rows are reconciled on launch (committing → unknown)
+  - Policy fails closed (`connectorPolicy.js`'s `connectorPolicyState`): only a successful, well-formed snapshot allows; unresolvable, any error code, or >1.5s → unavailable; org switch `features.connectorsEnabled`
+  - `emailConnector.js` opens Gmail/Outlook/mailto compose windows (`emailCompose.js`, shared ESM); a body that won't fit the 2,000-char compose URL goes to the clipboard instead, then the subject too if it's still too long; a recipient list that alone doesn't fit is refused
 - **postMigrationDetector.js**: Detects users returning from the pre-Gizmo bundle ID via a `.bundle-migrated` sentinel in userData; consumed by `ipcHandlers.js` to drive the `PostMigrationOnboarding` modal
 
 ### React Components (src/components/)
@@ -683,6 +689,7 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 4. Standalone commands (no text selected) run through the chat pipeline (`src/components/dictation/AssistantPanel.tsx`): chat tools (notes search/create/update, calendar, web search, clipboard, `get_snippet` — triggers listed in the tool description, body fetched on demand — and `update_dictionary` / `update_snippets`, which write through the settings store so the change syncs like a UI edit), RAG memory, and the custom dictionary plus snippet triggers injected into the system prompt. Conversations persist in the `agent_conversations` table and are browsable from the ControlPanel chat
 5. Response delivery: a capture with `status: "editable"` (a focused writable non-terminal field with no selection) plus auto-paste banks a `deliverySessionId`; the completed answer is pasted via `paste-at-captured-target`, which revalidates the target and fails closed to the panel + clipboard on any change (`assistantResponseDelivery.ts`, `pasteAtCapturedTarget` in `selectionManager.js`). A follow-up spoken while the panel is already open stays panel-first. Cancelled or empty responses never paste and never touch the clipboard
 6. Selection edits are unchanged: highlighted text goes through the `dictationAgent` scope and is safely replaced in place — it never opens the panel
+7. Connector tools (email_draft, find_contact; paid, policy-gated) run through src/helpers/connectors; approval cards open the panel and turn off caret paste for that turn
 
 **Storage & IPC**:
 
