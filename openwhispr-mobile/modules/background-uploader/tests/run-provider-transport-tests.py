@@ -2,6 +2,7 @@
 import http.server
 import os
 from pathlib import Path
+import ssl
 import subprocess
 import tempfile
 import threading
@@ -37,11 +38,27 @@ def main():
 
         class Origin(http.server.BaseHTTPRequestHandler):
             cancelled_requests = 0
+            same_origin_forwarded = 0
 
             def do_GET(self):
                 if self.path == "/must-not-start":
                     type(self).cancelled_requests += 1
-                if self.path == "/slow":
+                if self.path == "/same-origin-sink":
+                    type(self).same_origin_forwarded += 1
+                if self.path == "/trickle":
+                    # Each byte arrives inside the idle timeout; only a total limit ends it.
+                    self.send_response(200)
+                    self.send_header("Content-Length", "10")
+                    self.end_headers()
+                    for _ in range(10):
+                        self.wfile.write(b"x")
+                        self.wfile.flush()
+                        time.sleep(0.5)
+                elif self.path == "/redirect-same":
+                    self.send_response(307)
+                    self.send_header("Location", "/same-origin-sink")
+                    self.end_headers()
+                elif self.path == "/slow":
                     time.sleep(2)
                     self.send_response(200)
                     self.end_headers()
@@ -64,21 +81,31 @@ def main():
                 pass
 
         origin = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Origin)
-        for server in (receiver, origin):
+        certificate = Path(output) / "self-signed.pem"
+        subprocess.run([
+            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+            "-subj", "/CN=127.0.0.1", "-keyout", str(certificate), "-out", str(certificate),
+        ], check=True, capture_output=True)
+        untrusted = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Origin)
+        tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        tls.load_cert_chain(certificate)
+        untrusted.socket = tls.wrap_socket(untrusted.socket, server_side=True)
+        for server in (receiver, origin, untrusted):
             threading.Thread(target=server.serve_forever, daemon=True).start()
         try:
             subprocess.run([executable], env={
                 **os.environ,
                 "PROVIDER_TEST_BASE_URL": f"http://127.0.0.1:{origin.server_port}",
-            }, timeout=25, check=True)
+                "PROVIDER_TEST_TLS_URL": f"https://127.0.0.1:{untrusted.server_port}",
+            }, timeout=60, check=True)
             assert RedirectReceiver.forwarded == 0, "Redirect forwarded credentials to another origin"
+            assert Origin.same_origin_forwarded == 0, "Redirect was followed within the same origin"
             assert Origin.cancelled_requests == 0, "A request cancelled before registration reached the server"
-            print("Second origin received zero redirected requests; pre-start cancellation sent no request.")
+            print("No redirect was followed; pre-start cancellation sent no request.")
         finally:
-            origin.shutdown()
-            receiver.shutdown()
-            origin.server_close()
-            receiver.server_close()
+            for server in (origin, receiver, untrusted):
+                server.shutdown()
+                server.server_close()
 
 
 if __name__ == "__main__":

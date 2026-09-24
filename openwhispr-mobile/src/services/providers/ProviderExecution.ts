@@ -1,6 +1,11 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { createProviderCredentialScope } from './ProviderCredentialScope';
-import { buildApiUrl, isSecureHttpEndpoint, normalizeBaseUrl } from '@/lib/providerEndpoints';
+import {
+  buildApiUrl,
+  getModelListBaseCandidates,
+  isSecureHttpEndpoint,
+  normalizeBaseUrl,
+} from '@/lib/providerEndpoints';
 import modelCatalog from '@/config/providerCatalog.json';
 import {
   MOBILE_PROVIDER_IDS,
@@ -83,6 +88,8 @@ export interface ProviderSetupInput {
 export interface ProviderModelDiscovery {
   models: Array<{ id: string; name: string }>;
   verification: 'catalog-only';
+  /** The base that answered; a bare custom server origin may resolve to its /v1 API. */
+  endpoint: string;
 }
 
 export interface ProviderConnectionResult {
@@ -91,6 +98,8 @@ export interface ProviderConnectionResult {
   providerId: string;
   modelId: string;
   scope: ProviderRoute['scope'];
+  /** The base that answered; a bare custom server origin may resolve to its /v1 API. */
+  endpoint: string;
 }
 
 export class ProviderExecutionError extends Error {
@@ -175,6 +184,13 @@ function assertEndpoint(route: ProviderRoute): string {
   return endpoint;
 }
 
+function audioTooLargeError(): ProviderExecutionError {
+  return new ProviderExecutionError(
+    'AUDIO_TOO_LARGE',
+    'This audio is larger than the 25 MB provider limit. Record a shorter clip or choose a smaller file.',
+  );
+}
+
 async function apiKeyForRoute(
   route: ProviderRoute,
   getCredential: ProviderExecutionDependencies['getCredential'],
@@ -201,6 +217,15 @@ async function apiKeyForRoute(
     );
   }
   return credential.apiKey;
+}
+
+async function prepareRoute(
+  route: ProviderRoute,
+  getCredential: ProviderExecutionDependencies['getCredential'],
+): Promise<{ endpoint: string; apiKey: string | null }> {
+  assertSupportedProvider(route);
+  const endpoint = assertEndpoint(route);
+  return { endpoint, apiKey: await apiKeyForRoute(route, getCredential) };
 }
 
 function authHeaders(apiKey: string | null): Record<string, string> {
@@ -247,6 +272,13 @@ const FINAL_NATIVE_FAILURES: Record<string, string> = {
   PROVIDER_RECOVERY_UNAVAILABLE:
     'The recording could not be saved for recovery. The original audio is retained.',
   PROVIDER_TRANSPORT_UNAVAILABLE: 'Update OpenWhispr to use your own provider key.',
+  PROVIDER_INVALID_RECOVERY_ROUTE:
+    'The provider settings for this recording are invalid. Check AI Models, then retry from history.',
+  // Not a cancellation: the audio is kept, so the user can retry it.
+  PROVIDER_BACKGROUND_EXPIRED: 'iOS stopped the request in the background. Retry from history.',
+  // Covers failed TLS handshakes too, not only untrusted certificates.
+  PROVIDER_CERTIFICATE_UNTRUSTED:
+    "Couldn't connect securely to this server. Check that its certificate is valid and trusted by iOS.",
 };
 
 function normalizeTransportFailure(error: unknown, providerId: string): Error {
@@ -254,6 +286,7 @@ function normalizeTransportFailure(error: unknown, providerId: string): Error {
   if (error instanceof Error && error.name === 'AbortError') return error;
   const nativeCode = objectValue(error)?.code;
   if (nativeCode === 'PROVIDER_CANCELLED') return abortError();
+  if (nativeCode === 'PROVIDER_AUDIO_TOO_LARGE') return audioTooLargeError();
   if (typeof nativeCode === 'string' && FINAL_NATIVE_FAILURES[nativeCode]) {
     return new ProviderExecutionError(nativeCode, FINAL_NATIVE_FAILURES[nativeCode]);
   }
@@ -321,10 +354,18 @@ function catalogModelConfig(
   };
 }
 
-function responseTextFromChat(payload: unknown): string | null {
+function responseTextFromChat(payload: unknown, providerId: string): string | null {
   const choices = objectValue(payload)?.choices;
   if (!Array.isArray(choices)) return null;
-  return nonEmptyText(objectValue(objectValue(choices[0])?.message)?.content);
+  const choice = objectValue(choices[0]);
+  // A cut-off cleanup would silently replace the full transcript it was given.
+  if (choice?.finish_reason === 'length') {
+    throw new ProviderExecutionError(
+      'PROVIDER_RESPONSE_TRUNCATED',
+      `${providerDisplayName(providerId)} stopped before finishing. Try a model with a larger output limit.`,
+    );
+  }
+  return nonEmptyText(objectValue(choice?.message)?.content);
 }
 
 function transcriptionDuration(payload: unknown): number {
@@ -332,14 +373,45 @@ function transcriptionDuration(payload: unknown): number {
   return typeof duration === 'number' && Number.isFinite(duration) && duration >= 0 ? duration : 0;
 }
 
+// Setup checks only: a custom server entered as a bare origin usually serves its
+// API under /v1. Built-in providers have fixed endpoints and are never probed.
+async function firstWorkingEndpoint<T>(
+  route: ProviderRoute,
+  endpoint: string,
+  attempt: (candidate: string) => Promise<T>,
+): Promise<{ result: T; endpoint: string }> {
+  const candidates =
+    route.providerId === 'custom' ? getModelListBaseCandidates(endpoint) : [endpoint];
+  let primaryError: unknown;
+  for (const [index, candidate] of candidates.entries()) {
+    try {
+      return { result: await attempt(candidate), endpoint: candidate };
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw error;
+      if (index === 0) primaryError = error;
+    }
+  }
+  throw primaryError;
+}
+
 async function processText(
   dependencies: ProviderExecutionDependencies,
   input: ProviderTextInput,
 ): Promise<{ text: string; model: string }> {
+  const { endpoint, apiKey } = await prepareRoute(input.route, dependencies.getCredential);
+  return {
+    text: await requestChat(dependencies, input, endpoint, apiKey),
+    model: input.route.modelId,
+  };
+}
+
+async function requestChat(
+  dependencies: ProviderExecutionDependencies,
+  input: ProviderTextInput,
+  endpoint: string,
+  apiKey: string | null,
+): Promise<string> {
   const { route } = input;
-  assertSupportedProvider(route);
-  const endpoint = assertEndpoint(route);
-  const apiKey = await apiKeyForRoute(route, dependencies.getCredential);
   const modelConfig = catalogModelConfig(route.providerId, route.modelId);
   const conversation = [...(input.messages ?? []), { role: 'user' as const, content: input.text }];
   const response = await safeRequest(
@@ -361,10 +433,7 @@ async function processText(
     },
   );
   const payload = await parseJson(response, route.providerId);
-  return {
-    text: requireText(responseTextFromChat(payload), route.providerId),
-    model: route.modelId,
-  };
+  return requireText(responseTextFromChat(payload, route.providerId), route.providerId);
 }
 
 async function transcribe(
@@ -372,16 +441,9 @@ async function transcribe(
   input: ProviderTranscriptionInput,
 ): Promise<{ text: string; duration: number }> {
   const { route } = input;
-  assertSupportedProvider(route);
-  const endpoint = assertEndpoint(route);
-  const apiKey = await apiKeyForRoute(route, dependencies.getCredential);
+  const { endpoint, apiKey } = await prepareRoute(route, dependencies.getCredential);
   const size = await dependencies.fileSize(input.audioUri);
-  if (size !== undefined && size > PROVIDER_AUDIO_LIMIT_BYTES) {
-    throw new ProviderExecutionError(
-      'AUDIO_TOO_LARGE',
-      'This audio is larger than the 25 MB provider limit. Record a shorter clip or choose a smaller file.',
-    );
-  }
+  if (size !== undefined && size > PROVIDER_AUDIO_LIMIT_BYTES) throw audioTooLargeError();
   const parameters: Record<string, string> = { model: route.modelId };
   if (input.language && input.language !== 'auto') parameters.language = input.language;
   if (input.prompt) parameters.prompt = input.prompt;
@@ -424,9 +486,20 @@ async function discoverModels(
   input: ProviderSetupInput,
 ): Promise<ProviderModelDiscovery> {
   const { route } = input;
-  assertSupportedProvider(route);
-  const endpoint = assertEndpoint(route);
-  const apiKey = await apiKeyForRoute(route, dependencies.getCredential);
+  const { endpoint, apiKey } = await prepareRoute(route, dependencies.getCredential);
+  const discovered = await firstWorkingEndpoint(route, endpoint, (candidate) =>
+    listModels(dependencies, input, candidate, apiKey),
+  );
+  return { models: discovered.result, verification: 'catalog-only', endpoint: discovered.endpoint };
+}
+
+async function listModels(
+  dependencies: ProviderExecutionDependencies,
+  input: ProviderSetupInput,
+  endpoint: string,
+  apiKey: string | null,
+): Promise<Array<{ id: string; name: string }>> {
+  const { route } = input;
   const response = await safeRequest(dependencies, route, buildApiUrl(endpoint, '/models'), {
     method: 'GET',
     headers: authHeaders(apiKey),
@@ -448,7 +521,7 @@ async function discoverModels(
       `${providerDisplayName(route.providerId)} returned no usable models.`,
     );
   }
-  return { models, verification: 'catalog-only' };
+  return models;
 }
 
 async function testConnection(
@@ -456,29 +529,31 @@ async function testConnection(
   input: ProviderSetupInput,
 ): Promise<ProviderConnectionResult> {
   const { route } = input;
-  if (!isTranscriptionScope(route.scope)) {
-    await processText(dependencies, {
-      route,
-      text: 'Reply with OK.',
-      systemPrompt: 'This is a provider connection test. Reply only with OK.',
-      signal: input.signal,
-    });
-    return {
-      ok: true,
-      verification: 'inference',
-      providerId: route.providerId,
-      modelId: route.modelId,
-      scope: route.scope,
-    };
-  }
-  await discoverModels(dependencies, input);
-  return {
+  const identity = {
     ok: true,
-    verification: 'catalog-only',
     providerId: route.providerId,
     modelId: route.modelId,
     scope: route.scope,
-  };
+  } as const;
+  if (isTranscriptionScope(route.scope)) {
+    const { endpoint } = await discoverModels(dependencies, input);
+    return { ...identity, verification: 'catalog-only', endpoint };
+  }
+  const prepared = await prepareRoute(route, dependencies.getCredential);
+  const { endpoint } = await firstWorkingEndpoint(route, prepared.endpoint, (candidate) =>
+    requestChat(
+      dependencies,
+      {
+        route,
+        text: 'Reply with OK.',
+        systemPrompt: 'This is a provider connection test. Reply only with OK.',
+        signal: input.signal,
+      },
+      candidate,
+      prepared.apiKey,
+    ),
+  );
+  return { ...identity, verification: 'inference', endpoint };
 }
 
 const defaultDependencies: ProviderExecutionDependencies = {

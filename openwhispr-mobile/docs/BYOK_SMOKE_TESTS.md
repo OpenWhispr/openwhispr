@@ -37,9 +37,11 @@ Run from `openwhispr-mobile/`: `npm test -- --runInBand`, `npm run typecheck`, `
 
 ## Network and native gates
 
-- BYOK HTTP uses an ephemeral URLSession with finite UIKit background execution time and a 300 s idle timeout. Apple background URLSessions always follow redirects, so they are not used for direct provider credentials.
+- BYOK HTTP uses an ephemeral URLSession with finite UIKit background execution time, a 300 s idle timeout, and a 10 min total limit. Apple background URLSessions always follow redirects, so they are not used for direct provider credentials.
 - Rebuild iOS after the native provider transport/config plugins change. A build without the native bridge must fail closed, with no JavaScript fetch fallback.
 - Verify HTTP 301/302/307/308 responses never forward credentials or audio to another destination, including same-origin redirects. Keep normal TLS certificate validation enabled.
+- Point a Custom server at a self-signed HTTPS endpoint. The check must say it couldn't connect securely and point at the certificate, not that the server is unreachable.
+- Lock the phone during a long provider upload until iOS ends background time. The recording must stay in history as a failed item that says iOS stopped the request, and retrying it must work.
 - Check public HTTPS; rejected public HTTP; LAN IP HTTP; `.local`; Tailscale IP and hostname; IPv6 loopback/link-local; unreachable hosts; and denied Local Network permission. Broad private-CIDR and `ts.net` ATS exceptions are not installed; use HTTPS where ATS blocks HTTP.
 
 Record credential types and sanitized outcomes only. Do not attach keys, access tokens, sensitive URLs, transcript content, or raw responses.

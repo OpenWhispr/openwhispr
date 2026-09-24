@@ -133,7 +133,7 @@ EXPO_NO_DOTENV=1 SENTRY_DISABLE_AUTO_UPLOAD=true OPENWHISPR_APP_ENV=production n
 python3 modules/background-uploader/tests/run-provider-transport-tests.py
 ```
 
-The native transport regression requires macOS, Python 3, and Xcode Command Line Tools. It compiles Foundation-only Swift and uses local HTTP servers with synthetic credentials to check redirect refusal, response redaction, private-host rules, and secret-free recovery metadata. It does not replace compiling the Expo module for iOS or testing background URLSession on a device.
+The native transport regression requires macOS, Python 3, and Xcode Command Line Tools. It compiles Foundation-only Swift and uses local HTTP servers with synthetic credentials to check redirect refusal (including same-origin redirects), response redaction, the 300 s idle and 10 min total time limits, background-expiry and untrusted-certificate errors, the native 25 MB audio cap, private-host rules, and secret-free recovery metadata. Mobile CI runs it on a macOS runner. It does not replace compiling the Expo module for iOS or testing background URLSession on a device.
 
 Build a fresh native iOS app after changing any native module or config plugin. Do not use a JavaScript-only update to introduce the provider request transport.
 

@@ -337,12 +337,9 @@ public class BackgroundUploaderModule: Module {
     let snapshotJSON = request.routeSnapshot
     let metadata = ProviderJobMetadata.decode(snapshotJSON)
     if let snapshotJSON {
-      guard let metadata, metadata.route.provider == "byok", metadata.matchesDestination(url),
-            ["dictation", "upload"].contains(metadata.route.inferenceRoute?.scope ?? ""),
-            let audioUri = request.recoveryAudioUri ?? request.fileUri,
-            let audioURL = audioUri.hasPrefix("file://") ? URL(string: audioUri) : (audioUri.hasPrefix("/") ? URL(fileURLWithPath: audioUri) : nil),
-            audioURL.isFileURL, FileManager.default.fileExists(atPath: audioURL.path) else {
-        promise.reject("PROVIDER_INVALID_RECOVERY_ROUTE", "The original recording and provider route are required for recovery.")
+      let audioUri = request.recoveryAudioUri ?? request.fileUri ?? ""
+      if let error = ProviderRequestTransport.recoveryError(snapshotJSON: snapshotJSON, destination: url, audioUri: audioUri) {
+        promise.reject(error.code, error.message)
         return
       }
       do { try ProviderRecoveryStore.savePending(snapshotJSON: snapshotJSON, audioUri: audioUri) }
@@ -354,10 +351,12 @@ public class BackgroundUploaderModule: Module {
     var headers = request.headers
     var bodyFileURL: URL?
     if let fileUri = request.fileUri {
-      let fileURL = fileUri.hasPrefix("file://") ? URL(string: fileUri) : (fileUri.hasPrefix("/") ? URL(fileURLWithPath: fileUri) : nil)
-      guard request.body == nil, let fileURL, fileURL.isFileURL,
-            FileManager.default.fileExists(atPath: fileURL.path) else {
-        promise.reject("PROVIDER_AUDIO_UNAVAILABLE", "The recorded audio file is unavailable.")
+      guard request.body == nil, let fileURL = ProviderRequestTransport.fileURL(from: fileUri) else {
+        promise.reject(ProviderTransportError.audioUnavailable.code, ProviderTransportError.audioUnavailable.message)
+        return
+      }
+      if let error = ProviderRequestTransport.audioFileError(fileURL) {
+        promise.reject(error.code, error.message)
         return
       }
       let fileName = request.fileName ?? fileURL.lastPathComponent
@@ -380,7 +379,7 @@ public class BackgroundUploaderModule: Module {
       var backgroundTask: UIBackgroundTaskIdentifier = .invalid
       backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Provider request") {
         // iOS terminates the app unless the task ends inside this handler.
-        self.providerTransport.cancel(requestId: request.requestId)
+        self.providerTransport.expire(requestId: request.requestId)
         UIApplication.shared.endBackgroundTask(backgroundTask)
         backgroundTask = .invalid
       }

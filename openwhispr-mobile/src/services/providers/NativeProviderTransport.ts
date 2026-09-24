@@ -1,15 +1,16 @@
 import type { BackgroundUploader as BackgroundUploaderType } from '../../../modules/background-uploader/src';
 
 // The native transport's timeout is idle-based; whisper decodes of a 25 MB file
-// and long chat completions can stay silent for minutes. Swift clamps to 300.
+// and long chat completions can stay silent for minutes. Swift clamps it to 300
+// and separately stops any request after 10 minutes in total.
 const PROVIDER_REQUEST_TIMEOUT_SECONDS = 300;
 
 let requestSequence = 0;
 
 // Hermes has no DOMException global, so cancellations use a plain Error that
 // callers recognise by name, as they would a fetch AbortError.
-export function abortError(): Error {
-  const error = new Error('Provider request cancelled.');
+export function abortError(message = 'Provider request cancelled.'): Error {
+  const error = new Error(message);
   error.name = 'AbortError';
   return error;
 }

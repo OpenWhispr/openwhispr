@@ -86,6 +86,80 @@ struct ProviderRequestTransportTests {
     precondition(semaphore.wait(timeout: .now() + 10) == .success, "Error request timed out")
     precondition(failedResponseBody == "", "Provider error bodies must be redacted")
 
+    var sameOriginRedirectStatus: Int?
+    transport.request(
+      requestId: "same-origin-redirect-check", url: URL(string: "\(baseURL)/redirect-same")!, method: "POST",
+      headers: ["Authorization": "Bearer synthetic-test-credential"], body: Data("test payload".utf8),
+      bodyFileURL: nil, timeout: 5
+    ) { result in
+      if case .success(let response) = result { sameOriginRedirectStatus = response.status }
+      semaphore.signal()
+    }
+    precondition(semaphore.wait(timeout: .now() + 10) == .success, "Same-origin redirect timed out")
+    precondition(sameOriginRedirectStatus == 307, "Same-origin redirects must also be returned instead of followed")
+
+    var expired = false
+    transport.request(
+      requestId: "expire-check", url: URL(string: "\(baseURL)/slow")!, method: "GET",
+      headers: [:], body: nil, bodyFileURL: nil, timeout: 5
+    ) { result in
+      if case .failure(.backgroundExpired) = result { expired = true }
+      semaphore.signal()
+    }
+    transport.expire(requestId: "expire-check")
+    precondition(semaphore.wait(timeout: .now() + 10) == .success, "Background expiry timed out")
+    precondition(expired, "An expired background task must not look like a user cancellation")
+
+    precondition(ProviderRequestTransport().resourceTimeout == 600, "Provider requests are capped at 10 minutes in total")
+    let tricklingTransport = ProviderRequestTransport(resourceTimeout: 2)
+    var trickleFailed = false
+    let trickleStartedAt = Date()
+    tricklingTransport.request(
+      requestId: "trickle-check", url: URL(string: "\(baseURL)/trickle")!, method: "GET",
+      headers: [:], body: nil, bodyFileURL: nil, timeout: 5
+    ) { result in
+      if case .failure = result { trickleFailed = true }
+      semaphore.signal()
+    }
+    precondition(semaphore.wait(timeout: .now() + 15) == .success, "Trickle request timed out")
+    precondition(trickleFailed, "A server that keeps trickling bytes must hit the total request limit")
+    precondition(Date().timeIntervalSince(trickleStartedAt) < 5, "The total limit must stop the request before the trickle ends")
+
+    let tlsURL = ProcessInfo.processInfo.environment["PROVIDER_TEST_TLS_URL"]!
+    var untrusted = false
+    transport.request(
+      requestId: "tls-check", url: URL(string: "\(tlsURL)/json")!, method: "GET",
+      headers: [:], body: nil, bodyFileURL: nil, timeout: 5
+    ) { result in
+      if case .failure(.untrustedCertificate) = result { untrusted = true }
+      semaphore.signal()
+    }
+    precondition(semaphore.wait(timeout: .now() + 10) == .success, "TLS request timed out")
+    precondition(untrusted, "A self-signed certificate must be reported as untrusted, not as a network failure")
+
+    let limit = ProviderRequestTransport.audioLimitBytes
+    precondition(limit == 25 * 1024 * 1024)
+    let audioDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: audioDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: audioDirectory) }
+    func sparseFile(_ name: String, size: UInt64) throws -> URL {
+      let url = audioDirectory.appendingPathComponent(name)
+      FileManager.default.createFile(atPath: url.path, contents: nil)
+      let handle = try FileHandle(forWritingTo: url)
+      try handle.truncate(atOffset: size)
+      try handle.close()
+      return url
+    }
+    let atLimit = try sparseFile("at-limit.m4a", size: UInt64(limit))
+    let overLimit = try sparseFile("over-limit.m4a", size: UInt64(limit) + 1)
+    let missing = audioDirectory.appendingPathComponent("missing.m4a")
+    precondition(ProviderRequestTransport.audioFileError(atLimit) == nil, "Audio at the limit is accepted")
+    precondition(ProviderRequestTransport.audioFileError(overLimit) == .audioTooLarge, "Audio over the limit is refused natively")
+    precondition(ProviderRequestTransport.audioFileError(missing) == .audioUnavailable)
+    precondition(ProviderRequestTransport.fileURL(from: atLimit.absoluteString) == atLimit)
+    precondition(ProviderRequestTransport.fileURL(from: atLimit.path) == atLimit)
+    precondition(ProviderRequestTransport.fileURL(from: "https://example.com/audio.m4a") == nil)
+
     for value in ["https://example.com", "http://127.0.0.1", "http://192.168.1.2", "http://100.64.1.1", "http://host.local", "http://host.ts.net", "http://[::1]"] {
       precondition(ProviderRequestTransport.isAllowedURL(URL(string: value)!), "Expected allowed URL")
     }
@@ -107,6 +181,16 @@ struct ProviderRequestTransportTests {
     precondition(ProviderJobMetadata.decode(snapshot.replacingOccurrences(of: "https://api.openai.com/v1", with: "https://api.openai.com/v1?api_key=synthetic-secret")) == nil)
     precondition(ProviderJobMetadata.decode(snapshot.replacingOccurrences(of: "\"version\":1", with: "\"version\":2")) == nil)
     precondition(ProviderJobMetadata.decode(snapshot.replacingOccurrences(of: "\"scope\":\"dictation\"", with: "\"scope\":\"meeting\"")) == nil, "Meeting routes are not a mobile BYOK scope")
+    let openAIDestination = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
+    precondition(ProviderRequestTransport.recoveryError(snapshotJSON: snapshot, destination: openAIDestination, audioUri: atLimit.absoluteString) == nil)
+    precondition(
+      ProviderRequestTransport.recoveryError(snapshotJSON: snapshot, destination: openAIDestination, audioUri: missing.absoluteString) == .audioUnavailable,
+      "A missing recording is an audio failure, not an invalid route"
+    )
+    precondition(ProviderRequestTransport.recoveryError(snapshotJSON: snapshot, destination: openAIDestination, audioUri: overLimit.absoluteString) == .audioTooLarge)
+    precondition(ProviderRequestTransport.recoveryError(snapshotJSON: snapshot, destination: URL(string: "https://other.example.com/v1/audio/transcriptions")!, audioUri: atLimit.absoluteString) == .invalidRecoveryRoute)
+    precondition(ProviderRequestTransport.recoveryError(snapshotJSON: snapshot.replacingOccurrences(of: "\"scope\":\"dictation\"", with: "\"scope\":\"cleanup\""), destination: openAIDestination, audioUri: atLimit.absoluteString) == .invalidRecoveryRoute)
+    precondition(ProviderRequestTransport.recoveryError(snapshotJSON: snapshot, destination: openAIDestination, audioUri: "") == .audioUnavailable)
     let contextSnapshot = snapshot.replacingOccurrences(of: "\"jobId\":\"original-job\"", with: "\"jobId\":\"original-job\",\"requestContext\":\"recording\"")
     precondition(ProviderJobMetadata.decode(contextSnapshot)?.resultEnvelope(text: "raw")?.contains("recording") == true)
     let suiteName = "ProviderRecoveryTests.\(UUID().uuidString)"
@@ -122,6 +206,6 @@ struct ProviderRequestTransportTests {
     precondition(storage.string(forKey: "provider_pending_jobs")?.contains("synthetic-secret") == false)
     storage.set("{broken", forKey: "provider_pending_jobs")
     precondition(ProviderRecoveryStore.pendingJobIds(in: storage) == ["corrupt", "older"], "Per-job records must repair an interrupted index write")
-    print("Native redirect refusal, JSON, error redaction, URL rules, and secret-free recovery snapshots passed")
+    print("Native redirect refusal, expiry, time limits, certificate errors, audio checks, URL rules, and secret-free recovery snapshots passed")
   }
 }
