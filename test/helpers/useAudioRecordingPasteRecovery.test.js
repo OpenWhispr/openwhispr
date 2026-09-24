@@ -69,6 +69,7 @@ async function mount(t) {
       setCallbacks(callbacks) { this.callbacks=callbacks; }
       getState() { return { isRecording:false, isProcessing:false }; }
       shouldUseStreaming() { return false; }
+      isSttConfigStale() { return false; }
       setVoiceAgentRequested(value) { this.voiceAgentRequested=value; }
       setAssistantSelectionContext() {}
       setTranslationRequested() {}
