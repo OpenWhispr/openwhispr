@@ -81,7 +81,7 @@ export function ConnectorsSection({ isPaid, onUpgrade }: ConnectorsSectionProps)
               </SelectContent>
             </Select>
           ) : (
-            <Button variant="outline" size="sm" className="shrink-0" onClick={onUpgrade}>
+            <Button size="sm" className="shrink-0" onClick={onUpgrade}>
               {t("connectors.upgrade")}
             </Button>
           )}

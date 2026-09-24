@@ -53,6 +53,9 @@ test("free users see an upgrade button instead of the picker", async (t) => {
   const markup = await renderSection(t, { isPaid: false, allowed: true });
   assert.match(markup, /connectors\.upgrade/);
   assert.doesNotMatch(markup, /connectors\.email\.targets\.gmail/);
+  // Matches the API card pattern (IntegrationsView.tsx): the free-plan Upgrade
+  // CTA is the primary/filled button, not outline.
+  assert.doesNotMatch(markup, /variant="outline"/);
 });
 
 test("an org that turned connectors off sees why", async (t) => {
