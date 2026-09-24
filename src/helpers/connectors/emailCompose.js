@@ -25,7 +25,12 @@ const COMPOSE_BASES = {
   outlookPersonal: "https://outlook.live.com/mail/0/deeplink/compose",
 };
 
-const EMAIL_ADDRESS_PATTERN = /^[^\s@<>()[\],;:"]+@[^\s@<>()[\],;:"]+\.[^\s@<>()[\],;:".]{2,}$/;
+// The To field is the user's only look at the recipient, so invisible and
+// control characters (a right-to-left override can make evil.io read as
+// corp.com) are refused anywhere. Domains are dot-separated labels of
+// letters, digits and inner hyphens (IDN letters included).
+const EMAIL_ADDRESS_PATTERN =
+  /^[^\s@<>()[\],;:"\p{Cc}\p{Cf}]+@(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?\.)+[\p{L}\p{N}-]{2,}$/u;
 
 export function isValidEmailAddress(value) {
   return typeof value === "string" && value.length <= 254 && EMAIL_ADDRESS_PATTERN.test(value);

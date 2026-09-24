@@ -141,11 +141,37 @@ test("Gmail on macOS and Linux keeps a longer non-ASCII body in the link", async
 
 test("email address validation", async () => {
   const { isValidEmailAddress } = await load();
-  for (const good of ["a@example.com", "gabe+lunch@example.co.uk", "o'neil@example.com"]) {
+  for (const good of [
+    "a@example.com",
+    "gabe+lunch@example.co.uk",
+    "o'neil@example.com",
+    "josé@münchen.de",
+    "a@xn--80ak6aa92e.com",
+    "first.last@sub-domain.example.org",
+  ]) {
     assert.equal(isValidEmailAddress(good), true, good);
   }
   for (const bad of ["Gabe", "gabe@", "@example.com", "a@b", "a b@example.com", "a@example.com,b@example.com", "", null]) {
     assert.equal(isValidEmailAddress(bad), false, String(bad));
+  }
+});
+
+test("addresses that could disguise the recipient or carry URL junk are refused", async () => {
+  const { isValidEmailAddress } = await load();
+  for (const bad of [
+    "‮moc.proc@evil.io", // right-to-left override: displays as oi.live@corp.com
+    "alice@corp.com​.evil.io", // zero-width space
+    "alice‍@corp.com", // zero-width joiner
+    "alice\u0000@corp.com",
+    "alice\u0007@corp.com",
+    "a@b.com?subject=x",
+    "a@b.com#frag",
+    "a@b.com&",
+    "a@b..com",
+    "a@b.com/../x",
+    "a@-corp.com",
+  ]) {
+    assert.equal(isValidEmailAddress(bad), false, JSON.stringify(bad));
   }
 });
 
