@@ -1,6 +1,16 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpen, CornerDownLeft, Download, Pencil, Plus, Sparkles, Upload, X } from "./icons";
+import {
+  CornerDownLeft,
+  Download,
+  NotebookPen,
+  PanelRight,
+  Pencil,
+  Plus,
+  Sparkles,
+  Upload,
+  X,
+} from "./icons";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
@@ -10,6 +20,7 @@ import { ConfirmDialog } from "./ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useToast } from "./ui/useToast";
 import SnippetsView from "./SnippetsView";
+import DictionaryEmptyIllustration from "./DictionaryEmptyIllustration";
 import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
 import { parseDictionaryImportText } from "../helpers/dictionaryImport";
@@ -23,6 +34,7 @@ export default function DictionaryView() {
   const { toast } = useToast();
 
   const [newWord, setNewWord] = useState("");
+  const [showEmptyInput, setShowEmptyInput] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [editingWord, setEditingWord] = useState<string | null>(null);
@@ -71,7 +83,10 @@ export default function DictionaryView() {
   );
 
   const handleAdd = useCallback(() => {
-    if (addWords(newWord) > 0) setNewWord("");
+    if (addWords(newWord) > 0) {
+      setNewWord("");
+      setShowEmptyInput(false);
+    }
   }, [addWords, newWord]);
 
   const handleImport = useCallback(() => {
@@ -115,43 +130,60 @@ export default function DictionaryView() {
     }
   }, [customDictionary, toast, t]);
 
-  const emptyState = (
-    <div className="flex min-h-52 flex-wrap items-center justify-between gap-6 px-3 py-5">
-      <div className="max-w-md flex-1">
-        <h2 className="text-lg font-semibold text-foreground">{t("dictionary.emptyTitle")}</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          {t("dictionary.emptyDescription", { agentName })}
-        </p>
-        <Button className="mt-5 rounded-full px-5" onClick={() => addInputRef.current?.focus()}>
-          <Plus size={14} />
-          {t("dictionary.addFirstWord")}
-        </Button>
+  const addWordInput = (
+    <div className="relative">
+      <Input
+        dir="auto"
+        ref={addInputRef}
+        autoFocus={userWords.length === 0}
+        placeholder={t("dictionary.addPlaceholder")}
+        value={newWord}
+        onChange={(e) => setNewWord(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") handleAdd();
+          if (e.key === "Escape" && userWords.length === 0) setShowEmptyInput(false);
+        }}
+        className="h-10 w-full pe-24 text-sm placeholder:text-foreground/45"
+      />
+      <div className="absolute end-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
+        <button
+          onClick={handleAdd}
+          disabled={!newWord.trim()}
+          aria-label={t("dictionary.addWord")}
+          className="flex items-center gap-1 text-xs text-foreground/45 transition-colors enabled:hover:text-primary disabled:text-foreground/45"
+        >
+          {t("dictionary.add")}
+          <CornerDownLeft size={12} />
+        </button>
+        <div className="h-4 w-px bg-foreground/10 dark:bg-white/8" />
         <button
           onClick={() => setShowBulkImport(true)}
-          className="ms-4 inline-flex items-center gap-1.5 text-xs text-primary hover:underline focus-visible:underline"
+          aria-label={t("dictionary.importWords")}
+          className="text-foreground/45 transition-colors hover:text-foreground/60"
         >
-          <Upload size={11} />
-          {t("dictionary.importList")}
+          <Upload size={14} />
         </button>
       </div>
-      <div
-        aria-hidden="true"
-        className="relative hidden h-44 min-w-56 flex-1 items-center justify-center overflow-hidden md:flex"
-      >
-        <span className="absolute h-40 w-40 rounded-full border border-dashed border-primary/20" />
-        <span className="absolute h-28 w-28 rounded-full border border-dashed border-primary/20" />
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <BookOpen size={25} strokeWidth={1.5} />
-        </span>
-        <span className="absolute start-0 top-2 flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 shadow-sm">
-          <span className="h-1.5 w-10 rounded-full bg-muted-foreground/25" />
-          <span className="h-1.5 w-16 rounded-full bg-primary/50" />
-        </span>
-        <span className="absolute end-0 bottom-2 flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 shadow-sm">
-          <span className="h-1.5 w-12 rounded-full bg-muted-foreground/25" />
-          <span className="h-1.5 w-14 rounded-full bg-primary/50" />
-        </span>
+    </div>
+  );
+
+  const emptyState = (
+    <div className="flex min-h-64 items-start px-6 py-6">
+      <div className="relative z-10 w-full min-w-0 md:w-3/5">
+        <h2 className="text-xl font-semibold text-foreground">{t("dictionary.emptyTitle")}</h2>
+        <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
+          {t("dictionary.emptyDescription", { agentName })}
+        </p>
+        {showEmptyInput ? (
+          <div className="mt-6 max-w-md">{addWordInput}</div>
+        ) : (
+          <Button className="mt-6 px-5" onClick={() => setShowEmptyInput(true)}>
+            <Plus size={16} />
+            {t("dictionary.addFirstWord")}
+          </Button>
+        )}
       </div>
+      <DictionaryEmptyIllustration variant="dictionary" />
     </div>
   );
 
@@ -166,54 +198,23 @@ export default function DictionaryView() {
         variant="destructive"
       />
 
-      <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 pt-4")}>
-        <TabsList className="h-7 p-0.5 rounded-[7px]">
-          <TabsTrigger value="dictionary" className="h-6 px-2.5 text-xs rounded-[5px]">
+      <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "max-w-7xl px-6 pt-6")}>
+        <TabsList className="h-10 rounded-full p-1">
+          <TabsTrigger value="dictionary" className="h-8 gap-2 rounded-full px-4 text-sm">
+            <NotebookPen size={17} />
             {t("dictionary.tabDictionary")}
           </TabsTrigger>
-          <TabsTrigger value="snippets" className="h-6 px-2.5 text-xs rounded-[5px]">
+          <TabsTrigger value="snippets" className="h-8 gap-2 rounded-full px-4 text-sm">
+            <PanelRight size={17} />
             {t("dictionary.tabSnippets")}
           </TabsTrigger>
         </TabsList>
       </div>
 
       <TabsContent value="dictionary" className="flex-1 min-h-0 mt-0 overflow-y-auto">
-        <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-4 flex flex-col gap-3")}>
+        <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "max-w-7xl flex flex-col gap-3 px-6 py-5")}>
           {/* ─── Add word ─── */}
-          <div>
-            <div className="relative">
-              <Input
-                dir="auto"
-                ref={addInputRef}
-                placeholder={t("dictionary.addPlaceholder")}
-                value={newWord}
-                onChange={(e) => setNewWord(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleAdd();
-                }}
-                className="w-full h-8 text-xs pe-24 placeholder:text-foreground/45"
-              />
-              <div className="absolute end-2.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                <button
-                  onClick={handleAdd}
-                  disabled={!newWord.trim()}
-                  aria-label={t("dictionary.addWord")}
-                  className="flex items-center gap-1 text-xs text-foreground/45 enabled:hover:text-primary disabled:text-foreground/45 transition-colors"
-                >
-                  {t("dictionary.add")}
-                  <CornerDownLeft size={10} />
-                </button>
-                <div className="w-px h-3.5 bg-foreground/10 dark:bg-white/8" />
-                <button
-                  onClick={() => setShowBulkImport(true)}
-                  aria-label={t("dictionary.importWords")}
-                  className="text-foreground/45 hover:text-foreground/60 transition-colors"
-                >
-                  <Upload size={11} />
-                </button>
-              </div>
-            </div>
-          </div>
+          {userWords.length > 0 && addWordInput}
 
           {/* ─── Bulk import ─── */}
           {showBulkImport && (
@@ -257,20 +258,29 @@ export default function DictionaryView() {
           )}
 
           {/* ─── Agent name (always recognized) ─── */}
-          <div className="rounded-md border border-primary/15 dark:border-primary/20 bg-primary/3 dark:bg-primary/6 px-4 py-2.5 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <Sparkles size={11} className="text-primary/70 shrink-0" />
-              <span dir="auto" className="text-xs font-medium text-primary truncate">
-                {agentName}
+          {userWords.length > 0 && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/15 bg-primary/3 px-4 py-3 dark:border-primary/20 dark:bg-primary/6">
+              <div className="flex items-center gap-2 min-w-0">
+                <Sparkles size={11} className="text-primary/70 shrink-0" />
+                <span dir="auto" className="text-xs font-medium text-primary truncate">
+                  {agentName}
+                </span>
+              </div>
+              <span className="text-xs text-foreground/45 shrink-0">
+                {t("dictionary.agentDefault")}
               </span>
             </div>
-            <span className="text-xs text-foreground/45 shrink-0">
-              {t("dictionary.agentDefault")}
-            </span>
-          </div>
+          )}
 
           {/* ─── Dictionary list ─── */}
-          <div className="rounded-md border border-foreground/8 dark:border-white/10 bg-foreground/[0.02] dark:bg-white/[0.03] px-4 py-3">
+          <div
+            className={cn(
+              "border border-border/70 bg-card/50 shadow-sm dark:border-white/10 dark:bg-surface-2/60",
+              userWords.length > 0
+                ? "rounded-2xl px-4 py-3"
+                : "relative overflow-hidden rounded-3xl dark:bg-surface-window"
+            )}
+          >
             {userWords.length > 0 && (
               <>
                 <div className="flex items-center justify-between">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CornerDownLeft, Mic, Pencil, Plus, X } from "./icons";
+import { CornerDownLeft, Pencil, Plus, X } from "./icons";
 import {
   Dialog,
   DialogContent,
@@ -18,8 +18,7 @@ import { Textarea } from "./ui/textarea";
 import { useSettings } from "../hooks/useSettings";
 import { getCachedPlatform } from "../utils/platform";
 import type { Snippet } from "../utils/snippets";
-
-const EXAMPLE_KEYS = ["linkedin", "intro"] as const;
+import DictionaryEmptyIllustration from "./DictionaryEmptyIllustration";
 
 interface EditSnippetDialogProps {
   snippet: Snippet | null;
@@ -112,6 +111,7 @@ export default function SnippetsView() {
   const { snippets, setSnippets } = useSettings();
   const [trigger, setTrigger] = useState("");
   const [expansion, setExpansion] = useState("");
+  const [showEmptyInput, setShowEmptyInput] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<Snippet | null>(null);
   const triggerInputRef = useRef<HTMLInputElement>(null);
@@ -152,6 +152,7 @@ export default function SnippetsView() {
   const handleCreate = () => {
     setSnippets([...snippets, { trigger: trimmedTrigger, replacement: expansion.trim() }]);
     setTrigger("");
+    setShowEmptyInput(false);
     closePanel();
   };
 
@@ -166,8 +167,77 @@ export default function SnippetsView() {
 
   const canCreate = !!trimmedTrigger && !!expansion.trim() && !duplicate;
 
+  const triggerInput = (
+    <div>
+      <div className="relative">
+        <Input
+          dir="auto"
+          ref={triggerInputRef}
+          autoFocus={snippets.length === 0}
+          placeholder={t("dictionary.snippets.addPlaceholder")}
+          value={trigger}
+          onChange={(e) => setTrigger(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") openPanel();
+            if (e.key === "Escape" && snippets.length === 0 && !panelOpen) setShowEmptyInput(false);
+          }}
+          maxLength={80}
+          className="h-10 w-full pe-16 text-sm placeholder:text-foreground/45"
+        />
+        <button
+          onClick={openPanel}
+          disabled={!trimmedTrigger || duplicate}
+          aria-label={t("dictionary.snippets.create")}
+          className="absolute end-3 top-1/2 flex -translate-y-1/2 items-center gap-1 text-xs text-foreground/45 transition-colors enabled:hover:text-primary disabled:text-foreground/45"
+        >
+          {t("dictionary.add")}
+          <CornerDownLeft size={12} />
+        </button>
+      </div>
+      {duplicate && (
+        <p className="mt-1.5 text-xs text-destructive">{t("dictionary.snippets.duplicate")}</p>
+      )}
+    </div>
+  );
+
+  const expansionPanel = (
+    <div className="rounded-xl border border-primary/30 px-3 pb-2 pt-2.5 dark:border-primary/40">
+      <Textarea
+        dir="auto"
+        autoFocus
+        value={expansion}
+        onChange={(e) => setExpansion(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") closePanel();
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canCreate) handleCreate();
+        }}
+        placeholder={t("dictionary.snippets.replacementPlaceholder")}
+        rows={4}
+        className="min-h-[72px] resize-none rounded-none border-0 bg-transparent p-0 text-xs text-foreground shadow-none placeholder:text-foreground/45 hover:border-0 focus:border-0 focus:ring-0"
+      />
+      <div className="flex items-center justify-between pt-1.5">
+        <div dir="ltr" className="flex items-center gap-0.5">
+          <kbd className="rounded border border-border/70 bg-muted/40 px-1 py-px font-mono text-[10px] leading-tight text-muted-foreground/70 dark:border-white/10">
+            {getCachedPlatform() === "darwin" ? "⌘" : "Ctrl"}
+          </kbd>
+          <kbd className="rounded border border-border/70 bg-muted/40 px-1 py-px font-mono text-[10px] leading-tight text-muted-foreground/70 dark:border-white/10">
+            ⏎
+          </kbd>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={closePanel}>
+            {t("common.cancel")}
+          </Button>
+          <Button size="sm" onClick={handleCreate} disabled={!canCreate}>
+            {t("dictionary.snippets.create")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-4 flex flex-col gap-3")}>
+    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "max-w-7xl flex flex-col gap-3 px-6 py-5")}>
       <EditSnippetDialog
         snippet={editing}
         onOpenChange={(open) => {
@@ -178,74 +248,20 @@ export default function SnippetsView() {
       />
 
       {/* ─── Add snippet ─── */}
-      <div>
-        <div className="relative">
-          <Input
-            dir="auto"
-            ref={triggerInputRef}
-            placeholder={t("dictionary.snippets.addPlaceholder")}
-            value={trigger}
-            onChange={(e) => setTrigger(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") openPanel();
-            }}
-            maxLength={80}
-            className="w-full h-8 text-xs pe-16 placeholder:text-foreground/45"
-          />
-          <button
-            onClick={openPanel}
-            disabled={!trimmedTrigger || duplicate}
-            aria-label={t("dictionary.snippets.create")}
-            className="absolute end-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-foreground/45 enabled:hover:text-primary disabled:text-foreground/45 transition-colors"
-          >
-            {t("dictionary.add")}
-            <CornerDownLeft size={10} />
-          </button>
-        </div>
-        {duplicate && (
-          <p className="mt-1.5 text-xs text-destructive">{t("dictionary.snippets.duplicate")}</p>
-        )}
-      </div>
+      {snippets.length > 0 && triggerInput}
 
       {/* ─── Expansion panel ─── */}
-      {panelOpen && (
-        <div className="rounded-md border border-primary/30 dark:border-primary/40 px-3 pt-2.5 pb-2">
-          <Textarea
-            dir="auto"
-            autoFocus
-            value={expansion}
-            onChange={(e) => setExpansion(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") closePanel();
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canCreate) handleCreate();
-            }}
-            placeholder={t("dictionary.snippets.replacementPlaceholder")}
-            rows={4}
-            className="min-h-[72px] resize-none border-0 shadow-none rounded-none bg-transparent p-0 text-xs text-foreground placeholder:text-foreground/45 hover:border-0 focus:border-0 focus:ring-0"
-          />
-          <div className="flex items-center justify-between pt-1.5">
-            <div dir="ltr" className="flex items-center gap-0.5">
-              <kbd className="text-[10px] px-1 py-px rounded border border-border/70 dark:border-white/10 bg-muted/40 text-muted-foreground/70 font-mono leading-tight">
-                {getCachedPlatform() === "darwin" ? "⌘" : "Ctrl"}
-              </kbd>
-              <kbd className="text-[10px] px-1 py-px rounded border border-border/70 dark:border-white/10 bg-muted/40 text-muted-foreground/70 font-mono leading-tight">
-                ⏎
-              </kbd>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={closePanel}>
-                {t("common.cancel")}
-              </Button>
-              <Button size="sm" onClick={handleCreate} disabled={!canCreate}>
-                {t("dictionary.snippets.create")}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {panelOpen && snippets.length > 0 && expansionPanel}
 
       {/* ─── Snippet list ─── */}
-      <div className="rounded-md border border-foreground/8 dark:border-white/10 bg-foreground/[0.02] dark:bg-white/[0.03] px-4 py-3">
+      <div
+        className={cn(
+          "border border-border/70 bg-card/50 shadow-sm dark:border-white/10 dark:bg-surface-2/60",
+          snippets.length > 0
+            ? "rounded-2xl px-4 py-3"
+            : "relative overflow-hidden rounded-3xl dark:bg-surface-window"
+        )}
+      >
         {snippets.length > 0 && (
           <>
             <h3 className="text-xs font-semibold text-foreground/45">
@@ -256,45 +272,27 @@ export default function SnippetsView() {
         )}
 
         {snippets.length === 0 ? (
-          <div className="flex min-h-52 flex-wrap items-center justify-between gap-6 px-3 py-5">
-            <div className="max-w-md flex-1">
-              <h2 className="text-lg font-semibold text-foreground leading-snug">
-                {t("dictionary.snippets.emptyTitle")}{" "}
-                <span className="text-primary">{t("dictionary.snippets.emptyTitleAccent")}</span>
+          <div className="flex min-h-64 items-start px-6 py-6">
+            <div className="relative z-10 w-full min-w-0 md:w-3/5">
+              <h2 className="text-xl font-semibold leading-snug text-foreground">
+                {t("dictionary.snippets.emptyTitle")} {t("dictionary.snippets.emptyTitleAccent")}
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
                 {t("dictionary.snippets.emptyDescription")}
               </p>
-              <Button
-                className="mt-5 rounded-full px-5"
-                onClick={() => triggerInputRef.current?.focus()}
-              >
-                <Plus size={14} />
-                {t("dictionary.snippets.new")}
-              </Button>
+              {showEmptyInput ? (
+                <div className="mt-6 max-w-md space-y-3">
+                  {triggerInput}
+                  {panelOpen && expansionPanel}
+                </div>
+              ) : (
+                <Button className="mt-6 px-5" onClick={() => setShowEmptyInput(true)}>
+                  <Plus size={16} />
+                  {t("dictionary.snippets.new")}
+                </Button>
+              )}
             </div>
-            <div
-              aria-hidden="true"
-              className="relative hidden h-44 min-w-64 flex-1 items-center justify-center overflow-hidden md:flex"
-            >
-              <span className="absolute h-40 w-40 rounded-full border border-dashed border-primary/20" />
-              <span className="absolute h-28 w-28 rounded-full border border-dashed border-primary/20" />
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Mic size={25} strokeWidth={1.5} />
-              </span>
-              {EXAMPLE_KEYS.map((key, index) => (
-                <span
-                  key={key}
-                  className={cn(
-                    "absolute max-w-44 truncate rounded-xl border border-border bg-card px-3 py-2 text-xs text-primary shadow-sm",
-                    index === 0 ? "start-0 top-1" : "end-0 bottom-1"
-                  )}
-                >
-                  {t(`dictionary.snippets.examples.${key}Trigger`)} →{" "}
-                  {t(`dictionary.snippets.examples.${key}Text`)}
-                </span>
-              ))}
-            </div>
+            <DictionaryEmptyIllustration variant="snippets" />
           </div>
         ) : visibleSnippets.length === 0 ? (
           <p className="py-6 text-xs text-foreground/45 text-center">
