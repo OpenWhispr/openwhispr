@@ -392,3 +392,26 @@ test("the card stops listening for GPU changes when it unmounts", async (t) => {
   const left = Object.values(picker.listeners).map((list) => list.length);
   assert.deepEqual(left, [0, 0, 0], "every listener removed");
 });
+
+test("a card left with no pack to show or offer hides, not the deleted pack", async (t) => {
+  // Only CUDA, failed, on a GPU with no CUDA support and no Vulkan driver
+  const noVulkan = vulkanPack({
+    downloaded: false,
+    hasNvidiaGpu: true,
+    vulkan: { available: false },
+  });
+  const packs = onlyCuda({ gpuInfo: OLD_NVIDIA, ...failedWith(KERNEL_IMAGE) });
+  const picker = await mountPicker(t, noVulkan, packs.cuda);
+  try {
+    assert.ok(picker.shows(hasText(KERNEL_IMAGE)));
+
+    // Remove on another card deleted the pack: main now reports nothing in use
+    await picker.fire("changed", { cuda: cudaPack({ gpuInfo: OLD_NVIDIA }) });
+
+    assert.equal(picker.shows(isFailedCard), false);
+    assert.equal(picker.shows(hasText(KERNEL_IMAGE)), false, "the deleted pack's reason is gone");
+    assert.equal(picker.shows(hasText("Remove")), false, "no Remove for a deleted pack");
+  } finally {
+    await picker.unmount();
+  }
+});

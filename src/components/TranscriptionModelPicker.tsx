@@ -740,12 +740,13 @@ export default function TranscriptionModelPicker({
         window.electronAPI?.getCudaWhisperStatus?.(),
         window.electronAPI?.getVulkanWhisperStatus?.(),
       ]);
+      // No pack to show or offer hides the card. A re-read can land here after
+      // another card removed the pack this one shows, so reset, never keep it.
       const pack = pickGpuCardPack(cuda, vulkan);
-      if (!pack) return;
-      setGpuBackend(pack.backend);
-      setGpuDownloaded(pack.status.downloaded);
-      setGpuFailed(!!pack.status.gpuFailed);
-      setGpuFailReason(pack.status.gpuFailReason ?? null);
+      setGpuBackend(pack?.backend ?? null);
+      setGpuDownloaded(!!pack?.status.downloaded);
+      setGpuFailed(!!pack?.status.gpuFailed);
+      setGpuFailReason(pack?.status.gpuFailReason ?? null);
     } catch {}
   }, []);
 
