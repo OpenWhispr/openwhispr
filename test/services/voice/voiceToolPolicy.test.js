@@ -52,6 +52,23 @@ test("reports each write's outcome once; an error result counts as failed", asyn
   ]);
 });
 
+// R8: a repeat call after a FAILED first write must not read as a plain
+// success (the model would go on to tell the user the write worked).
+test("a repeat call after a failed first run reports the failure, not a plain success", async () => {
+  const { createWriteOnceGuard } = await load();
+  const guard = createWriteOnceGuard(new Set(["create_note"]));
+  const execute = async () => ({ error: "Notes are full" });
+
+  const first = await guard.run("create_note", execute);
+  const second = await guard.run("create_note", execute);
+
+  assert.deepEqual(first, { error: "Notes are full" });
+  assert.equal(second.alreadyDone, true);
+  assert.deepEqual(second.result, { error: "Notes are full" });
+  assert.match(second.note, /already failed/i);
+  assert.match(second.note, /Notes are full/);
+});
+
 test("two parallel calls in one step still run the tool once", async () => {
   const { createWriteOnceGuard } = await load();
   const guard = createWriteOnceGuard(new Set(["copy_to_clipboard"]));
@@ -88,6 +105,8 @@ test("cloud ToolResult writes run once per turn; a repeat call reports the alrea
   assert.deepEqual(first, { success: true, data: { id: 1 }, displayText: "Created note" });
   assert.equal(second.success, true);
   assert.match(String(second.data), /already/i);
+  // The UI-facing displayText reuses the real first result, not the model note.
+  assert.equal(second.displayText, "Created note");
   assert.deepEqual(outcomes, [["create_note", true]]);
 });
 
@@ -105,6 +124,32 @@ test("runToolResultOnce reports a failed ToolResult write as ok: false, preservi
 
   assert.deepEqual(result, { success: false, data: null, displayText: "Dictionary is full" });
   assert.deepEqual(outcomes, [["update_dictionary", false]]);
+});
+
+// R8: the cloud adapter's repeat call must not turn a failed write into a
+// plain success just because "the guard ran the tool successfully once".
+test("runToolResultOnce: a repeat call after a failed first write reports success: false and reuses the original displayText", async () => {
+  const { createWriteOnceGuard, runToolResultOnce } = await load();
+  const outcomes = [];
+  const guard = createWriteOnceGuard(new Set(["create_note"]), (name, ok) =>
+    outcomes.push([name, ok])
+  );
+  let runs = 0;
+  const execute = async () => {
+    runs += 1;
+    return { success: false, data: null, displayText: "Notes are full" };
+  };
+
+  const first = await runToolResultOnce(guard, "create_note", execute);
+  const second = await runToolResultOnce(guard, "create_note", execute);
+
+  assert.equal(runs, 1);
+  assert.deepEqual(first, { success: false, data: null, displayText: "Notes are full" });
+  assert.equal(second.success, false);
+  assert.match(String(second.data), /already failed/i);
+  assert.match(String(second.data), /Notes are full/);
+  assert.equal(second.displayText, "Notes are full");
+  assert.deepEqual(outcomes, [["create_note", false]]);
 });
 
 test("runToolResultOnce leaves read-only cloud tools unlimited", async () => {

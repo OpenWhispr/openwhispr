@@ -10,6 +10,17 @@ const ALREADY_DONE_NOTE =
 const isToolError = (result: unknown): boolean =>
   typeof result === "object" && result !== null && "error" in result;
 
+// R8: a repeat call after a FAILED first write must not read as a plain success —
+// the model would go on to tell the user the write succeeded. The error text comes
+// from the AI-SDK { error } shape isToolError above reads.
+const errorTextOf = (result: unknown): string => {
+  const error = (result as { error?: unknown } | null)?.error;
+  return typeof error === "string" ? error : "unknown error";
+};
+
+const alreadyFailedNote = (errorText: string): string =>
+  `This action already failed in this turn: ${errorText}. Don't retry; tell the user it didn't work.`;
+
 export interface WriteOnceGuard {
   run(name: string, execute: () => Promise<unknown>): Promise<unknown>;
 }
@@ -17,7 +28,8 @@ export interface WriteOnceGuard {
 /**
  * Small local models repeated create_note / update_note within one turn, which
  * would write duplicates. Each write tool runs at most once per voice turn; a
- * repeat call gets the first result back instead of running again.
+ * repeat call gets the first result back instead of running again. If the first
+ * run failed, the repeat's note says so instead of claiming success (R8).
  */
 export function createWriteOnceGuard(
   writeToolNames: ReadonlySet<string>,
@@ -29,7 +41,11 @@ export function createWriteOnceGuard(
       if (!writeToolNames.has(name)) return execute();
       const previous = firstRuns.get(name);
       if (previous) {
-        return previous.then((result) => ({ alreadyDone: true, note: ALREADY_DONE_NOTE, result }));
+        return previous.then((result) =>
+          isToolError(result)
+            ? { alreadyDone: true, note: alreadyFailedNote(errorTextOf(result)), result }
+            : { alreadyDone: true, note: ALREADY_DONE_NOTE, result }
+        );
       }
       const pending = execute().then((result) => {
         onWriteResult?.(name, !isToolError(result));
@@ -57,10 +73,11 @@ const isAlreadyDoneResult = (
  * Adapts createWriteOnceGuard for the OpenWhispr Cloud tool-call path, which
  * executes tools directly (registry.get(name).execute(args)) and gets back a
  * ToolResult ({ success, data, displayText }) rather than the AI-SDK { error }
- * shape the guard above reads. A failed write still reports `ok: false`, and a
- * repeat call comes back as a successful result whose data is the "already
- * ran" note, so the cloud executor can serialize it like any other tool
- * result.
+ * shape the guard above reads. A failed write still reports `ok: false`. A
+ * repeat call never claims success on a write that actually failed (R8): its
+ * `success` matches the first run's outcome, `data` carries the guard's note
+ * (for the model), and `displayText` reuses the first run's displayText (for
+ * the chat UI) rather than the English model-facing note.
  */
 export async function runToolResultOnce(
   guard: WriteOnceGuard,
@@ -73,7 +90,12 @@ export async function runToolResultOnce(
   });
 
   if (isAlreadyDoneResult(raw)) {
-    return { success: true, data: raw.note, displayText: raw.note };
+    const firstResult = raw.result as ToolResultLike & { error?: string };
+    return {
+      success: !isToolError(firstResult),
+      data: raw.note,
+      displayText: firstResult.displayText,
+    };
   }
   const { error: _unused, ...rest } = raw as ToolResultLike & { error?: string };
   return rest;

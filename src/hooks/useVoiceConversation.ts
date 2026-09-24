@@ -40,6 +40,14 @@ interface TurnMetrics {
   availableTools: string[];
   /** Write tools that ran and succeeded this turn (createWriteOnceGuard caps each at one). */
   succeededWrites: string[];
+  /**
+   * Every write tool actually executed this turn (never a repeat blocked by the
+   * guard), in execution order: the bare name on success, `"<name> (failed)"`
+   * on failure. Lets the harness report verify the guard end to end instead of
+   * relying on `calledTools`, which is every call the model made, including
+   * ones the guard blocked from running.
+   */
+  ranWrites: string[];
   answer: string;
 }
 
@@ -161,6 +169,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         transcript: turn.transcript,
         calledTools: turn.calledTools,
         availableTools: turn.availableTools,
+        ranWrites: turn.ranWrites,
         answer: turn.answer,
         metrics,
       });
@@ -244,6 +253,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
           calledTools: [],
           availableTools: [],
           succeededWrites: [],
+          ranWrites: [],
           answer: "",
         };
         setState("thinking");
@@ -444,6 +454,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       },
       onWriteToolResult: (name, ok) => {
         if (ok) turnRef.current?.succeededWrites.push(name);
+        turnRef.current?.ranWrites.push(ok ? name : `${name} (failed)`);
       },
       dryRunWrites: harnessActive,
       brainOverride,

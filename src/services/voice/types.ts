@@ -24,6 +24,8 @@ export interface VoiceTurnReport {
   transcript: string;
   calledTools: string[];
   availableTools: string[];
+  /** Write tools actually executed (not blocked as a repeat by the guard); see TurnMetrics.ranWrites. */
+  ranWrites: string[];
   answer: string;
   metrics: Record<string, number | null>;
 }

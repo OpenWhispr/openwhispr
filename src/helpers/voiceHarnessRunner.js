@@ -93,6 +93,7 @@ function toResult(scenario, report, extra = {}) {
     heard: report?.transcript ?? "",
     calledTools: report?.calledTools ?? [],
     availableTools: report?.availableTools ?? [],
+    ranWrites: report?.ranWrites ?? [],
     outcome: report?.outcome ?? "timeout",
     metrics: report?.metrics ?? {},
     answer: report?.answer ?? "",

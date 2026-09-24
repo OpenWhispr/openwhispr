@@ -132,13 +132,17 @@ function formatHarnessReport({ results, summary, environment }) {
     "",
     `Tool choice: **${summary.passed}/${scoredTotal} correct**, ${summary.skipped} skipped (tool not available in this session).`,
     "",
-    "| Scenario | Result | Heard | Expected | Called | First audio | Answer |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
+    // "Ran" verifies the write-once guard end to end: "Called" is every tool call
+    // the model made (including repeats the guard blocked from running), so
+    // e.g. note-create can list "create_note, create_note" under Called while
+    // Ran shows the guard only let one of them through.
+    "| Scenario | Result | Heard | Expected | Called | Ran | First audio | Answer |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
   for (const item of results) {
     const score = scoreTurn(item);
     lines.push(
-      `| ${item.id} | ${score.status}${score.reason ? ` (${cell(score.reason)})` : ""} | ${cell(item.heard)} | ${cell(item.expectTools.join(" / ") || "none")} | ${cell(item.calledTools.join(", ") || "none")} | ${seconds(item.metrics?.speechEndToFirstAudioMs)} | ${cell((item.answer || "").slice(0, 120))} |`
+      `| ${item.id} | ${score.status}${score.reason ? ` (${cell(score.reason)})` : ""} | ${cell(item.heard)} | ${cell(item.expectTools.join(" / ") || "none")} | ${cell(item.calledTools.join(", ") || "none")} | ${cell((item.ranWrites ?? []).join(", ") || "none")} | ${seconds(item.metrics?.speechEndToFirstAudioMs)} | ${cell((item.answer || "").slice(0, 120))} |`
     );
   }
   return lines.join("\n") + "\n";

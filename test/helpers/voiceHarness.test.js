@@ -71,6 +71,7 @@ const result = (overrides) => ({
   expectTools: [],
   calledTools: [],
   availableTools: ["web_search"],
+  ranWrites: [],
   outcome: "spoke",
   metrics: { speechEndToFirstAudioMs: 1000, transcriptToFirstDeltaMs: 400, firstChunkToFirstAudioMs: 300 },
   answer: "Hi.",
@@ -114,4 +115,30 @@ test("the report names the machine, the headline numbers and each scenario", () 
   assert.match(report, /You stop talking → first sound/);
   assert.match(report, /\| weather \|/);
   assert.match(report, /web_search/);
+});
+
+// R10: "Called" is every call the model made, including a repeat the guard
+// blocked from running; "Ran" is what the write-once guard actually let
+// through, so the two can genuinely differ (e.g. a model that repeats
+// create_note once, blocked, vs. once, let through).
+test("the report has a Ran column showing executed writes, separate from Called", () => {
+  const results = [
+    result({
+      id: "note-create",
+      calledTools: ["create_note", "create_note"],
+      ranWrites: ["create_note"],
+      expectTools: ["create_note"],
+    }),
+    result({ id: "plain-rag" }),
+  ];
+  const report = formatHarnessReport({
+    results,
+    summary: summarizeHarness(results),
+    environment: { machine: "Apple M5 Pro", memoryGb: 48, brain: "qwen3.5-9b", tts: "pocket" },
+  });
+  assert.match(report, /\| Scenario \| Result \| Heard \| Expected \| Called \| Ran \| First audio \| Answer \|/);
+  const noteCreateRow = report.split("\n").find((line) => line.startsWith("| note-create |"));
+  assert.match(noteCreateRow, /create_note, create_note \| create_note \|/);
+  const plainRagRow = report.split("\n").find((line) => line.startsWith("| plain-rag |"));
+  assert.match(plainRagRow, /\| none \| none \|/);
 });
