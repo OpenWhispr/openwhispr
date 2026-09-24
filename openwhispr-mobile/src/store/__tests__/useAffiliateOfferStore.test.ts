@@ -86,3 +86,24 @@ it('falls back to normal purchasing when no verified offer is available', async 
   expect(await presentAffiliateOffer()).toBe(false);
   expect(begin).not.toHaveBeenCalled();
 });
+
+it('starts a fresh offer check after an account switch and keeps it when the old one resolves', async () => {
+  let releaseOld!: (value: null) => void;
+  jest.mocked(loadAffiliateOffer).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        releaseOld = resolve;
+      }),
+  );
+  const old = presentAffiliateOffer();
+  owner = 'other';
+  const current = presentAffiliateOffer();
+  expect(current).not.toBe(old);
+  await new Promise<void>((done) => setImmediate(done));
+  releaseOld(null);
+  expect(await old).toBe(false);
+  expect(presentAffiliateOffer()).toBe(current);
+  expect(useAffiliateOfferStore.getState().identity?.userId).toBe('other');
+  closeAffiliateOffer();
+  expect(await current).toBe(true);
+});

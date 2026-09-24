@@ -1,6 +1,6 @@
 # Creator links and verified monthly offers
 
-Held iOS/iPadOS client port of the accepted flow from `OpenWhispr/openwhispr-mobile#96` (`b5c7124f`) into mobile main `6ecfea8c`. Backend dependency: `OpenWhispr/openwhispr-api#211`, contract reviewed at `13b8a14c21a50feba23bf62a7673cb49c7f55c4c`. Android is excluded. This change does not enable production flags, codes, routing, payouts or store release.
+Held iOS/iPadOS client port of the accepted flow from `OpenWhispr/openwhispr-mobile#96` (`b5c7124f`) into mobile main `6ecfea8c`. Backend dependency: `OpenWhispr/openwhispr-api#211`, contract reviewed at `13b8a14c21a50feba23bf62a7673cb49c7f55c4c` and unchanged in the subsequent approved head `f949fbe95898e39ba29beb705e4d121f69ae720b`. Android is excluded. This change does not enable production flags, codes, routing, payouts or store release.
 
 ## User journey
 
@@ -12,6 +12,8 @@ Saving a creator does not promise a discount. The client checks the account, ses
 
 The API keeps the first saved creator permanently. Anonymous purchase remains supported; commission waits for account linking and a verified registered creator. Restore and app return reconcile billing; signed server payment events own commissions. Personal annual purchases can earn commission without this monthly discount. Workspace purchases are excluded by the backend.
 
+**Workspace-member entry remains open:** main represents workspace-only access as subscribed, and its Plans & Billing route manages that existing access. This port retains that behavior. The backend permits a separate personal purchase by a workspace member, but this client does not yet provide a separate entry for it. Define that entry without interrupting workspace access before claiming the full personal-purchase scope is accepted.
+
 ## Configuration and consent
 
 Leave `EXPO_PUBLIC_AFFILIATE_DOMAIN` and `EXPO_PUBLIC_AFFILIATE_PUBLISHABLE_KEY` empty for the held release. Only a public `dub_pk_` key belongs in the client. Development uses `open-whispr-affiliate-sandbox.dub.link`; production uses `try.openwhispr.com`. Mismatched environments fail configuration. Associated domains are added only when configured. Production association and App Store fallback remain separate setup.
@@ -22,7 +24,7 @@ Usage Analytics and iOS tracking authorization both govern link resolution/claim
 
 ## Account and lifecycle safety
 
-Candidates and resolved click IDs persist before claim retries, with account/revision checks and a ten-second deadline. Switching users clears local ownership. Offer loading has an eight-second deadline; displayed offers remain bound to account, cookie and billing UUID. Dismissal cancels late presentation. Reconciliation captures original credentials, discards stale results and serializes native identity changes with purchase sync so another account cannot take over a restore midway.
+Candidates and resolved click IDs persist before claim retries, with account/revision checks and a ten-second deadline. Switching users clears local ownership. Offer loading has an eight-second deadline; displayed offers remain bound to account, cookie and billing UUID. Dismissal or leaving Plans & Billing cancels late presentation. Reconciliation captures original credentials, discards stale results and serializes native identity changes with purchase sync so another account cannot take over a restore midway. Native callers time out after ten seconds while an uncancellable native operation retains its lock; expired queued operations are skipped. A hung native call requires retry after it settles or app restart, rather than unsafe concurrent identity changes.
 
 ## Validation and release limits
 

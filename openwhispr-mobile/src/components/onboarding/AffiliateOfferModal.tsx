@@ -36,7 +36,12 @@ export function AffiliateOfferModal() {
             if (!stopped && isBillingIdentityCurrent(identity))
               return useUsageStore.getState().load(true);
           })
-          .catch(() => {});
+          .catch(() => {
+            if (!stopped && isBillingIdentityCurrent(identity))
+              setError(
+                'We couldn’t verify your purchase yet. Restart the app and restore purchases in Plans & Billing.',
+              );
+          });
       }
     });
     return () => {

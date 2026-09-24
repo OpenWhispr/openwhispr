@@ -109,3 +109,28 @@ it('serializes another login behind an in-progress purchase sync', async () => {
   expect(await next).toBe(true);
   expect(mockPurchases.logIn.mock.calls.map(([id]) => id)).toEqual(['billing-a', 'billing-b']);
 });
+
+it('bounds callers behind a hung native operation without switching its identity', async () => {
+  jest.clearAllMocks();
+  jest.useFakeTimers();
+  let release!: (value: never) => void;
+  mockPurchases.recordPurchase.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const recording = recordRevenueCatPurchase('monthly');
+  await Promise.resolve();
+  const next = identifyRevenueCatUser('billing-b');
+  await jest.advanceTimersByTimeAsync(10001);
+  expect(await recording).toBe(false);
+  expect(await next).toBe(false);
+  expect(mockPurchases.logIn).not.toHaveBeenCalled();
+  release({} as never);
+  await jest.advanceTimersByTimeAsync(1);
+  expect(mockPurchases.logIn).not.toHaveBeenCalled();
+  jest.useRealTimers();
+  expect(await identifyRevenueCatUser('billing-c')).toBe(true);
+  expect(mockPurchases.logIn).toHaveBeenCalledWith('billing-c');
+});

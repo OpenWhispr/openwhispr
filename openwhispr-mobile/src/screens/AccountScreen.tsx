@@ -1,9 +1,9 @@
-import { presentAffiliateOffer } from '@/store/useAffiliateOfferStore';
+import { presentAffiliateOffer, closeAffiliateOffer } from '@/store/useAffiliateOfferStore';
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Alert, Platform, View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import Constants from 'expo-constants';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import { PlanBadge } from '@/components/ui/PlanBadge';
@@ -118,7 +118,7 @@ async function openGrantedBillingManagement(usage: UsageInfo): Promise<void> {
 
 export default function AccountScreen() {
   const params = useLocalSearchParams<{ superwallPlacement?: string }>();
-  const { user, isGuest, signOut, deleteAccount } = useAuthStore();
+  const { user, sessionCookie, isGuest, signOut, deleteAccount } = useAuthStore();
   // An anonymous onboarding session: Sign Out would revoke it (and the notes
   // and purchase it carries) and the API refuses to delete it, so the one
   // account action it needs is creating the account.
@@ -128,6 +128,25 @@ export default function AccountScreen() {
   const resetOnboarding = useOnboardingStore((state) => state.reset);
   const { register: registerSuperwallGate } = useSuperwallGate();
   const handledBillingIntentRef = useRef<string | null>(null);
+  const billingContextRef = useRef({
+    userId: user?.id,
+    sessionCookie,
+    active: true,
+    generation: 0,
+  });
+  billingContextRef.current.userId = user?.id;
+  billingContextRef.current.sessionCookie = sessionCookie;
+  const affiliatePendingRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      billingContextRef.current.active = true;
+      return () => {
+        billingContextRef.current.active = false;
+        billingContextRef.current.generation += 1;
+        if (affiliatePendingRef.current) closeAffiliateOffer();
+      };
+    }, []),
+  );
 
   useEffect(() => {
     if (user) loadUsage();
@@ -146,10 +165,17 @@ export default function AccountScreen() {
   }, [signOut, user]);
 
   const handleBillingPress = useCallback(async (): Promise<void> => {
+    const context = { ...billingContextRef.current };
+    const isCurrent = () =>
+      billingContextRef.current.active &&
+      billingContextRef.current.generation === context.generation &&
+      useAuthStore.getState().user?.id === context.userId &&
+      useAuthStore.getState().sessionCookie === context.sessionCookie;
     let currentUsage = useUsageStore.getState().usage;
     if (user && !currentUsage) {
       const loadResult = await loadUsage(true);
       currentUsage = loadResult.usage ?? useUsageStore.getState().usage;
+      if (!isCurrent()) return;
       if (!currentUsage) {
         Alert.alert("Couldn't Load Billing", 'Please try again in a moment.');
         return;
@@ -158,8 +184,16 @@ export default function AccountScreen() {
 
     const managementUsage = currentUsage;
     if (!currentUsage?.isSubscribed && !(await useAffiliateStore.getState().prepare())) return;
-
-    if (!currentUsage?.isSubscribed && (await presentAffiliateOffer())) return;
+    if (!isCurrent()) return;
+    if (!currentUsage?.isSubscribed) {
+      affiliatePendingRef.current = true;
+      try {
+        if (await presentAffiliateOffer(isCurrent)) return;
+      } finally {
+        affiliatePendingRef.current = false;
+      }
+    }
+    if (!isCurrent()) return;
 
     await registerSuperwallGate({
       placement: SUPERWALL_PLACEMENTS.accountBillingOpen,

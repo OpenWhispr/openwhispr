@@ -10,9 +10,23 @@ let configured = false;
 let identityQueue: Promise<unknown> = Promise.resolve();
 
 function withIdentity<T>(operation: () => Promise<T>): Promise<T> {
-  const result = identityQueue.then(operation, operation);
+  let expired = false;
+  const run = () => {
+    if (expired) throw new Error('Billing operation expired before starting');
+    return operation();
+  };
+  const result = identityQueue.then(run, run);
+  // Native calls cannot be cancelled. Keep the lock until they settle, while
+  // releasing callers and skipping expired queued work instead of hanging UI.
   identityQueue = result.catch(() => {});
-  return result;
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      expired = true;
+      reject(new Error('Billing is taking too long. Retry or restart the app.'));
+    }, 10000);
+  });
+  return Promise.race([result, timeout]).finally(() => clearTimeout(timer));
 }
 
 function getRevenueCatApiKey(): string | undefined {

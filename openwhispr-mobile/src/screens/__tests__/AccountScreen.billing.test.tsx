@@ -1,9 +1,10 @@
 jest.mock('@/store/useAffiliateOfferStore', () => ({
-  presentAffiliateOffer: jest.fn().mockResolvedValue(false),
   closeAffiliateOffer: jest.fn(),
+  presentAffiliateOffer: jest.fn().mockResolvedValue(false),
 }));
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { closeAffiliateOffer, presentAffiliateOffer } from '@/store/useAffiliateOfferStore';
 import { Alert } from 'react-native';
 import type { UsageInfo } from '@/data/remote/usageApi';
 import { ApiError } from '@/lib/apiClient';
@@ -88,6 +89,7 @@ const mockUsageStoreState: {
 };
 
 jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]),
   router: {
     push: jest.fn(),
     replace: (...args: unknown[]) => mockRouterReplace(...args),
@@ -191,6 +193,7 @@ describe('AccountScreen billing management', () => {
   beforeEach(() => {
     mockPrepareAffiliate.mockResolvedValue(true);
     jest.clearAllMocks();
+    jest.mocked(presentAffiliateOffer).mockResolvedValue(false);
     mockAuthState.user = mockUser;
     mockAuthState.sessionCookie = 'session-cookie';
     mockAuthState.isGuest = false;
@@ -217,6 +220,64 @@ describe('AccountScreen billing management', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('discards a delayed creator check when Plans & Billing is left', async () => {
+    mockUsageStoreState.usage = mockUnsubscribedUsage;
+    let resolve!: (value: boolean) => void;
+    mockPrepareAffiliate.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const screen = render(<AccountScreen />);
+    fireEvent.press(screen.getByText('Plans & Billing'));
+    screen.unmount();
+    await act(async () => {
+      resolve(true);
+    });
+    expect(presentAffiliateOffer).not.toHaveBeenCalled();
+    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
+  });
+
+  it('discards a delayed creator check when the authenticated session changes', async () => {
+    mockUsageStoreState.usage = mockUnsubscribedUsage;
+    let resolve!: (value: boolean) => void;
+    mockPrepareAffiliate.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const screen = render(<AccountScreen />);
+    fireEvent.press(screen.getByText('Plans & Billing'));
+    mockAuthState.sessionCookie = 'another-session';
+    await act(async () => {
+      resolve(true);
+    });
+    expect(presentAffiliateOffer).not.toHaveBeenCalled();
+    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
+  });
+
+  it('closes a pending offer on exit without opening a fallback paywall', async () => {
+    mockUsageStoreState.usage = mockUnsubscribedUsage;
+    let resolve!: (value: boolean) => void;
+    jest.mocked(presentAffiliateOffer).mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const screen = render(<AccountScreen />);
+    fireEvent.press(screen.getByText('Plans & Billing'));
+    await waitFor(() => expect(presentAffiliateOffer).toHaveBeenCalled());
+    screen.unmount();
+    expect(closeAffiliateOffer).toHaveBeenCalled();
+    await act(async () => {
+      resolve(false);
+    });
+    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
   });
 
   it('opens Stripe management only for an authoritative US web subscriber', async () => {

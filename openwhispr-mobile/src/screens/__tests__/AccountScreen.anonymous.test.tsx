@@ -91,6 +91,7 @@ const mockUsageStoreState: {
 
 const mockRouterPush = jest.fn();
 jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]),
   router: {
     push: (...args: unknown[]) => mockRouterPush(...args),
     replace: (...args: unknown[]) => mockRouterReplace(...args),

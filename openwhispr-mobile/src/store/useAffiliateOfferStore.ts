@@ -11,21 +11,24 @@ export const useAffiliateOfferStore = create<{
   offer: AffiliateOffer | null;
   identity: BillingIdentity | null;
 }>(() => ({ offer: null, identity: null }));
-let showing: Promise<boolean> | null = null;
+let showing: { identity: BillingIdentity; promise: Promise<boolean> } | null = null;
 let finish: (() => void) | null = null;
 let revision = 0;
 export function closeAffiliateOffer(): void {
   revision += 1;
+  showing = null;
   if (useAffiliateOfferStore.getState().offer) useUsageStore.getState().endBillingSession();
   useAffiliateOfferStore.setState({ offer: null, identity: null });
   finish?.();
   finish = null;
 }
 export function presentAffiliateOffer(isCurrent: () => boolean = () => true): Promise<boolean> {
-  if (showing) return showing;
   const identity = getBillingIdentity();
+  if (!identity || !isCurrent()) return Promise.resolve(false);
+  if (showing && isBillingIdentityCurrent(showing.identity)) return showing.promise;
+  if (showing) closeAffiliateOffer();
   const version = revision;
-  showing = (async () => {
+  const promise = (async () => {
     const { loadAffiliateOffer } =
       require('@/lib/affiliateOffer') as typeof import('@/lib/affiliateOffer');
     const offer = await loadAffiliateOffer();
@@ -33,7 +36,6 @@ export function presentAffiliateOffer(isCurrent: () => boolean = () => true): Pr
       !isCurrent() ||
       version !== revision ||
       !offer ||
-      !identity ||
       !isBillingIdentityCurrent(identity) ||
       useUsageStore.getState().usage?.isSubscribed
     )
@@ -45,7 +47,8 @@ export function presentAffiliateOffer(isCurrent: () => boolean = () => true): Pr
     });
     return true;
   })().finally(() => {
-    showing = null;
+    if (showing?.promise === promise) showing = null;
   });
-  return showing;
+  showing = { identity, promise };
+  return promise;
 }
