@@ -163,6 +163,7 @@ test("Windows directories with spaces and quoted filenames remain literal", asyn
     String.raw`\\fileserver\Shared Documents\_archive\report.txt`,
   ]) {
     assert.equal(markdownToPlainText(`Open ${path} and **read** it.`), `Open ${path} and read it.`);
+    assert.equal(markdownToPlainText(`**Read** ${path}.`), `Read ${path}.`);
   }
   const quoted = String.raw`"C:\My Documents\report _draft_.txt"`;
   assert.equal(
