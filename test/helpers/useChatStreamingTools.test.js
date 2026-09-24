@@ -104,8 +104,71 @@ test("on the AI SDK path a tool step shows the tool's own text, not a bare Done"
     })()
   );
 
-  await captured.sendToAI("Who is Gab?", []);
+  let holds = 0;
+  await captured.sendToAI("Who is Gab?", [], { onHoldDelivery: () => (holds += 1) });
 
   const assistant = getMessages().find((message) => message.role === "assistant");
   assert.equal(assistant.toolCalls[0].result, "Contacts found: 2");
+  // The AI SDK tools carry the turn's scope, so a tool's hold reaches the caller.
+  assert.equal(holds, 1);
+});
+
+test("on the cloud path a tool's hold reaches the caller through the turn's scope", async (t) => {
+  const { captured, reasoningService } = await renderChatStreaming(t, {}, {
+    electronAPI: { connectorFindContacts: async () => ({ contacts: [] }) },
+  });
+  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
+    (async function* () {
+      yield { type: "tool_calls", calls: [{ id: "srv-1", name: "find_contact", arguments: '{"name":"Zed"}' }] };
+      const result = await config.executeToolCall("find_contact", '{"name":"Zed"}', "srv-1");
+      yield { type: "tool_result", callId: "srv-1", toolName: "find_contact", displayText: result.displayText };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+
+  let holds = 0;
+  await captured.sendToAI("Who is Zed?", [], { onHoldDelivery: () => (holds += 1) });
+
+  assert.equal(holds, 1);
+});
+
+test("Esc settles a send whose tool never finishes, and a late result is dropped", async (t) => {
+  let finishLookup;
+  const { captured, reasoningService } = await renderChatStreaming(t, {}, {
+    electronAPI: {
+      connectorFindContacts: () =>
+        new Promise((resolve) => {
+          finishLookup = resolve;
+        }),
+    },
+  });
+  let toolResult;
+  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
+    (async function* () {
+      yield { type: "tool_calls", calls: [{ id: "srv-2", name: "find_contact", arguments: '{"name":"Zed"}' }] };
+      toolResult = await config.executeToolCall("find_contact", '{"name":"Zed"}', "srv-2");
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+
+  const sending = captured.sendToAI("Who is Zed?", []);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  captured.cancelStream();
+  const outcome = await Promise.race([
+    sending.then(() => "settled"),
+    new Promise((resolve) => setTimeout(() => resolve("still waiting on the tool"), 1000)),
+  ]);
+  finishLookup({ contacts: [{ name: "Zed", email: "zed@example.com", lastMet: null }] });
+
+  assert.equal(outcome, "settled");
+  assert.equal(toolResult.displayText, "");
+});
+
+test("an error before the stream starts still rejects the send and adds no messages", async (t) => {
+  const { captured, getMessages } = await renderChatStreaming(t, {}, {
+    // Snippet triggers are read while the tool registry is built, before any stream.
+    settings: { snippets: null },
+  });
+  await assert.rejects(() => captured.sendToAI("hi", []), TypeError);
+  assert.equal(getMessages().length, 0);
 });
