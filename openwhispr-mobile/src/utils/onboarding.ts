@@ -20,7 +20,6 @@ export interface OnboardingProgress {
   paywallHandled?: boolean;
   paywallNextStep?: PaywallNextStep;
   tutorialCompleted?: boolean;
-  affiliateSequence?: boolean;
   keyboardInstalled: boolean;
   permissionsGranted: {
     microphone: boolean;

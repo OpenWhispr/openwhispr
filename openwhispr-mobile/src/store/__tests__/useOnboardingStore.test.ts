@@ -1,7 +1,3 @@
-import { getAffiliateClientConfig } from '@/lib/affiliateLink';
-jest.mock('@/lib/affiliateLink', () => ({
-  getAffiliateClientConfig: jest.fn().mockReturnValue(null),
-}));
 import { getStepProgress, useOnboardingStore } from '../useOnboardingStore';
 import { OnboardingService } from '@/utils/onboarding';
 import { logTutorialCompletion } from '@/lib/appsflyer';
@@ -28,7 +24,6 @@ const service = jest.mocked(OnboardingService);
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(getAffiliateClientConfig).mockReturnValue(null);
   mockConfig = { defaultMode: 'cloud' };
   service.setProgress.mockResolvedValue();
   service.completeOnboarding.mockResolvedValue();
@@ -334,46 +329,4 @@ it('preserves the tracking request marker when resetting setup', async () => {
     paywallHandled: false,
     trackingAuthorizationRequestAttempted: true,
   });
-});
-
-it('keeps fresh affiliate onboarding at graduation before payment and optional signup', async () => {
-  jest
-    .mocked(getAffiliateClientConfig)
-    .mockReturnValue({ domain: 'sandbox.dub.link', publishableKey: 'dub_pk_test' });
-  service.getProgress.mockResolvedValue({
-    step: 'get-started',
-    keyboardInstalled: false,
-    permissionsGranted: { microphone: false, notifications: false },
-  });
-  await useOnboardingStore.getState().hydrate();
-  await useOnboardingStore.getState().goToStep('privacy-mode');
-  await useOnboardingStore.getState().chooseMode('cloud', 'privacy-mode');
-  expect(useOnboardingStore.getState().currentStep).toBe('language');
-  await useOnboardingStore.getState().goNext('language');
-  await useOnboardingStore.getState().goNext('notifications');
-  expect(useOnboardingStore.getState().currentStep).toBe('graduation');
-  await useOnboardingStore.getState().goNext('graduation');
-  expect(useOnboardingStore.getState().currentStep).toBe('paywall');
-  await useOnboardingStore.getState().goNext('paywall');
-  expect(useOnboardingStore.getState().currentStep).toBe('create-account');
-  await useOnboardingStore.getState().goNext('create-account');
-  await useOnboardingStore.getState().goNext('tracking-permission');
-  expect(useOnboardingStore.getState().finished).toBe(true);
-});
-it('does not move an in-progress ordinary setup onto the affiliate route', async () => {
-  jest
-    .mocked(getAffiliateClientConfig)
-    .mockReturnValue({ domain: 'sandbox.dub.link', publishableKey: 'dub_pk_test' });
-  service.getProgress.mockResolvedValue({
-    version: 3,
-    step: 'notifications',
-    paywallHandled: true,
-    selectedMode: 'cloud',
-    keyboardInstalled: true,
-    permissionsGranted: { microphone: true, notifications: true },
-  });
-  await useOnboardingStore.getState().hydrate();
-  expect(useOnboardingStore.getState().affiliateSequence).toBe(false);
-  await useOnboardingStore.getState().goNext('notifications');
-  expect(useOnboardingStore.getState().currentStep).toBe('create-account');
 });

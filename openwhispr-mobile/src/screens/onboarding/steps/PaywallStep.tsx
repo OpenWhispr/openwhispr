@@ -2,7 +2,7 @@ import { presentAffiliateOffer, closeAffiliateOffer } from '@/store/useAffiliate
 import { PaywallHighlights } from '@/components/onboarding/PaywallHighlights';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -10,6 +10,10 @@ import { useUsageStore } from '@/store/useUsageStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { describeOnboardingError } from '@/lib/onboardingErrors';
+import { CreatorLinkField } from '@/components/onboarding/CreatorLinkField';
+import { getAffiliateClientConfig } from '@/lib/affiliateLink';
+import { useAffiliateStore } from '@/store/useAffiliateStore';
+import { TrackingPermissionStep } from './TrackingPermissionStep';
 
 // A cold launch that resumes on this step arrives before the SDK's configure
 // round trip has finished; registering then is answered immediately for a
@@ -29,6 +33,7 @@ export const PAYWALL_ESCAPE_MS = 8_000;
 export function PaywallStep() {
   const { goNext } = useOnboardingStep('paywall');
   const user = useAuthStore((s) => s.user);
+  const sessionCookie = useAuthStore((s) => s.sessionCookie);
   const isSubscribed = useUsageStore((s) => s.usage?.isSubscribed ?? false);
   const { register, state, isConfigured } = useSuperwallGate();
   const hasPresentedRef = useRef(false);
@@ -38,6 +43,35 @@ export function PaywallStep() {
   const [readyGraceElapsed, setReadyGraceElapsed] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [escapeElapsed, setEscapeElapsed] = useState(false);
+  const affiliateEnabled = Boolean(getAffiliateClientConfig());
+  const [consentChecked, setConsentChecked] = useState(!affiliateEnabled);
+  const [entryReady, setEntryReady] = useState(!affiliateEnabled);
+  const [checkingLink, setCheckingLink] = useState(false);
+  const checkingLinkRef = useRef(false);
+  const completeConsent = useCallback(async () => setConsentChecked(true), []);
+  const checkCreator = useCallback(async () => {
+    if (checkingLinkRef.current) return;
+    checkingLinkRef.current = true;
+    setCheckingLink(true);
+    setAdvanceError(null);
+    try {
+      const prepared = await useAffiliateStore.getState().prepare();
+      const auth = useAuthStore.getState();
+      if (
+        prepared &&
+        !unmountedRef.current &&
+        auth.user?.id === user?.id &&
+        auth.sessionCookie === sessionCookie
+      )
+        setEntryReady(true);
+    } catch (error) {
+      if (!unmountedRef.current)
+        setAdvanceError(describeOnboardingError(error, 'Could not check your link. Try again.'));
+    } finally {
+      checkingLinkRef.current = false;
+      if (!unmountedRef.current) setCheckingLink(false);
+    }
+  }, [user?.id, sessionCookie]);
 
   const [advanceError, setAdvanceError] = useState<string | null>(null);
   const advance = useCallback(async (): Promise<void> => {
@@ -91,6 +125,8 @@ export function PaywallStep() {
       return;
     }
 
+    if (!consentChecked || !entryReady) return;
+
     if (!isConfigured && !readyGraceElapsed) return;
     hasPresentedRef.current = true;
     setPresenting(true);
@@ -101,11 +137,15 @@ export function PaywallStep() {
     // only thing that cancels the advance; effect re-runs must not.
     const controller = new AbortController();
     registrationRef.current = controller;
-    presentAffiliateOffer(
-      () => !unmountedRef.current && !hasAdvancedRef.current && !controller.signal.aborted,
-    )
+    const isCurrent = () =>
+      !unmountedRef.current &&
+      !hasAdvancedRef.current &&
+      !controller.signal.aborted &&
+      useAuthStore.getState().user?.id === user.id &&
+      useAuthStore.getState().sessionCookie === sessionCookie;
+    presentAffiliateOffer(isCurrent)
       .then((shown) => {
-        if (!shown && !unmountedRef.current && !controller.signal.aborted)
+        if (!shown && isCurrent())
           return register({
             placement: SUPERWALL_PLACEMENTS.onboardingPaywall,
             signal: controller.signal,
@@ -113,32 +153,56 @@ export function PaywallStep() {
       })
       .catch(() => {})
       .finally(() => {
-        if (!unmountedRef.current) void advance();
+        if (isCurrent()) void advance();
       });
-  }, [advance, isConfigured, isSubscribed, readyGraceElapsed, register, user]);
+  }, [
+    advance,
+    consentChecked,
+    entryReady,
+    isConfigured,
+    isSubscribed,
+    readyGraceElapsed,
+    register,
+    user,
+    sessionCookie,
+  ]);
 
   // Between registering and the SDK presenting, this backdrop looks like an
   // ordinary screen with a primary button; tapping it would mount the next
   // step underneath a paywall that then presents on top of it.
   const ctaDisabled = !advanceError && presenting && state.status === 'idle' && !escapeElapsed;
 
+  if (affiliateEnabled && !consentChecked && user && !isSubscribed)
+    return <TrackingPermissionStep onComplete={completeConsent} />;
+
   return (
-    <OnboardingShell
-      title="Go further with OpenWhispr Pro."
-      titleAccent="Pro"
-      subtitle="Unlock more with Pro, or close the offer to keep using Cloud with your current limits."
-      ctaLabel="Continue"
-      ctaDisabled={ctaDisabled}
-      onCta={advance}
+    <KeyboardAvoidingView
+      className="flex-1"
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View className="gap-4 pt-2">
-        {advanceError ? (
-          <Text accessibilityRole="alert" className="text-systemRed">
-            {advanceError}
-          </Text>
-        ) : null}
-        <PaywallHighlights />
-      </View>
-    </OnboardingShell>
+      <OnboardingShell
+        title="Go further with OpenWhispr Pro."
+        titleAccent="Pro"
+        subtitle="Unlock more with Pro, or close the offer to keep using Cloud with your current limits."
+        ctaLabel="Continue"
+        ctaDisabled={ctaDisabled || checkingLink}
+        ctaLoading={checkingLink}
+        onCta={entryReady ? advance : checkCreator}
+        beforeCta={
+          affiliateEnabled && !entryReady ? (
+            <CreatorLinkField onSubmit={() => void checkCreator()} />
+          ) : undefined
+        }
+      >
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-4 pt-2">
+          {advanceError ? (
+            <Text accessibilityRole="alert" className="text-systemRed">
+              {advanceError}
+            </Text>
+          ) : null}
+          <PaywallHighlights />
+        </ScrollView>
+      </OnboardingShell>
+    </KeyboardAvoidingView>
   );
 }

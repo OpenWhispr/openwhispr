@@ -4,6 +4,27 @@ jest.mock('@/store/useAffiliateOfferStore', () => ({
   closeAffiliateOffer: jest.fn(),
 }));
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+let mockAffiliateEnabled = false;
+const mockPrepare = jest.fn();
+jest.mock('@/lib/affiliateLink', () => ({
+  getAffiliateClientConfig: () =>
+    mockAffiliateEnabled ? { domain: 'sandbox.dub.link', publishableKey: 'dub_pk_TEST' } : null,
+}));
+jest.mock('@/store/useAffiliateStore', () => ({
+  useAffiliateStore: { getState: () => ({ prepare: mockPrepare }) },
+}));
+jest.mock('@/components/onboarding/CreatorLinkField', () => ({
+  CreatorLinkField: () => {
+    const { Text } = require('react-native');
+    return <Text>Have a creator link?</Text>;
+  },
+}));
+jest.mock('../TrackingPermissionStep', () => ({
+  TrackingPermissionStep: ({ onComplete }: { onComplete: () => Promise<void> }) => {
+    const { Button } = require('react-native');
+    return <Button title="Existing tracking choice" onPress={onComplete} />;
+  },
+}));
 
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('react-native-safe-area-context', () => ({
@@ -27,10 +48,13 @@ jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: mockRegister, ...mockGate }),
 }));
 
-type MockAuthState = { user: { id: string; isAnonymous: boolean } | null };
+type MockAuthState = { user: { id: string; isAnonymous: boolean } | null; sessionCookie?: string };
 let mockAuthState: MockAuthState = { user: { id: 'anon-user', isAnonymous: true } };
 jest.mock('@/store/useAuthStore', () => ({
-  useAuthStore: (selector: (s: MockAuthState) => unknown) => selector(mockAuthState),
+  useAuthStore: Object.assign(
+    (selector: (s: MockAuthState) => unknown) => selector(mockAuthState),
+    { getState: () => mockAuthState },
+  ),
 }));
 
 type MockUsageState = { usage: { isSubscribed: boolean } | null };
@@ -44,11 +68,60 @@ import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAffiliateEnabled = false;
+  mockPrepare.mockResolvedValue(true);
   mockGoNext.mockResolvedValue(undefined);
   mockRegister.mockResolvedValue(true);
   mockAuthState = { user: { id: 'anon-user', isAnonymous: true } };
   mockUsageState = { usage: null };
   mockGate = { isConfigured: true, state: { status: 'idle' } };
+});
+
+it('uses the existing consent step before creator entry and the early paywall', async () => {
+  mockAffiliateEnabled = true;
+  const screen = render(<PaywallStep />);
+  expect(screen.queryByText('Have a creator link?')).toBeNull();
+  expect(mockPrepare).not.toHaveBeenCalled();
+  expect(mockRegister).not.toHaveBeenCalled();
+  await act(async () => {
+    fireEvent.press(screen.getByText('Existing tracking choice'));
+  });
+  expect(screen.getByText('Have a creator link?')).toBeTruthy();
+  expect(mockRegister).not.toHaveBeenCalled();
+  mockPrepare.mockResolvedValueOnce(false);
+  await act(async () => {
+    fireEvent.press(screen.getByText('Continue'));
+  });
+  expect(mockRegister).not.toHaveBeenCalled();
+  expect(mockGoNext).not.toHaveBeenCalled();
+  await act(async () => {
+    fireEvent.press(screen.getByText('Continue'));
+  });
+  expect(mockPrepare).toHaveBeenCalledTimes(2);
+  expect(mockRegister).toHaveBeenCalledTimes(1);
+  expect(mockGoNext).toHaveBeenCalledTimes(1);
+});
+
+it('ignores a late creator check after the early paywall step unmounts', async () => {
+  mockAffiliateEnabled = true;
+  let done!: (value: boolean) => void;
+  mockPrepare.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        done = resolve;
+      }),
+  );
+  const screen = render(<PaywallStep />);
+  await act(async () => {
+    fireEvent.press(screen.getByText('Existing tracking choice'));
+  });
+  fireEvent.press(screen.getByText('Continue'));
+  screen.unmount();
+  await act(async () => {
+    done(true);
+  });
+  expect(mockRegister).not.toHaveBeenCalled();
+  expect(mockGoNext).not.toHaveBeenCalled();
 });
 
 afterEach(() => {
