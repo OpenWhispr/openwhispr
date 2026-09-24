@@ -1324,6 +1324,11 @@ class IPCHandlers {
     this.whisperManager.restartServerWithGpuPreference(modelName).catch((err) => {
       debugLogger.error("whisper-server GPU preference restart failed", { error: err.message });
     });
+    // Every pack download or delete and every Retry ends here, already saved.
+    // Tell every window, not just the caller's: Retry on the fallback pop-up
+    // runs in the dictation window, and Settings keeps up to three GPU cards
+    // mounted (#1736). A fallback is announced by its own notification.
+    broadcastToWindows("whisper-gpu-status-changed");
     return !!modelName;
   }
 

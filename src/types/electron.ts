@@ -1771,6 +1771,7 @@ declare global {
         }) => void
       ) => () => void;
       onGpuFallbackNotification: (callback: () => void) => () => void;
+      onWhisperGpuStatusChanged: (callback: () => void) => () => void;
 
       // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
       getGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;

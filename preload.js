@@ -456,6 +456,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "gpu-fallback-notification",
     (callback) => () => callback()
   ),
+  // Main changed the installed packs or the remembered GPU failure (#1736)
+  onWhisperGpuStatusChanged: registerListener(
+    "whisper-gpu-status-changed",
+    (callback) => () => callback()
+  ),
 
   // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
   getGpuPackMigrationNotice: () => ipcRenderer.invoke("get-gpu-pack-migration-notice"),

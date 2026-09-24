@@ -33,13 +33,16 @@ const electronStub = {
   },
   net: { fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }) },
   BrowserWindow: class {
+    // The dictation window (fallback pop-up) and the control panel (Settings).
+    // Each send records what .env held at that moment.
     static getAllWindows() {
-      return [
-        {
-          isDestroyed: () => false,
-          webContents: { send: (channel, data) => broadcasts.push({ channel, data }) },
+      return ["dictation", "control-panel"].map((window) => ({
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel, data) =>
+            broadcasts.push({ window, channel, data, failed: process.env.WHISPER_GPU_FAILED }),
         },
-      ];
+      }));
     }
     static fromWebContents() {
       return null;
@@ -185,7 +188,14 @@ test("a Vulkan fallback saves its reason with the flag, in one .env write", () =
       WHISPER_GPU_FAILED_REASON_VULKAN: DEVICE_LOST,
     },
   ]);
-  assert.deepEqual(broadcasts, [{ channel: "gpu-fallback-notification", data: {} }]);
+  // Announced once per window, by its own notification, after the save
+  assert.deepEqual(
+    broadcasts.map(({ window, channel, failed }) => [window, channel, failed]),
+    [
+      ["dictation", "gpu-fallback-notification", "vulkan"],
+      ["control-panel", "gpu-fallback-notification", "vulkan"],
+    ]
+  );
 });
 
 test("the status IPC reports each backend's own saved reason", async () => {
@@ -282,4 +292,52 @@ test("each pack's status says whether it is the pack main has in use", async () 
 
   serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
   assert.deepEqual(await inUse(), [true, false], "both failed: CUDA first, with its reason");
+});
+
+const STATUS_CHANGED = "whisper-gpu-status-changed";
+// Which windows were told to re-read the GPU status, and what .env held then
+const toldToReread = () =>
+  broadcasts.filter((b) => b.channel === STATUS_CHANGED).map((b) => [b.window, b.failed]);
+
+test("Retry on the fallback pop-up tells every open window, once it is cleared", async () => {
+  const { serverManager, invoke } = createHandlers();
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+  broadcasts.length = 0;
+
+  await invoke("whisper-gpu-retry");
+
+  // Settings is another window, still showing the failure until it re-reads
+  assert.deepEqual(toldToReread(), [
+    ["dictation", undefined],
+    ["control-panel", undefined],
+  ]);
+});
+
+test("downloading or deleting either pack tells every open window, once saved", async () => {
+  const { serverManager, invoke } = createHandlers();
+  for (const [channel, stillFailed] of [
+    ["download-cuda-whisper-binary", "vulkan"],
+    ["delete-cuda-whisper-binary", "vulkan"],
+    ["download-vulkan-whisper-binary", "cuda"],
+    ["delete-vulkan-whisper-binary", "cuda"],
+  ]) {
+    serverManager.emit("cuda-fallback", { reason: KERNEL_IMAGE });
+    serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+    broadcasts.length = 0;
+
+    await invoke(channel);
+
+    const told = [
+      ["dictation", stillFailed],
+      ["control-panel", stillFailed],
+    ];
+    assert.deepEqual(toldToReread(), told, channel);
+  }
+});
+
+test("a pack download that fails changes nothing and announces nothing", async () => {
+  const { invoke } = createHandlers({ downloadError: new Error("network down") });
+
+  assert.equal((await invoke("download-vulkan-whisper-binary")).success, false);
+  assert.deepEqual(toldToReread(), []);
 });
