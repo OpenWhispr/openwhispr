@@ -355,7 +355,7 @@ test("a legacy autoEnd preference cannot disable eligible meeting auto-end", asy
   const harness = createEngine();
   const messages = [];
   harness.engine.setPreferences({ audioDetection: false, processDetection: false, autoEnd: false });
-  assert.deepEqual(harness.engine.getPreferences(), {
+  assert.deepEqual(harness.engine.preferences, {
     processDetection: false,
     audioDetection: false,
   });

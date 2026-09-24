@@ -739,10 +739,6 @@ class MeetingDetectionEngine {
     this._syncAudioActivityDetector();
   }
 
-  getPreferences() {
-    return { ...this.preferences };
-  }
-
   start() {
     debugLogger.info("Meeting detection engine started", this.preferences, "meeting");
     this._syncMeetingProcessDetector();

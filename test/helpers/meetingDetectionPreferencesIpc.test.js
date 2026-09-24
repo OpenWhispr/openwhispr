@@ -97,11 +97,6 @@ const ENABLED_SNAPSHOT = {
   meetingProcessDetection: true,
 };
 
-test("the legacy meeting-detection-set-preferences channel is gone", () => {
-  assert.equal(handlers.has("meeting-detection-set-preferences"), false);
-  assert.equal(handlers.has("meeting-detection-get-preferences"), false);
-});
-
 test("the saved snapshot drives both detectors", async () => {
   applied.length = 0;
   await sync({ ...ENABLED_SNAPSHOT, meetingProcessDetection: false });

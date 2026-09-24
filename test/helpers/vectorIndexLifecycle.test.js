@@ -81,7 +81,6 @@ test("reset invalidates readiness and prevents acknowledging writes", async () =
   const h = loadIndex();
   h.index.init(6333);
   h.index.reset();
-  assert.equal(h.index.isReady(), false);
   assert.equal(await h.index.upsertNote(1, "test"), false);
   assert.equal(await h.index.deleteNote(1), false);
 });

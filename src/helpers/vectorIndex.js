@@ -199,10 +199,6 @@ class VectorIndex {
         onProgress(Math.min(i + BATCH_SIZE, conversations.length), conversations.length);
     }
   }
-
-  isReady() {
-    return this.client !== null;
-  }
 }
 
 module.exports = new VectorIndex();
