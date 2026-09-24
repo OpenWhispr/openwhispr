@@ -33,7 +33,7 @@ const mockPrepareAffiliate = jest.fn().mockResolvedValue(true);
 jest.mock('@/store/useAffiliateStore', () => ({
   useAffiliateStore: { getState: () => ({ prepare: mockPrepareAffiliate }) },
 }));
-jest.mock('@/components/onboarding/CreatorLinkField', () => ({ CreatorLinkField: () => null }));
+jest.mock('@/components/AccountCreatorLink', () => ({ AccountCreatorLink: () => null }));
 const mockRegisterSuperwallGate = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockCreateStripeBillingPortalSession = jest.fn();

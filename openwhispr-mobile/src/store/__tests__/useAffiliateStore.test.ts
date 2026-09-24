@@ -51,7 +51,7 @@ it('ordinary continuation performs no affiliate request', async () => {
   expect(await useAffiliateStore.getState().prepare()).toBe(true);
   expect(claim).not.toHaveBeenCalled();
 });
-it('a manual paste is saved locally but only the main CTA claims it', async () => {
+it('editing saves locally and only an explicit prepare claims it', async () => {
   await useAffiliateStore.getState().edit('https://sandbox.dub.link/creator');
   expect(claim).not.toHaveBeenCalled();
   expect(AsyncStorage.setItem).toHaveBeenLastCalledWith(
@@ -61,6 +61,33 @@ it('a manual paste is saved locally but only the main CTA claims it', async () =
   expect(await useAffiliateStore.getState().prepare()).toBe(true);
   expect(useAffiliateStore.getState().saved).toBe(true);
   expect(claim.mock.calls[0][2]).toBe('session-a');
+});
+
+it('navigation cancellation reaches the claim guard and releases checking for a later retry', async () => {
+  let current = true;
+  let finish!: (status: 'provisional') => void;
+  claim.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await useAffiliateStore.getState().edit('https://sandbox.dub.link/creator');
+  const pending = useAffiliateStore.getState().prepare(() => current);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  expect(claim.mock.calls[0][3]()).toBe(true);
+  current = false;
+  expect(claim.mock.calls[0][3]()).toBe(false);
+  finish('provisional');
+  expect(await pending).toBe(false);
+  expect(useAffiliateStore.getState()).toMatchObject({ saved: false, checking: false });
+  expect(await useAffiliateStore.getState().prepare()).toBe(true);
+});
+
+it('does not start collection if the caller has already left', async () => {
+  await useAffiliateStore.getState().edit('https://sandbox.dub.link/creator');
+  expect(await useAffiliateStore.getState().prepare(() => false)).toBe(false);
+  expect(claim).not.toHaveBeenCalled();
 });
 it('checking twice makes one claim and an offline failure retains input for retry or clearing', async () => {
   let reject!: (error: Error) => void;

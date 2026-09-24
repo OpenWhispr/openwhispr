@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet, type AccessibilityState } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from './SystemIcon';
 import { BRAND } from '@/config/colors';
@@ -17,6 +17,7 @@ type SettingsRowProps = {
   destructive?: boolean;
   showChevron?: boolean;
   selected?: boolean;
+  accessibilityState?: AccessibilityState;
 };
 
 export function SettingsRow({
@@ -32,11 +33,14 @@ export function SettingsRow({
   destructive = false,
   showChevron = true,
   selected = false,
+  accessibilityState,
 }: SettingsRowProps) {
   const isLine = iconStyle === 'line';
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityState={accessibilityState}
       disabled={!onPress && !rightElement}
       className={selected ? 'bg-brand/10 active:bg-brand/20' : 'active:bg-tertiarySystemFill'}
     >

@@ -26,7 +26,7 @@ import { iosColor } from '@/config/colors';
 import { getAccountDisplay } from '@/lib/accountDisplay';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useAffiliateStore } from '@/store/useAffiliateStore';
-import { CreatorLinkField } from '@/components/onboarding/CreatorLinkField';
+import { AccountCreatorLink, type CreatorOfferResult } from '@/components/AccountCreatorLink';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 
 const MUTED_ICON_BG = iosColor('systemGray2');
@@ -164,60 +164,76 @@ export default function AccountScreen() {
     );
   }, [signOut, user]);
 
-  const handleBillingPress = useCallback(async (): Promise<void> => {
-    const context = { ...billingContextRef.current };
-    const isCurrent = () =>
-      billingContextRef.current.active &&
-      billingContextRef.current.generation === context.generation &&
-      useAuthStore.getState().user?.id === context.userId &&
-      useAuthStore.getState().sessionCookie === context.sessionCookie;
-    let currentUsage = useUsageStore.getState().usage;
-    if (user && !currentUsage) {
-      const loadResult = await loadUsage(true);
-      currentUsage = loadResult.usage ?? useUsageStore.getState().usage;
-      if (!isCurrent()) return;
-      if (!currentUsage) {
-        Alert.alert("Couldn't Load Billing", 'Please try again in a moment.');
-        return;
-      }
-    }
-
-    const managementUsage = currentUsage;
-    if (!currentUsage?.isSubscribed && !(await useAffiliateStore.getState().prepare())) return;
-    if (!isCurrent()) return;
-    if (!currentUsage?.isSubscribed) {
+  const handleBillingPress = useCallback(
+    async (intent: 'plans' | 'creator' | 'standard' = 'plans'): Promise<CreatorOfferResult> => {
+      if (affiliatePendingRef.current) return 'cancelled';
       affiliatePendingRef.current = true;
       try {
-        if (await presentAffiliateOffer(isCurrent)) return;
+        const context = { ...billingContextRef.current };
+        const isCurrent = () =>
+          billingContextRef.current.active &&
+          billingContextRef.current.generation === context.generation &&
+          useAuthStore.getState().user?.id === context.userId &&
+          useAuthStore.getState().sessionCookie === context.sessionCookie;
+        let currentUsage = useUsageStore.getState().usage;
+        if (user && !currentUsage) {
+          const loadResult = await loadUsage(true);
+          currentUsage = loadResult.usage ?? useUsageStore.getState().usage;
+          if (!isCurrent()) return 'cancelled';
+          if (!currentUsage) {
+            Alert.alert("Couldn't Load Billing", 'Please try again in a moment.');
+            return 'cancelled';
+          }
+        }
+
+        const managementUsage = currentUsage;
+        if (
+          intent === 'creator' &&
+          (!currentUsage || currentUsage.isSubscribed || !useAffiliateStore.getState().link.trim())
+        )
+          return 'cancelled';
+        if (
+          !currentUsage?.isSubscribed &&
+          intent !== 'standard' &&
+          !(await useAffiliateStore.getState().prepare(isCurrent))
+        )
+          return 'invalid';
+        if (!isCurrent()) return 'cancelled';
+        if (!currentUsage?.isSubscribed && intent !== 'standard') {
+          if (await presentAffiliateOffer(isCurrent)) return 'shown';
+        }
+        if (!isCurrent()) return 'cancelled';
+        if (intent === 'creator') return 'unavailable';
+
+        await registerSuperwallGate({
+          placement: SUPERWALL_PLACEMENTS.accountBillingOpen,
+          params: currentUsage
+            ? {
+                plan: currentUsage.plan,
+                status: currentUsage.status,
+                isSubscribed: currentUsage.isSubscribed,
+                isTrial: currentUsage.isTrial,
+              }
+            : undefined,
+          onAccessGrantedWithoutPurchase: managementUsage
+            ? () => {
+                openGrantedBillingManagement(managementUsage).catch(() => {});
+              }
+            : undefined,
+          onPurchaseComplete: (completion) => {
+            router.replace({
+              pathname: '/(tabs)/(record)',
+              params: { proCompletion: completion },
+            });
+          },
+        });
+        return 'cancelled';
       } finally {
         affiliatePendingRef.current = false;
       }
-    }
-    if (!isCurrent()) return;
-
-    await registerSuperwallGate({
-      placement: SUPERWALL_PLACEMENTS.accountBillingOpen,
-      params: currentUsage
-        ? {
-            plan: currentUsage.plan,
-            status: currentUsage.status,
-            isSubscribed: currentUsage.isSubscribed,
-            isTrial: currentUsage.isTrial,
-          }
-        : undefined,
-      onAccessGrantedWithoutPurchase: managementUsage
-        ? () => {
-            openGrantedBillingManagement(managementUsage).catch(() => {});
-          }
-        : undefined,
-      onPurchaseComplete: (completion) => {
-        router.replace({
-          pathname: '/(tabs)/(record)',
-          params: { proCompletion: completion },
-        });
-      },
-    });
-  }, [loadUsage, registerSuperwallGate, user]);
+    },
+    [loadUsage, registerSuperwallGate, user],
+  );
 
   useEffect(() => {
     if (!user || params.superwallPlacement !== SUPERWALL_PLACEMENTS.accountBillingOpen) return;
@@ -320,13 +336,13 @@ export default function AccountScreen() {
 
         <SettingsSection title="Subscription">
           {user && usage && !usage.isSubscribed ? (
-            <View className="px-4">
-              <CreatorLinkField
-                onSubmit={() => {
-                  handleBillingPress().catch(() => {});
-                }}
-              />
-            </View>
+            <AccountCreatorLink
+              key={`${user.id}:${sessionCookie}`}
+              onCheckOffer={() => handleBillingPress('creator')}
+              onViewPlans={() => {
+                handleBillingPress('standard').catch(() => {});
+              }}
+            />
           ) : null}
           <SettingsRow
             iconStyle="line"

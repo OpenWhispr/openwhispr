@@ -30,7 +30,7 @@ interface AffiliateState extends Candidate {
   hydrate: () => Promise<void>;
   bindSession: () => Promise<void>;
   edit: (link: string, autoSubmit?: boolean) => Promise<void>;
-  prepare: () => Promise<boolean>;
+  prepare: (isCallerCurrent?: () => boolean) => Promise<boolean>;
 }
 let revision = 0;
 let writeQueue: Promise<void> = Promise.resolve();
@@ -101,10 +101,11 @@ export const useAffiliateStore = create<AffiliateState>((set, get) => ({
       set({ error: 'We couldn’t save your link. Try again.' });
     }
   },
-  prepare: async () => {
+  prepare: async (isCallerCurrent = () => true) => {
     if (!getAffiliateClientConfig()) return true;
     await get().hydrate();
     await get().bindSession();
+    if (!isCallerCurrent()) return false;
     const state = get();
     if (!state.link.trim() || state.saved) return true;
     if (state.checking) return false;
@@ -123,6 +124,7 @@ export const useAffiliateStore = create<AffiliateState>((set, get) => ({
     }
     const version = revision;
     const isCurrent = () =>
+      isCallerCurrent() &&
       revision === version &&
       useAuthStore.getState().user?.id === auth.user?.id &&
       useAuthStore.getState().sessionCookie === auth.sessionCookie &&
