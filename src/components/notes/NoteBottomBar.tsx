@@ -1,22 +1,29 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight } from "../icons";
+import { ChatInput } from "../chat/ChatInput";
+import type { AgentState } from "../chat/types";
 import { cn } from "../lib/utils";
+import { FLOATING_CHAT_MAX_HEIGHT_CSS, observeFloatingChatSize } from "./floatingChatLayout";
 
 const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
 
 interface NoteBottomBarProps {
-  /** Uses an opaque surface while the live transcript streams underneath. */
   isRecording: boolean;
   draftText: string;
   onDraftChange: (text: string) => void;
   onAskSubmit: (text: string) => void;
   onInputFocus?: () => void;
+  onInputEscape?: () => void;
   askDisabled?: boolean;
   actionPicker?: React.ReactNode;
-  /** One centred call to action floated above the ask capsule. */
   callout?: React.ReactNode;
   hideInput?: boolean;
+  chatOpen?: boolean;
+  chatContent?: React.ReactNode;
+  hasChatMessages?: boolean;
+  agentState?: AgentState;
+  onCancel?: () => void;
+  floatingPanelRef?: (panel: HTMLDivElement | null) => void | (() => void);
 }
 
 export default function NoteBottomBar({
@@ -25,122 +32,112 @@ export default function NoteBottomBar({
   onDraftChange,
   onAskSubmit,
   onInputFocus,
+  onInputEscape,
   askDisabled,
   actionPicker,
   callout,
-  hideInput,
+  hideInput = false,
+  chatOpen = false,
+  chatContent,
+  hasChatMessages = false,
+  agentState = "idle",
+  onCancel,
+  floatingPanelRef,
 }: NoteBottomBarProps) {
   const { t } = useTranslation();
-  const [isExpanded, setIsExpanded] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const hasText = draftText.trim().length > 0;
 
-  const handleSubmit = useCallback(() => {
-    const text = draftText.trim();
-    if (!text || askDisabled) return;
-    onAskSubmit(text);
-    onDraftChange("");
-    setIsExpanded(false);
-  }, [draftText, askDisabled, onAskSubmit, onDraftChange]);
+  const attachPanel = useCallback(
+    (panel: HTMLDivElement | null) => {
+      if (!panel) return;
+      if (!chatOpen) {
+        panel.style.height = "48px";
+        return;
+      }
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleSubmit();
-      }
-      if (e.key === "Escape") {
-        setIsExpanded(false);
-        inputRef.current?.blur();
-      }
+      const container = panel.parentElement?.parentElement;
+      const header = panel.querySelector<HTMLElement>("[data-note-chat-header]");
+      const messageContent = panel.querySelector<HTMLElement>(".agent-chat-scroll > :first-child");
+      const composer = panel.lastElementChild as HTMLElement | null;
+      if (!container || !header || !messageContent || !composer) return;
+
+      const stopSizing = observeFloatingChatSize({
+        panel,
+        container,
+        header,
+        messageContent,
+        composer,
+        isEmpty: !hasChatMessages,
+      });
+      const stopLayout = floatingPanelRef?.(panel);
+
+      return () => {
+        stopSizing();
+        if (typeof stopLayout === "function") stopLayout();
+      };
     },
-    [handleSubmit]
+    [chatOpen, floatingPanelRef, hasChatMessages]
   );
 
-  const handleInputFocus = useCallback(() => {
-    setIsExpanded(true);
-    onInputFocus?.();
-  }, [onInputFocus]);
-
-  // Chat panel opening hides the input; drop the expanded state so the bar
-  // comes back in its idle layout when the panel closes.
-  useEffect(() => {
-    if (hideInput) setIsExpanded(false);
-  }, [hideInput]);
-
-  useEffect(() => {
-    if (!isExpanded) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (!hasText && containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsExpanded(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isExpanded, hasText]);
-
   return (
-    <div
-      ref={containerRef}
-      className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-7 pt-6 pointer-events-none bg-gradient-to-t from-background from-45% to-transparent"
-    >
-      {callout && !hideInput && (
-        <div className="pointer-events-auto mb-3 flex justify-center">{callout}</div>
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-5 pb-7 pt-6">
+      <div
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background from-45% to-transparent transition-opacity duration-200",
+          chatOpen && "opacity-0"
+        )}
+      />
+      {callout && !chatOpen && !hideInput && (
+        <div className="pointer-events-auto relative mb-3 flex justify-center">{callout}</div>
       )}
-      <div className="flex items-end pointer-events-auto w-full max-w-[600px] mx-auto">
+      <div
+        ref={attachPanel}
+        aria-hidden={hideInput}
+        inert={hideInput}
+        style={{ maxHeight: FLOATING_CHAT_MAX_HEIGHT_CSS }}
+        className={cn(
+          "pointer-events-auto relative mx-auto flex w-full max-w-[600px] flex-col border",
+          chatOpen || hideInput ? "overflow-hidden" : "overflow-visible",
+          "transition-[height,border-radius,box-shadow,max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+          isRecording && !chatOpen ? RECORDING_SURFACE : "bg-background shadow-sm",
+          chatOpen
+            ? "rounded-3xl border-black/10 shadow-elevated dark:border-white/14"
+            : "rounded-full border-black/10 dark:border-white/14",
+          "focus-within:border-black/15 focus-within:ring-[3px] focus-within:ring-primary/8 dark:focus-within:border-white/22",
+          hideInput && "max-w-0 border-transparent opacity-0 pointer-events-none"
+        )}
+      >
         <div
-          aria-hidden={hideInput}
+          aria-hidden={!chatOpen}
+          inert={!chatOpen}
           className={cn(
-            "flex-1 min-w-0 flex items-center h-12 gap-2 rounded-full",
-            isRecording ? RECORDING_SURFACE : "bg-background shadow-sm",
-            "border",
-            "transition-[max-width,opacity,padding,border-color,box-shadow] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
-            hideInput
-              ? "max-w-0 opacity-0 ps-0 pe-0 border-transparent shadow-none pointer-events-none"
-              : "max-w-[600px] opacity-100 ps-4 pe-2",
-            isExpanded
-              ? "border-black/15 dark:border-white/22 ring-[3px] ring-primary/8"
-              : !hideInput && "border-black/10 dark:border-white/14"
+            "flex min-h-0 flex-1 flex-col overflow-hidden transition-[opacity,transform] duration-200 motion-reduce:transition-none",
+            chatOpen ? "translate-y-0 opacity-100 delay-75" : "translate-y-2 opacity-0"
           )}
         >
-          <input
-            dir="auto"
-            ref={inputRef}
-            type="text"
-            value={draftText}
-            onChange={(e) => onDraftChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={handleInputFocus}
-            disabled={askDisabled}
-            tabIndex={hideInput ? -1 : undefined}
-            placeholder={t("chat.inputPlaceholder")}
-            className={cn(
-              "input-inline flex-1 bg-transparent outline-none min-w-0 p-0 caret-primary",
-              "text-sm text-foreground",
-              "placeholder:text-muted-foreground"
-            )}
-          />
-
-          {!hasText && !isExpanded && actionPicker && (
-            <div className="shrink-0">{actionPicker}</div>
-          )}
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!hasText || askDisabled}
-            className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground",
-              "transition-colors duration-150",
-              "enabled:hover:bg-muted/80 enabled:hover:text-foreground enabled:active:scale-95",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-              "disabled:cursor-default"
-            )}
-            aria-label={t("embeddedChat.send")}
-          >
-            <ArrowRight size={18} className="-rotate-90" />
-          </button>
+          {chatContent}
         </div>
+        {!hideInput && (
+          <ChatInput
+            className="w-full"
+            variant="note"
+            agentState={agentState}
+            partialTranscript=""
+            draftText={draftText}
+            onDraftChange={onDraftChange}
+            onTextSubmit={onAskSubmit}
+            onCancel={onCancel}
+            onFocus={onInputFocus}
+            onEscape={onInputEscape}
+            focusOnIdle={chatOpen}
+            disabled={askDisabled}
+            voiceDraft={chatOpen}
+            placeholder={t("chat.inputPlaceholder")}
+            trailingContent={
+              !chatOpen && actionPicker ? <div className="shrink-0">{actionPicker}</div> : null
+            }
+          />
+        )}
       </div>
     </div>
   );

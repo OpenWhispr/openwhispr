@@ -10,6 +10,10 @@ async function renderBottomBar(t, props) {
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-note-bottom-bar-test-",
     mockModules: {
+      "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
+      "/useVoiceDraft": `
+        export const useVoiceDraft = () => ({ status: "idle", streamingOnlyProvider: false });
+      `,
       "/stores/meetingRecordingStore": `
         export const getMicAnalyser = () => null;
         export const useMeetingRecordingStore = { getState: () => ({ currentMicLevel: 0 }) };
@@ -52,8 +56,19 @@ test("the ask capsule never transitions its surface between the two states", asy
   for (const isRecording of [false, true]) {
     const html = await renderBottomBar(t, { isRecording });
     assert.ok(
-      html.includes("transition-[max-width,opacity,padding,border-color,box-shadow]"),
+      html.includes("transition-[height,border-radius,box-shadow,max-width,opacity]"),
       `capsule transition is property-scoped (isRecording=${isRecording})`
     );
   }
+});
+
+test("in-view chat expands the existing capsule around one composer", async (t) => {
+  const html = await renderBottomBar(t, {
+    chatOpen: true,
+    chatContent: createElement("div", { "data-note-chat-header": "" }, "Chat"),
+  });
+
+  assert.ok(html.includes("rounded-3xl"));
+  assert.ok(html.includes("data-note-chat-header"));
+  assert.equal((html.match(/<textarea/g) ?? []).length, 1);
 });

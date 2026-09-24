@@ -22,9 +22,15 @@ interface ChatInputProps {
   className?: string;
   /** Offer a mic when the input is empty; recordings transcribe into the input. */
   voiceDraft?: boolean;
-  variant?: "default" | "assistant";
+  variant?: "default" | "assistant" | "note";
   draftText?: string;
   onDraftChange?: (text: string) => void;
+  onFocus?: () => void;
+  onEscape?: () => void;
+  trailingContent?: React.ReactNode;
+  focusOnIdle?: boolean;
+  fillHeight?: boolean;
+  disabled?: boolean;
 }
 
 function RecordingIndicator() {
@@ -67,6 +73,12 @@ export function ChatInput({
   variant = "default",
   draftText,
   onDraftChange,
+  onFocus,
+  onEscape,
+  trailingContent,
+  focusOnIdle = true,
+  fillHeight = false,
+  disabled = false,
 }: ChatInputProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -93,20 +105,27 @@ export function ChatInput({
 
   const handleSubmit = useCallback(() => {
     const text = inputText.trim();
-    if (!text || !onTextSubmit) return;
+    if (!text || !onTextSubmit || disabled) return;
     onTextSubmit(text);
     setInputText("");
     requestAnimationFrame(() => inputRef.current?.focus());
-  }, [inputText, onTextSubmit, setInputText]);
+  }, [inputText, onTextSubmit, setInputText, disabled]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Escape" && onEscape) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.blur();
+        onEscape();
+        return;
+      }
       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         handleSubmit();
       }
     },
-    [handleSubmit]
+    [handleSubmit, onEscape]
   );
 
   const isIdle = agentState === "idle";
@@ -118,28 +137,40 @@ export function ChatInput({
   useLayoutEffect(() => {
     const input = inputRef.current;
     if (!input) return;
-    input.style.height = "auto";
-    input.style.height = `${input.scrollHeight}px`;
-  }, [inputText, isVoiceRecording, isVoiceTranscribing]);
+    if (fillHeight) {
+      input.style.height = "100%";
+    } else {
+      input.style.height = "auto";
+      input.style.height = `${input.scrollHeight}px`;
+    }
+  }, [inputText, isVoiceRecording, isVoiceTranscribing, fillHeight]);
 
   useEffect(() => {
-    if (isIdle) {
+    if (isIdle && focusOnIdle) {
       requestAnimationFrame(() => inputRef.current?.focus());
     }
-  }, [isIdle]);
+  }, [isIdle, focusOnIdle]);
 
   return (
     <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
       <div
         className={cn(
           "flex items-center gap-2 min-h-11 ps-4 pe-1.5 py-1.5 rounded-3xl",
-          variant === "assistant" ? "min-h-12 bg-card shadow-sm dark:bg-surface-2" : GLASS_SURFACE,
-          "border border-black/10 dark:border-white/14",
-          "transition-all duration-200",
+          variant === "assistant"
+            ? "min-h-12 bg-card shadow-sm dark:bg-surface-2"
+            : variant === "note"
+              ? "min-h-12 bg-transparent"
+              : GLASS_SURFACE,
+          variant === "note" ? "border-0" : "border border-black/10 dark:border-white/14",
+          fillHeight
+            ? "h-[min(40vh,16rem)] items-end"
+            : "transition-[border-color,box-shadow] duration-200",
           isIdle &&
             (variant === "assistant"
               ? "focus-within:border-foreground/15 focus-within:ring-2 focus-within:ring-foreground/5"
-              : "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8")
+              : variant === "note"
+                ? ""
+                : "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8")
         )}
       >
         {isListening && (
@@ -215,7 +246,7 @@ export function ChatInput({
         )}
 
         {(isIdle || isBusy) && !isVoiceRecording && !isVoiceTranscribing && (
-          <div className="flex items-end gap-2 w-full">
+          <div className={cn("flex items-end gap-2 w-full", fillHeight && "h-full")}>
             <textarea
               dir="auto"
               ref={inputRef}
@@ -223,17 +254,20 @@ export function ChatInput({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={isBusy}
+              onFocus={onFocus}
+              disabled={isBusy || disabled}
               autoFocus={autoFocus}
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
                 "input-inline flex-1 outline-none bg-transparent caret-primary",
-                variant === "assistant" ? "text-sm" : "text-[13px]",
+                variant === "assistant" || variant === "note" ? "text-sm" : "text-[13px]",
                 "text-foreground placeholder:text-muted-foreground/70",
                 "min-w-0 min-h-8 max-h-32 resize-none overflow-y-auto border-0 px-0 py-1.5 leading-5",
-                isBusy && "text-muted-foreground/70 cursor-not-allowed"
+                fillHeight && "min-h-0 max-h-none",
+                (isBusy || disabled) && "text-muted-foreground/70 cursor-not-allowed"
               )}
             />
+            {isIdle && !inputText.trim() && trailingContent}
             {isBusy && onCancel ? (
               <button
                 type="button"
@@ -252,7 +286,7 @@ export function ChatInput({
             ) : isIdle && (inputText.trim() || !voiceDraft) ? (
               <button
                 onClick={handleSubmit}
-                disabled={!inputText.trim()}
+                disabled={!inputText.trim() || disabled}
                 aria-label={t("agentMode.input.send")}
                 className={cn(
                   "rounded-full shrink-0",
@@ -261,12 +295,12 @@ export function ChatInput({
                   "transition-all duration-100",
                   inputText.trim()
                     ? "hover:brightness-110 active:scale-95"
-                    : variant === "assistant"
+                    : variant === "assistant" || variant === "note"
                       ? "cursor-default"
                       : "opacity-30 saturate-0 cursor-default"
                 )}
               >
-                {variant === "assistant" ? (
+                {variant === "assistant" || variant === "note" ? (
                   <span className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
                     <ArrowRight size={18} className="-rotate-90" />
                   </span>
@@ -277,10 +311,10 @@ export function ChatInput({
             ) : isIdle ? (
               <button
                 onClick={voice.start}
-                disabled={voice.streamingOnlyProvider}
+                disabled={voice.streamingOnlyProvider || disabled}
                 aria-label={t("notes.editor.transcribe")}
                 title={
-                  voice.streamingOnlyProvider
+                  voice.streamingOnlyProvider || disabled
                     ? t("agentMode.input.voiceDraftStreamingOnly")
                     : t("notes.editor.transcribe")
                 }

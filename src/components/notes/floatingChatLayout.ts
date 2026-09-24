@@ -11,6 +11,7 @@ export const FLOATING_CHAT_MAX_HEIGHT_CSS = "calc(100% - 7rem)";
 const SCROLL_BOTTOM_THRESHOLD_PX = 80;
 const FLOATING_CHAT_TOP_CLEARANCE_PX = 112;
 const FLOATING_CHAT_EMPTY_CONTENT_HEIGHT_PX = 160;
+const FLOATING_CHAT_MESSAGE_PADDING_PX = 16;
 
 export type { ScrollMetrics };
 
@@ -52,7 +53,10 @@ export function observeFloatingChatSize(
       : messageContent.scrollHeight;
     const availableHeight = Math.max(0, container.clientHeight - FLOATING_CHAT_TOP_CLEARANCE_PX);
     panel.style.height = `${Math.min(
-      header.offsetHeight + contentHeight + composer.offsetHeight,
+      header.offsetHeight +
+        contentHeight +
+        FLOATING_CHAT_MESSAGE_PADDING_PX +
+        composer.offsetHeight,
       availableHeight
     )}px`;
   };

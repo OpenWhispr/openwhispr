@@ -165,12 +165,12 @@ test("the in-view chat grows with its content and stops at the available note he
     }
   );
 
-  assert.equal(panel.style.height, "260px");
+  assert.equal(panel.style.height, "276px");
   assert.deepEqual(observed, [container, header, messageContent, composer]);
 
   composer.offsetHeight = 104;
   onResize();
-  assert.equal(panel.style.height, "300px", "a multiline draft grows the panel upward");
+  assert.equal(panel.style.height, "316px", "a multiline draft grows the panel upward");
 
   messageContent.scrollHeight = 800;
   onResize();
@@ -178,7 +178,7 @@ test("the in-view chat grows with its content and stops at the available note he
 
   messageContent.scrollHeight = 100;
   onResize();
-  assert.equal(panel.style.height, "240px", "switching chats shrinks the panel again");
+  assert.equal(panel.style.height, "256px", "switching chats shrinks the panel again");
 
   cleanup();
   assert.equal(disconnected, true);

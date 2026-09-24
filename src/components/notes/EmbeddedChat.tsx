@@ -10,7 +10,6 @@ import type { Message, AgentState } from "../chat/types";
 import { setActiveNoteId, setActiveFolderId } from "../../stores/noteStore";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { ConversationPicker } from "./ConversationPicker";
-import { FLOATING_CHAT_MAX_HEIGHT_CSS, observeFloatingChatSize } from "./floatingChatLayout";
 
 export type EmbeddedChatMode = "hidden" | "floating" | "sidebar";
 
@@ -27,8 +26,7 @@ interface EmbeddedChatProps {
   activeConversationId?: number | null;
   onSwitchConversation?: (id: number) => void;
   onNewChat?: () => void;
-  /** Floating panel ref; NoteEditor reserves scroll space with it. */
-  floatingPanelRef?: (panel: HTMLDivElement | null) => void | (() => void);
+  active?: boolean;
 }
 
 function EmptyState({ floating }: { floating: boolean }) {
@@ -64,36 +62,9 @@ export default function EmbeddedChat({
   activeConversationId,
   onSwitchConversation,
   onNewChat,
-  floatingPanelRef,
+  active = true,
 }: EmbeddedChatProps) {
   const { t } = useTranslation();
-  const isEmpty = messages.length === 0;
-
-  const attachFloatingPanel = useCallback(
-    (panel: HTMLDivElement | null) => {
-      const container = panel?.parentElement;
-      const header = panel?.firstElementChild as HTMLElement | null;
-      const messageContent = panel?.querySelector<HTMLElement>(".agent-chat-scroll > :first-child");
-      const composer = panel?.lastElementChild as HTMLElement | null;
-      if (!panel || !container || !header || !messageContent || !composer) return;
-
-      const stopSizing = observeFloatingChatSize({
-        panel,
-        container,
-        header,
-        messageContent,
-        composer,
-        isEmpty,
-      });
-      const stopLayout = floatingPanelRef?.(panel);
-
-      return () => {
-        stopSizing();
-        if (typeof stopLayout === "function") stopLayout();
-      };
-    },
-    [floatingPanelRef, isEmpty]
-  );
 
   const handleOpenNote = useCallback(async (noteId: number) => {
     const note = await window.electronAPI.getNote(noteId);
@@ -103,11 +74,11 @@ export default function EmbeddedChat({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "Escape" && mode === "floating") {
+      if (e.key === "Escape" && mode === "floating" && active) {
         onModeChange("hidden");
       }
     },
-    [mode, onModeChange]
+    [mode, onModeChange, active]
   );
 
   useEffect(() => {
@@ -134,6 +105,7 @@ export default function EmbeddedChat({
 
   const header = (
     <div
+      data-note-chat-header={mode === "floating" ? "" : undefined}
       className={cn(
         "h-9 flex items-center px-3 shrink-0",
         mode === "sidebar" && "border-b border-border/70 dark:border-white/10"
@@ -170,19 +142,7 @@ export default function EmbeddedChat({
     </div>
   );
 
-  const chatInput = (
-    <ChatInput
-      agentState={agentState}
-      draftText={draftText}
-      onDraftChange={onDraftChange}
-      partialTranscript=""
-      onTextSubmit={onTextSubmit}
-      onCancel={onCancel}
-      voiceDraft
-    />
-  );
-
-  const chatContent = (
+  const chatBody = (
     <>
       {header}
       <div className="flex-1 min-h-0 flex flex-col **:data-chat-bubble:max-w-full">
@@ -192,27 +152,11 @@ export default function EmbeddedChat({
           onOpenNote={handleOpenNote}
         />
       </div>
-      {mode === "floating" ? <div className="shrink-0">{chatInput}</div> : chatInput}
     </>
   );
 
   if (mode === "floating") {
-    return (
-      <div
-        ref={attachFloatingPanel}
-        style={{ maxHeight: FLOATING_CHAT_MAX_HEIGHT_CSS }}
-        className={cn(
-          "absolute bottom-4 left-5 right-5 z-20 mx-auto max-w-[600px]",
-          "min-h-0 flex flex-col overflow-hidden rounded-3xl",
-          "bg-background dark:bg-surface-2",
-          "border border-black/10 dark:border-white/14",
-          "shadow-elevated",
-          "transition-[height] duration-200 ease-out motion-reduce:transition-none"
-        )}
-      >
-        {chatContent}
-      </div>
-    );
+    return chatBody;
   }
 
   return (
@@ -225,7 +169,16 @@ export default function EmbeddedChat({
         "min-h-0"
       )}
     >
-      {chatContent}
+      {chatBody}
+      <ChatInput
+        agentState={agentState}
+        draftText={draftText}
+        onDraftChange={onDraftChange}
+        partialTranscript=""
+        onTextSubmit={onTextSubmit}
+        onCancel={onCancel}
+        voiceDraft
+      />
     </div>
   );
 }

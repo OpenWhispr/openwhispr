@@ -742,7 +742,7 @@ export default function NoteEditor({
 
   const floatingChatPanelRef = useCallback(
     (panel: HTMLDivElement | null): (() => void) | undefined => {
-      const container = panel?.parentElement;
+      const container = panel?.parentElement?.parentElement;
       const contentRoot = contentScrollRef.current;
       if (!panel || !container || !contentRoot) return undefined;
 
@@ -1274,6 +1274,31 @@ export default function NoteEditor({
             onDraftChange={setChatDraft}
             onAskSubmit={handleAskSubmit}
             onInputFocus={handleChatInputFocus}
+            onInputEscape={() => setChatMode("hidden")}
+            chatOpen={chatMode === "floating"}
+            hasChatMessages={embeddedChat.messages.some((message) => message.role !== "tool")}
+            agentState={chatMode === "floating" ? embeddedChat.agentState : "idle"}
+            onCancel={embeddedChat.cancelStream}
+            floatingPanelRef={floatingChatPanelRef}
+            chatContent={
+              chatMode !== "sidebar" && (
+                <EmbeddedChat
+                  mode="floating"
+                  active={chatMode === "floating"}
+                  onModeChange={setChatMode}
+                  messages={embeddedChat.messages}
+                  agentState={embeddedChat.agentState}
+                  draftText={chatDraft}
+                  onDraftChange={setChatDraft}
+                  onTextSubmit={embeddedChat.sendMessage}
+                  onCancel={embeddedChat.cancelStream}
+                  noteConversations={embeddedChat.noteConversations}
+                  activeConversationId={embeddedChat.activeConversationId}
+                  onSwitchConversation={embeddedChat.switchConversation}
+                  onNewChat={embeddedChat.startNewChat}
+                />
+              )
+            }
             actionPicker={
               isRecording ||
               !canEditNote ||
@@ -1289,25 +1314,8 @@ export default function NoteEditor({
                 </Button>
               )
             }
-            hideInput={chatMode !== "hidden"}
+            hideInput={chatMode === "sidebar"}
           />
-          {chatMode === "floating" && (
-            <EmbeddedChat
-              mode="floating"
-              floatingPanelRef={floatingChatPanelRef}
-              onModeChange={setChatMode}
-              messages={embeddedChat.messages}
-              agentState={embeddedChat.agentState}
-              draftText={chatDraft}
-              onDraftChange={setChatDraft}
-              onTextSubmit={embeddedChat.sendMessage}
-              onCancel={embeddedChat.cancelStream}
-              noteConversations={embeddedChat.noteConversations}
-              activeConversationId={embeddedChat.activeConversationId}
-              onSwitchConversation={embeddedChat.switchConversation}
-              onNewChat={embeddedChat.startNewChat}
-            />
-          )}
         </div>
       </div>
       {chatMode === "sidebar" && (
