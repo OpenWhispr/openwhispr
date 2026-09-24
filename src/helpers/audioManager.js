@@ -5161,11 +5161,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             return res;
           });
 
+          usedCloudReasoning = true;
           if (reasonResult.success && hasTextContent(reasonResult.text)) {
             if (!customPrompt) assertValidCleanupOutput(finalText, reasonResult.text);
             finalText = reasonResult.text;
           }
-          usedCloudReasoning = true;
 
           logger.info(
             "Streaming reasoning complete",

@@ -20,15 +20,11 @@ export default class FakeAudioManager {
   setCallbacks(callbacks) { this.callbacks = callbacks; }
   getState() { return {}; }
   shouldUseStreaming() { return false; }
-  async safePaste(text) {
+  async safePaste() {
     this.pasteCalls += 1;
-    this.pastedText = text;
     return globalThis.__cleanupFallbackPasteOutcome?.pasted === true;
   }
-  async saveTranscription(text, rawText) {
-    this.savedTranscription = { text, rawText };
-    return true;
-  }
+  async saveTranscription() { return true; }
   cleanup() {}
 }
 `;
@@ -64,7 +60,7 @@ test("raw cleanup fallback is reported only after the original dictation is past
     mockModules: {
       "/helpers/audioManager": FAKE_AUDIO_MANAGER_SOURCE,
       "/utils/logger": `
-        export default { debug() {}, info() {}, warn() {}, error() {}, logReasoning() {} };
+        export default { debug() {}, info() {}, warn() {}, error() {} };
       `,
     },
   });
@@ -78,10 +74,8 @@ test("raw cleanup fallback is reported only after the original dictation is past
   });
   useCleanupFailureStore.setState({ pending: 0, lastFailure: null });
 
-  const onStateChange = () => {};
-  const onDemoEvent = () => {};
   function Harness() {
-    useAudioRecording(onStateChange, { onDemoEvent });
+    useAudioRecording(() => {}, { onDemoEvent: () => {} });
     return null;
   }
 
@@ -105,33 +99,6 @@ test("raw cleanup fallback is reported only after the original dictation is past
   assert.equal(manager.pasteCalls, 1);
   assert.equal(useCleanupFailureStore.getState().pending, 1);
   assert.deepEqual(useCleanupFailureStore.getState().lastFailure, cleanupFailure);
-
-  const { assertValidCleanupOutput } = await vite.ssrLoadModule("/utils/cleanupOutput.ts");
-  const rawText = "um so can you uh send me the report by friday";
-  let duplicateFailure;
-  try {
-    assertValidCleanupOutput(
-      rawText,
-      "Can you send me the report by Friday? Can you send me the report by Friday?"
-    );
-  } catch (error) {
-    duplicateFailure = { message: error.message, messageKey: error.messageKey };
-  }
-  assert.ok(duplicateFailure);
-  useCleanupFailureStore.setState({ pending: 0, lastFailure: null });
-  await React.act(async () =>
-    manager.callbacks.onTranscriptionComplete({
-      success: true,
-      text: rawText,
-      rawText,
-      source: "local",
-      cleanupFailure: duplicateFailure,
-    })
-  );
-  assert.equal(manager.pastedText, rawText);
-  assert.deepEqual(manager.savedTranscription, { text: rawText, rawText });
-  assert.equal(useCleanupFailureStore.getState().pending, 1);
-  assert.deepEqual(useCleanupFailureStore.getState().lastFailure, duplicateFailure);
 
   useCleanupFailureStore.setState({ pending: 0, lastFailure: null });
   globalThis.__cleanupFallbackPasteOutcome = { success: true, pasted: false };

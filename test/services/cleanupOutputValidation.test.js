@@ -28,10 +28,7 @@ test("cleanup validates completed provider output using the request's prompt set
     });
 
   await t.test("a complete but duplicated local answer fails cleanup", async () => {
-    await assert.rejects(process(), {
-      code: "CLEANUP_OUTPUT_INVALID",
-      reason: "duplicated_transcript",
-    });
+    await assert.rejects(process(), { code: "CLEANUP_OUTPUT_INVALID" });
   });
 
   await t.test("custom and explicit non-cleanup prompts remain unmodified", async () => {

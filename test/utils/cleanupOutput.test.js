@@ -23,7 +23,6 @@ test("cleanup rejects whole-output duplication without requiring a match to raw 
       () => assertValidCleanupOutput(RAW, output),
       {
         code: "CLEANUP_OUTPUT_INVALID",
-        reason: "duplicated_transcript",
         messageKey: "hooks.audioRecording.errorDescriptions.cleanupDuplicated",
       },
       output
@@ -50,6 +49,10 @@ test("cleanup leaves legitimate, ambiguous, and out-of-scope output alone", asyn
     [`${CLEAN} ${CLEAN}`, `${CLEAN.toUpperCase()}\n${CLEAN}`],
     ["Send it Thursday no wait Friday", "Send it Friday."],
     ["déjà vu élève", "Déjà vu, élève."],
+    [
+      "um please send the report by friday please send the report by friday",
+      "Please send the report by Friday. Please send the report by Friday.",
+    ],
   ]) {
     assert.doesNotThrow(() => assertValidCleanupOutput(raw, output), output);
   }

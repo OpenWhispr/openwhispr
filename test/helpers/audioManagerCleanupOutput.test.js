@@ -87,8 +87,16 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
                 result = value;
               },
             });
+            let usageOptions;
+            window.electronAPI.cloudStreamingUsage = async (text, seconds, options) => {
+              usageOptions = options;
+              return { success: true };
+            };
             await manager._finalizeStreamingRecording(null);
             assert.equal(result.rawText, RAW);
+            await new Promise(setImmediate);
+            // The successful /api/reason call already logged this dictation.
+            assert.equal(usageOptions?.sendLogs, false);
           } else {
             let translationInput;
             manager.processWithReasoningModel = async (text) => {

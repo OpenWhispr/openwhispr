@@ -39,10 +39,11 @@ export function assertValidCleanupOutput(rawText: string, output: string): void 
   if (!tokens.slice(0, halfLength).every((token, index) => token === tokens[index + halfLength])) {
     return;
   }
+  // A speaker who really said it twice has at least as many raw words as the cleanup.
+  if (tokens.length <= originalTokens.length) return;
 
-  const reason = "duplicated_transcript";
   logger.logReasoning("CLEANUP_OUTPUT_REJECTED", {
-    reason,
+    reason: "duplicated_transcript",
     inputLength: rawText.length,
     outputLength: output.length,
   });
@@ -50,7 +51,6 @@ export function assertValidCleanupOutput(rawText: string, output: string): void 
     new Error("AI cleanup repeated the transcript. The original text was kept."),
     {
       code: "CLEANUP_OUTPUT_INVALID",
-      reason,
       messageKey: "hooks.audioRecording.errorDescriptions.cleanupDuplicated",
     }
   );
