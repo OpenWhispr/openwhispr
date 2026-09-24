@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   native:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     env:
       CI: 'true'
@@ -52,18 +52,33 @@ jobs:
           ruby-version: '3.3'
           working-directory: openwhispr-mobile
           bundler-cache: true
-      - name: Select an installed Xcode 26 toolchain
+      - name: Select Xcode 26.4 or newer and verify the app SDK APIs
         run: |
           XCODE_APP=$(python3 - <<'PY'
           from pathlib import Path
           import re
           apps = [p for p in Path('/Applications').glob('Xcode_26*.app')
-                  if re.fullmatch(r'Xcode_26(?:\.\d+)*\.app', p.name)]
-          assert apps, 'Xcode 26 is required by the mobile project'
+                  if re.fullmatch(r'Xcode_26(?:\.\d+)*\.app', p.name)
+                  and tuple(map(int, re.findall(r'\d+', p.name))) >= (26, 4)]
+          assert apps, 'The app requires Xcode 26.4+ for Foundation Models token/context APIs'
           print(max(apps, key=lambda p: tuple(map(int, re.findall(r'\d+', p.name)))))
           PY
           )
+          export DEVELOPER_DIR="$XCODE_APP/Contents/Developer"
           echo "DEVELOPER_DIR=$XCODE_APP/Contents/Developer" >> "$GITHUB_ENV"
+          xcodebuild -version
+          cat > "$RUNNER_TEMP/verify-app-sdk.swift" <<'SWIFT'
+          import FoundationModels
+          @available(iOS 26.4, *)
+          func verifyAppSDK(_ prompt: String) async throws {
+            let model = SystemLanguageModel.default
+            let _: Int = model.contextSize
+            let _: Int = try await model.tokenCount(for: prompt)
+          }
+          SWIFT
+          xcrun swiftc -typecheck -target arm64-apple-ios18.0-simulator \
+            -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
+            "$RUNNER_TEMP/verify-app-sdk.swift"
       - name: Install locked JavaScript dependencies
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
