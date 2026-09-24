@@ -3744,6 +3744,7 @@
       "connectFailedDescription": "Ocorreu um erro ao conectar ao Calendar.app. Reinicie o OpenWhispr e tente novamente."
     },
     "sections": {
+      "connectors": "Conectores",
       "calendar": "Calendário",
       "api": "API",
       "mcp": "MCP",
@@ -3824,6 +3825,35 @@
       "unknown": "Não foi possível confirmar o envio. Verifique {{destination}}.",
       "cancelled": "Cancelado. Nada foi enviado.",
       "notSent": "Não enviado."
+    },
+    "policyOff": "Sua organização desativou os conectores.",
+    "upgrade": "Atualizar",
+    "email": {
+      "title": "Rascunhos de e-mail",
+      "description": "O assistente abre um rascunho pré-preenchido no seu aplicativo de e-mail. Você revisa e aperta Enviar.",
+      "targetLabel": "Criar rascunhos de e-mail em",
+      "targets": {
+        "auto": "Automático",
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (trabalho ou escola)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Aplicativo de e-mail padrão"
+      }
+    },
+    "recent": {
+      "title": "Ações recentes",
+      "actions": {
+        "email_draft": "Rascunho para {{destination}}"
+      },
+      "states": {
+        "pending": "Aguardando",
+        "committing": "Em andamento",
+        "sent": "Concluído",
+        "failed": "Falhou",
+        "unknown": "Não confirmado",
+        "cancelled": "Cancelado",
+        "expired": "Expirado"
+      }
     }
   },
   "calendar": {

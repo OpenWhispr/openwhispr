@@ -3744,6 +3744,7 @@
       "connectFailedDescription": "Calendar.app への接続中にエラーが発生しました。OpenWhispr を再起動してもう一度お試しください。"
     },
     "sections": {
+      "connectors": "コネクタ",
       "calendar": "カレンダー",
       "api": "API",
       "mcp": "MCP",
@@ -3824,6 +3825,35 @@
       "unknown": "送信されたか確認できませんでした。{{destination}} を確認してください。",
       "cancelled": "キャンセルしました。何も送信されていません。",
       "notSent": "送信されていません。"
+    },
+    "policyOff": "組織によってコネクタが無効にされています。",
+    "upgrade": "アップグレード",
+    "email": {
+      "title": "メール下書き",
+      "description": "アシスタントがメールアプリに下書きを自動入力して開きます。内容を確認し、自分で送信を押してください。",
+      "targetLabel": "メールを作成するアプリ",
+      "targets": {
+        "auto": "自動",
+        "gmail": "Gmail",
+        "outlookWork": "Outlook（職場または学校）",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "既定のメールアプリ"
+      }
+    },
+    "recent": {
+      "title": "最近のアクション",
+      "actions": {
+        "email_draft": "{{destination}} 宛ての下書き"
+      },
+      "states": {
+        "pending": "待機中",
+        "committing": "処理中",
+        "sent": "完了",
+        "failed": "失敗",
+        "unknown": "未確認",
+        "cancelled": "キャンセル済み",
+        "expired": "期限切れ"
+      }
     }
   },
   "calendar": {

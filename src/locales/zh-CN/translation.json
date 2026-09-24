@@ -3744,6 +3744,7 @@
       "connectFailedDescription": "连接 Calendar.app 时出错。请重启 OpenWhispr 后重试。"
     },
     "sections": {
+      "connectors": "连接器",
       "calendar": "日历",
       "api": "API",
       "mcp": "MCP",
@@ -3824,6 +3825,35 @@
       "unknown": "无法确认是否已发送，请检查 {{destination}}。",
       "cancelled": "已取消，未发送任何内容。",
       "notSent": "未发送。"
+    },
+    "policyOff": "您的组织已关闭连接器。",
+    "upgrade": "升级",
+    "email": {
+      "title": "邮件草稿",
+      "description": "助手会在您的邮件应用中打开预填好的草稿，由您检查并亲自点击发送。",
+      "targetLabel": "在此处起草邮件",
+      "targets": {
+        "auto": "自动",
+        "gmail": "Gmail",
+        "outlookWork": "Outlook（工作或学校）",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "默认邮件应用"
+      }
+    },
+    "recent": {
+      "title": "最近的操作",
+      "actions": {
+        "email_draft": "发送给 {{destination}} 的草稿"
+      },
+      "states": {
+        "pending": "等待中",
+        "committing": "进行中",
+        "sent": "已完成",
+        "failed": "失败",
+        "unknown": "未确认",
+        "cancelled": "已取消",
+        "expired": "已过期"
+      }
     }
   },
   "calendar": {

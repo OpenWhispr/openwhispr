@@ -3913,6 +3913,7 @@
       "connectFailedDescription": "Beim Verbinden mit Calendar.app ist ein Fehler aufgetreten. Starte OpenWhispr neu und versuche es erneut."
     },
     "sections": {
+      "connectors": "Konnektoren",
       "calendar": "Kalender",
       "api": "API",
       "mcp": "MCP",
@@ -3993,6 +3994,35 @@
       "unknown": "Konnte nicht bestätigt werden. Bitte {{destination}} prüfen.",
       "cancelled": "Abgebrochen. Es wurde nichts gesendet.",
       "notSent": "Nicht gesendet."
+    },
+    "policyOff": "Konnektoren wurden von deiner Organisation deaktiviert.",
+    "upgrade": "Upgrade",
+    "email": {
+      "title": "E-Mail-Entwürfe",
+      "description": "Der Assistent öffnet einen vorausgefüllten Entwurf in deiner E-Mail-App. Du prüfst ihn und klickst selbst auf Senden.",
+      "targetLabel": "E-Mails entwerfen in",
+      "targets": {
+        "auto": "Automatisch",
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (geschäftlich oder Schule)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Standard-E-Mail-App"
+      }
+    },
+    "recent": {
+      "title": "Letzte Aktionen",
+      "actions": {
+        "email_draft": "Entwurf an {{destination}}"
+      },
+      "states": {
+        "pending": "Wartet",
+        "committing": "Läuft",
+        "sent": "Erledigt",
+        "failed": "Fehlgeschlagen",
+        "unknown": "Nicht bestätigt",
+        "cancelled": "Abgebrochen",
+        "expired": "Abgelaufen"
+      }
     }
   },
   "notesView": {

@@ -637,6 +637,7 @@
       "connectFailedDescription": "حدث خطأ ما أثناء الاتصال بتطبيق Calendar.app. يرجى إعادة تشغيل OpenWhispr والمحاولة مرة أخرى."
     },
     "sections": {
+      "connectors": "الموصلات",
       "calendar": "التقويم (Calendar)",
       "api": "API",
       "mcp": "MCP",
@@ -717,6 +718,35 @@
       "unknown": "تعذّر تأكيد الإرسال. تحقق من {{destination}}.",
       "cancelled": "تم الإلغاء. لم يتم إرسال شيء.",
       "notSent": "لم يُرسل."
+    },
+    "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
+    "upgrade": "ترقية",
+    "email": {
+      "title": "مسودات البريد الإلكتروني",
+      "description": "يفتح المساعد مسودة معبأة مسبقًا في تطبيق البريد الإلكتروني الخاص بك. راجعها واضغط إرسال بنفسك.",
+      "targetLabel": "صياغة رسائل البريد الإلكتروني في",
+      "targets": {
+        "auto": "تلقائي",
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (العمل أو المدرسة)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "تطبيق البريد الافتراضي"
+      }
+    },
+    "recent": {
+      "title": "الإجراءات الأخيرة",
+      "actions": {
+        "email_draft": "مسودة إلى {{destination}}"
+      },
+      "states": {
+        "pending": "قيد الانتظار",
+        "committing": "قيد التنفيذ",
+        "sent": "تم",
+        "failed": "فشل",
+        "unknown": "لم يتم التأكيد",
+        "cancelled": "أُلغي",
+        "expired": "منتهي الصلاحية"
+      }
     }
   },
   "auth": {

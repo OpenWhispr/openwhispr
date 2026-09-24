@@ -3788,6 +3788,7 @@
       "connectFailedDescription": "При подключении к Calendar.app произошла ошибка. Перезапустите OpenWhispr и попробуйте снова."
     },
     "sections": {
+      "connectors": "Коннекторы",
       "calendar": "Календарь",
       "api": "API",
       "mcp": "MCP",
@@ -3868,6 +3869,35 @@
       "unknown": "Не удалось подтвердить отправку. Проверьте {{destination}}.",
       "cancelled": "Отменено. Ничего не отправлено.",
       "notSent": "Не отправлено."
+    },
+    "policyOff": "Ваша организация отключила коннекторы.",
+    "upgrade": "Улучшить",
+    "email": {
+      "title": "Черновики писем",
+      "description": "Ассистент открывает предзаполненный черновик в вашем почтовом приложении. Вы проверяете его и сами нажимаете «Отправить».",
+      "targetLabel": "Создавать черновики писем в",
+      "targets": {
+        "auto": "Автоматически",
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (рабочий или учебный)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Почтовое приложение по умолчанию"
+      }
+    },
+    "recent": {
+      "title": "Последние действия",
+      "actions": {
+        "email_draft": "Черновик для {{destination}}"
+      },
+      "states": {
+        "pending": "Ожидание",
+        "committing": "Выполняется",
+        "sent": "Готово",
+        "failed": "Не удалось",
+        "unknown": "Не подтверждено",
+        "cancelled": "Отменено",
+        "expired": "Истекло"
+      }
     }
   },
   "calendar": {

@@ -3797,6 +3797,7 @@
       "connectFailedDescription": "Se produjo un error al conectar con Calendar.app. Reinicia OpenWhispr e inténtalo de nuevo."
     },
     "sections": {
+      "connectors": "Conectores",
       "calendar": "Calendario",
       "api": "API",
       "mcp": "MCP",
@@ -3877,6 +3878,35 @@
       "unknown": "No se pudo confirmar el envío. Verifica {{destination}}.",
       "cancelled": "Cancelado. No se envió nada.",
       "notSent": "No enviado."
+    },
+    "policyOff": "Tu organización ha desactivado los conectores.",
+    "upgrade": "Mejorar",
+    "email": {
+      "title": "Borradores de correo",
+      "description": "El asistente abre un borrador prellenado en tu aplicación de correo. Tú lo revisas y pulsas Enviar.",
+      "targetLabel": "Redactar correos en",
+      "targets": {
+        "auto": "Automático",
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (trabajo o escuela)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Aplicación de correo predeterminada"
+      }
+    },
+    "recent": {
+      "title": "Acciones recientes",
+      "actions": {
+        "email_draft": "Borrador a {{destination}}"
+      },
+      "states": {
+        "pending": "Esperando",
+        "committing": "En curso",
+        "sent": "Listo",
+        "failed": "Fallido",
+        "unknown": "Sin confirmar",
+        "cancelled": "Cancelado",
+        "expired": "Caducado"
+      }
     }
   },
   "calendar": {

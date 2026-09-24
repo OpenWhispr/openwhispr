@@ -3913,6 +3913,7 @@
       "connectFailedDescription": "Something went wrong while connecting to Calendar.app. Please restart OpenWhispr and try again."
     },
     "sections": {
+      "connectors": "Connectors",
       "calendar": "Calendar",
       "api": "API",
       "mcp": "MCP",
@@ -3993,6 +3994,35 @@
       "unknown": "Couldn't confirm it was sent. Check {{destination}}.",
       "cancelled": "Cancelled. Nothing was sent.",
       "notSent": "Not sent."
+    },
+    "policyOff": "Connectors are turned off by your organization.",
+    "upgrade": "Upgrade",
+    "email": {
+      "title": "Email drafts",
+      "description": "The assistant opens a pre-filled draft in your email app. You review it and press Send yourself.",
+      "targetLabel": "Draft emails in",
+      "targets": {
+        "auto": "Automatic",
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (work or school)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Default mail app"
+      }
+    },
+    "recent": {
+      "title": "Recent actions",
+      "actions": {
+        "email_draft": "Draft to {{destination}}"
+      },
+      "states": {
+        "pending": "Waiting",
+        "committing": "In progress",
+        "sent": "Done",
+        "failed": "Failed",
+        "unknown": "Not confirmed",
+        "cancelled": "Cancelled",
+        "expired": "Expired"
+      }
     }
   },
   "notesView": {
