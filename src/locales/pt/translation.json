@@ -3840,10 +3840,11 @@
       "notSent": "Não enviado."
     },
     "policyOff": "Sua organização desativou os conectores.",
-    "upgrade": "Atualizar",
+    "viewPlans": "Ver planos",
     "email": {
       "title": "Rascunhos de e-mail",
       "description": "O assistente abre um rascunho pré-preenchido no seu aplicativo de e-mail. Você revisa e aperta Enviar.",
+      "proRequired": "Atualize para um plano pago para que o assistente escreva rascunhos de e-mail para você.",
       "targetLabel": "Criar rascunhos de e-mail em",
       "targets": {
         "auto": "Automático",

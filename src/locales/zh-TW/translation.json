@@ -3840,10 +3840,11 @@
       "notSent": "未傳送。"
     },
     "policyOff": "您的組織已關閉連接器。",
-    "upgrade": "升級",
+    "viewPlans": "查看方案",
     "email": {
       "title": "郵件草稿",
       "description": "助理會在您的郵件應用程式中開啟預先填寫的草稿，由您檢查並親自按下傳送。",
+      "proRequired": "升級到付費方案，讓助理為您草擬郵件。",
       "targetLabel": "在此撰寫郵件",
       "targets": {
         "auto": "自動",

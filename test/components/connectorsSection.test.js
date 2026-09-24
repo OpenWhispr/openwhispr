@@ -51,15 +51,18 @@ test("paid users choose where drafts open", async (t) => {
   const markup = await renderSection(t, { isPaid: true, blocked: false });
   assert.match(markup, /connectors\.email\.title/);
   assert.match(markup, /connectors\.email\.targets\.gmail/);
-  assert.doesNotMatch(markup, /connectors\.upgrade/);
+  assert.match(markup, /connectors\.email\.description/);
+  assert.doesNotMatch(markup, /connectors\.viewPlans/);
 });
 
-test("free users see an upgrade button instead of the picker", async (t) => {
+test("free users see that a paid plan is required and a View Plans button", async (t) => {
   const markup = await renderSection(t, { isPaid: false, blocked: false });
-  assert.match(markup, /connectors\.upgrade/);
+  // Matches the API card pattern (IntegrationsView.tsx): the description says
+  // a paid plan is required, and the CTA is the primary/filled button.
+  assert.match(markup, /connectors\.email\.proRequired/);
+  assert.doesNotMatch(markup, /connectors\.email\.description/);
+  assert.match(markup, /connectors\.viewPlans/);
   assert.doesNotMatch(markup, /connectors\.email\.targets\.gmail/);
-  // Matches the API card pattern (IntegrationsView.tsx): the free-plan Upgrade
-  // CTA is the primary/filled button, not outline.
   assert.doesNotMatch(markup, /variant="outline"/);
 });
 

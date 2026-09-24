@@ -8,15 +8,15 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
 import { isConnectorsBlockedByOrg } from "../stores/policyRules";
 import type { ConnectorActionRecord } from "../types/connectors";
+import { normalizeDbDate } from "../utils/dateFormatting";
 
 const EMAIL_TARGET_OPTIONS = ["auto", "gmail", "outlookWork", "outlookPersonal", "mailto"] as const;
 
-function formatWhen(createdAt: string): string {
-  // SQLite CURRENT_TIMESTAMP is UTC "YYYY-MM-DD HH:MM:SS".
-  const date = new Date(`${createdAt.replace(" ", "T")}Z`);
+function formatWhen(createdAt: string, locale: string): string {
+  const date = normalizeDbDate(createdAt);
   return Number.isNaN(date.getTime())
     ? createdAt
-    : date.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+    : date.toLocaleString(locale, { dateStyle: "short", timeStyle: "short" });
 }
 
 interface ConnectorsSectionProps {
@@ -25,7 +25,7 @@ interface ConnectorsSectionProps {
 }
 
 export function ConnectorsSection({ isPaid, onUpgrade }: ConnectorsSectionProps): ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const blockedByOrg = usePolicyStore(isConnectorsBlockedByOrg);
   const emailDraftTarget = useSettingsStore((state) => state.emailDraftTarget);
   const setEmailDraftTarget = useSettingsStore((state) => state.setEmailDraftTarget);
@@ -67,7 +67,7 @@ export function ConnectorsSection({ isPaid, onUpgrade }: ConnectorsSectionProps)
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-foreground">{t("connectors.email.title")}</p>
             <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
-              {t("connectors.email.description")}
+              {isPaid ? t("connectors.email.description") : t("connectors.email.proRequired")}
             </p>
           </div>
           {isPaid ? (
@@ -88,7 +88,7 @@ export function ConnectorsSection({ isPaid, onUpgrade }: ConnectorsSectionProps)
             </Select>
           ) : (
             <Button size="sm" className="shrink-0" onClick={onUpgrade}>
-              {t("connectors.upgrade")}
+              {t("connectors.viewPlans")}
             </Button>
           )}
         </div>
@@ -113,7 +113,8 @@ export function ConnectorsSection({ isPaid, onUpgrade }: ConnectorsSectionProps)
                         t(`connectors.recent.unlabeledActions.${row.connector}_${row.action}`)}
                   </span>
                   <span className="shrink-0">
-                    {formatWhen(row.createdAt)} · {t(`connectors.recent.states.${row.state}`)}
+                    {formatWhen(row.createdAt, i18n.language)} ·{" "}
+                    {t(`connectors.recent.states.${row.state}`)}
                   </span>
                 </li>
               ))}

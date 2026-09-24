@@ -4009,10 +4009,11 @@
       "notSent": "Not sent."
     },
     "policyOff": "Connectors are turned off by your organization.",
-    "upgrade": "Upgrade",
+    "viewPlans": "View Plans",
     "email": {
       "title": "Email drafts",
       "description": "The assistant opens a pre-filled draft in your email app. You review it and press Send yourself.",
+      "proRequired": "Upgrade to a paid plan to let the assistant draft emails for you.",
       "targetLabel": "Draft emails in",
       "targets": {
         "auto": "Automatic",

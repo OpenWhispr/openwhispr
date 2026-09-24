@@ -4009,10 +4009,11 @@
       "notSent": "Non envoyé."
     },
     "policyOff": "Votre organisation a désactivé les connecteurs.",
-    "upgrade": "Passer au supérieur",
+    "viewPlans": "Voir les forfaits",
     "email": {
       "title": "Brouillons d'e-mails",
       "description": "L'assistant ouvre un brouillon pré-rempli dans votre application de messagerie. Vous le vérifiez et appuyez vous-même sur Envoyer.",
+      "proRequired": "Passez à un plan payant pour que l'assistant rédige des e-mails pour vous.",
       "targetLabel": "Rédiger les e-mails dans",
       "targets": {
         "auto": "Automatique",

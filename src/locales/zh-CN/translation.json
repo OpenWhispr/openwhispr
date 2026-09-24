@@ -3840,10 +3840,11 @@
       "notSent": "未发送。"
     },
     "policyOff": "您的组织已关闭连接器。",
-    "upgrade": "升级",
+    "viewPlans": "查看套餐",
     "email": {
       "title": "邮件草稿",
       "description": "助手会在您的邮件应用中打开预填好的草稿，由您检查并亲自点击发送。",
+      "proRequired": "升级到付费计划，让助手为您起草邮件。",
       "targetLabel": "在此处起草邮件",
       "targets": {
         "auto": "自动",
