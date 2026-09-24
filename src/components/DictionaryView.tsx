@@ -143,7 +143,7 @@ export default function DictionaryView() {
           if (e.key === "Enter") handleAdd();
           if (e.key === "Escape" && userWords.length === 0) setShowEmptyInput(false);
         }}
-        className="h-10 w-full rounded-full pe-24 text-sm placeholder:text-foreground/45"
+        className="h-10 w-full rounded-full! pe-24 text-sm placeholder:text-foreground/45"
       />
       <div className="absolute end-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
         <button

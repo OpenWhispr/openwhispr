@@ -182,7 +182,7 @@ export default function SnippetsView() {
             if (e.key === "Escape" && snippets.length === 0 && !panelOpen) setShowEmptyInput(false);
           }}
           maxLength={80}
-          className="h-10 w-full rounded-full pe-16 text-sm placeholder:text-foreground/45"
+          className="h-10 w-full rounded-full! pe-16 text-sm placeholder:text-foreground/45"
         />
         <button
           onClick={openPanel}
