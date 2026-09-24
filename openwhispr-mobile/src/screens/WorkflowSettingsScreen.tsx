@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Keyboard, Linking, Platform, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { Keyboard, Linking, Platform, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
@@ -10,9 +10,14 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { Toast, type ToastType } from '@/components/ui/Toast';
 import { confirmDestructive } from '@/lib/alerts';
+import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
+import { OnDeviceModelSection } from '@/components/settings/OnDeviceModelSection';
+import { useConfigToggle } from '@/hooks/useConfigToggle';
+import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
+import { resolveCustomPrompt } from '@/config/prompts/registry';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { inferenceToProcessingMode, type UserConfig } from '@/types';
+import type { UserConfig } from '@/types';
 import {
   type ProviderCredential,
   getProviderCredential,
@@ -22,19 +27,15 @@ import {
   setProviderCredential,
 } from '@/services/providers/ProviderCredentials';
 import { workflowSaveConfig } from '@/lib/inferenceModes';
-import {
-  getLocalReasoningReadiness,
-  getLocalReasoningUnavailableMessage,
-} from '@/lib/localReasoning';
-import { useAuthStore } from '@/store/useAuthStore';
 import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
 import {
   ON_DEVICE_MODE_NOTES,
   UNSET_PROVIDER_NOTES,
-  confirmSpeechModeReady,
   parseWorkflow,
   unsetSelection,
-} from '@/lib/byokWorkflows';
+} from '@/lib/aiWorkflows';
+import { isLocalModelKey } from '@/lib/localModelCatalog';
+import { switchWorkflowMode } from '@/lib/workflowModeSwitch';
 import {
   discoverProviderModels,
   testProviderConnection,
@@ -65,9 +66,55 @@ const PROVIDER_SETUP_URLS: Record<string, string> = {
   openrouter: 'https://openrouter.ai/keys',
 };
 
-export function ProviderSettingsScreen(): React.JSX.Element {
-  const params = useLocalSearchParams<{ scope?: string; mode?: string }>();
-  const scope = parseWorkflow(params.scope);
+function CleanupSettings(): React.JSX.Element {
+  const cleanupEnabled = useConfigStore((state) => state.config?.cleanupEnabled ?? true);
+  const toggleCleanup = useConfigToggle('cleanupEnabled');
+  const hasCustomPrompt = useCustomPromptsStore(
+    (state) => resolveCustomPrompt(state.customPrompts.cleanup) !== undefined,
+  );
+  return (
+    <SettingsSection title="Settings">
+      <SettingsRow
+        iconStyle="line"
+        icon="sparkles"
+        mdIcon="Sparkles"
+        title="Enable Text Cleanup"
+        description="Use AI to remove filler words, fix grammar, and polish punctuation."
+        rightElement={<SettingsSwitch value={cleanupEnabled} onValueChange={toggleCleanup} />}
+        showChevron={false}
+      />
+      <SettingsRow
+        iconStyle="line"
+        icon="text.quote"
+        mdIcon="TextQuote"
+        title="Cleanup Prompt"
+        subtitle={hasCustomPrompt ? 'Custom' : 'Default'}
+        onPress={() => router.push('/(account)/cleanup-prompt')}
+      />
+    </SettingsSection>
+  );
+}
+
+function NoteTitleSettings(): React.JSX.Element {
+  const autoTitle = useConfigStore((state) => state.config?.autoGenerateNoteTitle ?? true);
+  const toggleAutoTitle = useConfigToggle('autoGenerateNoteTitle');
+  return (
+    <SettingsSection title="Settings">
+      <SettingsRow
+        iconStyle="line"
+        icon="textformat"
+        mdIcon="Type"
+        title="Auto-generate Note Titles"
+        description="Use AI to generate a short title for notes after enhancement."
+        rightElement={<SettingsSwitch value={autoTitle} onValueChange={toggleAutoTitle} />}
+        showChevron={false}
+      />
+    </SettingsSection>
+  );
+}
+
+export function WorkflowSettingsScreen(): React.JSX.Element {
+  const scope = parseWorkflow(useLocalSearchParams<{ scope?: string }>().scope);
   if (!scope) {
     return (
       <SettingsScreen>
@@ -77,7 +124,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
       </SettingsScreen>
     );
   }
-  return <WorkflowSettings scope={scope} openWithProviders={params.mode === 'providers'} />;
+  return <WorkflowSettings scope={scope} />;
 }
 
 // The provider used last for this workflow, else the first one offered.
@@ -98,26 +145,14 @@ function providerSelection(
   );
 }
 
-function WorkflowSettings({
-  scope,
-  openWithProviders,
-}: {
-  scope: MobileInferenceScope;
-  openWithProviders: boolean;
-}): React.JSX.Element {
+function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX.Element {
   const config = useConfigStore((state) => state.config);
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const setActiveMode = useProcessingModeStore((state) => state.setActiveMode);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
-  const user = useAuthStore((state) => state.user);
-  const [savedSelection, setSavedSelection] = useState<InferenceSelection>(
-    () => config?.inference?.[scope] ?? unsetSelection(scope, activeMode),
-  );
-  const [selection, setSelection] = useState<InferenceSelection>(() =>
-    openWithProviders && savedSelection.mode !== 'providers'
-      ? providerSelection(config, scope)
-      : savedSelection,
-  );
+  const savedSelection = config?.inference?.[scope] ?? unsetSelection(scope, activeMode);
+  // Tracks the saved selection, except while a Bring Your Own Key draft is being set up.
+  const [selection, setSelection] = useState<InferenceSelection>(savedSelection);
   const remembered = useRef<Record<string, InferenceSelection>>({});
   const [picker, setPicker] = useState<Picker | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -150,11 +185,14 @@ function WorkflowSettings({
   const providerId = provider?.id;
   const models = provider?.models.length ? provider.models : discoveredModels;
   const modeNote =
-    activeMode === 'private'
-      ? ON_DEVICE_MODE_NOTES[scope]
-      : activeMode === 'providers' && !config?.inference?.[scope]
-        ? UNSET_PROVIDER_NOTES[scope]
-        : undefined;
+    (activeMode === 'private' ? ON_DEVICE_MODE_NOTES[scope] : undefined) ??
+    (activeMode === 'providers' && !config?.inference?.[scope]
+      ? UNSET_PROVIDER_NOTES[scope]
+      : undefined) ??
+    (selection.mode === 'providers' && savedSelection.mode !== 'providers'
+      ? 'Save to switch to Bring Your Own Key.'
+      : undefined);
+  const speechScope = scope === 'dictation' || scope === 'upload' ? scope : null;
 
   // A passing check looks like finished setup, so leaving must not drop the key silently.
   const hasUnsavedChanges =
@@ -213,15 +251,29 @@ function WorkflowSettings({
     setPicker(picker === next ? null : next);
   }
 
-  function chooseMode(mode: InferenceMode): void {
+  async function chooseMode(mode: InferenceMode): Promise<void> {
     if (busy) return;
-    setSelection(
-      mode === 'providers' && !selection.providerId
-        ? providerSelection(config, scope)
-        : { ...selection, mode },
-    );
     setPicker(null);
     clearInputs();
+    // Bring Your Own Key needs a provider and key, so it switches on Save.
+    if (mode === 'providers') {
+      setSelection(
+        selection.providerId ? { ...selection, mode } : providerSelection(config, scope),
+      );
+      return;
+    }
+    if (mode === savedSelection.mode) {
+      setSelection(savedSelection);
+      return;
+    }
+    setBusy(true);
+    try {
+      if (await switchWorkflowMode(scope, mode)) {
+        setSelection(useConfigStore.getState().config?.inference?.[scope] ?? { mode });
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   function chooseProvider(nextProviderId: string): void {
@@ -314,28 +366,13 @@ function WorkflowSettings({
     setSelection((current) => ({ ...current, endpoint }));
   }
 
-  // The same checks Speech to Text and Home run, plus Apple Intelligence for text workflows.
-  async function confirmModeReady(mode: InferenceMode): Promise<boolean> {
-    if (mode === 'providers') return true;
-    if (scope === 'dictation' || scope === 'upload') {
-      return confirmSpeechModeReady(mode === 'local' ? 'private' : 'cloud', user);
-    }
-    if (mode !== 'local') return true;
-    const readiness = await getLocalReasoningReadiness({ refresh: true });
-    if (readiness.status === 'ready') return true;
-    Alert.alert('On-Device Unavailable', getLocalReasoningUnavailableMessage(readiness));
-    return false;
-  }
-
   async function save(): Promise<void> {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      if (!(await confirmModeReady(selection.mode))) return;
       const saved = await prepareSelection();
       if (!saved) return;
-      const processingMode = inferenceToProcessingMode(saved.mode);
       await updateConfig(
         workflowSaveConfig(useConfigStore.getState().config, scope, saved, activeMode),
       );
@@ -343,9 +380,8 @@ function WorkflowSettings({
         setError('Unable to save your selection. Please try again.');
         return;
       }
-      if (scope === 'dictation') setActiveMode(processingMode, true);
+      if (scope === 'dictation') setActiveMode('providers', true);
       setSelection(saved);
-      setSavedSelection(saved);
       clearInputs();
       setNotice('Selection saved.');
     } catch {
@@ -462,17 +498,6 @@ function WorkflowSettings({
     );
   }
 
-  if (Platform.OS !== 'ios') {
-    return (
-      <SettingsScreen>
-        <Text className="px-8 text-[15px] text-secondaryLabel">
-          Provider setup is available on iOS. Cloud and on-device settings remain available on
-          Android.
-        </Text>
-      </SettingsScreen>
-    );
-  }
-
   return (
     <View className="flex-1 bg-systemBackground">
       <SettingsScreen
@@ -481,13 +506,23 @@ function WorkflowSettings({
         keyboardDismissMode="interactive"
       >
         <InferenceModePicker
-          scope={scope === 'dictation' || scope === 'upload' ? 'speech' : 'text'}
-          title="Mode"
+          scope={speechScope ? 'speech' : 'text'}
           selectedMode={selection.mode}
           onSelect={chooseMode}
         />
         {modeNote ? (
           <Text className="-mt-4 mb-6 px-8 text-[13px] text-secondaryLabel">{modeNote}</Text>
+        ) : null}
+        {selection.mode === 'local' && speechScope ? (
+          <OnDeviceModelSection
+            scope={speechScope}
+            picked={isLocalModelKey(savedSelection.modelId) ? savedSelection.modelId : undefined}
+          />
+        ) : null}
+        {selection.mode === 'local' && !speechScope ? (
+          <Text className="-mt-4 mb-6 px-8 text-[13px] text-secondaryLabel">
+            Runs on Apple Intelligence on this iPhone.
+          </Text>
         ) : null}
         {selection.mode === 'providers' && provider ? (
           <>
@@ -617,29 +652,25 @@ function WorkflowSettings({
                 ) : null}
               </View>
             </SettingsSection>
+            <View className="mb-7 gap-3 px-4">
+              {error ? (
+                <Text accessibilityRole="alert" className="text-[14px] text-systemRed">
+                  {error}
+                </Text>
+              ) : null}
+              {notice ? (
+                <Text accessibilityLiveRegion="polite" className="text-[14px] text-secondaryLabel">
+                  {notice}
+                </Text>
+              ) : null}
+              <Button loading={busy} onPress={save}>
+                Save selection
+              </Button>
+            </View>
           </>
         ) : null}
-        <View className="gap-3 px-4">
-          {error ? (
-            <Text accessibilityRole="alert" className="text-[14px] text-systemRed">
-              {error}
-            </Text>
-          ) : null}
-          {notice ? (
-            <Text accessibilityLiveRegion="polite" className="text-[14px] text-secondaryLabel">
-              {notice}
-            </Text>
-          ) : null}
-          {/* A workflow that was never set is not saved until something is chosen, so the
-              default shown here never becomes an explicit choice. */}
-          <Button
-            loading={busy}
-            disabled={!hasUnsavedChanges && !config?.inference?.[scope]}
-            onPress={save}
-          >
-            Save selection
-          </Button>
-        </View>
+        {scope === 'cleanup' ? <CleanupSettings /> : null}
+        {scope === 'notes' ? <NoteTitleSettings /> : null}
       </SettingsScreen>
       <Toast
         message={toast.message}

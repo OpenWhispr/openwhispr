@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 let mockRouteParams: { proCompletion?: string } = {};
 const mockRouterSetParams = jest.fn();
@@ -195,13 +195,13 @@ describe('HomeScreen mode control', () => {
     mockProcessingModeStoreState.activeMode = 'cloud';
   });
 
-  it('is a button that opens Speech to Text in Bring Your Own Key mode', () => {
+  it('is a button that opens the Dictation & Keyboard page in Bring Your Own Key mode', () => {
     mockProcessingModeStoreState.activeMode = 'providers';
     render(<HomeScreen />);
     const control = screen.getByLabelText('Transcription: Bring Your Own Key');
     expect(control.props.accessibilityRole).toBe('button');
     expect(control.props.accessibilityState?.checked).toBeUndefined();
-    expect(control.props.accessibilityHint).toBe('Opens Speech to Text settings.');
+    expect(control.props.accessibilityHint).toBe('Opens Dictation & Keyboard settings.');
   });
 
   it('is a Cloud switch otherwise', () => {
@@ -209,5 +209,15 @@ describe('HomeScreen mode control', () => {
     const control = screen.getByLabelText('Cloud transcription');
     expect(control.props.accessibilityRole).toBe('switch');
     expect(control.props.accessibilityState).toMatchObject({ checked: true });
+  });
+
+  it('opens the Dictation & Keyboard page when dictation uses your own key', () => {
+    mockProcessingModeStoreState.activeMode = 'providers';
+    render(<HomeScreen />);
+    fireEvent.press(screen.getByLabelText('Transcription: Bring Your Own Key'));
+    expect(require('expo-router').router.push).toHaveBeenCalledWith({
+      pathname: '/(account)/ai-workflow',
+      params: { scope: 'dictation' },
+    });
   });
 });

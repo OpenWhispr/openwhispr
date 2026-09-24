@@ -119,7 +119,7 @@ describe('CleanupPromptScreen — guidance', () => {
   it('shows the inactive notice when cleanup is turned off', () => {
     mockConfig = { defaultMode: 'cloud', cleanupEnabled: false };
     render(<CleanupPromptScreen />);
-    expect(screen.getByText(/Dictation Cleanup is off/)).toBeTruthy();
+    expect(screen.getByText(/Text Cleanup is off/)).toBeTruthy();
   });
 
   it('hides the notice in Cloud mode with cleanup on', () => {

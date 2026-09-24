@@ -229,7 +229,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     if (!(await isLocalAsrModelReady())) {
       Alert.alert(
         'Speech model needed',
-        'Download a local speech model in Settings → AI Models → Speech to Text, then try again.',
+        'Download a local speech model in Settings → AI Models → Dictation & Keyboard, then try again.',
       );
       setPhase('prompt');
       return;

@@ -1,10 +1,6 @@
-import { Alert } from 'react-native';
-import { router } from 'expo-router';
-import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
-import type { AuthUser } from '@/lib/authClient';
-import { getPrivateModeReadiness, getPrivateModeUnavailableMessage } from '@/lib/privateMode';
 import type { InferenceSelection } from '@/lib/mobileProviders';
 import { MODE_LABELS } from '@/lib/inferenceModes';
+import { isLocalModelKey, LOCAL_MODEL_TITLES } from '@/lib/localModelCatalog';
 import { providerDisplayName, type MobileInferenceScope } from '@/lib/mobileProviders';
 import type { ProcessingMode, UserConfig } from '@/types';
 
@@ -66,45 +62,14 @@ export function workflowSummary(
   if (activeMode === 'private') {
     if (scope === 'cleanup') return 'Skipped';
     const chatOnCloud = (config?.inference?.agent?.mode ?? 'openwhispr') === 'openwhispr';
-    return scope === 'agent' && chatOnCloud ? MODE_LABELS.openwhispr : MODE_LABELS.local;
+    if (scope === 'agent' && chatOnCloud) return MODE_LABELS.openwhispr;
   }
   const selection = config?.inference?.[scope] ?? unsetSelection(scope, activeMode);
+  if (selection.mode === 'local' && isLocalModelKey(selection.modelId))
+    return LOCAL_MODEL_TITLES[selection.modelId];
+  if (activeMode === 'private') return MODE_LABELS.local;
   if (selection.mode !== 'providers') return MODE_LABELS[selection.mode];
   if (!selection.providerId) return 'Not set';
   const name = providerDisplayName(selection.providerId);
   return keyMissing ? `${name} · Key missing` : name;
-}
-
-// Every control that moves speech to Cloud or On-Device runs these checks, so none can
-// save a mode that fails on the next recording.
-export async function confirmSpeechModeReady(
-  mode: 'cloud' | 'private',
-  user: AuthUser | null,
-): Promise<boolean> {
-  if (mode === 'cloud') {
-    if (!accountRequiredForCloud(user)) return true;
-    showAccountRequiredAlert('cloud transcription');
-    return false;
-  }
-  const readiness = await getPrivateModeReadiness().catch(() => null);
-  if (!readiness) {
-    Alert.alert('On-Device Unavailable', 'Unable to check the local model right now.');
-    return false;
-  }
-  if (readiness.status === 'unavailable') {
-    Alert.alert('On-Device Unavailable', getPrivateModeUnavailableMessage());
-    return false;
-  }
-  if (readiness.status === 'missing') {
-    Alert.alert(
-      'Download required',
-      `Download the on-device model (${readiness.modelName}) before switching to on-device.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Download', onPress: () => router.push('/(account)/model-download') },
-      ],
-    );
-    return false;
-  }
-  return true;
 }
