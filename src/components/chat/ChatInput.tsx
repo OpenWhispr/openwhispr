@@ -281,7 +281,8 @@ export function ChatInput({
         {(isIdle || isBusy) && !isVoiceRecording && !isVoiceTranscribing && (
           <div
             className={cn(
-              "flex items-end gap-2 w-full",
+              "flex gap-2 w-full",
+              isCompactNote ? "items-center" : "items-end",
               (expandOnFocus || variant === "sidebar" || isCompactNote) && "h-full"
             )}
           >
