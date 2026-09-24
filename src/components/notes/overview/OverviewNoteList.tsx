@@ -43,6 +43,7 @@ export function OverviewNoteList({
           dark={notesEmptyDark}
           width={327}
           height={117}
+          className="[mask-image:linear-gradient(to_right,transparent,black_20%,black_80%,transparent)]"
         />
         <h2 className="mt-6 text-lg font-semibold text-foreground">{t("notes.empty.title")}</h2>
         <p className="mt-2 max-w-sm text-sm text-muted-foreground">
