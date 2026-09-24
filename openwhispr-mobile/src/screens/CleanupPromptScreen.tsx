@@ -28,6 +28,7 @@ export default function CleanupPromptScreen() {
   const setCustomPrompt = useCustomPromptsStore((state) => state.setCustomPrompt);
   const resetCustomPrompt = useCustomPromptsStore((state) => state.resetCustomPrompt);
   const cleanupEnabled = useConfigStore((state) => state.config?.cleanupEnabled ?? true);
+  const cleanupSelected = useConfigStore((state) => !!state.config?.inference?.cleanup);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
   const keyboardHeight = useKeyboardHeight();
 
@@ -35,7 +36,12 @@ export default function CleanupPromptScreen() {
   const baseline = override ?? DEFAULT_CLEANUP_PROMPT;
   const [draft, setDraft] = useState(baseline);
 
-  const isActive = activeMode !== 'private' && cleanupEnabled;
+  // Every cleanup route uses the prompt; Bring Your Own Key skips cleanup until it has a selection.
+  const inactiveNotice = !cleanupEnabled
+    ? 'Dictation Cleanup is off. Your prompt is saved and applies once you turn it on.'
+    : activeMode === 'providers' && !cleanupSelected
+      ? 'Bring Your Own Key skips cleanup until Text Cleanup has a selection. Your prompt is saved and applies once it does.'
+      : null;
   const isDirty = draft !== baseline;
   const missingPlaceholder = !hasAgentNamePlaceholder(draft);
 
@@ -69,19 +75,15 @@ export default function CleanupPromptScreen() {
       >
         <View className="mx-4 mb-2 px-4">
           <Text className="text-[13px] text-secondaryLabel">
-            The instructions OpenWhispr's cloud AI follows when it cleans up dictation from the app,
-            the keyboard, and uploaded recordings. Keep {AGENT_NAME_PLACEHOLDER} where your agent's
-            name belongs.
+            The instructions the AI follows when it cleans up dictation from the app, the keyboard,
+            and uploaded recordings. Keep {AGENT_NAME_PLACEHOLDER} where your agent's name belongs.
           </Text>
         </View>
 
-        {!isActive ? (
+        {inactiveNotice ? (
           <View className="mx-4 mb-3">
             <View className="rounded-[14px] border border-separator bg-secondarySystemGroupedBackground px-4 py-3">
-              <Text className="text-[13px] text-secondaryLabel">
-                The cleanup prompt requires Cloud mode with Dictation Cleanup turned on. Your prompt
-                is saved and will apply once both are active.
-              </Text>
+              <Text className="text-[13px] text-secondaryLabel">{inactiveNotice}</Text>
             </View>
           </View>
         ) : null}
@@ -114,8 +116,8 @@ export default function CleanupPromptScreen() {
             <Text className="text-[13px] text-systemOrange">Long prompts slow down cleanup.</Text>
           ) : null}
           <Text className="text-[13px] text-secondaryLabel">
-            Sent to OpenWhispr's cloud with every cleanup request. Language, dictionary, and tone
-            instructions are added automatically.
+            Used for every cleanup request. Language, dictionary, and tone instructions are added
+            automatically.
           </Text>
         </View>
 

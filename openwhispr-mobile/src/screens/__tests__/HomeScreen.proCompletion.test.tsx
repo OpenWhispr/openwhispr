@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { render, screen } from '@testing-library/react-native';
 
 let mockRouteParams: { proCompletion?: string } = {};
 const mockRouterSetParams = jest.fn();
@@ -167,7 +167,7 @@ describe('HomeScreen Pro completion', () => {
     ['restored', 'OpenWhispr Pro Restored'],
   ] as const)('clears a valid %s completion once without showing it again', (completion, title) => {
     mockRouteParams = { proCompletion: completion };
-    const screen = render(<HomeScreen />);
+    const view = render(<HomeScreen />);
 
     expect(mockRouterSetParams).toHaveBeenCalledWith({ proCompletion: undefined });
     expect(Alert.alert).toHaveBeenCalledWith(title, expect.any(String), [
@@ -175,7 +175,7 @@ describe('HomeScreen Pro completion', () => {
     ]);
 
     mockRouteParams = {};
-    screen.rerender(<HomeScreen />);
+    view.rerender(<HomeScreen />);
 
     expect(mockRouterSetParams).toHaveBeenCalledTimes(1);
     expect(Alert.alert).toHaveBeenCalledTimes(1);
@@ -187,5 +187,27 @@ describe('HomeScreen Pro completion', () => {
 
     expect(mockRouterSetParams).not.toHaveBeenCalled();
     expect(Alert.alert).not.toHaveBeenCalled();
+  });
+});
+
+describe('HomeScreen mode control', () => {
+  afterEach(() => {
+    mockProcessingModeStoreState.activeMode = 'cloud';
+  });
+
+  it('is a button that opens Speech to Text in Bring Your Own Key mode', () => {
+    mockProcessingModeStoreState.activeMode = 'providers';
+    render(<HomeScreen />);
+    const control = screen.getByLabelText('Transcription: Bring Your Own Key');
+    expect(control.props.accessibilityRole).toBe('button');
+    expect(control.props.accessibilityState?.checked).toBeUndefined();
+    expect(control.props.accessibilityHint).toBe('Opens Speech to Text settings.');
+  });
+
+  it('is a Cloud switch otherwise', () => {
+    render(<HomeScreen />);
+    const control = screen.getByLabelText('Cloud transcription');
+    expect(control.props.accessibilityRole).toBe('switch');
+    expect(control.props.accessibilityState).toMatchObject({ checked: true });
   });
 });

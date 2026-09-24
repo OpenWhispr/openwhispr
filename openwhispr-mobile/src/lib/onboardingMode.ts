@@ -36,7 +36,11 @@ export async function chooseOnboardingMode(
   }
   if (useOnboardingStore.getState().currentStep !== from) return;
   const config = useConfigStore.getState().config ?? null;
-  const previous = { defaultMode: config?.defaultMode ?? 'cloud', inference: config?.inference };
+  const previous = {
+    defaultMode: config?.defaultMode ?? 'cloud',
+    inference: config?.inference,
+    pinnedInference: config?.pinnedInference,
+  };
   // The dictation route moves with the mode, so a replayed pick also leaves a Providers route.
   await saveOnboardingConfig(dictationModeConfig(config, mode));
   useProcessingModeStore.getState().resetToDefault(mode);

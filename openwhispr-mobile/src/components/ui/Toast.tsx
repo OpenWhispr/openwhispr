@@ -11,19 +11,23 @@ interface ToastProps {
   visible: boolean;
   type?: ToastType;
   topOffset?: number;
+  // Changes on every show, so a repeated identical message still re-announces and replays.
+  showId?: number;
 }
 
-export function Toast({ message, visible, type = 'info', topOffset = 24 }: ToastProps) {
+export function Toast({ message, visible, type = 'info', topOffset = 24, showId }: ToastProps) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-20)).current;
 
   // The toast ignores touches, so VoiceOver would never reach it on its own.
   useEffect(() => {
     if (visible && message) AccessibilityInfo.announceForAccessibility(message);
-  }, [visible, message]);
+  }, [visible, message, showId]);
 
   useEffect(() => {
     if (visible) {
+      opacity.setValue(0);
+      translateY.setValue(-20);
       Animated.parallel([
         Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
         Animated.timing(translateY, { toValue: 0, duration: 200, useNativeDriver: true }),
@@ -34,7 +38,7 @@ export function Toast({ message, visible, type = 'info', topOffset = 24 }: Toast
         Animated.timing(translateY, { toValue: -10, duration: 150, useNativeDriver: true }),
       ]).start();
     }
-  }, [visible, opacity, translateY]);
+  }, [visible, showId, opacity, translateY]);
 
   const icon =
     type === 'success'

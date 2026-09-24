@@ -548,13 +548,18 @@ export default function HomeScreen() {
           <Pressable
             onPress={handleTogglePrivateMode}
             disabled={isRecording}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: !isPrivateMode, disabled: isRecording }}
-            accessibilityLabel={
-              activeMode === 'providers'
-                ? 'Bring Your Own Key transcription'
-                : 'Cloud transcription'
-            }
+            {...(activeMode === 'providers'
+              ? {
+                  accessibilityRole: 'button',
+                  accessibilityState: { disabled: isRecording },
+                  accessibilityLabel: 'Transcription: Bring Your Own Key',
+                  accessibilityHint: 'Opens Speech to Text settings.',
+                }
+              : {
+                  accessibilityRole: 'switch',
+                  accessibilityState: { checked: !isPrivateMode, disabled: isRecording },
+                  accessibilityLabel: 'Cloud transcription',
+                })}
             className="h-9 flex-row items-center rounded-full px-1 active:opacity-80"
             style={{
               backgroundColor: isPrivateMode ? '#E3E0DE' : BRAND,

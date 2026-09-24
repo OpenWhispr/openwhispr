@@ -1,5 +1,4 @@
 import React, { useCallback } from 'react';
-import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
@@ -7,11 +6,10 @@ import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
+import { confirmSpeechModeReady } from '@/lib/byokWorkflows';
 import { dictationModeConfig } from '@/lib/inferenceModes';
-import { getPrivateModeReadiness, getPrivateModeUnavailableMessage } from '@/lib/privateMode';
 import { safeHaptics } from '@/lib/utils';
-import { type InferenceMode, inferenceToProcessingMode, processingToInferenceMode } from '@/types';
+import { type InferenceMode, processingToInferenceMode } from '@/types';
 
 export default function SpeechToTextScreen() {
   const config = useConfigStore((state) => state.config);
@@ -24,45 +22,19 @@ export default function SpeechToTextScreen() {
   const handleSelectMode = useCallback(
     async (mode: InferenceMode) => {
       if (mode === 'providers') {
-        router.push({ pathname: '/(account)/provider-workflow', params: { scope: 'dictation' } });
+        router.push({
+          pathname: '/(account)/provider-workflow',
+          params: { scope: 'dictation', mode: 'providers' },
+        });
         return;
       }
       if (mode === selectedMode) return;
       safeHaptics('light');
-      const nextProcessing = inferenceToProcessingMode(mode);
+      const nextMode = mode === 'local' ? 'private' : 'cloud';
+      if (!(await confirmSpeechModeReady(nextMode, user))) return;
 
-      if (nextProcessing === 'cloud' && accountRequiredForCloud(user)) {
-        showAccountRequiredAlert('cloud transcription');
-        return;
-      }
-
-      if (nextProcessing === 'private') {
-        const readiness = await getPrivateModeReadiness().catch(() => null);
-        if (!readiness) {
-          Alert.alert('On-Device Unavailable', 'Unable to check the local model right now.');
-          return;
-        }
-        if (readiness.status === 'unavailable') {
-          Alert.alert('On-Device Unavailable', getPrivateModeUnavailableMessage());
-          return;
-        }
-        if (readiness.status === 'missing') {
-          Alert.alert(
-            'Download required',
-            `Download the on-device model (${readiness.modelName}) before switching to on-device.`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Download', onPress: () => router.push('/(account)/model-download') },
-            ],
-          );
-          return;
-        }
-      }
-
-      setActiveMode(nextProcessing, true);
-      updateConfig(
-        dictationModeConfig(config ?? null, nextProcessing === 'private' ? 'private' : 'cloud'),
-      );
+      setActiveMode(nextMode, true);
+      updateConfig(dictationModeConfig(config ?? null, nextMode));
     },
     [config, selectedMode, setActiveMode, updateConfig, user],
   );

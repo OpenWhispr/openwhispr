@@ -1,42 +1,63 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Keyboard, Linking, Platform, View } from 'react-native';
+import { Alert, Keyboard, Linking, Platform, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
+import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { Toast, type ToastType } from '@/components/ui/Toast';
+import { confirmDestructive } from '@/lib/alerts';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import type { UserConfig } from '@/types';
+import { inferenceToProcessingMode, type UserConfig } from '@/types';
 import {
+  type ProviderCredential,
+  getProviderCredential,
   getProviderCredentialReference,
   getProviderCredentialStatus,
   removeProviderCredential,
   setProviderCredential,
 } from '@/services/providers/ProviderCredentials';
-import { dictationModeConfig } from '@/lib/inferenceModes';
+import { workflowSaveConfig } from '@/lib/inferenceModes';
+import {
+  getLocalReasoningReadiness,
+  getLocalReasoningUnavailableMessage,
+} from '@/lib/localReasoning';
+import { useAuthStore } from '@/store/useAuthStore';
 import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
-import { UNSET_PROVIDER_NOTES, parseWorkflow, unsetSelection } from '@/lib/byokWorkflows';
+import {
+  UNSET_PROVIDER_NOTES,
+  confirmSpeechModeReady,
+  parseWorkflow,
+  unsetSelection,
+} from '@/lib/byokWorkflows';
 import {
   discoverProviderModels,
   testProviderConnection,
   ProviderExecutionError,
 } from '@/services/providers/ProviderExecution';
 import { getProviderPolicy } from '@/services/providers/ProviderPolicy';
-import { isSecureHttpEndpoint, normalizeBaseUrl } from '@/lib/providerEndpoints';
+import {
+  getModelListBaseCandidates,
+  isSecureHttpEndpoint,
+  normalizeBaseUrl,
+} from '@/lib/providerEndpoints';
 import {
   defaultModelId,
   getMobileProvidersForScope,
   resolveMobileInferenceRoute,
   type InferenceMode,
   type InferenceSelection,
+  type MobileInferenceScope,
 } from '@/lib/mobileProviders';
 
 type Picker = 'provider' | 'model';
 const TOAST_MS = 3000;
+// Errors carry something to act on, so they stay long enough to read.
+const ERROR_TOAST_MS = 6000;
 const PROVIDER_SETUP_URLS: Record<string, string> = {
   openai: 'https://platform.openai.com/api-keys',
   groq: 'https://console.groq.com/keys',
@@ -44,13 +65,57 @@ const PROVIDER_SETUP_URLS: Record<string, string> = {
 };
 
 export function ProviderSettingsScreen(): React.JSX.Element {
+  const params = useLocalSearchParams<{ scope?: string; mode?: string }>();
+  const scope = parseWorkflow(params.scope);
+  if (!scope) {
+    return (
+      <SettingsScreen>
+        <Text className="px-8 text-[15px] text-secondaryLabel">
+          This workflow is not available.
+        </Text>
+      </SettingsScreen>
+    );
+  }
+  return <WorkflowSettings scope={scope} openWithProviders={params.mode === 'providers'} />;
+}
+
+// The provider used last for this workflow, else the first one offered.
+function providerSelection(
+  config: UserConfig | null,
+  scope: MobileInferenceScope,
+): InferenceSelection {
+  const providers = getMobileProvidersForScope(scope);
+  const remembered = Object.values(config?.rememberedInference?.[scope] ?? {}).find((saved) =>
+    providers.some((candidate) => candidate.id === saved.providerId),
+  );
+  return (
+    remembered ?? {
+      mode: 'providers',
+      providerId: providers[0]?.id,
+      modelId: defaultModelId(providers[0]),
+    }
+  );
+}
+
+function WorkflowSettings({
+  scope,
+  openWithProviders,
+}: {
+  scope: MobileInferenceScope;
+  openWithProviders: boolean;
+}): React.JSX.Element {
   const config = useConfigStore((state) => state.config);
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const setActiveMode = useProcessingModeStore((state) => state.setActiveMode);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
-  const scope = parseWorkflow(useLocalSearchParams<{ scope?: string }>().scope);
-  const [selection, setSelection] = useState<InferenceSelection>(
-    config?.inference?.[scope] ?? unsetSelection(scope, activeMode),
+  const user = useAuthStore((state) => state.user);
+  const [savedSelection, setSavedSelection] = useState<InferenceSelection>(
+    () => config?.inference?.[scope] ?? unsetSelection(scope, activeMode),
+  );
+  const [selection, setSelection] = useState<InferenceSelection>(() =>
+    openWithProviders && savedSelection.mode !== 'providers'
+      ? providerSelection(config, scope)
+      : savedSelection,
   );
   const remembered = useRef<Record<string, InferenceSelection>>({});
   const [picker, setPicker] = useState<Picker | null>(null);
@@ -60,13 +125,15 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [discoveredModels, setDiscoveredModels] = useState<{ id: string; name: string }[]>([]);
-  const [toast, setToast] = useState<{ message: string; type: ToastType; visible: boolean }>({
-    message: '',
-    type: 'info',
-    visible: false,
-  });
+  const [toast, setToast] = useState<{
+    message: string;
+    type: ToastType;
+    visible: boolean;
+    showId: number;
+  }>({ message: '', type: 'info', visible: false, showId: 0 });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const headerHeight = useHeaderHeight();
+  const navigation = useNavigation();
   const diagnosticController = useRef<AbortController | null>(null);
   useEffect(
     () => (): void => {
@@ -81,10 +148,29 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   const modelId = selection.modelId ?? defaultModelId(provider);
   const providerId = provider?.id;
   const models = provider?.models.length ? provider.models : discoveredModels;
-  const unsetNote =
-    activeMode === 'providers' && !config?.inference?.[scope]
-      ? UNSET_PROVIDER_NOTES[scope]
-      : undefined;
+  const modeNote =
+    activeMode === 'private' && scope !== 'dictation'
+      ? 'On-Device mode keeps this on your iPhone. Your choice applies when dictation leaves On-Device.'
+      : activeMode === 'providers' && !config?.inference?.[scope]
+        ? UNSET_PROVIDER_NOTES[scope]
+        : undefined;
+
+  // A passing check looks like finished setup, so leaving must not drop the key silently.
+  const hasUnsavedChanges =
+    !!apiKey.trim() ||
+    selection.mode !== savedSelection.mode ||
+    (selection.mode === 'providers' &&
+      (selection.providerId !== savedSelection.providerId ||
+        modelId !== savedSelection.modelId ||
+        (selection.endpoint ?? '') !== (savedSelection.endpoint ?? '')));
+  usePreventRemove(hasUnsavedChanges, ({ data }) =>
+    confirmDestructive(
+      'Discard unsaved changes?',
+      'Your selection and any key you entered have not been saved.',
+      () => navigation.dispatch(data.action),
+      { destructiveLabel: 'Discard' },
+    ),
+  );
 
   function clearInputs(): void {
     setApiKey('');
@@ -115,10 +201,10 @@ export function ProviderSettingsScreen(): React.JSX.Element {
 
   function showToast(message: string, type: ToastType): void {
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ message, type, visible: true });
+    setToast((current) => ({ message, type, visible: true, showId: current.showId + 1 }));
     toastTimer.current = setTimeout(
       () => setToast((current) => ({ ...current, visible: false })),
-      TOAST_MS,
+      type === 'error' ? ERROR_TOAST_MS : TOAST_MS,
     );
   }
 
@@ -129,12 +215,8 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   function chooseMode(mode: InferenceMode): void {
     if (busy) return;
     setSelection(
-      mode === 'providers' && !selection.providerId && provider
-        ? (config?.rememberedInference?.[scope]?.[provider.id] ?? {
-            mode,
-            providerId: provider.id,
-            modelId: defaultModelId(provider),
-          })
+      mode === 'providers' && !selection.providerId
+        ? providerSelection(config, scope)
         : { ...selection, mode },
     );
     setPicker(null);
@@ -184,8 +266,13 @@ export function ProviderSettingsScreen(): React.JSX.Element {
       }
       const reference = await getProviderCredentialReference(provider.id, endpoint);
       const hasNewCredential = !!apiKey.trim();
-      const hasCredential =
+      let hasCredential =
         hasNewCredential || (await getProviderCredentialStatus(reference)).isConfigured;
+      const carried = !hasCredential && saveCredential && (await savedServerCredential(endpoint));
+      if (carried) {
+        await setProviderCredential(reference, carried);
+        hasCredential = true;
+      }
       if (hasNewCredential && saveCredential) {
         await setProviderCredential(reference, { apiKey: apiKey.trim() });
         clearInputs();
@@ -206,48 +293,58 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     return saved;
   }
 
+  // A check can move a saved custom server to the /v1 address it answers on. Its key
+  // goes with it, but never to another host.
+  async function savedServerCredential(endpoint: string): Promise<ProviderCredential | null> {
+    const previous = savedSelection;
+    if (
+      previous.providerId !== 'custom' ||
+      !previous.endpoint ||
+      !previous.credentialRef ||
+      !getModelListBaseCandidates(previous.endpoint).includes(endpoint)
+    )
+      return null;
+    return getProviderCredential(previous.credentialRef);
+  }
+
+  // A bare server origin often serves its API under /v1; keep the address that answered.
+  function adoptWorkingEndpoint(draft: InferenceSelection, endpoint: string | undefined): void {
+    if (draft.providerId !== 'custom' || !endpoint || endpoint === draft.endpoint) return;
+    setSelection((current) => ({ ...current, endpoint }));
+  }
+
+  // The same checks Speech to Text and Home run, plus Apple Intelligence for text workflows.
+  async function confirmModeReady(mode: InferenceMode): Promise<boolean> {
+    if (mode === 'providers') return true;
+    if (scope === 'dictation' || scope === 'upload') {
+      return confirmSpeechModeReady(mode === 'local' ? 'private' : 'cloud', user);
+    }
+    if (mode !== 'local') return true;
+    const readiness = await getLocalReasoningReadiness({ refresh: true });
+    if (readiness.status === 'ready') return true;
+    Alert.alert('On-Device Unavailable', getLocalReasoningUnavailableMessage(readiness));
+    return false;
+  }
+
   async function save(): Promise<void> {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
+      if (!(await confirmModeReady(selection.mode))) return;
       const saved = await prepareSelection();
       if (!saved) return;
-      const processingMode =
-        saved.mode === 'local' ? 'private' : saved.mode === 'providers' ? 'providers' : 'cloud';
-      const currentConfig = useConfigStore.getState().config;
-      const inference: UserConfig['inference'] =
-        scope === 'dictation' && processingMode !== 'providers'
-          ? dictationModeConfig(currentConfig, processingMode).inference
-          : {
-              ...currentConfig?.inference,
-              // Pin uploads to the mode dictation is leaving for Bring Your Own Key.
-              ...(scope === 'dictation' && !currentConfig?.inference?.upload
-                ? { upload: { mode: activeMode === 'private' ? 'local' : 'openwhispr' } }
-                : {}),
-              [scope]: saved,
-            };
-      await updateConfig({
-        ...(saved.providerId
-          ? {
-              rememberedInference: {
-                ...currentConfig?.rememberedInference,
-                [scope]: {
-                  ...currentConfig?.rememberedInference?.[scope],
-                  [saved.providerId]: saved,
-                },
-              },
-            }
-          : {}),
-        inference,
-        ...(scope === 'dictation' ? { defaultMode: processingMode } : {}),
-      });
+      const processingMode = inferenceToProcessingMode(saved.mode);
+      await updateConfig(
+        workflowSaveConfig(useConfigStore.getState().config, scope, saved, activeMode),
+      );
       if (useConfigStore.getState().error) {
         setError('Unable to save your selection. Please try again.');
         return;
       }
       if (scope === 'dictation') setActiveMode(processingMode, true);
       setSelection(saved);
+      setSavedSelection(saved);
       clearInputs();
       setNotice('Selection saved.');
     } catch {
@@ -283,13 +380,18 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         );
         return;
       }
+      const checkKey =
+        apiKey.trim() ||
+        (!draft.credentialRef && (await savedServerCredential(draft.endpoint ?? ''))?.apiKey) ||
+        undefined;
       if (action === 'discover') {
         const result = await discoverProviderModels({
           route: resolved.route,
           signal: controller.signal,
-          apiKey: apiKey.trim() || undefined,
+          apiKey: checkKey,
         });
         if (controller.signal.aborted) return;
+        adoptWorkingEndpoint(draft, result.endpoint);
         setDiscoveredModels(result.models);
         showToast(
           result.models.length
@@ -301,11 +403,12 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         const result = await testProviderConnection({
           route: resolved.route,
           signal: controller.signal,
-          apiKey: apiKey.trim() || undefined,
+          apiKey: checkKey,
         });
         if (controller.signal.aborted) return;
+        adoptWorkingEndpoint(draft, result.endpoint);
         if (result.verification === 'inference')
-          showToast('Text inference succeeded for this model.', 'success');
+          showToast('Connection works. Save to use it.', 'success');
         else
           showToast(
             'Model catalog accessible. Transcription and inference access have not been verified.',
@@ -371,15 +474,19 @@ export function ProviderSettingsScreen(): React.JSX.Element {
 
   return (
     <View className="flex-1 bg-systemBackground">
-      <SettingsScreen keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
+      <SettingsScreen
+        automaticallyAdjustKeyboardInsets
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+      >
         <InferenceModePicker
           scope={scope === 'dictation' || scope === 'upload' ? 'speech' : 'text'}
           title="Mode"
           selectedMode={selection.mode}
           onSelect={chooseMode}
         />
-        {unsetNote ? (
-          <Text className="-mt-4 mb-6 px-8 text-[13px] text-secondaryLabel">{unsetNote}</Text>
+        {modeNote ? (
+          <Text className="-mt-4 mb-6 px-8 text-[13px] text-secondaryLabel">{modeNote}</Text>
         ) : null}
         {selection.mode === 'providers' && provider ? (
           <>
@@ -531,6 +638,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         message={toast.message}
         visible={toast.visible}
         type={toast.type}
+        showId={toast.showId}
         topOffset={headerHeight + 8}
       />
     </View>

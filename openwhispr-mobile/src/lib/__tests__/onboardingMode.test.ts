@@ -119,7 +119,8 @@ it('lets a guest leave a stuck download for Cloud', async () => {
 // screens would show the new mode while dictation kept using the provider.
 it('moves the dictation route with the chosen mode and restores both on failure', async () => {
   const providerRoute = { mode: 'providers', providerId: 'groq', modelId: 'whisper-large-v3' };
-  mockConfig = { defaultMode: 'providers', inference: { dictation: providerRoute } };
+  const inference = { dictation: providerRoute, upload: { mode: 'openwhispr' } };
+  mockConfig = { defaultMode: 'providers', inference, pinnedInference: ['upload'] };
   mockChooseMode.mockRejectedValueOnce(new Error('Keychain unavailable'));
   await expect(chooseOnboardingMode('private', 'privacy-mode')).rejects.toThrow(
     'Keychain unavailable',
@@ -127,9 +128,11 @@ it('moves the dictation route with the chosen mode and restores both on failure'
   expect(mockUpdateConfig).toHaveBeenNthCalledWith(1, {
     defaultMode: 'private',
     inference: { dictation: { mode: 'local' } },
+    pinnedInference: undefined,
   });
   expect(mockUpdateConfig).toHaveBeenLastCalledWith({
     defaultMode: 'providers',
-    inference: { dictation: providerRoute },
+    inference,
+    pinnedInference: ['upload'],
   });
 });

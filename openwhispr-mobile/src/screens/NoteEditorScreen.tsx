@@ -54,9 +54,11 @@ import {
 import { promptLocalModelFallback } from '@/lib/privateMode';
 import {
   getLocalReasoningReadiness,
+  getLocalReasoningUnavailableMessage,
   isLocalReasoningRequired,
   shouldUseLocalReasoning,
 } from '@/lib/localReasoning';
+import { providerDisplayName } from '@/lib/mobileProviders';
 import { promptLocalReasoningFallback } from '@/lib/localReasoningFallback';
 import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
 import { randomUUID } from '@/lib/uuid';
@@ -132,8 +134,12 @@ export default function NoteEditorScreen() {
   const { register: registerSuperwallGate } = useSuperwallGate();
   const { handleUsageLimitReached, isRecoveringUsageLimit } = useUsageLimitRecovery();
   const autoLearnEnabled = useConfigStore((s) => s.config?.autoLearnCorrections ?? true);
-  const providerNotes = useConfigStore((s) => s.config?.inference?.notes?.mode === 'providers');
-  const providerChat = useConfigStore((s) => s.config?.inference?.agent?.mode === 'providers');
+  const notesMode = useConfigStore((s) => s.config?.inference?.notes?.mode);
+  const notesProviderId = useConfigStore((s) => s.config?.inference?.notes?.providerId);
+  const chatMode = useConfigStore((s) => s.config?.inference?.agent?.mode);
+  const providerNotes = notesMode === 'providers';
+  // Only an unset or OpenWhispr chat route reaches Cloud, so only it needs an account and the paywall.
+  const cloudChat = chatMode !== 'providers' && chatMode !== 'local';
   const dictionaryEntries = useDictionaryStore((s) => s.entries);
   const dictionaryWords = useMemo(() => dictionaryEntries.map((e) => e.word), [dictionaryEntries]);
   const addLearnedWords = useDictionaryStore((s) => s.addLearnedWords);
@@ -550,6 +556,20 @@ export default function NoteEditorScreen() {
   const handleRunAction = useCallback(
     async (action: Parameters<typeof runAction>[0]) => {
       const routing = { isPrivateNote: note?.isPrivate === 1 };
+      // On-Device never leaves this phone: no account, paywall, or fallback to another service.
+      if (notesMode === 'local') {
+        const readiness = await getLocalReasoningReadiness();
+        if (readiness.status === 'ready') {
+          runSelectedAction(action, routing);
+          return;
+        }
+        Alert.alert(
+          'Local AI unavailable',
+          `${getLocalReasoningUnavailableMessage(readiness)} Note Formatting is set to On-Device, so this note stays on your iPhone.`,
+        );
+        return;
+      }
+
       const localRequired = providerNotes
         ? requiresCloudConfirmation
         : isLocalReasoningRequired(routing);
@@ -561,18 +581,14 @@ export default function NoteEditorScreen() {
         }
 
         const readiness = await getLocalReasoningReadiness();
+        const runElsewhereOnce = (): void =>
+          runSelectedAction(action, { ...routing, allowCloudFallback: true });
         promptLocalReasoningFallback({
           readiness,
-          signedIn: !!user || providerNotes,
+          signedIn: !!user,
           onEnableLocal: () => runSelectedAction(action, routing),
-          onUseCloudOnce:
-            user || providerNotes
-              ? () =>
-                  runSelectedAction(action, {
-                    ...routing,
-                    allowCloudFallback: true,
-                  })
-              : undefined,
+          onUseCloudOnce: user || providerNotes ? runElsewhereOnce : undefined,
+          destinationName: providerNotes ? providerDisplayName(notesProviderId ?? '') : undefined,
         });
         return;
       }
@@ -608,6 +624,8 @@ export default function NoteEditorScreen() {
     },
     [
       note?.isPrivate,
+      notesMode,
+      notesProviderId,
       providerNotes,
       registerSuperwallGate,
       requiresCloudConfirmation,
@@ -682,13 +700,13 @@ export default function NoteEditorScreen() {
 
   const runChatWithCloudConfirmation = useCallback(
     (question: string, appendUserMessage: boolean) => {
-      if (!providerChat && requiresRealAccount(user)) {
+      if (cloudChat && requiresRealAccount(user)) {
         showAccountRequiredAlert('AI chat', { cloudOnly: true });
         return;
       }
 
       const gateAndRun = (allowRemoteContent = false) => {
-        if (providerChat) {
+        if (!cloudChat) {
           startChatRequest(question, appendUserMessage, allowRemoteContent).catch(() => {});
           return;
         }
@@ -702,7 +720,7 @@ export default function NoteEditorScreen() {
         }).catch(() => {});
       };
 
-      if (requiresCloudConfirmation) {
+      if (requiresCloudConfirmation && chatMode !== 'local') {
         confirmCloudOnce(
           'Chat sends this note context to your selected AI service for this request. Your note privacy and sync settings will not change.',
           () => gateAndRun(true),
@@ -712,7 +730,7 @@ export default function NoteEditorScreen() {
 
       gateAndRun();
     },
-    [providerChat, registerSuperwallGate, requiresCloudConfirmation, startChatRequest, user],
+    [chatMode, cloudChat, registerSuperwallGate, requiresCloudConfirmation, startChatRequest, user],
   );
 
   const handleAskNote = useCallback(() => {

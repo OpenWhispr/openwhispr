@@ -1,4 +1,9 @@
-import type { InferenceScope, InferenceSelection, InferenceRoute } from '@/lib/mobileProviders';
+import type {
+  InferenceScope,
+  InferenceSelection,
+  InferenceRoute,
+  MobileInferenceScope,
+} from '@/lib/mobileProviders';
 
 export type ProcessingMode = 'cloud' | 'private' | 'providers';
 export type TranscriptionProvider = 'local' | 'cloud' | 'byok';
@@ -8,6 +13,9 @@ export type InferenceMode = 'openwhispr' | 'local' | 'providers';
 export interface UserConfig {
   inference?: Partial<Record<InferenceScope, InferenceSelection>>;
   rememberedInference?: Partial<Record<InferenceScope, Record<string, InferenceSelection>>>;
+  // Workflows held on the previous mode when dictation moved to Bring Your Own Key,
+  // as opposed to ones the user chose; only these are released when dictation leaves it.
+  pinnedInference?: MobileInferenceScope[];
   defaultMode: ProcessingMode;
   cleanupEnabled?: boolean;
   autoGenerateNoteTitle?: boolean;

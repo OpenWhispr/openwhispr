@@ -49,10 +49,10 @@ export default function AccountLayout() {
       />
       <Stack.Screen
         name="provider-workflow"
-        options={({ route }) => ({
-          title: WORKFLOW_LABELS[parseWorkflow((route.params as { scope?: string })?.scope)],
-          headerLargeTitle: false,
-        })}
+        options={({ route }) => {
+          const scope = parseWorkflow((route.params as { scope?: string })?.scope);
+          return { title: scope ? WORKFLOW_LABELS[scope] : '', headerLargeTitle: false };
+        }}
       />
       <Stack.Screen
         name="dictation-agent"
