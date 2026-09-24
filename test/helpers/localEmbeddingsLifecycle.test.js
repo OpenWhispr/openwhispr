@@ -171,6 +171,38 @@ test("reloads after the shared worker restarts", async () => {
   assert.equal(events.filter((event) => event === "text.load").length, 2);
 });
 
+test("speaker embeddings reload after the shared worker restarts", async () => {
+  const methods = [];
+  const client = {
+    generation: 0,
+    async request(method) {
+      methods.push(method);
+      return method === "speaker.extract" ? { embeddingBuffer: new ArrayBuffer(4) } : { ok: true };
+    },
+  };
+  const context = vm.createContext({
+    module: { exports: {} },
+    process: {},
+    require(name) {
+      if (name === "fs") return { existsSync: () => true };
+      if (name === "./debugLogger") return { debug() {} };
+      if (name === "./modelDirUtils") return { getModelsDirForService: () => "/models" };
+      if (name === "./onnxWorkerClient") return client;
+      return require(name);
+    },
+  });
+  vm.runInContext(
+    fs.readFileSync(path.resolve("src/helpers/speakerEmbeddings.js"), "utf8"),
+    context
+  );
+  const speakerEmbeddings = context.module.exports;
+  const samples = new Float32Array(16000 * 2);
+  await speakerEmbeddings.extractEmbeddingFromSamples(samples);
+  client.generation += 1;
+  await speakerEmbeddings.extractEmbeddingFromSamples(samples);
+  assert.equal(methods.filter((method) => method === "speaker.load").length, 2);
+});
+
 test("a failed load does not block unloading or the next load attempt", async () => {
   const { embeddings, client, events } = createHarness();
   const request = client.request.bind(client);

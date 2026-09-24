@@ -74,7 +74,6 @@ test.before(() => {
   // Mirrors the constructor's initial detector-gating state.
   target = {
     meetingProcessDetection: true,
-    notificationPreferencesInitialized: false,
     windowManager: { notificationPrefs: {} },
     meetingDetectionEngine: { setPreferences: (prefs) => applied.push(prefs) },
   };
@@ -103,20 +102,9 @@ test("the legacy meeting-detection-set-preferences channel is gone", () => {
   assert.equal(handlers.has("meeting-detection-get-preferences"), false);
 });
 
-test("a partial sync stores the notification prefs but keeps both detectors off", async () => {
-  applied.length = 0;
-  assert.deepEqual(await sync({ notificationsEnabled: true, notifyMeetingDetection: true }), {
-    success: true,
-  });
-  assert.equal(target.windowManager.notificationPrefs.notificationsEnabled, true);
-  assert.equal(target.notificationPreferencesInitialized, false);
-  assert.deepEqual(applied, [{ audioDetection: false, processDetection: false }]);
-});
-
-test("the full saved snapshot latches initialization and drives both detectors", async () => {
+test("the saved snapshot drives both detectors", async () => {
   applied.length = 0;
   await sync({ ...ENABLED_SNAPSHOT, meetingProcessDetection: false });
-  assert.equal(target.notificationPreferencesInitialized, true);
   assert.equal(target.meetingProcessDetection, false);
   assert.deepEqual(applied, [{ audioDetection: true, processDetection: false }]);
 
@@ -129,7 +117,7 @@ test("the full saved snapshot latches initialization and drives both detectors",
   assert.deepEqual(applied, [{ audioDetection: false, processDetection: false }]);
 });
 
-test("a partial update after initialization re-derives from the retained state", async () => {
+test("a partial update re-derives from the retained state", async () => {
   await sync(ENABLED_SNAPSHOT);
   applied.length = 0;
   await sync({ notificationsEnabled: false });

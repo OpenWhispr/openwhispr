@@ -168,7 +168,6 @@ test("a live recording with no note id still blocks a second manual meeting", as
 const { deriveDetectorPreferences } = require("../../src/helpers/meetingDetectionPreferencePolicy");
 
 const ENABLED_SNAPSHOT = {
-  initialized: true,
   notificationsEnabled: true,
   notifyMeetingDetection: true,
   meetingProcessDetection: true,
@@ -188,8 +187,6 @@ test("startup waits for saved notification preferences before starting prompt de
 test("a snapshot with meeting prompts disabled never starts prompt detectors", () => {
   const { engine, audioDetector, processDetector } = createEngine();
   engine.start();
-  applySnapshot(engine, { ...ENABLED_SNAPSHOT, initialized: false });
-  assert.equal(processDetector.running, false, "nothing starts before hydration");
   applySnapshot(engine, { ...ENABLED_SNAPSHOT, notifyMeetingDetection: false });
   assert.equal(audioDetector.running, false);
   assert.equal(processDetector.running, false);

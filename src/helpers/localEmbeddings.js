@@ -79,14 +79,9 @@ class LocalEmbeddings {
   }
 
   async _embedText(text) {
-    try {
-      await this._ensureLoaded();
-      const { embeddingBuffer } = await onnxWorkerClient.request("text.embed", { text });
-      return new Float32Array(embeddingBuffer);
-    } catch (err) {
-      this.loadPromise = null;
-      throw err;
-    }
+    await this._ensureLoaded();
+    const { embeddingBuffer } = await onnxWorkerClient.request("text.embed", { text });
+    return new Float32Array(embeddingBuffer);
   }
 
   embedText(text) {

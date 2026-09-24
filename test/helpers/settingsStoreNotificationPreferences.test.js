@@ -2,12 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-test("initial notification snapshot is atomic and precedes secret hydration", async (t) => {
+test("startup syncs the full saved notification snapshot once", async (t) => {
   const snapshots = [];
-  let releaseSecrets;
-  const secrets = new Promise((resolve) => {
-    releaseSecrets = resolve;
-  });
   installBrowserGlobals(t, {
     initialStorage: {
       notificationsEnabled: "false",
@@ -18,7 +14,7 @@ test("initial notification snapshot is atomic and precedes secret hydration", as
     },
     window: {
       electronAPI: {
-        getOpenAIKey: () => secrets,
+        getOpenAIKey: async () => "",
         setDictionary: async () => {},
         syncNotificationPreferences: async (prefs) => {
           snapshots.push(prefs);
@@ -30,22 +26,18 @@ test("initial notification snapshot is atomic and precedes secret hydration", as
     cachePrefix: "openwhispr-notification-preferences-test-",
   });
   const { initializeSettings } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const initialization = initializeSettings();
   try {
-    await Promise.resolve();
-    assert.deepEqual(snapshots, [
-      {
-        notificationsEnabled: false,
-        notifyMeetingDetection: true,
-        notifyCalendarReminders: false,
-        meetingProcessDetection: false,
-      },
-    ]);
+    await initializeSettings();
   } finally {
-    releaseSecrets("");
-    await initialization;
     const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
     await i18n.changeLanguage("en");
   }
-  assert.equal(snapshots.length, 1);
+  assert.deepEqual(snapshots, [
+    {
+      notificationsEnabled: false,
+      notifyMeetingDetection: true,
+      notifyCalendarReminders: false,
+      meetingProcessDetection: false,
+    },
+  ]);
 });

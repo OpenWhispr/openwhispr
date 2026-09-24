@@ -13,7 +13,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function harness({ realTimers = false } = {}) {
+function harness() {
   const calls = [];
   const logs = [];
   const pending = new Map();
@@ -123,17 +123,13 @@ function harness({ realTimers = false } = {}) {
       },
     },
     now: () => now,
-    ...(realTimers
-      ? {}
-      : {
-          setTimeout(callback, delay) {
-            timers.set(++nextTimer, { callback, delay });
-            return nextTimer;
-          },
-          clearTimeout(id) {
-            timers.delete(id);
-          },
-        }),
+    setTimeout(callback, delay) {
+      timers.set(++nextTimer, { callback, delay });
+      return nextTimer;
+    },
+    clearTimeout(id) {
+      timers.delete(id);
+    },
   });
   return {
     lifecycle,
@@ -175,44 +171,29 @@ function gateStart(h) {
   return gate;
 }
 
-test("cold searches wait for one shared activation and return vector results in time", async () => {
+test("cold searches answer with keywords at once and share one background activation", async () => {
   const h = harness();
   const gate = gateStart(h);
-  const first = h.lifecycle.search("first");
-  const second = h.lifecycle.search("second");
-  assert.equal([...h.timers.values()].filter((timer) => timer.delay === 2500).length, 2);
-  gate.resolve();
-  assert.deepEqual(await first, [{ noteId: 1, score: 0.9 }]);
-  assert.deepEqual(await second, [{ noteId: 1, score: 0.9 }]);
-  assert.equal(h.calls.filter((call) => call === "start").length, 1);
-  assert.equal(
-    [...h.timers.values()].some((timer) => timer.delay === 2500),
-    false
-  );
-});
-
-test("a cold search falls back to keywords when activation outlasts the wait, and activation continues", async () => {
-  const h = harness();
-  const gate = gateStart(h);
-  const search = h.lifecycle.search("slow start");
-  await h.fireTimer(2500);
-  assert.equal(await search, null);
+  assert.equal(await h.lifecycle.search("first"), null);
+  assert.equal(await h.lifecycle.search("second"), null);
   gate.resolve();
   assert.equal(await h.lifecycle.warmUp(), true);
-  assert.equal(h.lifecycle.isReady(), true);
   assert.equal(h.calls.filter((call) => call === "start").length, 1);
+  assert.deepEqual(await h.lifecycle.search("warm"), [{ noteId: 1, score: 0.9 }]);
 });
 
-test("an in-flight bounded wait still prevents idle teardown", async () => {
-  const h = harness({ realTimers: true });
-  const gate = gateStart(h);
-  const search = h.lifecycle.search("cold");
-  h.setNow(IDLE_TIMEOUT_MS + 1);
-  gate.resolve();
-  assert.deepEqual(await search, [{ noteId: 1, score: 0.9 }]);
-  await new Promise((resolve) => setTimeout(resolve, 5));
-  assert.equal(h.calls.includes("stop"), false);
-  assert.equal(h.calls.includes("unload"), false);
+test("a warm index keeps answering while an edit drains in the background", async () => {
+  const h = harness();
+  await h.lifecycle.warmUp();
+  const gate = deferred();
+  h.index.upsertNote = () => gate.promise;
+  h.pending.set(1, 1);
+  h.notes.set(1, { title: "Live note", content: "" });
+  h.lifecycle.notifyChanges();
+  assert.deepEqual(await h.lifecycle.search("query"), [{ noteId: 1, score: 0.9 }]);
+  gate.resolve(true);
+  assert.equal(await h.lifecycle.warmUp(), true);
+  assert.equal(h.pending.size, 0);
 });
 
 test("activation drains purges, live updates and deletions before readiness", async () => {
@@ -345,8 +326,9 @@ test("five minutes of idle releases resources and later search can wake them", a
   await timer.callback();
   assert.equal(h.lifecycle.isReady(), false);
   assert.ok(h.calls.includes("unload"));
+  assert.equal(await h.lifecycle.search("wake"), null);
+  assert.equal(await h.lifecycle.warmUp(), true);
   assert.deepEqual(await h.lifecycle.search("wake"), [{ noteId: 1, score: 0.9 }]);
-  assert.equal(h.lifecycle.isReady(), true);
 });
 
 test("an in-flight search prevents idle teardown", async () => {
@@ -371,10 +353,10 @@ test("a search during idle shutdown waits for teardown before warming", async ()
     h.qdrant.ready = false;
   };
   const stopping = [...h.timers.values()][0].callback();
-  const wake = h.lifecycle.search("wake");
+  assert.equal(await h.lifecycle.search("wake"), null);
   gate.resolve();
   await stopping;
-  assert.deepEqual(await wake, [{ noteId: 1, score: 0.9 }]);
+  assert.equal(await h.lifecycle.warmUp(), true);
   assert.equal(h.lifecycle.isReady(), true);
 });
 

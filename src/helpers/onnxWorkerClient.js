@@ -230,7 +230,7 @@ class OnnxWorkerClient {
       }
     }
 
-    if (method !== "text.unload") await this._spawn();
+    await this._spawn();
 
     const id = this.nextRequestId++;
     return new Promise((resolve, reject) => {

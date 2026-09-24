@@ -117,10 +117,7 @@ const {
   MEETING_MIC_SILENCE_RMS,
   MEETING_MIC_SILENCE_PEAK,
 } = require("./meetingMicGate");
-const {
-  isCompleteNotificationSnapshot,
-  deriveDetectorPreferences,
-} = require("./meetingDetectionPreferencePolicy");
+const { deriveDetectorPreferences } = require("./meetingDetectionPreferencePolicy");
 const { resolveDiarizationInput } = require("./meetingDiarizationInput");
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
@@ -660,7 +657,6 @@ class IPCHandlers {
     // Meeting detectors stay off until the renderer syncs its saved notification
     // preferences (see meetingDetectionPreferencePolicy.js).
     this.meetingProcessDetection = true;
-    this.notificationPreferencesInitialized = false;
     this.activeMeetingSpeakerConfig = null;
     this.whisperVadSettings = {
       dictationSileroEnabled: false,
@@ -11427,14 +11423,10 @@ class IPCHandlers {
         if (typeof prefs.meetingProcessDetection === "boolean") {
           this.meetingProcessDetection = prefs.meetingProcessDetection;
         }
-        if (isCompleteNotificationSnapshot(prefs)) {
-          this.notificationPreferencesInitialized = true;
-        }
         const { notificationsEnabled, notifyMeetingDetection } =
           this.windowManager.notificationPrefs;
         this.meetingDetectionEngine?.setPreferences(
           deriveDetectorPreferences({
-            initialized: this.notificationPreferencesInitialized,
             notificationsEnabled,
             notifyMeetingDetection,
             meetingProcessDetection: this.meetingProcessDetection,

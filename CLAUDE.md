@@ -253,7 +253,7 @@ Offline semantic search that finds notes by meaning, not just keywords. Used by 
 
 **Pipeline**:
 
-1. App launches → nothing starts. The first `db-semantic-search-notes` call activates the lifecycle: Qdrant binary starts → collection created → embedding model downloaded if missing (~22MB) → the journal is drained. A cold search waits up to 2.5s for that activation and otherwise answers with FTS5 results while it continues in the background. A journal row whose upsert keeps failing is retried up to three times and then parked, so one bad note never blocks the rest of the index
+1. App launches → nothing starts. The first `db-semantic-search-notes` call activates the lifecycle: Qdrant binary starts → collection created → embedding model downloaded if missing (~22MB) → the journal is drained. A cold search does not wait: it answers with FTS5 results while activation runs in the background. A journal row whose upsert keeps failing is retried up to three times and then parked, so one bad note never blocks the rest of the index
 2. Note create/update/delete → SQLite write → triggers journal the note id in `pending_vector_changes` → `IPCHandlers.notifyVectorChanges()` wakes an already-active index to drain the journal; an idle index drains it on its next activation
 3. Agent searches → `db-semantic-search-notes` IPC → parallel FTS5 + vector search → RRF merge → ranked results
 4. 5 minutes without a search or write → Qdrant is stopped and the embedding session released; FTS5 keeps serving

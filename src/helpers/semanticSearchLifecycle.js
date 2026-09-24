@@ -1,7 +1,5 @@
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const RETRY_DELAY_MS = 30 * 1000;
-// A cold search waits this long for activation before settling for keyword results.
-const SEARCH_WARMUP_WAIT_MS = 2500;
 const DRAIN_PAGE_SIZE = 50;
 // A row that fails this many passes is parked until the next activation, so one
 // poison note never disables semantic search for the rest.
@@ -55,14 +53,21 @@ class SemanticSearchLifecycle {
     qdrant.on("restarted", this.onRestart);
   }
 
-  isReady() {
+  // An initialized index on a live Qdrant; it may lag journal rows still draining.
+  _canSearch() {
     return (
       this.ready &&
       !this.closed &&
-      !this.activationPromise &&
       !this.stoppingPromise &&
       this.qdrant.isReady() &&
-      this.indexPort === this.qdrant.getPort() &&
+      this.indexPort === this.qdrant.getPort()
+    );
+  }
+
+  isReady() {
+    return (
+      this._canSearch() &&
+      !this.activationPromise &&
       !this.retryDue &&
       this.database.getPendingVectorChanges(1, this.drainedThroughRevision).length === 0
     );
@@ -168,7 +173,6 @@ class SemanticSearchLifecycle {
     if (this.qdrant.restartBlocked) return false;
 
     if (!recovery) this.lastActivity = this.now();
-    this.ready = false;
     this._clearIdleTimer();
     this.activationPromise = this._activate()
       .catch(async (error) => {
@@ -273,20 +277,15 @@ class SemanticSearchLifecycle {
     if (retry) this._scheduleRetry();
   }
 
-  // Resolves once activation settles or the wait window elapses, whichever is first.
-  _awaitWarmUp() {
-    let timer = null;
-    const window = new Promise((resolve) => {
-      timer = this.setTimeout(resolve, SEARCH_WARMUP_WAIT_MS);
-    });
-    return Promise.race([this.warmUp(), window]).finally(() => this.clearTimeout(timer));
-  }
-
+  // Never waits: a cold index answers with keywords, and a warm one searches while
+  // pending changes drain in the background.
   async search(query, limit, filter) {
     this.lastActivity = this.now();
     if (!this.isReady()) {
-      await this._awaitWarmUp();
-      if (!this.isReady()) return null;
+      this.warmUp().catch((error) =>
+        this.logger.warn("Semantic search warm-up failed", { error: error.message })
+      );
+      if (!this._canSearch()) return null;
     }
     this._clearIdleTimer();
     const search = this.vectorIndex.search(query, limit, filter);

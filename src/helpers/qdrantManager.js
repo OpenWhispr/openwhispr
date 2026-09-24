@@ -238,12 +238,15 @@ class QdrantManager extends EventEmitter {
     this._stopHealthCheck();
     this.consecutiveHealthFailures = 0;
     this.healthCheckInterval = setInterval(async () => {
-      if (!this.process) {
+      const child = this.process;
+      if (!child) {
         this._stopHealthCheck();
         return;
       }
       if (await this._checkHealth()) {
         this.consecutiveHealthFailures = 0;
+        // A check that resolves after a stop or restart must not revive the old process.
+        if (this.process === child) this.ready = true;
         return;
       }
       this.consecutiveHealthFailures++;

@@ -195,6 +195,20 @@ test("a healthy check resets the consecutive-failure count", async (t) => {
   assert.equal(state.spawnCalls.length, 1, "should never have restarted");
 });
 
+test("a healthy check after a failed one marks qdrant ready again", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { manager, state } = loadManager();
+  await manager.start();
+
+  state.healthy = false;
+  await tickHealthCheck(t, 1);
+  assert.equal(manager.isReady(), false);
+  state.healthy = true;
+  await tickHealthCheck(t, 1);
+
+  assert.equal(manager.isReady(), true);
+});
+
 test("stays stopped with one warning once the restart budget is spent", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval"] });
   const { QdrantManager, manager, state } = loadManager();
