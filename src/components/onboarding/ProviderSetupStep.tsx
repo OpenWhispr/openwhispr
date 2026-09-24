@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "../icons";
 import { useTranslation } from "react-i18next";
 import ProviderConnectionTest from "./ProviderConnectionTest";
 import { Button } from "../ui/button";
@@ -7,7 +7,10 @@ import { Input } from "../ui/input";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useModelDownload } from "../../hooks/useModelDownload";
+import type { ParakeetCheckResult } from "../../types/electron";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { normalizeBaseUrl } from "../../config/constants";
+import { withHttpsScheme } from "../../utils/urlUtils";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
   filterByokProviderOptionsByPolicy,
@@ -17,62 +20,71 @@ import {
 import {
   getTranscriptionProviders,
   getParakeetModels,
-  isCohereTranscribeModel,
   getWhisperModels,
   modelRegistry,
   type CloudProviderData,
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
+import {
+  LOCAL_ASR_ORGANIZATIONS,
+  getASRModelOrganization,
+  getSelectedASROrganization,
+  usesParakeetManager,
+  DEFAULT_LOCAL_ASR_SELECTION,
+} from "../../helpers/localASROrganization";
 import { pickDefaultModelId } from "../../models/providerDefaultModel";
-import type { OnboardingStepId } from "./flow";
-import { forgetPendingLocalModel, rememberPendingLocalModel } from "./pendingLocalModels";
+import {
+  RESUME_DRAFT_PERSIST_DELAY_MS,
+  type OnboardingByokDraft,
+  type OnboardingLocalModelDraft,
+  type OnboardingStepId,
+} from "./flow";
+import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
+import {
+  forgetPendingLocalModel,
+  isPendingLocalModel,
+  readPendingLocalModels,
+  rememberPendingLocalModel,
+} from "./pendingLocalModels";
 import { isLocalStageDownloadActive } from "./localDownloadState";
+import { isBlankByokDraft, resolveSavedByokConfig } from "./savedByokConfig";
 
 export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
   const { t } = useTranslation();
   const assistant = stepId.endsWith("assistant");
-  const local = stepId.startsWith("local");
   return (
     <div
-      className="relative mx-auto flex w-36 items-start justify-between"
+      className="relative mx-auto flex items-start justify-between w-40"
       aria-label={t("onboarding.rehaul.provider.progress")}
     >
-      <span className="absolute left-8 right-8 top-3.5 border-t border-dashed border-[var(--onboarding-control-border)]" />
+      <span className="absolute left-8 right-8 border-t border-dashed border-[var(--onboarding-control-border)] top-4" />
       <div className="relative z-10 flex w-14 flex-col items-center gap-1.5 text-[var(--onboarding-text-secondary)]">
         <span
-          className={`flex size-7 items-center justify-center rounded-full ${
+          className={`flex items-center justify-center rounded-full size-8 ${
             assistant
               ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)]"
               : "bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]"
           }`}
         >
           {assistant ? (
-            local ? (
-              <AudioLines className="size-3.5" />
-            ) : (
-              <CircleCheck className="size-3.5" strokeWidth={2} />
-            )
+            <CircleCheck className="size-4" strokeWidth={2} />
           ) : (
-            <AudioLines className="size-3.5" />
+            <AudioLines className="size-4" />
           )}
         </span>
-        <span className="text-[0.6875rem]">{t("onboarding.rehaul.provider.dictation")}</span>
+        <span className="text-xs">{t("onboarding.rehaul.provider.dictation")}</span>
       </div>
       <div className="relative z-10 flex w-14 flex-col items-center gap-1.5 text-[var(--onboarding-text-secondary)]">
         <span
-          className={`flex size-7 items-center justify-center rounded-full ${
+          className={`flex items-center justify-center rounded-full size-8 ${
             assistant
               ? "bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]"
               : "border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]"
           }`}
         >
-          <MousePointer2 className="size-3.5" />
+          <MousePointer2 className="size-4" />
         </span>
-        <span className="text-[0.6875rem]">
-          {local && assistant
-            ? t("onboarding.rehaul.local.agent")
-            : t("onboarding.rehaul.provider.assistant")}
-        </span>
+        <span className="text-xs">{t("onboarding.rehaul.provider.assistant")}</span>
       </div>
     </div>
   );
@@ -103,7 +115,7 @@ function StepPrimaryAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`h-9 rounded-[38px] border-0 bg-[var(--onboarding-accent)] px-5 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none! disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-secondary)] disabled:opacity-100! ${className}`}
+      className="h-9 rounded-[38px] px-5 text-sm"
     >
       {children}
     </Button>
@@ -112,10 +124,12 @@ function StepPrimaryAction({
 
 function StepSecondaryAction({
   onClick,
+  disabled = false,
   className = "",
   children,
 }: {
   onClick: () => void;
+  disabled?: boolean;
   className?: string;
   children: ReactNode;
 }) {
@@ -124,6 +138,7 @@ function StepSecondaryAction({
       type="button"
       variant="outline-flat"
       onClick={onClick}
+      disabled={disabled}
       className={`h-9 rounded-[38px]! border! border-[var(--onboarding-control-border)]! bg-transparent! px-5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! hover:bg-[var(--onboarding-surface-hover)]! ${className}`}
     >
       {children}
@@ -132,12 +147,17 @@ function StepSecondaryAction({
 }
 
 /** The card each setup mode's step renders into. Top margin is per call site. */
-export const SETUP_CARD_CLASS =
-  "mx-auto w-full max-w-[22rem] rounded-[1.125rem] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 py-4 text-[var(--onboarding-text-primary)]";
+const SETUP_CARD_BASE_CLASS =
+  "mx-auto w-full rounded-[1.125rem] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]";
+
+export const SETUP_CARD_CLASS = `${SETUP_CARD_BASE_CLASS} max-w-[30rem] px-3 py-4`;
+const LOCAL_MODEL_CARD_CLASS = `${SETUP_CARD_BASE_CLASS} max-w-[30rem] px-4 py-4`;
 
 /** The field trigger. Call sites that can be disabled add the disabled: variants. */
 const SELECT_TRIGGER_CLASS =
   "h-9 rounded-xl border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-3 text-xs text-[var(--onboarding-text-primary)]";
+const LOCAL_SELECT_TRIGGER_CLASS =
+  "h-12 rounded-xl border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-3 text-sm text-[var(--onboarding-text-primary)]";
 
 /**
  * The dropdown sheet, Figma "Onboarding / Frame 16": radius 17 on
@@ -178,7 +198,7 @@ const SELECT_PANEL_CLASS =
  * theme out here and would paint a square band behind the slab.
  */
 const SELECT_ITEM_CLASS =
-  "onboarding-select-item gap-2.5 rounded-none py-2.5 pl-1.5 pr-8 text-sm font-normal leading-[1.4] hover:bg-transparent focus:bg-transparent data-highlighted:bg-transparent dark:hover:bg-transparent dark:focus:bg-transparent dark:data-highlighted:bg-transparent [&>span:nth-child(2)]:w-full";
+  "onboarding-select-item gap-2.5 rounded-none py-2.5 ps-1.5 pe-8 text-sm font-normal leading-[1.4] hover:bg-transparent focus:bg-transparent data-highlighted:bg-transparent dark:hover:bg-transparent dark:focus:bg-transparent dark:data-highlighted:bg-transparent [&>span:nth-child(2)]:w-full";
 
 function providerCredential(provider: string, store: ReturnType<typeof useSettingsStore.getState>) {
   switch (provider) {
@@ -200,9 +220,83 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
       return { value: store.tinfoilApiKey, set: store.setTinfoilApiKey };
     case "corti":
       return { value: store.cortiApiKey, set: store.setCortiApiKey };
+    case "deepgram":
+      return { value: store.deepgramApiKey, set: store.setDeepgramApiKey };
+    case "assemblyai":
+      return { value: store.assemblyaiApiKey, set: store.setAssemblyaiApiKey };
     default:
       return { value: "", set: (_value: string) => undefined };
   }
+}
+
+/**
+ * One server's variants — missing scheme, host case, trailing slash, pasted API path —
+ * compare equal. Parsing lowercases the scheme and host; the path keeps its case.
+ */
+function endpointIdentity(baseUrl: string): string {
+  const normalized = normalizeBaseUrl(withHttpsScheme(baseUrl));
+  try {
+    return new URL(normalized).href;
+  } catch {
+    return normalized;
+  }
+}
+
+function isSameEndpoint(baseUrl: string, savedBaseUrl: string): boolean {
+  const saved = endpointIdentity(savedBaseUrl);
+  return Boolean(saved) && endpointIdentity(baseUrl) === saved;
+}
+
+/**
+ * The provider/model a local step opens on: the draft this step last wrote, then
+ * a selection whose download is still pending, then whatever the store already
+ * holds. Reads localStorage, so it belongs in a state initializer, not a render.
+ */
+function resolveInitialLocalSelection(
+  assistant: boolean,
+  resumeState: OnboardingLocalModelDraft | undefined,
+  store: ReturnType<typeof useSettingsStore.getState>
+): OnboardingLocalModelDraft {
+  const pending = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
+  // A fresh install has never picked a local provider (the store only falls back
+  // to whisper); open on the recommended Oruk model instead of that fallback.
+  const hasChosenLocalASR =
+    !!store.parakeetModel || localStorage.getItem("localTranscriptionProvider") !== null;
+  if (!assistant && !resumeState && !pending && !hasChosenLocalASR) {
+    return DEFAULT_LOCAL_ASR_SELECTION;
+  }
+  const savedProvider = assistant
+    ? modelRegistry.getProvider(store.chatAgentProvider)
+      ? store.chatAgentProvider
+      : "qwen"
+    : getSelectedASROrganization(store.localTranscriptionProvider, store.parakeetModel);
+  const resumeProvider = resumeState
+    ? getSelectedASROrganization(resumeState.provider, resumeState.modelId)
+    : undefined;
+  const pendingProvider = pending
+    ? getSelectedASROrganization(pending.provider, pending.modelId)
+    : undefined;
+  const requestedProvider = resumeProvider || pendingProvider || savedProvider;
+  const provider = assistant
+    ? modelRegistry.getProvider(requestedProvider)
+      ? requestedProvider
+      : "qwen"
+    : requestedProvider === "nvidia" || requestedProvider === "oruk"
+      ? requestedProvider
+      : "whisper";
+  const savedModel = assistant
+    ? store.chatAgentModel
+    : usesParakeetManager(provider)
+      ? store.parakeetModel
+      : store.whisperModel;
+
+  return {
+    provider,
+    modelId:
+      (resumeProvider === provider ? resumeState?.modelId : "") ||
+      (pendingProvider === provider ? pending?.modelId : "") ||
+      savedModel,
+  };
 }
 
 type HostedProvider = CloudProviderData | TranscriptionProviderData;
@@ -219,6 +313,8 @@ export function ByokProviderStep({
   onSelfHostedChange,
   onConnectionChange,
   onProceed,
+  resumeState,
+  onResumeStateChange,
 }: {
   stepId: "byok-dictation" | "byok-assistant";
   /** Set when the user picked "Self-hosted" on setup-choice rather than BYOK. */
@@ -226,6 +322,8 @@ export function ByokProviderStep({
   onSelfHostedChange: (requested: boolean) => void;
   onConnectionChange: (connected: boolean) => void;
   onProceed: () => void;
+  resumeState?: OnboardingByokDraft;
+  onResumeStateChange?: (state: OnboardingByokDraft) => void;
 }) {
   const { t } = useTranslation();
   const store = useSettingsStore();
@@ -235,32 +333,6 @@ export function ByokProviderStep({
   const selfHostedAllowed =
     isModeAllowedByPolicy(policy, scope, "self-hosted") &&
     isProviderAllowedByPolicy(policy, scope, "custom");
-  const [selfHosted, setSelfHosted] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState("");
-  const [selectedModel, setSelectedModel] = useState("");
-  const [draftApiKey, setDraftApiKey] = useState("");
-  const [draftBaseUrl, setDraftBaseUrl] = useState("");
-  const [draftCustomModel, setDraftCustomModel] = useState("");
-  const [draftCortiClientId, setDraftCortiClientId] = useState("");
-  const [draftCortiClientSecret, setDraftCortiClientSecret] = useState("");
-  const [connected, setConnected] = useState(false);
-
-  // Policy can forbid self-hosted, in which case the checkbox isn't rendered and
-  // honouring the request would strand the user in fields they can't switch away
-  // from.
-  useEffect(() => {
-    setSelfHosted(selfHostedRequested && selfHostedAllowed);
-    setSelectedProvider("");
-    setSelectedModel("");
-    setDraftApiKey("");
-    setDraftBaseUrl("");
-    setDraftCustomModel("");
-    setDraftCortiClientId("");
-    setDraftCortiClientSecret("");
-    setConnected(false);
-    onConnectionChange(false);
-  }, [onConnectionChange, selfHostedAllowed, selfHostedRequested, stepId]);
-
   const providers = useMemo(
     () =>
       filterByokProviderOptionsByPolicy<HostedProvider>(
@@ -270,18 +342,136 @@ export function ByokProviderStep({
       ),
     [assistant, policy, scope]
   );
+  // The session's draft wins; without one (onboarding was restarted, or an older build
+  // left it blank) the step reopens on what the user already saved, the same order
+  // LocalModelSetupStep uses. The draft never records keys, so the stored custom key is
+  // tracked by the endpoint it was saved under — the draft, and anything typed after it,
+  // can name a different server than the saved settings do.
+  const [seed] = useState(() => {
+    const saved = resolveSavedByokConfig(stepId, store);
+    const hasDraft = Boolean(resumeState && !isBlankByokDraft(resumeState));
+    const draft = hasDraft ? resumeState : saved?.draft;
+    const providerData = providers.find((provider) => provider.id === draft?.selectedProvider);
+    // After a restart the session only knows which setup-choice tile was clicked, so a
+    // saved endpoint opens its own card whichever tile that was; a draft carries the
+    // card the session recorded for it.
+    const selfHostedWanted =
+      hasDraft || !saved ? selfHostedRequested : Boolean(saved.draft.baseUrl);
+    const selfHosted = selfHostedWanted && selfHostedAllowed;
+    return {
+      provider: providerData?.id ?? "",
+      model: providerData?.models?.some((model) => model.id === draft?.selectedModel)
+        ? (draft?.selectedModel ?? "")
+        : pickDefaultModelId(providerData),
+      baseUrl: draft?.baseUrl ?? "",
+      customModel: draft?.customModel ?? "",
+      selfHosted,
+      cardDiffersFromSession: selfHosted !== selfHostedRequested,
+      keyedBaseUrl: saved?.usesCustomKey ? saved.draft.baseUrl : "",
+    };
+  });
+  // Hosted and self-hosted share the key field, so each mode shows its own saved key.
+  // The stored custom key belongs to the one endpoint it was saved under: offering it for
+  // a key-less server, a hosted provider, a first setup, or an endpoint the user has since
+  // typed would send a key they never typed to that server, and move the save onto the
+  // keyed route.
+  const credentialFor = (selfHostedMode: boolean, providerId: string, baseUrl: string) => {
+    if (!selfHostedMode) return providerCredential(providerId, store).value;
+    if (!isSameEndpoint(baseUrl, seed.keyedBaseUrl)) return "";
+    return assistant ? store.chatAgentCustomApiKey : store.customTranscriptionApiKey;
+  };
+  const [selfHosted, setSelfHosted] = useState(seed.selfHosted);
+  const [selectedProvider, setSelectedProvider] = useState(seed.provider);
+  const [selectedModel, setSelectedModel] = useState(seed.model);
+  const [draftApiKey, setDraftApiKey] = useState(() =>
+    credentialFor(seed.selfHosted, seed.provider, seed.baseUrl)
+  );
+  const [draftBaseUrl, setDraftBaseUrl] = useState(seed.baseUrl);
+  const [draftCustomModel, setDraftCustomModel] = useState(seed.customModel);
+  const [draftCortiClientId, setDraftCortiClientId] = useState(
+    seed.provider === "corti" ? store.cortiClientId : ""
+  );
+  const [draftCortiClientSecret, setDraftCortiClientSecret] = useState(
+    seed.provider === "corti" ? store.cortiClientSecret : ""
+  );
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    onConnectionChange(false);
+  }, [onConnectionChange]);
+
+  // The card the saved setup picked goes on the session once, at mount (both deps are
+  // stable), so the draft this visit writes reopens on it; later switches report
+  // through toggleSelfHosted.
+  useEffect(() => {
+    if (seed.cardDiffersFromSession) onSelfHostedChange(seed.selfHosted);
+  }, [onSelfHostedChange, seed]);
+
+  // Base URL and custom model are typed, so the write is debounced the way the
+  // auth draft is; the flush covers the pending write this card drops when the
+  // step advances and unmounts it.
+  const latestByokDraft = useRef<OnboardingByokDraft | null>(null);
+  const flushByokDraft = useCallback(() => {
+    if (latestByokDraft.current) onResumeStateChange?.(latestByokDraft.current);
+  }, [onResumeStateChange]);
+  const persistByokDraft = useDebouncedCallback(flushByokDraft, RESUME_DRAFT_PERSIST_DELAY_MS);
+
+  useEffect(() => {
+    latestByokDraft.current = {
+      selectedProvider,
+      selectedModel,
+      baseUrl: draftBaseUrl,
+      customModel: draftCustomModel,
+    };
+    persistByokDraft();
+  }, [draftBaseUrl, draftCustomModel, persistByokDraft, selectedModel, selectedProvider]);
+
+  useEffect(() => flushByokDraft, [flushByokDraft]);
+
+  // A live policy update can remove self-hosting while this card is open. The hosted
+  // half of the form is kept, so it only needs its provider's key.
+  useEffect(() => {
+    if (!selfHosted || selfHostedAllowed) return;
+    setSelfHosted(false);
+    onSelfHostedChange(false);
+    setDraftApiKey(providerCredential(selectedProvider, useSettingsStore.getState()).value);
+    setConnected(false);
+    onConnectionChange(false);
+  }, [onConnectionChange, onSelfHostedChange, selectedProvider, selfHosted, selfHostedAllowed]);
+
+  // Saved keys load asynchronously (initializeSettings), so an empty field takes its key
+  // when it arrives; anything already in the field is kept.
+  const savedKey = credentialFor(selfHosted, selectedProvider, draftBaseUrl);
+  // Retyping the endpoint strands the copy of the stored key this card prefilled, so it is
+  // taken back out. Only a byte-identical copy goes — never a key the user typed, and
+  // never while the field still names the endpoint the key was saved under.
+  const strandedKey =
+    selfHosted && !savedKey
+      ? assistant
+        ? store.chatAgentCustomApiKey
+        : store.customTranscriptionApiKey
+      : "";
+  const savedCortiClientId = selectedProvider === "corti" ? store.cortiClientId : "";
+  const savedCortiClientSecret = selectedProvider === "corti" ? store.cortiClientSecret : "";
+  useEffect(() => {
+    if (savedKey) setDraftApiKey((current) => current || savedKey);
+    else if (strandedKey) setDraftApiKey((current) => (current === strandedKey ? "" : current));
+    if (savedCortiClientId) setDraftCortiClientId((current) => current || savedCortiClientId);
+    if (savedCortiClientSecret) {
+      setDraftCortiClientSecret((current) => current || savedCortiClientSecret);
+    }
+  }, [savedCortiClientId, savedCortiClientSecret, savedKey, strandedKey]);
+
   const currentProvider = providers.find((provider) => provider.id === selectedProvider);
   const models = currentProvider?.models ?? [];
   const knownCredential = providerCredential(selectedProvider, store);
+  // Both halves of the form survive a mode switch, so switching back shows the saved or
+  // typed values again; only the shared key field follows the mode.
   const toggleSelfHosted = () => {
     const next = !selfHosted;
     setSelfHosted(next);
     onSelfHostedChange(next);
-    setSelectedProvider("");
-    setSelectedModel("");
-    setDraftApiKey("");
-    setDraftBaseUrl("");
-    setDraftCustomModel("");
+    setDraftApiKey(credentialFor(next, selectedProvider, draftBaseUrl));
     setConnected(false);
     onConnectionChange(false);
   };
@@ -291,6 +481,8 @@ export function ByokProviderStep({
     setSelectedProvider(providerId);
     setSelectedModel(fallbackModel);
     setDraftApiKey(providerCredential(providerId, store).value);
+    setDraftCortiClientId(providerId === "corti" ? store.cortiClientId : "");
+    setDraftCortiClientSecret(providerId === "corti" ? store.cortiClientSecret : "");
     setConnected(false);
     onConnectionChange(false);
   };
@@ -313,31 +505,45 @@ export function ByokProviderStep({
   const testingKey = draftApiKey;
   const testingBaseUrl = selfHosted ? draftBaseUrl : undefined;
   const isCortiTranscription = !assistant && !selfHosted && selectedProvider === "corti";
+  // A provider counts only while policy still lists it: a policy that loads after mount
+  // can remove the one this card opened on.
   const fieldsReady = selfHosted
     ? Boolean(draftBaseUrl.trim() && draftCustomModel.trim())
     : isCortiTranscription
-      ? Boolean(draftCortiClientId.trim() && draftCortiClientSecret.trim() && selectedModel)
-      : Boolean(selectedProvider && selectedModel && testingKey.trim());
+      ? Boolean(
+          currentProvider &&
+          draftCortiClientId.trim() &&
+          draftCortiClientSecret.trim() &&
+          selectedModel
+        )
+      : Boolean(currentProvider && selectedModel && testingKey.trim());
 
   const commitAndProceed = () => {
     if (selfHosted) {
-      // The connection test parses scheme-less input as https
-      // (providerConnectionTest.js), so commit the same URL it validated —
-      // the runtime's isSecureHttpEndpoint gate rejects a bare host.
-      const committedBaseUrl = draftBaseUrl.includes("://")
-        ? draftBaseUrl.trim()
-        : `https://${draftBaseUrl.trim()}`;
+      const committedBaseUrl = withHttpsScheme(draftBaseUrl);
       if (assistant) {
         store.setChatAgentRemoteUrl(committedBaseUrl);
         store.setChatAgentCustomApiKey(draftApiKey);
         store.setChatAgentModel(draftCustomModel);
         store.setChatAgentMode("self-hosted");
         store.setChatAgentProvider("custom");
-      } else {
+      } else if (draftApiKey.trim()) {
         store.setCloudTranscriptionBaseUrl(committedBaseUrl);
         store.setCustomTranscriptionApiKey(draftApiKey);
-        store.setCloudTranscriptionModel(draftCustomModel);
+        // Switch before setting the model: a switch files the current model under the
+        // outgoing provider and loads the incoming one's, replacing what was typed here.
         store.switchCloudTranscriptionProvider("dictation", "custom");
+        store.setCloudTranscriptionModel(draftCustomModel);
+        // A Settings server routes ahead of the keyed Custom endpoint, and sends no key.
+        store.setRemoteTranscriptionUrl("");
+        store.setCloudTranscriptionMode("byok");
+      } else {
+        // Key-less, so it is the Settings self-hosted server; the Custom endpoint and its
+        // key stay as they were. byok + custom is what derives the self-hosted mode.
+        store.switchCloudTranscriptionProvider("dictation", "custom");
+        store.setRemoteTranscriptionUrl(committedBaseUrl);
+        store.setRemoteTranscriptionModel(draftCustomModel);
+        store.setRemoteTranscriptionType("openai-compatible");
         store.setCloudTranscriptionMode("byok");
       }
     } else if (assistant) {
@@ -398,6 +604,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.endpointUrl")}</FieldLabel>
               <Input
+                dir="ltr"
                 value={draftBaseUrl}
                 onChange={(event) => setDraftBaseUrl(event.target.value)}
                 placeholder={t("onboarding.rehaul.provider.endpointPlaceholder")}
@@ -407,6 +614,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
               <Input
+                dir="ltr"
                 type="password"
                 value={draftApiKey}
                 onChange={(event) => setDraftApiKey(event.target.value)}
@@ -419,6 +627,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.modelId")}</FieldLabel>
               <Input
+                dir="ltr"
                 value={draftCustomModel}
                 onChange={(event) => setDraftCustomModel(event.target.value)}
                 placeholder={t("onboarding.rehaul.provider.modelIdPlaceholder")}
@@ -452,7 +661,7 @@ export function ByokProviderStep({
                         <ProviderIcon provider={provider.id} className="size-5" />
                         <span>{provider.name}</span>
                         {provider.id === "corti" && (
-                          <span className="ml-auto rounded bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-2 py-1 text-[0.625rem] text-[var(--onboarding-accent)]">
+                          <span className="ms-auto rounded bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-2 py-1 text-[0.625rem] text-[var(--onboarding-accent)]">
                             {t("onboarding.rehaul.provider.clinical")}
                           </span>
                         )}
@@ -474,7 +683,7 @@ export function ByokProviderStep({
                   className={`${SELECT_TRIGGER_CLASS} disabled:opacity-100 disabled:[&>svg]:hidden`}
                 >
                   {selectedModel ? (
-                    <span>
+                    <span dir="ltr">
                       {models.find((model) => model.id === selectedModel)?.name ?? selectedModel}
                     </span>
                   ) : (
@@ -498,6 +707,7 @@ export function ByokProviderStep({
                 <label className="block">
                   <FieldLabel>{t("onboarding.rehaul.provider.clientId")}</FieldLabel>
                   <Input
+                    dir="ltr"
                     value={draftCortiClientId}
                     onChange={(event) => setDraftCortiClientId(event.target.value)}
                     className={inputClass}
@@ -507,6 +717,7 @@ export function ByokProviderStep({
                 <label className="block">
                   <FieldLabel>{t("onboarding.rehaul.provider.clientSecret")}</FieldLabel>
                   <Input
+                    dir="ltr"
                     type="password"
                     value={draftCortiClientSecret}
                     onChange={(event) => setDraftCortiClientSecret(event.target.value)}
@@ -519,6 +730,7 @@ export function ByokProviderStep({
               <label className="block">
                 <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
                 <Input
+                  dir="ltr"
                   type="password"
                   value={draftApiKey}
                   onChange={(event) => setDraftApiKey(event.target.value)}
@@ -570,20 +782,50 @@ export function LocalModelSetupStep({
   onReadinessChange,
   onProceed,
   onSkip,
+  resumeState,
+  onResumeStateChange,
 }: {
   stepId: "local-dictation" | "local-assistant";
   onReadinessChange: (ready: boolean) => void;
   onProceed: () => void;
   onSkip: () => void;
+  resumeState?: OnboardingLocalModelDraft;
+  onResumeStateChange?: (state: OnboardingLocalModelDraft) => void;
 }) {
   const { t } = useTranslation();
   const store = useSettingsStore();
   const assistant = stepId === "local-assistant";
-  const [selectedProvider, setSelectedProvider] = useState(assistant ? "qwen" : "whisper");
-  const [selectedModel, setSelectedModel] = useState("");
+  const [initialSelection] = useState(() =>
+    resolveInitialLocalSelection(assistant, resumeState, store)
+  );
+  const [selectedProvider, setSelectedProvider] = useState(initialSelection.provider);
+  const [selectedModel, setSelectedModel] = useState(initialSelection.modelId);
   const [downloadedWhisper, setDownloadedWhisper] = useState<Set<string>>(new Set());
   const [downloadedParakeet, setDownloadedParakeet] = useState<Set<string>>(new Set());
   const [downloadedLlm, setDownloadedLlm] = useState<Set<string>>(new Set());
+  const [parakeetCapability, setParakeetCapability] = useState<ParakeetCheckResult | null>(null);
+  const parakeetUnavailable = !assistant && parakeetCapability?.supported === false;
+
+  useEffect(() => {
+    if (assistant) return;
+    let cancelled = false;
+    window.electronAPI
+      ?.checkParakeetInstallation?.()
+      .then((capability) => {
+        if (!cancelled) setParakeetCapability(capability);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [assistant]);
+
+  useEffect(() => {
+    if (parakeetUnavailable && usesParakeetManager(selectedProvider)) {
+      setSelectedProvider("whisper");
+      setSelectedModel("");
+    }
+  }, [parakeetUnavailable, selectedProvider]);
 
   const refreshDownloadedModels = useCallback(async () => {
     const [whisper, parakeet, llm] = await Promise.all([
@@ -623,20 +865,6 @@ export function LocalModelSetupStep({
     void refreshDownloadedModels();
   }, [refreshDownloadedModels]);
 
-  useEffect(() => {
-    const saved = useSettingsStore.getState();
-    const defaultProvider = assistant
-      ? modelRegistry.getProvider(saved.chatAgentProvider)
-        ? saved.chatAgentProvider
-        : "qwen"
-      : saved.localTranscriptionProvider === "nvidia"
-        ? "nvidia"
-        : "whisper";
-    setSelectedProvider(defaultProvider);
-    setSelectedModel("");
-    onReadinessChange(false);
-  }, [assistant, onReadinessChange, stepId]);
-
   const providerOptions = useMemo(() => {
     if (assistant) {
       return modelRegistry.getAllProviders().map((provider) => ({
@@ -645,10 +873,12 @@ export function LocalModelSetupStep({
         icon: provider.id,
       }));
     }
-    return [
-      { id: "whisper", name: "OpenAI", icon: "openai" },
-      { id: "nvidia", name: "NVIDIA", icon: "nvidia" },
-    ];
+    return LOCAL_ASR_ORGANIZATIONS.filter((organization) => organization.id !== "cohere").map(
+      (organization) => ({
+        ...organization,
+        icon: organization.id === "whisper" ? "openai" : organization.id,
+      })
+    );
   }, [assistant]);
 
   const models = useMemo(() => {
@@ -661,17 +891,15 @@ export function LocalModelSetupStep({
         icon: selectedProvider,
       }));
     }
-    if (selectedProvider === "nvidia") {
-      // Onboarding offers only the whisper/NVIDIA providers; Cohere models
-      // would otherwise commit provider "nvidia" with a Cohere model id.
+    if (usesParakeetManager(selectedProvider)) {
       return Object.entries(getParakeetModels())
-        .filter(([id]) => !isCohereTranscribeModel(id))
+        .filter(([id]) => getASRModelOrganization(id) === selectedProvider)
         .map(([id, model]) => ({
           id,
           name: model.name,
           size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
           recommended: model.recommended,
-          icon: "nvidia",
+          icon: selectedProvider,
         }));
     }
     return Object.entries(getWhisperModels()).map(([id, model]) => ({
@@ -683,31 +911,47 @@ export function LocalModelSetupStep({
     }));
   }, [assistant, selectedProvider]);
 
+  useEffect(() => {
+    if (selectedModel && !models.some((model) => model.id === selectedModel)) {
+      setSelectedModel("");
+    }
+  }, [models, selectedModel]);
+
+  useEffect(() => {
+    onResumeStateChange?.({ provider: selectedProvider, modelId: selectedModel });
+  }, [onResumeStateChange, selectedModel, selectedProvider]);
+
   const currentProvider = providerOptions.find((provider) => provider.id === selectedProvider);
   const activeDownload = assistant
     ? llmDownload
-    : selectedProvider === "nvidia"
+    : usesParakeetManager(selectedProvider)
       ? parakeetDownload
       : whisperDownload;
   const downloadedModels = assistant
     ? downloadedLlm
-    : selectedProvider === "nvidia"
+    : usesParakeetManager(selectedProvider)
       ? downloadedParakeet
       : downloadedWhisper;
-  const selectedReady = Boolean(selectedModel && downloadedModels.has(selectedModel));
+  const selectedReady = Boolean(
+    selectedModel &&
+    downloadedModels.has(selectedModel) &&
+    !(parakeetUnavailable && usesParakeetManager(selectedProvider))
+  );
 
   useEffect(() => {
     onReadinessChange(selectedReady);
   }, [onReadinessChange, selectedReady]);
 
   const selectInstalledModel = useCallback(
-    (modelId: string) => {
+    (modelId: string): void => {
+      if (parakeetUnavailable && usesParakeetManager(selectedProvider)) return;
+      const kind = assistant ? "assistant" : "dictation";
       setSelectedModel(modelId);
       if (assistant) {
         store.setChatAgentMode("local");
         store.setChatAgentProvider(selectedProvider);
         store.setChatAgentModel(modelId);
-      } else if (selectedProvider === "nvidia") {
+      } else if (usesParakeetManager(selectedProvider)) {
         store.setLocalTranscriptionProvider("nvidia");
         store.setParakeetModel(modelId);
       } else {
@@ -715,26 +959,60 @@ export function LocalModelSetupStep({
         store.setWhisperModel(modelId);
       }
       if (localStorage.getItem("localSetupPending") !== "true") {
-        forgetPendingLocalModel(assistant ? "assistant" : "dictation", modelId);
+        forgetPendingLocalModel(kind, modelId);
       }
     },
-    [assistant, selectedProvider, store]
+    [assistant, parakeetUnavailable, selectedProvider, store]
   );
 
-  const downloadModel = (modelId: string) => {
-    // downloadModel refuses (toast only) while another download of this kind
-    // runs; recording the pending selection for a refused download leaves a
-    // stale entry that a much later download would silently activate.
-    if (!activeDownload.isDownloading) {
-      rememberPendingLocalModel(assistant ? "assistant" : "dictation", {
-        provider: selectedProvider,
+  const chooseInstalledModel = (modelId: string): void => {
+    forgetPendingLocalModel(assistant ? "assistant" : "dictation");
+    selectInstalledModel(modelId);
+  };
+
+  const downloadModel = (modelId: string): void => {
+    if (parakeetUnavailable && usesParakeetManager(selectedProvider)) return;
+    const kind = assistant ? "assistant" : "dictation";
+    // LLMs can download concurrently; a refused duplicate or native transfer
+    // must not replace the selection waiting for an accepted download.
+    if (
+      !activeDownload.isDownloadingModel(modelId) &&
+      (assistant || !activeDownload.isDownloading)
+    ) {
+      rememberPendingLocalModel(kind, {
+        provider: selectedProvider === "oruk" ? "nvidia" : selectedProvider,
         modelId,
       });
     }
-    void activeDownload.downloadModel(modelId, selectInstalledModel);
+    void activeDownload.downloadModel(modelId, (downloadedId): void => {
+      if (
+        isPendingLocalModel(kind, {
+          provider: selectedProvider === "oruk" ? "nvidia" : selectedProvider,
+          modelId: downloadedId,
+        })
+      ) {
+        selectInstalledModel(downloadedId);
+        return;
+      }
+      if (readPendingLocalModels()[kind]) return;
+
+      // The tray can activate and consume this selection before the initiating
+      // IPC resolves. Reflect that activation without replacing a newer choice.
+      const saved = useSettingsStore.getState();
+      const alreadySelected = assistant
+        ? saved.chatAgentMode === "local" &&
+          saved.chatAgentProvider === selectedProvider &&
+          saved.chatAgentModel === downloadedId
+        : getSelectedASROrganization(saved.localTranscriptionProvider, saved.parakeetModel) ===
+            selectedProvider &&
+          (usesParakeetManager(selectedProvider) ? saved.parakeetModel : saved.whisperModel) ===
+            downloadedId;
+      if (alreadySelected) setSelectedModel(downloadedId);
+    });
   };
 
   const chooseProvider = (providerId: string) => {
+    if (parakeetUnavailable && usesParakeetManager(providerId)) return;
     setSelectedProvider(providerId);
     setSelectedModel("");
     onReadinessChange(false);
@@ -745,43 +1023,54 @@ export function LocalModelSetupStep({
     parakeet: parakeetDownload.isDownloading,
     llm: llmDownload.isDownloading,
   });
-  // A running download is enough to move on: it lives in the main process, the
-  // model is already remembered as pending (downloadModel above), and
-  // BackgroundModelDownloadTray keeps the progress on screen and applies the
-  // selection when it lands. Waiting for 100% would pin the user to this step
-  // for a multi-gigabyte download.
-  const canProceed = selectedReady || anyDownloadActive;
+  const pendingSelection = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
+  const pendingDownload = assistant
+    ? llmDownload
+    : pendingSelection?.provider === "nvidia"
+      ? parakeetDownload
+      : whisperDownload;
+  // Only the pending selection will activate in the background. Other transfers
+  // can outlive it when the user cancels the newest of several downloads.
+  const hasPendingDownload = Boolean(
+    pendingSelection && pendingDownload.isDownloadingModel(pendingSelection.modelId)
+  );
+  const canProceed = selectedReady || hasPendingDownload;
 
   const proceed = () => {
     // Leaving mid-download is the same situation as "download in background":
     // this step unmounts, so the tray is what finishes the job, and it only
     // applies the pending selection while localSetupPending is set.
-    if (anyDownloadActive && !selectedReady) {
+    if (hasPendingDownload && !selectedReady) {
       localStorage.setItem("localSetupPending", "true");
     }
     onProceed();
   };
 
+  // Only reachable while a download runs (see the action row), so the transfer
+  // always needs the tray to apply its pending selection once it lands.
+  const skip = () => {
+    localStorage.setItem("localSetupPending", "true");
+    onSkip();
+  };
+
   return (
-    <section className={`mt-5 ${SETUP_CARD_CLASS}`}>
+    <section className={`mt-8 ${LOCAL_MODEL_CARD_CLASS}`}>
       <SetupStageStepper stepId={stepId} />
 
-      <div className="mt-5">
+      <div className="mt-6">
         <FieldLabel>{t("onboarding.rehaul.local.providerLabel")}</FieldLabel>
         <Select value={selectedProvider} onValueChange={chooseProvider}>
-          <SelectTrigger className={SELECT_TRIGGER_CLASS}>
-            <div className="flex items-center gap-2">
-              <ProviderIcon
-                provider={currentProvider?.icon ?? selectedProvider}
-                className="size-4"
-                monochrome={assistant && selectedProvider === "qwen"}
-              />
-              {currentProvider?.name ?? selectedProvider}
-            </div>
+          <SelectTrigger className={LOCAL_SELECT_TRIGGER_CLASS}>
+            <span>{currentProvider?.name ?? selectedProvider}</span>
           </SelectTrigger>
           <SelectContent className={`max-h-[14.625rem] ${SELECT_PANEL_CLASS}`}>
             {providerOptions.map((provider) => (
-              <SelectItem key={provider.id} value={provider.id} className={SELECT_ITEM_CLASS}>
+              <SelectItem
+                key={provider.id}
+                value={provider.id}
+                className={SELECT_ITEM_CLASS}
+                disabled={parakeetUnavailable && usesParakeetManager(provider.id)}
+              >
                 <span className="flex items-center gap-2.5">
                   <ProviderIcon
                     provider={provider.icon}
@@ -794,31 +1083,32 @@ export function LocalModelSetupStep({
             ))}
           </SelectContent>
         </Select>
+        {parakeetUnavailable && (
+          <p className="mt-2 text-xs text-[var(--onboarding-text-secondary)]">
+            {parakeetCapability.minimumMacOSVersion
+              ? t("transcription.parakeet.requiresMacOS", {
+                  version: parakeetCapability.minimumMacOSVersion,
+                })
+              : t("transcription.parakeet.unavailable")}
+          </p>
+        )}
       </div>
 
-      {/* h, not max-h: a fixed 16rem keeps the card the same height for every
-          provider. Hugging the rows instead makes the card — and the Proceed
-          button under it — jump as you move through the provider dropdown, since
-          providers carry anywhere from one model to five. The empty grey under a
-          short list is the accepted cost of that stability. Rows are min-h-16, so
-          16rem shows four and the rest scrolls. */}
-      {/* onboarding-scroll-hidden, not the 5px thin thumb: a classic scrollbar
-          reserves layout width, so rows in an overflowing list stopped short of
-          the edge while a short provider's list filled it, and the two read as
-          different widths. The partially visible row at the bottom edge is the
-          overflow affordance instead. */}
-      <div className="onboarding-scroll-hidden mt-3 h-56 overflow-y-auto rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-3">
+      {/* A fixed list height keeps the card and footer stable while the visible
+          scrollbar makes additional provider models discoverable. */}
+      <div className="onboarding-list-scroll mt-4 h-56 rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)]">
         {models.map((model) => {
           const isDownloaded = downloadedModels.has(model.id);
-          const isDownloading = activeDownload.isDownloadingModel(model.id);
+          const download = activeDownload.downloads[model.id];
+          const isDownloading = Boolean(download);
           const isSelected = selectedModel === model.id && isDownloaded;
-          const percentage = Math.round(activeDownload.downloadProgress.percentage);
+          const percentage = Math.round(download?.progress ?? 0);
           return (
             <div
               key={model.id}
-              className="flex min-h-14 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-1 py-2 last:border-b-0"
+              className="flex min-h-20 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-2 py-3 last:border-b-0"
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
                 <ProviderIcon
                   provider={model.icon}
                   className="size-5"
@@ -828,13 +1118,13 @@ export function LocalModelSetupStep({
               <button
                 type="button"
                 disabled={!isDownloaded}
-                onClick={() => selectInstalledModel(model.id)}
-                className="min-w-0 flex-1 text-left disabled:cursor-default"
+                onClick={() => chooseInstalledModel(model.id)}
+                className="min-w-0 flex-1 rounded-lg text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default"
               >
-                <span className="block truncate text-sm font-medium text-[var(--onboarding-text-primary)]">
+                <span className="block truncate text-base font-medium text-[var(--onboarding-text-primary)]">
                   {model.name}
                 </span>
-                <span className="mt-0.5 block truncate text-xs text-[var(--onboarding-text-secondary)]">
+                <span className="mt-1 block truncate text-sm text-[var(--onboarding-text-secondary)]">
                   {model.size}
                   {!assistant && model.recommended && ` - ${t("common.recommended")}`}
                 </span>
@@ -846,36 +1136,36 @@ export function LocalModelSetupStep({
                 // text-secondary. Progress is a light/surface-tertiary fill
                 // growing from the left behind them, not a fixed-width segment
                 // around the percentage.
-                <span className="relative -mr-2 flex shrink-0 items-center gap-2 overflow-hidden rounded-[38px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 py-1.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                // No aria-live: BackgroundModelDownloadTray is the one live region
+                // for download progress, so a second one here read every tick twice.
+                <span className="relative flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 text-sm font-medium leading-[1.4] tabular-nums text-[var(--onboarding-text-secondary)]">
                   {/* Figma draws the rect taller than the pill so it bleeds top
                       and bottom; inset-y-0 does that without a magic height. */}
                   <span
-                    className="absolute inset-y-0 left-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
+                    className="absolute inset-y-0 start-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
                     style={{ width: `${percentage}%` }}
                     aria-hidden="true"
                   />
                   <span className="relative">{percentage}%</span>
                   <span className="relative whitespace-nowrap">
-                    {activeDownload.isInstalling
+                    {download?.phase === "installing"
                       ? t("onboarding.rehaul.local.installing")
                       : t("onboarding.rehaul.local.downloadingShort")}
                   </span>
                 </span>
               ) : isSelected ? (
-                // Same token as the Use pill it replaces on click — on blue-500 it
-                // was a visibly different blue sitting in the same slot.
-                <span className="-mr-2 flex h-7 shrink-0 items-center gap-1 rounded-full bg-[var(--onboarding-accent)] px-3 text-xs text-[var(--onboarding-accent-foreground)]">
-                  <Check className="size-3.5" />
+                // Same token as the Use pill it replaces on click.
+                <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-[var(--onboarding-accent)] px-3 text-sm text-[var(--onboarding-accent-foreground)]">
+                  <Check className="size-4" />
                   {t("onboarding.rehaul.local.selected")}
                 </span>
               ) : isDownloaded ? (
-                // On the accent rather than neutral-950: this is the row's
-                // affirmative action, so it carries the brand the way every other
-                // primary in onboarding does, and Download stays neutral below it.
+                // Installed alternatives remain explicit primary actions until
+                // they become the active selection.
                 <Button
                   type="button"
-                  onClick={() => selectInstalledModel(model.id)}
-                  className="-mr-2 h-7 gap-1.5 rounded-full border-0! bg-[var(--onboarding-accent)] px-2.5 text-xs font-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none!"
+                  onClick={() => chooseInstalledModel(model.id)}
+                  className="h-8 gap-1.5 px-3 text-sm"
                 >
                   {t("onboarding.rehaul.local.use")}
                 </Button>
@@ -883,7 +1173,7 @@ export function LocalModelSetupStep({
                 <Button
                   type="button"
                   onClick={() => downloadModel(model.id)}
-                  className="-mr-2 h-7 gap-1.5 rounded-full border-[var(--onboarding-inverse-surface)]! bg-[var(--onboarding-inverse-surface)] px-2.5 text-xs font-normal text-[var(--onboarding-inverse-text)] shadow-none! hover:shadow-none! hover:bg-[var(--onboarding-inverse-surface-secondary)] disabled:bg-[var(--onboarding-surface-tertiary-hover)] disabled:opacity-100"
+                  className="h-8 gap-1.5 px-3 text-sm"
                 >
                   <Download className="size-3.5" />
                   {t("onboarding.rehaul.local.download")}
@@ -894,11 +1184,16 @@ export function LocalModelSetupStep({
         })}
       </div>
 
-      <div className={`mt-4 grid gap-2 ${anyDownloadActive ? "grid-cols-2" : "grid-cols-1"}`}>
+      <div className={`mt-5 grid gap-2 ${anyDownloadActive ? "grid-cols-2" : "grid-cols-1"}`}>
+        {/* Skip means "don't wait for this download", never "set up local with no
+            model": leaving with nothing on disk still commits useLocalWhisper,
+            and whisper.js then refuses to load the selected model. */}
         {anyDownloadActive && (
-          <StepSecondaryAction onClick={onSkip}>{t("common.skip")}</StepSecondaryAction>
+          <StepSecondaryAction onClick={skip} disabled={!canProceed} className="h-10!">
+            {t("common.skip")}
+          </StepSecondaryAction>
         )}
-        <StepPrimaryAction onClick={proceed} disabled={!canProceed}>
+        <StepPrimaryAction onClick={proceed} disabled={!canProceed} className="h-10!">
           {t("onboarding.rehaul.provider.proceed")}
         </StepPrimaryAction>
       </div>

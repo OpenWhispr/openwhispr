@@ -1,18 +1,23 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network } from "lucide-react";
-import { TRANSCRIPTION_POLICY_PROVIDER_IDS, useSettingsStore } from "../../stores/settingsStore";
-import { usePolicyModeOptions } from "../../hooks/usePolicy";
+import { Cloud, Key, Cpu, Network, ShieldCheck } from "../icons";
+import {
+  TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
+  TRANSCRIPTION_POLICY_PROVIDER_IDS,
+  useSettingsStore,
+} from "../../stores/settingsStore";
+import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
+import { isEnterpriseTranscriptionOfferable } from "../../stores/policyRules";
+import { requestSignIn } from "../../utils/requestSignIn";
 import { InferenceModeSelector } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import SelfHostedPanel from "../SelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
-import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 
 export function UploadTranscriptionPanel() {
   const { t } = useTranslation();
-  const startOnboarding = useStartOnboarding();
+  const policySnapshot = usePolicySnapshot();
 
   const {
     isSignedIn,
@@ -34,6 +39,7 @@ export function UploadTranscriptionPanel() {
     uploadCloudTranscriptionBaseUrl,
     setUploadCloudTranscriptionBaseUrl,
     setUploadCloudTranscriptionMode,
+    setEnterpriseTranscriptionSetupMode,
     remoteTranscriptionUrl,
     setRemoteTranscriptionUrl,
     remoteTranscriptionModel,
@@ -71,21 +77,35 @@ export function UploadTranscriptionPanel() {
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
       },
+      ...(isEnterpriseTranscriptionOfferable(policySnapshot)
+        ? [
+            {
+              id: "enterprise" as const,
+              label: t("settingsPage.transcription.modes.enterprise"),
+              description: t("settingsPage.transcription.modes.enterpriseDesc"),
+              icon: <ShieldCheck className="w-4 h-4" />,
+            },
+          ]
+        : []),
     ],
     "transcription",
     uploadTranscriptionMode,
-    { byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS }
+    {
+      byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS,
+      enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
+    }
   );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
     if (mode === "openwhispr" && !isSignedIn) {
-      startOnboarding();
+      requestSignIn();
       return;
     }
     if (mode === effectiveTranscriptionMode) return;
     setUploadTranscriptionMode(mode);
     setUploadUseLocalWhisper(mode === "local");
     setUploadCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
   };
 
   const handleLocalTranscriptionModelSelect = useCallback(

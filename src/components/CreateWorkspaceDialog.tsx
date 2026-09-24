@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "./icons";
 import {
   Dialog,
   DialogContent,
@@ -17,12 +17,18 @@ import { useDelayedFlag } from "../hooks/useDelayedFlag";
 import { useToast } from "./ui/useToast";
 
 interface Props {
+  defaultName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: (workspaceId: string) => void;
 }
 
-export default function CreateWorkspaceDialog({ open, onOpenChange, onCreated }: Props) {
+export default function CreateWorkspaceDialog({
+  defaultName,
+  open,
+  onOpenChange,
+  onCreated,
+}: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
@@ -32,8 +38,8 @@ export default function CreateWorkspaceDialog({ open, onOpenChange, onCreated }:
   const showSpinner = useDelayedFlag(submitting);
 
   useEffect(() => {
-    if (!open) setName("");
-  }, [open]);
+    setName(open ? (defaultName ?? "") : "");
+  }, [defaultName, open]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -72,6 +78,7 @@ export default function CreateWorkspaceDialog({ open, onOpenChange, onCreated }:
               {t("workspaces.create.nameLabel")}
             </Label>
             <Input
+              dir="auto"
               id="workspace-name"
               autoFocus
               value={name}
@@ -90,7 +97,7 @@ export default function CreateWorkspaceDialog({ open, onOpenChange, onCreated }:
               {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={!name.trim() || submitting}>
-              {showSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
               {submitting ? t("workspaces.create.submitting") : t("workspaces.create.submit")}
             </Button>
           </DialogFooter>

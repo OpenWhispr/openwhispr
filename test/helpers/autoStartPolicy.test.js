@@ -7,6 +7,8 @@ const {
   resolveAutoStartState,
   needsHiddenFlagMigration,
   wasLaunchedHidden,
+  getRelaunchOptions,
+  getRelaunchWaiter,
 } = require("../../src/helpers/autoStartPolicy.js");
 
 // getLoginItemSettings compares the Run value against `"exe" args` verbatim, so
@@ -146,5 +148,60 @@ test("macOS detects a login launch from wasOpenedAtLogin, not from argv", () => 
       loginItemSettings: { wasOpenedAtLogin: false },
     }),
     false
+  );
+});
+
+test("a relaunch drops the hidden-launch flag and keeps every other arg", () => {
+  assert.deepEqual(
+    getRelaunchOptions({
+      argv: ["OpenWhispr.exe", HIDDEN_LAUNCH_FLAG, "--log-level=debug"],
+      protocol: "openwhispr",
+    }),
+    { args: ["--log-level=debug"] }
+  );
+});
+
+test("a relaunch drops the deep link that cold-started the app", () => {
+  assert.deepEqual(
+    getRelaunchOptions({
+      argv: [
+        "OpenWhispr.exe",
+        "openwhispr://auth/callback?bearer_token=stale",
+        "--proxy-server=http://proxy:8080",
+      ],
+      protocol: "openwhispr",
+    }),
+    { args: ["--proxy-server=http://proxy:8080"] }
+  );
+});
+
+test("an AppImage relaunches from the AppImage file, not its FUSE mount", () => {
+  assert.deepEqual(
+    getRelaunchOptions({
+      argv: ["/tmp/.mount_OpenWh/open-whispr", "--no-sandbox"],
+      protocol: "openwhispr",
+      appImagePath: "/home/user/OpenWhispr.AppImage",
+    }),
+    { launcherPath: "/home/user/OpenWhispr.AppImage", args: ["--no-sandbox"] }
+  );
+});
+
+test("the AppImage waiter outlives this process, then execs the file with its args", () => {
+  assert.deepEqual(
+    getRelaunchWaiter({
+      launcherPath: "/home/user/OpenWhispr.AppImage",
+      args: ["--no-sandbox"],
+      pid: 4242,
+    }),
+    {
+      file: "/bin/sh",
+      args: [
+        "-c",
+        'while kill -0 "$0"; do sleep 0.2; done; exec "$@"',
+        "4242",
+        "/home/user/OpenWhispr.AppImage",
+        "--no-sandbox",
+      ],
+    }
   );
 });

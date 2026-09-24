@@ -1,9 +1,5 @@
 import type { SpaceItem, TeamRole } from "../types/electron";
-import type { MySpace } from "./SpacesService";
-
-interface CloudTeam {
-  id: string;
-}
+import type { MySpace, SpaceMemberRemoval } from "./SpacesService";
 
 interface MutationResult {
   success: boolean;
@@ -12,7 +8,6 @@ interface MutationResult {
 
 export interface SpaceActionsDependencies {
   teams: {
-    create: (workspaceId: string, input: { name: string }) => Promise<CloudTeam>;
     remove: (teamId: string) => Promise<void>;
     addMember: (teamId: string, userId: string, role?: TeamRole) => Promise<void>;
     removeMember: (teamId: string, userId: string) => Promise<void>;
@@ -21,12 +16,15 @@ export interface SpaceActionsDependencies {
     mySpaces: () => Promise<MySpace[]>;
     create: (
       workspaceId: string,
-      input: { name: string; emoji?: string | null; team_ids: string[] }
+      input: { name: string; emoji?: string | null; member_ids: string[]; team_ids: string[] }
     ) => Promise<MySpace>;
     update: (spaceId: string, updates: { name: string; emoji: string | null }) => Promise<MySpace>;
     remove: (spaceId: string) => Promise<void>;
     assignTeam: (spaceId: string, teamId: string, access?: "admin" | "member") => Promise<void>;
     unassignTeam: (spaceId: string, teamId: string) => Promise<void>;
+    addMember: (spaceId: string, userId: string, role?: TeamRole) => Promise<void>;
+    setMemberRole: (spaceId: string, userId: string, role: TeamRole) => Promise<void>;
+    removeMember: (spaceId: string, userId: string) => Promise<SpaceMemberRemoval>;
   };
   local: {
     upsertSpaceFromCloud: (space: Record<string, unknown>) => Promise<SpaceItem | null>;
@@ -58,10 +56,12 @@ function errorMessage(err: unknown): string | undefined {
 }
 
 export function createSpaceActions(deps: SpaceActionsDependencies) {
-  async function settleAddMembers(teamId: string, userIds: string[]): Promise<unknown[]> {
-    const results = await Promise.allSettled(
-      userIds.map((userId) => deps.teams.addMember(teamId, userId))
-    );
+  // One failed add must not abort the rest; callers report the failures.
+  async function settleAddMembers(
+    userIds: string[],
+    add: (userId: string) => Promise<void>
+  ): Promise<unknown[]> {
+    const results = await Promise.allSettled(userIds.map(add));
     return results
       .filter((result): result is PromiseRejectedResult => result.status === "rejected")
       .map((result) => result.reason);
@@ -76,40 +76,26 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     await deps.local.loadSpaces();
   }
 
+  // Members and teams travel in the create body, so the server grants them
+  // atomically with the space; there is no partial-failure state to report.
   async function createSpace(
     workspaceId: string,
     input: { name: string; emoji?: string | null },
-    teams: { existingTeamIds: string[]; newTeam?: { name: string; memberIds: string[] } }
-  ): Promise<{ space: SpaceItem | null; failedMembers: number }> {
-    const teamIds = [...teams.existingTeamIds];
-    let failedMembers = 0;
-    let createdTeamId: string | null = null;
-    if (teams.newTeam) {
-      const team = await deps.teams.create(workspaceId, { name: teams.newTeam.name });
-      createdTeamId = team.id;
-      failedMembers = (await settleAddMembers(team.id, teams.newTeam.memberIds)).length;
-      teamIds.push(team.id);
-    }
-
-    let cloudSpace: MySpace;
-    try {
-      cloudSpace = await deps.spaces.create(workspaceId, {
-        name: input.name,
-        emoji: input.emoji,
-        team_ids: teamIds,
-      });
-    } catch (err) {
-      if (createdTeamId) await deps.teams.remove(createdTeamId).catch(() => {});
-      throw err;
-    }
-
+    access: { memberIds: string[]; teamIds: string[] }
+  ): Promise<SpaceItem | null> {
+    const cloudSpace = await deps.spaces.create(workspaceId, {
+      name: input.name,
+      emoji: input.emoji,
+      member_ids: access.memberIds,
+      team_ids: access.teamIds,
+    });
     const space = await deps.local.upsertSpaceFromCloud(
       cloudSpace as unknown as Record<string, unknown>
     );
     if (space) await deps.local.setSpaceSyncStatus(space.id, "synced");
     await deps.local.loadSpaces();
     deps.sync.requestSyncAll("manual");
-    return { space, failedMembers };
+    return space;
   }
 
   async function renameSpace(
@@ -183,11 +169,48 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     deps.sync.requestSyncAll("manual");
   }
 
+  async function addSpaceMembers(
+    space: SpaceItem,
+    userIds: string[]
+  ): Promise<{ failures: unknown[] }> {
+    const spaceId = requireCloudSpaceId(space);
+    const failures = await settleAddMembers(userIds, (userId) =>
+      deps.spaces.addMember(spaceId, userId)
+    );
+    await refreshSpaceMirror();
+    return { failures };
+  }
+
+  async function setSpaceMemberRole(
+    space: SpaceItem,
+    userId: string,
+    role: TeamRole
+  ): Promise<void> {
+    await deps.spaces.setMemberRole(requireCloudSpaceId(space), userId, role);
+    await refreshSpaceMirror();
+  }
+
+  async function removeSpaceMember(space: SpaceItem, userId: string): Promise<SpaceMemberRemoval> {
+    const result = await deps.spaces.removeMember(requireCloudSpaceId(space), userId);
+    await refreshSpaceMirror();
+    return result;
+  }
+
+  // Dropping one's own direct grant can revoke container access, so the
+  // sync pass runs to purge content the mirror no longer lists.
+  async function leaveSpace(space: SpaceItem, userId: string): Promise<SpaceMemberRemoval> {
+    const result = await removeSpaceMember(space, userId);
+    deps.sync.requestSyncAll("manual");
+    return result;
+  }
+
   async function addTeamMembers(
     teamId: string,
     userIds: string[]
   ): Promise<{ failures: unknown[] }> {
-    const failures = await settleAddMembers(teamId, userIds);
+    const failures = await settleAddMembers(userIds, (userId) =>
+      deps.teams.addMember(teamId, userId)
+    );
     await refreshSpaceMirror();
     return { failures };
   }
@@ -221,6 +244,10 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     assignTeamToSpace,
     setSpaceTeamAccess,
     unassignTeamFromSpace,
+    addSpaceMembers,
+    setSpaceMemberRole,
+    removeSpaceMember,
+    leaveSpace,
     addTeamMembers,
     removeTeamMember,
     setTeamMemberRole,

@@ -20,9 +20,6 @@ async function renderBottomBar(t, props) {
   return renderToStaticMarkup(
     createElement(mod.default, {
       isRecording: false,
-      isProcessing: false,
-      onStartRecording: () => {},
-      onStopRecording: () => {},
       onAskSubmit: () => {},
       ...props,
     })

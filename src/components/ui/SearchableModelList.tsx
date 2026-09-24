@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Search } from "lucide-react";
+import { Search } from "../icons";
 import { Input } from "./input";
 import { ModelCard, type ModelCardOption } from "./ModelCardList";
 import { getRemoteProviderIcon } from "../../utils/providerIcons";
@@ -181,12 +181,13 @@ export default function SearchableModelList({
 
   return (
     <div className="space-y-2">
-      <div className="relative">
+      <div dir="ltr" className="relative">
         <Search
           size={14}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none"
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none"
         />
         <Input
+          dir="ltr"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleKeyDown}
@@ -201,7 +202,7 @@ export default function SearchableModelList({
       </div>
 
       {rows.length > 0 && (
-        <div ref={scrollRef} className="overflow-y-auto pr-0.5 max-h-80">
+        <div ref={scrollRef} className="overflow-y-auto pe-0.5 max-h-80">
           <div
             id={listboxId}
             role="listbox"
@@ -229,7 +230,7 @@ export default function SearchableModelList({
                       <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
                         {row.label}
                       </span>
-                      <span className="text-[11px] text-muted-foreground/40 tabular-nums">
+                      <span className="text-[11px] text-muted-foreground/70 tabular-nums">
                         {row.count}
                       </span>
                     </div>

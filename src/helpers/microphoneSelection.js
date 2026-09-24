@@ -3,6 +3,11 @@ import { resolveMicDeviceSelection } from "./micDeviceSelection";
 
 export const MICROPHONE_SELECTION_MODES = ["system", "built-in", "specific"];
 
+// Chromium lists the Windows default input twice ("default" and the
+// "communications" role alias) under the device's own label. They are aliases,
+// not candidates: matching them makes every Windows mic tie with itself.
+const CHROMIUM_ALIAS_DEVICE_IDS = new Set(["default", "communications"]);
+
 export function getMicrophoneSelectionMode(settings = {}) {
   if (MICROPHONE_SELECTION_MODES.includes(settings.microphoneSelectionMode)) {
     return settings.microphoneSelectionMode;
@@ -30,7 +35,7 @@ function comparableLabel(label) {
 export function resolveSystemDefaultMicDevice(devices, systemDefault) {
   const inputs = devices.filter((device) => device.kind === "audioinput");
   const chromiumDefault = inputs.find((device) => device.deviceId === "default") || null;
-  const physicalInputs = inputs.filter((device) => device.deviceId !== "default");
+  const physicalInputs = inputs.filter((device) => !CHROMIUM_ALIAS_DEVICE_IDS.has(device.deviceId));
   const nativeName = systemDefault?.name?.trim();
 
   if (nativeName) {
@@ -80,7 +85,8 @@ export function resolveMicrophoneSelection(devices, settings, systemDefault = nu
 
   if (mode === "built-in") {
     const device = inputs.find(
-      (candidate) => candidate.deviceId !== "default" && isBuiltInMicrophone(candidate.label)
+      (candidate) =>
+        !CHROMIUM_ALIAS_DEVICE_IDS.has(candidate.deviceId) && isBuiltInMicrophone(candidate.label)
     );
     return { mode, device: device || null, status: device ? "built-in" : "unavailable" };
   }

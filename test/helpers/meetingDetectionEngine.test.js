@@ -49,15 +49,20 @@ function createEngine() {
   audioDetector.resetPrompt = () => {};
   audioDetector.setUserRecording = () => {};
   audioDetector.setMicWarmHold = () => {};
+  audioDetector.meetingAppNotifications = 0;
+  audioDetector.notifyMeetingAppsChanged = () => audioDetector.meetingAppNotifications++;
   audioDetector.start = () => {};
   audioDetector.stop = () => {};
 
   const shown = [];
+  const meetingNavigations = [];
+  const noteNavigations = [];
   const windowManager = {
     notificationPrefs: {},
     showMeetingNotification: (data) => shown.push(data),
     dismissMeetingNotification: () => {},
-    queueMeetingNoteNavigation: async () => {},
+    queueMeetingNoteNavigation: async (payload) => meetingNavigations.push(payload),
+    queueNoteNavigation: async (payload) => noteNavigations.push(payload),
   };
 
   const engine = new MeetingDetectionEngine(
@@ -68,7 +73,7 @@ function createEngine() {
     {}
   );
 
-  return { engine, audioDetector, shown };
+  return { engine, audioDetector, processDetector, shown, meetingNavigations, noteNavigations };
 }
 
 test("an unanswered audio prompt expires without cooling down the mic detector", () => {
@@ -100,4 +105,37 @@ test("a detection card closed without a response allows the next prompt", () => 
   audioDetector.emit("sustained-audio-detected", { durationMs: 4000, detectedAt: 1 });
 
   assert.equal(shown.length, 2);
+});
+
+test("a meeting app appearing asks the mic detector to re-evaluate unattributed activity", () => {
+  const { audioDetector, processDetector, shown } = createEngine();
+
+  processDetector.emit("meeting-process-detected", {
+    processKey: "zoom",
+    appName: "Zoom",
+    detectedAt: 0,
+  });
+
+  assert.equal(audioDetector.meetingAppNotifications, 1);
+  assert.equal(shown.length, 0, "a running meeting app alone stays context-only");
+});
+
+// The bare {} databaseManager is the assertion that no note was created: reaching
+// the note path at all would throw on getActiveEvents.
+test("a manual meeting start during a live recording surfaces that note, not a new one", async () => {
+  const { engine, noteNavigations } = createEngine();
+  engine._recordingSession = { sessionId: "s1", noteId: 42 };
+
+  await engine.startManualMeeting();
+
+  assert.deepEqual(noteNavigations, [{ noteId: 42 }]);
+});
+
+test("a live recording with no note id still blocks a second manual meeting", async () => {
+  const { engine, noteNavigations } = createEngine();
+  engine._recordingSession = { sessionId: "s2", noteId: null };
+
+  await engine.startManualMeeting();
+
+  assert.deepEqual(noteNavigations, []);
 });
