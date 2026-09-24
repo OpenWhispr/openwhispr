@@ -2,6 +2,9 @@
 module.exports = {
   preset: 'jest-expo',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  // Files under ../shared resolve packages from this app, as Metro does
+  // (metro.config.js); CI installs only this app's dependencies.
+  modulePaths: ['<rootDir>/node_modules'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@shared/ai/(.*)$': '<rootDir>/../shared/ai/$1',
