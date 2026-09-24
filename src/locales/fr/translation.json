@@ -4155,6 +4155,12 @@
     "join": "Rejoindre et transcrire"
   },
   "voiceConversation": {
-    "title": "Conversation vocale"
+    "title": "Conversation vocale",
+    "errors": {
+      "languageUnsupported": "La conversation vocale ne comprend que l'anglais pour l'instant. Réglez votre langue de dictée sur l'anglais ou Auto.",
+      "voiceModelsMissing": "La conversation vocale a besoin de ses modèles vocaux. Téléchargez-les dans les Réglages.",
+      "speechModelMissing": "La conversation vocale a besoin d'un modèle vocal Parakeet. Téléchargez-en un dans Réglages → Parole en texte.",
+      "brainNotDownloaded": "Le modèle local de l'Assistant vocal n'est pas encore téléchargé."
+    }
   }
 }

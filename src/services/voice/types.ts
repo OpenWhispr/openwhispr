@@ -37,6 +37,16 @@ export interface VoiceTurnEndpoint {
   inferenceMs: number | null;
 }
 
+/** Result of the main-process precondition check run before a session starts. */
+export type VoiceConversationReadiness =
+  | { ready: true }
+  | {
+      ready: false;
+      reason: "language-unsupported" | "voice-models-missing" | "speech-model-missing" | "brain-not-downloaded";
+      missing?: string[];
+      missingBytes?: number;
+    };
+
 export type VoiceConversationEvent =
   | { type: "speech-start"; at: number }
   | {

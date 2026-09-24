@@ -4155,6 +4155,12 @@
     "join": "Entrar e transcrever"
   },
   "voiceConversation": {
-    "title": "Conversa por voz"
+    "title": "Conversa por voz",
+    "errors": {
+      "languageUnsupported": "A conversa por voz só entende inglês por enquanto. Defina seu idioma de ditado como Inglês ou Automático.",
+      "voiceModelsMissing": "A conversa por voz precisa de seus modelos de voz. Baixe-os em Configurações.",
+      "speechModelMissing": "A conversa por voz precisa de um modelo de voz Parakeet. Baixe um em Configurações → Fala para texto.",
+      "brainNotDownloaded": "O modelo local do Assistente de voz ainda não foi baixado."
+    }
   }
 }

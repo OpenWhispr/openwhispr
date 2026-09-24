@@ -4155,6 +4155,12 @@
     "join": "Partecipa e trascrivi"
   },
   "voiceConversation": {
-    "title": "Conversazione vocale"
+    "title": "Conversazione vocale",
+    "errors": {
+      "languageUnsupported": "La conversazione vocale capisce solo l'inglese per ora. Imposta la lingua di dettatura su Inglese o Automatico.",
+      "voiceModelsMissing": "La conversazione vocale richiede i suoi modelli vocali. Scaricali dalle Impostazioni.",
+      "speechModelMissing": "La conversazione vocale richiede un modello vocale Parakeet. Scaricane uno in Impostazioni → Da voce a testo.",
+      "brainNotDownloaded": "Il modello locale dell'Assistente vocale non è ancora stato scaricato."
+    }
   }
 }

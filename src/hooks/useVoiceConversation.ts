@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { getSettings, useSettingsStore } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { createSpeechChunker } from "../services/voice/speechChunker";
@@ -53,12 +54,35 @@ const KEEP_WARM_TICKS = 6;
 const since = (from: number, to: number | undefined) =>
   to === undefined ? null : Math.round(to - from);
 
+const READINESS_MESSAGE_KEYS = {
+  "language-unsupported": "voiceConversation.errors.languageUnsupported",
+  "voice-models-missing": "voiceConversation.errors.voiceModelsMissing",
+  "speech-model-missing": "voiceConversation.errors.speechModelMissing",
+  "brain-not-downloaded": "voiceConversation.errors.brainNotDownloaded",
+} as const;
+
+/**
+ * The { mode, model } sent to getReadiness and used to decide which local model (if
+ * any) to keep warm. The harness's brain override always wins and is itself local;
+ * otherwise this mirrors whichever brain resolveChatStreamingInference resolved.
+ * `mode`, not `provider`, says "local" — in local inference mode `provider` is the
+ * model family (e.g. "qwen", "gemma"), never the literal string "local".
+ */
+function resolveVoiceBrain(
+  voiceModel: { mode?: string; model?: string },
+  brainOverride: string | null
+): { mode: string; model: string } {
+  if (brainOverride) return { mode: "local", model: brainOverride };
+  return { mode: voiceModel.mode || "", model: voiceModel.model || "" };
+}
+
 /**
  * Hands-free local voice conversation: an always-listening loop that turns each VAD
  * turn into an assistant command and speaks the streamed answer back, with barge-in.
  * Enabled by the voiceConversationEnabled setting.
  */
 export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationOptions) {
+  const { t } = useTranslation();
   const [state, setState] = useState<VoiceConversationState>("off");
   const activeRef = useRef(false);
   const micRef = useRef<MicStream | null>(null);
@@ -271,8 +295,23 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       const { config: voiceModel } = resolveChatStreamingInference(settings, {
         inferenceScope: "dictationAgent",
       });
+      const parakeetModel = settings.parakeetModel || DEFAULT_PARAKEET_MODEL;
+      const brain = resolveVoiceBrain(voiceModel, brainOverride);
+      const readiness = await api.getReadiness({
+        parakeetModel,
+        language: settings.preferredLanguage,
+        brain,
+      });
+      // `readiness.ready === false`, not `!readiness.ready`: negation narrowing doesn't
+      // discriminate this union in TS, so `readiness.reason` stays unresolved otherwise.
+      if (readiness.ready === false) {
+        onErrorRef.current?.(t(READINESS_MESSAGE_KEYS[readiness.reason]));
+        activeRef.current = false;
+        setState("off");
+        return;
+      }
       const info = await api.start({
-        parakeetModel: settings.parakeetModel || DEFAULT_PARAKEET_MODEL,
+        parakeetModel,
         brainModel: brainOverride || voiceModel.model,
         harness,
       });
@@ -308,8 +347,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       // Keep a local voice model loaded for the whole session: warm it now so the
       // first turn skips the cold start, then beat llama-server's 5-minute idle stop.
       const keepWarm = () => {
-        const localModel =
-          brainOverride || (voiceModel.provider === "local" ? voiceModel.model : null);
+        const localModel = brain.mode === "local" ? brain.model : null;
         if (localModel) {
           void api.keepModelWarm(localModel).catch(() => {});
         }
@@ -345,7 +383,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       onErrorRef.current?.(message);
       await stop();
     }
-  }, [api, brainOverride, finishUtteranceIfDrained, stop]);
+  }, [api, brainOverride, finishUtteranceIfDrained, stop, t]);
 
   const stopRef = useRef(stop);
   stopRef.current = stop;

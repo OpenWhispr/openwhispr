@@ -11,6 +11,8 @@ const {
   float32ToPcm16Buffer,
   resolveVoiceParakeetModel,
 } = require("./voiceConversationConfig");
+const { checkVoiceConversationReadiness } = require("./voiceConversationReadiness");
+const { createDownloadSignal } = require("./downloadUtils");
 
 // Local voice conversation: the renderer streams echo-cancelled 16 kHz mic frames in;
 // the worker's VAD + Smart Turn cut turns, Parakeet transcribes them here, and Pocket
@@ -176,6 +178,49 @@ function registerVoiceConversationIpc({ parakeetManager, getMeetingDetectionEngi
   ipcMain.handle("voice-conversation:speak", (_event, request) =>
     voiceWorker.request("speak", request)
   );
+
+  ipcMain.handle("voice-conversation:get-readiness", async (_event, request = {}) => {
+    const speechModel = resolveVoiceParakeetModel(request.parakeetModel, (name) =>
+      parakeetManager.isModelDownloaded(name)
+    );
+    const brain = request.brain || {};
+    let brainDownloaded = false;
+    if (brain.mode === "local" && brain.model) {
+      const modelManager = require("./modelManagerBridge").default;
+      modelManager.ensureInitialized();
+      brainDownloaded = await modelManager.isModelDownloaded(brain.model).catch(() => false);
+    }
+    return checkVoiceConversationReadiness({
+      modelStatus: voiceModels.getVoiceModelStatus(),
+      speechModelDownloaded: Boolean(speechModel && parakeetManager.isModelDownloaded(speechModel)),
+      language: request.language,
+      brain: { mode: brain.mode, model: brain.model, downloaded: brainDownloaded },
+    });
+  });
+
+  let modelDownload = null;
+  ipcMain.handle("voice-conversation:download-models", async (event) => {
+    if (modelDownload) return modelDownload.promise;
+    // downloadFile takes this { aborted, onAbort } signal, not an AbortSignal.
+    const { signal, abort } = createDownloadSignal();
+    const promise = voiceModels
+      .downloadVoiceModels({
+        signal,
+        onProgress: (progress) => {
+          if (!event.sender.isDestroyed()) event.sender.send("voice-conversation:download-progress", progress);
+        },
+      })
+      .finally(() => {
+        modelDownload = null;
+      });
+    modelDownload = { abort, promise };
+    return promise;
+  });
+
+  ipcMain.handle("voice-conversation:cancel-download", () => {
+    modelDownload?.abort();
+    return { cancelled: Boolean(modelDownload) };
+  });
 
   ipcMain.handle("voice-conversation:cancel-speech", (_event, { utteranceId }) =>
     voiceWorker.running ? voiceWorker.request("cancel", { utteranceId }) : { cancelled: true }

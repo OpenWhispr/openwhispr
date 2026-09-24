@@ -4155,6 +4155,12 @@
     "join": "Beitreten & transkribieren"
   },
   "voiceConversation": {
-    "title": "Sprachkonversation"
+    "title": "Sprachkonversation",
+    "errors": {
+      "languageUnsupported": "Sprachkonversation versteht vorerst nur Englisch. Stellen Sie Ihre Diktiersprache auf Englisch oder Automatisch.",
+      "voiceModelsMissing": "Für die Sprachkonversation werden ihre Sprachmodelle benötigt. Laden Sie sie in den Einstellungen herunter.",
+      "speechModelMissing": "Für die Sprachkonversation wird ein Parakeet-Sprachmodell benötigt. Laden Sie eines unter Einstellungen → Sprache zu Text herunter.",
+      "brainNotDownloaded": "Das lokale Modell des Sprachassistenten ist noch nicht heruntergeladen."
+    }
   }
 }

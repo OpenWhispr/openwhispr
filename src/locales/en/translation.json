@@ -4155,6 +4155,12 @@
     "join": "Join & transcribe"
   },
   "voiceConversation": {
-    "title": "Voice conversation"
+    "title": "Voice conversation",
+    "errors": {
+      "languageUnsupported": "Voice conversation understands English only for now. Set your dictation language to English or Auto.",
+      "voiceModelsMissing": "Voice conversation needs its voice models. Download them in Settings.",
+      "speechModelMissing": "Voice conversation needs a Parakeet speech model. Download one in Settings → Speech to Text.",
+      "brainNotDownloaded": "The Voice Assistant's local model isn't downloaded yet."
+    }
   }
 }

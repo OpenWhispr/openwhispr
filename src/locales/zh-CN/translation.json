@@ -4155,6 +4155,12 @@
     "join": "加入并转录"
   },
   "voiceConversation": {
-    "title": "语音对话"
+    "title": "语音对话",
+    "errors": {
+      "languageUnsupported": "语音对话目前仅支持英语。请将听写语言设置为英语或自动。",
+      "voiceModelsMissing": "语音对话需要其语音模型。请在设置中下载。",
+      "speechModelMissing": "语音对话需要 Parakeet 语音模型。请在设置 → 语音转文字 中下载。",
+      "brainNotDownloaded": "语音助手的本地模型尚未下载。"
+    }
   }
 }

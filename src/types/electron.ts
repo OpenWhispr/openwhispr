@@ -1826,6 +1826,16 @@ declare global {
         onEvent: (
           callback: (event: import("../services/voice/types").VoiceConversationEvent) => void
         ) => () => void;
+        getReadiness: (request: {
+          parakeetModel: string;
+          language: string;
+          brain: { mode: string; model: string };
+        }) => Promise<import("../services/voice/types").VoiceConversationReadiness>;
+        downloadModels: () => Promise<{ ready: boolean; missing: string[]; missingBytes: number }>;
+        cancelModelDownload: () => Promise<{ cancelled: boolean }>;
+        onDownloadProgress: (
+          callback: (progress: { model: string; downloadedBytes: number; totalBytes: number }) => void
+        ) => () => void;
       };
 
       // Parakeet operations (NVIDIA via sherpa-onnx)
