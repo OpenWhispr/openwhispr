@@ -48,13 +48,18 @@ actor OrukeetInstaller {
   func installedDirectoryAfterRecovery() async -> URL? {
     guard deleting == nil else { return nil }
     do {
+      let installed: URL?
       if let running {
         guard recovering else { return nil }
-        let installed = try await running.value
-        guard !Task.isCancelled, deleting == nil else { return nil }
-        return installed
+        installed = try await running.value
+      } else {
+        installed = try await findInstalled(prune: true)
       }
-      return try await findInstalled(prune: true)
+      // Delete can finish before this shared recovery waiter resumes. Do not
+      // turn its completed task's now-stale URL into an Installed UI state.
+      guard let installed, !Task.isCancelled, deleting == nil,
+        FileManager.default.fileExists(atPath: installed.path) else { return nil }
+      return installed
     } catch {
       NSLog("[ParakeetASR] Orukeet recovery is not usable: %@", error.localizedDescription)
       return nil

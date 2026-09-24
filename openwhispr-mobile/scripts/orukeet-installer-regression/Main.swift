@@ -63,6 +63,19 @@ struct InstallerRegression {
     do {
       let f = try Fixture()
       defer { f.cleanup() }
+      await SDKProbe.shared.configure(.vanishedRecovery, blocked: true)
+      let recovery = Task { await f.installer.installedDirectory() }
+      try await SDKProbe.shared.waitForStart()
+      let uiAvailability = Task { await f.installer.installedDirectoryAfterRecovery() }
+      await SDKProbe.shared.release()
+      try require(await recovery.value != nil, "the SDK boundary must return a stale completed result")
+      try require(await uiAvailability.value == nil, "model picker must not report a vanished recovery directory as installed")
+      checks.append("model-picker recovery result is rechecked after a directory vanishes")
+    }
+
+    do {
+      let f = try Fixture()
+      defer { f.cleanup() }
       await SDKProbe.shared.configure(.recover)
       await f.installer.removeUnusableCaches()
       let children = try FileManager.default.contentsOfDirectory(atPath: f.installer.modelsRoot.path)

@@ -12,11 +12,14 @@ checks during OS recovery, install admission, successful and failed cleanup,
 caller cancellation, deletion while a cancelled compiler is still unwinding,
 concurrent deletion, staging removal, retained backup exclusion and reinstall.
 An invalid existing installation is also replaced in a single pass.
+The model picker also rejects a completed recovery result whose directory has
+disappeared before its continuation resumes.
 
 The mutation run removes the recovery admission guards. The same tests must then
 reject the implementation (or time out while an availability query improperly
 waits for recovery). Test fixtures, modules and executables live in one temporary
 directory and are removed even when the mutated child times out.
+A second mutation removes the recovery-result existence check and must fail.
 
 This verifies application actor lifecycle behavior. It does not test actual
 Core ML inference, the iPhone runtime or SDK archive verification. The SDK's

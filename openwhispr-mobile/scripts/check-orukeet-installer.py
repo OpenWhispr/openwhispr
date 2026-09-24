@@ -55,7 +55,14 @@ def main():
                 caught = True
             if not caught:
                 raise AssertionError("Missing recovery-admission guard survived regression")
-            report["mutation_check"] = "removing recovery admission guards is rejected"
+            existence_guard = "FileManager.default.fileExists(atPath: installed.path) else { return nil }"
+            if existence_guard not in text:
+                raise AssertionError("Recovery-result mutation no longer matches source")
+            mutated.write_text(text.replace(existence_guard, "true else { return nil }"))
+            if run(mutated).returncode == 0:
+                raise AssertionError("Missing recovery-result existence check survived regression")
+            report["mutation_check"] = ["removing recovery admission guards is rejected",
+                                        "removing the recovery-result existence check is rejected"]
     output = json.dumps(report, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -3,7 +3,7 @@ import Foundation
 // Only the SDK boundary is replaced. The harness compiles the actual application
 // OrukeetInstaller.swift so actor admission/cancellation/deletion are exercised.
 public actor SDKProbe {
-  public enum Mode: Sendable { case normal, recover, failedRecovery, invalidCurrent, blockedInstall }
+  public enum Mode: Sendable { case normal, recover, vanishedRecovery, failedRecovery, invalidCurrent, blockedInstall }
   public static let shared = SDKProbe()
   private var mode: Mode = .normal
   private var blocked = false
@@ -73,10 +73,14 @@ public actor OrukeetModelStore {
     if mode == .invalidCurrent { throw StoreError.invalidInstallation("test corruption") }
     let current = root.appendingPathComponent("current")
     if FileManager.default.fileExists(atPath: current.path) { return current }
-    guard mode == .recover || mode == .failedRecovery else { return nil }
+    guard mode == .recover || mode == .vanishedRecovery || mode == .failedRecovery else { return nil }
     try await SDKProbe.shared.enter()
     if mode == .failedRecovery { throw StoreError.invalidInstallation("test compiler failure") }
-    return try publish()
+    let installed = try publish()
+    // Fault injection at the SDK boundary: the returned recovery URL can cease
+    // to exist before the model-picker continuation gets to use it.
+    if mode == .vanishedRecovery { try FileManager.default.removeItem(at: installed) }
+    return installed
   }
 
   public func install(fromArchive archive: URL,
