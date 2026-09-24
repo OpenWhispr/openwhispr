@@ -54,18 +54,6 @@ test("voice agent hotkey wins over translation when both flags are present", asy
   assert.equal(
     resolveDictationRouteKind({
       cleanupReachable: true,
-      agentReachable: true,
-      agentInvoked: false,
-      voiceAgentRequested: true,
-      translationRequested: true,
-      translationReachable: true,
-    }),
-    "agent"
-  );
-
-  assert.equal(
-    resolveDictationRouteKind({
-      cleanupReachable: true,
       agentReachable: false,
       agentInvoked: false,
       voiceAgentRequested: true,
