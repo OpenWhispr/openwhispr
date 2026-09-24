@@ -4650,11 +4650,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
       const provider = this.getStreamingProvider();
       // Decided once, with the provider, so a config refresh mid-recording
-      // cannot change how this session's stream errors are handled.
-      const managedOrukeet = isManagedOrukeetStream({
-        providerName: this.getStreamingProviderName(),
-        cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
-      });
+      // cannot change how this session's stream errors are handled. Only a
+      // session whose fallback recorder started has a capture to fail over
+      // to; stop finishes that recorder before a refused commit can arrive.
+      const failsOver =
+        Boolean(this.streamingFallbackRecorder) &&
+        isManagedOrukeetStream({
+          providerName: this.getStreamingProviderName(),
+          cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+        });
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
@@ -4711,7 +4715,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // and can drop a socket mid-recording. The fallback recorder has the
         // whole capture, so keep recording and let stop upload it to Cloud
         // rather than cutting the user off behind an error.
-        if (managedOrukeet && this.streamingFallbackRecorder) {
+        if (failsOver) {
           this._streamingFailoverReason ??= "stream_no_final";
           return;
         }

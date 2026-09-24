@@ -748,6 +748,37 @@ test("a managed Orukeet stream refused mid-recording keeps recording and uploads
   assert.deepEqual(errors, []);
 });
 
+test("a managed Orukeet error while stop awaits the final still uploads a short capture", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  let raise;
+  const provider = startingOrukeetProvider({
+    onError: (listener) => {
+      raise = listener;
+      return () => {};
+    },
+    // The refusal (commit capacity, a dropped socket or a final timeout)
+    // lands a round trip after the commit, once stop has finished the
+    // fallback recorder.
+    finalize: async () => {
+      while (manager.streamingFallbackRecorder) await new Promise(setImmediate);
+      raise("Orukeet transcription failed: capacity");
+      return { success: false, error: "Orukeet transcription failed: capacity" };
+    },
+  });
+  const { manager, errors, uploads } = createStartingManager(AudioManager, {
+    providerName: "orukeet",
+    provider,
+  });
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  await manager.stopStreamingRecording();
+
+  assert.deepEqual(uploads, [{ audio: "opening words", reason: "stream_no_final" }]);
+  assert.deepEqual(errors, []);
+});
+
 test("a managed Orukeet drop without a fallback recorder surfaces and auto-stops", async (t) => {
   const AudioManager = await loadManagerClass(t);
   useManagedOrukeetSettings();
