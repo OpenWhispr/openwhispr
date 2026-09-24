@@ -8,6 +8,8 @@ const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
 interface NoteBottomBarProps {
   /** Uses an opaque surface while the live transcript streams underneath. */
   isRecording: boolean;
+  draftText: string;
+  onDraftChange: (text: string) => void;
   onAskSubmit: (text: string) => void;
   onInputFocus?: () => void;
   askDisabled?: boolean;
@@ -19,6 +21,8 @@ interface NoteBottomBarProps {
 
 export default function NoteBottomBar({
   isRecording,
+  draftText,
+  onDraftChange,
   onAskSubmit,
   onInputFocus,
   askDisabled,
@@ -27,19 +31,18 @@ export default function NoteBottomBar({
   hideInput,
 }: NoteBottomBarProps) {
   const { t } = useTranslation();
-  const [inputText, setInputText] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const hasText = inputText.trim().length > 0;
+  const hasText = draftText.trim().length > 0;
 
   const handleSubmit = useCallback(() => {
-    const text = inputText.trim();
+    const text = draftText.trim();
     if (!text || askDisabled) return;
     onAskSubmit(text);
-    setInputText("");
+    onDraftChange("");
     setIsExpanded(false);
-  }, [inputText, askDisabled, onAskSubmit]);
+  }, [draftText, askDisabled, onAskSubmit, onDraftChange]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -105,8 +108,8 @@ export default function NoteBottomBar({
             dir="auto"
             ref={inputRef}
             type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            value={draftText}
+            onChange={(e) => onDraftChange(e.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={handleInputFocus}
             disabled={askDisabled}

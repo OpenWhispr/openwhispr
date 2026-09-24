@@ -20,6 +20,8 @@ async function renderBottomBar(t, props) {
   return renderToStaticMarkup(
     createElement(mod.default, {
       isRecording: false,
+      draftText: "",
+      onDraftChange: () => {},
       onAskSubmit: () => {},
       ...props,
     })
@@ -36,11 +38,12 @@ test("recording state renders no backdrop-filter surface over the live transcrip
   assert.ok(html.includes("shadow-(--shadow-glass)"), "capsules keep the glass rim shadow");
 });
 
-test("idle state keeps the liquid-glass capsule", async (t) => {
+test("idle state uses the compact outlined ask capsule", async (t) => {
   const html = await renderBottomBar(t, { isRecording: false });
 
-  assert.ok(html.includes("backdrop-blur-xl"));
-  assert.ok(html.includes("backdrop-saturate-150"));
+  assert.ok(html.includes("bg-background shadow-sm"));
+  assert.ok(html.includes("h-12"));
+  assert.ok(!html.includes("backdrop-blur"));
 });
 
 test("the ask capsule never transitions its surface between the two states", async (t) => {

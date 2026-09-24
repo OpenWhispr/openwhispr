@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import { ArrowRight, Mic, Square, X } from "../icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
@@ -23,6 +23,8 @@ interface ChatInputProps {
   /** Offer a mic when the input is empty; recordings transcribe into the input. */
   voiceDraft?: boolean;
   variant?: "default" | "assistant";
+  draftText?: string;
+  onDraftChange?: (text: string) => void;
 }
 
 function RecordingIndicator() {
@@ -63,15 +65,19 @@ export function ChatInput({
   className,
   voiceDraft = false,
   variant = "default",
+  draftText,
+  onDraftChange,
 }: ChatInputProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [inputText, setInputText] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [localDraft, setLocalDraft] = useState("");
+  const inputText = draftText ?? localDraft;
+  const setInputText = onDraftChange ?? setLocalDraft;
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const voice = useVoiceDraft({
     onTranscript: (text) => {
-      setInputText((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+      setInputText(inputText.trim() ? `${inputText.trim()} ${text}` : text);
       requestAnimationFrame(() => inputRef.current?.focus());
     },
     onError: (message) => {
@@ -91,11 +97,11 @@ export function ChatInput({
     onTextSubmit(text);
     setInputText("");
     requestAnimationFrame(() => inputRef.current?.focus());
-  }, [inputText, onTextSubmit]);
+  }, [inputText, onTextSubmit, setInputText]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         handleSubmit();
       }
@@ -109,6 +115,13 @@ export function ChatInput({
   const isBusy =
     agentState === "thinking" || agentState === "streaming" || agentState === "tool-executing";
 
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight}px`;
+  }, [inputText, isVoiceRecording, isVoiceTranscribing]);
+
   useEffect(() => {
     if (isIdle) {
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -119,7 +132,7 @@ export function ChatInput({
     <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
       <div
         className={cn(
-          "flex items-center gap-2 min-h-11 ps-4 pe-1.5 rounded-full",
+          "flex items-center gap-2 min-h-11 ps-4 pe-1.5 py-1.5 rounded-3xl",
           variant === "assistant" ? "min-h-12 bg-card shadow-sm dark:bg-surface-2" : GLASS_SURFACE,
           "border border-black/10 dark:border-white/14",
           "transition-all duration-200",
@@ -202,11 +215,11 @@ export function ChatInput({
         )}
 
         {(isIdle || isBusy) && !isVoiceRecording && !isVoiceTranscribing && (
-          <div className="flex items-center gap-2 w-full">
-            <input
+          <div className="flex items-end gap-2 w-full">
+            <textarea
               dir="auto"
               ref={inputRef}
-              type="text"
+              rows={1}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -217,7 +230,7 @@ export function ChatInput({
                 "input-inline flex-1 outline-none bg-transparent caret-primary",
                 variant === "assistant" ? "text-sm" : "text-[13px]",
                 "text-foreground placeholder:text-muted-foreground/70",
-                "min-w-0 p-0",
+                "min-w-0 min-h-8 max-h-32 resize-none overflow-y-auto border-0 px-0 py-1.5 leading-5",
                 isBusy && "text-muted-foreground/70 cursor-not-allowed"
               )}
             />

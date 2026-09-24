@@ -181,7 +181,7 @@ export default function ChatView() {
           />
         </Suspense>
       )}
-      <div className="flex h-full">
+      <div className="flex h-full min-h-0">
         <div className="w-56 min-w-50 shrink-0 border-e border-border dark:border-white/10">
           <ConversationList
             activeConversationId={activeConversationId}
@@ -193,7 +193,7 @@ export default function ChatView() {
             refreshKey={refreshKey}
           />
         </div>
-        <div className="flex-1 min-w-80 flex flex-col">
+        <div className="flex-1 min-w-80 min-h-0 flex flex-col">
           {hasActiveChat ? (
             <>
               <ChatMessages
@@ -209,7 +209,7 @@ export default function ChatView() {
               />
               <div className="px-3 pb-5 pt-1">
                 <ChatInput
-                  className="mx-auto w-full max-w-md"
+                  className="mx-auto w-full max-w-2xl"
                   agentState={streaming.agentState}
                   partialTranscript=""
                   onTextSubmit={handleTextSubmit}

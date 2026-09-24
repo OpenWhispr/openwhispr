@@ -18,6 +18,8 @@ interface EmbeddedChatProps {
   onModeChange: (mode: EmbeddedChatMode) => void;
   messages: Message[];
   agentState: AgentState;
+  draftText: string;
+  onDraftChange: (text: string) => void;
   onTextSubmit: (text: string) => void;
   onCancel: () => void;
   noteConversations?: ContainerConversationItem[];
@@ -45,6 +47,8 @@ export default function EmbeddedChat({
   onModeChange,
   messages,
   agentState,
+  draftText,
+  onDraftChange,
   onTextSubmit,
   onCancel,
   noteConversations,
@@ -138,6 +142,8 @@ export default function EmbeddedChat({
       </div>
       <ChatInput
         agentState={agentState}
+        draftText={draftText}
+        onDraftChange={onDraftChange}
         partialTranscript=""
         onTextSubmit={onTextSubmit}
         onCancel={onCancel}
@@ -153,7 +159,7 @@ export default function EmbeddedChat({
         style={{ maxHeight: FLOATING_CHAT_MAX_HEIGHT_CSS }}
         className={cn(
           "absolute bottom-4 left-5 right-5 z-20 mx-auto max-w-[600px]",
-          "min-h-50",
+          "h-2/3 min-h-0",
           "flex flex-col",
           "bg-background/95 dark:bg-surface-2/95",
           "border border-black/15 dark:border-white/18",
@@ -172,7 +178,7 @@ export default function EmbeddedChat({
   return (
     <div
       className={cn(
-        "w-85 shrink-0",
+        "w-2/5 min-w-72 max-w-2xl shrink-0",
         "border-s border-black/12 dark:border-white/14",
         "bg-surface-1 dark:bg-surface-2",
         "flex flex-col",

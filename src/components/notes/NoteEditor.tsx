@@ -255,6 +255,7 @@ export default function NoteEditor({
   const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
   const [viewMode, setViewMode] = useState<MeetingViewMode>(defaultViewMode);
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
+  const [chatDraft, setChatDraft] = useState("");
   const [folderSearch, setFolderSearch] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -506,6 +507,7 @@ export default function NoteEditor({
       prevNoteIdRef.current = note.id;
       return scheduleUiUpdate(() => {
         setChatMode("hidden");
+        setChatDraft("");
         setDiarizedSegments(null);
         setIsDiarizing(false);
         setSpeakerMappings({});
@@ -1268,6 +1270,8 @@ export default function NoteEditor({
           )}
           <NoteBottomBar
             isRecording={isRecording}
+            draftText={chatDraft}
+            onDraftChange={setChatDraft}
             onAskSubmit={handleAskSubmit}
             onInputFocus={handleChatInputFocus}
             actionPicker={
@@ -1294,6 +1298,8 @@ export default function NoteEditor({
               onModeChange={setChatMode}
               messages={embeddedChat.messages}
               agentState={embeddedChat.agentState}
+              draftText={chatDraft}
+              onDraftChange={setChatDraft}
               onTextSubmit={embeddedChat.sendMessage}
               onCancel={embeddedChat.cancelStream}
               noteConversations={embeddedChat.noteConversations}
@@ -1310,6 +1316,8 @@ export default function NoteEditor({
           onModeChange={setChatMode}
           messages={embeddedChat.messages}
           agentState={embeddedChat.agentState}
+          draftText={chatDraft}
+          onDraftChange={setChatDraft}
           onTextSubmit={embeddedChat.sendMessage}
           onCancel={embeddedChat.cancelStream}
           noteConversations={embeddedChat.noteConversations}
