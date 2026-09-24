@@ -937,6 +937,9 @@ export default function TranscriptionModelPicker({
     }
     if (normalized) {
       for (const provider of cloudProviders) {
+        // Custom endpoints on OpenRouter predate its tab and keep their own key
+        // slot, model id and WAV re-encode, so they are never moved onto it.
+        if (provider.id === "openrouter") continue;
         const providerNormalized = normalizeBaseUrl(provider.baseUrl);
         if (normalized === providerNormalized) {
           switchCloudTranscriptionProvider(transcriptionContext, provider.id);

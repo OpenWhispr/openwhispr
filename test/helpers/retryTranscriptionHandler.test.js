@@ -149,6 +149,7 @@ function buildFakeThis() {
       getMistralKey: () => "mk-mistral",
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
+      getOpenrouterKey: () => "ork-openrouter",
       getCustomTranscriptionKey: () => "ck-custom",
       getCortiClientId: () => "corti-id",
       getCortiClientSecret: () => "corti-secret",
@@ -373,6 +374,19 @@ test("retry: mistral goes to Mistral with x-api-key", async () => {
   assert.equal(result.success, true);
   assert.match(fetches[0].url, /api\.mistral\.ai/);
   assert.equal(fetches[0].init.headers["x-api-key"], "mk-mistral");
+});
+
+test("retry: openrouter goes to OpenRouter with the OpenRouter key", async () => {
+  fetches.length = 0;
+  const result = await invoke({
+    cloudTranscriptionProvider: "openrouter",
+    cloudTranscriptionModel: "openai/gpt-transcribe",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+  });
+  assert.equal(result.success, true);
+  assert.equal(fetches[0].url, "https://openrouter.ai/api/v1/audio/transcriptions");
+  assert.equal(fetches[0].init.headers.Authorization, "Bearer ork-openrouter");
 });
 
 test("proxy transcription handlers resolve to structured errors instead of rejecting", async () => {

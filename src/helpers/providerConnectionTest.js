@@ -17,8 +17,8 @@ const ENDPOINTS = {
 // and AssemblyAI returns transcripts — so a 200 is the whole credential signal.
 const MODEL_LIST_UNVERIFIABLE = new Set(["deepgram", "assemblyai"]);
 // OpenRouter's model catalogs answer 200 whatever the key, so they cannot tell a
-// valid key from a mistyped one; its key endpoint can. The transcription ids are
-// a fixed shortlist the registry agreement tests already pin.
+// valid key from a mistyped one; its key endpoint can. The model goes unchecked:
+// the ids are a fixed registry shortlist, so only a retired one would slip by.
 const TRANSCRIPTION_ENDPOINTS = {
   openrouter: "https://openrouter.ai/api/v1/key",
 };
