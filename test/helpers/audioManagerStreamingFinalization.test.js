@@ -778,6 +778,110 @@ test("a managed Orukeet drop without a fallback recorder surfaces and auto-stops
   await manager._streamingStopPromise;
 });
 
+test("a refused managed Orukeet start without a fallback recorder records in batch instead", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  globalThis.MediaRecorder = class {
+    constructor() {
+      throw new Error("MediaRecorder unavailable");
+    }
+  };
+  const { manager, uploads } = createStartingManager(AudioManager, {
+    providerName: "orukeet",
+    provider: refusedStartProvider(),
+  });
+  let batchStarts = 0;
+  manager.startRecording = async () => {
+    batchStarts += 1;
+    return true;
+  };
+  manager.cleanupStreaming = async () => {};
+
+  assert.equal(await manager.startStreamingRecording(), true);
+
+  // Nothing captured the opening words, so only a fresh recording can.
+  assert.equal(batchStarts, 1);
+  assert.equal(manager._streamingFailoverReason, null);
+  assert.deepEqual(uploads, []);
+});
+
+test("a stop pressed while a refused managed Orukeet start settles uploads once", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  let refuse;
+  const provider = startingOrukeetProvider({
+    start: () =>
+      new Promise((resolve) => {
+        refuse = () => resolve({ success: false, error: "Orukeet connection closed" });
+      }),
+  });
+  const { manager, errors, uploads } = createStartingManager(AudioManager, {
+    providerName: "orukeet",
+    provider,
+  });
+
+  const starting = manager.startStreamingRecording();
+  while (!refuse) await new Promise((resolve) => setImmediate(resolve));
+  await manager.stopStreamingRecording();
+  refuse();
+  await starting;
+
+  assert.equal(manager.isRecording, false, "the deferred stop ends the recording");
+  assert.deepEqual(uploads, [{ audio: "opening words", reason: "session_unavailable" }]);
+  assert.deepEqual(errors, []);
+});
+
+test("the recording after a failed-over one streams to its socket again", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  let starts = 0;
+  const provider = startingOrukeetProvider({
+    start: async () => {
+      starts += 1;
+      return starts === 1
+        ? { success: false, error: "Orukeet connection closed" }
+        : { success: true };
+    },
+  });
+  const { manager } = createStartingManager(AudioManager, { providerName: "orukeet", provider });
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  await manager.stopStreamingRecording();
+  assert.equal(await manager.startStreamingRecording(), true);
+  const pcm = speechPcm();
+  manager.streamingProcessor.port.onmessage({ data: pcm });
+
+  assert.deepEqual(provider.sent, [pcm]);
+});
+
+test("opening words streamed before a mid-recording drop still count as speech", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  let raise;
+  const provider = startingOrukeetProvider({
+    onError: (listener) => {
+      raise = listener;
+      return () => {};
+    },
+  });
+  const { manager, uploads } = createStartingManager(AudioManager, {
+    providerName: "orukeet",
+    provider,
+  });
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  manager.streamingProcessor.port.onmessage({ data: speechPcm() });
+  raise("Orukeet connection closed");
+  manager.streamingProcessor.port.onmessage({ data: silentPcm() });
+  await manager.stopStreamingRecording();
+
+  assert.deepEqual(uploads, [{ audio: "opening words", reason: "stream_no_final" }]);
+});
+
 test("other streaming providers still surface a dropped stream and auto-stop", async (t) => {
   const AudioManager = await loadManagerClass(t);
   useManagedOrukeetSettings();
