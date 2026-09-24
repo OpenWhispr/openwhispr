@@ -105,6 +105,22 @@ class WhisperManager {
     return { useCuda, useVulkan };
   }
 
+  // The pack the settings card describes, so the card never disagrees with the
+  // server (#1736): the pack every server start picks now (a GPU server always
+  // runs on it; while a pack change restarts the server, it names the target),
+  // else the installed pack that fell back to CPU, CUDA first, so its reason
+  // and Retry show. null when neither applies (no pack, or a pack opted out
+  // with WHISPER_*_ENABLED=false): the card then chooses which pack to offer.
+  resolveGpuPackInUse() {
+    const { useCuda, useVulkan } = this.resolveGpuStartOptions();
+    if (useCuda) return "cuda";
+    if (useVulkan) return "vulkan";
+    const failed = resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
+    if (failed.includes("cuda") && this._cudaBinaryManager?.isDownloaded()) return "cuda";
+    if (failed.includes("vulkan") && this._vulkanBinaryManager?.isDownloaded()) return "vulkan";
+    return null;
+  }
+
   // A remembered failure skips a downloaded pack silently, so a debug log turned
   // on after the fallback would show only a CPU start. Say why, once per state,
   // with the reason saved at the fallback (#1736). The log level is part of the

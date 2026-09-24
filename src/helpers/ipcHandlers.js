@@ -3457,6 +3457,7 @@ class IPCHandlers {
         path: this.whisperCudaManager.getCudaBinaryPath(),
         gpuInfo,
         ...this._whisperGpuFailureStatus("cuda"),
+        inUse: this.whisperManager.resolveGpuPackInUse() === "cuda",
       };
     });
 
@@ -3519,6 +3520,7 @@ class IPCHandlers {
         vulkan,
         hasNvidiaGpu: gpuInfo.hasNvidiaGpu,
         ...this._whisperGpuFailureStatus("vulkan"),
+        inUse: this.whisperManager.resolveGpuPackInUse() === "vulkan",
       };
     });
 
