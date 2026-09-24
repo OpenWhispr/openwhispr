@@ -1,9 +1,9 @@
-const os = require("os");
 const path = require("path");
 const { EventEmitter } = require("events");
 const { ipcMain } = require("electron");
 const debugLogger = require("./debugLogger");
 const voiceWorker = require("./voiceWorkerClient");
+const voiceModels = require("./voiceModels");
 const { pcm16ToWav } = require("../utils/audioUtils");
 const {
   VAD_SAMPLE_RATE,
@@ -105,18 +105,9 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
 
   ipcMain.handle("voice-spike:start", async (event, options = {}) => {
     sender = event.sender;
-    const config = buildVoiceWorkerConfig({
-      cacheDir: path.join(os.homedir(), ".cache", "openwhispr"),
-      ttsKind: process.env.OPENWHISPR_VOICE_SPIKE_TTS,
-      silenceMs: process.env.OPENWHISPR_VOICE_SPIKE_SILENCE_MS,
-      smartTurn: process.env.OPENWHISPR_VOICE_SPIKE_SMART_TURN === "1",
-      smartTurnMaxSilenceMs: process.env.OPENWHISPR_VOICE_SPIKE_SMART_TURN_MAX_MS,
-    });
-    const configKey = JSON.stringify([
-      config.ttsKind,
-      config.vad.sileroVad.minSilenceDuration,
-      config.smartTurn,
-    ]);
+    if (!voiceModels.getVoiceModelStatus().ready) throw new Error("voice-models-missing");
+    const config = buildVoiceWorkerConfig({ modelPaths: voiceModels.getVoiceModelPaths() });
+    const configKey = JSON.stringify([config.vad.sileroVad.model, config.smartTurn]);
     let loadMs = 0;
     let sampleRate = configuredSampleRate;
     if (configuredKey !== configKey || !voiceWorker.running) {
@@ -136,7 +127,6 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
       ),
       language: options.language,
       sampleRate,
-      ttsKind: config.ttsKind,
       brainModel: options.brainModel,
       harness: !!options.harness,
     };
@@ -146,7 +136,6 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
       debugLogger.warn("voice spike Parakeet warm-up failed", { error: error?.message });
     });
     debugLogger.info("voice spike started", {
-      ttsKind: config.ttsKind,
       smartTurn: configuredSmartTurn,
       minSilenceMs: Math.round(config.vad.sileroVad.minSilenceDuration * 1000),
       maxSilenceMs: config.smartTurn?.maxSilenceMs ?? null,
@@ -154,7 +143,7 @@ function registerVoiceSpikeIpc({ parakeetManager, getMeetingDetectionEngine }) {
       sampleRate,
       parakeetModel: session.parakeetModel,
     });
-    return { ttsKind: config.ttsKind, sampleRate, loadMs, smartTurn: configuredSmartTurn };
+    return { sampleRate, loadMs, smartTurn: configuredSmartTurn };
   });
 
   // Starts the voice model if needed and resets llama-server's 5-minute idle

@@ -157,7 +157,7 @@ async function runVoiceHarness({ voiceWorker, spikeEvents, getSession, sendToRen
     machine: os.cpus()?.[0]?.model || os.arch(),
     memoryGb: Math.round(os.totalmem() / 1024 ** 3),
     brain: session.brainModel || "unknown",
-    tts: session.ttsKind || "unknown",
+    tts: "pocket",
     startedAt: new Date().toISOString(),
   };
   const dir = path.join(app.getPath("userData"), "voice-harness");

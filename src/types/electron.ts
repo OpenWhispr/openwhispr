@@ -1803,7 +1803,7 @@ declare global {
           language?: string;
           brainModel?: string;
           harness?: boolean;
-        }) => Promise<{ ttsKind: string; sampleRate: number; loadMs: number }>;
+        }) => Promise<{ sampleRate: number; loadMs: number; smartTurn: boolean }>;
         isHarness: () => Promise<boolean>;
         brainOverride: () => Promise<string | null>;
         reportTurn: (report: import("../services/voice/types").VoiceTurnReport) => void;

@@ -278,7 +278,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         harness,
       });
       playerRef.current = createPcmPlayer({
-        // Kokoro, Kitten and Pocket all synthesize at 24 kHz.
+        // Pocket synthesizes at 24 kHz.
         sampleRate: info.sampleRate || 24000,
         onStart: () => setState("speaking"),
         onIdle: () => {
