@@ -13,7 +13,8 @@ import { withRetry } from '@/lib/retry';
 // Single budget for the entire streaming call: connect + receive.
 const AGENT_STREAM_TIMEOUT_MS = 55_000;
 
-// Max 1 retry — words are billed at /api/transcribe, not here.
+// Max 1 retry. Words are billed at /api/transcribe, not here, but each attempt
+// spends one of an anonymous session's five agent tries.
 const AGENT_MAX_RETRIES = 1;
 
 export interface AgentMessage {

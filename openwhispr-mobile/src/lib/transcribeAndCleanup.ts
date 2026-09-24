@@ -5,10 +5,12 @@ import {
   isLocalModelMissingError,
 } from '@/services/transcription/TranscriptionService';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
+import { requiresRealAccount } from './accountAccess';
 import { cleanupTranscript, AGENT_ACTION_TIMEOUT_MS } from './cleanupTranscript';
 import {
   getDictationAgentName,
@@ -124,11 +126,13 @@ async function shouldAttemptFusedCloudCleanup(request: TranscriptionRequest): Pr
     return false;
   }
   // A non-default keyboard tone must use the serial path: tone is injected via
-  // /api/reason, which only the serial cleanup pass calls.
+  // /api/reason, which only the serial cleanup pass calls. That endpoint refuses
+  // anonymous sessions, so they keep the fused cleanup and go without the tone.
   if (
     request.requestContext === 'keyboard' &&
     request.keyboardTone &&
-    request.keyboardTone !== 'default'
+    request.keyboardTone !== 'default' &&
+    !requiresRealAccount(useAuthStore.getState().user)
   ) {
     return false;
   }

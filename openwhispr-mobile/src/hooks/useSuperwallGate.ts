@@ -15,6 +15,8 @@ export type RegisterSuperwallGateOptions = {
   onAccessGrantedWithoutPurchase?: () => void;
   onPurchaseComplete?: (completion: SuperwallPurchaseCompletion) => void;
   requiresAccount?: boolean;
+  /** Cancels the optional onboarding offer when its screen is left. */
+  signal?: AbortSignal;
 };
 
 type SuperwallGateContextValue = {

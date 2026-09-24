@@ -44,9 +44,9 @@ export function DictationAgentScreen(): React.JSX.Element {
       <SettingsScreen keyboardShouldPersistTaps="handled">
         <View className="mx-4 mb-2 px-4">
           <Text className="text-[13px] text-secondaryLabel">
-            When you say your agent name while dictating, OpenWhispr rewrites what you said into
-            polished, ready-to-use text instead of inserting it word for word. Requires Cloud or
-            Providers mode.
+            When you say your assistant’s name while dictating, OpenWhispr rewrites what you said
+            into polished, ready-to-use text instead of inserting it word for word. Requires Cloud
+            or Providers mode.
           </Text>
         </View>
 
@@ -57,7 +57,7 @@ export function DictationAgentScreen(): React.JSX.Element {
               style={{ borderCurve: 'continuous' }}
             >
               <Text className="text-[13px] text-secondaryLabel">
-                Dictation Agent requires Cloud mode. Your settings are saved and will apply once
+                Voice Assistant requires Cloud mode. Your settings are saved and will apply once
                 Cloud mode is active.
               </Text>
             </View>
@@ -69,8 +69,8 @@ export function DictationAgentScreen(): React.JSX.Element {
             iconStyle="line"
             icon="person.wave.2"
             mdIcon="UserRoundCog"
-            title="Enable Dictation Agent"
-            description="Say your agent name while dictating to have OpenWhispr rewrite what you said."
+            title="Enable Voice Assistant"
+            description="Say your assistant’s name while dictating to have OpenWhispr rewrite what you said."
             rightElement={
               <SettingsSwitch
                 value={enabled}
@@ -82,7 +82,7 @@ export function DictationAgentScreen(): React.JSX.Element {
           />
         </SettingsSection>
 
-        <SettingsSection title="Agent Name">
+        <SettingsSection title="Assistant Name">
           <View className="px-4 py-3">
             <TextInput
               value={nameValue}
@@ -102,9 +102,9 @@ export function DictationAgentScreen(): React.JSX.Element {
         </SettingsSection>
         <View className="mx-4 -mt-5 mb-7 px-4">
           <Text className="text-[13px] text-secondaryLabel">
-            Start with this name, or say &quot;Hey&quot; and the name, to trigger the agent. A
-            mention mid-sentence is transcribed as usual. The name is automatically added to your
-            transcription hints so the speech model recognises it.
+            Start with this name, or say &quot;Hey&quot; and the name, to trigger the voice
+            assistant. A mention mid-sentence is transcribed as usual. The name is automatically
+            added to your transcription hints so the speech model recognises it.
           </Text>
         </View>
 
@@ -114,7 +114,7 @@ export function DictationAgentScreen(): React.JSX.Element {
             icon="text.cursor"
             mdIcon="TextCursor"
             title="Share Cursor Context"
-            description="Selected text is always sent when you use the agent. When on, the surrounding text near your cursor is also sent. Off by default."
+            description="Selected text is always sent when you use the voice assistant. When on, the surrounding text near your cursor is also sent. Off by default."
             rightElement={
               <SettingsSwitch
                 value={shareContext}
