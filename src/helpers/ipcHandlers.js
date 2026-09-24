@@ -4319,7 +4319,7 @@ class IPCHandlers {
         // backends see their own hotkeys, so access matters only without one.
         linuxInputAccessDenied:
           hotkeyManager.reliesOnLinuxKeyListener() &&
-          this.linuxKeyManager?.checkAvailability?.().reason === "input_access_denied",
+          hotkeyManager.nativeListenerProbe().reason === "input_access_denied",
       };
     });
 

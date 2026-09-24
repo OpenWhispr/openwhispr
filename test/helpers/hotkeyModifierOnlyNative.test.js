@@ -70,7 +70,7 @@ test("a right-side single modifier also reaches the native listener on linux", a
 // is set, and must be refused there too.
 const denyProbe = (reason) => () => ({ available: false, reason });
 
-for (const hotkey of ["Control+Super", "RightControl"]) {
+for (const hotkey of ["Control+Super", "Control+Alt", "RightControl"]) {
   test(`linux refuses "${hotkey}" when the listener has no input access`, async () => {
     setPlatform("linux");
     const mgr = new HotkeyManager();
@@ -81,6 +81,14 @@ for (const hotkey of ["Control+Super", "RightControl"]) {
     assert.equal(result.success, false);
     assert.equal(registered.size, 0, "a refused hotkey must not fall back to globalShortcut");
     assert.match(result.error, /usermod/, "the error must tell the user how to fix it");
+    for (const suggestion of result.suggestions) {
+      assert.equal(
+        HotkeyManager.isModifierOnlyHotkey(suggestion) ||
+          HotkeyManager.isRightSideModifier(suggestion),
+        false,
+        `"${suggestion}" needs the same listener`
+      );
+    }
   });
 }
 

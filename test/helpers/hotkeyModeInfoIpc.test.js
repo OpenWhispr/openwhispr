@@ -84,7 +84,6 @@ test.before(() => {
       isUsingKDEHotkeys: () => hotkeyManager.isUsingKDE(),
       isUsingNativeShortcutHotkeys: () => hotkeyManager.isUsingNativeShortcut(),
     },
-    linuxKeyManager: { checkAvailability: inputDenied },
   };
   IPCHandlers.prototype.setupHandlers.call(
     new Proxy(target, {

@@ -602,7 +602,10 @@ class HotkeyManager extends EventEmitter {
       hotkey,
       error: this._nativeListenerFailureMessage(reason),
       reason: deniedAccess ? "input_access_denied" : "native_listener_unavailable",
-      suggestions: this.getSuggestions(hotkey),
+      // Only regular-key hotkeys avoid the listener that just failed.
+      suggestions: this.getSuggestions(hotkey).filter(
+        (suggestion) => !isModifierOnlyHotkey(suggestion) && !isRightSideModifier(suggestion)
+      ),
     };
   }
 
