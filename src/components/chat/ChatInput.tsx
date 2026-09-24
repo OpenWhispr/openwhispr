@@ -254,8 +254,8 @@ export function ChatInput({
                 )}
               >
                 {variant === "assistant" ? (
-                  <span className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <ArrowRight size={16} className="-rotate-90" />
+                  <span className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <ArrowRight size={18} className="-rotate-90" />
                   </span>
                 ) : (
                   <SendIcon size={28} className="block rtl:scale-x-[-1]" />
