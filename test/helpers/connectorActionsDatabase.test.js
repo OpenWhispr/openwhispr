@@ -107,3 +107,27 @@ test("listRecent respects the limit", (t) => {
   assert.equal(log.listRecent("email", 3).length, 3);
   db.db.close();
 });
+
+test("calendar people rows expose attendees and organizers", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.upsertCalendarEvents([
+    {
+      id: "evt-1",
+      calendar_id: "primary",
+      provider: "google",
+      summary: "Lunch",
+      start_time: "2026-09-20T10:00:00Z",
+      end_time: "2026-09-20T11:00:00Z",
+      is_all_day: false,
+      status: "confirmed",
+      organizer_email: "gabe@example.com",
+      attendees_count: 1,
+      attendees: JSON.stringify([{ email: "gabe@example.com", displayName: "Gabe", self: false }]),
+    },
+  ]);
+  const [people] = db.getCalendarPeopleRows();
+  assert.equal(people.organizer_email, "gabe@example.com");
+  assert.match(people.attendees, /Gabe/);
+  db.db.close();
+});

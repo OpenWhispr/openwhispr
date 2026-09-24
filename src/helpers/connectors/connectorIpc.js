@@ -39,7 +39,7 @@ function createConnectorPolicyResolver({
   };
 }
 
-function registerConnectorIpc({ ipcMain, manager, getPolicyState }) {
+function registerConnectorIpc({ ipcMain, manager, getPolicyState, findContacts }) {
   ipcMain.handle("connector-status", () => manager.status());
 
   ipcMain.handle("connector-prepare", async (event, connectorId, action, args) => {
@@ -72,6 +72,13 @@ function registerConnectorIpc({ ipcMain, manager, getPolicyState }) {
     if (!isNonEmptyString(connectorId)) return [];
     return manager.recentActions(connectorId, limit);
   });
+
+  if (findContacts) {
+    ipcMain.handle("connector-find-contacts", (_event, query) => {
+      if (typeof query !== "string" || !query.trim()) return { contacts: [] };
+      return { contacts: findContacts(query.trim()) };
+    });
+  }
 }
 
 module.exports = { registerConnectorIpc, createConnectorPolicyResolver };

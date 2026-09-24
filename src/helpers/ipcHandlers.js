@@ -35,6 +35,7 @@ const {
   registerConnectorIpc,
   createConnectorPolicyResolver,
 } = require("./connectors/connectorIpc");
+const { searchContacts } = require("./connectors/contactSearch");
 // The renderer's ModelRegistry is not main-loadable; the raw registry data is
 // packaged, and the route resolver only needs {id, baseUrl} per provider.
 const transcriptionProviderBaseUrls = () =>
@@ -6099,6 +6100,7 @@ class IPCHandlers {
           getPolicy: (options) => workspacePolicyManager.getPolicy(options),
           getAuthGeneration: () => tokenStore.getState().generation,
         }),
+        findContacts: (query) => searchContacts(this.databaseManager.getCalendarPeopleRows(), query),
       });
     }
     this.enterpriseIdentityManager = createEnterpriseIdentityManager({

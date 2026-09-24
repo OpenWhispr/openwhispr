@@ -4757,6 +4757,24 @@ class DatabaseManager {
     return { unknown, cancelled };
   }
 
+  getCalendarPeopleRows(limit = 1000) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          `SELECT start_time, organizer_email, attendees
+             FROM calendar_events
+            WHERE attendees IS NOT NULL OR organizer_email IS NOT NULL
+            ORDER BY start_time DESC
+            LIMIT ?`
+        )
+        .all(limit);
+    } catch (error) {
+      debugLogger.error("Error reading calendar people", { error: error.message });
+      return [];
+    }
+  }
+
   getNoteByCalendarEventId(eventId, excludeNoteId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");

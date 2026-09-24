@@ -155,3 +155,26 @@ test("the deadline covers the auth-header lookup too", async () => {
   });
   assert.equal(await throwingAuth({}), "unavailable");
 });
+
+test("contact lookup trims the query and never needs policy", async () => {
+  const { registerConnectorIpc } = await load();
+  const ipcMain = fakeIpcMain();
+  const queries = [];
+  registerConnectorIpc({
+    ipcMain,
+    manager: fakeManager(),
+    getPolicyState: async () => {
+      throw new Error("must not be called");
+    },
+    findContacts: (query) => {
+      queries.push(query);
+      return [{ name: "Gabe", email: "gabe@example.com", lastMet: null }];
+    },
+  });
+  const handler = ipcMain.handlers.get("connector-find-contacts");
+  assert.deepEqual(await handler({}, "  Gabe "), {
+    contacts: [{ name: "Gabe", email: "gabe@example.com", lastMet: null }],
+  });
+  assert.deepEqual(await handler({}, 42), { contacts: [] });
+  assert.deepEqual(queries, ["Gabe"]);
+});

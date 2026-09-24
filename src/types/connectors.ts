@@ -64,3 +64,9 @@ export interface ConnectorActionRecord {
   errorCode: string | null;
   createdAt: string;
 }
+
+export interface ContactMatch {
+  name: string | null;
+  email: string;
+  lastMet: string | null;
+}

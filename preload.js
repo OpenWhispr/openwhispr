@@ -1274,6 +1274,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("connector-run-direct", connectorId, action, args),
   connectorRecentActions: (connectorId, limit) =>
     ipcRenderer.invoke("connector-recent-actions", connectorId, limit),
+  connectorFindContacts: (query) => ipcRenderer.invoke("connector-find-contacts", query),
   calendarGetAvailability: (request) => ipcRenderer.invoke("calendar-get-availability", request),
   gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),
 

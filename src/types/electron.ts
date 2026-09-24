@@ -15,6 +15,7 @@ import type {
   ConnectorEdits,
   ConnectorPrepareResult,
   ConnectorStatus,
+  ContactMatch,
 } from "./connectors";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
@@ -2891,6 +2892,7 @@ declare global {
         connectorId: string,
         limit?: number
       ) => Promise<ConnectorActionRecord[]>;
+      connectorFindContacts?: (query: string) => Promise<{ contacts: ContactMatch[] }>;
       calendarGetAvailability?: (
         request: CalendarAvailabilityRequest
       ) => Promise<
