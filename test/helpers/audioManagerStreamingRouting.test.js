@@ -385,6 +385,69 @@ test("a cloud upload reports why it was batch instead of the managed Orukeet str
   ]);
 });
 
+// The Cloud batch pipeline end to end: upload, then cleanup or translation.
+async function loadCloudPipeline(
+  t,
+  { translationRequested, useCleanupModel, cleanupCloudMode, preferredLanguage = "en" }
+) {
+  const { createManager, window } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-fallback-cleanup-",
+    settingsKey: "__fallbackCleanupSettings",
+    settings: {
+      cloudTranscriptionMode: "openwhispr",
+      isSignedIn: true,
+      useCleanupModel,
+      cleanupCloudMode,
+      preferredLanguage,
+      translationSourceLanguage: "en",
+      translationTargetLanguage: "es",
+      customPrompts: {},
+    },
+    mockModules: {
+      "/stores/settingsStore": `
+        export const getSettings = () => globalThis.__fallbackCleanupSettings;
+        export const getEffectiveCleanupModel = () => "cleanup-model";
+        export const selectResolvedLLMConfig = () => ({ model: "cleanup-model", provider: "openwhispr" });
+        export const isCloudCleanupMode = () => globalThis.__fallbackCleanupSettings.cleanupCloudMode === "openwhispr";
+        export const isCloudDictationAgentMode = () => false;
+        export const isCloudTranslationMode = () => true;
+      `,
+      "/config/prompts": `
+        export const resolvePrompt = () => "translation prompt";
+        export const appendScreenContextSuffix = (prompt) => prompt;
+      `,
+      "/dictationAgentInference": `
+        export const resolveDictationAgentInference = () => ({ reachable: false, config: {} });
+        export const resolveDictationAgentVisionInference = () => ({ active: false, config: {} });
+      `,
+      "/dictationTranslationInference": `
+        export const resolveDictationTranslationInference = () => ({
+          reachable: true, model: "translation-model", config: { provider: "openwhispr" }
+        });
+      `,
+    },
+  });
+  const originalNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { onLine: true },
+    configurable: true,
+  });
+  t.after(() =>
+    Object.defineProperty(globalThis, "navigator", {
+      value: originalNavigator,
+      configurable: true,
+    })
+  );
+  const manager = createManager({
+    translationRequested,
+    isDictionaryEcho: () => false,
+    getWhisperPrompt: () => null,
+    finalizeChineseScript: async (text) => text,
+    processWithReasoningModel: async () => "translated transcript",
+  });
+  return { manager, window };
+}
+
 for (const { name, translationRequested, useCleanupModel, cleanupCloudMode } of [
   {
     name: "cloud cleanup",
@@ -412,60 +475,10 @@ for (const { name, translationRequested, useCleanupModel, cleanupCloudMode } of 
   },
 ]) {
   test(`batch fallback telemetry survives ${name}`, async (t) => {
-    const { createManager, window } = await loadAudioManager(t, {
-      cachePrefix: "openwhispr-fallback-cleanup-",
-      settingsKey: "__fallbackCleanupSettings",
-      settings: {
-        cloudTranscriptionMode: "openwhispr",
-        isSignedIn: true,
-        useCleanupModel,
-        cleanupCloudMode,
-        preferredLanguage: "en",
-        translationSourceLanguage: "en",
-        translationTargetLanguage: "es",
-        customPrompts: {},
-      },
-      mockModules: {
-        "/stores/settingsStore": `
-          export const getSettings = () => globalThis.__fallbackCleanupSettings;
-          export const getEffectiveCleanupModel = () => "cleanup-model";
-          export const selectResolvedLLMConfig = () => ({ model: "cleanup-model", provider: "openwhispr" });
-          export const isCloudCleanupMode = () => globalThis.__fallbackCleanupSettings.cleanupCloudMode === "openwhispr";
-          export const isCloudDictationAgentMode = () => false;
-          export const isCloudTranslationMode = () => true;
-        `,
-        "/config/prompts": `
-          export const resolvePrompt = () => "translation prompt";
-          export const appendScreenContextSuffix = (prompt) => prompt;
-        `,
-        "/dictationAgentInference": `
-          export const resolveDictationAgentInference = () => ({ reachable: false, config: {} });
-          export const resolveDictationAgentVisionInference = () => ({ active: false, config: {} });
-        `,
-        "/dictationTranslationInference": `
-          export const resolveDictationTranslationInference = () => ({
-            reachable: true, model: "translation-model", config: { provider: "openwhispr" }
-          });
-        `,
-      },
-    });
-    const originalNavigator = globalThis.navigator;
-    Object.defineProperty(globalThis, "navigator", {
-      value: { onLine: true },
-      configurable: true,
-    });
-    t.after(() =>
-      Object.defineProperty(globalThis, "navigator", {
-        value: originalNavigator,
-        configurable: true,
-      })
-    );
-    const manager = createManager({
+    const { manager, window } = await loadCloudPipeline(t, {
       translationRequested,
-      isDictionaryEcho: () => false,
-      getWhisperPrompt: () => null,
-      finalizeChineseScript: async (text) => text,
-      processWithReasoningModel: async () => "translated transcript",
+      useCleanupModel,
+      cleanupCloudMode,
     });
     const uploads = [];
     const cleanupRequests = [];
@@ -499,5 +512,67 @@ for (const { name, translationRequested, useCleanupModel, cleanupCloudMode } of 
     }
     assert.equal(uploads.length, 6);
     assert.equal(cleanupRequests.length, combinedLog ? 6 : 0);
+  });
+}
+
+const JA_DETECTION = {
+  sttDetectedLanguage: "ja",
+  sttDetectedLanguageConfidence: 0.97,
+  sttDetectedLanguageAudioSeconds: 6,
+  sttDetectedLanguageStatus: "detected",
+};
+
+test("the language fallback upload declares auto, never the detected language", async (t) => {
+  const { manager, window } = await loadCloudPipeline(t, {
+    translationRequested: false,
+    useCleanupModel: false,
+    cleanupCloudMode: "openwhispr",
+    preferredLanguage: "auto",
+  });
+  const captured = [];
+  window.electronAPI.cloudTranscribe = async (_buffer, opts) => {
+    captured.push(opts);
+    return { success: true, text: "日本語のテキスト", sttProvider: "openai" };
+  };
+  const result = await manager.processWithOpenWhisprCloud(new Blob([new Uint8Array(100)]), {
+    streamingFallbackReason: "language_detected_unsupported",
+    detectedLanguageFields: JA_DETECTION,
+  });
+  assert.equal(result.text, "日本語のテキスト");
+  assert.equal(Object.hasOwn(captured[0], "language"), false);
+  assert.equal(captured[0].streamingFallbackReason, "language_detected_unsupported");
+  assert.equal(captured[0].sttDetectedLanguage, "ja");
+  assert.equal(captured[0].sttDetectedLanguageConfidence, 0.97);
+  assert.equal(captured[0].sttDetectedLanguageAudioSeconds, 6);
+  assert.equal(captured[0].sttDetectedLanguageStatus, "detected");
+});
+
+for (const translationRequested of [false, true]) {
+  test(`with cloud ${translationRequested ? "translation " : ""}cleanup the combined log request carries the detection`, async (t) => {
+    const { manager, window } = await loadCloudPipeline(t, {
+      translationRequested,
+      useCleanupModel: true,
+      cleanupCloudMode: "openwhispr",
+      preferredLanguage: "auto",
+    });
+    const reasonOpts = [];
+    window.electronAPI.cloudTranscribe = async () => ({
+      success: true,
+      text: "日本語",
+      sttProvider: "openai",
+    });
+    window.electronAPI.cloudReason = async (_text, opts) => {
+      reasonOpts.push(opts);
+      return { success: true, text: "日本語。" };
+    };
+    await manager.processWithOpenWhisprCloud(new Blob([new Uint8Array(100)]), {
+      streamingFallbackReason: "language_detected_unsupported",
+      detectedLanguageFields: JA_DETECTION,
+    });
+    assert.equal(reasonOpts.length, 1);
+    assert.equal(reasonOpts[0].streamingFallbackReason, "language_detected_unsupported");
+    for (const [key, value] of Object.entries(JA_DETECTION)) {
+      assert.equal(reasonOpts[0][key], value, key);
+    }
   });
 }
