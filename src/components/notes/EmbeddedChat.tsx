@@ -150,13 +150,23 @@ export default function EmbeddedChat({
   const chatBody = (
     <>
       {header}
-      <div className="flex-1 min-h-0 flex flex-col **:data-chat-bubble:max-w-full">
+      <div
+        className={cn(
+          "flex-1 min-h-0 flex flex-col **:data-chat-bubble:max-w-full",
+          mode === "floating" && "min-w-0 max-w-full **:data-chat-bubble:break-words"
+        )}
+      >
         <ChatMessages
           messages={messages}
           emptyState={<EmptyState floating={mode === "floating"} />}
           onOpenNote={handleOpenNote}
           scrollClassName={
-            mode === "floating" && messages.length === 0 ? "scrollbar-hidden" : undefined
+            mode === "floating"
+              ? cn(
+                  "min-w-0 max-w-full overflow-x-hidden",
+                  messages.length === 0 && "scrollbar-hidden"
+                )
+              : undefined
           }
         />
       </div>

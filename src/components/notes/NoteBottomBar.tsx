@@ -99,13 +99,13 @@ export default function NoteBottomBar({
         inert={hideInput}
         style={{ maxHeight: FLOATING_CHAT_MAX_HEIGHT_CSS }}
         className={cn(
-          "pointer-events-auto relative mx-auto flex w-full max-w-[600px] flex-col border",
+          "pointer-events-auto relative mx-auto flex w-full min-w-0 max-w-[600px] flex-col rounded-3xl border",
           chatOpen || hideInput ? "overflow-hidden" : "overflow-visible",
-          "transition-[height,border-radius,box-shadow,max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none",
+          "transition-[height,box-shadow,max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none",
           isRecording && !chatOpen ? RECORDING_SURFACE : "bg-background shadow-sm",
           chatOpen
-            ? "rounded-3xl border-black/10 shadow-elevated dark:border-white/14"
-            : "rounded-full border-black/10 dark:border-white/14",
+            ? "border-black/10 shadow-elevated dark:border-white/14"
+            : "border-black/10 dark:border-white/14",
           "focus-within:border-black/15 focus-within:ring-[3px] focus-within:ring-primary/8 dark:focus-within:border-white/22",
           hideInput && "max-w-0 border-transparent opacity-0 pointer-events-none"
         )}
@@ -114,7 +114,7 @@ export default function NoteBottomBar({
           aria-hidden={!chatOpen}
           inert={!chatOpen}
           className={cn(
-            "flex min-h-0 flex-1 flex-col overflow-hidden transition-[opacity,transform] duration-300 motion-reduce:transition-none",
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-[opacity,transform] duration-300 motion-reduce:transition-none",
             chatOpen ? "translate-y-0 opacity-100 delay-100" : "translate-y-2 opacity-0"
           )}
         >
@@ -122,7 +122,7 @@ export default function NoteBottomBar({
         </div>
         {!hideInput && (
           <ChatInput
-            className="w-full"
+            className="w-full min-w-0"
             variant="note"
             agentState={agentState}
             partialTranscript=""

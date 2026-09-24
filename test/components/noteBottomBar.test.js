@@ -56,7 +56,7 @@ test("the ask capsule never transitions its surface between the two states", asy
   for (const isRecording of [false, true]) {
     const html = await renderBottomBar(t, { isRecording });
     assert.ok(
-      html.includes("transition-[height,border-radius,box-shadow,max-width,opacity]"),
+      html.includes("transition-[height,box-shadow,max-width,opacity]"),
       `capsule transition is property-scoped (isRecording=${isRecording})`
     );
   }
@@ -69,6 +69,9 @@ test("in-view chat expands the existing capsule around one composer", async (t) 
   });
 
   assert.ok(html.includes("rounded-3xl"));
+  assert.ok(html.includes("max-w-[600px]"));
+  assert.ok(!html.includes("rounded-full border-black/10"), "the panel keeps one radius throughout expansion");
+  assert.ok(!html.includes("border-radius,box-shadow"), "height changes do not morph the corners");
   assert.ok(html.includes("data-note-chat-header"));
   assert.equal((html.match(/<textarea/g) ?? []).length, 1);
 });
