@@ -12,7 +12,7 @@ Saving a creator does not promise a discount. The client checks the account, ses
 
 The API keeps the first saved creator permanently. Anonymous purchase remains supported; commission waits for account linking and a verified registered creator. Restore and app return reconcile billing; signed server payment events own commissions. Personal annual purchases can earn commission without this monthly discount. Workspace purchases are excluded by the backend.
 
-**Workspace-member entry remains open:** main represents workspace-only access as subscribed, and its Plans & Billing route manages that existing access. This port retains that behavior. The backend permits a separate personal purchase by a workspace member, but this client does not yet provide a separate entry for it. Josh chose to retain the current UI and hold this part of launch on September 24. A later separate entry must preserve workspace access before the full personal-purchase scope can be accepted.
+**Workspace-member entry is a deferred exception:** main represents workspace-only access as subscribed, and its Plans & Billing route manages that existing access. This port retains that behavior. The backend permits a separate personal purchase by a workspace member, but this client does not yet provide a separate entry for it. Josh chose to retain the current UI and explicitly confirmed this omission does not block launch on September 24. A later separate entry must preserve workspace access; its absence is an accepted deferred case, not passed acceptance or a programme launch gate.
 
 ## Configuration and consent
 
