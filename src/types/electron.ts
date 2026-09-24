@@ -2911,6 +2911,7 @@ declare global {
         args: Record<string, unknown>
       ) => Promise<ConnectorPrepareResult>;
       connectorCommit?: (actionId: string, edits: ConnectorEdits) => Promise<ConnectorCommitResult>;
+      /** Cancels a pending approval, or a direct run (by its runId) still waiting on policy. */
       connectorCancel?: (
         actionId: string,
         reason: ConnectorCancelReason
@@ -2918,7 +2919,8 @@ declare global {
       connectorRunDirect?: (
         connectorId: string,
         action: string,
-        args: Record<string, unknown>
+        args: Record<string, unknown>,
+        runId?: string
       ) => Promise<ConnectorDirectResult>;
       connectorRecentActions?: (
         connectorId: string,

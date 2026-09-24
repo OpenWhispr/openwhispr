@@ -1274,8 +1274,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("connector-prepare", connectorId, action, args),
   connectorCommit: (actionId, edits) => ipcRenderer.invoke("connector-commit", actionId, edits),
   connectorCancel: (actionId, reason) => ipcRenderer.invoke("connector-cancel", actionId, reason),
-  connectorRunDirect: (connectorId, action, args) =>
-    ipcRenderer.invoke("connector-run-direct", connectorId, action, args),
+  connectorRunDirect: (connectorId, action, args, runId) =>
+    ipcRenderer.invoke("connector-run-direct", connectorId, action, args, runId),
   connectorRecentActions: (connectorId, limit) =>
     ipcRenderer.invoke("connector-recent-actions", connectorId, limit),
   connectorFindContacts: (query) => ipcRenderer.invoke("connector-find-contacts", query),

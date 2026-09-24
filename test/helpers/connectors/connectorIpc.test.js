@@ -64,6 +64,38 @@ test("each channel reaches the manager, with policy only where something can lea
   assert.equal(policyCalls.length, 3);
 });
 
+test("a cancel that lands while a direct run waits on policy stops it", async () => {
+  const { registerConnectorIpc } = await load();
+  const ipcMain = fakeIpcMain();
+  const manager = fakeManager();
+  const policyWaits = [];
+  registerConnectorIpc({
+    ipcMain,
+    manager,
+    getPolicyState: () => new Promise((resolve) => policyWaits.push(resolve)),
+  });
+  const h = (channel) => ipcMain.handlers.get(channel);
+
+  const cancelledRun = h("connector-run-direct")({}, "email", "draft", { to: ["a@b.co"] }, "run-1");
+  assert.deepEqual(await h("connector-cancel")({}, "run-1", "cancelled_by_user"), {
+    cancelled: true,
+  });
+  policyWaits.shift()("allowed");
+  assert.deepEqual(await cancelledRun, { state: "not_sent", reason: "cancelled" });
+
+  // Once policy resolves the run is no longer tracked, so a later cancel with
+  // the same id is an ordinary (pending approval) cancel.
+  const run = h("connector-run-direct")({}, "email", "draft", { to: ["a@b.co"] }, "run-2");
+  policyWaits.shift()("allowed");
+  await run;
+  await h("connector-cancel")({}, "run-2", "cancelled_by_user");
+
+  assert.deepEqual(
+    manager.calls.map((call) => call.name),
+    ["runDirect", "cancel"]
+  );
+});
+
 test("malformed arguments never reach the manager", async () => {
   const { registerConnectorIpc } = await load();
   const ipcMain = fakeIpcMain();

@@ -32,11 +32,51 @@ test("email_draft opens a draft through the main process", async (t) => {
     body: "Tomorrow at 1?",
   });
 
-  assert.deepEqual(calls, [
-    ["email", "draft", { target: "gmail", to: ["gabe@example.com"], cc: [], subject: "Lunch", body: "Tomorrow at 1?" }],
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].slice(0, 3), [
+    "email",
+    "draft",
+    { target: "gmail", to: ["gabe@example.com"], cc: [], subject: "Lunch", body: "Tomorrow at 1?" },
   ]);
+  assert.equal(typeof calls[0][3], "string");
   assert.equal(result.data.status, "draft_opened");
   assert.equal(result.data.bodyCopied, false);
+});
+
+test("email_draft cancels its run in main when the turn is cancelled mid-call", async (t) => {
+  const cancels = [];
+  let finishRun;
+  let runId;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: (_connector, _action, _args, id) => {
+          runId = id;
+          return new Promise((resolve) => {
+            finishRun = resolve;
+          });
+        },
+        connectorCancel: async (...args) => {
+          cancels.push(args);
+          return { cancelled: true };
+        },
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  const controller = new AbortController();
+
+  const pending = createEmailDraftTool("gmail").execute(
+    { to: ["a@example.com"], subject: "s", body: "b" },
+    countingContext(controller.signal)
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  controller.abort();
+  finishRun({ state: "not_sent", reason: "cancelled" });
+  const result = await pending;
+
+  assert.deepEqual(cancels, [[runId, "cancelled_by_user"]]);
+  assert.equal(result.data.status, "not_sent");
 });
 
 test("email_draft asks for addresses instead of guessing", async (t) => {

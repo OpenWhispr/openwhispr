@@ -56,14 +56,31 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
       }
 
       if (context?.signal.aborted) return notSentResult("cancelled");
-      const result = await window.electronAPI?.connectorRunDirect?.("email", "draft", {
-        target,
-        to,
-        cc,
-        subject: typeof args.subject === "string" ? args.subject : "",
-        body: typeof args.body === "string" ? args.body : "",
-      });
+      // Main may still be resolving policy when the user presses Esc; the
+      // cancel names this run so main drops it instead of opening a window.
+      const runId = crypto.randomUUID();
+      const cancelRun = () =>
+        void window.electronAPI?.connectorCancel?.(runId, "cancelled_by_user");
+      context?.signal.addEventListener("abort", cancelRun, { once: true });
+      let result;
+      try {
+        result = await window.electronAPI?.connectorRunDirect?.(
+          "email",
+          "draft",
+          {
+            target,
+            to,
+            cc,
+            subject: typeof args.subject === "string" ? args.subject : "",
+            body: typeof args.body === "string" ? args.body : "",
+          },
+          runId
+        );
+      } finally {
+        context?.signal.removeEventListener("abort", cancelRun);
+      }
       if (!result) return unavailableResult("connectors_unavailable");
+      if (result.state === "not_sent") return notSentResult(result.reason);
       if (result.state === "unavailable") return unavailableResult(result.reason);
       if (result.state === "failed") return failedResult(result.errorCode, result.message);
 
