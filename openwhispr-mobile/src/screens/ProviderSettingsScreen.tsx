@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Linking, Platform, View } from 'react-native';
+import { Keyboard, Linking, Platform, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { Toast, type ToastType } from '@/components/ui/Toast';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { UserConfig } from '@/types';
@@ -30,6 +32,7 @@ import { type InferenceMode, type InferenceSelection } from '@shared/ai/routing'
 import { getMobileProvidersForScope, resolveMobileInferenceRoute } from '@/lib/mobileProviders';
 
 type Picker = 'provider' | 'model';
+const TOAST_MS = 3000;
 const PROVIDER_SETUP_URLS: Record<string, string> = {
   openai: 'https://platform.openai.com/api-keys',
   groq: 'https://console.groq.com/keys',
@@ -53,10 +56,18 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [discoveredModels, setDiscoveredModels] = useState<{ id: string; name: string }[]>([]);
+  const [toast, setToast] = useState<{ message: string; type: ToastType; visible: boolean }>({
+    message: '',
+    type: 'info',
+    visible: false,
+  });
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const insets = useSafeAreaInsets();
   const diagnosticController = useRef<AbortController | null>(null);
   useEffect(
     () => (): void => {
       diagnosticController.current?.abort();
+      if (toastTimer.current) clearTimeout(toastTimer.current);
     },
     [],
   );
@@ -98,6 +109,15 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     };
   }, [providerId, selection.endpoint, selection.mode]);
 
+  function showToast(message: string, type: ToastType): void {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ message, type, visible: true });
+    toastTimer.current = setTimeout(
+      () => setToast((current) => ({ ...current, visible: false })),
+      TOAST_MS,
+    );
+  }
+
   function openPicker(next: Picker): void {
     setPicker(picker === next ? null : next);
   }
@@ -136,11 +156,12 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   async function prepareSelection(
     requireModel = true,
     saveCredential = true,
+    onInvalid: (message: string) => void = setError,
   ): Promise<InferenceSelection | null> {
     let saved: InferenceSelection = { mode: selection.mode };
     if (selection.mode === 'providers') {
       if (!provider || (requireModel && !modelId.trim())) {
-        setError('Choose a provider and enter a model ID.');
+        onInvalid('Choose a provider and enter a model ID.');
         return null;
       }
       const endpoint = normalizeBaseUrl(
@@ -148,12 +169,12 @@ export function ProviderSettingsScreen(): React.JSX.Element {
       );
       if (provider.id === 'custom') {
         if (!isSecureHttpEndpoint(endpoint)) {
-          setError('Use HTTPS, or HTTP for a private-network host.');
+          onInvalid('Use HTTPS, or HTTP for a private-network host.');
           return null;
         }
         const parsed = new URL(endpoint);
         if (parsed.username || parsed.password || parsed.search || parsed.hash) {
-          setError('Remove credentials, query parameters, and fragments from the endpoint URL.');
+          onInvalid('Remove credentials, query parameters, and fragments from the endpoint URL.');
           return null;
         }
       }
@@ -167,7 +188,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         setConfigured(true);
       }
       if (provider.id !== 'custom' && !hasCredential) {
-        setError('Enter a credential for this provider.');
+        onInvalid('Enter a credential for this provider.');
         return null;
       }
       saved = {
@@ -233,13 +254,16 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   }
 
   async function diagnose(action: 'test' | 'discover'): Promise<void> {
+    // The result toast sits at the bottom of the screen, where the keyboard would cover it.
+    Keyboard.dismiss();
     setBusy(true);
     setError(null);
     setNotice(null);
     const controller = new AbortController();
     diagnosticController.current = controller;
+    const showError = (message: string): void => showToast(message, 'error');
     try {
-      const draft = await prepareSelection(action === 'test', false);
+      const draft = await prepareSelection(action === 'test', false, showError);
       if (!draft) return;
       const resolved = resolveMobileInferenceRoute({
         scope,
@@ -248,7 +272,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         policy: await getProviderPolicy(),
       });
       if (!resolved.ok || resolved.route.mode !== 'providers') {
-        setError(
+        showError(
           !resolved.ok && resolved.code.startsWith('POLICY')
             ? 'Organization policy does not currently permit this provider check.'
             : 'Check your provider, model, and endpoint before testing.',
@@ -263,10 +287,11 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         });
         if (controller.signal.aborted) return;
         setDiscoveredModels(result.models);
-        setNotice(
+        showToast(
           result.models.length
             ? 'Model catalog loaded. Inference access has not been verified.'
             : 'No models were listed. You can still enter a model ID manually.',
+          'info',
         );
       } else {
         const result = await testProviderConnection({
@@ -275,15 +300,17 @@ export function ProviderSettingsScreen(): React.JSX.Element {
           apiKey: apiKey.trim() || undefined,
         });
         if (controller.signal.aborted) return;
-        setNotice(
-          result.verification === 'inference'
-            ? 'Text inference succeeded for this model.'
-            : 'Model catalog accessible. Transcription and inference access have not been verified.',
-        );
+        if (result.verification === 'inference')
+          showToast('Text inference succeeded for this model.', 'success');
+        else
+          showToast(
+            'Model catalog accessible. Transcription and inference access have not been verified.',
+            'info',
+          );
       }
     } catch (failure: unknown) {
       if (!controller.signal.aborted)
-        setError(
+        showError(
           failure instanceof ProviderExecutionError
             ? failure.message
             : 'Unable to check this provider. Check the endpoint and connection, then try again.',
@@ -339,155 +366,169 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   }
 
   return (
-    <SettingsScreen keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
-      <InferenceModePicker
-        scope={scope === 'dictation' || scope === 'upload' ? 'speech' : 'text'}
-        title="Mode"
-        selectedMode={selection.mode}
-        onSelect={chooseMode}
-      />
-      {unsetNote ? (
-        <Text className="-mt-4 mb-6 px-8 text-[13px] text-secondaryLabel">{unsetNote}</Text>
-      ) : null}
-      {selection.mode === 'providers' && provider ? (
-        <>
-          <SettingsSection title="Connection">
-            <SettingsRow
-              icon="network"
-              mdIcon="Network"
-              iconStyle="line"
-              title="Provider"
-              subtitle={provider.name}
-              onPress={busy ? undefined : () => openPicker('provider')}
-            />
-            {picker === 'provider' &&
-              providers.map((item) =>
-                choice(item.name, item.id === provider.id, () => chooseProvider(item.id)),
-              )}
-            {models.length > 0 ? (
+    <View className="flex-1 bg-systemBackground">
+      <SettingsScreen keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
+        <InferenceModePicker
+          scope={scope === 'dictation' || scope === 'upload' ? 'speech' : 'text'}
+          title="Mode"
+          selectedMode={selection.mode}
+          onSelect={chooseMode}
+        />
+        {unsetNote ? (
+          <Text className="-mt-4 mb-6 px-8 text-[13px] text-secondaryLabel">{unsetNote}</Text>
+        ) : null}
+        {selection.mode === 'providers' && provider ? (
+          <>
+            <SettingsSection title="Connection">
               <SettingsRow
-                icon="square.stack"
-                mdIcon="Layers"
+                icon="network"
+                mdIcon="Network"
                 iconStyle="line"
-                title="Model"
-                subtitle={models.find((model) => model.id === modelId)?.name ?? modelId}
-                onPress={busy ? undefined : () => openPicker('model')}
+                title="Provider"
+                subtitle={provider.name}
+                onPress={busy ? undefined : () => openPicker('provider')}
               />
-            ) : null}
-            {picker === 'model' &&
-              models.map((model) =>
-                choice(model.name, model.id === modelId, () => {
-                  setSelection({ ...selection, modelId: model.id });
-                  setPicker(null);
-                  setNotice(null);
-                }),
-              )}
-          </SettingsSection>
-          <SettingsSection
-            borderless
-            title={configured ? 'Credential saved on this device' : 'Credentials'}
-          >
-            <View className="gap-3 p-1">
-              {provider.id === 'custom' ? (
-                <>
-                  <Input
-                    label="Endpoint URL"
-                    accessibilityLabel="Endpoint URL"
-                    value={selection.endpoint ?? ''}
-                    onChangeText={(endpoint) => {
-                      setSelection({ ...selection, endpoint });
-                      clearInputs();
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType="url"
-                    placeholder="https://your-server.example/v1"
-                    editable={!busy}
-                  />
-                  <Text className="text-[13px] text-secondaryLabel">
-                    On iPhone, localhost refers to this iPhone. Use your server's LAN address for a
-                    local server.
-                  </Text>
-                </>
-              ) : null}
-              {!provider.models.length ? (
-                <Input
-                  label="Model ID"
-                  accessibilityLabel="Model ID"
-                  value={modelId}
-                  onChangeText={(nextModel) => setSelection({ ...selection, modelId: nextModel })}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!busy}
+              {picker === 'provider' &&
+                providers.map((item) =>
+                  choice(item.name, item.id === provider.id, () => chooseProvider(item.id)),
+                )}
+              {models.length > 0 ? (
+                <SettingsRow
+                  icon="square.stack"
+                  mdIcon="Layers"
+                  iconStyle="line"
+                  title="Model"
+                  subtitle={models.find((model) => model.id === modelId)?.name ?? modelId}
+                  onPress={busy ? undefined : () => openPicker('model')}
                 />
               ) : null}
-              <Input
-                label={provider.id === 'custom' ? 'API key (optional)' : 'API key'}
-                accessibilityLabel="API key"
-                value={apiKey}
-                onChangeText={setApiKey}
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder={configured ? 'Leave blank to keep saved credential' : 'Enter API key'}
-                editable={!busy}
-              />
-              {PROVIDER_SETUP_URLS[provider.id] ? (
-                <Button
-                  variant="ghost"
-                  disabled={busy}
-                  onPress={async (): Promise<void> => {
-                    try {
-                      await Linking.openURL(PROVIDER_SETUP_URLS[provider.id]);
-                    } catch {
-                      setError('Unable to open the provider website. Please try again.');
-                    }
+              {picker === 'model' &&
+                models.map((model) =>
+                  choice(model.name, model.id === modelId, () => {
+                    setSelection({ ...selection, modelId: model.id });
+                    setPicker(null);
+                    setNotice(null);
+                  }),
+                )}
+            </SettingsSection>
+            <SettingsSection
+              borderless
+              title={configured ? 'Credential saved on this device' : 'Credentials'}
+            >
+              <View className="gap-3 p-1">
+                {provider.id === 'custom' ? (
+                  <>
+                    <Input
+                      label="Endpoint URL"
+                      accessibilityLabel="Endpoint URL"
+                      value={selection.endpoint ?? ''}
+                      onChangeText={(endpoint) => {
+                        setSelection({ ...selection, endpoint });
+                        clearInputs();
+                      }}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="url"
+                      placeholder="https://your-server.example/v1"
+                      editable={!busy}
+                    />
+                    <Text className="text-[13px] text-secondaryLabel">
+                      On iPhone, localhost refers to this iPhone. Use your server's LAN address for
+                      a local server.
+                    </Text>
+                  </>
+                ) : null}
+                {!provider.models.length ? (
+                  <Input
+                    label="Model ID"
+                    accessibilityLabel="Model ID"
+                    value={modelId}
+                    onChangeText={(nextModel) => setSelection({ ...selection, modelId: nextModel })}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!busy}
+                  />
+                ) : null}
+                <Input
+                  label={provider.id === 'custom' ? 'API key (optional)' : 'API key'}
+                  accessibilityLabel="API key"
+                  value={apiKey}
+                  onChangeText={(next) => {
+                    // A paste or password-manager fill arrives as one change; typing adds one character.
+                    if (next.length - apiKey.length > 1) Keyboard.dismiss();
+                    setApiKey(next);
                   }}
-                >
-                  Get provider credentials
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder={
+                    configured ? 'Leave blank to keep saved credential' : 'Enter API key'
+                  }
+                  editable={!busy}
+                />
+                {PROVIDER_SETUP_URLS[provider.id] ? (
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    onPress={async (): Promise<void> => {
+                      try {
+                        await Linking.openURL(PROVIDER_SETUP_URLS[provider.id]);
+                      } catch {
+                        setError('Unable to open the provider website. Please try again.');
+                      }
+                    }}
+                  >
+                    Get provider credentials
+                  </Button>
+                ) : null}
+                {configured ? (
+                  <Button variant="ghost" disabled={busy} onPress={removeCredential}>
+                    Remove credential
+                  </Button>
+                ) : null}
+              </View>
+            </SettingsSection>
+            <SettingsSection borderless title="Verify access">
+              <View className="gap-3 p-1">
+                <Text className="text-[13px] text-secondaryLabel">
+                  Checks use the key entered above without saving it. Text checks send a short test
+                  prompt and may incur provider charges; transcription checks verify catalog access
+                  only.
+                </Text>
+                <Button variant="outline" disabled={busy} onPress={() => diagnose('test')}>
+                  Check connection
                 </Button>
-              ) : null}
-              {configured ? (
-                <Button variant="ghost" disabled={busy} onPress={removeCredential}>
-                  Remove credential
-                </Button>
-              ) : null}
-            </View>
-          </SettingsSection>
-          <SettingsSection borderless title="Verify access">
-            <View className="gap-3 p-1">
-              <Text className="text-[13px] text-secondaryLabel">
-                Checks use the key entered above without saving it. Text checks send a short test
-                prompt and may incur provider charges; transcription checks verify catalog access
-                only.
-              </Text>
-              <Button variant="outline" disabled={busy} onPress={() => diagnose('test')}>
-                Check connection
-              </Button>
-              {provider.id === 'custom' || provider.id === 'openrouter' ? (
-                <Button variant="outline" disabled={busy} onPress={() => diagnose('discover')}>
-                  Discover models
-                </Button>
-              ) : null}
-            </View>
-          </SettingsSection>
-        </>
-      ) : null}
-      <View className="gap-3 px-4">
-        {error ? (
-          <Text accessibilityRole="alert" className="text-[14px] text-systemRed">
-            {error}
-          </Text>
+                {provider.id === 'custom' || provider.id === 'openrouter' ? (
+                  <Button variant="outline" disabled={busy} onPress={() => diagnose('discover')}>
+                    Discover models
+                  </Button>
+                ) : null}
+              </View>
+            </SettingsSection>
+          </>
         ) : null}
-        {notice ? (
-          <Text accessibilityLiveRegion="polite" className="text-[14px] text-secondaryLabel">
-            {notice}
-          </Text>
-        ) : null}
-        <Button loading={busy} onPress={save}>
-          Save selection
-        </Button>
-      </View>
-    </SettingsScreen>
+        <View className="gap-3 px-4">
+          {error ? (
+            <Text accessibilityRole="alert" className="text-[14px] text-systemRed">
+              {error}
+            </Text>
+          ) : null}
+          {notice ? (
+            <Text accessibilityLiveRegion="polite" className="text-[14px] text-secondaryLabel">
+              {notice}
+            </Text>
+          ) : null}
+          <Button loading={busy} onPress={save}>
+            Save selection
+          </Button>
+        </View>
+      </SettingsScreen>
+      <Toast
+        message={toast.message}
+        visible={toast.visible}
+        type={toast.type}
+        bottomOffset={insets.bottom + 16}
+      />
+    </View>
   );
 }

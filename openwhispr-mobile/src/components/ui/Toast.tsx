@@ -1,19 +1,26 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Animated, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Image } from 'expo-image';
 import { BRAND, iosColor } from '@/config/colors';
 
+export type ToastType = 'success' | 'error' | 'info';
+
 interface ToastProps {
   message: string;
   visible: boolean;
-  type?: 'success' | 'error' | 'info';
+  type?: ToastType;
   bottomOffset?: number;
 }
 
 export function Toast({ message, visible, type = 'info', bottomOffset = 24 }: ToastProps) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
+
+  // The toast ignores touches, so VoiceOver would never reach it on its own.
+  useEffect(() => {
+    if (visible && message) AccessibilityInfo.announceForAccessibility(message);
+  }, [visible, message]);
 
   useEffect(() => {
     if (visible) {
@@ -54,6 +61,7 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     alignSelf: 'center',
+    maxWidth: '92%',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -68,6 +76,7 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   text: {
+    flexShrink: 1,
     fontSize: 14,
     fontWeight: '500',
     color: iosColor('label'),

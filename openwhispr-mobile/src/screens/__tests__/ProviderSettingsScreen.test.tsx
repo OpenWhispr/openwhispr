@@ -1,4 +1,5 @@
 import React from 'react';
+import { Keyboard } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
@@ -12,11 +13,19 @@ let mockActiveMode = 'cloud';
 const mockCredentialStatus = jest.fn().mockResolvedValue({ isConfigured: false });
 let mockConfig: Record<string, unknown> | null = null;
 let mockScope: string | undefined;
+const MockText = require('react-native').Text;
 
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/GradientGlassSurface', () => ({ GradientGlassSurface: () => null }));
 jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ scope: mockScope }) }));
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+jest.mock('@/components/ui/Toast', () => ({
+  Toast: ({ message, visible, type }: { message: string; visible: boolean; type: string }) =>
+    visible ? <MockText testID={`toast-${type}`}>{message}</MockText> : null,
+}));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: Object.assign(
     (selector: (state: unknown) => unknown) =>
@@ -217,7 +226,7 @@ it('reports catalog-only checks without claiming inference access or changing th
   enableProviders();
   fireEvent.changeText(screen.getByLabelText('API key'), 'test-key');
   fireEvent.press(screen.getByText('Check connection'));
-  await screen.findByText(
+  expect(await screen.findByTestId('toast-info')).toHaveTextContent(
     'Model catalog accessible. Transcription and inference access have not been verified.',
   );
   expect(mockTestConnection).toHaveBeenCalledWith(
@@ -252,8 +261,46 @@ it('blocks diagnostic network calls when organization policy is unresolved', asy
   enableProviders();
   fireEvent.changeText(screen.getByLabelText('API key'), 'test-key');
   fireEvent.press(screen.getByText('Check connection'));
-  await screen.findByText('Organization policy does not currently permit this provider check.');
+  expect(await screen.findByTestId('toast-error')).toHaveTextContent(
+    'Organization policy does not currently permit this provider check.',
+  );
   expect(mockTestConnection).not.toHaveBeenCalled();
+});
+
+it('reports a passing inference check as a success toast', async () => {
+  mockTestConnection.mockResolvedValue({ ok: true, verification: 'inference' });
+  mockScope = 'cleanup';
+  render(<ProviderSettingsScreen />);
+  enableProviders();
+  fireEvent.changeText(screen.getByLabelText('API key'), 'test-key');
+  fireEvent.press(screen.getByText('Check connection'));
+  expect(await screen.findByTestId('toast-success')).toHaveTextContent(
+    'Text inference succeeded for this model.',
+  );
+});
+
+it('reports a check without a key as an error toast and closes the keyboard', async () => {
+  const dismiss = jest.spyOn(Keyboard, 'dismiss');
+  render(<ProviderSettingsScreen />);
+  enableProviders();
+  fireEvent.press(screen.getByText('Check connection'));
+  expect(dismiss).toHaveBeenCalled();
+  expect(await screen.findByTestId('toast-error')).toHaveTextContent(
+    'Enter a credential for this provider.',
+  );
+  expect(mockTestConnection).not.toHaveBeenCalled();
+});
+
+it('closes the keyboard when a key is pasted, but not while typing', () => {
+  const dismiss = jest.spyOn(Keyboard, 'dismiss');
+  render(<ProviderSettingsScreen />);
+  enableProviders();
+  const input = screen.getByLabelText('API key');
+  fireEvent.changeText(input, 's');
+  fireEvent.changeText(input, 'sk');
+  expect(dismiss).not.toHaveBeenCalled();
+  fireEvent.changeText(input, 'sk-pasted-provider-key');
+  expect(dismiss).toHaveBeenCalledTimes(1);
 });
 
 it('checks a provider from On-Device mode, since a check sends no user content', async () => {
@@ -262,9 +309,7 @@ it('checks a provider from On-Device mode, since a check sends no user content',
   enableProviders();
   fireEvent.changeText(screen.getByLabelText('API key'), 'test-key');
   fireEvent.press(screen.getByText('Check connection'));
-  await screen.findByText(
-    'Model catalog accessible. Transcription and inference access have not been verified.',
-  );
+  await screen.findByTestId('toast-info');
   expect(mockTestConnection).toHaveBeenCalled();
 });
 
@@ -295,7 +340,9 @@ it('discovers custom models before choosing a model, without silently selecting 
   chooseProvider('Custom');
   fireEvent.changeText(screen.getByLabelText('Endpoint URL'), 'https://example.com/v1');
   fireEvent.press(screen.getByText('Discover models'));
-  await screen.findByText('Model catalog loaded. Inference access has not been verified.');
+  expect(await screen.findByTestId('toast-info')).toHaveTextContent(
+    'Model catalog loaded. Inference access has not been verified.',
+  );
   expect(screen.getByLabelText('Model ID').props.value).toBe('');
   fireEvent.press(screen.getByText('Model'));
   fireEvent.press(screen.getByText('Server Model'));
