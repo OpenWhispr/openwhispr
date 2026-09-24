@@ -239,13 +239,13 @@ function useSettingsInternal() {
   );
   const policySettled = isPolicySettled(policySnapshot);
   // A sign-out before the policy fetch starts leaves the policy idle, so only
-  // the account scope change says this window's deferred sync can now apply.
-  const [accountScopeChanges, setAccountScopeChanges] = useState(0);
+  // the cleared account scope says this window's deferred sync can now apply.
+  const [signOuts, setSignOuts] = useState(0);
   useEffect(
     () =>
-      window.electronAPI?.onActiveAccountScopeChanged?.(() =>
-        setAccountScopeChanges((count) => count + 1)
-      ),
+      window.electronAPI?.onActiveAccountScopeChanged?.((scope) => {
+        if (!scope) setSignOuts((count) => count + 1);
+      }),
     []
   );
 
@@ -283,7 +283,7 @@ function useSettingsInternal() {
     preferredLanguage,
     localServerPrefs,
     policySettled,
-    accountScopeChanges,
+    signOuts,
   ]);
 
   return {
