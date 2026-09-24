@@ -512,7 +512,7 @@
       "couldNotDeleteDescription": "ربما تمت إزالة هذا النص المفرَّغ بالفعل.",
       "couldNotDeleteDescriptionGeneric": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "empty": "لا توجد أي نصوص مفرَّغة حتى الآن",
-      "emptyDescription": "اضغط مفتاح الاختصار في أي تطبيق وابدأ الحديث. يُحفظ كل نص هنا بخصوصية على جهازك.",
+      "emptyDescription": "ستظهر إملاءاتك هنا.",
       "sectionTitle": "النصوص المكتوبة",
       "dataRetentionDisabled": "الاحتفاظ بالبيانات قيد الإيقاف. لا يتم حفظ النصوص المفرَّغة والصوت في السجل.",
       "press": "اضغط",
@@ -600,9 +600,6 @@
       "disconnect": "قطع الاتصال",
       "disconnectConfirm": "هل تريد قطع اتصال {{email}}؟",
       "disconnectDescription": "لن يتم تسجيل ملاحظات الاجتماع من هذا التقويم بعد الآن.",
-      "systemAudioRequired": "إذن صوت النظام مطلوب",
-      "systemAudioDescription": "لتفريغ الاجتماعات، يحتاج OpenWhispr إلى إذن صوت النظام لالتقاط صوت المشاركين الآخرين. نحن لا نسجل شاشتك أبدًا. سيتم توجيهك إلى إعدادات النظام لتمكين ذلك.",
-      "openSettings": "فتح إعدادات النظام",
       "connectFailed": "فشل الاتصال",
       "connectFailedDescription": "حدث خطأ ما أثناء الاتصال بتقويم Google. يرجى المحاولة مرة أخرى."
     },
@@ -900,10 +897,6 @@
       "examples": {
         "linkedinTrigger": "حسابي على LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "مطالبة إعادة الكتابة",
-        "rewriteText": "أعد كتابة هذا ليكون أكثر إيجازًا واحترافية",
-        "introTrigger": "بريد المقدمة",
-        "introText": "مرحبًا، أود أن نجد بعض الوقت للدردشة في وقت لاحق من هذا الأسبوع…",
         "signoffTrigger": "ختام الرسالة",
         "signoffText": "أطيب التحيات، Alex · alex@example.com"
       },
@@ -912,7 +905,6 @@
     "emptyTitle": "قاموسك فارغ",
     "emptyDescription": "أضف الكلمات التي يجب أن يكتبها {{agentName}} بشكل صحيح دائمًا: الأسماء، الأدوات، الاختصارات.",
     "addFirstWord": "أضف كلمتك الأولى",
-    "importList": "استيراد قائمة",
     "agentDefault": "تمت الإضافة افتراضيًا",
     "promptLimitNotice": "عدد أحرف قاموسك: {{chars}}. لا تقرأ نماذج Groq وWhisper سوى بضع مئات من الأحرف الأخيرة منه، لذا تعمل القوائم الأقصر بشكل أفضل معها. أما النماذج الأخرى فتحصل على القائمة كاملة."
   },

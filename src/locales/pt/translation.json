@@ -616,7 +616,7 @@
       "couldNotDeleteDescription": "Esta transcrição pode já ter sido removida.",
       "couldNotDeleteDescriptionGeneric": "Algo deu errado. Tente novamente.",
       "empty": "Ainda sem transcrições",
-      "emptyDescription": "Pressione o seu atalho em qualquer app e comece a falar. Cada transcrição é salva aqui, de forma privada, no seu dispositivo.",
+      "emptyDescription": "Seus ditados aparecerão aqui.",
       "sectionTitle": "Transcrições",
       "dataRetentionDisabled": "A retenção de dados está desativada. Transcrições e áudio não são salvos no histórico.",
       "press": "Pressione",
@@ -3298,10 +3298,6 @@
       "examples": {
         "linkedinTrigger": "Meu LinkedIn",
         "linkedinText": "linkedin.com/in/voce",
-        "rewriteTrigger": "Prompt de reescrita",
-        "rewriteText": "Reescreva isto para ficar mais conciso e profissional",
-        "introTrigger": "Email de apresentação",
-        "introText": "Olá, adoraria encontrar um horário para conversar esta semana…",
         "signoffTrigger": "Assinatura",
         "signoffText": "Abraços, Alex · alex@example.com"
       },
@@ -3310,7 +3306,6 @@
     "emptyTitle": "Seu dicionário está vazio",
     "emptyDescription": "Adicione palavras que {{agentName}} deve sempre acertar: nomes, ferramentas, siglas.",
     "addFirstWord": "Adicione sua primeira palavra",
-    "importList": "Importar uma lista",
     "agentDefault": "Adicionado por padrão"
   },
   "insights": {
@@ -3712,9 +3707,6 @@
       "disconnect": "Desconectar",
       "disconnectConfirm": "Desconectar {{email}}?",
       "disconnectDescription": "As notas de reunião não serão mais gravadas deste calendário.",
-      "systemAudioRequired": "Permissão de Áudio do Sistema Necessária",
-      "systemAudioDescription": "Para transcrever reuniões, o OpenWhispr precisa da permissão de Áudio do Sistema para capturar o áudio dos outros participantes. Nunca gravamos a sua tela. Você será levado às Configurações do Sistema para ativá-la.",
-      "openSettings": "Abrir Configurações do Sistema",
       "connectFailed": "Falha na conexão",
       "connectFailedDescription": "Ocorreu um erro ao conectar ao Google Calendar. Tente novamente."
     },

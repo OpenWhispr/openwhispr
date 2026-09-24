@@ -143,32 +143,25 @@ test("the in-view chat always opens at two-thirds height and ignores content gro
   const { observeFloatingChatSize } = await load();
   const panel = { style: { height: "" } };
   const container = { clientHeight: 600 };
-  const messageContent = { scrollHeight: 160 };
-  const composer = { offsetHeight: 64 };
   const observed = [];
   let onResize;
   let disconnected = false;
 
-  const cleanup = observeFloatingChatSize(
-    { panel, container },
-    (callback) => {
-      onResize = callback;
-      return {
-        observe(element) {
-          observed.push(element);
-        },
-        disconnect() {
-          disconnected = true;
-        },
-      };
-    }
-  );
+  const cleanup = observeFloatingChatSize({ panel, container }, (callback) => {
+    onResize = callback;
+    return {
+      observe(element) {
+        observed.push(element);
+      },
+      disconnect() {
+        disconnected = true;
+      },
+    };
+  });
 
   assert.equal(panel.style.height, "400px");
   assert.deepEqual(observed, [container], "message and composer resizes cannot grow the panel");
 
-  composer.offsetHeight = 104;
-  messageContent.scrollHeight = 800;
   onResize();
   assert.equal(panel.style.height, "400px", "content changes scroll inside a fixed panel");
 
@@ -184,18 +177,13 @@ test("the note viewport caps the in-view chat in a short window", async () => {
   const { observeFloatingChatSize } = await load();
   const panel = { style: { height: "" } };
   const container = { clientHeight: 600 };
-  const messageContent = { scrollHeight: 500 };
   let onResize;
-  const stopSelected = observeFloatingChatSize(
-    { panel, container },
-    (callback) => {
-      onResize = callback;
-      return { observe() {}, disconnect() {} };
-    }
-  );
+  const stopSelected = observeFloatingChatSize({ panel, container }, (callback) => {
+    onResize = callback;
+    return { observe() {}, disconnect() {} };
+  });
   assert.equal(panel.style.height, "400px");
 
-  messageContent.scrollHeight = 2000;
   onResize();
   assert.equal(panel.style.height, "400px", "long chat history stays inside the panel");
 

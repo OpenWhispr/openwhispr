@@ -637,7 +637,7 @@
       "couldNotDeleteDescription": "Cette transcription a peut-être déjà été supprimée.",
       "couldNotDeleteDescriptionGeneric": "Une erreur est survenue. Veuillez réessayer.",
       "empty": "Aucune transcription pour le moment",
-      "emptyDescription": "Appuyez sur votre raccourci dans n’importe quelle app et parlez. Chaque transcription est enregistrée ici, en privé, sur votre appareil.",
+      "emptyDescription": "Vos dictées apparaîtront ici.",
       "sectionTitle": "Transcriptions",
       "dataRetentionDisabled": "La conservation des données est désactivée. Les transcriptions et l'audio ne sont pas sauvegardés dans l'historique.",
       "press": "Appuyez sur",
@@ -3650,10 +3650,6 @@
       "examples": {
         "linkedinTrigger": "Mon LinkedIn",
         "linkedinText": "linkedin.com/in/vous",
-        "rewriteTrigger": "Prompt de réécriture",
-        "rewriteText": "Réécris ceci de façon plus concise et professionnelle",
-        "introTrigger": "Email d'intro",
-        "introText": "Bonjour, j'aimerais trouver un moment pour échanger cette semaine…",
         "signoffTrigger": "Signature",
         "signoffText": "Cordialement, Alex · alex@example.com"
       },
@@ -3662,7 +3658,6 @@
     "emptyTitle": "Votre dictionnaire est vide",
     "emptyDescription": "Ajoutez les mots que {{agentName}} doit toujours reconnaître : noms, outils, acronymes.",
     "addFirstWord": "Ajoutez votre premier mot",
-    "importList": "Importer une liste",
     "agentDefault": "Ajouté par défaut"
   },
   "support": {
@@ -3882,9 +3877,6 @@
       "disconnect": "Déconnecter",
       "disconnectConfirm": "Déconnecter {{email}} ?",
       "disconnectDescription": "Les notes de réunion ne seront plus enregistrées depuis ce calendrier.",
-      "systemAudioRequired": "Autorisation Audio Système requise",
-      "systemAudioDescription": "Pour transcrire les réunions, OpenWhispr a besoin de l'autorisation Audio Système pour capturer l'audio des autres participants. Nous n'enregistrons jamais votre écran. Vous serez dirigé vers les Réglages Système pour l'activer.",
-      "openSettings": "Ouvrir les Réglages Système",
       "connectFailed": "Échec de la connexion",
       "connectFailedDescription": "Une erreur s'est produite lors de la connexion à Google Calendar. Veuillez réessayer."
     },

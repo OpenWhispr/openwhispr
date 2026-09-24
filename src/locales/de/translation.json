@@ -637,7 +637,7 @@
       "couldNotDeleteDescription": "Diese Transkription wurde möglicherweise bereits entfernt.",
       "couldNotDeleteDescriptionGeneric": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "empty": "Noch keine Transkriptionen",
-      "emptyDescription": "Drücke deinen Hotkey in einer beliebigen App und sprich los. Jede Transkription wird hier privat auf deinem Gerät gespeichert.",
+      "emptyDescription": "Deine Diktate erscheinen hier.",
       "sectionTitle": "Transkriptionen",
       "dataRetentionDisabled": "Datenaufbewahrung ist deaktiviert. Transkriptionen und Audio werden nicht im Verlauf gespeichert.",
       "press": "Drücken Sie",
@@ -3650,10 +3650,6 @@
       "examples": {
         "linkedinTrigger": "Mein LinkedIn",
         "linkedinText": "linkedin.com/in/du",
-        "rewriteTrigger": "Umschreib-Prompt",
-        "rewriteText": "Schreibe das prägnanter und professioneller um",
-        "introTrigger": "Intro-E-Mail",
-        "introText": "Hallo, ich würde mich freuen, diese Woche Zeit für ein Gespräch zu finden …",
         "signoffTrigger": "Grußformel",
         "signoffText": "Viele Grüße, Alex · alex@example.com"
       },
@@ -3662,7 +3658,6 @@
     "emptyTitle": "Dein Wörterbuch ist leer",
     "emptyDescription": "Füge Wörter hinzu, die {{agentName}} immer richtig erkennen soll: Namen, Tools, Abkürzungen.",
     "addFirstWord": "Füge dein erstes Wort hinzu",
-    "importList": "Liste importieren",
     "agentDefault": "Standardmäßig enthalten"
   },
   "support": {
@@ -3882,9 +3877,6 @@
       "disconnect": "Trennen",
       "disconnectConfirm": "{{email}} trennen?",
       "disconnectDescription": "Besprechungsnotizen werden von diesem Kalender nicht mehr aufgezeichnet.",
-      "systemAudioRequired": "Systemaudio-Berechtigung erforderlich",
-      "systemAudioDescription": "Zum Transkribieren von Meetings benötigt OpenWhispr die Systemaudio-Berechtigung, um den Ton anderer Teilnehmer aufzunehmen. Wir nehmen Ihren Bildschirm nie auf. Sie werden zu den Systemeinstellungen weitergeleitet, um diese zu aktivieren.",
-      "openSettings": "Systemeinstellungen öffnen",
       "connectFailed": "Verbindung fehlgeschlagen",
       "connectFailedDescription": "Beim Verbinden mit Google Calendar ist ein Fehler aufgetreten. Bitte versuche es erneut."
     },

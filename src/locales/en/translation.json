@@ -2987,10 +2987,10 @@
     }
   },
   "chat": {
-    "newChat": "New Chat",
+    "newChat": "New chat",
     "search": "Search conversations...",
     "archived": "Archived",
-    "noConversations": "No Assistant Chat",
+    "noConversations": "No chats yet",
     "noConversationsDescription": "Your chats with Assistant will appear here.",
     "noArchived": "No archived chats",
     "loadFailed": "Couldn't load chats",
@@ -3006,14 +3006,14 @@
     "deleteConfirm": "This conversation will be permanently deleted. This cannot be undone.",
     "editTitle": "Double-click to edit title",
     "untitled": "Untitled",
-    "searchChat": "Search Chat",
+    "searchChat": "Search chats",
     "searchTitle": "Search conversations",
     "searchDescription": "Search across all your conversations",
     "inputPlaceholder": "Ask anything about your note",
     "starters": {
       "todos": "List my recent to-dos",
-      "meeting": "Prepare me for next meet.",
-      "sharedNotes": "Highlight my notes shared"
+      "meeting": "Prepare me for my next meeting",
+      "sharedNotes": "Highlight my shared notes"
     }
   },
   "referral": {
@@ -3159,7 +3159,7 @@
       "undo": "Undo",
       "emptySpace": "No notes yet. Notes here are visible to everyone in {{space}}.",
       "emptyTeamHint": "Spaces shared with you will appear here.",
-      "emptyTeamTitle": "No shared space",
+      "emptyTeamTitle": "No shared spaces",
       "noteCount_one": "{{count}} note",
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "You no longer have access to {{space}}",
@@ -3295,9 +3295,9 @@
       "raw": "Raw",
       "aiSummary": "AI Summary",
       "saving": "Saving",
-      "transcriptEmptyTitle": "No Transcript Recorded",
-      "transcriptEmptyDescription": "Recording which are spoken will be presented here, start your recording now",
-      "startRecording": "Start Recording",
+      "transcriptEmptyTitle": "No transcript yet",
+      "transcriptEmptyDescription": "Start a recording and everything said will appear here.",
+      "startRecording": "Start recording",
       "generateSummary": "Generate AI Summary",
       "startWriting": "Start writing...",
       "staleIndicator": "Content has changed since enhancement",
@@ -3646,14 +3646,10 @@
       "emptyTitle": "Stuff you shouldn't have to say",
       "emptyTitleAccent": "twice",
       "emptyDescription": "Say a trigger word and OpenWhispr swaps it with your saved content, URLs, intros, sign-offs, prompts.",
-      "new": "New Snippet",
+      "new": "New snippet",
       "examples": {
         "linkedinTrigger": "My LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "Rewrite prompt",
-        "rewriteText": "Rewrite this to be more concise and professional",
-        "introTrigger": "Intro email",
-        "introText": "Hey, would love to find some time to chat later this week…",
         "signoffTrigger": "Sign off",
         "signoffText": "Best, Alex · alex@example.com"
       },
@@ -3662,7 +3658,6 @@
     "emptyTitle": "Add words to your dictionary",
     "emptyDescription": "Add words for {{agentName}} to always get right: names, tools, acronyms.",
     "addFirstWord": "Add your first word",
-    "importList": "Import a list",
     "agentDefault": "Added by default"
   },
   "support": {
@@ -3882,9 +3877,6 @@
       "disconnect": "Disconnect",
       "disconnectConfirm": "Disconnect {{email}}?",
       "disconnectDescription": "Meeting notes will no longer be recorded from this calendar.",
-      "systemAudioRequired": "System Audio Permission Required",
-      "systemAudioDescription": "To transcribe meetings, OpenWhispr needs the System Audio permission to capture other participants' audio. We never record your screen. You'll be taken to System Settings to enable it.",
-      "openSettings": "Open System Settings",
       "connectFailed": "Connection Failed",
       "connectFailedDescription": "Something went wrong while connecting Google Calendar. Please try again."
     },
@@ -4103,9 +4095,9 @@
     "conversationSelector": "Switch conversation",
     "history": "History",
     "quickActions": "Quick actions",
-    "generateSummary": "Generate Summary",
-    "makeTodos": "Make To Dos",
-    "createOutline": "Create Outline"
+    "generateSummary": "Generate summary",
+    "makeTodos": "Make to-dos",
+    "createOutline": "Create outline"
   },
   "transcriptionPreview": {
     "label": "Preview",

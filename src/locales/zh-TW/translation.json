@@ -637,7 +637,7 @@
       "couldNotDeleteDescription": "這筆轉錄記錄可能已被移除。",
       "couldNotDeleteDescriptionGeneric": "發生錯誤，請再試一次。",
       "empty": "目前沒有轉錄記錄",
-      "emptyDescription": "在任何應用程式中按下快捷鍵開始說話。每則轉錄都會私密地儲存在你的裝置上。",
+      "emptyDescription": "你的聽寫內容會顯示在這裡。",
       "sectionTitle": "轉錄記錄",
       "dataRetentionDisabled": "資料保留已關閉。轉錄和音訊不會儲存至歷史記錄。",
       "press": "按下",
@@ -3298,10 +3298,6 @@
       "examples": {
         "linkedinTrigger": "我的 LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "改寫提示詞",
-        "rewriteText": "把這段話改寫得更簡潔、更專業",
-        "introTrigger": "開場郵件",
-        "introText": "你好，希望本週能找個時間聊聊…",
         "signoffTrigger": "簽名",
         "signoffText": "祝好，Alex · alex@example.com"
       },
@@ -3310,7 +3306,6 @@
     "emptyTitle": "你的字典是空的",
     "emptyDescription": "新增希望{{agentName}}始終辨識正確的詞：名字、工具、縮寫。",
     "addFirstWord": "新增第一個詞",
-    "importList": "匯入清單",
     "agentDefault": "預設加入"
   },
   "insights": {
@@ -3712,9 +3707,6 @@
       "disconnect": "中斷連接",
       "disconnectConfirm": "中斷 {{email}} 的連接？",
       "disconnectDescription": "將不再從此日曆記錄會議筆記。",
-      "systemAudioRequired": "需要系統音訊權限",
-      "systemAudioDescription": "要轉錄會議，OpenWhispr 需要系統音訊權限來錄製其他參與者的音訊。我們絕不會錄製您的螢幕。您將被引導至系統設定以啟用此權限。",
-      "openSettings": "打開系統設定",
       "connectFailed": "連線失敗",
       "connectFailedDescription": "連線 Google Calendar 時發生錯誤。請再試一次。"
     },

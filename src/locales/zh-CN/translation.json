@@ -637,7 +637,7 @@
       "couldNotDeleteDescription": "此转录记录可能已被删除。",
       "couldNotDeleteDescriptionGeneric": "出了点问题，请重试。",
       "empty": "暂无转录记录",
-      "emptyDescription": "在任意应用中按下快捷键开始说话。每条转写都会私密地保存在你的设备上。",
+      "emptyDescription": "你的听写内容会显示在这里。",
       "sectionTitle": "转写记录",
       "dataRetentionDisabled": "数据保留已关闭。转录和音频不会保存到历史记录。",
       "press": "按下",
@@ -3298,10 +3298,6 @@
       "examples": {
         "linkedinTrigger": "我的 LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "改写提示词",
-        "rewriteText": "把这段话改写得更简洁、更专业",
-        "introTrigger": "开场邮件",
-        "introText": "你好，希望本周能找个时间聊聊…",
         "signoffTrigger": "签名",
         "signoffText": "祝好，Alex · alex@example.com"
       },
@@ -3310,7 +3306,6 @@
     "emptyTitle": "你的词典是空的",
     "emptyDescription": "添加希望{{agentName}}始终识别正确的词：名字、工具、缩写。",
     "addFirstWord": "添加第一个词",
-    "importList": "导入列表",
     "agentDefault": "默认添加"
   },
   "insights": {
@@ -3712,9 +3707,6 @@
       "disconnect": "断开",
       "disconnectConfirm": "断开 {{email}}？",
       "disconnectDescription": "将不再从此日历记录会议笔记。",
-      "systemAudioRequired": "需要系统音频权限",
-      "systemAudioDescription": "要转录会议，OpenWhispr 需要系统音频权限来录制其他参与者的音频。我们绝不会录制您的屏幕。您将被引导至系统设置以启用此权限。",
-      "openSettings": "打开系统设置",
       "connectFailed": "连接失败",
       "connectFailedDescription": "连接 Google Calendar 时出错。请重试。"
     },

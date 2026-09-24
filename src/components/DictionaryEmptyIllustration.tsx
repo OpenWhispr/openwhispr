@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { NotebookPen, PanelRight } from "./icons";
 
 interface DictionaryEmptyIllustrationProps {
@@ -5,6 +6,7 @@ interface DictionaryEmptyIllustrationProps {
 }
 
 export default function DictionaryEmptyIllustration({ variant }: DictionaryEmptyIllustrationProps) {
+  const { t } = useTranslation();
   const isSnippet = variant === "snippets";
 
   return (
@@ -40,23 +42,27 @@ export default function DictionaryEmptyIllustration({ variant }: DictionaryEmpty
       {isSnippet ? (
         <>
           <span
-            dir="ltr"
+            dir="auto"
             className="absolute left-16 top-7 flex flex-col gap-1 rounded-2xl border border-border/70 bg-card px-4 py-2.5 text-sm shadow-sm dark:bg-surface-window"
           >
-            <span className="italic text-foreground/50 dark:text-foreground/65">“brb”</span>
+            <span className="italic text-foreground/50 dark:text-foreground/65">
+              “{t("dictionary.snippets.examples.signoffTrigger")}”
+            </span>
             <span className="italic text-primary">
-              <span className="mr-2 text-foreground/50 dark:text-foreground/65">↳</span>be right
-              back
+              <span className="me-2 text-foreground/50 dark:text-foreground/65">↳</span>
+              {t("dictionary.snippets.examples.signoffText")}
             </span>
           </span>
           <span
-            dir="ltr"
+            dir="auto"
             className="absolute bottom-7 right-2 flex flex-col gap-1 rounded-2xl border border-border/70 bg-card px-4 py-2.5 text-sm shadow-sm dark:bg-surface-window"
           >
-            <span className="italic text-foreground/50 dark:text-foreground/65">“my linkedin”</span>
+            <span className="italic text-foreground/50 dark:text-foreground/65">
+              “{t("dictionary.snippets.examples.linkedinTrigger")}”
+            </span>
             <span className="italic text-primary">
-              <span className="mr-2 text-foreground/50 dark:text-foreground/65">↳</span>
-              www.linkedin.com/in/your-profile
+              <span className="me-2 text-foreground/50 dark:text-foreground/65">↳</span>
+              {t("dictionary.snippets.examples.linkedinText")}
             </span>
           </span>
         </>
