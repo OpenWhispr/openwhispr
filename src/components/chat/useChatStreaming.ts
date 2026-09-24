@@ -23,6 +23,12 @@ import {
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { buildVoiceHistory } from "../../services/voice/voiceHistory";
 import { compactToolResultForVoice } from "../../services/voice/voiceTools";
+import {
+  createWriteOnceGuard,
+  runToolResultOnce,
+  VOICE_EXCLUDED_TOOLS,
+  type WriteOnceGuard,
+} from "../../services/voice/voiceToolPolicy";
 import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
@@ -98,6 +104,8 @@ interface UseChatStreamingOptions {
   onToolCall?: (toolNames: string[]) => void;
   /** Voice conversation: the tools offered to the model for this voice turn. */
   onToolsAvailable?: (toolNames: string[]) => void;
+  /** Voice conversation: each write tool's outcome, so a spoken claim can be checked. */
+  onWriteToolResult?: (name: string, ok: boolean) => void;
   /** Voice conversation harness: write tools report success without changing anything. */
   voiceDryRunWrites?: boolean;
   /** Voice conversation harness: local model id that answers voice turns instead of the setting. */
@@ -107,28 +115,31 @@ interface UseChatStreamingOptions {
 const DRY_RUN_RESULT = { success: true, dryRun: true, note: "Test run: nothing was changed." };
 
 /**
- * Voice turns get compacted tool results (see compactToolResultForVoice); in the
- * harness, the tools named in `dryRunNames` return a canned success instead.
+ * Voice turns get compacted tool results (see compactToolResultForVoice) and run
+ * each write tool at most once (see createWriteOnceGuard); in the harness, the
+ * tools named in `dryRunNames` return a canned success instead.
  */
-function compactVoiceToolResults(
+function prepareVoiceTools(
   tools: ReturnType<ToolRegistry["toAISDKFormat"]> | undefined,
-  dryRunNames: Set<string> = new Set()
+  { dryRunNames, guard }: { dryRunNames: Set<string>; guard: WriteOnceGuard }
 ): ReturnType<ToolRegistry["toAISDKFormat"]> | undefined {
   if (!tools) return tools;
-  const compacted: ReturnType<ToolRegistry["toAISDKFormat"]> = {};
+  const prepared: ReturnType<ToolRegistry["toAISDKFormat"]> = {};
   for (const [name, tool] of Object.entries(tools)) {
     const execute = tool.execute;
-    compacted[name] = execute
+    prepared[name] = execute
       ? ({
           ...tool,
-          execute: async (...args: Parameters<typeof execute>) =>
-            dryRunNames.has(name)
-              ? DRY_RUN_RESULT
-              : compactToolResultForVoice(name, await execute(...args)),
+          execute: (...args: Parameters<typeof execute>) =>
+            guard.run(name, async () =>
+              dryRunNames.has(name)
+                ? DRY_RUN_RESULT
+                : compactToolResultForVoice(name, await execute(...args))
+            ),
         } as typeof tool)
       : tool;
   }
-  return compacted;
+  return prepared;
 }
 
 export interface SendToAIOptions {
@@ -181,6 +192,7 @@ export function useChatStreaming({
   onContentDelta,
   onToolCall,
   onToolsAvailable,
+  onWriteToolResult,
   voiceDryRunWrites = false,
   voiceModelOverride = null,
   voiceReplies = false,
@@ -198,6 +210,8 @@ export function useChatStreaming({
   onToolCallRef.current = onToolCall;
   const onToolsAvailableRef = useRef(onToolsAvailable);
   onToolsAvailableRef.current = onToolsAvailable;
+  const onWriteToolResultRef = useRef(onWriteToolResult);
+  onWriteToolResultRef.current = onWriteToolResult;
   const voiceDryRunWritesRef = useRef(voiceDryRunWrites);
   voiceDryRunWritesRef.current = voiceDryRunWrites;
   const voiceModelOverrideRef = useRef(voiceModelOverride);
@@ -370,7 +384,10 @@ export function useChatStreaming({
         const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
         // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
         const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
-        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}`;
+        // voiceReplies changes which tools this registry may offer (voice turns
+        // exclude snippet editing), so it must be part of the cache key too —
+        // otherwise a registry built for one kind of turn gets reused for the other.
+        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${voiceRepliesRef.current}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
@@ -387,6 +404,7 @@ export function useChatStreaming({
               getSnippets: () => getSettings().snippets,
               setSnippets: (snippets) => useSettingsStore.getState().setSnippets(snippets),
             },
+            ...(voiceRepliesRef.current ? { excludeTools: VOICE_EXCLUDED_TOOLS } : {}),
           });
           toolRegistryRef.current = { key: cacheKey, registry };
         }
@@ -488,6 +506,19 @@ export function useChatStreaming({
       try {
         let stream: AsyncGenerator<AgentStreamChunk>;
 
+        // Shared by both branches below: OpenWhispr Cloud runs tools via
+        // executeToolCall, BYOK/local runs them via the AI SDK's registry.toAISDKFormat()
+        // wrapper, but "each write tool runs at most once per voice turn" applies to
+        // whichever one actually answers this request. One guard per request, so
+        // "once per turn" resets with each spoken turn.
+        const writeToolNames = new Set(
+          (registry?.getAll() ?? []).filter((tool) => !tool.readOnly).map((tool) => tool.name)
+        );
+        const dryRunNames = voiceTurn && voiceDryRunWritesRef.current ? writeToolNames : new Set<string>();
+        const writeOnceGuard = voiceTurn
+          ? createWriteOnceGuard(writeToolNames, (name, ok) => onWriteToolResultRef.current?.(name, ok))
+          : null;
+
         if (isCloudAgent) {
           const executeToolCall = registry
             ? async (name: string, argsJson: string) => {
@@ -506,7 +537,9 @@ export function useChatStreaming({
                     displayText: t("agentMode.tools.invalidArgs", { name }),
                   };
                 }
-                const result = await tool.execute(args);
+                const result = writeOnceGuard
+                  ? await runToolResultOnce(writeOnceGuard, name, () => tool.execute(args))
+                  : await tool.execute(args);
                 const data = result.success
                   ? typeof result.data === "string"
                     ? result.data
@@ -531,14 +564,10 @@ export function useChatStreaming({
             ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
           });
         } else {
-          const dryRunNames = new Set(
-            voiceTurn && voiceDryRunWritesRef.current
-              ? (registry?.getAll() ?? []).filter((tool) => !tool.readOnly).map((tool) => tool.name)
-              : []
-          );
-          const aiTools = voiceTurn
-            ? compactVoiceToolResults(registry?.toAISDKFormat(), dryRunNames)
-            : registry?.toAISDKFormat();
+          const aiTools =
+            voiceTurn && writeOnceGuard
+              ? prepareVoiceTools(registry?.toAISDKFormat(), { dryRunNames, guard: writeOnceGuard })
+              : registry?.toAISDKFormat();
           stream = ReasoningService.processTextStreamingAI(
             llmMessages,
             llmConfig.model,

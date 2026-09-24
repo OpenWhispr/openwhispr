@@ -129,6 +129,7 @@ export function AssistantPanel({
     onContentDelta: speechTap?.onContentDelta,
     onToolCall: speechTap?.onToolCall,
     onToolsAvailable: speechTap?.onToolsAvailable,
+    onWriteToolResult: speechTap?.onWriteToolResult,
     voiceDryRunWrites: speechTap?.dryRunWrites ?? false,
     voiceModelOverride: speechTap?.brainOverride ?? null,
     voiceReplies: speechTap !== null,

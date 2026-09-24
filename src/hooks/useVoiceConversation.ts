@@ -38,6 +38,8 @@ interface TurnMetrics {
   transcript: string;
   calledTools: string[];
   availableTools: string[];
+  /** Write tools that ran and succeeded this turn (createWriteOnceGuard caps each at one). */
+  succeededWrites: string[];
   answer: string;
 }
 
@@ -241,6 +243,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
           transcript: event.text,
           calledTools: [],
           availableTools: [],
+          succeededWrites: [],
           answer: "",
         };
         setState("thinking");
@@ -430,6 +433,9 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       },
       onToolsAvailable: (toolNames) => {
         if (turnRef.current) turnRef.current.availableTools = toolNames;
+      },
+      onWriteToolResult: (name, ok) => {
+        if (ok) turnRef.current?.succeededWrites.push(name);
       },
       dryRunWrites: harnessActive,
       brainOverride,

@@ -8,6 +8,8 @@ export interface AssistantSpeechTap {
   onToolCall: (toolNames: string[]) => void;
   /** Tools offered to the model for this turn (the harness scores against them). */
   onToolsAvailable: (toolNames: string[]) => void;
+  /** A write tool finished this turn; `ok` is false when it returned an error. */
+  onWriteToolResult: (name: string, ok: boolean) => void;
   /** Harness mode: write tools report success without changing anything. */
   dryRunWrites: boolean;
   /** OPENWHISPR_VOICE_HARNESS_BRAIN: local model that answers voice turns, or null. */
