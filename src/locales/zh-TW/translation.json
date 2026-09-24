@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "滑鼠按鍵快捷鍵目前僅在 macOS 上受支援。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" 無法在此桌面上使用，其快捷鍵需要包含一個一般按鍵。請加入一個按鍵，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住說話需要 macOS 能偵測到放開的按鍵：Globe、右側 Option 之類的右側按鍵，或帶修飾鍵的快速鍵。點按可用於任何按鍵。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
       "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
@@ -702,6 +703,11 @@
       "title": "缺少必要的模型",
       "description": "您的組織要求在此裝置上安裝這些模型：{{models}}。",
       "download": "下載"
+    },
+    "cloudNudge": {
+      "title": "你已登入",
+      "description": "聽寫仍在使用你自己的設定。你可以隨時切換至 OpenWhispr Cloud。",
+      "action": "開啟設定"
     }
   },
   "reasoning": {
@@ -914,6 +920,7 @@
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
         "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。",
         "cleanupTruncated": "AI 模型的輸出長度達到上限，未能完成聽寫清理。",
+        "cleanupDuplicated": "AI 清理重複了轉錄內容。已保留原始文字。",
         "cleanupEmptyReply": "AI 模型傳回空白回應，沒有產生清理後的文字。"
       },
       "translationFallback": {
@@ -935,6 +942,18 @@
         "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
         "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
         "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"
+      },
+      "pastePermission": {
+        "title": "允許自動貼上",
+        "description": "請在系統設定 → 隱私權與安全性 → 輔助使用中啟用 OpenWhispr。",
+        "settingsFailed": "無法開啟設定。請開啟系統設定 → 隱私權與安全性 → 輔助使用，並啟用 OpenWhispr。",
+        "manualPaste": "點擊下方按鈕複製文字，然後按 {{shortcut}} 貼上。",
+        "openSettings": "開啟設定",
+        "copyToClipboard": "複製到剪貼板",
+        "copyFailed": "複製失敗"
+      },
+      "pasteFailed": {
+        "title": "無法自動貼上"
       }
     },
     "clipboard": {
@@ -2655,7 +2674,8 @@
     "errors": {
       "contextTooLarge": "內容過長，{{model}} 無法在這台電腦上讀取。大約需要 {{needed}} 個上下文 token，但記憶體只能容納 {{max}} 個。請改用雲端模型，或對更短的選取範圍執行該動作。",
       "contextTooLargeGeneric": "內容過長，{{model}} 無法在這台電腦上讀取。請改用雲端模型，或對更短的選取範圍執行該動作。",
-      "localServerUnavailable": "無法在這台電腦上啟動 {{model}}。請重試，或改用雲端模型。"
+      "localServerUnavailable": "無法在這台電腦上啟動 {{model}}。請重試，或改用雲端模型。",
+      "localModelBusy": "本機模型仍在處理另一個請求。請等待其完成後再試。"
     }
   },
   "referral": {
@@ -3099,6 +3119,8 @@
       "runAction": "執行 {{name}}",
       "selectAction": "選擇動作",
       "done": "完成",
+      "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
+      "emptyReply": "模型傳回了空白回覆。請再試一次，或選擇其他模型。",
       "builtin": {
         "generateNotes": {
           "name": "生成筆記",

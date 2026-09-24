@@ -593,8 +593,8 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                       <Button
                         onClick={() => copyText(testResult)}
                         variant="ghost"
-                        size="sm"
-                        className="h-6 px-1.5"
+                        size="icon"
+                        className="h-6 w-7"
                       >
                         <Copy className="w-3 h-3 text-muted-foreground" />
                       </Button>

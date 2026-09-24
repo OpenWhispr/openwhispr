@@ -907,7 +907,9 @@ class ClipboardManager {
       if (platform === "darwin") {
         method = this.resolveFastPasteBinary() ? "cgevent" : "applescript";
         this.safeLog("🔍 Checking accessibility permissions for paste operation...");
-        const hasPermissions = await this.checkAccessibilityPermissions(allowClipboardFallback);
+        const hasPermissions = await this.checkAccessibilityPermissions(
+          allowClipboardFallback || options.silentAccessibilityCheck === true
+        );
 
         if (!hasPermissions) {
           this.safeLog("⚠️ No accessibility permissions - text copied to clipboard only");
@@ -917,7 +919,10 @@ class ClipboardManager {
           }
           const errorMsg =
             "Accessibility permissions required for automatic pasting. Text has been copied to clipboard - please paste manually with Cmd+V.";
-          throw new Error(errorMsg);
+          throw Object.assign(new Error(errorMsg), {
+            code: "ACCESSIBILITY_PERMISSION_REQUIRED",
+            clipboardCopied: true,
+          });
         }
 
         this.safeLog("✅ Permissions granted, attempting to paste...");
@@ -1012,6 +1017,15 @@ class ClipboardManager {
             } else {
               resolve({ restoreComplete: Promise.resolve() });
             }
+          } else if (useFastPaste && code === 3) {
+            this.safeLog("CGEvent paste could not resolve the active keyboard layout", {
+              stderr: errorOutput.trim(),
+            });
+            reject(
+              new Error(
+                "Paste could not resolve the active keyboard layout. Text is copied to clipboard - please paste manually with Cmd+V."
+              )
+            );
           } else if (useFastPaste) {
             this.safeLog(
               code === 2

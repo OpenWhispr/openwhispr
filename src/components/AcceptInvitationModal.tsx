@@ -18,6 +18,7 @@ import {
 import { useAuth } from "../hooks/useAuth";
 import { signOut } from "../lib/auth";
 import { syncService } from "../services/SyncService.js";
+import { stopRecording } from "../stores/meetingRecordingStore";
 import { afterWorkspaceJoined } from "../services/membershipActions";
 import { useToast } from "./ui/useToast";
 import SignInDialog from "./SignInDialog";
@@ -119,6 +120,8 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
   // new one (the purge never blocks the switch).
   async function handleSwitchAccount() {
     if (token) storePendingInvitationToken(token);
+    // Signing out takes a live meeting's note out of scope; end it first.
+    await stopRecording();
     await syncService.purgeTeamSpacesForSignOut();
     await signOut();
   }

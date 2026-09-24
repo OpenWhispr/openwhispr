@@ -197,6 +197,8 @@ export function AssistantPanel({
     const commandId = pendingCommand.id;
     const delivery = pendingCommand.delivery;
     const targetsCapturedInput = delivery?.mode === "paste";
+    // A caret in a markdown-friendly app still keeps the compact pill.
+    const plainTextResponse = delivery?.mode === "paste" && delivery.plainText;
     let responseDelivered = false;
     if (pendingCommand.selectedContext) {
       setSelectedContext(null);
@@ -206,6 +208,7 @@ export function AssistantPanel({
       attachment: pendingCommand.attachment ?? undefined,
       selectedContext: pendingCommand.selectedContext ?? undefined,
       suppressResponseContent: targetsCapturedInput,
+      plainTextResponse,
       onComplete: delivery
         ? async ({ content }) => {
             const result = await deliverAssistantResponse(delivery, content);
@@ -605,7 +608,7 @@ export function AssistantPanel({
               type="button"
               variant="secondary"
               size="sm"
-              className="rounded-full px-4"
+              className="px-4"
               onClick={onClose}
               tabIndex={footerPhase === "actions" ? 0 : -1}
             >
@@ -615,7 +618,7 @@ export function AssistantPanel({
             <Button
               type="button"
               size="sm"
-              className="rounded-full border-border/70 bg-surface-raised px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
+              className="bg-surface-raised bg-none px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
               onClick={() => void handleCopy()}
               aria-live="polite"
               tabIndex={footerPhase === "actions" ? 0 : -1}

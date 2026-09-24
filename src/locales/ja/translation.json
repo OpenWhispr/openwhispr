@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" はこのデスクトップでは使用できません。ショートカットには通常のキーが必要です。Control+Alt+Space のようにキーを追加してください。",
       "holdNeedsReleaseKey": "ホールドして話すには、macOS が離したことを検知できるキーが必要です。Globe、右 Option のような右側のキー、または修飾キー付きのショートカットです。タップならどのキーでも使えます。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
       "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
@@ -702,6 +703,11 @@
       "title": "必須モデルがありません",
       "description": "組織では、このデバイスにこれらのモデルが必要です：{{models}}。",
       "download": "ダウンロード"
+    },
+    "cloudNudge": {
+      "title": "サインインしました",
+      "description": "音声入力は引き続きご自身の設定で動作します。いつでも OpenWhispr Cloud に切り替えられます。",
+      "action": "設定を開く"
     }
   },
   "reasoning": {
@@ -914,6 +920,7 @@
         "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
         "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。",
         "cleanupTruncated": "AI モデルの出力が上限に達し、ディクテーションのクリーンアップが完了しませんでした。",
+        "cleanupDuplicated": "AI クリーンアップが文字起こしを繰り返しました。元のテキストを保持しました。",
         "cleanupEmptyReply": "AI モデルが空の応答を返したため、クリーンアップされたテキストがありません。"
       },
       "translationFallback": {
@@ -935,6 +942,18 @@
         "unavailable": "OpenWhispr は選択したテキストを安全に読み取れませんでした。アクセシビリティまたは入力自動化の権限を確認してください。",
         "tooLarge": "選択範囲が大きすぎます。6,000文字以内を選択してください。",
         "reasoningFailed": "AI は選択範囲の編集を完了できませんでした。元のテキストは変更されていません。"
+      },
+      "pastePermission": {
+        "title": "自動貼り付けを許可",
+        "description": "システム設定 → プライバシーとセキュリティ → アクセシビリティでOpenWhisprを有効にしてください。",
+        "settingsFailed": "設定を開けませんでした。システム設定 → プライバシーとセキュリティ → アクセシビリティを開き、OpenWhisprを有効にしてください。",
+        "manualPaste": "下のボタンでテキストをコピーし、{{shortcut}}を押して貼り付けてください。",
+        "openSettings": "設定を開く",
+        "copyToClipboard": "テキストをコピー",
+        "copyFailed": "コピーに失敗しました"
+      },
+      "pasteFailed": {
+        "title": "自動貼り付けに失敗しました"
       }
     },
     "clipboard": {
@@ -2655,7 +2674,8 @@
     "errors": {
       "contextTooLarge": "このコンピューターでは長すぎて {{model}} が読み取れません。約 {{needed}} トークンのコンテキストが必要ですが、メモリに収まるのは {{max}} までです。クラウドモデルを使うか、選択範囲を短くして実行してください。",
       "contextTooLargeGeneric": "このコンピューターでは長すぎて {{model}} が読み取れません。クラウドモデルを使うか、選択範囲を短くして実行してください。",
-      "localServerUnavailable": "このコンピューターでは {{model}} を起動できませんでした。もう一度試すか、クラウドモデルに切り替えてください。"
+      "localServerUnavailable": "このコンピューターでは {{model}} を起動できませんでした。もう一度試すか、クラウドモデルに切り替えてください。",
+      "localModelBusy": "ローカルモデルはまだ別のリクエストを処理しています。完了を待ってから、もう一度お試しください。"
     }
   },
   "notes": {
@@ -2880,6 +2900,8 @@
       "runAction": "{{name}} を実行",
       "selectAction": "アクションを選択",
       "done": "完了",
+      "chunkProgress": "パート {{step}} / {{total}}",
+      "emptyReply": "モデルから空の応答が返されました。もう一度お試しいただくか、別のモデルを選択してください。",
       "builtin": {
         "generateNotes": {
           "name": "ノートを生成",

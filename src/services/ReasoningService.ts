@@ -11,10 +11,14 @@ import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy, httpError } from "../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../config/constants";
 import logger from "../utils/logger";
+import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
-import { getLlmRequestTimeoutSeconds } from "../helpers/llmRequestTimeout.js";
+import {
+  getLlmRequestTimeoutSeconds,
+  llmRequestTimeoutError,
+} from "../helpers/llmRequestTimeout.js";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
@@ -332,7 +336,7 @@ class ReasoningService extends BaseReasoningService {
       }
       const controller = new AbortController();
       this.activeRequestControllers.add(controller);
-      const timeoutSeconds = getLlmRequestTimeoutSeconds();
+      const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
       try {
         const headers: Record<string, string> = {
@@ -396,7 +400,7 @@ class ReasoningService extends BaseReasoningService {
           if (requestGeneration !== this.requestCancellationGeneration) {
             throw httpError("Request cancelled", 499);
           }
-          throw new Error(`Request timed out after ${timeoutSeconds}s`);
+          throw llmRequestTimeoutError(timeoutSeconds);
         }
         throw error;
       } finally {
@@ -458,6 +462,11 @@ class ReasoningService extends BaseReasoningService {
     ({ model, config } = managed);
     const trimmedModel = model?.trim?.() || "";
     const settings = getSettings();
+    const validateCleanup =
+      config.inferenceScope === "dictationCleanup" &&
+      !config.systemPrompt &&
+      !config.requiresAgent &&
+      !settings.customPrompts.cleanup;
     const isImplicitCleanup =
       config.provider === undefined && config.baseUrl === undefined && config.lanUrl === undefined;
     const implicitProvider =
@@ -514,6 +523,8 @@ class ReasoningService extends BaseReasoningService {
         config: dispatchConfig,
         ctx: this.providerContext,
       });
+
+      if (validateCleanup) assertValidCleanupOutput(text, result);
 
       logger.logReasoning("PROVIDER_SUCCESS", {
         provider: providerId,

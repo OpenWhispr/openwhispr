@@ -475,7 +475,10 @@ export function getWhisperModelInfo(modelId: string): WhisperModelInfo | undefin
 
 export const WHISPER_MODEL_INFO = modelData.whisperModels;
 
-export function getCloudModel(modelId: string): CloudModelDefinition | undefined {
+export function getCloudModel(
+  modelId: string,
+  providerId?: string
+): CloudModelDefinition | undefined {
   for (const provider of modelData.cloudProviders) {
     const model = provider.models.find((m) => m.id === modelId);
     if (model) return model;
@@ -483,6 +486,11 @@ export function getCloudModel(modelId: string): CloudModelDefinition | undefined
   for (const provider of modelData.enterpriseProviders) {
     const model = provider.models.find((m) => m.id === modelId);
     if (model) return model;
+  }
+  // OpenRouter ids carry a vendor prefix (google/gemini-3.5-flash-lite) that the
+  // registry stores without, so retry on the upstream id.
+  if (providerId === "openrouter" && modelId.includes("/")) {
+    return getCloudModel(modelId.slice(modelId.lastIndexOf("/") + 1));
   }
   return undefined;
 }
@@ -512,7 +520,7 @@ export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiAp
   // registry knows rejects temperature (Claude Opus 4.7+, #1417) must keep it
   // omitted here too — OpenRouter forwards the 400 rather than stripping it.
   if (provider === "openrouter" && modelId.includes("/")) {
-    const upstream = getCloudModel(modelId.slice(modelId.lastIndexOf("/") + 1));
+    const upstream = getCloudModel(modelId, provider);
     return { tokenParam: "max_tokens", supportsTemperature: upstream?.supportsTemperature ?? true };
   }
 

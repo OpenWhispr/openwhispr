@@ -14,6 +14,7 @@ import {
   buildAzureTranscriptionUrl,
 } from "../utils/urlUtils.ts";
 import {
+  isOrukeetEndpoint,
   isSelfHostedTranscription,
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription.js";
@@ -312,7 +313,9 @@ export function resolveTranscriptionRoute({
         provider: "self-hosted",
         endpoint: buildBatchEndpoint(rawUrl, base, selfHostedModel),
         model: selfHostedModel,
-        auth: { scheme: "none", keyRef: null },
+        auth: isOrukeetEndpoint(s)
+          ? { scheme: "bearer", keyRef: "custom" }
+          : { scheme: "none", keyRef: null },
         sizeCapBytes: null,
         language,
       };

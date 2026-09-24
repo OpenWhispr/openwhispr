@@ -73,6 +73,15 @@ test("portal shortcuts use the XDG modifier syntax", () => {
   assert.equal(GnomeShortcutManager.convertToPortalFormat("Control+Super"), "");
 });
 
+test("lone right-side modifiers have no portal trigger", () => {
+  assert.equal(GnomeShortcutManager.convertToPortalFormat("RightControl"), "");
+  assert.equal(GnomeShortcutManager.convertToPortalFormat("RightAlt"), "");
+  assert.equal(GnomeShortcutManager.convertToPortalFormat("RightShift"), "");
+  assert.equal(GnomeShortcutManager.convertToPortalFormat("RightSuper"), "");
+  assert.equal(GnomeShortcutManager.convertToPortalFormat("Control+Shift+K"), "CTRL+SHIFT+k");
+  assert.equal(GnomeShortcutManager.convertToPortalFormat("F8"), "F8");
+});
+
 test("failed portal registration restores the working GNOME tap binding", async () => {
   const manager = new GnomeShortcutManager();
   const registrations = [];

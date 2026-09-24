@@ -336,7 +336,7 @@ let audioTapManager = null;
 let linuxPortalAudioManager = null;
 let windowsLoopbackAudioManager = null;
 let meetingAecManager = null;
-let qdrantManager = null;
+let semanticSearch = null;
 let ipcHandlers = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
@@ -531,6 +531,9 @@ function initializeCoreManagers() {
   windowManager.selectionManager = selectionManager;
   windowManager.windowsKeyManager = windowsKeyManager;
   windowManager.linuxKeyManager = linuxKeyManager;
+  if (process.platform === "linux") {
+    windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
+  }
 
   // IPC handlers must be registered before window content loads
   ipcHandlers = new IPCHandlers({
@@ -556,7 +559,7 @@ function initializeCoreManagers() {
     linuxPortalAudioManager,
     windowsLoopbackAudioManager,
     meetingAecManager,
-    getQdrantManager: () => qdrantManager,
+    getSemanticSearch: () => semanticSearch,
     getTrayManager: () => trayManager,
     oauthProtocolRegistered: protocolRegistered,
     oauthProtocol: OAUTH_PROTOCOL,
@@ -1108,6 +1111,8 @@ async function startApp() {
     await flushPendingNoteDeepLink();
   }
 
+  await hotkeyManager.hyprlandRegistrationReady;
+
   // Set up voice agent hotkey (dictation routed straight to the dictation
   // agent, bypassing cleanup). Tap-only slots gate autorepeat like the
   // dictation toggle does.
@@ -1193,7 +1198,8 @@ async function startApp() {
       }
       return { success: false, message: result.error };
     } else {
-      hotkeyManager.unregisterSlot("meeting");
+      const removed = await hotkeyManager.unregisterSlot("meeting");
+      if (removed === false) return { success: false };
       environmentManager.saveMeetingKey("");
       windowManager.reconcileNativeKeyListeners();
       return { success: true };
@@ -1286,43 +1292,18 @@ async function startApp() {
   }
 
   const QdrantManager = require("./src/helpers/qdrantManager");
-  qdrantManager = new QdrantManager();
-  // Must not throw: this also runs inside the unhealthy-restart path, whose
-  // catch would stop the replacement sidecar.
-  const wireVectorIndex = (port) => {
-    try {
-      const vectorIndex = require("./src/helpers/vectorIndex");
-      vectorIndex.init(port);
-      vectorIndex
-        .ensureCollection()
-        .then(() => ipcHandlers?.drainPendingVectorPurges())
-        .catch((err) => {
-          debugLogger.debug("Qdrant collection setup error (non-fatal)", { error: err.message });
-        });
-    } catch (err) {
-      debugLogger.debug("Qdrant rewire error (non-fatal)", { error: err.message });
-    }
-  };
-  // A successful unhealthy-restart can bring the sidecar back on a new port.
-  qdrantManager.on("restarted", wireVectorIndex);
-  sidecarRegistry.register("qdrant", () => qdrantManager.stop());
-  if (qdrantManager.isAvailable()) {
-    qdrantManager
-      .start()
-      .then(() => {
-        if (qdrantManager.isReady()) wireVectorIndex(qdrantManager.getPort());
-      })
-      .catch((err) => {
-        debugLogger.debug("Qdrant startup error (non-fatal)", { error: err.message });
-      });
-  }
-
+  const SemanticSearchLifecycle = require("./src/helpers/semanticSearchLifecycle");
   const localEmbeddings = require("./src/helpers/localEmbeddings");
-  if (!localEmbeddings.isAvailable()) {
-    localEmbeddings.downloadModel().catch((err) => {
-      debugLogger.debug("Embedding model download error (non-fatal)", { error: err.message });
-    });
-  }
+  const qdrantManager = new QdrantManager();
+  semanticSearch = new SemanticSearchLifecycle({
+    qdrant: qdrantManager,
+    vectorIndex: require("./src/helpers/vectorIndex"),
+    embeddings: localEmbeddings,
+    noteEmbedText: localEmbeddings.LocalEmbeddings.noteEmbedText,
+    database: databaseManager,
+    logger: debugLogger,
+  });
+  sidecarRegistry.register("qdrant", () => semanticSearch.stop());
 
   if (process.platform === "win32") {
     const nircmdStatus = clipboardManager.getNircmdStatus();
@@ -1779,8 +1760,15 @@ async function startApp() {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"
         );
-        if (isLiveWindow(windowManager.mainWindow)) {
-          windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
+        // GNOME, KDE and Hyprland run this listener only as a spare release
+        // source in Hold; their own shortcut still presses and releases.
+        if (!hotkeyManager.reliesOnLinuxKeyListener()) return;
+        // Settings owns the recovery (toast, Hold disabled, back to Tap) and it
+        // renders in the control panel, not the pill this event used to reach.
+        for (const browserWindow of BrowserWindow.getAllWindows()) {
+          if (!browserWindow.isDestroyed()) {
+            browserWindow.webContents.send("linux-ptt-permission-denied");
+          }
         }
       });
     }

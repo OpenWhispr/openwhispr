@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarDays, Code2, Info, Loader2, Mail, Plus, Unlink } from "./icons";
 import { Button } from "./ui/button";
+import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
+import { cn } from "./lib/utils";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Badge } from "./ui/badge";
 import { SettingsPanel, SettingsPanelRow, SettingsRow } from "./ui/SettingsSection";
@@ -357,7 +359,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
   }, [isMac, setAppleCalendarConnected]);
 
   return (
-    <div className="max-w-lg mx-auto w-full px-6 py-6 space-y-5">
+    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-6 space-y-5")}>
       <p className="text-xs text-muted-foreground/70">{t("integrations.description")}</p>
 
       <div>

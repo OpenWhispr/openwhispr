@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" 无法在此桌面上使用，其快捷键需要包含一个普通按键。请添加一个按键，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住说话需要 macOS 能检测到松开的按键：Globe、右侧 Option 之类的右侧按键，或带修饰键的快捷键。点按可用于任何按键。",
       "registrationFailed": "无法注册 \"{{hotkey}}\"，该快捷键可能已被其他应用占用。",
       "updateFailedCheckFormat": "无法将快捷键更新为 \"{{hotkey}}\"，请检查格式是否有效。",
@@ -702,6 +703,11 @@
       "title": "缺少必需的模型",
       "description": "您的组织要求在此设备上安装这些模型：{{models}}。",
       "download": "下载"
+    },
+    "cloudNudge": {
+      "title": "你已登录",
+      "description": "听写仍在使用你自己的配置。你可以随时切换到 OpenWhispr Cloud。",
+      "action": "打开设置"
     }
   },
   "reasoning": {
@@ -914,6 +920,7 @@
         "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
         "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。",
         "cleanupTruncated": "AI 模型的输出长度达到上限，未能完成听写清理。",
+        "cleanupDuplicated": "AI 清理重复了转录内容。已保留原始文本。",
         "cleanupEmptyReply": "AI 模型返回了空响应，没有生成清理后的文本。"
       },
       "translationFallback": {
@@ -935,6 +942,18 @@
         "unavailable": "OpenWhispr 无法安全读取选中的文本。请检查辅助功能或输入自动化权限。",
         "tooLarge": "选中的内容过长。请选择不超过 6,000 个字符。",
         "reasoningFailed": "AI 无法完成选中文本编辑。原始文本未被更改。"
+      },
+      "pastePermission": {
+        "title": "允许自动粘贴",
+        "description": "请在系统设置 → 隐私与安全性 → 辅助功能中启用 OpenWhispr。",
+        "settingsFailed": "无法打开设置。请打开系统设置 → 隐私与安全性 → 辅助功能，并启用 OpenWhispr。",
+        "manualPaste": "点击下方按钮复制文本，然后按 {{shortcut}} 粘贴。",
+        "openSettings": "打开设置",
+        "copyToClipboard": "复制到剪贴板",
+        "copyFailed": "复制失败"
+      },
+      "pasteFailed": {
+        "title": "无法自动粘贴"
       }
     },
     "clipboard": {
@@ -2655,7 +2674,8 @@
     "errors": {
       "contextTooLarge": "内容过长，{{model}} 无法在这台电脑上读取。大约需要 {{needed}} 个上下文 token，但内存中只能容纳 {{max}} 个。请改用云端模型，或对更短的选区执行该操作。",
       "contextTooLargeGeneric": "内容过长，{{model}} 无法在这台电脑上读取。请改用云端模型，或对更短的选区执行该操作。",
-      "localServerUnavailable": "无法在这台电脑上启动 {{model}}。请重试，或改用云端模型。"
+      "localServerUnavailable": "无法在这台电脑上启动 {{model}}。请重试，或改用云端模型。",
+      "localModelBusy": "本地模型仍在处理另一个请求。请等待其完成后再试。"
     }
   },
   "referral": {
@@ -3099,6 +3119,8 @@
       "runAction": "运行 {{name}}",
       "selectAction": "选择操作",
       "done": "完成",
+      "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
+      "emptyReply": "模型返回了空回复。请重试，或选择其他模型。",
       "builtin": {
         "generateNotes": {
           "name": "生成笔记",

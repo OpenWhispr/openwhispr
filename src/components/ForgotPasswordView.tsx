@@ -54,7 +54,7 @@ export default function ForgotPasswordView({
         <Button
           onClick={onBack}
           variant="outline"
-          className="mt-3 h-10 w-full rounded-full border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]"
+          className="mt-3 w-full border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]"
         >
           <ArrowLeft className="size-3.5 rtl:rotate-180" />
           <span className="text-sm font-medium">{t("forgotPassword.goBack")}</span>
