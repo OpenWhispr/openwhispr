@@ -100,13 +100,13 @@ test("the handler entry is hidden and declares only the scheme", () => {
   );
 });
 
-test("Exec escapes percent signs and keeps every argument", () => {
+test("Exec keeps every argument", () => {
   const { buildHandlerEntry } = loadHelper(createXdg());
-  const execLine = (launchCommand) =>
-    buildHandlerEntry("openwhispr", launchCommand).match(/^Exec=(.*)$/m)[1];
 
-  assert.equal(execLine(["/home/u/100%/OpenWhispr"]), "/home/u/100%%/OpenWhispr %U");
-  assert.equal(execLine(["/repo/electron", "/repo"]), "/repo/electron /repo %U");
+  assert.match(
+    buildHandlerEntry("openwhispr", ["/repo/electron", "/repo"]),
+    /^Exec=\/repo\/electron \/repo %U$/m
+  );
 });
 
 // Generic-mode xdg-open takes the first space-separated word of Exec as the
@@ -124,6 +124,26 @@ test(
     assert.match(result.reason, /My Apps/);
     assert.deepEqual(xdg.calls, []);
     assert.equal(fs.existsSync(applicationsDir), false);
+
+    process.env.APPIMAGE = "/home/u/100%/OpenWhispr.AppImage";
+    assert.equal(registerLinuxUrlSchemeHandler("openwhispr").registered, false);
+  })
+);
+
+test(
+  "a launch path that needs quoting removes the entry an earlier path registered",
+  withInstall(async ({ applicationsDir }) => {
+    const xdg = createXdg();
+    const { registerLinuxUrlSchemeHandler } = loadHelper(xdg);
+    process.env.APPIMAGE = "/home/u/Apps/OpenWhispr.AppImage";
+    registerLinuxUrlSchemeHandler("openwhispr");
+    xdg.calls.length = 0;
+
+    process.env.APPIMAGE = "/home/u/My Apps/OpenWhispr.AppImage";
+    assert.equal(registerLinuxUrlSchemeHandler("openwhispr").registered, false);
+
+    assert.equal(fs.existsSync(path.join(applicationsDir, HANDLER_FILE)), false);
+    assert.deepEqual(xdg.calls, [["update-desktop-database", [applicationsDir]]]);
   })
 );
 

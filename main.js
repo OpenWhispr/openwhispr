@@ -186,12 +186,11 @@ function restoreHtmlHandlerIfChanged(original) {
   }
 }
 
-// True source of truth for whether openwhispr:// resolves on Linux — the same
-// MIME database xdg-open consults. Returns true for deb/rpm/flatpak/AUR installs
-// (scheme registered via the packaged .desktop MimeType; registerLinuxUrlSchemeHandler
-// first takes it back from an AppImage/tar.gz entry) and false for AppImage/tar.gz
-// runs whose own registration failed, so we never enable a dead-end OAuth flow.
-// Used to recover from setAsDefaultProtocolClient's KDE false negative.
+// Whether the MIME database xdg-open consults has any handler for openwhispr://.
+// It does not check which entry that is: deb/rpm/flatpak/AUR installs declare the
+// scheme in their packaged .desktop MimeType, and an AppImage/tar.gz run whose
+// registration was refused has already removed its own entry. Used to recover
+// from setAsDefaultProtocolClient's KDE false negative.
 function isOAuthSchemeRegistered() {
   if (process.platform !== "linux") return false;
   try {

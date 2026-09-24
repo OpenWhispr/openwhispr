@@ -7,8 +7,9 @@ const { resolveExecutablePath } = require("./linuxAutostart");
 const XDG_TOOL_TIMEOUT_MS = 3000;
 const PACKAGED_DESKTOP_FILE = "open-whispr.desktop";
 
-// Characters the Desktop Entry spec says must be quoted in an Exec argument.
-const EXEC_RESERVED_CHARACTERS = /[\s"'\\><~|&;$*?#()`]/;
+// Characters the Desktop Entry spec says must be quoted in an Exec argument, plus
+// %, whose %% escape generic-mode xdg-open never undoes.
+const EXEC_RESERVED_CHARACTERS = /[\s"'\\><~|&;$*?#()`%]/;
 
 // NoDisplay keeps it out of app menus, where a deb/rpm or the AppImage's own
 // entry already appears; it exists only to receive the sign-in callback.
@@ -17,7 +18,7 @@ function buildHandlerEntry(protocol, launchCommand) {
     "[Desktop Entry]",
     "Type=Application",
     "Name=OpenWhispr",
-    `Exec=${[...launchCommand.map((arg) => arg.replace(/%/g, "%%")), "%U"].join(" ")}`,
+    `Exec=${[...launchCommand, "%U"].join(" ")}`,
     "Terminal=false",
     "NoDisplay=true",
     `MimeType=x-scheme-handler/${protocol};`,
@@ -80,16 +81,23 @@ function registerLinuxUrlSchemeHandler(protocol, appArgs = []) {
   }
 
   const launchCommand = [resolveExecutablePath(), ...appArgs];
-  // Generic-mode xdg-open takes the first space-separated word of Exec as the
-  // program, quotes included, so a quoted Exec would register but never launch.
-  if (launchCommand.some((arg) => EXEC_RESERVED_CHARACTERS.test(arg))) {
-    return { registered: false, reason: `launch path needs quoting: ${launchCommand[0]}` };
-  }
 
   try {
     const dataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
     const applicationsDir = path.join(dataHome, "applications");
     const filePath = path.join(applicationsDir, fileName);
+    // Generic-mode xdg-open takes the first space-separated word of Exec as the
+    // program, quotes and %% escapes included, so such an Exec would never launch.
+    // Drop an entry from an earlier launch path too, or xdg-mime's mimeinfo.cache
+    // lookup keeps answering with it.
+    if (launchCommand.some((arg) => EXEC_RESERVED_CHARACTERS.test(arg))) {
+      if (fs.existsSync(filePath)) {
+        fs.rmSync(filePath);
+        refreshDesktopDatabase(applicationsDir);
+      }
+      return { registered: false, reason: `launch path needs quoting: ${launchCommand[0]}` };
+    }
+
     // Rewriting on any change also re-points the entry after the AppImage moves.
     const contents = buildHandlerEntry(protocol, launchCommand);
     if (readFileOrNull(filePath) !== contents) {
