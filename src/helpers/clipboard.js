@@ -670,13 +670,16 @@ class ClipboardManager {
     return null;
   }
 
-  _detectHyprlandWindowClass() {
+  _detectHyprlandWindow() {
     if (!this.commandExists("hyprctl")) return null;
     try {
       const result = spawnSync("hyprctl", ["activewindow", "-j"], { timeout: 1000 });
       if (result.status !== 0) return null;
       const win = JSON.parse(result.stdout.toString());
-      return win.class?.toLowerCase() || null;
+      return {
+        windowClass: win.class?.toLowerCase() || null,
+        pid: Number.isInteger(win.pid) && win.pid > 0 ? win.pid : null,
+      };
     } catch (err) {
       debugLogger.warn("hyprctl window detection failed", { error: err?.message }, "clipboard");
       return null;
@@ -1529,8 +1532,14 @@ class ClipboardManager {
       }
     };
 
-    const targetWindowId = preDetectTargetWindow();
-    let detectedWindowClass = preDetectWindowClass(targetWindowId);
+    // XWayland can retain a stale active window while a native Wayland
+    // client has focus. On Hyprland, only the compositor knows the target;
+    // do not mix its class with a stale X11 window ID, PID or Electron flag.
+    const hyprlandWindow = isHyprland ? this._detectHyprlandWindow() : null;
+    const targetWindowId = isHyprland ? null : preDetectTargetWindow();
+    let detectedWindowClass = isHyprland
+      ? hyprlandWindow?.windowClass || null
+      : preDetectWindowClass(targetWindowId);
 
     if (!detectedWindowClass && isKde) {
       detectedWindowClass = this._detectKdeWindowClass();
@@ -1539,14 +1548,9 @@ class ClipboardManager {
       }
     }
 
-    if (!detectedWindowClass && isHyprland) {
-      detectedWindowClass = this._detectHyprlandWindowClass();
-      if (detectedWindowClass) {
-        debugLogger.debug("Hyprland window class detected", { detectedWindowClass }, "clipboard");
-      }
-    }
-
-    const detectedWindowPid = preDetectWindowPid(targetWindowId);
+    const detectedWindowPid = isHyprland
+      ? hyprlandWindow?.pid || null
+      : preDetectWindowPid(targetWindowId);
     const detectedWindowComm = preDetectWindowComm(detectedWindowPid);
     const detectedIsElectron = preDetectIsElectron(detectedWindowPid);
     if (detectedIsElectron) {
@@ -1556,7 +1560,11 @@ class ClipboardManager {
       });
     }
     const windowSignals = [detectedWindowClass, detectedWindowComm].filter(Boolean);
-    const signalsMatch = (needle) => windowSignals.some((signal) => signal.includes(needle));
+    const signalsMatch = (needle) =>
+      windowSignals.some((signal) =>
+        // The short terminal name "st" must not match "vivaldi-stable".
+        needle === "st" ? /(^|[.\s_-])st($|[.\s_-])/.test(signal) : signal.includes(needle)
+      );
     const detectedIsKonsole = signalsMatch("konsole");
 
     // Shift+Insert is the universal Linux paste shortcut — works in terminals and
