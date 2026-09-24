@@ -1,6 +1,5 @@
 const { QdrantClient } = require("@qdrant/js-client-rest");
 const localEmbeddings = require("./localEmbeddings");
-const { LocalEmbeddings } = localEmbeddings;
 const debugLogger = require("./debugLogger");
 const { chunkConversation } = require("./conversationChunker");
 
@@ -15,39 +14,47 @@ class VectorIndex {
     this.client = new QdrantClient({ host: "127.0.0.1", port });
   }
 
+  reset() {
+    this.client = null;
+  }
+
   async ensureCollection() {
-    if (!this.client) return;
+    if (!this.client) throw new Error("Vector index is not initialized");
     try {
       await this.client.getCollection(this.collectionName);
-    } catch {
-      try {
-        await this.client.createCollection(this.collectionName, {
-          vectors: { size: 384, distance: "Cosine" },
-        });
-      } catch (err) {
-        debugLogger.error("Failed to create Qdrant collection", { error: err.message });
-      }
+      return { created: false };
+    } catch (error) {
+      if (error.status !== 404) throw error;
+      await this.client.createCollection(this.collectionName, {
+        vectors: { size: 384, distance: "Cosine" },
+      });
+      return { created: true };
     }
   }
 
   async upsertNote(noteId, text, payload = {}) {
-    if (!this.client) return;
+    if (!this.client) return false;
     try {
       const vector = await localEmbeddings.embedText(text);
       await this.client.upsert(this.collectionName, {
+        wait: true,
         points: [{ id: noteId, vector: Array.from(vector), payload }],
       });
+      return true;
     } catch (err) {
       debugLogger.debug("Vector index upsert failed", { noteId, error: err.message });
+      return false;
     }
   }
 
   async deleteNote(noteId) {
-    if (!this.client) return;
+    if (!this.client) return false;
     try {
-      await this.client.delete(this.collectionName, { points: [noteId] });
+      await this.client.delete(this.collectionName, { wait: true, points: [noteId] });
+      return true;
     } catch (err) {
       debugLogger.debug("Vector index delete failed", { noteId, error: err.message });
+      return false;
     }
   }
 
@@ -55,6 +62,7 @@ class VectorIndex {
     if (!this.client) return false;
     try {
       await this.client.delete(this.collectionName, {
+        wait: true,
         filter: { must: [{ key: "space_id", match: { value: spaceId } }] },
       });
       return true;
@@ -78,32 +86,6 @@ class VectorIndex {
       debugLogger.debug("Vector search failed", { error: err.message });
       return [];
     }
-  }
-
-  async reindexAll(notes, onProgress) {
-    if (!this.client) return { failed: notes.length };
-    const BATCH_SIZE = 50;
-    let failed = 0;
-    for (let i = 0; i < notes.length; i += BATCH_SIZE) {
-      const batch = notes.slice(i, i + BATCH_SIZE);
-      const texts = batch.map((n) =>
-        LocalEmbeddings.noteEmbedText(n.title, n.content, n.enhanced_content)
-      );
-      try {
-        const vectors = await localEmbeddings.embedTexts(texts);
-        const points = batch.map((n, j) => ({
-          id: n.id,
-          vector: Array.from(vectors[j]),
-          payload: { space_id: n.space_id, folder_id: n.folder_id ?? null },
-        }));
-        await this.client.upsert(this.collectionName, { points });
-      } catch (err) {
-        failed += batch.length;
-        debugLogger.debug("Vector reindex batch failed", { offset: i, error: err.message });
-      }
-      if (onProgress) onProgress(Math.min(i + BATCH_SIZE, notes.length), notes.length);
-    }
-    return { failed };
   }
 
   async ensureConversationChunksCollection() {
@@ -216,10 +198,6 @@ class VectorIndex {
       if (onProgress)
         onProgress(Math.min(i + BATCH_SIZE, conversations.length), conversations.length);
     }
-  }
-
-  isReady() {
-    return this.client !== null;
   }
 }
 

@@ -2,7 +2,7 @@ import i18n, { normalizeUiLanguage } from "../../i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { en as enPrompts } from "../../locales/prompts";
 import { getLanguageInstruction } from "../../utils/languageSupport";
-import { PROMPT_KINDS, type PromptKind } from "./registry";
+import { PROMPT_KINDS, PLAIN_TEXT_RESPONSE_SUFFIX, type PromptKind } from "./registry";
 
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./registry";
 
@@ -56,6 +56,11 @@ export function appendDictionarySuffix(
     defaultValue: enPrompts.dictionarySuffix,
   });
   return prompt + suffix + customDictionary.join(", ");
+}
+
+// Append after every other suffix: trailing instructions are the ones models weight most.
+export function appendPlainTextResponseSuffix(prompt: string): string {
+  return prompt + PLAIN_TEXT_RESPONSE_SUFFIX;
 }
 
 function applySubstitutions(template: string, opts: ResolvePromptOptions): string {

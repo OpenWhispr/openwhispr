@@ -33,7 +33,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
    - Main Process: Electron main, IPC handlers, database operations
    - Renderer Process: React app with context isolation
    - Preload Script: Secure bridge between processes
-   - ONNX Utility Process: hosts all `onnxruntime-node` inference (text embeddings, speaker embeddings, fbank). Lazy-spawned on first use via `src/helpers/onnxWorkerClient.js` → `src/workers/onnxWorker.js`. Native crashes (e.g., ORT `bad_alloc`) confine to the worker; main process rejects in-flight requests and respawns with backoff. Stopped in `will-quit`.
+   - ONNX Utility Process: hosts all `onnxruntime-node` inference (text embeddings, speaker embeddings, fbank). Lazy-spawned on first use via `src/helpers/onnxWorkerClient.js` → `src/workers/onnxWorker.js`. Native crashes (e.g., ORT `bad_alloc`) confine to the worker; main process rejects in-flight requests and respawns with backoff. A request that times out kills the worker so it respawns the same way; the embedding clients reload their sessions on the new worker. Exits once idle with no session loaded (`releaseIfIdle`, after semantic search releases its model). Stopped in `will-quit`.
 
 3. **Audio Pipeline**:
    - MediaRecorder API → Blob → ArrayBuffer → IPC → File → whisper.cpp
@@ -109,7 +109,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - `HIDDEN_LAUNCH_FLAG` (`--hidden`) is how a login launch tells the app to start in the tray. Windows has no native equivalent (`openAsHidden` is macOS-only and a no-op on macOS 13+), so the flag rides on the login item's `args`; Linux puts it on the autostart entry's `Exec`; macOS uses `wasOpenedAtLogin` instead
   - On Windows, read the state from `executableWillLaunchAtLogin`, never from `openAtLogin`: `openAtLogin` only compares the `Run` value against the current executable and args and ignores the `StartupApproved` key that Task Manager and Settings write when a user disables a startup app
   - Reads and writes must pass identical `args`, or `openAtLogin` always reports false
-  - `getRelaunchOptions()` and `getRelaunchWaiter()` shape the `relaunch-app` IPC that follows `cleanup-app` (Reset app data; Delete account with device erase): the relaunch drops `--hidden` and any cold-start deep link, and an AppImage or Windows portable build is started again from its on-disk file (`$APPIMAGE`, `$PORTABLE_EXECUTABLE_FILE`) by a detached waiter, since both run from a directory that disappears when the app exits. The handler in `ipcHandlers.js` only quits under `npm run dev` and, on macOS with an update Squirrel already holds, hands the restart to the updater
+  - `getRelaunchOptions()` and `getRelaunchWaiter()` shape the `relaunch-app` IPC that follows `cleanup-app` (Reset app data; Delete account with device erase): the relaunch drops `--hidden` and any cold-start deep link, and an AppImage is started again from its on-disk file (`$APPIMAGE`) by a detached waiter, since it runs from a FUSE mount that disappears when the app exits. The handler in `ipcHandlers.js` only quits under `npm run dev` and, on macOS with an update Squirrel already holds, hands the restart to the updater
 - **linuxAutostart.js**: Launch-at-login on Linux via an XDG autostart entry
   - `app.setLoginItemSettings()` is a no-op on Linux, so the entry is written directly to `$XDG_CONFIG_HOME/autostart/open-whispr.desktop`, matching the executable name electron-builder packages under
   - `Exec` resolves from `$APPIMAGE` first: `process.execPath` is the ephemeral AppImage FUSE mount
@@ -127,9 +127,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Gates notifications during recording (tap-to-talk and push-to-talk)
   - Post-recording cooldown (2.5s) before showing queued notifications
   - Priority-based coalescing (process > audio) — one notification, not three
+  - Both detectors start off and only run once the renderer has synced its saved notification preferences (`sync-notification-preferences`); they stop when meeting prompts are disabled and restart when re-enabled. The derivation lives in `meetingDetectionPreferencePolicy.js` (pure, unit-tested in `test/helpers/meetingDetectionPreferencePolicy.test.js`); `ipcHandlers.js` is a thin adapter over it
 - **meetingProcessDetector.js**: Detects running meeting apps
   - macOS: Event-driven via `systemPreferences.subscribeWorkspaceNotification` (zero CPU)
   - Windows/Linux: Shared `processListCache` polling (30s interval)
+  - Scans are start-generation guarded: a process-list read that completes after `stop()` or a newer `start()` is discarded, since the detector is now stopped and started at runtime (notification toggles, auto-end sessions)
 - **audioActivityDetector.js**: Detects microphone usage for unscheduled meetings
   - macOS: Event-driven via `macos-mic-listener` binary (CoreAudio process objects; aggregate device activity prompts only while a known meeting app is running)
   - Windows: Event-driven via `windows-mic-listener.exe` (WASAPI sessions, self-PID exclusion)
@@ -158,8 +160,9 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **parakeet.js**: NVIDIA Parakeet model management via sherpa-onnx
 - **parakeetServer.js**: sherpa-onnx CLI wrapper for transcription
 - **qdrantManager.js**: Qdrant vector DB sidecar process lifecycle (spawn, health check, shutdown)
+- **semanticSearchLifecycle.js**: Single owner of the semantic search resources — starts Qdrant and the embedding model on demand, drains the SQLite change journal, and releases both after 5 minutes idle
 - **localEmbeddings.js**: Local text embedding via ONNX Runtime + all-MiniLM-L6-v2 (384-dim vectors)
-- **vectorIndex.js**: Qdrant collection management — upsert, delete, search, batch reindex
+- **vectorIndex.js**: Qdrant collection management — upsert, delete, search
 - **windowConfig.js**: Centralized window configuration
 - **windowManager.js**: Window creation and lifecycle management
 - **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app. `POST /v1/transcribe` takes a file **path** (never audio) and runs the user's downloaded local model through `IPCHandlers.transcribeLocalFile`, approving the path with `approveAudioPath` first; `GET /v1/transcribe/models` lists local models with download state and the app's default (`localTranscriptionModels.js`, read from the `.env` pre-warm values).
@@ -242,20 +245,22 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 
 ### Local Semantic Search (Qdrant + MiniLM)
 
-Always-on offline semantic search that finds notes by meaning, not just keywords. Used by the AI agent's `search_notes` tool. Qdrant starts automatically on app launch; embedding model auto-downloads on first run if missing.
+Offline semantic search that finds notes by meaning, not just keywords. Used by the AI agent's `search_notes` tool. Its resources are lazy (#2143): Qdrant and the embedding model start on the first semantic search (or the first vector write while the index is active), the embedding model downloads on that first activation if missing, and everything is released after 5 minutes idle. While asleep, keyword FTS5 serves searches and note changes are journaled in SQLite.
 
 **Architecture**:
 
 - **Qdrant sidecar**: Rust binary spawned as child process (`qdrantManager.js`), port 6333–6350
 - **Embedding model**: `all-MiniLM-L6-v2` via ONNX Runtime (`localEmbeddings.js`), 384-dim vectors
 - **Vector index**: Qdrant collection management (`vectorIndex.js`), cosine distance
+- **Lifecycle owner**: `semanticSearchLifecycle.js` — the only caller that starts or stops Qdrant, the embedding model and the collection
 - **Hybrid search**: FTS5 + Qdrant in parallel → Reciprocal Rank Fusion (K=60) with 0.3 cosine score threshold
 
 **Pipeline**:
 
-1. App launches → Qdrant binary starts → collection created. Embedding model auto-downloads if missing (~22MB)
-2. Note create/update/delete → SQLite write → background vector upsert/delete via `_asyncVectorUpsert()`/`_asyncVectorDelete()`
+1. App launches → nothing starts. The first `db-semantic-search-notes` call activates the lifecycle: embedding model downloaded if missing (~22MB) → Qdrant binary starts → collection ensured → the journal is drained. A cold search does not wait: it answers with FTS5 results while activation runs in the background. An existing collection serves searches while the journal drains; a newly created one waits until that activation's drain finishes. A journal row whose upsert keeps failing is parked after three failed attempts, so one bad note never blocks the rest of the index
+2. Note create/update/delete → SQLite write → triggers journal the note id in `pending_vector_changes` → `IPCHandlers.notifyVectorChanges()` wakes an already-active index to drain the journal; an idle index drains it on its next activation
 3. Agent searches → `db-semantic-search-notes` IPC → parallel FTS5 + vector search → RRF merge → ranked results
+4. 5 minutes without a search or write → Qdrant is stopped and the embedding session released; FTS5 keeps serving
 
 **Search fallback chain** (in `searchNotesTool.ts`): cloud search → local semantic → FTS5 keyword
 
@@ -263,11 +268,12 @@ Always-on offline semantic search that finds notes by meaning, not just keywords
 
 - Qdrant data: `~/.cache/openwhispr/qdrant-data/` (`qdrant-data-dev/` in development)
 - Qdrant binary: `resources/bin/qdrant-{platform}-{arch}` (bundled — downloaded during `prebuild` / `predev:main`)
-- Embedding model: `~/.cache/openwhispr/embedding-models/all-MiniLM-L6-v2/` (auto-downloaded on first launch)
+- Embedding model: `~/.cache/openwhispr/embedding-models/all-MiniLM-L6-v2/` (downloaded on the first semantic search)
+- Change journal: `pending_vector_changes` table in the notes SQLite database, maintained by triggers
 
 **Dependencies**: `@qdrant/js-client-rest`, `onnxruntime-node`
 
-**Dev setup**: The Qdrant binary downloads automatically via `predev`/`prestart`. The embedding model auto-downloads on first app launch. To manually download: `npm run download:qdrant` and `npm run download:embedding-model`.
+**Dev setup**: The Qdrant binary downloads automatically via `predev`/`prestart`. The embedding model downloads on the first semantic search. To manually download: `npm run download:qdrant` and `npm run download:embedding-model`.
 
 ### Build Scripts (scripts/)
 
@@ -656,7 +662,7 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 
 - All prompts render in one always-on-top overlay window (`MeetingNotificationCard`), content-protected so it never appears in screen shares
 - Prompt copy is derived in the renderer from `{ variant, event, joinUrl }` (`meetingNotification.*` i18n keys); variants: `detected` (mic evidence), `starting` (calendar event not yet started), `underway` (event in progress)
-- Per-source notification prefs: `notifyCalendarReminders` gates calendar prompts, `notifyMeetingDetection` gates mic/process prompts
+- Per-source notification prefs: `notifyCalendarReminders` gates calendar prompts, `notifyMeetingDetection` gates mic/process prompts and, with `notificationsEnabled`, whether the mic and process detectors run at all (`meetingProcessDetection` additionally gates the process detector); nothing runs until the renderer has synced the saved snapshot
 - During recording (tap-to-talk or push-to-talk): ALL notifications suppressed
 - After recording: 2.5s cooldown before showing queued notifications
 - Multiple signals coalesced: one overlay at a time; a newer prompt replaces the current one
@@ -677,7 +683,7 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 
 ### 17. Voice Assistant Hotkey
 
-A dedicated global hotkey that starts a dictation whose transcript is sent straight to the voice assistant as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. Standalone commands never type at an unverified cursor: with auto-paste enabled and a writable caret verified at capture time (an opaque `caret` session in `selectionManager.js`, revalidated before pasting; terminals and fields with a live selection excluded — the native probes check the focused element's own selection state, closing the clipboard-capture blind spots), the completed answer pastes at that caret and the pill returns to idle. Otherwise the answer streams into a floating assistant panel attached to the dictation pill (there is no separate assistant window) and, with auto-paste enabled, is also copied to the clipboard for manual paste (the Copy button confirms for six seconds). The pill window is content-protected while the panel is open (the panel never appears in screen shares).
+A dedicated global hotkey that starts a dictation whose transcript is sent straight to the voice assistant as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. With auto-paste enabled, a caret verified as writable at capture time (an opaque `caret` session in `selectionManager.js`, revalidated before pasting) receives the completed answer and the pill returns to idle. A dormant macOS accessibility tree reports "unknown": synthetic copy can still recover selected text, but cannot establish a safe caret destination. Unknown targets therefore stay on the panel route, since they can also be integrated terminals, pages without inputs, or fields with selections hidden by clipboard capture. A verified caret whose accessibility becomes unknown before delivery falls back the same way. Terminal and secure-field checks still apply to verified targets. Otherwise the answer streams into a floating assistant panel attached to the dictation pill (there is no separate assistant window) and, with auto-paste enabled, is also copied to the clipboard for manual paste (the Copy button confirms for six seconds). The pill window is content-protected while the panel is open (the panel never appears in screen shares).
 
 **Flow**:
 
@@ -807,7 +813,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 - [ ] Test meeting notification suppression during recording
 - [ ] Test post-recording cooldown (notifications shouldn't flash immediately)
 - [ ] Create a note about "quarterly revenue projections", search via agent for "financial forecast" — should match semantically
-- [ ] Verify Qdrant starts on app launch (check debug logs for "qdrant started successfully")
+- [ ] Verify Qdrant stays down at launch and starts on the first agent search (check debug logs for "qdrant started successfully"), then stops after 5 idle minutes
 - [ ] Kill Qdrant process manually — verify FTS5 keyword search still works as fallback
 
 ### Common Issues and Solutions
@@ -857,7 +863,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 
 7. **Local Semantic Search Not Working**:
    - Qdrant binary should be in `resources/bin/qdrant-{platform}-{arch}` (auto-downloaded during `predev`/`prebuild`)
-   - Embedding model should be in `~/.cache/openwhispr/embedding-models/all-MiniLM-L6-v2/model.onnx` (auto-downloaded on first app launch)
+   - Embedding model should be in `~/.cache/openwhispr/embedding-models/all-MiniLM-L6-v2/model.onnx` (downloaded on the first semantic search)
    - Run `npm run download:qdrant` and `npm run download:embedding-model` manually if missing
    - Check debug logs for "qdrant" entries (port, health check, errors)
    - If Qdrant fails to start, search still works via FTS5 keyword fallback
@@ -886,6 +892,9 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 - **Launch at login**: `HKCU\...\Run` entry written by Electron, named after the AppUserModelId, carrying `--hidden` so a login launch goes to the tray
   - Read the state from `executableWillLaunchAtLogin`; `openAtLogin` misses a startup app disabled from Task Manager or Settings
   - `resources/nsis/installer.nsh` removes the `Run` and `StartupApproved\Run` values on uninstall (but not on update), which Electron itself never cleans up
+- **Tray identity**: signed production builds pass a permanent GUID to `new Tray()` (`tray.js`) so Windows keeps the user's tray placement across updates. Never change the GUID
+  - Windows binds an unsigned executable's GUID to its path, so the GUID is gated on the `windowsTrayIdentity` marker that `electron-builder.json` injects through `extraMetadata`
+  - `electron-builder.json` forces Windows code signing; unsigned Windows builds (PR CI, local) must use `electron-builder.unsigned-win.json`, which clears the marker. Never run the `win-unpacked` a failed signed build leaves behind: it carries the marker and may be unsigned
 - **Push-to-Talk**: Native key listener binary (`windows-key-listener.exe`) enables true push-to-talk
   - Uses Windows Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)
   - Supports compound hotkeys (e.g., `Ctrl+Shift+F11`)

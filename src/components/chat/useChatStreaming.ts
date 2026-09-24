@@ -14,6 +14,7 @@ import {
 import { usePolicyStore } from "../../stores/policyStore";
 import {
   appendDictionarySuffix,
+  appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
   getAgentSystemPrompt,
 } from "../../config/prompts";
@@ -94,6 +95,8 @@ export interface SendToAIOptions {
   selectedContext?: AgentSelectionContext;
   /** Keeps a caret-destined voice response in the compact pill while it streams. */
   suppressResponseContent?: boolean;
+  /** Asks the model for plain prose because the answer will be pasted into a plain-text app. */
+  plainTextResponse?: boolean;
   /** Per-request completion hook used to deliver a finished voice response. */
   onComplete?: (result: {
     assistantId: string;
@@ -362,6 +365,9 @@ export function useChatStreaming({
         // dictation path pairs the suffix with an attached image. Restore it
         // for cloud context once openwhispr-api#157 vision-routes that field.
         systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
+      }
+      if (options?.plainTextResponse) {
+        systemPrompt = appendPlainTextResponseSuffix(systemPrompt);
       }
       if (attachment) {
         transformLastUserMessage(history, (message) => ({

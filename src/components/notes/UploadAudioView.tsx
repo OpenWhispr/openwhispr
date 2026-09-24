@@ -36,7 +36,7 @@ import {
 import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
-import { useStartOnboarding } from "../../hooks/useStartOnboarding";
+import { requestSignIn } from "../../utils/requestSignIn";
 import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
@@ -293,15 +293,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionBaseUrl,
     cloudTranscriptionMode,
     transcriptionMode,
+    remoteTranscriptionUrl,
+    remoteTranscriptionModel,
   } = useSettingsStore(
     useShallow((settings) =>
       selectResolvedUploadTranscription(selectPolicyEffectiveSettings(settings, policyState))
     )
   );
   const uploadAllowedByPolicy = useTranscriptionContextAllowed("upload");
-
-  const remoteTranscriptionUrl = useSettingsStore((s) => s.remoteTranscriptionUrl);
-  const remoteTranscriptionModel = useSettingsStore((s) => s.remoteTranscriptionModel);
 
   const setUploadTranscriptionMode = useSettingsStore((s) => s.setUploadTranscriptionMode);
   const setUploadCloudTranscriptionMode = useSettingsStore(
@@ -941,8 +940,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
   };
 
-  const handleCreateAccount = useStartOnboarding();
-
   const switchToCloud = () => {
     setUploadTranscriptionMode("openwhispr");
     setUploadCloudTranscriptionMode("openwhispr");
@@ -1158,7 +1155,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             requiresAccount={requiresAccount}
             isProUser={!!isProUser}
             onUpgrade={() => usage?.openCheckout()}
-            onCreateAccount={handleCreateAccount}
+            onCreateAccount={requestSignIn}
             onSwitchToCloud={switchToCloud}
             onOpenSettings={onOpenSettings}
           />
