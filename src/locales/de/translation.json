@@ -3806,6 +3806,8 @@
     },
     "tools": {
       "search_notesName": "Notizen durchsuchen",
+      "email_draftName": "E-Mail-Entwurf",
+      "find_contactName": "Kontakt suchen",
       "get_noteName": "Notiz abrufen",
       "create_noteName": "Notiz erstellen",
       "update_noteName": "Notiz aktualisieren",
@@ -3818,6 +3820,8 @@
       "update_dictionaryName": "Wörterbuch aktualisieren",
       "update_snippetsName": "Snippets aktualisieren",
       "search_notesStatus": "Notizen werden durchsucht...",
+      "email_draftStatus": "E-Mail-Entwurf wird geöffnet...",
+      "find_contactStatus": "Kontakte werden gesucht...",
       "web_searchStatus": "Websuche...",
       "copy_to_clipboardStatus": "In Zwischenablage kopieren...",
       "get_calendar_eventsStatus": "Kalender wird geprüft...",

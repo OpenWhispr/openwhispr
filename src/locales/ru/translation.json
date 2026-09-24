@@ -3681,6 +3681,8 @@
     },
     "tools": {
       "search_notesName": "Поиск заметок",
+      "email_draftName": "Черновик письма",
+      "find_contactName": "Найти контакт",
       "get_noteName": "Получить заметку",
       "create_noteName": "Создать заметку",
       "update_noteName": "Обновить заметку",
@@ -3693,6 +3695,8 @@
       "update_dictionaryName": "Обновить словарь",
       "update_snippetsName": "Обновить сниппеты",
       "search_notesStatus": "Поиск в заметках...",
+      "email_draftStatus": "Открытие черновика письма...",
+      "find_contactStatus": "Поиск контактов...",
       "web_searchStatus": "Поиск в интернете...",
       "copy_to_clipboardStatus": "Копирование в буфер обмена...",
       "get_calendar_eventsStatus": "Проверка календаря...",

@@ -3637,6 +3637,8 @@
     },
     "tools": {
       "search_notesName": "Pesquisar notas",
+      "email_draftName": "Rascunho de e-mail",
+      "find_contactName": "Encontrar contato",
       "get_noteName": "Obter nota",
       "create_noteName": "Criar nota",
       "update_noteName": "Atualizar nota",
@@ -3649,6 +3651,8 @@
       "update_dictionaryName": "Atualizar dicionário",
       "update_snippetsName": "Atualizar snippets",
       "search_notesStatus": "Pesquisando notas...",
+      "email_draftStatus": "Abrindo um rascunho de e-mail...",
+      "find_contactStatus": "Procurando contatos...",
       "web_searchStatus": "Pesquisando na web...",
       "copy_to_clipboardStatus": "Copiando para a área de transferência...",
       "get_calendar_eventsStatus": "Verificando calendário...",

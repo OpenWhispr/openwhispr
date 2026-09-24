@@ -3637,6 +3637,8 @@
     },
     "tools": {
       "search_notesName": "搜索笔记",
+      "email_draftName": "邮件草稿",
+      "find_contactName": "查找联系人",
       "get_noteName": "获取笔记",
       "create_noteName": "创建笔记",
       "update_noteName": "更新笔记",
@@ -3649,6 +3651,8 @@
       "update_dictionaryName": "更新词典",
       "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜索笔记...",
+      "email_draftStatus": "正在打开邮件草稿...",
+      "find_contactStatus": "正在查找联系人...",
       "web_searchStatus": "正在搜索网页...",
       "copy_to_clipboardStatus": "正在复制到剪贴板...",
       "get_calendar_eventsStatus": "正在查看日历...",

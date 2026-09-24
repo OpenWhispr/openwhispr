@@ -3806,6 +3806,8 @@
     },
     "tools": {
       "search_notesName": "Search notes",
+      "email_draftName": "Email draft",
+      "find_contactName": "Find contact",
       "get_noteName": "Get note",
       "create_noteName": "Create note",
       "update_noteName": "Update note",
@@ -3818,6 +3820,8 @@
       "update_dictionaryName": "Update dictionary",
       "update_snippetsName": "Update snippets",
       "search_notesStatus": "Searching notes...",
+      "email_draftStatus": "Opening an email draft...",
+      "find_contactStatus": "Looking up contacts...",
       "web_searchStatus": "Searching the web...",
       "copy_to_clipboardStatus": "Copying to clipboard...",
       "get_calendar_eventsStatus": "Checking calendar...",

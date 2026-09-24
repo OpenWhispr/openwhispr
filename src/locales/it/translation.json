@@ -3637,6 +3637,8 @@
     },
     "tools": {
       "search_notesName": "Cerca nelle note",
+      "email_draftName": "Bozza email",
+      "find_contactName": "Trova contatto",
       "get_noteName": "Ottieni nota",
       "create_noteName": "Crea nota",
       "update_noteName": "Aggiorna nota",
@@ -3649,6 +3651,8 @@
       "update_dictionaryName": "Aggiorna dizionario",
       "update_snippetsName": "Aggiorna snippet",
       "search_notesStatus": "Ricerca nelle note...",
+      "email_draftStatus": "Apertura di una bozza email...",
+      "find_contactStatus": "Ricerca contatti...",
       "web_searchStatus": "Ricerca sul web...",
       "copy_to_clipboardStatus": "Copia negli appunti...",
       "get_calendar_eventsStatus": "Controllo del calendario...",

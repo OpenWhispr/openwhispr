@@ -3637,6 +3637,8 @@
     },
     "tools": {
       "search_notesName": "搜尋筆記",
+      "email_draftName": "郵件草稿",
+      "find_contactName": "尋找聯絡人",
       "get_noteName": "取得筆記",
       "create_noteName": "建立筆記",
       "update_noteName": "更新筆記",
@@ -3649,6 +3651,8 @@
       "update_dictionaryName": "更新字典",
       "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜尋筆記...",
+      "email_draftStatus": "正在開啟郵件草稿...",
+      "find_contactStatus": "正在尋找聯絡人...",
       "web_searchStatus": "正在搜尋網頁...",
       "copy_to_clipboardStatus": "正在複製到剪貼簿...",
       "get_calendar_eventsStatus": "正在查看行事曆...",

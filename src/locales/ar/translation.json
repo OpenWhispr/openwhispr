@@ -1257,6 +1257,8 @@
     },
     "tools": {
       "search_notesName": "البحث في الملاحظات",
+      "email_draftName": "مسودة بريد إلكتروني",
+      "find_contactName": "البحث عن جهة اتصال",
       "get_noteName": "الحصول على الملاحظة",
       "create_noteName": "إنشاء ملاحظة",
       "update_noteName": "تحديث الملاحظة",
@@ -1269,6 +1271,8 @@
       "update_dictionaryName": "تحديث القاموس",
       "update_snippetsName": "تحديث المقتطفات",
       "search_notesStatus": "جاري البحث في الملاحظات...",
+      "email_draftStatus": "جارٍ فتح مسودة بريد إلكتروني...",
+      "find_contactStatus": "جارٍ البحث عن جهات الاتصال...",
       "web_searchStatus": "جاري البحث في الويب...",
       "copy_to_clipboardStatus": "جاري النسخ إلى الحافظة...",
       "get_calendar_eventsStatus": "جاري التحقق من التقويم...",

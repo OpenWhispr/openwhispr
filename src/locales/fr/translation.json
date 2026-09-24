@@ -3806,6 +3806,8 @@
     },
     "tools": {
       "search_notesName": "Rechercher des notes",
+      "email_draftName": "Brouillon d'e-mail",
+      "find_contactName": "Rechercher un contact",
       "get_noteName": "Obtenir une note",
       "create_noteName": "Créer une note",
       "update_noteName": "Mettre à jour une note",
@@ -3818,6 +3820,8 @@
       "update_dictionaryName": "Mettre à jour le dictionnaire",
       "update_snippetsName": "Mettre à jour les snippets",
       "search_notesStatus": "Recherche de notes...",
+      "email_draftStatus": "Ouverture d'un brouillon d'e-mail...",
+      "find_contactStatus": "Recherche de contacts...",
       "web_searchStatus": "Recherche sur le web...",
       "copy_to_clipboardStatus": "Copie dans le presse-papiers...",
       "get_calendar_eventsStatus": "Vérification du calendrier...",

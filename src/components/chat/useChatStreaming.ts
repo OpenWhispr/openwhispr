@@ -8,10 +8,15 @@ import { resolveChatStreamingInference } from "../../helpers/dictationAgentInfer
 import logger from "../../utils/logger";
 import {
   isAgentAllowed,
+  isConnectorsAllowed,
   isLlmSelectionAllowed,
   isWebSearchAllowed,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
+import { getUsageState } from "../../lib/usageStore";
+import { readHasPaidAccess } from "../../lib/paidAccessFlag";
+import { hasConnectorPlan } from "../../utils/connectorEligibility";
+import { resolveEmailDraftTarget } from "../../utils/emailDraftTarget";
 import {
   appendDictionarySuffix,
   appendScreenContextSuffix,
@@ -309,9 +314,17 @@ export function useChatStreaming({
         const calendarConnected =
           settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
         const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
+        const connectorsAvailable =
+          settings.isSignedIn &&
+          hasConnectorPlan(getUsageState(), readHasPaidAccess()) &&
+          isConnectorsAllowed(usePolicyStore.getState());
+        const emailDraftTarget = resolveEmailDraftTarget(settings.emailDraftTarget, {
+          gcalConnected: settings.gcalConnected,
+          mcalAccountEmails: settings.mcalAccounts.map((account) => account.email),
+        });
         // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
         const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
-        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}`;
+        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${connectorsAvailable}-${emailDraftTarget}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
@@ -328,6 +341,7 @@ export function useChatStreaming({
               getSnippets: () => getSettings().snippets,
               setSnippets: (snippets) => useSettingsStore.getState().setSnippets(snippets),
             },
+            connectors: connectorsAvailable ? { emailDraftTarget } : undefined,
           });
           toolRegistryRef.current = { key: cacheKey, registry };
         }

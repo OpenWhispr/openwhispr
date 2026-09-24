@@ -3637,6 +3637,8 @@
     },
     "tools": {
       "search_notesName": "ノートを検索",
+      "email_draftName": "メールの下書き",
+      "find_contactName": "連絡先を検索",
       "get_noteName": "ノートを取得",
       "create_noteName": "ノートを作成",
       "update_noteName": "ノートを更新",
@@ -3649,6 +3651,8 @@
       "update_dictionaryName": "辞書を更新",
       "update_snippetsName": "スニペットを更新",
       "search_notesStatus": "ノートを検索中...",
+      "email_draftStatus": "メールの下書きを開いています...",
+      "find_contactStatus": "連絡先を検索中...",
       "web_searchStatus": "ウェブを検索中...",
       "copy_to_clipboardStatus": "クリップボードにコピー中...",
       "get_calendar_eventsStatus": "カレンダーを確認中...",
