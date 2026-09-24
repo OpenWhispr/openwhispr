@@ -276,9 +276,10 @@ const FINAL_NATIVE_FAILURES: Record<string, string> = {
     'The provider settings for this recording are invalid. Check AI Models, then retry from history.',
   // Not a cancellation: the audio is kept, so the user can retry it.
   PROVIDER_BACKGROUND_EXPIRED: 'iOS stopped the request in the background. Retry from history.',
-  // Covers failed TLS handshakes too, not only untrusted certificates.
   PROVIDER_CERTIFICATE_UNTRUSTED:
     "Couldn't connect securely to this server. Check that its certificate is valid and trusted by iOS.",
+  // The 10-minute total limit. Retrying would send a long upload again.
+  PROVIDER_TIMED_OUT: 'The provider took too long to respond. Try again.',
 };
 
 function normalizeTransportFailure(error: unknown, providerId: string): Error {
@@ -373,6 +374,20 @@ function transcriptionDuration(payload: unknown): number {
   return typeof duration === 'number' && Number.isFinite(duration) && duration >= 0 ? duration : 0;
 }
 
+// Failures a different base address cannot change: the key, the account, or the
+// connection itself. Anything else (a 404, a web page, a 405) may mean the API
+// lives under /v1.
+const SAME_AT_EVERY_BASE = new Set([
+  'INVALID_CREDENTIAL',
+  'PROVIDER_QUOTA_EXCEEDED',
+  'PROVIDER_RATE_LIMITED',
+  'PROVIDER_NETWORK_ERROR',
+  'PROVIDER_LOCAL_NETWORK_ERROR',
+  'PROVIDER_HTTPS_REQUIRED',
+  'PROVIDER_CERTIFICATE_UNTRUSTED',
+  'PROVIDER_TIMED_OUT',
+]);
+
 // Setup checks only: a custom server entered as a bare origin usually serves its
 // API under /v1. Built-in providers have fixed endpoints and are never probed.
 async function firstWorkingEndpoint<T>(
@@ -382,16 +397,18 @@ async function firstWorkingEndpoint<T>(
 ): Promise<{ result: T; endpoint: string }> {
   const candidates =
     route.providerId === 'custom' ? getModelListBaseCandidates(endpoint) : [endpoint];
-  let primaryError: unknown;
-  for (const [index, candidate] of candidates.entries()) {
+  let lastError: unknown;
+  for (const candidate of candidates) {
     try {
       return { result: await attempt(candidate), endpoint: candidate };
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') throw error;
-      if (index === 0) primaryError = error;
+      if (!(error instanceof ProviderExecutionError) || SAME_AT_EVERY_BASE.has(error.code)) {
+        throw error;
+      }
+      lastError = error;
     }
   }
-  throw primaryError;
+  throw lastError;
 }
 
 async function processText(

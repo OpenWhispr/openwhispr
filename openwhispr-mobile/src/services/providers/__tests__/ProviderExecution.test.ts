@@ -470,6 +470,7 @@ describe('ProviderExecution security and errors', () => {
       'PROVIDER_CERTIFICATE_UNTRUSTED',
       "Couldn't connect securely to this server. Check that its certificate is valid and trusted by iOS.",
     ],
+    ['PROVIDER_TIMED_OUT', 'The provider took too long to respond. Try again.'],
   ])('reports native %s as a final, readable failure', async (code, message) => {
     const execution = createProviderExecution({
       ...makeDependencies([], []),
@@ -640,13 +641,49 @@ describe('ProviderExecution setup checks', () => {
     ]);
   });
 
-  test('reports the entered endpoint failure when no custom candidate works', async () => {
+  test('reports a rejected key at the entered endpoint without probing /v1', async () => {
+    const requests: Array<{ url: string; init: RequestInit }> = [];
     const execution = createProviderExecution(
-      makeDependencies([jsonResponse({}, 401), jsonResponse({}, 404)], []),
+      makeDependencies([jsonResponse({}, 401), jsonResponse({}, 404)], requests),
     );
     await expect(execution.discoverProviderModels({ route: customRoute() })).rejects.toMatchObject({
       code: 'INVALID_CREDENTIAL',
     });
+    expect(requests).toHaveLength(1);
+  });
+
+  test.each([
+    ['a page that is not the API', jsonResponse({ html: true })],
+    ['405 for the method', jsonResponse({}, 405)],
+  ])('falls back to /v1 when the bare origin answers with %s', async (_label, bareAnswer) => {
+    const requests: Array<{ url: string; init: RequestInit }> = [];
+    const execution = createProviderExecution(
+      makeDependencies([bareAnswer, jsonResponse({ data: [{ id: 'llama3' }] })], requests),
+    );
+    await expect(execution.discoverProviderModels({ route: customRoute() })).resolves.toMatchObject(
+      { endpoint: `${bareServer}/v1` },
+    );
+    expect(requests).toHaveLength(2);
+  });
+
+  test('reports the /v1 failure when the bare origin only answered 404', async () => {
+    const execution = createProviderExecution(
+      makeDependencies([jsonResponse({}, 404), jsonResponse({}, 401)], []),
+    );
+    await expect(execution.testProviderConnection({ route: customRoute() })).rejects.toMatchObject({
+      code: 'INVALID_CREDENTIAL',
+    });
+  });
+
+  test('does not wait on /v1 when the server cannot be reached at all', async () => {
+    const request = jest.fn(async (): Promise<Response> => {
+      throw Object.assign(new Error('native'), { code: 'PROVIDER_LOCAL_NETWORK_ERROR' });
+    });
+    const execution = createProviderExecution({ ...makeDependencies([], []), request });
+    await expect(execution.testProviderConnection({ route: customRoute() })).rejects.toMatchObject({
+      code: 'PROVIDER_LOCAL_NETWORK_ERROR',
+    });
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
   test('stops trying custom candidates once the check is cancelled', async () => {

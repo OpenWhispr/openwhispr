@@ -118,11 +118,11 @@ struct ProviderRequestTransportTests {
       requestId: "trickle-check", url: URL(string: "\(baseURL)/trickle")!, method: "GET",
       headers: [:], body: nil, bodyFileURL: nil, timeout: 5
     ) { result in
-      if case .failure = result { trickleFailed = true }
+      if case .failure(.timedOut) = result { trickleFailed = true }
       semaphore.signal()
     }
     precondition(semaphore.wait(timeout: .now() + 15) == .success, "Trickle request timed out")
-    precondition(trickleFailed, "A server that keeps trickling bytes must hit the total request limit")
+    precondition(trickleFailed, "A server that keeps trickling bytes must hit the total request limit and say so")
     precondition(Date().timeIntervalSince(trickleStartedAt) < 5, "The total limit must stop the request before the trickle ends")
 
     let tlsURL = ProcessInfo.processInfo.environment["PROVIDER_TEST_TLS_URL"]!
@@ -136,6 +136,26 @@ struct ProviderRequestTransportTests {
     }
     precondition(semaphore.wait(timeout: .now() + 10) == .success, "TLS request timed out")
     precondition(untrusted, "A self-signed certificate must be reported as untrusted, not as a network failure")
+
+    func classify(_ code: Int, host: String = "api.openai.com", elapsed: TimeInterval = 1) -> ProviderTransportError {
+      ProviderRequestTransport.failure(
+        for: NSError(domain: NSURLErrorDomain, code: code), host: host, elapsed: elapsed, resourceTimeout: 600)
+    }
+    guard case .network = classify(NSURLErrorSecureConnectionFailed) else {
+      preconditionFailure("A handshake that fails for any reason, such as a dropped connection, must stay retryable")
+    }
+    guard case .untrustedCertificate = classify(NSURLErrorServerCertificateHasBadDate) else {
+      preconditionFailure("An expired certificate must be reported as untrusted")
+    }
+    guard case .timedOut = classify(NSURLErrorTimedOut, elapsed: 600) else {
+      preconditionFailure("Hitting the total request limit must not look like an unreachable server")
+    }
+    guard case .network = classify(NSURLErrorTimedOut, elapsed: 300) else {
+      preconditionFailure("An idle timeout before the total limit stays a retryable network failure")
+    }
+    guard case .localNetwork = classify(NSURLErrorTimedOut, host: "192.168.1.20", elapsed: 300) else {
+      preconditionFailure("A local server that stops answering points at Local Network access")
+    }
 
     let limit = ProviderRequestTransport.audioLimitBytes
     precondition(limit == 25 * 1024 * 1024)

@@ -16,6 +16,7 @@ enum ProviderTransportError: Error {
   case httpsRequired
   case backgroundExpired
   case untrustedCertificate
+  case timedOut
   case audioUnavailable
   case audioTooLarge
   case invalidRecoveryRoute
@@ -30,6 +31,7 @@ enum ProviderTransportError: Error {
     case .httpsRequired: return "PROVIDER_HTTPS_REQUIRED"
     case .backgroundExpired: return "PROVIDER_BACKGROUND_EXPIRED"
     case .untrustedCertificate: return "PROVIDER_CERTIFICATE_UNTRUSTED"
+    case .timedOut: return "PROVIDER_TIMED_OUT"
     case .audioUnavailable: return "PROVIDER_AUDIO_UNAVAILABLE"
     case .audioTooLarge: return "PROVIDER_AUDIO_TOO_LARGE"
     case .invalidRecoveryRoute: return "PROVIDER_INVALID_RECOVERY_ROUTE"
@@ -46,6 +48,7 @@ enum ProviderTransportError: Error {
     case .httpsRequired: return "iOS only allows this server over HTTPS. Use an HTTPS address."
     case .backgroundExpired: return "iOS stopped the request in the background."
     case .untrustedCertificate: return "Couldn't connect securely to this server."
+    case .timedOut: return "The provider took too long to respond."
     case .audioUnavailable: return "The recorded audio file is unavailable."
     case .audioTooLarge: return "The recorded audio is larger than the 25 MB provider limit."
     case .invalidRecoveryRoute: return "The provider route for this recording is invalid."
@@ -65,8 +68,9 @@ final class ProviderRequestTransport: NSObject, URLSessionTaskDelegate {
   let resourceTimeout: TimeInterval
   static let audioLimitBytes = 25 * 1024 * 1024
   // TLS failures a retry cannot fix, such as a self-signed or expired server certificate.
+  // NSURLErrorSecureConnectionFailed is left out: iOS also reports a handshake that a
+  // flaky connection dropped that way, and a retry can fix that.
   private static let certificateErrorCodes: Set<Int> = [
-    NSURLErrorSecureConnectionFailed,
     NSURLErrorServerCertificateHasBadDate,
     NSURLErrorServerCertificateUntrusted,
     NSURLErrorServerCertificateHasUnknownRoot,
@@ -124,6 +128,18 @@ final class ProviderRequestTransport: NSObject, URLSessionTaskDelegate {
     return scheme == "http" && isPrivateHost(host)
   }
 
+  // iOS reports the idle timeout and the total limit with the same code, so the elapsed
+  // time tells them apart. Only the total limit is final: retrying it repeats a long upload.
+  static func failure(
+    for error: NSError, host: String, elapsed: TimeInterval, resourceTimeout: TimeInterval
+  ) -> ProviderTransportError {
+    // App Transport Security refuses plain HTTP to hosts it does not treat as local.
+    if error.code == NSURLErrorAppTransportSecurityRequiresSecureConnection { return .httpsRequired }
+    if certificateErrorCodes.contains(error.code) { return .untrustedCertificate }
+    if error.code == NSURLErrorTimedOut && elapsed >= resourceTimeout - 1 { return .timedOut }
+    return isPrivateHost(host) ? .localNetwork : .network
+  }
+
   private static func isPrivateHost(_ rawHost: String) -> Bool {
     let host = rawHost.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
     if ["localhost", "0.0.0.0", "::1"].contains(host) || host.hasSuffix(".local") || host.hasSuffix(".ts.net") { return true }
@@ -172,6 +188,8 @@ final class ProviderRequestTransport: NSObject, URLSessionTaskDelegate {
     request.timeoutInterval = min(timeout, 300)
     request.httpBody = body
     for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+    let startedAt = Date()
+    let resourceTimeout = resourceTimeout
     let completed: (Data?, URLResponse?, Error?) -> Void = { [weak self] data, response, error in
       if let bodyFileURL { try? FileManager.default.removeItem(at: bodyFileURL) }
       self?.lock.lock()
@@ -180,11 +198,11 @@ final class ProviderRequestTransport: NSObject, URLSessionTaskDelegate {
       self?.lock.unlock()
       if let error = error as NSError? {
         if error.code == NSURLErrorCancelled { completion(.failure(stopReason ?? .cancelled)) }
-        // App Transport Security refuses plain HTTP to hosts it does not treat as local.
-        else if error.code == NSURLErrorAppTransportSecurityRequiresSecureConnection { completion(.failure(.httpsRequired)) }
-        else if Self.certificateErrorCodes.contains(error.code) { completion(.failure(.untrustedCertificate)) }
-        else if Self.isPrivateHost(url.host?.lowercased() ?? "") { completion(.failure(.localNetwork)) }
-        else { completion(.failure(.network)) }
+        else {
+          completion(.failure(Self.failure(
+            for: error, host: url.host?.lowercased() ?? "",
+            elapsed: Date().timeIntervalSince(startedAt), resourceTimeout: resourceTimeout)))
+        }
         return
       }
       guard let response = response as? HTTPURLResponse else { completion(.failure(.network)); return }
