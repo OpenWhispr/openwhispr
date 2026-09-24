@@ -7,13 +7,7 @@ const DEFAULT_CHAT_AGENT_PROMPT =
   "Keep answers brief unless the user asks for detail. " +
   "You may be given a transcription of spoken input, so handle informal phrasing gracefully.";
 
-// Appended per request — never baked into the default above — when the
-// answer is pasted at a caret that wants plain text. Conditional on purpose:
-// the panel renders markdown, so panel answers keep it; markdown-friendly
-// apps (see src/helpers/markdownTargets.js) keep it; a user's custom chat
-// prompt still receives it; and the shipped default text (and its hash in
-// retiredPrompts.js) stays unchanged. English-only because the chat-agent
-// prompt it extends is English-only (i18nKey: null).
+// Appended per request, not baked into the default: the panel renders markdown.
 export const PLAIN_TEXT_RESPONSE_SUFFIX =
   "\n\nOUTPUT FORMAT: Your answer will be inserted as plain text exactly where the user is typing, " +
   "inside another application. Write plain prose with no markdown: no asterisks, underscores, " +

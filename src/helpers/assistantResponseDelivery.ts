@@ -32,7 +32,7 @@ interface AssistantResponseDeliveryDependencies {
 export function createAssistantResponseDelivery({
   autoPasteEnabled,
   deliverySessionId,
-  acceptsMarkdown = false,
+  acceptsMarkdown,
   restoreClipboard,
   allowClipboardFallback,
 }: {
@@ -81,15 +81,8 @@ export async function deliverAssistantResponse(
   const clipboard = dependencies.clipboard ?? navigator.clipboard;
 
   if (delivery.mode === "paste") {
-    // plainText is the main process's verdict on the captured app. When set,
-    // the model was asked for prose (plainTextResponse) and this is the floor
-    // under a model that drifts back to markdown. It covers the clipboard
-    // fallback too: a refused paste leaves the user about to paste the same
-    // text by hand into the same field. A markdown-friendly target (Obsidian,
-    // an AI prompt box) gets the answer exactly as written. A strip that
-    // leaves nothing at all — an answer that is only fences and rules — falls
-    // back to the raw answer, because pasting the markdown beats pasting
-    // nothing into the user's field.
+    // The strip also covers the clipboard fallback (the user pastes into the
+    // same field by hand); an answer it empties entirely is pasted raw.
     const text = delivery.plainText ? markdownToPlainText(content) || content : content;
     try {
       const result = await electronAPI?.pasteAtCapturedTarget?.(delivery.sessionId, text, {

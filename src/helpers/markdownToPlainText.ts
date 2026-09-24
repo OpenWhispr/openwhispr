@@ -156,10 +156,13 @@ function stripInline(text: string): string {
     .replace(/(?<![\w*\\])\*(\S(?:.*?\S)?)\*(?![\w*])/g, "$1")
     .replace(/(?<![\w_\\])_(?!_)(\S(?:.*?[^\s_])?)_(?![\w_])/g, "$1");
 
-  return stripped.replace(
-    new RegExp(`${placeholderPrefix}(\\d+)`, "g"),
-    (_match: string, index: string): string => literals[Number(index)]
-  );
+  // A literal can itself hold placeholders (a code span inside a link destination).
+  const placeholder = new RegExp(`${placeholderPrefix}(\\d+)`, "g");
+  const restore = (text: string): string =>
+    text.replace(placeholder, (_match: string, index: string): string =>
+      restore(literals[Number(index)])
+    );
+  return restore(stripped);
 }
 
 function splitTableCells(row: string): string[] {

@@ -58,10 +58,7 @@ export function appendDictionarySuffix(
   return prompt + suffix + customDictionary.join(", ");
 }
 
-// Appended last, after every other suffix, when the answer will be pasted at
-// a plain-text caret — trailing instructions are the ones models weight most
-// (the same reason wrapCleanupTranscript re-anchors the contract after the
-// transcript).
+// Append after every other suffix: trailing instructions are the ones models weight most.
 export function appendPlainTextResponseSuffix(prompt: string): string {
   return prompt + PLAIN_TEXT_RESPONSE_SUFFIX;
 }

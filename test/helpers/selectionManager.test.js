@@ -843,7 +843,6 @@ test("a caret in a markdown-native macOS app is reported as accepting markdown",
 
   assert.equal(result.status, "editable");
   assert.equal(result.acceptsMarkdown, true);
-  assert.equal(manager.sessions.get(result.sessionId).acceptsMarkdown, true);
 });
 
 test("a caret in a plain-text macOS app is reported as wanting plain text", async () => {
@@ -855,7 +854,6 @@ test("a caret in a plain-text macOS app is reported as wanting plain text", asyn
 
   assert.equal(result.status, "editable");
   assert.equal(result.acceptsMarkdown, false);
-  assert.equal(manager.sessions.get(result.sessionId).acceptsMarkdown, false);
 });
 
 test("an unreadable pid defaults the caret to plain text", async () => {
@@ -990,32 +988,6 @@ test("a paste the clipboard helper reports as not pasted logs paste_failed", asy
   const [entry] = declines();
   assert.equal(entry.meta.code, "paste_failed");
   assert.equal(entry.meta.probeStatus, "editable");
-});
-
-test("a successful paste logs no decline and one debug line carrying the markdown verdict", async () => {
-  logged.length = 0;
-  const { manager } = makeHarness({
-    selections: [
-      { state: "none", editable: true },
-      { state: "none", editable: true },
-    ],
-  });
-  manager._readExecutablePath = async () => "/Applications/Obsidian.app/Contents/MacOS/Obsidian";
-  const capture = await manager.captureSelectedText({ probeEditable: true });
-
-  assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
-    success: true,
-  });
-  assert.equal(declines().length, 0);
-  const successes = logged.filter((entry) => entry.message === "Assistant response pasted");
-  assert.equal(successes.length, 1);
-  assert.equal(successes[0].level, "debug");
-  assert.equal(successes[0].meta.platform, "darwin");
-  assert.equal(successes[0].meta.acceptsMarkdown, true);
-  // The AX target carries no exe name, window class or app name, so the
-  // signature the verdict matched on is empty here and logs as null.
-  assert.ok("targetSignature" in successes[0].meta);
-  assert.equal(successes[0].meta.targetSignature, null);
 });
 
 test("captured app identity controls literal-safe delivery through paste and changed-target fallback", async () => {

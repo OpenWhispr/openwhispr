@@ -2674,9 +2674,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       screenContext: config?.rawScreenContext ?? null,
       ...(selectedContext ? { selectedContext } : {}),
       // The verdict only means something next to a caret session.
-      ...(deliverySessionId
-        ? { deliverySessionId, deliveryAcceptsMarkdown: deliveryAcceptsMarkdown === true }
-        : {}),
+      ...(deliverySessionId ? { deliverySessionId, deliveryAcceptsMarkdown } : {}),
     };
   }
 

@@ -367,7 +367,6 @@ export function useChatStreaming({
         systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
       }
       if (options?.plainTextResponse) {
-        // Last on purpose: trailing instructions are the ones models weight most.
         systemPrompt = appendPlainTextResponseSuffix(systemPrompt);
       }
       if (attachment) {

@@ -154,7 +154,7 @@ const MARKDOWN_TARGET_SIGNATURES = [
 
 // Checked first, as plain substrings. An app that carries a listed name but
 // is not a markdown surface — the veto wins.
-const MARKDOWN_TARGET_VETOES = ["notion calendar", "notion mail", "xcode"];
+const MARKDOWN_TARGET_VETOES = ["notion calendar", "notion mail"];
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -176,6 +176,5 @@ function isMarkdownTargetSignature(signature) {
 
 module.exports = {
   MARKDOWN_TARGET_SIGNATURES,
-  MARKDOWN_TARGET_VETOES,
   isMarkdownTargetSignature,
 };

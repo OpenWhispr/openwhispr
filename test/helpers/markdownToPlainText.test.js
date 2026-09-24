@@ -326,3 +326,9 @@ test("fenced code preserves whitespace at the edges of an answer", async () => {
   }
   assert.equal(markdownToPlainText("```\n\n    value\n\n```"), "\n    value\n");
 });
+
+test("code spans inside a quoted path or a link destination restore fully", async () => {
+  const { markdownToPlainText } = await helperModule;
+  assert.equal(markdownToPlainText('"/tmp/`x`"'), '"/tmp/x"');
+  assert.equal(markdownToPlainText("See [docs](https://a.com/`x`)"), "See docs (https://a.com/x)");
+});

@@ -535,7 +535,7 @@ export const useAudioRecording = (toast, options = {}) => {
                 delivery: createAssistantResponseDelivery({
                   autoPasteEnabled,
                   deliverySessionId,
-                  acceptsMarkdown: deliveryAcceptsMarkdown === true,
+                  acceptsMarkdown: deliveryAcceptsMarkdown,
                   restoreClipboard: !keepTranscriptionInClipboard,
                   allowClipboardFallback: isAccessibilitySkipped(),
                 }),

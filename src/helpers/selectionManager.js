@@ -177,19 +177,12 @@ class SelectionManager {
       const capture = await this._readCurrentSelection(expectedTarget, { probeEditable });
       if (capture.status === "editable") {
         const sessionId = crypto.randomUUID();
-        // Decided once, here, and carried on both the session and the result:
-        // the renderer asks the model for plain prose and strips markdown only
-        // when the target is not a markdown-friendly app.
+        // The renderer asks for plain prose and strips markdown only when the
+        // target is not a markdown-friendly app.
         const acceptsMarkdown = await this._targetAcceptsMarkdown(capture.target);
         this.sessions.set(sessionId, {
           kind: "caret",
           target: capture.target,
-          acceptsMarkdown,
-          // App identity, never user content: what the markdown verdict was
-          // matched against, so a success log can say why. Windows and Linux
-          // name the app on the target; a macOS AX target carries none, so
-          // this is empty there — honest rather than invented.
-          targetSignature: this._targetSignature(capture.target) || null,
           expiresAt: this.now() + SESSION_TTL_MS,
         });
         return { status: "editable", sessionId, acceptsMarkdown };
@@ -308,16 +301,6 @@ class SelectionManager {
             probeStatus: "editable",
           });
         }
-        debugLogger.debug(
-          "Assistant response pasted",
-          {
-            targetKind: session.target?.kind ?? null,
-            acceptsMarkdown: session.acceptsMarkdown === true,
-            targetSignature: session.targetSignature ?? null,
-            platform: this.platform,
-          },
-          "clipboard"
-        );
         return { success: true };
       } catch (error) {
         debugLogger.warn("Assistant response paste failed", { error: error.message }, "clipboard");
