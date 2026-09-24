@@ -48,16 +48,16 @@ export function ToneStep(): ReactElement {
     >
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ gap: 12, paddingBottom: 16 }}
+        // Tight spacing lets the third tone peek above Continue, showing the list scrolls.
+        contentContainerStyle={{ gap: 10, paddingBottom: 16 }}
       >
-        <View className="rounded-xl bg-secondarySystemGroupedBackground p-4">
+        <View className="rounded-xl bg-secondarySystemGroupedBackground px-4 py-3">
           <Text className="text-[13px] font-semibold text-secondaryLabel">Compare the tones</Text>
-          <Text className="mt-2 text-[15px] leading-[21px] text-label">
+          <Text className="mt-1 text-[15px] leading-[21px] text-label">
             The same lunch invitation, written five different ways.
           </Text>
-          <Text className="mt-2 text-[12px] leading-[17px] text-secondaryLabel">
-            These are illustrative examples. Live tones need Cloud, Dictation Cleanup, and an
-            account. You can choose Local after this preview.
+          <Text className="mt-1.5 text-[12px] leading-[17px] text-secondaryLabel">
+            Live tones need Cloud, Dictation Cleanup, and an account.
           </Text>
         </View>
         {KEYBOARD_TONES.map((tone) => (
@@ -68,10 +68,10 @@ export function ToneStep(): ReactElement {
             accessibilityState={{ selected: selected === tone.value, disabled: saving }}
             disabled={saving}
             onPress={() => setSelected(tone.value)}
-            className={`rounded-2xl border p-4 bg-secondarySystemGroupedBackground ${selected === tone.value ? 'border-primary' : 'border-separator'}`}
+            className={`rounded-2xl border px-4 py-3 bg-secondarySystemGroupedBackground ${selected === tone.value ? 'border-primary' : 'border-separator'}`}
           >
             <View className="flex-row items-center justify-between gap-3">
-              <Text className="flex-1 text-[20px] font-semibold text-label">{tone.label}</Text>
+              <Text className="flex-1 text-[18px] font-semibold text-label">{tone.label}</Text>
               <SystemIcon
                 name={selected === tone.value ? 'checkmark.circle.fill' : 'circle'}
                 mdName={selected === tone.value ? 'CheckCircle2' : 'Circle'}
@@ -79,12 +79,12 @@ export function ToneStep(): ReactElement {
                 color={selected === tone.value ? 'brand' : 'tertiaryLabel'}
               />
             </View>
-            <Text className="mt-1 text-[14px] text-secondaryLabel">{tone.description}</Text>
-            <View className="mt-4 flex-row items-start gap-3 rounded-xl bg-primary/5 p-3">
-              <View className="h-8 w-8 items-center justify-center rounded-full bg-primary/15">
+            <Text className="mt-0.5 text-[14px] text-secondaryLabel">{tone.description}</Text>
+            <View className="mt-3 flex-row items-start gap-3 rounded-xl bg-primary/5 px-3 py-2.5">
+              <View className="h-7 w-7 items-center justify-center rounded-full bg-primary/15">
                 <Text className="text-[13px] font-semibold text-primary">S</Text>
               </View>
-              <Text className="flex-1 text-[15px] leading-[21px] text-label">
+              <Text className="flex-1 text-[15px] leading-[20px] text-label">
                 {EXAMPLES[tone.value]}
               </Text>
             </View>

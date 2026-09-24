@@ -107,3 +107,14 @@ it('reads each tone with its description and example to screen readers', () => {
     }),
   ).toBeTruthy();
 });
+
+it('keeps the intro to the comparison and what live tones need', () => {
+  const screen = render(<ToneStep />);
+  expect(screen.getByText('Compare the tones')).toBeTruthy();
+  expect(screen.getByText('The same lunch invitation, written five different ways.')).toBeTruthy();
+  expect(
+    screen.getByText('Live tones need Cloud, Dictation Cleanup, and an account.'),
+  ).toBeTruthy();
+  expect(screen.queryByText(/illustrative/)).toBeNull();
+  expect(screen.queryByText(/choose Local/)).toBeNull();
+});
