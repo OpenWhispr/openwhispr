@@ -66,14 +66,13 @@ test("a 200 is the whole signal for providers with no OpenAI-shaped model list",
   }
 });
 
-test("a transcription test asks OpenRouter for its speech-to-text catalog", () => {
-  // /v1/models returns OpenRouter's ~440 text models and no STT ones, so a
-  // transcription selection would always read as modelNotFound without the
-  // output_modalities filter.
+test("a transcription test checks the OpenRouter key, not its public catalog", () => {
+  // OpenRouter's catalogs list every model for any caller, so only its key
+  // endpoint can tell a valid key from a mistyped one.
   assert.equal(
     resolveProviderRequest({ provider: "openrouter", scope: "transcription", apiKey: "secret" })
       .endpoint,
-    "https://openrouter.ai/api/v1/models?output_modalities=transcription"
+    "https://openrouter.ai/api/v1/key"
   );
 
   // The reasoning scope keeps the plain catalog.
@@ -92,26 +91,24 @@ test("a transcription test asks OpenRouter for its speech-to-text catalog", () =
   );
 });
 
-test("an OpenRouter transcription model passes the availability check", async () => {
-  const seen = [];
-  const result = await testProviderConnection(
-    {
-      provider: "openrouter",
-      scope: "transcription",
-      apiKey: "secret",
-      model: "openai/gpt-transcribe",
-    },
-    async (url) => {
-      seen.push(url);
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ data: [{ id: "openai/gpt-transcribe" }, { id: "deepgram/nova-3" }] }),
-      };
-    }
-  );
-  assert.deepEqual(result, { success: true });
-  assert.deepEqual(seen, ["https://openrouter.ai/api/v1/models?output_modalities=transcription"]);
+test("the OpenRouter transcription test passes a valid key and rejects a bad one", async () => {
+  // Mirrors OpenRouter: the catalog answers 200 whatever the key, while the key
+  // endpoint answers 401 to a key it doesn't recognise.
+  const openRouter = (keyStatus) => async (url) =>
+    url === "https://openrouter.ai/api/v1/key"
+      ? { ok: keyStatus === 200, status: keyStatus, json: async () => ({ data: {} }) }
+      : { ok: true, status: 200, json: async () => ({ data: [{ id: "openai/gpt-transcribe" }] }) };
+  const config = { provider: "openrouter", scope: "transcription", model: "openai/gpt-transcribe" };
+
+  assert.deepEqual(await testProviderConnection({ ...config, apiKey: "valid" }, openRouter(200)), {
+    success: true,
+  });
+  assert.deepEqual(await testProviderConnection({ ...config, apiKey: "typo" }, openRouter(401)), {
+    success: false,
+    errorCode: "credentialsRejected",
+    error: "The provider rejected these credentials.",
+    status: 401,
+  });
 });
 
 test("normalizes custom compatible endpoints", () => {
