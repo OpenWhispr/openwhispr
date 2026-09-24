@@ -69,14 +69,20 @@ export class LocalTranscriptionService {
     return LocalWhisperService.isAvailable() || LocalParakeetService.isAvailable();
   }
 
-  static async getAvailability(): Promise<LocalEngineAvailability> {
+  static async getAvailability(
+    options: { waitForRecovery?: boolean } = {},
+  ): Promise<LocalEngineAvailability> {
     const parakeetSupported = LocalParakeetService.isAvailable();
     const orukeetSupported = parakeetSupported && LocalParakeetService.supportsVersion('orukeet');
     const [parakeetV2Downloaded, parakeetV3Downloaded, orukeetDownloaded] = parakeetSupported
       ? await Promise.all([
           LocalParakeetService.isModelDownloaded('v2'),
           LocalParakeetService.isModelDownloaded('v3'),
-          orukeetSupported ? LocalParakeetService.isModelDownloaded('orukeet') : false,
+          orukeetSupported
+            ? options.waitForRecovery
+              ? LocalParakeetService.isModelDownloadedAfterRecovery('orukeet')
+              : LocalParakeetService.isModelDownloaded('orukeet')
+            : false,
         ])
       : [false, false, false];
 

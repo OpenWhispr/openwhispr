@@ -46,6 +46,7 @@ struct InstallerRegression {
       await SDKProbe.shared.configure(.recover, blocked: true)
       let recovery = Task { await f.installer.installedDirectory() }
       try await SDKProbe.shared.waitForStart()
+      let uiAvailability = Task { await f.installer.installedDirectoryAfterRecovery() }
       try require(await f.installer.installedDirectory() == nil, "availability must not wait for recovery")
       do {
         _ = try await f.installer.install(fromArchive: f.archive) { _ in }
@@ -54,8 +55,9 @@ struct InstallerRegression {
       await SDKProbe.shared.release()
       let installed = await recovery.value
       try require(installed != nil, "recovery must publish a model")
+      try require(await uiAvailability.value == installed, "model-picker availability must await recovery, not report absent")
       try require(await SDKProbe.shared.starts == 1, "only one recovery is admitted")
-      checks.append("nonblocking availability and install admission during OS recovery")
+      checks.append("nonblocking dictation probes, waiting model-picker availability and install admission during recovery")
     }
 
     do {
@@ -105,6 +107,7 @@ struct InstallerRegression {
       try await SDKProbe.shared.waitForCancellation()
       let repeatedDeletion = Task { try await f.installer.deleteModelsAndStaging() }
       try require(await f.installer.installedDirectory() == nil, "lookup must not restart during deletion")
+      try require(await f.installer.installedDirectoryAfterRecovery() == nil, "model-picker lookup must not restart during deletion")
       do {
         _ = try await f.installer.install(fromArchive: f.archive) { _ in }
         throw RegressionFailure.assertion("install must be busy while deletion joins recovery")
@@ -130,6 +133,7 @@ struct InstallerRegression {
       await SDKProbe.shared.configure(.blockedInstall, blocked: true)
       let installation = Task { try await f.installer.install(fromArchive: f.archive) { _ in } }
       try await SDKProbe.shared.waitForStart()
+      try require(await f.installer.installedDirectoryAfterRecovery() == nil, "model picker must not wait for an explicit download")
       installation.cancel()
       do {
         _ = try await installation.value

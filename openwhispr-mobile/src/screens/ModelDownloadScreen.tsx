@@ -43,7 +43,11 @@ export default function ModelDownloadScreen() {
       const available = LocalTranscriptionService.isAvailable();
       setIsAvailable(available);
       if (available) {
-        const availability = await LocalTranscriptionService.getAvailability();
+        // Keep the loading state through local recompilation after an iOS
+        // update; showing a transient Download button can start a duplicate ZIP.
+        const availability = await LocalTranscriptionService.getAvailability({
+          waitForRecovery: true,
+        });
         setCatalog(getLocalModelCatalog(getPreferredTranscriptionLanguages(), availability));
       }
     } catch {

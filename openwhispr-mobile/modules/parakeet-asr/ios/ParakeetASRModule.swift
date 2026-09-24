@@ -102,6 +102,24 @@ public class ParakeetASRModule: Module {
       }
     }
 
+    // UI checks wait for an already-running OS rebuild, so the model picker
+    // cannot show Download for a model whose retained source is being compiled.
+    // Dictation's existing isModelDownloaded call remains non-blocking.
+    AsyncFunction("isModelDownloadedAfterRecovery") { (version: String, promise: Promise) in
+      Task {
+        do {
+          let model = try Self.parseModel(version)
+          if model == .orukeet {
+            promise.resolve(await Self.orukeet.installedDirectoryAfterRecovery() != nil)
+          } else {
+            promise.resolve(await Self.isDownloaded(model))
+          }
+        } catch {
+          promise.reject("MODEL_CHECK_ERROR", error.localizedDescription)
+        }
+      }
+    }
+
     // Everything the JS downloader (src/services/transcription/parakeetModelDownloader.ts) needs
     // to fetch a version. HuggingFace-tree names come from FluidAudio's own tables so the manifest
     // can never drift from the loader; the archive pin comes from OrukeetBundle.

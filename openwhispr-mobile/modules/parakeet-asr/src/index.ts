@@ -127,6 +127,7 @@ export interface MemorySample {
 
 interface NativeParakeetASR {
   isModelDownloaded(version: ParakeetVersion): Promise<boolean>;
+  isModelDownloadedAfterRecovery?(version: ParakeetVersion): Promise<boolean>;
   modelSpec(version: ParakeetVersion): Promise<ParakeetModelSpec>;
   installFromArchive(version: ParakeetVersion, archivePath: string): Promise<void>;
   deleteModel(version: ParakeetVersion): Promise<void>;
@@ -182,6 +183,16 @@ export const ParakeetASR = {
 
   async isModelDownloaded(version: ParakeetVersion): Promise<boolean> {
     return this.supportsVersion(version) ? requireNative().isModelDownloaded(version) : false;
+  },
+
+  /** Model-picker check: wait for local OS recovery without blocking dictation probes. */
+  async isModelDownloadedAfterRecovery(version: ParakeetVersion): Promise<boolean> {
+    if (!this.supportsVersion(version)) return false;
+    const native = requireNative();
+    // Preserve OTA compatibility with binaries that predate this optional API.
+    return native.isModelDownloadedAfterRecovery
+      ? native.isModelDownloadedAfterRecovery(version)
+      : native.isModelDownloaded(version);
   },
 
   /** How to fetch a version: its HuggingFace tree, or its pinned archive (see ParakeetModelSpec). */

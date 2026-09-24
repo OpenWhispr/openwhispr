@@ -71,6 +71,10 @@ export class LocalParakeetService {
     return ParakeetASR.isModelDownloaded(version);
   }
 
+  static async isModelDownloadedAfterRecovery(version: ParakeetVersion): Promise<boolean> {
+    return ParakeetASR.isModelDownloadedAfterRecovery(version);
+  }
+
   /** Installed weights plus any staged partial download for this version, in bytes (0 if neither exists). */
   static async modelSizeBytes(version: ParakeetVersion): Promise<number> {
     return ParakeetASR.modelSizeBytes(version);

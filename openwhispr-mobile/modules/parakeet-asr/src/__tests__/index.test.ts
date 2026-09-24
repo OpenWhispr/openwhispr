@@ -39,9 +39,30 @@ describe('ParakeetASR on a native build that predates Orukeet', () => {
     expect(isModelDownloaded).toHaveBeenCalledTimes(1);
     expect(isModelDownloaded).toHaveBeenCalledWith('v3');
   });
+
+  it('keeps recovery-aware UI checks compatible with old binaries', async () => {
+    const barrel = loadWithNative(olderNative);
+    await expect(barrel.isModelDownloadedAfterRecovery('orukeet')).resolves.toBe(false);
+    await expect(barrel.isModelDownloadedAfterRecovery('v3')).resolves.toBe(true);
+    expect(isModelDownloaded).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('ParakeetASR on a native build that installs archives', () => {
+  it('uses the recovery-aware API only for the model-picker check', async () => {
+    const isModelDownloaded = jest.fn(async () => false);
+    const isModelDownloadedAfterRecovery = jest.fn(async () => true);
+    const barrel = loadWithNative({
+      isModelDownloaded,
+      isModelDownloadedAfterRecovery,
+      installFromArchive: jest.fn(),
+    });
+    await expect(barrel.isModelDownloaded('orukeet')).resolves.toBe(false);
+    await expect(barrel.isModelDownloadedAfterRecovery('orukeet')).resolves.toBe(true);
+    expect(isModelDownloaded).toHaveBeenCalledTimes(1);
+    expect(isModelDownloadedAfterRecovery).toHaveBeenCalledWith('orukeet');
+  });
+
   it('supports Orukeet and asks the native module whether it is downloaded', async () => {
     const isModelDownloaded = jest.fn(async () => true);
     const barrel = loadWithNative({ isModelDownloaded, installFromArchive: jest.fn() });

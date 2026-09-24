@@ -13,6 +13,7 @@ actor OrukeetInstaller {
   nonisolated let stagingDirectory: URL
   private let store: OrukeetModelStore
   private var running: Task<URL?, Error>?
+  private var recovering = false
   private var deleting: Task<Void, Error>?
 
   init(home: URL) {
@@ -37,6 +38,25 @@ actor OrukeetInstaller {
       return try await findInstalled(prune: false)
     } catch {
       NSLog("[ParakeetASR] Orukeet install is not usable: %@", error.localizedDescription)
+      return nil
+    }
+  }
+
+  /// The model picker can show a loading indicator while a startup OS rebuild
+  /// finishes. Dictation continues using the non-blocking check above. Waiting
+  /// for this shared recovery does not cancel it when an individual UI closes.
+  func installedDirectoryAfterRecovery() async -> URL? {
+    guard deleting == nil else { return nil }
+    do {
+      if let running {
+        guard recovering else { return nil }
+        let installed = try await running.value
+        guard !Task.isCancelled, deleting == nil else { return nil }
+        return installed
+      }
+      return try await findInstalled(prune: true)
+    } catch {
+      NSLog("[ParakeetASR] Orukeet recovery is not usable: %@", error.localizedDescription)
       return nil
     }
   }
@@ -134,7 +154,8 @@ actor OrukeetInstaller {
       return installed
     }
     running = task
-    defer { running = nil }
+    recovering = true
+    defer { running = nil; recovering = false }
     return try await withTaskCancellationHandler {
       try await task.value
     } onCancel: {

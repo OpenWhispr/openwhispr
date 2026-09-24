@@ -85,6 +85,34 @@ beforeEach(() => {
 });
 
 describe('ModelDownloadScreen — Orukeet', () => {
+  it('keeps the model picker loading during OS recovery and then shows the installed model', async () => {
+    let finishRecovery!: (value: LocalEngineAvailability) => void;
+    mockTranscription.getAvailability.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRecovery = resolve;
+        }),
+    );
+    render(<ModelDownloadScreen />);
+
+    await screen.findByText('Loading models…');
+    expect(mockTranscription.getAvailability).toHaveBeenCalledWith({ waitForRecovery: true });
+    expect(screen.queryByLabelText('Download Orukeet')).toBeNull();
+    await act(async () =>
+      finishRecovery({
+        parakeetSupported: true,
+        parakeetV2Downloaded: true,
+        parakeetV3Downloaded: true,
+        whisperDownloaded: true,
+        orukeetSupported: true,
+        orukeetDownloaded: true,
+      }),
+    );
+    await screen.findByLabelText('Delete Orukeet');
+    expect(screen.queryByLabelText('Download Orukeet')).toBeNull();
+    expect(mockParakeet.downloadModel).not.toHaveBeenCalled();
+  });
+
   it('lists Orukeet without taking the Recommended badge from Parakeet', async () => {
     render(<ModelDownloadScreen />);
 
