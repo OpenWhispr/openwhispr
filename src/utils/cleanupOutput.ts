@@ -17,7 +17,10 @@ function comparisonTokens(text: string): string[] {
 }
 
 export function assertValidCleanupOutput(rawText: string, output: string): void {
-  const originalTokens = comparisonTokens(rawText);
+  // Collapse stutters ("the the") so they don't read as saying a word twice.
+  const originalTokens = comparisonTokens(rawText).filter(
+    (token, index, all) => token !== all[index - 1]
+  );
   const tokens: string[] = [];
   for (const line of output.split(/\r?\n/u)) {
     if (cleanupLabel.test(line.trim())) continue;

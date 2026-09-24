@@ -34,11 +34,15 @@ test("cleanup rejects whole-output duplication without requiring a match to raw 
       output
     );
   }
-  // Filler-heavy speech can be as long as its cleanup said twice, and longer
-  // speech repeats common words without being said twice.
+  // Filler-heavy speech can be as long as its cleanup said twice, and longer or
+  // stuttered speech repeats words without being said twice.
   for (const [raw, output] of [
     ["um so uh basically can you uh like send me the report by friday um yeah", CLEAN],
     [LONG_RAW, LONG_CLEAN],
+    [
+      "I I I think we we should uh we should move the the meeting to to friday because because the the client is is out on on thursday",
+      "I think we should move the meeting to Friday because the client is out on Thursday.",
+    ],
   ]) {
     assert.throws(() => assertValidCleanupOutput(raw, `${output} ${output}`), {
       code: "CLEANUP_OUTPUT_INVALID",
