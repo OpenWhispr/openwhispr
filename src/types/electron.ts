@@ -1688,6 +1688,7 @@ declare global {
           localTranscriptionProvider: LocalTranscriptionProvider;
           model?: string;
           language?: string;
+          policyResolved: boolean;
         }
       ) => Promise<void>;
 
@@ -1919,7 +1920,6 @@ declare global {
       llamaServerStart: (
         modelId: string
       ) => Promise<{ success: boolean; port?: number; error?: string }>;
-      llamaServerStop: () => Promise<{ success: boolean; error?: string }>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;

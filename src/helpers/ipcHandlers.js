@@ -5226,8 +5226,11 @@ class IPCHandlers {
 
       // Stop the shared llama-server only when no scope still needs the model it
       // holds, so the active scopes keep their server when another switches away.
+      // A signed-in window that hasn't loaded its workspace policy yet reports
+      // unclamped modes, so it waits; signed out, the policy never loads.
       const modelManager = require("./modelManagerBridge").default;
-      if (shouldStopLocalServer(localServer, modelManager.currentServerModelId)) {
+      const policySettled = prefs.policyResolved || !this._hasActiveAccountScope();
+      if (policySettled && shouldStopLocalServer(localServer, modelManager.currentServerModelId)) {
         if (modelManager.getServerStatus().running) {
           debugLogger.debug("Stopping llama-server: no scope needs its model", {
             loadedModel: modelManager.currentServerModelId,
@@ -5409,16 +5412,6 @@ class IPCHandlers {
 
         this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
         return { success: true, port: modelManager.serverManager.port };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle("llama-server-stop", async () => {
-      try {
-        const modelManager = require("./modelManagerBridge").default;
-        await modelManager.stopServer();
-        return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
       }

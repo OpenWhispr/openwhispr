@@ -2921,9 +2921,13 @@ export function isCloudChatAgentMode() {
 }
 
 // What resolveLocalServerNeeds (main process) decides the shared llama-server
-// from. Pass policy-effective state: the resolved configs carry fallback
-// inheritance and enterprise overrides, so they match what requests run on.
-export function selectLocalServerPrefs(state: SettingsState): LocalServerPrefs {
+// from. The policy-effective resolved configs carry fallback inheritance,
+// enterprise overrides and policy clamps, so they match what requests run on.
+export function selectLocalServerPrefs(
+  rawState: SettingsState,
+  policyState: PolicyDecisionSnapshot
+): LocalServerPrefs {
+  const state = selectPolicyEffectiveSettings(rawState, policyState);
   const cleanup = selectResolvedLLMConfig(state, "dictationCleanup");
   const dictationAgent = selectResolvedLLMConfig(state, "dictationAgent");
   const noteFormatting = selectResolvedLLMConfig(state, "noteFormatting");

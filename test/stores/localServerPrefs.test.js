@@ -5,6 +5,8 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 
 const MODEL = "qwen3.5-4b-q4_k_m";
 
+const UNMANAGED = { status: "unmanaged", policy: null, appVersion: null };
+
 const ALL_CLOUD = {
   _llmScopeKeysMigrated: "1",
   _dictationAgentSeeded: "1",
@@ -43,7 +45,7 @@ test("typed chat on a local model keeps the server once cleanup moves to the clo
   );
 
   s.setResolvedLLMConfig("dictationCleanup", { mode: "openwhispr", cloudMode: "openwhispr" });
-  const needs = s.resolveLocalServerNeeds(s.selectLocalServerPrefs(s.getSettings()));
+  const needs = s.resolveLocalServerNeeds(s.selectLocalServerPrefs(s.getSettings(), UNMANAGED));
 
   assert.deepEqual(needs.models, [MODEL]);
   assert.equal(s.shouldStopLocalServer(needs, MODEL), false);
@@ -62,7 +64,7 @@ test("note formatting counts the local model it inherits from cleanup", async (t
     "openwhispr-local-server-prefs-notes-test-"
   );
 
-  const prefs = s.selectLocalServerPrefs(s.getSettings());
+  const prefs = s.selectLocalServerPrefs(s.getSettings(), UNMANAGED);
 
   assert.equal(prefs.noteFormattingMode, "local");
   assert.equal(prefs.noteFormattingModel, MODEL);
@@ -76,7 +78,7 @@ test("the server stops once the last local scope leaves", async (t) => {
   );
 
   s.setResolvedLLMConfig("dictationAgent", { mode: "openwhispr", cloudMode: "openwhispr" });
-  const needs = s.resolveLocalServerNeeds(s.selectLocalServerPrefs(s.getSettings()));
+  const needs = s.resolveLocalServerNeeds(s.selectLocalServerPrefs(s.getSettings(), UNMANAGED));
 
   assert.deepEqual(needs.models, []);
   assert.equal(s.shouldStopLocalServer(needs, MODEL), true);
@@ -109,8 +111,7 @@ test("a policy that forbids local inference reports the clamped mode", async (t)
     },
   };
 
-  const effective = s.selectPolicyEffectiveSettings(s.useSettingsStore.getState(), cloudOnly);
-  const prefs = s.selectLocalServerPrefs(effective);
+  const prefs = s.selectLocalServerPrefs(s.useSettingsStore.getState(), cloudOnly);
 
   assert.notEqual(prefs.cleanupMode, "local");
   assert.deepEqual(s.resolveLocalServerNeeds(prefs).models, []);

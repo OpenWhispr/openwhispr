@@ -4,7 +4,6 @@ import {
   useSettingsStore,
   initializeSettings,
   selectLocalServerPrefs,
-  selectPolicyEffectiveSettings,
 } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
@@ -235,9 +234,7 @@ function useSettingsInternal() {
   // llama-server from it, so it must see every scope's resolved local model.
   const policySnapshot = usePolicySnapshot();
   const localServerPrefs = useSettingsStore(
-    useShallow((state) =>
-      selectLocalServerPrefs(selectPolicyEffectiveSettings(state, policySnapshot))
-    )
+    useShallow((state) => selectLocalServerPrefs(state, policySnapshot))
   );
 
   useEffect(() => {
@@ -256,6 +253,7 @@ function useSettingsInternal() {
         model: model || undefined,
         language: preferredLanguage || undefined,
         ...localServerPrefs,
+        policyResolved: localHistoryPolicyResolved,
       })
       .catch((err) =>
         logger.warn(
@@ -272,6 +270,7 @@ function useSettingsInternal() {
     cohereModel,
     preferredLanguage,
     localServerPrefs,
+    localHistoryPolicyResolved,
   ]);
 
   return {
