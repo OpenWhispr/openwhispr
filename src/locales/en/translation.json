@@ -123,6 +123,7 @@
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
       "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
+      "windowsKeyListenerMissing": "\"{{hotkey}}\" needs the Windows key listener, which this install is missing. Choose a shortcut with a regular key, like F8.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
       "trySuggestions": "Try: {{suggestions}}",
       "slotConflict": "This hotkey is already used for {{slot}}."
