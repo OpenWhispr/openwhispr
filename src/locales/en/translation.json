@@ -3009,11 +3009,11 @@
     "searchChats": "Search chats",
     "searchTitle": "Search conversations",
     "searchDescription": "Search across all your conversations",
-    "newChatEmpty": "Ask about your notes, transcripts, or anything else",
+    "inputPlaceholder": "Ask anything about your note",
     "starters": {
       "todos": "List my recent to-dos",
-      "meeting": "Prepare me for my next meeting",
-      "sharedNotes": "Highlight notes shared with me"
+      "meeting": "Prepare me for next meet.",
+      "sharedNotes": "Highlight my notes shared"
     }
   },
   "referral": {

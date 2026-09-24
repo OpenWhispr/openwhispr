@@ -3488,11 +3488,11 @@
     "searchChats": "Pesquisar chats",
     "searchTitle": "Pesquisar conversas",
     "searchDescription": "Pesquisar em todas as conversas",
-    "newChatEmpty": "Pergunte sobre suas notas, transcrições ou qualquer coisa",
+    "inputPlaceholder": "Pergunte sobre sua nota",
     "starters": {
-      "todos": "Liste minhas tarefas recentes",
-      "meeting": "Prepare-me para a próxima reunião",
-      "sharedNotes": "Destaque as notas compartilhadas comigo"
+      "todos": "Minhas tarefas recentes",
+      "meeting": "Prepare a reunião",
+      "sharedNotes": "Minhas notas compartilhadas"
     }
   },
   "support": {

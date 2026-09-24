@@ -3488,11 +3488,11 @@
     "searchChats": "チャットを検索",
     "searchTitle": "会話を検索",
     "searchDescription": "すべての会話を検索",
-    "newChatEmpty": "ノートや文字起こし、その他なんでも聞いてください",
+    "inputPlaceholder": "ノートについて何でも質問",
     "starters": {
-      "todos": "最近の To Do を一覧表示して",
-      "meeting": "次の会議の準備を手伝って",
-      "sharedNotes": "共有されたノートをまとめて"
+      "todos": "最近の To Do",
+      "meeting": "次の会議に備える",
+      "sharedNotes": "共有ノートを見る"
     }
   },
   "support": {

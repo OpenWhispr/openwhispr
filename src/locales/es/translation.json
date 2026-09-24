@@ -3541,11 +3541,11 @@
     "searchChats": "Buscar chats",
     "searchTitle": "Buscar conversaciones",
     "searchDescription": "Buscar en todas tus conversaciones",
-    "newChatEmpty": "Pregunta sobre tus notas, transcripciones o lo que quieras",
+    "inputPlaceholder": "Pregunta sobre tu nota",
     "starters": {
-      "todos": "Enumera mis tareas pendientes recientes",
-      "meeting": "Prepárame para mi próxima reunión",
-      "sharedNotes": "Destaca las notas compartidas conmigo"
+      "todos": "Mis tareas recientes",
+      "meeting": "Prepara mi reunión",
+      "sharedNotes": "Mis notas compartidas"
     }
   },
   "support": {

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Mic, Square, X } from "../icons";
+import { ArrowRight, Mic, Square, X } from "../icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { SendIcon } from "../ui/SendIcon";
@@ -22,6 +22,7 @@ interface ChatInputProps {
   className?: string;
   /** Offer a mic when the input is empty; recordings transcribe into the input. */
   voiceDraft?: boolean;
+  variant?: "default" | "assistant";
 }
 
 function RecordingIndicator() {
@@ -61,6 +62,7 @@ export function ChatInput({
   placeholder,
   className,
   voiceDraft = false,
+  variant = "default",
 }: ChatInputProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -118,11 +120,13 @@ export function ChatInput({
       <div
         className={cn(
           "flex items-center gap-2 min-h-11 ps-4 pe-1.5 rounded-full",
-          GLASS_SURFACE,
+          variant === "assistant" ? "min-h-12 bg-card shadow-sm dark:bg-surface-2" : GLASS_SURFACE,
           "border border-black/10 dark:border-white/14",
           "transition-all duration-200",
           isIdle &&
-            "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8"
+            (variant === "assistant"
+              ? "focus-within:border-foreground/15 focus-within:ring-2 focus-within:ring-foreground/5"
+              : "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8")
         )}
       >
         {isListening && (
@@ -211,7 +215,8 @@ export function ChatInput({
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
                 "input-inline flex-1 outline-none bg-transparent caret-primary",
-                "text-[13px] text-foreground placeholder:text-muted-foreground/70",
+                variant === "assistant" ? "text-sm" : "text-[13px]",
+                "text-foreground placeholder:text-muted-foreground/70",
                 "min-w-0 p-0",
                 isBusy && "text-muted-foreground/70 cursor-not-allowed"
               )}
@@ -243,10 +248,18 @@ export function ChatInput({
                   "transition-all duration-100",
                   inputText.trim()
                     ? "hover:brightness-110 active:scale-95"
-                    : "opacity-30 saturate-0 cursor-default"
+                    : variant === "assistant"
+                      ? "cursor-default"
+                      : "opacity-30 saturate-0 cursor-default"
                 )}
               >
-                <SendIcon size={28} className="block rtl:scale-x-[-1]" />
+                {variant === "assistant" ? (
+                  <span className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <ArrowRight size={16} className="-rotate-90" />
+                  </span>
+                ) : (
+                  <SendIcon size={28} className="block rtl:scale-x-[-1]" />
+                )}
               </button>
             ) : isIdle ? (
               <button

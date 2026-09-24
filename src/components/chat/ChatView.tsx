@@ -5,11 +5,11 @@ import { useChatStreaming } from "./useChatStreaming";
 import { useChatMessageSender } from "./useChatMessageSender";
 import { ChatMessages } from "./ChatMessages";
 import { ChatInput } from "./ChatInput";
-import { ChatEmptyIllustration } from "./ChatEmptyIllustration";
 import ConversationList from "./ConversationList";
 import EmptyChatState from "./EmptyChatState";
 import { ConfirmDialog } from "../ui/dialog";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
+import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
 import { Check, FileText, Video } from "../icons";
@@ -36,10 +36,7 @@ function NewChatEmptyState({
   const { t } = useTranslation();
   return (
     <div className="flex h-full min-h-80 flex-col items-center justify-center px-4 text-center">
-      <div className="flex h-20 w-20 items-center justify-center rounded-full border border-border bg-card shadow-sm dark:border-white/10">
-        <ChatEmptyIllustration size={58} />
-      </div>
-      <p className="mt-4 text-sm text-muted-foreground">{t("chat.newChatEmpty")}</p>
+      <BrandMarkIcon size={64} className="text-foreground/15 dark:text-muted-foreground/35" />
       {showSuggestions && (
         <div className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
           {STARTER_PROMPTS.map(({ key, icon: Icon }) => (
@@ -48,12 +45,14 @@ function NewChatEmptyState({
               type="button"
               disabled={disabled}
               onClick={() => onPrompt(t(key))}
-              className="flex min-h-28 flex-col items-start justify-between rounded-2xl border border-border bg-card p-4 text-start text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10"
+              className="flex min-h-24 flex-col items-start justify-between rounded-2xl border border-border bg-card p-4 text-start text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10"
             >
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <Icon size={16} />
               </span>
-              <span>{t(key)}</span>
+              <span className="max-w-full truncate" title={t(key)}>
+                {t(key)}
+              </span>
             </button>
           ))}
         </div>
@@ -208,15 +207,16 @@ export default function ChatView() {
                 }
                 contentClassName={PAGE_CONTENT_WIDTH_CLASS}
               />
-              <div className="px-3 pb-3 pt-1">
+              <div className="px-3 pb-5 pt-1">
                 <ChatInput
-                  className={PAGE_CONTENT_WIDTH_CLASS}
+                  className="mx-auto w-full max-w-md"
                   agentState={streaming.agentState}
                   partialTranscript=""
                   onTextSubmit={handleTextSubmit}
                   onCancel={streaming.cancelStream}
                   autoFocus={isNewChat}
-                  voiceDraft
+                  placeholder={t("chat.inputPlaceholder")}
+                  variant="assistant"
                 />
               </div>
             </>

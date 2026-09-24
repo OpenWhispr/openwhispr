@@ -3009,11 +3009,11 @@
     "searchChats": "Chats suchen",
     "searchTitle": "Unterhaltungen suchen",
     "searchDescription": "In allen Unterhaltungen suchen",
-    "newChatEmpty": "Fragen Sie zu Ihren Notizen, Transkripten oder anderem",
+    "inputPlaceholder": "Frag etwas zu deiner Notiz",
     "starters": {
-      "todos": "Liste meine letzten Aufgaben auf",
-      "meeting": "Bereite mich auf mein nächstes Meeting vor",
-      "sharedNotes": "Zeige mir geteilte Notizen"
+      "todos": "Meine letzten Aufgaben",
+      "meeting": "Nächstes Meeting planen",
+      "sharedNotes": "Geteilte Notizen zeigen"
     }
   },
   "referral": {

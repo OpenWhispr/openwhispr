@@ -3488,11 +3488,11 @@
     "searchChats": "搜尋聊天",
     "searchTitle": "搜尋對話",
     "searchDescription": "搜尋所有對話",
-    "newChatEmpty": "詢問關於筆記、轉錄或其他任何內容",
+    "inputPlaceholder": "詢問關於筆記的任何問題",
     "starters": {
-      "todos": "列出我最近的待辦事項",
-      "meeting": "幫我準備下一場會議",
-      "sharedNotes": "找出與我分享的筆記"
+      "todos": "最近的待辦事項",
+      "meeting": "準備下一場會議",
+      "sharedNotes": "查看共享筆記"
     }
   },
   "support": {
