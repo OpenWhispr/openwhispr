@@ -305,8 +305,11 @@ test("a failed macOS upgrade still removes obsolete libraries when retried", asy
   const markerPath = path.join(binDir, ".sherpa-onnx-darwin-arm64.json");
   const obsoleteLibrary = path.join(binDir, "libonnxruntime.1.27.0.dylib");
   const cApiLibrary = path.join(binDir, "libsherpa-onnx-c-api.dylib");
+  // Installs before v1.7.6 wrote no marker, so the marker below never owned this one.
+  const unownedCxxApiLibrary = path.join(binDir, "libsherpa-onnx-cxx-api.dylib");
   fs.writeFileSync(obsoleteLibrary, "old runtime");
   fs.writeFileSync(cApiLibrary, "old C API with espeak-ng");
+  fs.writeFileSync(unownedCxxApiLibrary, "old C++ API");
   fs.copyFileSync(obsoleteLibrary, path.join(binDir, "libonnxruntime.dylib"));
   fs.writeFileSync(path.join(binDir, "libllama.dylib"), "unrelated runtime");
   for (const binaryPath of binaryPaths) fs.writeFileSync(binaryPath, "old binary");
@@ -358,6 +361,10 @@ test("a failed macOS upgrade still removes obsolete libraries when retried", asy
               }
               fs.writeFileSync(path.join(extractDir, "libonnxruntime.dylib"), "new runtime");
               fs.writeFileSync(path.join(extractDir, "libsherpa-onnx-c-api.dylib"), "new C API");
+              fs.writeFileSync(
+                path.join(extractDir, "libsherpa-onnx-cxx-api.dylib"),
+                "new C++ API"
+              );
             },
           };
         }
@@ -378,6 +385,7 @@ test("a failed macOS upgrade still removes obsolete libraries when retried", asy
   assert.equal(await downloadBinary("darwin-arm64", config), true);
   assert.equal(fs.existsSync(obsoleteLibrary), false);
   assert.equal(fs.existsSync(cApiLibrary), false);
+  assert.equal(fs.existsSync(unownedCxxApiLibrary), false);
   assert.equal(fs.readFileSync(path.join(binDir, "libonnxruntime.dylib"), "utf8"), "new runtime");
   assert.equal(fs.readFileSync(path.join(binDir, "libllama.dylib"), "utf8"), "unrelated runtime");
 });
@@ -390,6 +398,8 @@ test("a failed automatic Windows repair stays incomplete and retries DLL patchin
   const binaryPaths = EXE_NAMES.map((name) => path.join(binDir, name));
   const markerPath = path.join(binDir, ".sherpa-onnx-win32-x64.json");
   const options = { platformArch: "win32-x64", binDir };
+  // A pre-v1.7.6 install: the C API DLL is on disk but no marker owns it.
+  fs.writeFileSync(path.join(binDir, "sherpa-onnx-c-api.dll"), "old C API with espeak-ng");
   const sourcePath = require.resolve("../../scripts/download-sherpa-onnx");
   const requireFromDownloader = createRequire(sourcePath);
   let downloads = 0;

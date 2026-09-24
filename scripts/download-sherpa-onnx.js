@@ -377,9 +377,23 @@ async function downloadBinary(platformArch, config, isForce = false) {
     // Copy shared libraries
     const copiedLibraries = [];
     if (config.libPattern) {
-      const libraries = findLibrariesInDir(extractDir, config.libPattern, {
+      const archiveLibraries = findLibrariesInDir(extractDir, config.libPattern, {
         ignoreReadErrors: true,
-      }).filter((libPath) => SHIPPED_LIBRARY_PATTERN.test(path.basename(libPath)));
+      });
+      const libraries = archiveLibraries.filter((libPath) =>
+        SHIPPED_LIBRARY_PATTERN.test(path.basename(libPath))
+      );
+
+      // Installs before v1.7.6 wrote no marker yet copied every library, so
+      // ownership alone would leave their C API library (espeak-ng) behind.
+      const unshippedNames = new Set(archiveLibraries.map((libPath) => path.basename(libPath)));
+      for (const libPath of libraries) unshippedNames.delete(path.basename(libPath));
+      for (const libName of unshippedNames) {
+        const stalePath = path.join(BIN_DIR, libName);
+        if (!fs.existsSync(stalePath)) continue;
+        fs.rmSync(stalePath, { force: true });
+        console.log(`  ${platformArch}: Removed unshipped ${libName}`);
+      }
 
       // Separate versioned and unversioned libraries to create symlinks where possible
       // e.g. libonnxruntime.dylib -> libonnxruntime.1.23.2.dylib (saves ~71MB)
