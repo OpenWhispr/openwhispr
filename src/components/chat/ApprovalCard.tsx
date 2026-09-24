@@ -43,6 +43,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
             <input
               aria-label={t("connectors.approval.titleLabel")}
               className="w-full rounded-md border border-border/70 bg-background px-2 py-1"
+              dir="auto"
               value={draft.title}
               onChange={(event) => updateApprovalDraft(entry.toolCallId, { title: event.target.value })}
             />
@@ -50,6 +51,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
           <textarea
             aria-label={t("connectors.approval.bodyLabel")}
             className="min-h-24 w-full rounded-md border border-border/70 bg-background px-2 py-1"
+            dir="auto"
             value={draft.body}
             onChange={(event) => updateApprovalDraft(entry.toolCallId, { body: event.target.value })}
           />

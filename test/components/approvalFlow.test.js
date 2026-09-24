@@ -90,6 +90,11 @@ test("Edit, change, Done editing, Send: the reviewed text is what gets sent", as
   assert.match(container.textContent, /Original text/);
 
   await React.act(async () => click(button(container, "connectors.approval.edit")));
+  // Editing must not lose the direction-detection the static view gets:
+  // an RTL draft opened for editing should still render right-to-left.
+  const bodyField = findElement(container, (element) => element.tagName === "TEXTAREA");
+  assert.ok(bodyField, "the body textarea is rendered in edit mode");
+  assert.equal(bodyField.getAttribute("dir"), "auto");
   // What the textarea's onChange calls with the typed value.
   await React.act(async () => store.updateApprovalDraft("call-1", { body: "Edited text" }));
   await React.act(async () => click(button(container, "connectors.approval.doneEditing")));
