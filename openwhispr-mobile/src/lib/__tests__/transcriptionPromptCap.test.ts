@@ -24,6 +24,16 @@ describe('dictionaryPromptLimit', () => {
     ).toBe(GROQ_PROMPT_CHARS);
   });
 
+  it('matches Groq by host, not by a substring anywhere in the URL', (): void => {
+    expect(
+      dictionaryPromptLimit({
+        providerId: 'custom',
+        endpoint: 'https://api.groq.com.example.net/v1',
+        modelId: 'whisper-1',
+      }),
+    ).toBe(WHISPER_PROMPT_CHARS);
+  });
+
   it('gives gpt-4o transcribe models the generous budget, case-insensitively', (): void => {
     expect(
       dictionaryPromptLimit({

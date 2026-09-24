@@ -13,7 +13,7 @@ export function dictionaryPromptLimit(input: {
   endpoint: string;
   modelId: string;
 }): number {
-  if (input.providerId === 'groq' || input.endpoint.includes('api.groq.com')) {
+  if (input.providerId === 'groq' || new URL(input.endpoint).hostname === 'api.groq.com') {
     return GROQ_PROMPT_CHARS;
   }
   if (input.modelId.toLowerCase().startsWith('gpt-4o')) return TRANSCRIBE_PROMPT_CHARS;
