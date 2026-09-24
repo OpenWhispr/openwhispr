@@ -3006,14 +3006,14 @@
     "deleteConfirm": "Diese Unterhaltung wird dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
     "editTitle": "Doppelklick zum Bearbeiten des Titels",
     "untitled": "Ohne Titel",
-    "searchChat": "Chats durchsuchen",
+    "searchChats": "Chats suchen",
     "searchTitle": "Unterhaltungen suchen",
     "searchDescription": "In allen Unterhaltungen suchen",
     "inputPlaceholder": "Frag etwas zu deiner Notiz",
     "starters": {
       "todos": "Meine letzten Aufgaben",
-      "meeting": "Nächstes Meeting planen",
-      "sharedNotes": "Geteilte Notizen zeigen"
+      "meeting": "Bereite mich auf mein nächstes Meeting vor",
+      "sharedNotes": "Hebe meine geteilten Notizen hervor"
     }
   },
   "referral": {
@@ -3601,7 +3601,6 @@
         }
       },
       "invite": "Einladen",
-      "list": {},
       "author": {
         "you": "Du"
       }

@@ -373,7 +373,7 @@ export function ChatInput({
                   GRADIENT_CIRCLE,
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-all duration-100",
-                  voice.streamingOnlyProvider
+                  voice.streamingOnlyProvider || disabled
                     ? "opacity-30 saturate-0 cursor-default"
                     : "hover:brightness-110 active:scale-95"
                 )}

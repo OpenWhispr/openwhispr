@@ -3249,7 +3249,6 @@
         }
       },
       "invite": "邀請",
-      "list": {},
       "author": {
         "you": "你"
       }
@@ -3478,14 +3477,14 @@
     "deleteConfirm": "此對話將被永久刪除，無法復原。",
     "editTitle": "雙擊編輯標題",
     "untitled": "無標題",
-    "searchChat": "搜尋聊天",
+    "searchChats": "搜尋聊天",
     "searchTitle": "搜尋對話",
     "searchDescription": "搜尋所有對話",
     "inputPlaceholder": "詢問關於筆記的任何問題",
     "starters": {
       "todos": "最近的待辦事項",
-      "meeting": "準備下一場會議",
-      "sharedNotes": "查看共享筆記"
+      "meeting": "幫我準備下一場會議",
+      "sharedNotes": "突顯我的共享筆記"
     }
   },
   "support": {

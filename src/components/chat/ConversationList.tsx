@@ -212,7 +212,7 @@ export default function ConversationList({
           )}
         >
           <Search size={16} className="shrink-0" />
-          {t("chat.searchChat")}
+          {t("chat.searchChats")}
         </button>
         {conversations.some((c) => c.is_archived) && (
           <button

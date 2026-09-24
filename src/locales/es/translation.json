@@ -3302,7 +3302,6 @@
         }
       },
       "invite": "Invitar",
-      "list": {},
       "author": {
         "you": "Tú"
       }
@@ -3531,14 +3530,14 @@
     "deleteConfirm": "Esta conversación se eliminará permanentemente. No se puede deshacer.",
     "editTitle": "Doble clic para editar el título",
     "untitled": "Sin título",
-    "searchChat": "Buscar chats",
+    "searchChats": "Buscar chats",
     "searchTitle": "Buscar conversaciones",
     "searchDescription": "Buscar en todas tus conversaciones",
     "inputPlaceholder": "Pregunta sobre tu nota",
     "starters": {
       "todos": "Mis tareas recientes",
-      "meeting": "Prepara mi reunión",
-      "sharedNotes": "Mis notas compartidas"
+      "meeting": "Prepárame para mi próxima reunión",
+      "sharedNotes": "Destaca mis notas compartidas"
     }
   },
   "support": {

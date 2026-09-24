@@ -3249,7 +3249,6 @@
         }
       },
       "invite": "邀请",
-      "list": {},
       "author": {
         "you": "你"
       }
@@ -3478,14 +3477,14 @@
     "deleteConfirm": "此对话将被永久删除，无法撤消。",
     "editTitle": "双击编辑标题",
     "untitled": "无标题",
-    "searchChat": "搜索聊天",
+    "searchChats": "搜索聊天",
     "searchTitle": "搜索对话",
     "searchDescription": "搜索所有对话",
     "inputPlaceholder": "询问关于笔记的任何问题",
     "starters": {
       "todos": "最近的待办事项",
-      "meeting": "准备下一场会议",
-      "sharedNotes": "查看共享笔记"
+      "meeting": "帮我准备下一场会议",
+      "sharedNotes": "突出显示我的共享笔记"
     }
   },
   "support": {

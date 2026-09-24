@@ -3177,7 +3177,6 @@
         }
       },
       "invite": "招待",
-      "list": {},
       "author": {
         "you": "自分"
       }
@@ -3478,14 +3477,14 @@
     "deleteConfirm": "この会話は完全に削除されます。元に戻すことはできません。",
     "editTitle": "ダブルクリックでタイトルを編集",
     "untitled": "無題",
-    "searchChat": "チャットを検索",
+    "searchChats": "チャットを検索",
     "searchTitle": "会話を検索",
     "searchDescription": "すべての会話を検索",
     "inputPlaceholder": "ノートについて何でも質問",
     "starters": {
       "todos": "最近の To Do",
-      "meeting": "次の会議に備える",
-      "sharedNotes": "共有ノートを見る"
+      "meeting": "次の会議に備えさせて",
+      "sharedNotes": "共有ノートのハイライトを見せて"
     }
   },
   "support": {

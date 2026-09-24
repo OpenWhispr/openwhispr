@@ -3006,7 +3006,7 @@
     "deleteConfirm": "This conversation will be permanently deleted. This cannot be undone.",
     "editTitle": "Double-click to edit title",
     "untitled": "Untitled",
-    "searchChat": "Search chats",
+    "searchChats": "Search chats",
     "searchTitle": "Search conversations",
     "searchDescription": "Search across all your conversations",
     "inputPlaceholder": "Ask anything about your note",
@@ -3601,7 +3601,6 @@
         }
       },
       "invite": "Invite",
-      "list": {},
       "author": {
         "you": "You"
       }
@@ -3643,7 +3642,7 @@
       "duplicate": "A snippet with this trigger already exists",
       "emptyTitle": "Stuff you shouldn't have to say",
       "emptyTitleAccent": "twice",
-      "emptyDescription": "Say a trigger word and OpenWhispr swaps it with your saved content, URLs, intros, sign-offs, prompts.",
+      "emptyDescription": "Speak a trigger word and OpenWhispr replaces it with whatever you saved — URLs, intros, sign-offs, prompts.",
       "new": "New snippet",
       "examples": {
         "linkedinTrigger": "My LinkedIn",

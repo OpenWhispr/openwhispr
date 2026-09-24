@@ -3249,7 +3249,6 @@
         }
       },
       "invite": "Invita",
-      "list": {},
       "author": {
         "you": "Tu"
       }
@@ -3478,14 +3477,14 @@
     "deleteConfirm": "Questa conversazione verrà eliminata permanentemente. Non è possibile annullare.",
     "editTitle": "Doppio clic per modificare il titolo",
     "untitled": "Senza titolo",
-    "searchChat": "Cerca nelle chat",
+    "searchChats": "Cerca chat",
     "searchTitle": "Cerca conversazioni",
     "searchDescription": "Cerca in tutte le conversazioni",
     "inputPlaceholder": "Chiedi qualcosa sulla tua nota",
     "starters": {
       "todos": "Le mie attività recenti",
-      "meeting": "Prepara la riunione",
-      "sharedNotes": "Mostra note condivise"
+      "meeting": "Preparami per la prossima riunione",
+      "sharedNotes": "Evidenzia le mie note condivise"
     }
   },
   "support": {
