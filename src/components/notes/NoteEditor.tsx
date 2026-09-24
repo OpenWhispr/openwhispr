@@ -1270,7 +1270,13 @@ export default function NoteEditor({
             isRecording={isRecording}
             onAskSubmit={handleAskSubmit}
             onInputFocus={handleChatInputFocus}
-            actionPicker={isRecording || !canEditNote ? undefined : actionPicker}
+            actionPicker={
+              isRecording ||
+              !canEditNote ||
+              (viewMode === "transcript" && !hasMeetingTranscript && !hasChatSegments)
+                ? undefined
+                : actionPicker
+            }
             callout={
               showSummaryCallout && (
                 <Button className="h-9 gap-2 px-4 text-sm" onClick={onGenerateSummary}>
