@@ -5,11 +5,12 @@ import { cn } from "../lib/utils";
 import { ChatMessages } from "../chat/ChatMessages";
 import { ChatInput } from "../chat/ChatInput";
 import { ChatEmptyIllustration } from "../chat/ChatEmptyIllustration";
+import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
 import type { Message, AgentState } from "../chat/types";
 import { setActiveNoteId, setActiveFolderId } from "../../stores/noteStore";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { ConversationPicker } from "./ConversationPicker";
-import { FLOATING_CHAT_MAX_HEIGHT_CSS } from "./floatingChatLayout";
+import { FLOATING_CHAT_MAX_HEIGHT_CSS, observeFloatingChatSize } from "./floatingChatLayout";
 
 export type EmbeddedChatMode = "hidden" | "floating" | "sidebar";
 
@@ -27,17 +28,25 @@ interface EmbeddedChatProps {
   onSwitchConversation?: (id: number) => void;
   onNewChat?: () => void;
   /** Floating panel ref; NoteEditor reserves scroll space with it. */
-  floatingPanelRef?: React.Ref<HTMLDivElement>;
+  floatingPanelRef?: (panel: HTMLDivElement | null) => void | (() => void);
 }
 
-function EmptyState() {
+function EmptyState({ floating }: { floating: boolean }) {
   const { t } = useTranslation();
   return (
     <div className="flex h-full min-h-40 flex-col items-center justify-center gap-3 px-4 text-center select-none">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-card dark:border-white/10">
-        <ChatEmptyIllustration size={38} />
-      </div>
-      <p className="max-w-44 text-xs text-muted-foreground">{t("embeddedChat.emptyState")}</p>
+      {floating ? (
+        <BrandMarkIcon size={36} className="text-foreground/20 dark:text-muted-foreground/35" />
+      ) : (
+        <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-card dark:border-white/10">
+          <ChatEmptyIllustration size={38} />
+        </div>
+      )}
+      <p
+        className={cn("text-muted-foreground", floating ? "max-w-64 text-sm" : "max-w-44 text-xs")}
+      >
+        {t("embeddedChat.emptyState")}
+      </p>
     </div>
   );
 }
@@ -58,6 +67,33 @@ export default function EmbeddedChat({
   floatingPanelRef,
 }: EmbeddedChatProps) {
   const { t } = useTranslation();
+  const isEmpty = messages.length === 0;
+
+  const attachFloatingPanel = useCallback(
+    (panel: HTMLDivElement | null) => {
+      const container = panel?.parentElement;
+      const header = panel?.firstElementChild as HTMLElement | null;
+      const messageContent = panel?.querySelector<HTMLElement>(".agent-chat-scroll > :first-child");
+      const composer = panel?.lastElementChild as HTMLElement | null;
+      if (!panel || !container || !header || !messageContent || !composer) return;
+
+      const stopSizing = observeFloatingChatSize({
+        panel,
+        container,
+        header,
+        messageContent,
+        composer,
+        isEmpty,
+      });
+      const stopLayout = floatingPanelRef?.(panel);
+
+      return () => {
+        stopSizing();
+        if (typeof stopLayout === "function") stopLayout();
+      };
+    },
+    [floatingPanelRef, isEmpty]
+  );
 
   const handleOpenNote = useCallback(async (noteId: number) => {
     const note = await window.electronAPI.getNote(noteId);
@@ -134,40 +170,44 @@ export default function EmbeddedChat({
     </div>
   );
 
+  const chatInput = (
+    <ChatInput
+      agentState={agentState}
+      draftText={draftText}
+      onDraftChange={onDraftChange}
+      partialTranscript=""
+      onTextSubmit={onTextSubmit}
+      onCancel={onCancel}
+      voiceDraft
+    />
+  );
+
   const chatContent = (
     <>
       {header}
       <div className="flex-1 min-h-0 flex flex-col **:data-chat-bubble:max-w-full">
-        <ChatMessages messages={messages} emptyState={<EmptyState />} onOpenNote={handleOpenNote} />
+        <ChatMessages
+          messages={messages}
+          emptyState={<EmptyState floating={mode === "floating"} />}
+          onOpenNote={handleOpenNote}
+        />
       </div>
-      <ChatInput
-        agentState={agentState}
-        draftText={draftText}
-        onDraftChange={onDraftChange}
-        partialTranscript=""
-        onTextSubmit={onTextSubmit}
-        onCancel={onCancel}
-        voiceDraft
-      />
+      {mode === "floating" ? <div className="shrink-0">{chatInput}</div> : chatInput}
     </>
   );
 
   if (mode === "floating") {
     return (
       <div
-        ref={floatingPanelRef}
+        ref={attachFloatingPanel}
         style={{ maxHeight: FLOATING_CHAT_MAX_HEIGHT_CSS }}
         className={cn(
           "absolute bottom-4 left-5 right-5 z-20 mx-auto max-w-[600px]",
-          "h-2/3 min-h-0",
-          "flex flex-col",
-          "bg-background/95 dark:bg-surface-2/95",
-          "border border-black/15 dark:border-white/18",
-          "ring-1 ring-inset ring-white/60 dark:ring-white/8",
-          "rounded-xl",
+          "min-h-0 flex flex-col overflow-hidden rounded-3xl",
+          "bg-background dark:bg-surface-2",
+          "border border-black/10 dark:border-white/14",
           "shadow-elevated",
-          "backdrop-blur-2xl",
-          "animate-[scale-in_200ms_ease-out]"
+          "transition-[height] duration-200 ease-out motion-reduce:transition-none"
         )}
       >
         {chatContent}

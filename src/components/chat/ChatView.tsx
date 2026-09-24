@@ -13,6 +13,7 @@ import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
 import { Check, FileText, Video } from "../icons";
+import { observeChatComposerInset } from "./composerLayout";
 
 const CommandSearch = lazy(() => import("../CommandSearch"));
 
@@ -161,6 +162,12 @@ export default function ChatView() {
   const hasActiveChat =
     activeConversationId !== null || persistence.messages.length > 0 || isNewChat;
 
+  const composerRef = useCallback((composer: HTMLDivElement | null) => {
+    const container = composer?.parentElement;
+    if (!composer || !container) return;
+    return observeChatComposerInset(composer, container);
+  }, []);
+
   return (
     <>
       <ConfirmDialog
@@ -193,7 +200,7 @@ export default function ChatView() {
             refreshKey={refreshKey}
           />
         </div>
-        <div className="flex-1 min-w-80 min-h-0 flex flex-col">
+        <div className="relative flex-1 min-w-80 min-h-0 flex flex-col">
           {hasActiveChat ? (
             <>
               <ChatMessages
@@ -205,9 +212,9 @@ export default function ChatView() {
                     disabled={streaming.agentState !== "idle"}
                   />
                 }
-                contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                contentClassName={`${PAGE_CONTENT_WIDTH_CLASS} pb-[var(--chat-composer-inset,5rem)]`}
               />
-              <div className="px-3 pb-5 pt-1">
+              <div ref={composerRef} className="absolute inset-x-0 bottom-0 z-10 px-3 pb-5 pt-1">
                 <ChatInput
                   className="mx-auto w-full max-w-2xl"
                   agentState={streaming.agentState}

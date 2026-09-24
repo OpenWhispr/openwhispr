@@ -9,6 +9,8 @@ export const FLOATING_CHAT_MIN_VISIBLE_CONTENT_PX = 80;
 export const FLOATING_CHAT_MAX_HEIGHT_CSS = "calc(100% - 7rem)";
 
 const SCROLL_BOTTOM_THRESHOLD_PX = 80;
+const FLOATING_CHAT_TOP_CLEARANCE_PX = 112;
+const FLOATING_CHAT_EMPTY_CONTENT_HEIGHT_PX = 160;
 
 export type { ScrollMetrics };
 
@@ -28,6 +30,41 @@ interface FloatingChatLayoutDependencies {
   createResizeObserver?: (callback: () => void) => ResizeObserverHandle;
   requestFrame?: (callback: () => void) => number;
   cancelFrame?: (frameId: number) => void;
+}
+
+interface FloatingChatSizeOptions {
+  panel: HTMLElement;
+  container: HTMLElement;
+  header: HTMLElement;
+  messageContent: HTMLElement;
+  composer: HTMLElement;
+  isEmpty: boolean;
+}
+
+export function observeFloatingChatSize(
+  { panel, container, header, messageContent, composer, isEmpty }: FloatingChatSizeOptions,
+  createResizeObserver: (callback: () => void) => ResizeObserverHandle = (callback) =>
+    new ResizeObserver(callback)
+): () => void {
+  const updateHeight = (): void => {
+    const contentHeight = isEmpty
+      ? FLOATING_CHAT_EMPTY_CONTENT_HEIGHT_PX
+      : messageContent.scrollHeight;
+    const availableHeight = Math.max(0, container.clientHeight - FLOATING_CHAT_TOP_CLEARANCE_PX);
+    panel.style.height = `${Math.min(
+      header.offsetHeight + contentHeight + composer.offsetHeight,
+      availableHeight
+    )}px`;
+  };
+
+  updateHeight();
+  const observer = createResizeObserver(updateHeight);
+  observer.observe(container);
+  observer.observe(header);
+  observer.observe(messageContent);
+  observer.observe(composer);
+
+  return (): void => observer.disconnect();
 }
 
 export function isNearScrollBottom(metrics: ScrollMetrics): boolean {

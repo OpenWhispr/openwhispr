@@ -139,6 +139,51 @@ test("the panel cap leaves the promised note content visible", async () => {
   assert.equal(FLOATING_CHAT_MAX_HEIGHT_CSS, "calc(100% - 7rem)");
 });
 
+test("the in-view chat grows with its content and stops at the available note height", async () => {
+  const { observeFloatingChatSize } = await load();
+  const panel = { style: { height: "" } };
+  const container = { clientHeight: 600 };
+  const header = { offsetHeight: 36 };
+  const messageContent = { scrollHeight: 160 };
+  const composer = { offsetHeight: 64 };
+  const observed = [];
+  let onResize;
+  let disconnected = false;
+
+  const cleanup = observeFloatingChatSize(
+    { panel, container, header, messageContent, composer, isEmpty: false },
+    (callback) => {
+      onResize = callback;
+      return {
+        observe(element) {
+          observed.push(element);
+        },
+        disconnect() {
+          disconnected = true;
+        },
+      };
+    }
+  );
+
+  assert.equal(panel.style.height, "260px");
+  assert.deepEqual(observed, [container, header, messageContent, composer]);
+
+  composer.offsetHeight = 104;
+  onResize();
+  assert.equal(panel.style.height, "300px", "a multiline draft grows the panel upward");
+
+  messageContent.scrollHeight = 800;
+  onResize();
+  assert.equal(panel.style.height, "488px", "long chats scroll inside the available space");
+
+  messageContent.scrollHeight = 100;
+  onResize();
+  assert.equal(panel.style.height, "240px", "switching chats shrinks the panel again");
+
+  cleanup();
+  assert.equal(disconnected, true);
+});
+
 function createLayoutHarness(observeFloatingChatLayout, { scroller }) {
   const panel = createElement({ offsetHeight: 200 });
   const container = createElement();
