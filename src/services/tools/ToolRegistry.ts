@@ -23,6 +23,12 @@ export interface ToolExecutionContext {
    * put user content on the clipboard, or needs the user to answer.
    */
   onHoldDelivery: () => void;
+  /**
+   * Counts one use of `key` in this turn and reports whether it stays within
+   * `limit`, so a tool can cap what one turn does (drafts opened, clipboard
+   * writes). Synchronous, so tool calls running in parallel can't overshoot.
+   */
+  claimTurnSlot: (key: string, limit: number) => boolean;
 }
 
 export interface ToolDefinition {

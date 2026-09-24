@@ -118,6 +118,20 @@ test("a scope's notices do nothing once its turn has ended", async () => {
   assert.equal(notices, 0);
 });
 
+test("turn slots are shared by a scope's calls and start over with each turn", async () => {
+  const { createToolExecutionScope } = await loadScope();
+  const scope = createToolExecutionScope();
+  const first = scope.createContext("call-e");
+  const second = scope.createContext("call-f");
+
+  assert.equal(first.claimTurnSlot("draft", 2), true);
+  assert.equal(second.claimTurnSlot("draft", 2), true);
+  assert.equal(first.claimTurnSlot("draft", 2), false);
+  // Keys count separately.
+  assert.equal(second.claimTurnSlot("clipboard", 1), true);
+  assert.equal(createToolExecutionScope().createContext("call-g").claimTurnSlot("draft", 2), true);
+});
+
 test("a scope without handlers ignores approval and delivery notices", async () => {
   const { createToolExecutionScope } = await loadScope();
   const context = createToolExecutionScope().createContext("call-c");

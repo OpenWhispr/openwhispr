@@ -3932,6 +3932,8 @@
       "unavailable": "Los conectores no están disponibles en este momento.",
       "failed": "No funcionó.",
       "contactsFound": "Contactos encontrados: {{total}}",
+      "draftLimit": "Solo se pueden abrir {{count}} borradores por solicitud.",
+      "clipboardBusy": "No se abrió: el texto de otro borrador sigue en tu portapapeles.",
       "errors": {
         "open_failed": "No se pudo abrir tu aplicación de correo.",
         "draft_too_long": "Demasiados destinatarios para un enlace de borrador.",

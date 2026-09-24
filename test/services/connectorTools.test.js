@@ -101,9 +101,82 @@ function countingContext(signal = new AbortController().signal) {
     onHoldDelivery() {
       context.holds += 1;
     },
+    claimTurnSlot: () => true,
   };
   return context;
 }
+
+const loadScope = () => import("../../src/components/chat/toolExecutionScope.ts");
+
+test("email_draft opens at most three drafts per turn", async (t) => {
+  let opened = 0;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async () => {
+          opened += 1;
+          return { state: "sent", destinationLabel: "a@example.com", bodyCopied: false };
+        },
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  const { createToolExecutionScope } = await loadScope();
+  const scope = createToolExecutionScope();
+  const tool = createEmailDraftTool("gmail");
+  const draft = (id) =>
+    tool.execute({ to: ["a@example.com"], subject: "s", body: "b" }, scope.createContext(id));
+
+  // The AI SDK runs a step's tool calls in parallel.
+  const results = await Promise.all(["1", "2", "3", "4"].map(draft));
+
+  assert.equal(opened, 3);
+  assert.deepEqual(
+    results.map((result) => result.data.status),
+    ["draft_opened", "draft_opened", "draft_opened", "not_sent"]
+  );
+  assert.equal(results[3].data.reason, "draft_limit");
+  // A new turn starts over.
+  const next = createToolExecutionScope().createContext("5");
+  assert.equal((await tool.execute({ to: ["a@example.com"], subject: "s", body: "b" }, next)).data.status, "draft_opened");
+});
+
+test("only one draft per turn may put its text on the clipboard", async (t) => {
+  const opened = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async (_connector, _action, args) => {
+          opened.push(args.to[0]);
+          return { state: "sent", destinationLabel: args.to[0], bodyCopied: args.body.length > 1000 };
+        },
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  const { createToolExecutionScope } = await loadScope();
+  const scope = createToolExecutionScope();
+  // mailto keeps a 2,000-character link on every platform.
+  const tool = createEmailDraftTool("mailto");
+  const longBody = "word ".repeat(600);
+
+  const [first, second] = await Promise.all([
+    tool.execute({ to: ["josh@example.com"], subject: "Recap", body: longBody }, scope.createContext("1")),
+    tool.execute({ to: ["dana@example.com"], subject: "Recap", body: longBody }, scope.createContext("2")),
+  ]);
+  const short = await tool.execute(
+    { to: ["kim@example.com"], subject: "Hi", body: "Short one." },
+    scope.createContext("3")
+  );
+
+  assert.equal(first.data.status, "draft_opened");
+  assert.equal(second.data.status, "not_sent");
+  assert.equal(second.data.reason, "clipboard_in_use");
+  assert.match(second.data.guidance, /paste/);
+  // A draft that fits its link needs no clipboard, so it still opens.
+  assert.equal(short.data.status, "draft_opened");
+  assert.deepEqual(opened, ["josh@example.com", "kim@example.com"]);
+});
 
 test("email_draft tells the model when content went to the clipboard", async (t) => {
   installBrowserGlobals(t, {

@@ -4048,6 +4048,8 @@
       "unavailable": "Les connecteurs ne sont pas disponibles pour le moment.",
       "failed": "Cela n'a pas fonctionné.",
       "contactsFound": "Contacts trouvés : {{total}}",
+      "draftLimit": "Seuls {{count}} brouillons peuvent s'ouvrir par demande.",
+      "clipboardBusy": "Non ouvert : le texte d'un autre brouillon est encore dans votre presse-papiers.",
       "errors": {
         "open_failed": "Impossible d'ouvrir votre application de messagerie.",
         "draft_too_long": "Trop de destinataires pour un lien de brouillon.",

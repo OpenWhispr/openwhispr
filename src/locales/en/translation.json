@@ -4048,6 +4048,8 @@
       "unavailable": "Connectors aren't available right now.",
       "failed": "That didn't work.",
       "contactsFound": "Contacts found: {{total}}",
+      "draftLimit": "Only {{count}} drafts can open per request.",
+      "clipboardBusy": "Not opened: another draft's text is still on your clipboard.",
       "errors": {
         "open_failed": "Couldn't open your email app.",
         "draft_too_long": "Too many recipients for a draft link.",

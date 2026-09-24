@@ -26,11 +26,15 @@ export function unavailableResult(reason: string): ToolResult {
   };
 }
 
-export function notSentResult(reason: string): ToolResult {
+export function notSentResult(
+  reason: string,
+  guidance: string = NO_RETRY,
+  displayText: string = i18n.t("connectors.approval.notSent")
+): ToolResult {
   return {
     success: true,
-    data: { status: "not_sent", reason, guidance: NO_RETRY },
-    displayText: i18n.t("connectors.approval.notSent"),
+    data: { status: "not_sent", reason, guidance },
+    displayText,
   };
 }
 

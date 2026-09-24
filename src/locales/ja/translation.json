@@ -3879,6 +3879,8 @@
       "unavailable": "現在コネクタを利用できません。",
       "failed": "うまくいきませんでした。",
       "contactsFound": "見つかった連絡先: {{total}}",
+      "draftLimit": "1回のリクエストで開ける下書きは{{count}}件までです。",
+      "clipboardBusy": "開いていません：別の下書きのテキストがまだクリップボードにあります。",
       "errors": {
         "open_failed": "メールアプリを開けませんでした。",
         "draft_too_long": "下書きリンクには宛先が多すぎます。",

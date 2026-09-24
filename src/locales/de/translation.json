@@ -4048,6 +4048,8 @@
       "unavailable": "Konnektoren sind gerade nicht verfügbar.",
       "failed": "Das hat nicht funktioniert.",
       "contactsFound": "Gefundene Kontakte: {{total}}",
+      "draftLimit": "Pro Anfrage können nur {{count}} Entwürfe geöffnet werden.",
+      "clipboardBusy": "Nicht geöffnet: Der Text eines anderen Entwurfs ist noch in deiner Zwischenablage.",
       "errors": {
         "open_failed": "Deine E-Mail-App konnte nicht geöffnet werden.",
         "draft_too_long": "Zu viele Empfänger für einen Entwurfslink.",

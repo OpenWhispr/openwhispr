@@ -3879,6 +3879,8 @@
       "unavailable": "Os conectores não estão disponíveis no momento.",
       "failed": "Não funcionou.",
       "contactsFound": "Contatos encontrados: {{total}}",
+      "draftLimit": "Só é possível abrir {{count}} rascunhos por solicitação.",
+      "clipboardBusy": "Não aberto: o texto de outro rascunho ainda está na sua área de transferência.",
       "errors": {
         "open_failed": "Não foi possível abrir seu aplicativo de e-mail.",
         "draft_too_long": "Destinatários demais para um link de rascunho.",

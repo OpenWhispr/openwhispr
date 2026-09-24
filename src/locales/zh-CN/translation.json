@@ -3879,6 +3879,8 @@
       "unavailable": "连接器暂时不可用。",
       "failed": "操作未成功。",
       "contactsFound": "找到的联系人：{{total}}",
+      "draftLimit": "每次请求最多只能打开 {{count}} 份草稿。",
+      "clipboardBusy": "未打开：另一份草稿的文字仍在剪贴板中。",
       "errors": {
         "open_failed": "无法打开您的邮件应用。",
         "draft_too_long": "收件人太多，无法生成草稿链接。",

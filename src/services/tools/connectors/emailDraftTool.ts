@@ -1,13 +1,18 @@
 import i18n from "../../../i18n";
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from "../ToolRegistry";
-import { isValidEmailAddress } from "../../../helpers/connectors/emailCompose";
+import { buildComposeRequest, isValidEmailAddress } from "../../../helpers/connectors/emailCompose";
 import type { EmailDraftTarget } from "../../../utils/emailDraftTarget";
+import { getCachedPlatform } from "../../../utils/platform";
 import {
   failedResult,
   needsClarificationResult,
   notSentResult,
   unavailableResult,
 } from "./toolOutcome";
+
+// Enough for "email Josh and Dana each a recap"; a model stuck in a loop, or
+// following an injected instruction, can't bury the user in compose windows.
+const MAX_DRAFTS_PER_TURN = 3;
 
 function addressList(value: unknown): string[] {
   return Array.isArray(value)
@@ -56,6 +61,33 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
       }
 
       if (context?.signal.aborted) return notSentResult("cancelled");
+      if (context && !context.claimTurnSlot("email_draft", MAX_DRAFTS_PER_TURN)) {
+        return notSentResult(
+          "draft_limit",
+          `Only ${MAX_DRAFTS_PER_TURN} drafts can open per request. Tell the user which drafts opened and ask them to request the rest again.`,
+          i18n.t("connectors.toolStatus.draftLimit", { count: MAX_DRAFTS_PER_TURN })
+        );
+      }
+      const draft = {
+        target,
+        to,
+        cc,
+        subject: typeof args.subject === "string" ? args.subject : "",
+        body: typeof args.body === "string" ? args.body : "",
+      };
+      // Main builds the same request; checking it here claims the clipboard
+      // before any await, so a second overflowing draft in the turn can't
+      // replace the first one's text before the user pastes it.
+      const preview = buildComposeRequest({ ...draft, platform: getCachedPlatform() });
+      const needsClipboard = preview.ok && preview.clipboardText !== null;
+      if (needsClipboard && context && !context.claimTurnSlot("clipboard", 1)) {
+        return notSentResult(
+          "clipboard_in_use",
+          "This draft is too long for a link, and its text would replace another draft's text on the clipboard. Tell the user to paste the earlier draft's text first, then ask again for this one.",
+          i18n.t("connectors.toolStatus.clipboardBusy")
+        );
+      }
+
       // Main may still be resolving policy when the user presses Esc; the
       // cancel names this run so main drops it instead of opening a window.
       const runId = crypto.randomUUID();
@@ -64,18 +96,7 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
       context?.signal.addEventListener("abort", cancelRun, { once: true });
       let result;
       try {
-        result = await window.electronAPI?.connectorRunDirect?.(
-          "email",
-          "draft",
-          {
-            target,
-            to,
-            cc,
-            subject: typeof args.subject === "string" ? args.subject : "",
-            body: typeof args.body === "string" ? args.body : "",
-          },
-          runId
-        );
+        result = await window.electronAPI?.connectorRunDirect?.("email", "draft", draft, runId);
       } finally {
         context?.signal.removeEventListener("abort", cancelRun);
       }

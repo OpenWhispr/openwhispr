@@ -3879,6 +3879,8 @@
       "unavailable": "I connettori non sono disponibili al momento.",
       "failed": "Non ha funzionato.",
       "contactsFound": "Contatti trovati: {{total}}",
+      "draftLimit": "Si possono aprire solo {{count}} bozze per richiesta.",
+      "clipboardBusy": "Non aperta: il testo di un'altra bozza è ancora negli appunti.",
       "errors": {
         "open_failed": "Impossibile aprire l'app email.",
         "draft_too_long": "Troppi destinatari per un link di bozza.",
