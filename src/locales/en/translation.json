@@ -4100,7 +4100,12 @@
     "undock": "Undock from sidebar",
     "close": "Close chat",
     "newChat": "New chat",
-    "conversationSelector": "Switch conversation"
+    "conversationSelector": "Switch conversation",
+    "history": "History",
+    "quickActions": "Quick actions",
+    "generateSummary": "Generate Summary",
+    "makeTodos": "Make To Dos",
+    "createOutline": "Create Outline"
   },
   "transcriptionPreview": {
     "label": "Preview",

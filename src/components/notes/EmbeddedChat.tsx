@@ -1,17 +1,28 @@
 import { useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { X, PanelRight, PanelRightClose } from "../icons";
+import { X, PanelRight, Plus, AlignLeft, ClipboardCheck, FileText } from "../icons";
 import { cn } from "../lib/utils";
 import { ChatMessages } from "../chat/ChatMessages";
 import { ChatInput } from "../chat/ChatInput";
-import { ChatEmptyIllustration } from "../chat/ChatEmptyIllustration";
 import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 import type { Message, AgentState } from "../chat/types";
 import { setActiveNoteId, setActiveFolderId } from "../../stores/noteStore";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { ConversationPicker } from "./ConversationPicker";
 
 export type EmbeddedChatMode = "hidden" | "floating" | "sidebar";
+
+const SIDEBAR_PROMPTS = [
+  { key: "embeddedChat.generateSummary", icon: AlignLeft },
+  { key: "embeddedChat.makeTodos", icon: ClipboardCheck },
+  { key: "embeddedChat.createOutline", icon: FileText },
+] as const;
 
 interface EmbeddedChatProps {
   mode: EmbeddedChatMode;
@@ -39,17 +50,16 @@ function EmptyState({ floating }: { floating: boolean }) {
       )}
     >
       {floating ? (
-        <BrandMarkIcon size={36} className="text-foreground/20 dark:text-muted-foreground/35" />
+        <>
+          <BrandMarkIcon size={36} className="text-foreground/20 dark:text-muted-foreground/35" />
+          <p className="max-w-64 text-sm text-muted-foreground">{t("embeddedChat.emptyState")}</p>
+        </>
       ) : (
-        <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-card dark:border-white/10">
-          <ChatEmptyIllustration size={38} />
-        </div>
+        <BrandMarkIcon
+          size={88}
+          className="text-foreground/10 drop-shadow-sm dark:text-foreground/15"
+        />
       )}
-      <p
-        className={cn("text-muted-foreground", floating ? "max-w-64 text-sm" : "max-w-44 text-xs")}
-      >
-        {t("embeddedChat.emptyState")}
-      </p>
     </div>
   );
 }
@@ -103,17 +113,18 @@ export default function EmbeddedChat({
       onSwitchConversation={onSwitchConversation}
       onNewChat={onNewChat}
       titleClassName="max-w-32"
+      variant={mode === "sidebar" ? "sidebar" : "default"}
+      onUndock={mode === "sidebar" ? () => onModeChange("floating") : undefined}
     />
   ) : (
-    <span className="text-xs font-medium text-foreground/50">{t("embeddedChat.title")}</span>
+    <span className="text-xs font-medium text-foreground/50">
+      {t(mode === "sidebar" ? "embeddedChat.history" : "embeddedChat.title")}
+    </span>
   );
 
   const header = (
     <div
-      className={cn(
-        "h-9 flex items-center px-3 shrink-0",
-        mode === "sidebar" && "border-b border-border/70 dark:border-white/10"
-      )}
+      className={cn("flex items-center shrink-0", mode === "sidebar" ? "h-20 px-8" : "h-9 px-3")}
     >
       {headerTitle}
       <div className="flex-1" />
@@ -126,21 +137,25 @@ export default function EmbeddedChat({
           >
             <PanelRight size={13} className="rtl:scale-x-[-1]" />
           </button>
-        ) : (
+        ) : null}
+        {mode === "sidebar" && onNewChat && (
           <button
-            onClick={() => onModeChange("floating")}
-            className="h-6 w-6 flex items-center justify-center rounded-md text-foreground/45 hover:bg-foreground/6 transition-colors"
-            aria-label={t("embeddedChat.undock")}
+            onClick={onNewChat}
+            className="flex size-9 items-center justify-center rounded-full text-foreground/65 transition-colors hover:bg-foreground/6 hover:text-foreground"
+            aria-label={t("embeddedChat.newChat")}
           >
-            <PanelRightClose size={13} className="rtl:scale-x-[-1]" />
+            <Plus size={22} />
           </button>
         )}
         <button
           onClick={() => onModeChange("hidden")}
-          className="h-6 w-6 flex items-center justify-center rounded-md text-foreground/45 hover:bg-foreground/6 transition-colors"
+          className={cn(
+            "flex items-center justify-center text-foreground/45 transition-colors hover:bg-foreground/6 hover:text-foreground",
+            mode === "sidebar" ? "size-9 rounded-full" : "h-6 w-6 rounded-md"
+          )}
           aria-label={t("embeddedChat.close")}
         >
-          <X size={13} />
+          <X size={mode === "sidebar" ? 22 : 13} />
         </button>
       </div>
     </div>
@@ -165,7 +180,9 @@ export default function EmbeddedChat({
                   "min-w-0 max-w-full overflow-x-hidden",
                   messages.length === 0 && "scrollbar-hidden"
                 )
-              : undefined
+              : messages.length === 0
+                ? "scrollbar-hidden"
+                : undefined
           }
         />
       </div>
@@ -177,25 +194,58 @@ export default function EmbeddedChat({
   }
 
   return (
-    <div
-      className={cn(
-        "w-2/5 min-w-72 max-w-2xl shrink-0",
-        "border-s border-black/12 dark:border-white/14",
-        "bg-surface-1 dark:bg-surface-2",
-        "flex flex-col",
-        "min-h-0"
-      )}
-    >
-      {chatBody}
-      <ChatInput
-        agentState={agentState}
-        draftText={draftText}
-        onDraftChange={onDraftChange}
-        partialTranscript=""
-        onTextSubmit={onTextSubmit}
-        onCancel={onCancel}
-        voiceDraft
-      />
+    <div className="flex min-h-0 w-1/2 min-w-80 max-w-2xl shrink-0 p-4" data-note-chat-panel>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-4xl border border-border/60 bg-surface-1 dark:border-white/10 dark:bg-surface-1">
+        {chatBody}
+        <div className="mx-3 mb-3 shrink-0 overflow-hidden rounded-4xl bg-surface-3 dark:bg-surface-3">
+          <div className="scrollbar-hidden flex items-center gap-2 overflow-x-auto px-2 pt-2 pb-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={agentState !== "idle"}
+                  aria-label={t("embeddedChat.quickActions")}
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full border border-dashed border-foreground/35 bg-background text-foreground/55 transition-colors hover:text-foreground disabled:opacity-40 dark:bg-surface-2"
+                >
+                  <Plus size={17} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top" sideOffset={8}>
+                {SIDEBAR_PROMPTS.map(({ key, icon: Icon }) => (
+                  <DropdownMenuItem key={key} onClick={() => onTextSubmit(t(key))}>
+                    <Icon size={15} className="text-primary" />
+                    {t(key)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {SIDEBAR_PROMPTS.map(({ key, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onTextSubmit(t(key))}
+                disabled={agentState !== "idle"}
+                className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-border/70 bg-background px-3 text-sm text-foreground/65 transition-colors hover:text-foreground disabled:opacity-40 dark:border-white/10 dark:bg-surface-2"
+              >
+                <Icon size={16} className="text-primary" />
+                {t(key)}
+              </button>
+            ))}
+          </div>
+          <ChatInput
+            className="w-full px-1 pb-1"
+            variant="sidebar"
+            agentState={agentState}
+            draftText={draftText}
+            onDraftChange={onDraftChange}
+            partialTranscript=""
+            onTextSubmit={onTextSubmit}
+            onCancel={onCancel}
+            focusOnIdle={false}
+            placeholder={t("chat.inputPlaceholder")}
+          />
+        </div>
+      </div>
     </div>
   );
 }

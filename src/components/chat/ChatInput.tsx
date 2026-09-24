@@ -22,7 +22,7 @@ interface ChatInputProps {
   className?: string;
   /** Offer a mic when the input is empty; recordings transcribe into the input. */
   voiceDraft?: boolean;
-  variant?: "default" | "assistant" | "note";
+  variant?: "default" | "assistant" | "note" | "sidebar";
   outlined?: boolean;
   draftText?: string;
   onDraftChange?: (text: string) => void;
@@ -148,13 +148,13 @@ export function ChatInput({
   useLayoutEffect(() => {
     const input = inputRef.current;
     if (!input) return;
-    if (expandOnFocus) {
+    if (expandOnFocus || variant === "sidebar") {
       input.style.height = "100%";
     } else {
       input.style.height = "auto";
       input.style.height = `${input.scrollHeight}px`;
     }
-  }, [inputText, isVoiceRecording, isVoiceTranscribing, expandOnFocus]);
+  }, [inputText, isVoiceRecording, isVoiceTranscribing, expandOnFocus, variant]);
 
   useEffect(() => {
     if (!isIdle || !focusOnIdle) return;
@@ -168,19 +168,24 @@ export function ChatInput({
     <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
       <div
         className={cn(
-          "flex items-center gap-2 min-h-11 ps-4 pe-1.5 py-1.5 rounded-3xl",
+          "flex items-center gap-2 min-h-11",
+          variant === "sidebar"
+            ? "h-40 items-end rounded-4xl bg-background ps-4 pe-3 py-3 dark:bg-surface-2"
+            : "rounded-3xl ps-4 pe-1.5 py-1.5",
           variant === "assistant"
             ? "min-h-12 bg-card shadow-sm dark:bg-surface-2"
             : variant === "note"
               ? outlined
                 ? "min-h-12 bg-background"
                 : "min-h-12 bg-transparent"
-              : GLASS_SURFACE,
-          variant === "note"
-            ? outlined
-              ? "border border-border/70 dark:border-white/14"
-              : "border-0"
-            : "border border-black/10 dark:border-white/14",
+              : variant === "default" && GLASS_SURFACE,
+          variant === "sidebar"
+            ? "border border-border/80 dark:border-white/14"
+            : variant === "note"
+              ? outlined
+                ? "border border-border/70 dark:border-white/14"
+                : "border-0"
+              : "border border-black/10 dark:border-white/14",
           expandOnFocus
             ? cn(
                 "h-12 items-end transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none",
@@ -270,7 +275,12 @@ export function ChatInput({
         )}
 
         {(isIdle || isBusy) && !isVoiceRecording && !isVoiceTranscribing && (
-          <div className={cn("flex items-end gap-2 w-full", expandOnFocus && "h-full")}>
+          <div
+            className={cn(
+              "flex items-end gap-2 w-full",
+              (expandOnFocus || variant === "sidebar") && "h-full"
+            )}
+          >
             <textarea
               dir="auto"
               ref={inputRef}
@@ -284,10 +294,14 @@ export function ChatInput({
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
                 "input-inline flex-1 outline-none bg-transparent caret-primary",
-                variant === "assistant" || variant === "note" ? "text-sm" : "text-[13px]",
+                variant === "sidebar"
+                  ? "text-base"
+                  : variant === "assistant" || variant === "note"
+                    ? "text-sm"
+                    : "text-[13px]",
                 "text-foreground placeholder:text-muted-foreground/70",
                 "min-w-0 min-h-8 max-h-32 resize-none overflow-y-auto border-0 px-0 py-1.5 leading-5",
-                expandOnFocus && "min-h-0 max-h-none",
+                (expandOnFocus || variant === "sidebar") && "min-h-0 max-h-none",
                 (isBusy || disabled) && "text-muted-foreground/70 cursor-not-allowed"
               )}
             />
@@ -319,14 +333,19 @@ export function ChatInput({
                   "transition-all duration-100",
                   inputText.trim()
                     ? "hover:brightness-110 active:scale-95"
-                    : variant === "assistant" || variant === "note"
+                    : variant === "assistant" || variant === "note" || variant === "sidebar"
                       ? "cursor-default"
                       : "opacity-30 saturate-0 cursor-default"
                 )}
               >
-                {variant === "assistant" || variant === "note" ? (
-                  <span className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <ArrowRight size={18} className="-rotate-90" />
+                {variant === "assistant" || variant === "note" || variant === "sidebar" ? (
+                  <span
+                    className={cn(
+                      "flex items-center justify-center rounded-full bg-muted text-muted-foreground",
+                      variant === "sidebar" ? "size-10" : "size-8"
+                    )}
+                  >
+                    <ArrowRight size={variant === "sidebar" ? 20 : 18} className="-rotate-90" />
                   </span>
                 ) : (
                   <SendIcon size={28} className="block rtl:scale-x-[-1]" />

@@ -4024,7 +4024,12 @@
     "undock": "從側邊欄取消固定",
     "close": "關閉聊天",
     "newChat": "新對話",
-    "conversationSelector": "切換對話"
+    "conversationSelector": "切換對話",
+    "history": "歷史記錄",
+    "quickActions": "快速操作",
+    "generateSummary": "產生摘要",
+    "makeTodos": "建立待辦事項",
+    "createOutline": "建立大綱"
   },
   "transcriptionPreview": {
     "label": "預覽",

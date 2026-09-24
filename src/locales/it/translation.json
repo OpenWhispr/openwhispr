@@ -4024,7 +4024,12 @@
     "undock": "Sgancia dalla barra laterale",
     "close": "Chiudi chat",
     "newChat": "Nuova chat",
-    "conversationSelector": "Cambia conversazione"
+    "conversationSelector": "Cambia conversazione",
+    "history": "Cronologia",
+    "quickActions": "Azioni rapide",
+    "generateSummary": "Genera riepilogo",
+    "makeTodos": "Crea attività",
+    "createOutline": "Crea scaletta"
   },
   "transcriptionPreview": {
     "label": "Anteprima",

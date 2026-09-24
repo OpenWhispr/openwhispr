@@ -4068,7 +4068,12 @@
     "undock": "Открепить от боковой панели",
     "close": "Закрыть чат",
     "newChat": "Новый чат",
-    "conversationSelector": "Сменить беседу"
+    "conversationSelector": "Сменить беседу",
+    "history": "История",
+    "quickActions": "Быстрые действия",
+    "generateSummary": "Создать сводку",
+    "makeTodos": "Составить список дел",
+    "createOutline": "Создать план"
   },
   "transcriptionPreview": {
     "label": "Предпросмотр",

@@ -4100,7 +4100,12 @@
     "undock": "Von Seitenleiste abdocken",
     "close": "Chat schließen",
     "newChat": "Neuer Chat",
-    "conversationSelector": "Unterhaltung wechseln"
+    "conversationSelector": "Unterhaltung wechseln",
+    "history": "Verlauf",
+    "quickActions": "Schnellaktionen",
+    "generateSummary": "Zusammenfassung erstellen",
+    "makeTodos": "Aufgabenliste erstellen",
+    "createOutline": "Gliederung erstellen"
   },
   "transcriptionPreview": {
     "label": "Vorschau",

@@ -4222,7 +4222,12 @@
     "undock": "إلغاء الإرساء من الشريط الجانبي",
     "close": "إغلاق الدردشة",
     "newChat": "محادثة جديدة",
-    "conversationSelector": "تبديل المحادثة"
+    "conversationSelector": "تبديل المحادثة",
+    "history": "السجل",
+    "quickActions": "إجراءات سريعة",
+    "generateSummary": "إنشاء ملخص",
+    "makeTodos": "إنشاء قائمة مهام",
+    "createOutline": "إنشاء مخطط"
   },
   "transcriptionPreview": {
     "label": "معاينة",

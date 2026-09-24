@@ -4100,7 +4100,12 @@
     "undock": "Détacher de la barre latérale",
     "close": "Fermer le chat",
     "newChat": "Nouvelle discussion",
-    "conversationSelector": "Changer de conversation"
+    "conversationSelector": "Changer de conversation",
+    "history": "Historique",
+    "quickActions": "Actions rapides",
+    "generateSummary": "Générer un résumé",
+    "makeTodos": "Créer des tâches",
+    "createOutline": "Créer un plan"
   },
   "transcriptionPreview": {
     "label": "Aperçu",

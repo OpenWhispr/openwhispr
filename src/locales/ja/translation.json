@@ -4024,7 +4024,12 @@
     "undock": "サイドバーから外す",
     "close": "チャットを閉じる",
     "newChat": "新しいチャット",
-    "conversationSelector": "会話を切り替え"
+    "conversationSelector": "会話を切り替え",
+    "history": "履歴",
+    "quickActions": "クイックアクション",
+    "generateSummary": "要約を作成",
+    "makeTodos": "ToDoを作成",
+    "createOutline": "アウトラインを作成"
   },
   "transcriptionPreview": {
     "label": "プレビュー",

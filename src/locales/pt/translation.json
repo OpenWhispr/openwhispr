@@ -4024,7 +4024,12 @@
     "undock": "Desafixar da barra lateral",
     "close": "Fechar chat",
     "newChat": "Novo chat",
-    "conversationSelector": "Trocar conversa"
+    "conversationSelector": "Trocar conversa",
+    "history": "Histórico",
+    "quickActions": "Ações rápidas",
+    "generateSummary": "Gerar resumo",
+    "makeTodos": "Criar tarefas",
+    "createOutline": "Criar esboço"
   },
   "transcriptionPreview": {
     "label": "Pré-visualização",
