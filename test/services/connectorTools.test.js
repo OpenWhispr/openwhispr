@@ -386,5 +386,6 @@ test("the system prompt adds connector rules only when a connector tool is prese
   assert.match(withEmail, /Use find_contact/);
   assert.match(withEmail, /Use email_draft/);
   assert.match(withEmail, /needs_clarification/);
+  assert.match(withEmail, /guidance in each connector result/);
   assert.doesNotMatch(withoutEmail, /needs_clarification/);
 });

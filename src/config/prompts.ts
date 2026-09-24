@@ -76,8 +76,10 @@ function getLocalCalendarContext(): string {
 
 export const CONNECTOR_TOOL_NAMES = ["find_contact", "email_draft"];
 
+// Each result that must not be retried says so in its own guidance, so the
+// rule needs no list of statuses (and grows with no new connector).
 const CONNECTOR_TOOL_RULES =
-  "When a connector tool returns needs_clarification, ask the user before calling it again. Never retry an action that returned cancelled_by_user, not_sent, unavailable or unknown unless the user asks you to.";
+  "When a connector tool returns needs_clarification, ask the user before calling it again. Follow the guidance in each connector result, including when not to retry.";
 
 export function getAgentSystemPrompt(availableTools?: string[], noteContext?: string): string {
   let prompt = resolvePrompt("chatAgent", { agentName: null });
