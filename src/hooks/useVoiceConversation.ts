@@ -308,6 +308,11 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       // `readiness.ready === false`, not `!readiness.ready`: negation narrowing doesn't
       // discriminate this union in TS, so `readiness.reason` stays unresolved otherwise.
       if (readiness.ready === false) {
+        logger.warn(
+          "Voice conversation not ready",
+          { reason: readiness.reason, missing: readiness.missing, harness },
+          "voice-conversation"
+        );
         onErrorRef.current?.(t(READINESS_MESSAGE_KEYS[readiness.reason]));
         activeRef.current = false;
         setState("off");
