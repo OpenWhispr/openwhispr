@@ -359,3 +359,36 @@ test("a fallback whose status read fails still shows as failed, with no old reas
     await picker.unmount();
   }
 });
+
+test("the card re-reads when main says the GPU state changed, without remounting", async (t) => {
+  const failed = onlyVulkan(failedWith(DEVICE_LOST));
+  const picker = await mountPicker(t, failed.vulkan, failed.cuda);
+  try {
+    assert.ok(picker.shows(hasText(DEVICE_LOST)));
+
+    // Retry on the fallback pop-up, in the dictation window, cleared the failure
+    await picker.fire("changed", { status: onlyVulkan().vulkan });
+
+    assert.equal(picker.shows(isFailedCard), false);
+    assert.equal(picker.shows(hasText(DEVICE_LOST)), false, "the old reason is gone");
+    assert.ok(picker.shows(hasText("GPU acceleration ready")));
+  } finally {
+    await picker.unmount();
+  }
+});
+
+test("the card stops listening for GPU changes when it unmounts", async (t) => {
+  const packs = onlyVulkan();
+  const picker = await mountPicker(t, packs.vulkan, packs.cuda);
+  let whileMounted;
+  try {
+    whileMounted = picker.listeners.changed.length;
+  } finally {
+    // Always unmount: a picker left mounted keeps its 5 s poll alive
+    await picker.unmount();
+  }
+
+  assert.equal(whileMounted, 1, "listening while mounted");
+  const left = Object.values(picker.listeners).map((list) => list.length);
+  assert.deepEqual(left, [0, 0, 0], "every listener removed");
+});

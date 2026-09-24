@@ -753,6 +753,9 @@ export default function TranscriptionModelPicker({
     if (!effectiveLocal || internalLocalProvider !== "whisper") return;
     if (getCachedPlatform() === "darwin") return;
     readGpuStatus();
+    // Retry on the fallback pop-up, or Remove on another card, changes the
+    // packs or the saved failure while this card stays mounted (#1736)
+    return window.electronAPI?.onWhisperGpuStatusChanged?.(readGpuStatus);
   }, [effectiveLocal, internalLocalProvider, readGpuStatus]);
 
   useEffect(() => {
