@@ -44,7 +44,7 @@ export default function AccountLayout() {
       <Stack.Screen name="ai-models" options={{ title: 'AI Models', headerLargeTitle: false }} />
       <Stack.Screen
         name="dictation-agent"
-        options={{ title: 'Dictation Agent', headerLargeTitle: false }}
+        options={{ title: 'Voice Assistant', headerLargeTitle: false }}
       />
       <Stack.Screen
         name="keyboard-tone"
