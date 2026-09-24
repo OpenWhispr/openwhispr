@@ -3,8 +3,6 @@ import { CircleCheck, FileSearch, Loader2, MessageCircle, UsersRound } from "../
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
-import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import googleCalendarIcon from "../../assets/icons/google-calendar.svg";
 import microsoftCalendarIcon from "../../assets/icons/microsoft-calendar.webp";
 import appleCalendarIcon from "../../assets/icons/apple-calendar.webp";
@@ -15,16 +13,10 @@ type ProviderId = "google" | "microsoft" | "apple";
 export default function CalendarConnectionsStep() {
   const { t } = useTranslation();
   const store = useSettingsStore();
-  const systemAudio = useSystemAudioPermission();
   const [connecting, setConnecting] = useState<ProviderId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [appleDenied, setAppleDenied] = useState(false);
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
-
-  const ensureSystemAudio = useCallback(async () => {
-    if (systemAudio.granted || !canManageSystemAudioInApp(systemAudio)) return true;
-    return systemAudio.request();
-  }, [systemAudio]);
 
   const connect = useCallback(
     async (provider: ProviderId) => {
@@ -32,12 +24,6 @@ export default function CalendarConnectionsStep() {
       setError(null);
       setAppleDenied(false);
       try {
-        // Recording a meeting needs system audio; connecting a calendar does not.
-        // Awaited so the permission dialog doesn't race the OAuth browser window,
-        // but a denial no longer aborts the connection — that left a user who
-        // declined the prompt unable to connect any calendar at all.
-        await ensureSystemAudio();
-
         if (provider === "google") {
           const result = await window.electronAPI?.gcalStartOAuth?.();
           if (result?.success && result.email) {
@@ -78,7 +64,7 @@ export default function CalendarConnectionsStep() {
         setConnecting(null);
       }
     },
-    [ensureSystemAudio, store, t]
+    [store, t]
   );
 
   useEffect(() => {

@@ -161,6 +161,7 @@ export default function HistoryView({
                   dark={historyEmptyDark}
                   width={560}
                   height={102}
+                  className="[mask-image:linear-gradient(to_right,transparent,black_20%,black_80%,transparent)]"
                 />
                 <h2 className="mt-6 text-lg font-semibold text-foreground">
                   {t("controlPanel.history.empty")}

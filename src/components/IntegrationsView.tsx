@@ -18,8 +18,6 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { useSettingsStore } from "../stores/settingsStore";
-import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
-import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import type { CalendarAccount } from "../types/calendar";
 import ApiKeysSection from "./ApiKeysSection";
 import CliIntegrationCard from "./CliIntegrationCard";
@@ -183,7 +181,6 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
   const [isMsConnecting, setIsMsConnecting] = useState(false);
   const [msDisconnectingEmail, setMsDisconnectingEmail] = useState<string | null>(null);
   const [confirmMsDisconnectEmail, setConfirmMsDisconnectEmail] = useState<string | null>(null);
-  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [isAppleConnecting, setIsAppleConnecting] = useState(false);
   const [appleSourceNames, setAppleSourceNames] = useState<string[]>([]);
   const [confirmAppleDisconnect, setConfirmAppleDisconnect] = useState(false);
@@ -191,10 +188,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
   // i18n prefix of the provider whose OAuth flow failed, e.g. "integrations.googleCalendar"
   const [oauthErrorKey, setOauthErrorKey] = useState<string | null>(null);
   const [apiKeysDialogOpen, setApiKeysDialogOpen] = useState(false);
-  const systemAudio = useSystemAudioPermission();
-  const { request: requestSystemAudioAccess } = systemAudio;
   const hasAccounts = gcalAccounts.length > 0;
-  const needsSystemAudioGrant = !systemAudio.granted && canManageSystemAudioInApp(systemAudio);
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
 
   const startOAuth = useCallback(async () => {
@@ -249,35 +243,6 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
       setIsAppleConnecting(false);
     }
   }, [setAppleCalendarConnected]);
-
-  const withSystemAudioGate = useCallback(
-    async (connect: () => Promise<void>) => {
-      if (needsSystemAudioGrant) {
-        const granted = await requestSystemAudioAccess();
-        if (!granted) {
-          setShowPermissionDialog(true);
-          return;
-        }
-      }
-      await connect();
-    },
-    [needsSystemAudioGrant, requestSystemAudioAccess]
-  );
-
-  const handleConnect = useCallback(
-    () => withSystemAudioGate(startOAuth),
-    [withSystemAudioGate, startOAuth]
-  );
-
-  const handleMicrosoftConnect = useCallback(
-    () => withSystemAudioGate(startMicrosoftOAuth),
-    [withSystemAudioGate, startMicrosoftOAuth]
-  );
-
-  const handleAppleConnect = useCallback(
-    () => withSystemAudioGate(connectAppleCalendar),
-    [withSystemAudioGate, connectAppleCalendar]
-  );
 
   const handleAppleDisconnect = useCallback(async () => {
     await window.electronAPI?.acalDisconnect?.();
@@ -370,7 +335,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
             i18nKey="integrations.googleCalendar"
             connected={hasAccounts}
             isConnecting={isConnecting}
-            onConnect={handleConnect}
+            onConnect={startOAuth}
           />
           <CalendarAccountRows
             i18nKey="integrations.googleCalendar"
@@ -380,7 +345,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
             primaryOnly={gcalPrimaryOnly}
             onPrimaryOnlyChange={setGcalPrimaryOnly}
             isConnecting={isConnecting}
-            onAddAnother={handleConnect}
+            onAddAnother={startOAuth}
           />
 
           <ProviderRow
@@ -388,7 +353,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
             i18nKey="integrations.microsoftCalendar"
             connected={mcalAccounts.length > 0}
             isConnecting={isMsConnecting}
-            onConnect={handleMicrosoftConnect}
+            onConnect={startMicrosoftOAuth}
           />
           <CalendarAccountRows
             i18nKey="integrations.microsoftCalendar"
@@ -398,7 +363,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
             primaryOnly={mcalPrimaryOnly}
             onPrimaryOnlyChange={setMcalPrimaryOnly}
             isConnecting={isMsConnecting}
-            onAddAnother={handleMicrosoftConnect}
+            onAddAnother={startMicrosoftOAuth}
           />
 
           {isMac && (
@@ -407,7 +372,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
               i18nKey="integrations.appleCalendar"
               connected={appleCalendarConnected}
               isConnecting={isAppleConnecting}
-              onConnect={handleAppleConnect}
+              onConnect={connectAppleCalendar}
             />
           )}
 
@@ -552,19 +517,6 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
         onConfirm={() => {
           if (confirmMsDisconnectEmail) handleMicrosoftDisconnect(confirmMsDisconnectEmail);
         }}
-      />
-
-      <ConfirmDialog
-        open={showPermissionDialog}
-        onOpenChange={setShowPermissionDialog}
-        title={t("integrations.googleCalendar.systemAudioRequired")}
-        description={t("integrations.googleCalendar.systemAudioDescription")}
-        confirmText={
-          systemAudio.mode === "native"
-            ? t("integrations.googleCalendar.openSettings")
-            : t("onboarding.permissions.grantAccess")
-        }
-        onConfirm={systemAudio.mode === "native" ? systemAudio.openSettings : systemAudio.request}
       />
 
       <ConfirmDialog
