@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Keyboard, Linking, Platform, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { Input } from '@/components/ui/Input';
@@ -62,7 +62,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     visible: false,
   });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const diagnosticController = useRef<AbortController | null>(null);
   useEffect(
     () => (): void => {
@@ -254,7 +254,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   }
 
   async function diagnose(action: 'test' | 'discover'): Promise<void> {
-    // The result toast sits at the bottom of the screen, where the keyboard would cover it.
+    // Focus moves to the result, so the keyboard has no reason to stay up.
     Keyboard.dismiss();
     setBusy(true);
     setError(null);
@@ -527,7 +527,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         message={toast.message}
         visible={toast.visible}
         type={toast.type}
-        bottomOffset={insets.bottom + 16}
+        topOffset={headerHeight + 8}
       />
     </View>
   );

@@ -10,12 +10,12 @@ interface ToastProps {
   message: string;
   visible: boolean;
   type?: ToastType;
-  bottomOffset?: number;
+  topOffset?: number;
 }
 
-export function Toast({ message, visible, type = 'info', bottomOffset = 24 }: ToastProps) {
+export function Toast({ message, visible, type = 'info', topOffset = 24 }: ToastProps) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(20)).current;
+  const translateY = useRef(new Animated.Value(-20)).current;
 
   // The toast ignores touches, so VoiceOver would never reach it on its own.
   useEffect(() => {
@@ -31,7 +31,7 @@ export function Toast({ message, visible, type = 'info', bottomOffset = 24 }: To
     } else {
       Animated.parallel([
         Animated.timing(opacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: 10, duration: 150, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: -10, duration: 150, useNativeDriver: true }),
       ]).start();
     }
   }, [visible, opacity, translateY]);
@@ -48,7 +48,7 @@ export function Toast({ message, visible, type = 'info', bottomOffset = 24 }: To
 
   return (
     <Animated.View
-      style={[styles.container, { bottom: bottomOffset, opacity, transform: [{ translateY }] }]}
+      style={[styles.container, { top: topOffset, opacity, transform: [{ translateY }] }]}
       pointerEvents="none"
     >
       <Image source={icon} style={{ width: 16, height: 16 }} tintColor={iconColor} />

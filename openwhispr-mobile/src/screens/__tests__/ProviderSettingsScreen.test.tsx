@@ -19,9 +19,7 @@ jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text })
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/GradientGlassSurface', () => ({ GradientGlassSurface: () => null }));
 jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ scope: mockScope }) }));
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
-}));
+jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 0 }));
 jest.mock('@/components/ui/Toast', () => ({
   Toast: ({ message, visible, type }: { message: string; visible: boolean; type: string }) =>
     visible ? <MockText testID={`toast-${type}`}>{message}</MockText> : null,
