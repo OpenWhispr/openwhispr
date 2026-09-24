@@ -93,3 +93,19 @@ test("measures a PCM16 chunk as one window", async () => {
     maxConsecutiveSpeechWindows: 1,
   });
 });
+
+test("reads a quiet PCM16 chunk at the batch analyser's 8-bit resolution", async () => {
+  const { createLocalSpeechGateState, recordPcm16SpeechWindow, getLocalSpeechGateDecision } =
+    await import("../../src/helpers/localSpeechGate.js");
+
+  // ±40 is about -58 dBFS. The analyser's byte samples floor every negative
+  // sample to -1/128 and every small positive one to 0, so batch measures
+  // (1/128)·√½ and never calls this silence.
+  const state = createLocalSpeechGateState();
+  recordPcm16SpeechWindow(state, new Int16Array([40, -40, 40, -40]).buffer);
+  const decision = getLocalSpeechGateDecision(state);
+
+  assert.equal(decision.reason, "insufficient_speech");
+  assert.ok(Math.abs(decision.peakRms - 0.0055243) < 1e-6, `peakRms ${decision.peakRms}`);
+  assert.equal(decision.peakAmplitude, 0.0078125);
+});
