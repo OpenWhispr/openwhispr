@@ -72,5 +72,21 @@ test("in-view chat expands the existing capsule around one composer", async (t) 
   assert.ok(html.includes("max-w-[600px]"));
   assert.ok(!html.includes("rounded-full border-black/10"), "the panel keeps one radius throughout expansion");
   assert.ok(!html.includes("border-radius,box-shadow"), "height changes do not morph the corners");
+  assert.ok(html.includes("border-t border-border/70"), "messages and composer have a divider");
+  assert.ok(html.includes("bg-surface-1/70"), "the composer has a distinct surface");
   assert.equal((html.match(/<textarea/g) ?? []).length, 1);
+});
+
+test("closing a selected chat restores the compact actions and summary callout", async (t) => {
+  const html = await renderBottomBar(t, {
+    chatOpen: false,
+    chatContent: createElement("div", null, "Previous conversation"),
+    actionPicker: createElement("button", null, "More actions"),
+    callout: createElement("button", null, "Generate summary"),
+  });
+
+  assert.ok(html.includes("More actions"));
+  assert.ok(html.includes("Generate summary"));
+  assert.ok(html.includes("agentMode.input.send"));
+  assert.ok(!html.includes("border-t border-border/70"));
 });

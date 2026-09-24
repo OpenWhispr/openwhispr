@@ -20,7 +20,6 @@ interface NoteBottomBarProps {
   hideInput?: boolean;
   chatOpen?: boolean;
   chatContent?: React.ReactNode;
-  hasSelectedConversation?: boolean;
   agentState?: AgentState;
   onCancel?: () => void;
   floatingPanelRef?: (panel: HTMLDivElement | null) => void | (() => void);
@@ -39,7 +38,6 @@ export default function NoteBottomBar({
   hideInput = false,
   chatOpen = false,
   chatContent,
-  hasSelectedConversation = false,
   agentState = "idle",
   onCancel,
   floatingPanelRef,
@@ -60,7 +58,6 @@ export default function NoteBottomBar({
       const stopSizing = observeFloatingChatSize({
         panel,
         container,
-        hasConversation: hasSelectedConversation,
       });
       const stopLayout = floatingPanelRef?.(panel);
 
@@ -69,7 +66,7 @@ export default function NoteBottomBar({
         if (typeof stopLayout === "function") stopLayout();
       };
     },
-    [chatOpen, floatingPanelRef, hasSelectedConversation]
+    [chatOpen, floatingPanelRef]
   );
 
   return (
@@ -86,6 +83,7 @@ export default function NoteBottomBar({
       )}
       <div
         ref={attachPanel}
+        data-note-chat-panel
         aria-hidden={hideInput}
         inert={hideInput}
         style={{ maxHeight: FLOATING_CHAT_MAX_HEIGHT_CSS }}
@@ -113,8 +111,13 @@ export default function NoteBottomBar({
         </div>
         {!hideInput && (
           <ChatInput
-            className="w-full min-w-0"
+            className={cn(
+              "w-full min-w-0",
+              chatOpen &&
+                "border-t border-border/70 bg-surface-1/70 px-2 py-1 dark:border-white/10 dark:bg-surface-2/70"
+            )}
             variant="note"
+            outlined={chatOpen}
             agentState={agentState}
             partialTranscript=""
             draftText={draftText}

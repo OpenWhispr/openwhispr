@@ -10,7 +10,6 @@ export const FLOATING_CHAT_MAX_HEIGHT_CSS = "calc(100% - 7rem)";
 
 const SCROLL_BOTTOM_THRESHOLD_PX = 80;
 const FLOATING_CHAT_TOP_CLEARANCE_PX = 112;
-const FLOATING_CHAT_NEW_CONVERSATION_HEIGHT_PX = 294;
 
 export type { ScrollMetrics };
 
@@ -35,20 +34,16 @@ interface FloatingChatLayoutDependencies {
 interface FloatingChatSizeOptions {
   panel: HTMLElement;
   container: HTMLElement;
-  hasConversation: boolean;
 }
 
 export function observeFloatingChatSize(
-  { panel, container, hasConversation }: FloatingChatSizeOptions,
+  { panel, container }: FloatingChatSizeOptions,
   createResizeObserver: (callback: () => void) => ResizeObserverHandle = (callback) =>
     new ResizeObserver(callback)
 ): () => void {
   const updateHeight = (): void => {
     const availableHeight = Math.max(0, container.clientHeight - FLOATING_CHAT_TOP_CLEARANCE_PX);
-    const targetHeight = hasConversation
-      ? (container.clientHeight * 2) / 3
-      : FLOATING_CHAT_NEW_CONVERSATION_HEIGHT_PX;
-    panel.style.height = `${Math.min(targetHeight, availableHeight)}px`;
+    panel.style.height = `${Math.min((container.clientHeight * 2) / 3, availableHeight)}px`;
   };
 
   updateHeight();

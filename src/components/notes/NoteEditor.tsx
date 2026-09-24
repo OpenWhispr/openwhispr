@@ -256,6 +256,16 @@ export default function NoteEditor({
   const [viewMode, setViewMode] = useState<MeetingViewMode>(defaultViewMode);
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   const [chatDraft, setChatDraft] = useState("");
+  const handleChatModeChange = useCallback((mode: EmbeddedChatMode) => {
+    if (
+      mode === "hidden" &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest("[data-note-chat-panel]")
+    ) {
+      document.activeElement.blur();
+    }
+    setChatMode(mode);
+  }, []);
   const [folderSearch, setFolderSearch] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -1274,9 +1284,8 @@ export default function NoteEditor({
             onDraftChange={setChatDraft}
             onAskSubmit={handleAskSubmit}
             onInputFocus={handleChatInputFocus}
-            onInputEscape={() => setChatMode("hidden")}
+            onInputEscape={() => handleChatModeChange("hidden")}
             chatOpen={chatMode === "floating"}
-            hasSelectedConversation={embeddedChat.activeConversationId !== null}
             agentState={chatMode === "floating" ? embeddedChat.agentState : "idle"}
             onCancel={embeddedChat.cancelStream}
             floatingPanelRef={floatingChatPanelRef}
@@ -1285,7 +1294,7 @@ export default function NoteEditor({
                 <EmbeddedChat
                   mode="floating"
                   active={chatMode === "floating"}
-                  onModeChange={setChatMode}
+                  onModeChange={handleChatModeChange}
                   messages={embeddedChat.messages}
                   agentState={embeddedChat.agentState}
                   draftText={chatDraft}
@@ -1321,7 +1330,7 @@ export default function NoteEditor({
       {chatMode === "sidebar" && (
         <EmbeddedChat
           mode="sidebar"
-          onModeChange={setChatMode}
+          onModeChange={handleChatModeChange}
           messages={embeddedChat.messages}
           agentState={embeddedChat.agentState}
           draftText={chatDraft}

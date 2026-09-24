@@ -23,6 +23,7 @@ interface ChatInputProps {
   /** Offer a mic when the input is empty; recordings transcribe into the input. */
   voiceDraft?: boolean;
   variant?: "default" | "assistant" | "note";
+  outlined?: boolean;
   draftText?: string;
   onDraftChange?: (text: string) => void;
   onFocus?: () => void;
@@ -71,6 +72,7 @@ export function ChatInput({
   className,
   voiceDraft = false,
   variant = "default",
+  outlined = false,
   draftText,
   onDraftChange,
   onFocus,
@@ -86,11 +88,18 @@ export function ChatInput({
   const inputText = draftText ?? localDraft;
   const setInputText = onDraftChange ?? setLocalDraft;
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const allowDeferredFocusRef = useRef(variant !== "note" || focusOnIdle);
+  allowDeferredFocusRef.current = variant !== "note" || focusOnIdle;
+  const focusAfterFrame = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (allowDeferredFocusRef.current) inputRef.current?.focus();
+    });
+  }, []);
 
   const voice = useVoiceDraft({
     onTranscript: (text) => {
       setInputText(inputText.trim() ? `${inputText.trim()} ${text}` : text);
-      requestAnimationFrame(() => inputRef.current?.focus());
+      focusAfterFrame();
     },
     onError: (message) => {
       toast({
@@ -108,8 +117,8 @@ export function ChatInput({
     if (!text || !onTextSubmit || disabled) return;
     onTextSubmit(text);
     setInputText("");
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, [inputText, onTextSubmit, setInputText, disabled]);
+    focusAfterFrame();
+  }, [inputText, onTextSubmit, setInputText, disabled, focusAfterFrame]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -146,9 +155,11 @@ export function ChatInput({
   }, [inputText, isVoiceRecording, isVoiceTranscribing, expandOnFocus]);
 
   useEffect(() => {
-    if (isIdle && focusOnIdle) {
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
+    if (!isIdle || !focusOnIdle) return;
+    const frameId = requestAnimationFrame(() => {
+      if (allowDeferredFocusRef.current) inputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frameId);
   }, [isIdle, focusOnIdle]);
 
   return (
@@ -159,9 +170,15 @@ export function ChatInput({
           variant === "assistant"
             ? "min-h-12 bg-card shadow-sm dark:bg-surface-2"
             : variant === "note"
-              ? "min-h-12 bg-transparent"
+              ? outlined
+                ? "min-h-12 bg-background"
+                : "min-h-12 bg-transparent"
               : GLASS_SURFACE,
-          variant === "note" ? "border-0" : "border border-black/10 dark:border-white/14",
+          variant === "note"
+            ? outlined
+              ? "border border-border/70 dark:border-white/14"
+              : "border-0"
+            : "border border-black/10 dark:border-white/14",
           expandOnFocus
             ? "h-12 items-end focus-within:h-[min(40vh,16rem)] transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none"
             : "transition-[border-color,box-shadow] duration-200",
