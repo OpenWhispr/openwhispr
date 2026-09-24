@@ -1,4 +1,5 @@
 const os = require("os");
+const { getSystemErrorName } = require("util");
 
 // A GPU whisper-server that falls back to CPU used to leave only its backend
 // name behind (WHISPER_GPU_FAILED), so neither the settings card nor a bug
@@ -8,6 +9,8 @@ const os = require("os");
 // tail also keeps a long-running server's older output out of the answer.
 const STDERR_TAIL_CHARS = 16 * 1024;
 const MAX_REASON_LENGTH = 240;
+// The high bit marks an NTSTATUS warning or error; POSIX exit codes stop at 255
+const WINDOWS_STATUS_MIN = 0x80000000;
 
 // Where the reason is saved: one .env key per backend beside WHISPER_GPU_FAILED,
 // set and cleared with it (ipcHandlers, whisperGpuUpgradeReset) and listed in
@@ -64,6 +67,16 @@ function findCauseLine(lines) {
   );
 }
 
+function describeExitCode(exitCode) {
+  // Node closes a process it could not spawn (a missing or non-executable
+  // binary) with the negative error number as its exit code
+  if (exitCode < 0) return `could not launch (${getSystemErrorName(exitCode)})`;
+  // A Windows crash exits with an NTSTATUS code, e.g. 0xC0000005 for an access
+  // violation, which people look up in hex, never as 3221225477
+  if (exitCode >= WINDOWS_STATUS_MIN) return `exit code 0x${exitCode.toString(16).toUpperCase()}`;
+  return `exit code ${exitCode}`;
+}
+
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -115,7 +128,7 @@ function extractWhisperGpuFailureReason({
   if (reason) return reason;
   // No line names the cause (a driver crash, a missing DLL, a hang): say how it ended
   if (signal) return `terminated by ${signal}`;
-  if (exitCode !== null && exitCode !== undefined) return `exit code ${exitCode}`;
+  if (exitCode !== null && exitCode !== undefined) return describeExitCode(exitCode);
   if (timeoutMs) return `startup timed out after ${Math.round(timeoutMs / 1000)} s`;
   return null;
 }

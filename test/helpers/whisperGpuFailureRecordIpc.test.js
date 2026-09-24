@@ -4,12 +4,14 @@ const Module = require("node:module");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { EventEmitter } = require("node:events");
 
 // Runs the real GPU-failure handlers from ipcHandlers.js outside Electron. The
 // saved reason must follow WHISPER_GPU_FAILED everywhere the flag is set,
 // cleared or reported (#1736).
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
+// Loaded through the mock hook below, never at the top level, so its server
+// manager gets the electron stub
+const whisperModulePath = require.resolve("../../src/helpers/whisper");
 const originalLoad = Module._load;
 const handlers = new Map();
 const broadcasts = [];
@@ -31,13 +33,16 @@ const electronStub = {
   },
   net: { fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }) },
   BrowserWindow: class {
+    // The dictation window (fallback pop-up) and the control panel (Settings).
+    // Each send records what .env held at that moment.
     static getAllWindows() {
-      return [
-        {
-          isDestroyed: () => false,
-          webContents: { send: (channel, data) => broadcasts.push({ channel, data }) },
+      return ["dictation", "control-panel"].map((window) => ({
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel, data) =>
+            broadcasts.push({ window, channel, data, failed: process.env.WHISPER_GPU_FAILED }),
         },
-      ];
+      }));
     }
     static fromWebContents() {
       return null;
@@ -59,6 +64,10 @@ Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
   // Never reach the OS keychain (tokenStore and environment.js load secretCrypto)
   if (request === "./secretCrypto") return { isAvailable: () => false };
+  // whisper.js logs a skipped pack each time the status names the pack in use
+  if (request === "./debugLogger" && parent?.filename === whisperModulePath) {
+    return new Proxy({}, { get: () => () => {} });
+  }
   if (parent?.filename === handlersModulePath) {
     if (request === "./debugLogger") return new Proxy({}, { get: () => () => {} });
     // The status handlers probe the machine's GPUs; the answer is irrelevant here
@@ -116,10 +125,33 @@ function anything() {
   });
 }
 
-function createHandlers() {
+function createHandlers({ downloadError = null } = {}) {
   const IPCHandlers = require(handlersModulePath);
-  const serverManager = new EventEmitter();
-  serverManager.isRemote = false;
+  const WhisperManager = require(whisperModulePath);
+  // The real manager, so the status reports the pack main has in use from the
+  // same rule every server start uses. No server is ever started here.
+  const whisperManager = Object.assign(new WhisperManager(), {
+    stopServer: async () => {},
+    restartServerWithGpuPreference: async () => ({ success: true, restarted: false }),
+  });
+  const { serverManager } = whisperManager;
+  const download = async () => {
+    if (downloadError) throw downloadError;
+  };
+  const whisperCudaManager = {
+    isDownloaded: () => true,
+    isDownloading: () => false,
+    getCudaBinaryPath: () => null,
+    download,
+    delete: async () => ({ success: true }),
+  };
+  const whisperVulkanManager = {
+    isDownloaded: () => true,
+    isDownloading: () => false,
+    download,
+    delete: async () => ({ success: true, deletedCount: 1 }),
+  };
+  whisperManager.setGpuBinaryManagers({ cuda: whisperCudaManager, vulkan: whisperVulkanManager });
   // What each .env rewrite would persist, captured at the moment of the write
   const envWrites = [];
   const target = Object.assign(Object.create(IPCHandlers.prototype), {
@@ -129,25 +161,9 @@ function createHandlers() {
         return { success: true };
       },
     },
-    whisperManager: {
-      serverManager,
-      currentServerModel: null,
-      stopServer: async () => {},
-      restartServerWithGpuPreference: async () => ({ success: true, restarted: false }),
-    },
-    whisperCudaManager: {
-      isDownloaded: () => true,
-      isDownloading: () => false,
-      getCudaBinaryPath: () => null,
-      download: async () => {},
-      delete: async () => ({ success: true }),
-    },
-    whisperVulkanManager: {
-      isDownloaded: () => true,
-      isDownloading: () => false,
-      download: async () => {},
-      delete: async () => ({ success: true, deletedCount: 1 }),
-    },
+    whisperManager,
+    whisperCudaManager,
+    whisperVulkanManager,
   });
   const context = new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
@@ -172,7 +188,14 @@ test("a Vulkan fallback saves its reason with the flag, in one .env write", () =
       WHISPER_GPU_FAILED_REASON_VULKAN: DEVICE_LOST,
     },
   ]);
-  assert.deepEqual(broadcasts, [{ channel: "gpu-fallback-notification", data: {} }]);
+  // Announced once per window, by its own notification, after the save
+  assert.deepEqual(
+    broadcasts.map(({ window, channel, failed }) => [window, channel, failed]),
+    [
+      ["dictation", "gpu-fallback-notification", "vulkan"],
+      ["control-panel", "gpu-fallback-notification", "vulkan"],
+    ]
+  );
 });
 
 test("the status IPC reports each backend's own saved reason", async () => {
@@ -253,4 +276,68 @@ test("deleting the CUDA pack and re-downloading Vulkan clear their reasons too",
   assert.equal(process.env.WHISPER_GPU_FAILED_REASON_VULKAN, DEVICE_LOST);
   await invoke("download-vulkan-whisper-binary");
   assert.equal(process.env.WHISPER_GPU_FAILED_REASON_VULKAN, undefined);
+});
+
+test("each pack's status says whether it is the pack main has in use", async () => {
+  // Both packs installed
+  const { serverManager, invoke } = createHandlers();
+  const inUse = async () => [
+    (await invoke("get-cuda-whisper-status")).inUse,
+    (await invoke("get-vulkan-whisper-status")).inUse,
+  ];
+  assert.deepEqual(await inUse(), [true, false], "CUDA, as every server start picks");
+
+  serverManager.emit("cuda-fallback", { reason: KERNEL_IMAGE });
+  assert.deepEqual(await inUse(), [false, true], "the next start runs Vulkan");
+
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+  assert.deepEqual(await inUse(), [true, false], "both failed: CUDA first, with its reason");
+});
+
+const STATUS_CHANGED = "whisper-gpu-status-changed";
+// Which windows were told to re-read the GPU status, and what .env held then
+const toldToReread = () =>
+  broadcasts.filter((b) => b.channel === STATUS_CHANGED).map((b) => [b.window, b.failed]);
+
+test("Retry on the fallback pop-up tells every open window, once it is cleared", async () => {
+  const { serverManager, invoke } = createHandlers();
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+  broadcasts.length = 0;
+
+  await invoke("whisper-gpu-retry");
+
+  // Settings is another window, still showing the failure until it re-reads
+  assert.deepEqual(toldToReread(), [
+    ["dictation", undefined],
+    ["control-panel", undefined],
+  ]);
+});
+
+test("downloading or deleting either pack tells every open window, once saved", async () => {
+  const { serverManager, invoke } = createHandlers();
+  for (const [channel, stillFailed] of [
+    ["download-cuda-whisper-binary", "vulkan"],
+    ["delete-cuda-whisper-binary", "vulkan"],
+    ["download-vulkan-whisper-binary", "cuda"],
+    ["delete-vulkan-whisper-binary", "cuda"],
+  ]) {
+    serverManager.emit("cuda-fallback", { reason: KERNEL_IMAGE });
+    serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+    broadcasts.length = 0;
+
+    await invoke(channel);
+
+    const told = [
+      ["dictation", stillFailed],
+      ["control-panel", stillFailed],
+    ];
+    assert.deepEqual(toldToReread(), told, channel);
+  }
+});
+
+test("a pack download that fails changes nothing and announces nothing", async () => {
+  const { invoke } = createHandlers({ downloadError: new Error("network down") });
+
+  assert.equal((await invoke("download-vulkan-whisper-binary")).success, false);
+  assert.deepEqual(toldToReread(), []);
 });

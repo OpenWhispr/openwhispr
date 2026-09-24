@@ -266,7 +266,7 @@ test("the mid-transcription reason ignores what earlier requests printed", async
 
   await manager.transcribe(Buffer.from("audio"));
 
-  assert.deepEqual(events, [{ reason: "exit code 3221225477" }]);
+  assert.deepEqual(events, [{ reason: "exit code 0xC0000005" }]);
 });
 
 test("falls back to CPU when a peer's replacement is another doomed CUDA server", async (t) => {

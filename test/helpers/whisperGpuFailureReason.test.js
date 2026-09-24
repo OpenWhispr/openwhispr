@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { getSystemErrorMap } = require("node:util");
 const { parse: parseDotenv } = require("dotenv");
 
 const {
@@ -73,7 +74,7 @@ test("recovered warnings alone are not a cause: the exit is reported instead", (
     "ggml_vulkan: Failed ggml_vk_create_buffer (vk::Device::allocateMemory: ErrorOutOfDeviceMemory)",
     "ggml_cuda_host_malloc: failed to allocate 512.00 MiB of pinned memory: out of memory",
   ].join("\n");
-  assert.equal(extractReason({ stderr, exitCode: 3221225477 }), "exit code 3221225477");
+  assert.equal(extractReason({ stderr, exitCode: 3221225477 }), "exit code 0xC0000005");
 });
 
 test("a ggml abort with no error word in it is reported, not the exit it caused", () => {
@@ -133,7 +134,7 @@ test("with only the generic load-failure lines, the first one is kept", () => {
 test("without an error line, reports how the process ended", () => {
   const banner = "ggml_vulkan: Found 1 Vulkan devices:\n";
   // A driver crash or a missing DLL on Windows prints nothing and exits with an NTSTATUS code
-  assert.equal(extractReason({ stderr: banner, exitCode: 3221225477 }), "exit code 3221225477");
+  assert.equal(extractReason({ stderr: banner, exitCode: 3221225477 }), "exit code 0xC0000005");
   assert.equal(extractReason({ stderr: banner, signal: "SIGSEGV" }), "terminated by SIGSEGV");
   assert.equal(
     extractReason({ stderr: banner, timeoutMs: 120000 }),
@@ -143,12 +144,30 @@ test("without an error line, reports how the process ended", () => {
   assert.equal(extractReason({}), null);
 });
 
+test("a Windows crash status reads in hex, the form reporters and search engines know", () => {
+  // Node reports GetExitCodeProcess's DWORD unsigned, so 0xC0000005 arrives as 3221225477
+  assert.equal(extractReason({ exitCode: 0xc0000135 }), "exit code 0xC0000135");
+  assert.equal(extractReason({ exitCode: 0xc0000409 }), "exit code 0xC0000409");
+  assert.equal(extractReason({ exitCode: 0x80000003 }), "exit code 0x80000003");
+  // An ordinary exit status stays a small decimal number
+  assert.equal(extractReason({ exitCode: 1 }), "exit code 1");
+  assert.equal(extractReason({ exitCode: 255 }), "exit code 255");
+});
+
+test("a binary that could not be launched is named by its error, not a negative exit code", () => {
+  // Node closes a process it failed to spawn with the negative error number as its
+  // exit code (-2 for ENOENT on macOS and Linux, -4058 on Windows)
+  const errno = (name) => [...getSystemErrorMap()].find(([, [code]]) => code === name)[0];
+  assert.equal(extractReason({ exitCode: errno("ENOENT") }), "could not launch (ENOENT)");
+  assert.equal(extractReason({ exitCode: errno("EACCES") }), "could not launch (EACCES)");
+});
+
 test("reads only the last 16 KB, so a long-running server's old lines are ignored", () => {
   const stderr =
     "error: failed to read WAV file 'old.wav'\n" +
     "whisper_print_timings:    total time =    10.00 ms\n".repeat(400);
   assert.ok(stderr.length > 16 * 1024);
-  assert.equal(extractReason({ stderr, exitCode: 3221225477 }), "exit code 3221225477");
+  assert.equal(extractReason({ stderr, exitCode: 3221225477 }), "exit code 0xC0000005");
 });
 
 test("returns one line, capped at MAX_REASON_LENGTH", () => {
