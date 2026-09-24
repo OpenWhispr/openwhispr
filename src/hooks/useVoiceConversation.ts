@@ -300,9 +300,12 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       });
       const parakeetModel = settings.parakeetModel || DEFAULT_PARAKEET_MODEL;
       const brain = resolveVoiceBrain(voiceModel, brainOverride);
+      // The harness plays English speech and must not depend on user settings (same
+      // reason `enabled` ORs in `harnessAvailable`), so it checks readiness as English
+      // regardless of the dev profile's actual dictation language.
       const readiness = await api.getReadiness({
         parakeetModel,
-        language: settings.preferredLanguage,
+        language: harness ? "en" : settings.preferredLanguage,
         brain,
       });
       // `readiness.ready === false`, not `!readiness.ready`: negation narrowing doesn't
