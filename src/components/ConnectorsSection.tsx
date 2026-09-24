@@ -38,6 +38,9 @@ export function ConnectorsSection({ isPaid, onUpgrade }: ConnectorsSectionProps)
       ?.connectorRecentActions?.("email", 10)
       .then((rows) => {
         if (active) setRecent(rows ?? []);
+      })
+      .catch(() => {
+        if (active) setRecent([]);
       });
     return () => {
       active = false;
