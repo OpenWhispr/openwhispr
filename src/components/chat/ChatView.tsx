@@ -221,8 +221,10 @@ export default function ChatView() {
                   partialTranscript=""
                   onTextSubmit={handleTextSubmit}
                   onCancel={streaming.cancelStream}
+                  autoFocus={isNewChat}
+                  voiceDraft
                   focusOnIdle={false}
-                  placeholder={t("chat.inputPlaceholder")}
+                  placeholder={t("embeddedChat.askPlaceholder")}
                   variant="assistant"
                   expandOnFocus
                 />

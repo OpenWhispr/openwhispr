@@ -75,6 +75,37 @@ test("closing the Notes composer cancels a pending auto-focus", async (t) => {
   assert.equal(focusCount, 0, "even an in-flight frame cannot refocus a closed composer");
 });
 
+test("a composer that skips idle focus still gets focus back when a reply ends", async (t) => {
+  const { root, container, ChatInput } = await mountChatInput(t);
+  const frames = new Map();
+  let nextFrame = 0;
+  globalThis.requestAnimationFrame = (callback) => {
+    const id = ++nextFrame;
+    frames.set(id, callback);
+    return id;
+  };
+  globalThis.cancelAnimationFrame = (id) => frames.delete(id);
+  const props = {
+    variant: "assistant",
+    partialTranscript: "",
+    onTextSubmit: () => {},
+    focusOnIdle: false,
+  };
+  const render = (agentState) =>
+    React.act(async () => root.render(React.createElement(ChatInput, { ...props, agentState })));
+
+  await render("idle");
+  assert.equal(frames.size, 0, "mounting idle does not grab focus");
+
+  await render("streaming");
+  await render("idle");
+  const textarea = findNode(container, "textarea");
+  let focusCount = 0;
+  textarea.focus = () => focusCount++;
+  for (const frame of frames.values()) frame();
+  assert.equal(focusCount, 1, "the input is refocused after the reply");
+});
+
 test("a long Notes draft scrolls inside the compact composer after closing chat", async (t) => {
   const { root, container, ChatInput } = await mountChatInput(t);
   const props = {

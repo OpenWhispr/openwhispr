@@ -157,13 +157,20 @@ export function ChatInput({
     }
   }, [inputText, isVoiceRecording, isVoiceTranscribing, expandOnFocus, variant, isCompactNote]);
 
+  // The input is disabled while a reply streams, which drops its focus; hand it back when the
+  // reply ends, even where focusOnIdle is off so the composer doesn't grab focus on mount.
+  const wasBusyRef = useRef(false);
   useEffect(() => {
-    if (!isIdle || !focusOnIdle) return;
+    if (isBusy) wasBusyRef.current = true;
+    if (!isIdle) return;
+    const replyFinished = wasBusyRef.current;
+    wasBusyRef.current = false;
+    if (!focusOnIdle && !replyFinished) return;
     const frameId = requestAnimationFrame(() => {
       if (allowDeferredFocusRef.current) inputRef.current?.focus();
     });
     return () => cancelAnimationFrame(frameId);
-  }, [isIdle, focusOnIdle]);
+  }, [isIdle, isBusy, focusOnIdle]);
 
   return (
     <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
@@ -353,7 +360,7 @@ export function ChatInput({
                 disabled={voice.streamingOnlyProvider || disabled}
                 aria-label={t("notes.editor.transcribe")}
                 title={
-                  voice.streamingOnlyProvider || disabled
+                  voice.streamingOnlyProvider
                     ? t("agentMode.input.voiceDraftStreamingOnly")
                     : t("notes.editor.transcribe")
                 }
