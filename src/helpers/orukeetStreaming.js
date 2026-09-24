@@ -256,12 +256,16 @@ class OrukeetStreaming {
   fail(error) {
     if (this.failure) return;
     this.failure = error;
+    // Before `ready`, the rejected connect() is the report and the start falls
+    // back on it; onError is for an established stream, so a refused socket
+    // does not also surface as a streaming error.
+    const connecting = Boolean(this.connectReject);
     this.connectReject?.(error);
     this.connectResolve = this.connectReject = null;
     this.finalReject?.(error);
     this.clearFinal();
     this.close();
-    this.onError?.(error);
+    if (!connecting) this.onError?.(error);
   }
 
   close() {

@@ -634,6 +634,7 @@ class AudioManager {
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
     this.streamingFallbackReason = null;
+    this._streamingFailoverReason = null;
     this.warmupFailureStreak = 0;
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
@@ -4597,6 +4598,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       sessionId = (this._streamingSessionGeneration || 0) + 1;
       this._streamingSessionGeneration = sessionId;
       this.streamingFallbackReason = null;
+      this._streamingFailoverReason = null;
       this._activeStreamingSessionId = sessionId;
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
@@ -4671,7 +4673,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           this._streamingFlushResolve?.();
           return;
         }
-        provider.send(event.data);
+        if (!this._streamingFailoverReason) provider.send(event.data);
       };
 
       this.isStreaming = true;
@@ -4710,6 +4712,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const errorCleanup = provider.onError((error) => {
         if (!ownsSession()) return;
         logger.error("Streaming provider error", { error }, "streaming");
+        // Managed Orukeet refuses a second concurrent recording on the account
+        // and can drop a socket mid-recording. The fallback recorder has the
+        // whole capture, so keep recording and let stop upload it to Cloud
+        // rather than cutting the user off behind an error.
+        if (
+          this.getStreamingProviderName() === "orukeet" &&
+          getSettings().cloudTranscriptionMode === "openwhispr"
+        ) {
+          this._streamingFailoverReason ??= "stream_no_final";
+          return;
+        }
         this.onError?.({
           title: "Streaming Error",
           description: error,
@@ -4770,6 +4783,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const tWs = performance.now();
       this._settleStreamingStart();
       if (startWasCancelled()) return false;
+
+      // A managed Orukeet start failure (refused socket, account cap, outage)
+      // keeps this capture: the fallback recorder has held the audio since the
+      // mic opened, and reopening the mic for a batch recording would lose it.
+      if (result.needsFallback && this.streamingFallbackReason && this.streamingFallbackRecorder) {
+        this._streamingFailoverReason = this.streamingFallbackReason;
+        this.streamingFallbackReason = null;
+        logger.info(
+          "Managed Orukeet unavailable, recording for the Cloud upload",
+          { reason: this._streamingFailoverReason },
+          "streaming"
+        );
+        if (this.stopRequestedDuringStreamingStart) {
+          this.stopRequestedDuringStreamingStart = false;
+          return this.stopStreamingRecording();
+        }
+        return true;
+      }
 
       if (result.needsFallback) {
         this.isRecording = false;
@@ -5396,7 +5427,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let usedBatchFallback = false;
     let batchWarning = null;
     let batchFallbackResult = null;
-    if (!finalText && !finalAcknowledged && durationSeconds > 2 && fallbackBlob?.size > 0) {
+    let failoverError = null;
+    const failoverReason = this._streamingFailoverReason;
+    if (
+      !finalText &&
+      (failoverReason || (!finalAcknowledged && durationSeconds > 2)) &&
+      fallbackBlob?.size > 0
+    ) {
       const target = resolveStreamingFallbackTarget(getSettings());
       if (target === "skip") {
         logger.warn(
@@ -5422,7 +5459,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                     // The tag feeds the Orukeet rollout's fallback rate; other
                     // providers still fall back, just untagged.
                     ...(this.getStreamingProviderName() === "orukeet"
-                      ? { streamingFallbackReason: "stream_no_final" }
+                      ? { streamingFallbackReason: failoverReason || "stream_no_final" }
                       : {}),
                   },
                   wasCancelled
@@ -5438,6 +5475,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
         } catch (fallbackErr) {
           logger.error("Batch fallback failed", { error: fallbackErr.message }, "streaming");
+          // A failed-over recording has no other transcript: keep it for retry
+          // and report the failure, as the batch recording it replaces would.
+          if (failoverReason && fallbackErr.message !== "No audio detected") {
+            failoverError = fallbackErr;
+            this.saveFailedTranscription(fallbackErr.message, fallbackErr.code || null, {
+              durationSeconds,
+              analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+            });
+          }
         }
       }
     }
@@ -5543,7 +5589,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     if (wasCancelled()) return true;
 
-    if (!finalText) {
+    if (failoverError) {
+      this.onError?.({
+        title: "Transcription Error",
+        description: `Transcription failed: ${failoverError.message}`,
+        code: failoverError.code,
+        messageKey: failoverError.messageKey,
+      });
+    } else if (!finalText) {
       // Match the batch pipeline: settle processing first, then publish the
       // empty outcome so the warning cannot interrupt the thinking transition.
       this.onTranscriptionComplete?.({ success: true, text: "" });
