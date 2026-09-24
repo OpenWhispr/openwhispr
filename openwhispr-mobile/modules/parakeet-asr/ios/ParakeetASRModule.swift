@@ -83,8 +83,8 @@ public class ParakeetASRModule: Module {
 
     Events("parakeetInstallProgress")
 
-    // Orukeet caches keyed to an earlier iOS build (and work an interrupted install left) can
-    // never load again; reclaim them rather than leave ~600 MB the UI can't reach.
+    // Recover an earlier iOS cache from its retained archive before reclaiming old compiled
+    // copies and interrupted work. The installer also tracks this work for cancellation.
     OnCreate {
       Task { await Self.orukeet.removeUnusableCaches() }
     }
@@ -96,6 +96,24 @@ public class ParakeetASRModule: Module {
         do {
           let model = try Self.parseModel(version)
           promise.resolve(await Self.isDownloaded(model))
+        } catch {
+          promise.reject("MODEL_CHECK_ERROR", error.localizedDescription)
+        }
+      }
+    }
+
+    // UI checks wait for an already-running OS rebuild, so the model picker
+    // cannot show Download for a model whose retained source is being compiled.
+    // Dictation's existing isModelDownloaded call remains non-blocking.
+    AsyncFunction("isModelDownloadedAfterRecovery") { (version: String, promise: Promise) in
+      Task {
+        do {
+          let model = try Self.parseModel(version)
+          if model == .orukeet {
+            promise.resolve(await Self.orukeet.installedDirectoryAfterRecovery() != nil)
+          } else {
+            promise.resolve(await Self.isDownloaded(model))
+          }
         } catch {
           promise.reject("MODEL_CHECK_ERROR", error.localizedDescription)
         }
@@ -162,17 +180,16 @@ public class ParakeetASRModule: Module {
         do {
           let model = try Self.parseModel(version)
           if model == .orukeet {
-            // A cancelled install stops at its next checkpoint instead of publishing into the
-            // directory being removed below.
-            await Self.orukeet.cancelInstall()
-          }
-          // Repo-scoped dirs (…/Models/parakeet-tdt-0.6b-v{2,3}) or Orukeet's own root — removing
-          // one frees only this version's weights and never touches the diarization models.
-          // A failed or cancelled download leaves partial weights (up to ~555 MB) in the JS staging
-          // sibling; "Delete model" is the only thing that reclaims them.
-          for dir in Self.storageDirectories(for: model)
-          where FileManager.default.fileExists(atPath: dir.path) {
-            try FileManager.default.removeItem(at: dir)
+            // Cancellation, joining and removal share one installer operation so
+            // another availability check cannot restart OS recovery before delete.
+            try await Self.orukeet.deleteModelsAndStaging()
+          } else {
+            // Repo-scoped directories remove only this version, including its
+            // partial JS download; diarization models are stored separately.
+            for dir in Self.storageDirectories(for: model)
+            where FileManager.default.fileExists(atPath: dir.path) {
+              try FileManager.default.removeItem(at: dir)
+            }
           }
           if self.loadedModel == model { await self.releaseManager() }
           promise.resolve(nil)
@@ -202,9 +219,9 @@ public class ParakeetASRModule: Module {
 
     // --- Engine lifecycle + transcription ---
 
-    // Load already-downloaded weights + build the warm AsrManager. The first load after a download
-    // is where CoreML's one-time ANE compile happens (~seconds), and the download UI owns that wait
-    // ("Preparing model…") — a dictation tap must never pay it. This module never downloads;
+    // Load already-downloaded weights and prepare the reusable AsrManager. Orukeet also runs its
+    // first prediction here, while the download UI shows "Preparing model…", and discards the
+    // silence result/state. loadMs includes that preparation. This module never downloads;
     // FluidAudio's loader can (see the header note on AsrModels.load).
     AsyncFunction("prepare") { (version: String, promise: Promise) in
       Task {
@@ -217,6 +234,14 @@ public class ParakeetASRModule: Module {
           let (models, directory) = try await Self.loadModels(model)
           let manager = AsrManager()
           try await manager.loadModels(models)
+          if model == .orukeet {
+            do {
+              try await OrukeetWarmup.run(on: manager)
+            } catch {
+              await manager.cleanup()
+              throw error
+            }
+          }
           let loadMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
 
           self.asr = manager
@@ -425,11 +450,13 @@ public class ParakeetASRModule: Module {
   }
 
   /// Where the JS downloader stages an in-progress transfer: the install root's path with
-  /// ".downloading" appended. The only definition of that suffix — JS reads the path from
-  /// `modelSpec` instead of rebuilding it. Staging is kept between attempts so completed files are
+  /// ".downloading" appended. Orukeet's installer owns its staging URL and deletion;
+  /// JS reads the path from `modelSpec` instead of rebuilding it. Staging is kept between attempts so completed files are
   /// reused, which also means a failed run leaves it behind.
   private static func stagingDirectory(for model: ParakeetModel) -> URL {
-    URL(fileURLWithPath: installRoot(for: model).path + ".downloading")
+    model == .orukeet
+      ? orukeet.stagingDirectory
+      : URL(fileURLWithPath: installRoot(for: model).path + ".downloading")
   }
 
   /// Recursive sum of file sizes under `dir` (`.mlmodelc` are directories of weight files). 0 if absent.

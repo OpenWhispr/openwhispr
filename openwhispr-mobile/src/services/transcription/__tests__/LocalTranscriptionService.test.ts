@@ -14,6 +14,7 @@ jest.mock('../LocalParakeetService', () => ({
     isAvailable: jest.fn(() => true),
     supportsVersion: jest.fn(() => true),
     isModelDownloaded: jest.fn(async () => true),
+    isModelDownloadedAfterRecovery: jest.fn(async () => true),
     hasFailedToLoad: jest.fn(() => false),
     transcribe: jest.fn(async () => ({ text: 'parakeet text', duration: 2, provider: 'local' })),
     prepare: jest.fn(async () => undefined),
@@ -117,6 +118,17 @@ describe('LocalTranscriptionService', () => {
       orukeetDownloaded: false,
     });
     expect(mockParakeet.isModelDownloaded).toHaveBeenCalledWith('orukeet');
+    expect(mockParakeet.isModelDownloadedAfterRecovery).not.toHaveBeenCalled();
+  });
+
+  it('waits for Orukeet recovery when the model picker requests availability', async () => {
+    await expect(
+      LocalTranscriptionService.getAvailability({ waitForRecovery: true }),
+    ).resolves.toMatchObject({
+      orukeetDownloaded: true,
+    });
+    expect(mockParakeet.isModelDownloadedAfterRecovery).toHaveBeenCalledWith('orukeet');
+    expect(mockParakeet.isModelDownloaded).not.toHaveBeenCalledWith('orukeet');
   });
 
   it('reports Orukeet unsupported, and never asks for it, on a binary that predates it', async () => {
