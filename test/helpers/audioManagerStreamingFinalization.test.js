@@ -1447,23 +1447,49 @@ test("an older gateway sends no detection fields", async (t) => {
   assert.deepEqual(detectionFields(usage[0]), {});
 });
 
-test("a failed re-transcription keeps the Orukeet text and reports usage", async (t) => {
+test("a failed re-transcription is reported and kept for retry, never pasting Orukeet's text", async (t) => {
   const AudioManager = await loadManagerClass(t);
-  for (const upload of [
-    async () => {
-      throw new Error("Cloud transcription failed");
-    },
-    async () => ({ text: "" }),
-  ]) {
-    const { uploads, usage, published } = await stopManagedDictation(AudioManager, {
+  const saved = [];
+  const { uploads, reasonCalls, usage, published, errors } = await stopManagedDictation(
+    AudioManager,
+    {
       final: JA_FINAL,
-      upload,
-    });
-    assert.equal(uploads.length, 1);
-    assert.equal(published[0].text, "ashita no kaigi");
-    assert.equal(usage.length, 1);
-    assert.deepEqual(detectionFields(usage[0]), JA_DETECTION);
-  }
+      upload: async () => {
+        throw new Error("Cloud transcription failed");
+      },
+      overrides: { saveFailedTranscription: (...args) => saved.push(args) },
+    }
+  );
+  assert.equal(uploads.length, 1);
+  assert.deepEqual(
+    errors.map(({ title, description }) => [title, description]),
+    [["Transcription Error", "Transcription failed: Cloud transcription failed"]]
+  );
+  assert.deepEqual(
+    saved.map(([message, code]) => [message, code]),
+    [["Cloud transcription failed", null]]
+  );
+  assert.deepEqual(published, []);
+  assert.deepEqual(reasonCalls, []);
+  assert.deepEqual(usage, []);
+});
+
+test("a re-transcription that returns no text ends empty and keeps the recording", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const saved = [];
+  const { reasonCalls, usage, published, errors } = await stopManagedDictation(AudioManager, {
+    final: JA_FINAL,
+    upload: async () => ({ text: "" }),
+    overrides: { saveFailedTranscription: (...args) => saved.push(args) },
+  });
+  assert.deepEqual(published, [{ success: true, text: "" }]);
+  assert.deepEqual(
+    saved.map(([, code]) => code),
+    ["NO_SPEECH_DETECTED"]
+  );
+  assert.deepEqual(errors, []);
+  assert.deepEqual(reasonCalls, []);
+  assert.deepEqual(usage, []);
 });
 
 test("Cloud finding no speech ends the dictation empty and keeps the recording", async (t) => {
@@ -1614,19 +1640,22 @@ test("a selection edit that fails during the language re-transcription surfaces 
       selectionEditFatal: true,
       code: "SELECTION_EDIT_REASONING_FAILED",
     });
-  const { reasonCalls, usage, published, errors, stopResult } = await stopManagedDictation(
-    AudioManager,
-    {
-      final: JA_FINAL,
-      upload: async () => {
-        throw selectionEditFailure();
-      },
-    }
-  );
-  assert.equal(stopResult, false);
+  const saved = [];
+  const { reasonCalls, usage, published, errors } = await stopManagedDictation(AudioManager, {
+    final: JA_FINAL,
+    upload: async () => {
+      throw selectionEditFailure();
+    },
+    overrides: { saveFailedTranscription: (...args) => saved.push(args) },
+  });
+  // As a failed batch selection edit ends: its own title, recording kept.
   assert.deepEqual(
-    errors.map(({ title, code }) => [title, code]),
-    [["Selection Edit Failed", "SELECTION_EDIT_REASONING_FAILED"]]
+    errors.map(({ title, description, code }) => [title, description, code]),
+    [["Selection Edit Failed", "Selection edit failed", "SELECTION_EDIT_REASONING_FAILED"]]
+  );
+  assert.deepEqual(
+    saved.map(([, code]) => code),
+    ["SELECTION_EDIT_REASONING_FAILED"]
   );
   // Orukeet's discarded text is neither published nor edited with.
   assert.deepEqual(published, []);

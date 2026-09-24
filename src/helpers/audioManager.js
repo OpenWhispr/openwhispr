@@ -113,7 +113,6 @@ import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValida
 import { isEmptyRecording } from "./recordingGuard";
 import {
   analyzeDictionaryPromptFragment,
-  DICTIONARY_ECHO_CODE,
   dictionaryEchoError,
   matchesDictionaryPrompt,
   payloadSendsDictionaryBias,
@@ -5092,21 +5091,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  // A failed selection edit ends the dictation with its own error; the
-  // transcript must not fall through to another edit or a paste.
-  _failStreamingSelectionEdit(error) {
-    this.pendingSelectionEdit = null;
-    this.onError?.({
-      title: "Selection Edit Failed",
-      description: error.message,
-      code: error.code,
-      messageKey: error.messageKey,
-    });
-    this.isProcessing = false;
-    this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
-    return false;
-  }
-
   async _finalizeStreamingRecording(sessionId) {
     if (
       sessionId !== null &&
@@ -5324,6 +5308,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let usedBatchFallback = false;
     let batchWarning = null;
     let batchFallbackResult = null;
+    let failureReport = null;
     const isOrukeetStream = this.getStreamingProviderName() === "orukeet";
     const detectedLanguageFields = isOrukeetStream
       ? orukeetDetectedLanguageFields(orukeetFinal)
@@ -5344,6 +5329,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         detectedLanguageFields,
         "streaming"
       );
+      // Orukeet's text is the nonsense this path exists to catch, so it is
+      // never kept: a failed re-transcription ends as a batch recording's would.
+      const failLanguageFallback = (error) => {
+        logger.error(
+          "Language re-transcription failed, discarding the Orukeet transcript",
+          { error: error.message, code: error.code },
+          "streaming"
+        );
+        finalText = "";
+        const outcome = transcriptionFailureOutcome(error);
+        failureReport = outcome.report;
+        if (outcome.keepAudio) {
+          this.saveFailedTranscription(error.message, error.code || null, {
+            durationSeconds,
+            analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+          });
+        }
+      };
       try {
         const batchResult = await this.processWithOpenWhisprCloud(
           fallbackBlob,
@@ -5362,41 +5365,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           batchFallbackResult = batchResult;
           batchWarning = batchResult.warning || null;
         } else {
-          logger.warn(
-            "Language re-transcription returned no text, keeping the Orukeet transcript",
-            {},
-            "streaming"
+          failLanguageFallback(
+            Object.assign(new Error("No speech detected in audio"), { code: "NO_SPEECH_DETECTED" })
           );
         }
       } catch (languageFallbackErr) {
         if (wasCancelled()) return true;
-        if (languageFallbackErr.selectionEditFatal) {
-          return this._failStreamingSelectionEdit(languageFallbackErr);
-        }
-        if (
-          languageFallbackErr.code === "NO_SPEECH_DETECTED" ||
-          languageFallbackErr.code === DICTIONARY_ECHO_CODE
-        ) {
-          // Cloud heard no speech, so Orukeet's text is the nonsense this path
-          // exists to catch, and an echo was already metered. End empty and keep
-          // the recording for a retry, as the batch pipeline does (#1547).
-          logger.warn(
-            "Language re-transcription found no speech, discarding the Orukeet transcript",
-            { code: languageFallbackErr.code },
-            "streaming"
-          );
-          finalText = "";
-          this.saveFailedTranscription(languageFallbackErr.message, languageFallbackErr.code, {
-            durationSeconds,
-            analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-          });
-        } else {
-          logger.error(
-            "Language re-transcription failed, keeping the Orukeet transcript",
-            { error: languageFallbackErr.message },
-            "streaming"
-          );
-        }
+        failLanguageFallback(languageFallbackErr);
       }
     }
 
@@ -5534,7 +5509,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       } catch (reasonError) {
         if (wasCancelled()) return true;
-        if (reasonError.selectionEditFatal) return this._failStreamingSelectionEdit(reasonError);
+        if (reasonError.selectionEditFatal) {
+          this.pendingSelectionEdit = null;
+          this.onError?.({
+            title: "Selection Edit Failed",
+            description: reasonError.message,
+            code: reasonError.code,
+            messageKey: reasonError.messageKey,
+          });
+          this.isProcessing = false;
+          this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
+          return false;
+        }
         logger.error(
           "Streaming reasoning failed, using raw text",
           { error: reasonError.message },
@@ -5550,7 +5536,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     // If streaming produced no text, fall back to batch — routed so BYOK audio
     // and cloud audio never cross over (see resolveStreamingFallbackTarget).
-    let failureReport = null;
     const failoverReason = this._streamingFailoverReason;
     // No stream will transcribe a failed-over recording, so it uploads at any
     // length, unless it was the silence the batch speech gate skips.
