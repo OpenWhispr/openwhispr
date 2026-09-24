@@ -17,7 +17,7 @@ const mockStorage = new Map<string, string>();
 const mockRoute = {
   provider: 'byok',
   cleanupUnavailable: 'Cleanup is unavailable. Your raw transcript is saved.',
-  agentUnavailable: 'Agent is unavailable. Your raw transcript is saved.',
+  agentUnavailable: 'The voice assistant is unavailable. Your raw transcript is saved.',
   inferenceRoute: {
     mode: 'providers',
     scope: 'dictation',

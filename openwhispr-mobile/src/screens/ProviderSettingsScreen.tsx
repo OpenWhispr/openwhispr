@@ -37,7 +37,7 @@ const SCOPES: Record<MobileInferenceScope, string> = {
   upload: 'Uploads',
   cleanup: 'Text Cleanup',
   notes: 'Note Formatting & Titles',
-  agent: 'Chat & Agents',
+  agent: 'Chat & Voice Assistant',
 };
 const MODES: Record<InferenceMode, string> = {
   openwhispr: 'OpenWhispr Cloud',
@@ -55,7 +55,7 @@ const PROVIDER_SETUP_URLS: Record<string, string> = {
 const UNSET_PROVIDER_NOTES: Partial<Record<MobileInferenceScope, string>> = {
   cleanup: 'Not saved yet. Cleanup is skipped until you save a selection.',
   agent:
-    'Not saved yet. Voice commands are skipped until you save a selection; note chat uses OpenWhispr Cloud.',
+    'Not saved yet. The voice assistant is skipped until you save a selection; note chat uses OpenWhispr Cloud.',
 };
 
 // What a workflow with no saved selection runs: On-Device mode keeps everything

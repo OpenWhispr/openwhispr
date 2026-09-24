@@ -276,7 +276,7 @@ async function maybeRunAgentActionOnFusedResult(
   } catch (err) {
     // On failure, the fused text (already cleaned) is used — same failure
     // semantics as desktop: raw/pre-existing text inserts on agent error.
-    onSkipped('Agent processing failed. Your raw transcript is saved.');
+    onSkipped('The voice assistant failed. Your raw transcript is saved.');
     if (request.agentRoute?.mode !== 'providers')
       console.warn('[transcribeAndCleanup] agent action call failed, using fused text:', err);
     return undefined;

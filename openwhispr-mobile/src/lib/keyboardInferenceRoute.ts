@@ -77,14 +77,14 @@ function readRoute(jobId: string, storageKey: string): TranscriptionJobRoute | u
     if (value.cleanupUnavailable)
       route.cleanupUnavailable = 'Cleanup is unavailable. Your raw transcript is saved.';
     if (value.agentUnavailable)
-      route.agentUnavailable = 'Agent is unavailable. Your raw transcript is saved.';
+      route.agentUnavailable = 'The voice assistant is unavailable. Your raw transcript is saved.';
     for (const scope of ['cleanup', 'agent'] as const) {
       const field = scope === 'cleanup' ? 'cleanupRoute' : 'agentRoute';
       const unavailable = scope === 'cleanup' ? 'cleanupUnavailable' : 'agentUnavailable';
       if (!route[field] && !route[unavailable]) {
         if (route.provider === 'byok')
           route[unavailable] =
-            `${scope === 'cleanup' ? 'Cleanup' : 'Agent'} is unavailable. Your raw transcript is saved.`;
+            `${scope === 'cleanup' ? 'Cleanup' : 'The voice assistant'} is unavailable. Your raw transcript is saved.`;
         else route[field] = { mode: route.provider === 'local' ? 'local' : 'openwhispr', scope };
       }
     }

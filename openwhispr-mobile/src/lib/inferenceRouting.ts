@@ -81,7 +81,7 @@ export function snapshotTextInference(provider: TranscriptionProvider): TextInfe
       result[routeKey] = { mode: 'local', scope };
     } else if (!selection && provider === 'byok') {
       result[errorKey] =
-        `Choose ${scope === 'agent' ? 'an agent' : 'a cleanup'} provider in AI Models. Your raw transcript is saved.`;
+        `Choose ${scope === 'agent' ? 'a voice assistant' : 'a cleanup'} provider in AI Models. Your raw transcript is saved.`;
     } else if (selection?.mode === 'providers') {
       const resolved = resolveMobileInferenceRoute({
         scope,

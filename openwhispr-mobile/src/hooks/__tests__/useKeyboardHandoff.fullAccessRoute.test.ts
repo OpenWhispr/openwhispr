@@ -621,7 +621,7 @@ describe('provider job lifecycle', () => {
     const { generateForJob } = jest.requireMock('@/services/agent/AgentComposerService');
     (readKeyboardInferenceRoute as jest.Mock).mockReturnValue({
       provider: 'byok',
-      agentUnavailable: 'Agent is unavailable. Your raw transcript is saved.',
+      agentUnavailable: 'The voice assistant is unavailable. Your raw transcript is saved.',
     });
     const agentJob = { jobId: '100-job', sessionId: 's', kind: 'compose' };
     (readKeyboardAgentJob as jest.Mock).mockImplementation((id: string) =>

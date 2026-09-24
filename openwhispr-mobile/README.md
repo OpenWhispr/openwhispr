@@ -50,7 +50,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for platform prerequisites, configurati
 
 ## Personal provider setup (iOS)
 
-Open **AI Models → Providers**, choose a workflow, then select a provider and model. Dictation/keyboard, uploads, cleanup, note formatting/titles, and chat/agents keep separate selections. This release supports OpenAI, Groq, OpenRouter (text), and any OpenAI-compatible Custom server. Other providers in the shared catalog are not offered on mobile yet. Available models follow the shared desktop catalog; actual release readiness is tracked in the [provider smoke-test matrix](./docs/BYOK_SMOKE_TESTS.md).
+Open **AI Models → Providers**, choose a workflow, then select a provider and model. Dictation/keyboard, uploads, cleanup, note formatting/titles, and chat/voice assistant keep separate selections. This release supports OpenAI, Groq, OpenRouter (text), and any OpenAI-compatible Custom server. Other providers in the shared catalog are not offered on mobile yet. Available models follow the shared desktop catalog; actual release readiness is tracked in the [provider smoke-test matrix](./docs/BYOK_SMOKE_TESTS.md).
 
 Enter a provider API key and save. No OpenWhispr account or Pro subscription is required for personal provider use; your provider bills requests separately. Hosted inference and sync retain their existing account requirements. Provider credentials live in device-local secure storage, are not synced, and survive sign-out. Remove credential deletes one key; Remove all provider keys deletes every saved key, including keys for Custom endpoints you no longer use. Deleting the app does not remove Keychain items, so remove the keys first if you want them gone.
 
