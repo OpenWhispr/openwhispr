@@ -1,10 +1,25 @@
+import { KeyboardAvoidingView } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { safeHaptics } from '@/lib/utils';
 import { VoiceAgentStep } from '../VoiceAgentStep';
 
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/lib/utils', () => ({ ...jest.requireActual('@/lib/utils'), safeHaptics: jest.fn() }));
+jest.mock('react-native-reanimated', () => ({
+  __esModule: true,
+  default: { View: require('react-native').View },
+  useAnimatedStyle: () => ({}),
+  useSharedValue: (value: number) => ({ value }),
+  withSequence: jest.fn(),
+  withTiming: jest.fn(),
+}));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
-jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
+// Renders the symbol name so a test can tell which glyph an instruction shows.
+jest.mock('@/components/ui/SystemIcon', () => {
+  const { Text } = require('react-native');
+  return { SystemIcon: ({ name }: { name: string }) => <Text>{`[${name}]`}</Text> };
+});
 let mockListener: (event: { status?: string; error?: string; updatedAtMs?: string }) => void;
 jest.mock('../../../../../modules/app-group-storage/src', () => ({
   addKeyboardStatusChangedListener: (listener: typeof mockListener) => {
@@ -41,12 +56,15 @@ jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) => selector({ user: mockUser }),
 }));
 
-const START = 'Tap the field, then the ✨ agent button on your keyboard.';
-const ASK = 'Say: “Write a message inviting Sam to lunch tomorrow at noon.”';
-const FOLLOW_UP = 'Now tap Ask for changes and say: “Make this more concise.”';
+// The field is focused on arrival, and the glyph is the keyboard's own agent button.
+const START = 'Tap the [wand.and.stars] button on your keyboard.';
+const ASK =
+  'Say: “I cancelled my subscription last month but got charged again. Draft an email asking them to refund it.”';
+const FOLLOW_UP = 'Now tap Ask for changes and say: “Make it firmer.”';
 const INSERT = 'Tap ✓ to insert it.';
-const DONE = 'That’s your voice agent.';
-const ACCOUNT_REQUIRED = 'The live try isn’t available. Sign in at the end to use the agent.';
+const DONE = 'That’s your voice assistant.';
+const ACCOUNT_REQUIRED =
+  'The live try isn’t available. Sign in at the end to use the voice assistant.';
 
 const emit = (status: string, error?: string, updatedAtMs?: string): void => {
   act(() => mockListener({ status, error, updatedAtMs }));
@@ -63,10 +81,55 @@ beforeEach(() => {
 
 it('starts by pointing to the agent button on the keyboard', () => {
   const screen = render(<VoiceAgentStep />);
-  expect(screen.getByText('Meet your voice agent.')).toBeTruthy();
+  expect(screen.getByText('Meet your voice assistant.')).toBeTruthy();
   expect(screen.getByText(START)).toBeTruthy();
   expect(screen.getByLabelText('Your message')).toBeTruthy();
   expect(screen.queryByText('Example request')).toBeNull();
+});
+
+it('says what the agent does in one line', () => {
+  const screen = render(<VoiceAgentStep />);
+  expect(screen.getByText('Say what you need, and it writes it for you in any app.')).toBeTruthy();
+});
+
+// The keyboard is up for the whole try, so the buttons stay put and it covers them; Skip at the
+// top is the way out until the draft is inserted and the keyboard closes.
+it('lets the keyboard cover the buttons', () => {
+  const screen = render(<VoiceAgentStep />);
+  expect(screen.UNSAFE_queryByType(KeyboardAvoidingView)).toBeNull();
+});
+
+it('nudges with a haptic each time the instruction changes', () => {
+  const screen = render(<VoiceAgentStep />);
+  expect(safeHaptics).not.toHaveBeenCalled();
+  emit('recording');
+  expect(safeHaptics).toHaveBeenLastCalledWith('light');
+  emit('agent_ready', undefined, '1000');
+  emit('agent_ready', undefined, '2000');
+  expect(safeHaptics).toHaveBeenCalledTimes(3);
+  fireEvent.changeText(
+    screen.getByLabelText('Your message'),
+    'Hi, please refund this charge and confirm my subscription is cancelled.',
+  );
+  expect(safeHaptics).toHaveBeenLastCalledWith('success');
+});
+
+it('addresses the practice email to Support', () => {
+  const screen = render(<VoiceAgentStep />);
+  expect(screen.getByText('To: Support')).toBeTruthy();
+});
+
+it('shows the refund request and a drafted email when the live try is unavailable', () => {
+  mockUser = null;
+  const screen = render(<VoiceAgentStep />);
+  expect(
+    screen.getByText(
+      '“I cancelled my subscription last month but got charged again. Draft an email asking them to refund it.”',
+    ),
+  ).toBeTruthy();
+  expect(screen.getByText(/Could you please refund this charge\?/)).toBeTruthy();
+  expect(screen.queryByText(/confirm/)).toBeNull();
+  expect(screen.queryByText(/lunch/)).toBeNull();
 });
 
 it('walks through a request, a spoken follow-up and inserting the result', () => {
@@ -81,7 +144,10 @@ it('walks through a request, a spoken follow-up and inserting the result', () =>
   expect(screen.getByText(FOLLOW_UP)).toBeTruthy();
   emit('agent_ready');
   expect(screen.getByText(INSERT)).toBeTruthy();
-  fireEvent.changeText(screen.getByLabelText('Your message'), 'Hey Sam, lunch tomorrow at noon?');
+  fireEvent.changeText(
+    screen.getByLabelText('Your message'),
+    'Hi, please refund this charge and confirm my subscription is cancelled.',
+  );
   expect(screen.getByText(DONE)).toBeTruthy();
 });
 
@@ -89,7 +155,7 @@ it('does not count ordinary dictation as trying the agent', () => {
   const screen = render(<VoiceAgentStep />);
   emit('recording');
   emit('ready');
-  fireEvent.changeText(screen.getByLabelText('Your message'), 'Hey Sam, lunch tomorrow?');
+  fireEvent.changeText(screen.getByLabelText('Your message'), 'Please refund the charge.');
   expect(screen.queryByText(DONE)).toBeNull();
   expect(screen.getByText(ASK)).toBeTruthy();
 });
@@ -119,7 +185,10 @@ it('keeps the first draft insertable when the refinement fails', () => {
   expect(screen.getByText(INSERT)).toBeTruthy();
   expect(screen.getByText('Retry')).toBeTruthy();
   expect(screen.queryByText('Example request')).toBeNull();
-  fireEvent.changeText(screen.getByLabelText('Your message'), 'Hey Sam, lunch tomorrow at noon?');
+  fireEvent.changeText(
+    screen.getByLabelText('Your message'),
+    'Hi, please refund this charge and confirm my subscription is cancelled.',
+  );
   expect(screen.getByText(DONE)).toBeTruthy();
   expect(screen.queryByText('Retry')).toBeNull();
 });
@@ -140,10 +209,17 @@ it('keeps the finished step when an agent error arrives after inserting the draf
   const screen = render(<VoiceAgentStep />);
   emit('recording');
   emit('agent_ready', undefined, '1000');
-  fireEvent.changeText(screen.getByLabelText('Your message'), 'Hey Sam, lunch tomorrow at noon?');
+  fireEvent.changeText(
+    screen.getByLabelText('Your message'),
+    'Hi, please refund this charge and confirm my subscription is cancelled.',
+  );
   emit('agent_error', 'account_required');
   expect(screen.getByText(DONE)).toBeTruthy();
-  expect(screen.getByDisplayValue('Hey Sam, lunch tomorrow at noon?')).toBeTruthy();
+  expect(
+    screen.getByDisplayValue(
+      'Hi, please refund this charge and confirm my subscription is cancelled.',
+    ),
+  ).toBeTruthy();
   expect(screen.queryByText(ACCOUNT_REQUIRED)).toBeNull();
   expect(screen.queryByText('Example request')).toBeNull();
 });
@@ -166,7 +242,9 @@ it('does not offer a retry once the weekly word limit is reached', () => {
   emit('recording');
   emit('agent_error', 'usage_limit');
   expect(
-    screen.getByText('You’ve reached the weekly word limit. Try the agent again once it resets.'),
+    screen.getByText(
+      'You’ve reached the weekly word limit. Try the voice assistant again once it resets.',
+    ),
   ).toBeTruthy();
   expect(screen.getByText('Example request')).toBeTruthy();
   expect(screen.queryByText('Retry')).toBeNull();
@@ -188,23 +266,29 @@ it('falls back to the example when the live try needs an account', () => {
   expect(screen.queryByText('Retry')).toBeNull();
 });
 
-it('offers a retry and the example when the agent fails before a draft', () => {
+it('offers a retry and the example when the agent fails before a draft', async () => {
   const screen = render(<VoiceAgentStep />);
   emit('recording');
   emit('agent_error', 'Network request failed');
-  expect(screen.getByText('The agent couldn’t finish. Try again or skip for now.')).toBeTruthy();
+  expect(
+    screen.getByText('The voice assistant couldn’t finish. Try again or skip for now.'),
+  ).toBeTruthy();
   expect(screen.getByText('Example request')).toBeTruthy();
-  fireEvent.press(screen.getByText('Retry'));
+  await act(async () => {
+    fireEvent.press(screen.getByText('Retry'));
+  });
   expect(screen.getByText(START)).toBeTruthy();
   expect(screen.getByLabelText('Your message')).toBeTruthy();
 });
 
-it('starts the try over when retrying after a failed refinement', () => {
+it('starts the try over when retrying after a failed refinement', async () => {
   const screen = render(<VoiceAgentStep />);
   emit('recording');
   emit('agent_ready', undefined, '1000');
   emit('agent_error', 'Network request failed');
-  fireEvent.press(screen.getByText('Retry'));
+  await act(async () => {
+    fireEvent.press(screen.getByText('Retry'));
+  });
   expect(screen.getByText(START)).toBeTruthy();
   // A draft from before the retry no longer counts toward the follow-up.
   emit('agent_ready', undefined, '2000');
@@ -217,7 +301,9 @@ it.each([
 ])('shows the example instead of a live try for %s', (_label, arrange) => {
   arrange();
   const screen = render(<VoiceAgentStep />);
-  expect(screen.getByText('The voice agent uses Cloud. Here’s an example instead.')).toBeTruthy();
+  expect(
+    screen.getByText('The voice assistant uses Cloud. Here’s an example instead.'),
+  ).toBeTruthy();
   expect(screen.getByText('Example request')).toBeTruthy();
   expect(screen.queryByText(START)).toBeNull();
   expect(mockSetMode).not.toHaveBeenCalled();
@@ -227,7 +313,7 @@ it('shows the example when there is no session to try the agent with', () => {
   mockUser = null;
   const screen = render(<VoiceAgentStep />);
   expect(
-    screen.getByText('The voice agent needs a connection. Here’s an example instead.'),
+    screen.getByText('The voice assistant needs a connection. Here’s an example instead.'),
   ).toBeTruthy();
   expect(screen.getByText('Example request')).toBeTruthy();
 });

@@ -1,30 +1,52 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { Keyboard, PlatformColor, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useOnboardingPracticeMode } from '@/hooks/useOnboardingPracticeMode';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
+import { BRAND } from '@/config/colors';
 import { SpaceGrotesk } from '@/lib/fonts';
+import { safeHaptics } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-storage/src';
 
 type Phase = 'start' | 'asking' | 'first-draft' | 'refined' | 'done';
 
-const INSTRUCTIONS: Record<Phase, string> = {
-  start: 'Tap the field, then the ✨ agent button on your keyboard.',
-  asking: 'Say: “Write a message inviting Sam to lunch tomorrow at noon.”',
-  'first-draft': 'Now tap Ask for changes and say: “Make this more concise.”',
+// What users say in the live try, and what the example shows when the live try can't run.
+const REQUEST =
+  'I cancelled my subscription last month but got charged again. Draft an email asking them to refund it.';
+const EXAMPLE_DRAFT =
+  'Hi,\n\nI cancelled my subscription last month, but I was charged again this month. Could you please refund this charge?\n\nThanks';
+
+// The field is focused on arrival, so the first instruction points straight at the keyboard's agent
+// button, drawn with the same glyph the keyboard uses.
+const INSTRUCTIONS: Record<Phase, ReactNode> = {
+  start: (
+    <>
+      Tap the <SystemIcon name="wand.and.stars" mdName="WandSparkles" size={17} color="label" />{' '}
+      button on your keyboard.
+    </>
+  ),
+  asking: `Say: “${REQUEST}”`,
+  'first-draft': 'Now tap Ask for changes and say: “Make it firmer.”',
   refined: 'Tap ✓ to insert it.',
-  done: 'That’s your voice agent.',
+  done: 'That’s your voice assistant.',
 };
 
 // Errors a retry can't clear: the server wants an account (the free tries are used up, the guest
 // word quota is spent, or the server has no live try yet; only an account clears it) or the weekly
 // word limit is reached (only its reset clears it).
 const FINAL_ERROR_NOTES: Record<string, string> = {
-  account_required: 'The live try isn’t available. Sign in at the end to use the agent.',
-  usage_limit: 'You’ve reached the weekly word limit. Try the agent again once it resets.',
+  account_required: 'The live try isn’t available. Sign in at the end to use the voice assistant.',
+  usage_limit:
+    'You’ve reached the weekly word limit. Try the voice assistant again once it resets.',
 };
 
 export function VoiceAgentStep(): ReactElement {
@@ -45,6 +67,17 @@ export function VoiceAgentStep(): ReactElement {
   const hasDraft = phase === 'first-draft' || phase === 'refined';
   const liveAvailable = !localSelected && !!user && (!agentError || hasDraft);
   const errorIsFinal = !!agentError && agentError in FINAL_ERROR_NOTES;
+  const pulse = useSharedValue(0);
+  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pulse.value * 0.04 }] }));
+  const flashStyle = useAnimatedStyle(() => ({ opacity: pulse.value * 0.18 }));
+
+  // Eyes are on the keyboard during the try, so each new instruction pulses the card and taps the
+  // phone to draw them back up.
+  useEffect(() => {
+    if (phase === 'start') return;
+    pulse.value = withSequence(withTiming(1, { duration: 160 }), withTiming(0, { duration: 700 }));
+    safeHaptics(phase === 'done' ? 'success' : 'light');
+  }, [phase, pulse]);
 
   useEffect(() => {
     const subscription = addKeyboardStatusChangedListener((event) => {
@@ -80,19 +113,19 @@ export function VoiceAgentStep(): ReactElement {
     ? (FINAL_ERROR_NOTES[agentError] ??
       (hasDraft
         ? 'The change didn’t go through. You can still insert this draft.'
-        : 'The agent couldn’t finish. Try again or skip for now.'))
+        : 'The voice assistant couldn’t finish. Try again or skip for now.'))
     : null;
   const fallbackNote = localSelected
-    ? 'The voice agent uses Cloud. Here’s an example instead.'
+    ? 'The voice assistant uses Cloud. Here’s an example instead.'
     : !user
-      ? 'The voice agent needs a connection. Here’s an example instead.'
+      ? 'The voice assistant needs a connection. Here’s an example instead.'
       : errorNote;
 
   return (
     <OnboardingShell
-      title="Meet your voice agent."
-      titleAccent="voice agent"
-      subtitle="Ask for what you need, then refine it by voice."
+      title="Meet your voice assistant."
+      titleAccent="voice assistant"
+      subtitle="Say what you need, and it writes it for you in any app."
       progress={progress}
       onBack={goBack}
       onSkip={goNext}
@@ -108,7 +141,14 @@ export function VoiceAgentStep(): ReactElement {
       >
         {liveAvailable ? (
           <>
-            <View className="flex-row items-center gap-3 rounded-2xl bg-primary/5 p-4">
+            <Animated.View
+              style={pulseStyle}
+              className="flex-row items-center gap-3 overflow-hidden rounded-2xl bg-primary/5 p-4"
+            >
+              <Animated.View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, { backgroundColor: BRAND }, flashStyle]}
+              />
               <SystemIcon
                 name={phase === 'done' ? 'checkmark.circle.fill' : 'sparkles'}
                 mdName={phase === 'done' ? 'CheckCircle2' : 'Sparkles'}
@@ -117,11 +157,16 @@ export function VoiceAgentStep(): ReactElement {
               />
               <Text
                 accessibilityLiveRegion="polite"
+                accessibilityLabel={
+                  phase === 'start' && !agentError
+                    ? 'Tap the voice assistant button, the wand, on your keyboard.'
+                    : undefined
+                }
                 className="flex-1 text-[16px] leading-[22px] text-label"
               >
                 {INSTRUCTIONS[agentError ? 'refined' : phase]}
               </Text>
-            </View>
+            </Animated.View>
             {errorNote ? (
               <Text
                 accessibilityRole="alert"
@@ -134,7 +179,7 @@ export function VoiceAgentStep(): ReactElement {
             ) : null}
             <View className="rounded-2xl border border-separator bg-secondarySystemGroupedBackground px-4 pb-4 pt-3">
               <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
-                To: Sam
+                To: Support
               </Text>
               <TextInput
                 ref={input}
@@ -178,9 +223,7 @@ export function VoiceAgentStep(): ReactElement {
                   Example request
                 </Text>
               </View>
-              <Text className="mt-3 text-[17px] leading-[24px] text-label">
-                “Write a message inviting Sam to lunch tomorrow at noon.”
-              </Text>
+              <Text className="mt-3 text-[17px] leading-[24px] text-label">“{REQUEST}”</Text>
             </View>
             <View className="rounded-2xl bg-primary/5 p-4">
               <View className="flex-row items-center gap-2">
@@ -189,9 +232,7 @@ export function VoiceAgentStep(): ReactElement {
                   Example response
                 </Text>
               </View>
-              <Text className="mt-3 text-[17px] leading-[24px] text-label">
-                Hey Sam, are you free for lunch tomorrow? Let’s meet at noon if that works for you.
-              </Text>
+              <Text className="mt-3 text-[17px] leading-[24px] text-label">{EXAMPLE_DRAFT}</Text>
             </View>
           </>
         )}
