@@ -14,11 +14,7 @@ function classifyPaths(paths) {
   let mobile = false;
   let build = false;
   for (const path of paths) {
-    if (
-      sharedPaths.has(path) ||
-      path.startsWith(".github/scripts/") ||
-      path.startsWith("shared/ai/")
-    ) {
+    if (sharedPaths.has(path) || path.startsWith(".github/scripts/")) {
       desktop = true;
       mobile = true;
       build = true;

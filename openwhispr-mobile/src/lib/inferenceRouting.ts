@@ -1,12 +1,12 @@
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import type {
-  InferenceScope,
-  InferenceSelection,
-  InferenceRoute,
-  RouteErrorCode,
-} from '@shared/ai/routing';
-import { resolveMobileInferenceRoute } from '@/lib/mobileProviders';
+import {
+  type InferenceScope,
+  type InferenceSelection,
+  type InferenceRoute,
+  type RouteErrorCode,
+  resolveMobileInferenceRoute,
+} from '@/lib/mobileProviders';
 import type { TranscriptionProvider, TranscriptionRequest, TextInferenceSnapshot } from '@/types';
 
 export type ProviderRoute = Extract<InferenceRoute, { mode: 'providers' }>;

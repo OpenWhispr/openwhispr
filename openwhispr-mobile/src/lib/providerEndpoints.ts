@@ -2,7 +2,7 @@
 // public DNS names like "127.example.com" / "10.example.com" cannot bypass
 // the HTTPS requirement via string-prefix matching.
 function parseIPv4Literal(hostname: string): number[] | null {
-  const parts = hostname.split(".");
+  const parts = hostname.split('.');
   if (parts.length !== 4) return null;
 
   const octets: number[] = [];
@@ -18,10 +18,10 @@ function parseIPv4Literal(hostname: string): number[] | null {
 }
 
 function isPrivateHost(hostname: string): boolean {
-  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
 
-  if (h === "localhost" || h === "0.0.0.0") return true;
-  if (h === "::1") return true;
+  if (h === 'localhost' || h === '0.0.0.0') return true;
+  if (h === '::1') return true;
 
   const ipv4 = parseIPv4Literal(h);
   if (ipv4) {
@@ -35,14 +35,14 @@ function isPrivateHost(hostname: string): boolean {
     if (a === 169 && b === 254) return true;
   }
 
-  const isIPv6 = h.includes(":");
+  const isIPv6 = h.includes(':');
   // Link-local is fe80::/10 (fe80–febf), not only the fe80 hextet. Same rule as
   // isPrivateIp in urlAudioDownloader.js. Unique local is fc00::/7 (fc/fd).
-  if (isIPv6 && (/^fe[89ab]/.test(h) || h.startsWith("fc") || h.startsWith("fd"))) return true;
-  if (h.endsWith(".local")) return true;
+  if (isIPv6 && (/^fe[89ab]/.test(h) || h.startsWith('fc') || h.startsWith('fd'))) return true;
+  if (h.endsWith('.local')) return true;
   // Tailscale MagicDNS — resolves to CGNAT (100.64/10) addresses reachable
   // only inside the user's own tailnet.
-  if (h.endsWith(".ts.net")) return true;
+  if (h.endsWith('.ts.net')) return true;
 
   return false;
 }
@@ -51,8 +51,8 @@ export function isSecureHttpEndpoint(url: string): boolean {
   try {
     const parsed = new URL(url);
     return (
-      parsed.protocol === "https:" ||
-      (parsed.protocol === "http:" && isPrivateHost(parsed.hostname))
+      parsed.protocol === 'https:' ||
+      (parsed.protocol === 'http:' && isPrivateHost(parsed.hostname))
     );
   } catch {
     return false;
@@ -64,14 +64,14 @@ export function isSecureHttpEndpoint(url: string): boolean {
 // (or similar) on a full /chat/completions URL (#1309).
 function splitUrlDecorators(value: string): { path: string; query: string; hash: string } {
   let path = value;
-  let hash = "";
-  const hashIndex = path.indexOf("#");
+  let hash = '';
+  const hashIndex = path.indexOf('#');
   if (hashIndex >= 0) {
     hash = path.slice(hashIndex);
     path = path.slice(0, hashIndex);
   }
-  let query = "";
-  const queryIndex = path.indexOf("?");
+  let query = '';
+  const queryIndex = path.indexOf('?');
   if (queryIndex >= 0) {
     query = path.slice(queryIndex);
     path = path.slice(0, queryIndex);
@@ -85,52 +85,52 @@ function joinUrlDecorators(path: string, query: string, hash: string): string {
 
 // API Configuration helpers
 export const normalizeBaseUrl = (value?: string | null): string => {
-  if (!value) return "";
+  if (!value) return '';
 
   const trimmed = value.trim();
-  if (!trimmed) return "";
+  if (!trimmed) return '';
 
   const { path: rawPath, query, hash } = splitUrlDecorators(trimmed);
   let normalized = rawPath;
 
   // Remove common API endpoint suffixes to get the base URL
   const suffixReplacements: Array<[RegExp, string]> = [
-    [/\/v1\/chat\/completions$/i, "/v1"],
-    [/\/chat\/completions$/i, ""],
-    [/\/v1\/responses$/i, "/v1"],
-    [/\/responses$/i, ""],
-    [/\/v1\/models$/i, "/v1"],
-    [/\/models$/i, ""],
-    [/\/v1\/audio\/transcriptions$/i, "/v1"],
-    [/\/audio\/transcriptions$/i, ""],
-    [/\/v1\/audio\/translations$/i, "/v1"],
-    [/\/audio\/translations$/i, ""],
+    [/\/v1\/chat\/completions$/i, '/v1'],
+    [/\/chat\/completions$/i, ''],
+    [/\/v1\/responses$/i, '/v1'],
+    [/\/responses$/i, ''],
+    [/\/v1\/models$/i, '/v1'],
+    [/\/models$/i, ''],
+    [/\/v1\/audio\/transcriptions$/i, '/v1'],
+    [/\/audio\/transcriptions$/i, ''],
+    [/\/v1\/audio\/translations$/i, '/v1'],
+    [/\/audio\/translations$/i, ''],
   ];
 
   for (const [pattern, replacement] of suffixReplacements) {
     if (pattern.test(normalized)) {
-      normalized = normalized.replace(pattern, replacement).replace(/\/+$/, "");
+      normalized = normalized.replace(pattern, replacement).replace(/\/+$/, '');
     }
   }
 
-  return joinUrlDecorators(normalized.replace(/\/+$/, ""), query, hash);
+  return joinUrlDecorators(normalized.replace(/\/+$/, ''), query, hash);
 };
 
 export const buildApiUrl = (base: string, path: string): string => {
-  const normalizedBase = normalizeBaseUrl(base) || "https://api.openai.com/v1";
+  const normalizedBase = normalizeBaseUrl(base) || 'https://api.openai.com/v1';
   if (!path) {
     return normalizedBase;
   }
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const { path: originAndPath, query, hash } = splitUrlDecorators(normalizedBase);
   return joinUrlDecorators(`${originAndPath}${normalizedPath}`, query, hash);
 };
 
-export const ensureV1Suffix = (base: string): string => {
+const ensureV1Suffix = (base: string): string => {
   if (!base) return base;
   const normalized = normalizeBaseUrl(base) || base;
   const { path, query, hash } = splitUrlDecorators(normalized);
-  return joinUrlDecorators(path.endsWith("/v1") ? path : `${path}/v1`, query, hash);
+  return joinUrlDecorators(path.endsWith('/v1') ? path : `${path}/v1`, query, hash);
 };
 
 // Ordered bases to try when listing models from an OpenAI-compatible server.

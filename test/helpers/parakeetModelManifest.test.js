@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const vm = require("node:vm");
 const { createRequire } = require("node:module");
-const registry = require("../../shared/ai/modelRegistryData.json");
+const registry = require("../../src/models/modelRegistryData.json");
 const { getRequiredModelFiles } = require("../../src/helpers/parakeetModelInfo");
 
 const MODEL = "orukeet-v0.1.0";

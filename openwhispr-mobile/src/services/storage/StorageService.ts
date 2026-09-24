@@ -1,4 +1,4 @@
-import type { InferenceSelection } from '@shared/ai/routing';
+import type { InferenceSelection } from '@/lib/mobileProviders';
 import 'expo-sqlite/localStorage/install';
 import * as SecureStore from 'expo-secure-store';
 import { UserConfig, Transcript } from '../../types';

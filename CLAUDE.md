@@ -374,7 +374,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 - Name stored in localStorage and database
 - ReasoningService detects "Hey [AgentName]" patterns
 - Standalone wake-word commands stream into the assistant panel (the address is stripped first, `stripAgentAddress`); a highlighted selection is edited in place by the dictation agent
-- Supports multiple AI providers (all models defined in `shared/ai/modelRegistryData.json`):
+- Supports multiple AI providers (all models defined in `src/models/modelRegistryData.json`):
   - **OpenAI** (Responses API):
     - GPT-6 Astra (`gpt-6-astra`) - Most capable OpenAI model for coding, computer use, and research, 1M context
     - GPT-5.6 Series (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`) - Flagship, balanced, and fastest tiers
@@ -409,7 +409,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 
 ### 8. Model Registry Architecture
 
-All AI model definitions are centralized in `shared/ai/modelRegistryData.json` as the single source of truth:
+All AI model definitions are centralized in `src/models/modelRegistryData.json` as the single source of truth:
 
 ```json
 {
@@ -420,7 +420,7 @@ All AI model definitions are centralized in `shared/ai/modelRegistryData.json` a
 
 **Key files:**
 
-- `shared/ai/modelRegistryData.json` - Single source of truth for all models
+- `src/models/modelRegistryData.json` - Single source of truth for all models
 - `src/models/ModelRegistry.ts` - TypeScript wrapper with helper methods; also derives
   `REASONING_PROVIDERS` (`buildReasoningProviders()`), consumed by the model pickers
 - `src/models/providerDefaultModel.ts` - `pickProviderDefaultModel()`; with no

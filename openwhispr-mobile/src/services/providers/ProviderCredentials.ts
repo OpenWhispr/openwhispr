@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
-import { isSecureHttpEndpoint, normalizeBaseUrl } from '@shared/ai/endpoints';
-import modelCatalog from '@shared/ai/modelRegistryData.json';
+import { isSecureHttpEndpoint, normalizeBaseUrl } from '@/lib/providerEndpoints';
+import modelCatalog from '@/config/providerCatalog.json';
 
 export interface ProviderCredential {
   apiKey: string;

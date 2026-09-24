@@ -27,7 +27,7 @@ import { geminiProvider } from "../src/services/ai/inferenceProviders/gemini.ts"
 import { getLlmRequestTimeoutSeconds } from "../src/helpers/llmRequestTimeout.js";
 import { NOTE_OUTPUT_MAX_TOKENS } from "../src/helpers/builtinActions.js";
 import logger from "../src/utils/logger.ts";
-import registryData from "../shared/ai/modelRegistryData.json" with { type: "json" };
+import registryData from "../src/models/modelRegistryData.json" with { type: "json" };
 import {
   buildNoteProbeSystemPrompt,
   buildNoteProbeTranscript,

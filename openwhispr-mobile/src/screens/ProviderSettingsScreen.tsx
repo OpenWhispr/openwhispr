@@ -26,10 +26,14 @@ import {
   ProviderExecutionError,
 } from '@/services/providers/ProviderExecution';
 import { getProviderPolicy } from '@/services/providers/ProviderPolicy';
-import { isSecureHttpEndpoint, normalizeBaseUrl } from '@shared/ai/endpoints';
-import { pickDefaultModelId } from '@shared/ai/providerDefaultModel';
-import { type InferenceMode, type InferenceSelection } from '@shared/ai/routing';
-import { getMobileProvidersForScope, resolveMobileInferenceRoute } from '@/lib/mobileProviders';
+import { isSecureHttpEndpoint, normalizeBaseUrl } from '@/lib/providerEndpoints';
+import {
+  defaultModelId,
+  getMobileProvidersForScope,
+  resolveMobileInferenceRoute,
+  type InferenceMode,
+  type InferenceSelection,
+} from '@/lib/mobileProviders';
 
 type Picker = 'provider' | 'model';
 const TOAST_MS = 3000;
@@ -74,7 +78,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
   const providers = getMobileProvidersForScope(scope);
   const provider =
     providers.find((candidate) => candidate.id === selection.providerId) ?? providers[0];
-  const modelId = selection.modelId ?? pickDefaultModelId(provider);
+  const modelId = selection.modelId ?? defaultModelId(provider);
   const providerId = provider?.id;
   const models = provider?.models.length ? provider.models : discoveredModels;
   const unsetNote =
@@ -129,7 +133,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         ? (config?.rememberedInference?.[scope]?.[provider.id] ?? {
             mode,
             providerId: provider.id,
-            modelId: pickDefaultModelId(provider),
+            modelId: defaultModelId(provider),
           })
         : { ...selection, mode },
     );
@@ -146,7 +150,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         config?.rememberedInference?.[scope]?.[nextProviderId] ?? {
           mode: 'providers',
           providerId: nextProviderId,
-          modelId: pickDefaultModelId(next),
+          modelId: defaultModelId(next),
         },
     );
     setPicker(null);

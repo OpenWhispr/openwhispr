@@ -9,7 +9,7 @@ const {
   checkDiskSpace,
 } = require("./downloadUtils");
 
-const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
+const modelRegistryData = require("../models/modelRegistryData.json");
 const LlamaServerManager = require("./llamaServer");
 const debugLogger = require("./debugLogger");
 const { readGgufMetadataFromFile } = require("./ggufMetadata");

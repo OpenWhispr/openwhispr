@@ -20,7 +20,7 @@ beforeAll(() => {
 afterAll(() => {
   globalThis.DOMException = nodeDOMException;
 });
-import type { InferenceRoute } from '@shared/ai/routing';
+import type { InferenceRoute } from '@/lib/mobileProviders';
 import {
   createProviderExecution,
   ProviderExecutionError,

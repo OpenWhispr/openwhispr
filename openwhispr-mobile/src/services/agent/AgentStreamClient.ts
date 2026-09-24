@@ -1,4 +1,4 @@
-import type { InferenceSelection } from '@shared/ai/routing';
+import type { InferenceSelection } from '@/lib/mobileProviders';
 import { fetch } from 'expo/fetch';
 import {
   BASE_URL,

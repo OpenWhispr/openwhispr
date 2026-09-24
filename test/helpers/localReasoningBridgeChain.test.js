@@ -6,7 +6,7 @@ const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 
-const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
+const modelRegistryData = require("../../src/models/modelRegistryData.json");
 const { buildGguf, LLAMA_3_2_3B_ENTRIES } = require("./harness/ggufFixtures");
 
 // Drives the primary local LLM path end to end — the IPC bridge

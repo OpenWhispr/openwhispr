@@ -1,5 +1,4 @@
-import sharedPrompts from '@shared/ai/prompts.json';
-import { DEFAULT_CLEANUP_PROMPT } from '@/config/prompts/registry';
+import { DEFAULT_ACTION_PROMPT, DEFAULT_CLEANUP_PROMPT } from '@/config/prompts/registry';
 import languageRegistry from '@/config/languageRegistry.json';
 import { detectAgentMention } from '@/lib/dictationAgent';
 import { TONE_INSTRUCTIONS } from '@/services/agent/composerPrompt';
@@ -29,8 +28,7 @@ export function buildProviderPrompt(request: ReasoningRequest): ProviderPrompt {
   const agentName = request.agentName?.trim() ?? '';
   const customPrompt = request.customPrompt?.trim() ? request.customPrompt : undefined;
   const actionMode = !customPrompt && !!agentName && detectAgentMention(request.text, agentName);
-  const template =
-    customPrompt ?? (actionMode ? sharedPrompts.actionPrompt : DEFAULT_CLEANUP_PROMPT);
+  const template = customPrompt ?? (actionMode ? DEFAULT_ACTION_PROMPT : DEFAULT_CLEANUP_PROMPT);
   const parts = [template.replace(/\{\{agentName\}\}/g, (): string => agentName)];
   const language = languageInstruction(request.language);
   if (language) parts.push(language);

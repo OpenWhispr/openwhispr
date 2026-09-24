@@ -120,7 +120,7 @@ test("managed transcription fallback binds known providers to their canonical en
   });
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   const { getSettings, useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const registry = await vite.ssrLoadModule("../shared/ai/modelRegistryData.json");
+  const registry = await vite.ssrLoadModule("/models/modelRegistryData.json");
   const openai = registry.default.transcriptionProviders.find(
     (provider) => provider.id === "openai"
   );

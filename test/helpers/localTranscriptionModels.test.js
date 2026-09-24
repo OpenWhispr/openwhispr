@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { listLocalTranscriptionModels } = require("../../src/helpers/localTranscriptionModels.js");
-const registry = require("../../shared/ai/modelRegistryData.json");
+const registry = require("../../src/models/modelRegistryData.json");
 
 const managers = (downloaded) => ({
   whisperManager: { isModelDownloaded: (m) => downloaded.has(m) },

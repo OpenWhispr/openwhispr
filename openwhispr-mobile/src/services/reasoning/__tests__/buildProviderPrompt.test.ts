@@ -1,12 +1,4 @@
-import mobileRegistry from '@/config/languageRegistry.json';
-import desktopRegistry from '../../../../../src/config/languageRegistry.json';
 import { buildProviderPrompt } from '../buildProviderPrompt';
-
-// Language instructions come from this copy and the server shares the desktop
-// one, so drift would change what providers are told.
-it('keeps the language registry identical to the desktop copy', () => {
-  expect(mobileRegistry).toEqual(desktopRegistry);
-});
 
 it('builds cleanup prompts locally with language, dictionary, tone and agent-name substitution', () => {
   const prompt = buildProviderPrompt({

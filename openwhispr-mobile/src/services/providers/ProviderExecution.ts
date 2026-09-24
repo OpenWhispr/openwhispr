@@ -1,10 +1,13 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { createProviderCredentialScope } from './ProviderCredentialScope';
-import type { InferenceRoute } from '@shared/ai/routing';
-import { isTranscriptionScope } from '@shared/ai/routing';
-import { buildApiUrl, isSecureHttpEndpoint, normalizeBaseUrl } from '@shared/ai/endpoints';
-import modelCatalog from '@shared/ai/modelRegistryData.json';
-import { MOBILE_PROVIDER_IDS, providerDisplayName } from '@/lib/mobileProviders';
+import { buildApiUrl, isSecureHttpEndpoint, normalizeBaseUrl } from '@/lib/providerEndpoints';
+import modelCatalog from '@/config/providerCatalog.json';
+import {
+  MOBILE_PROVIDER_IDS,
+  isTranscriptionScope,
+  providerDisplayName,
+  type InferenceRoute,
+} from '@/lib/mobileProviders';
 import {
   getProviderCredential,
   getProviderCredentialReference,

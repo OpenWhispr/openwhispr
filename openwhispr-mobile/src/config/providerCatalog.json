@@ -1,0 +1,138 @@
+{
+  "cloudProviders": [
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "models": [
+        {
+          "id": "gpt-6-astra",
+          "name": "GPT-6 Astra",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-5.6-sol",
+          "name": "GPT-5.6 Sol",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "name": "GPT-5.6 Terra",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "name": "GPT-5.6 Luna",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-5.5",
+          "name": "GPT-5.5",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-5.2",
+          "name": "GPT-5.2",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-5-mini",
+          "name": "GPT-5 Mini",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-5-nano",
+          "name": "GPT-5 Nano",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-4.1",
+          "name": "GPT-4.1",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": true
+        },
+        {
+          "id": "gpt-4.1-mini",
+          "name": "GPT-4.1 Mini",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": true
+        },
+        {
+          "id": "gpt-4.1-nano",
+          "name": "GPT-4.1 Nano",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": true
+        }
+      ]
+    },
+    {
+      "id": "groq",
+      "name": "Groq",
+      "models": [
+        {
+          "id": "openai/gpt-oss-120b",
+          "name": "GPT-OSS 120B"
+        },
+        {
+          "id": "openai/gpt-oss-20b",
+          "name": "GPT-OSS 20B"
+        },
+        {
+          "id": "groq/compound",
+          "name": "Compound"
+        },
+        {
+          "id": "groq/compound-mini",
+          "name": "Compound Mini"
+        }
+      ]
+    }
+  ],
+  "transcriptionProviders": [
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "baseUrl": "https://api.openai.com/v1",
+      "models": [
+        {
+          "id": "gpt-transcribe",
+          "name": "GPT Transcribe"
+        },
+        {
+          "id": "gpt-4o-mini-transcribe",
+          "name": "GPT-4o Mini Transcribe"
+        },
+        {
+          "id": "gpt-4o-transcribe",
+          "name": "GPT-4o Transcribe"
+        },
+        {
+          "id": "whisper-1",
+          "name": "Whisper"
+        }
+      ]
+    },
+    {
+      "id": "groq",
+      "name": "Groq",
+      "baseUrl": "https://api.groq.com/openai/v1",
+      "models": [
+        {
+          "id": "whisper-large-v3",
+          "name": "Whisper Large v3"
+        },
+        {
+          "id": "whisper-large-v3-turbo",
+          "name": "Whisper Large v3 Turbo"
+        }
+      ]
+    }
+  ]
+}

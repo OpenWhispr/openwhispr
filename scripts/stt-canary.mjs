@@ -30,7 +30,7 @@ import geminiTranscription from "../src/helpers/geminiTranscription.js";
 import geminiLive from "../src/helpers/geminiLiveStreaming.js";
 import AssemblyAiStreaming from "../src/helpers/assemblyAiStreaming.js";
 import DeepgramStreaming from "../src/helpers/deepgramStreaming.js";
-import modelRegistryData from "../shared/ai/modelRegistryData.json" with { type: "json" };
+import modelRegistryData from "../src/models/modelRegistryData.json" with { type: "json" };
 
 const { fetchRealtimeTokenForProvider } = tokenProviders;
 const { pcm16ToWav } = audioUtils;

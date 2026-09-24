@@ -1,4 +1,4 @@
-import type { InferenceSelection } from '@shared/ai/routing';
+import type { InferenceSelection } from '@/lib/mobileProviders';
 import { MODE_LABELS } from '@/lib/inferenceModes';
 import { providerDisplayName, type MobileInferenceScope } from '@/lib/mobileProviders';
 import type { ProcessingMode, UserConfig } from '@/types';

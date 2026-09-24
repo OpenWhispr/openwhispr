@@ -1,4 +1,4 @@
-const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
+const modelRegistryData = require("../models/modelRegistryData.json");
 const { getModelType } = require("./parakeetModelInfo");
 
 // Every local speech-to-text model the registry knows, with whether it is on

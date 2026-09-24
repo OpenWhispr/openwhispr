@@ -27,8 +27,6 @@
     "src/locales/**/*",
     "src/hooks/**/*",
     "src/models/**/*",
-    "shared/**/*.ts",
-    "shared/**/*.json",
     "src/services/localReasoningBridge.js",
     "src/services/transcriptionBaseUrl.ts",
     "src/stores/policyRules.ts",

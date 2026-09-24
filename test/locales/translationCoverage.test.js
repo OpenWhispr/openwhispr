@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const modelRegistry = require("../../shared/ai/modelRegistryData.json");
+const modelRegistry = require("../../src/models/modelRegistryData.json");
 
 const SRC = path.join(__dirname, "../../src");
 const LOCALES = path.join(SRC, "locales");

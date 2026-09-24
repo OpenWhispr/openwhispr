@@ -41,25 +41,6 @@ test("shared CI configuration selects both", () => {
   }
 });
 
-test("shared AI source, catalogs and fixtures select both apps and packaging", () => {
-  for (const path of [
-    "shared/ai/catalog.ts",
-    "shared/ai/modelRegistryData.json",
-    "shared/ai/fixtures/providers.json",
-    "shared/ai/README.md",
-  ]) {
-    assert.deepEqual(classifyPaths([path]), { desktop: true, mobile: true, build: true });
-  }
-});
-
-test("unrelated shared paths keep desktop-only routing", () => {
-  assert.deepEqual(classifyPaths(["shared/other.ts", "shared/ai-tools/index.ts"]), {
-    desktop: true,
-    mobile: false,
-    build: true,
-  });
-});
-
 test("desktop docs do not require packaging", () => {
   assert.deepEqual(
     classifyPaths(["README.md", "docs/setup.md", "LICENSE", ".github/ISSUE_TEMPLATE/bug.yml"]),

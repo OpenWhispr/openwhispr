@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
+const modelRegistryData = require("../../src/models/modelRegistryData.json");
 const english = require("../../src/locales/en/translation.json");
 
 // Tinfoil retires GLM-5.2 on 2026-09-10 (replaced by glm-5-3) and its live
@@ -213,10 +213,7 @@ test("a provider's named default beats its list position", async (t) => {
     // The seed leads with its own default, so only a list that doesn't can
     // tell the two rules apart.
     assert.equal(
-      pickDefaultModelId({
-        models: [{ id: "listed-first" }, { id: "named" }],
-        defaultModel: "named",
-      }),
+      pickDefaultModelId({ models: [{ id: "listed-first" }, { id: "named" }], defaultModel: "named" }),
       "named"
     );
     assert.equal(pickDefaultModelId(byId.tinfoil), "glm-5-3");

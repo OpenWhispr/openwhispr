@@ -1,4 +1,4 @@
-import type { InferencePolicy } from '@shared/ai/routing';
+import type { InferencePolicy } from '@/lib/mobileProviders';
 
 const mockGet = jest.fn();
 let mockAuthState: {

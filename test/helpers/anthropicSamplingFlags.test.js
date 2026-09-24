@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const modelData = require("../../shared/ai/modelRegistryData.json");
+const modelData = require("../../src/models/modelRegistryData.json");
 
 const anthropicModels = modelData.cloudProviders.find((p) => p.id === "anthropic").models;
 

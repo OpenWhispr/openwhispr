@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const modelData = require("../../shared/ai/modelRegistryData.json");
+const modelData = require("../../src/models/modelRegistryData.json");
 
 const DRAFT_FIELDS = ["draftHfRepo", "draftFileName", "draftSizeBytes"];
 

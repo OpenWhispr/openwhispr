@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-const modelRegistryData = require("../../shared/ai/modelRegistryData.json");
+const modelRegistryData = require("../../src/models/modelRegistryData.json");
 
 // getModelProvider falls back to id heuristics for ids outside the registry
 // (a GGUF the user renamed, a catalog entry not yet synced). Every local model

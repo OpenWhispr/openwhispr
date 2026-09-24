@@ -1,4 +1,4 @@
-import modelDataRaw from "../../shared/ai/modelRegistryData.json";
+import modelDataRaw from "./modelRegistryData.json";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";

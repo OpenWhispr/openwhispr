@@ -1,4 +1,4 @@
-import type { InferenceSelection } from '@shared/ai/routing';
+import type { InferenceSelection } from '@/lib/mobileProviders';
 import { ApiError } from '@/lib/apiClient';
 import { isAccountRequiredError } from '@/lib/accountRequiredError';
 import { useConfigStore } from '@/store/useConfigStore';

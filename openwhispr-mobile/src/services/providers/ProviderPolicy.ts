@@ -1,5 +1,5 @@
 import 'expo-sqlite/localStorage/install';
-import type { InferencePolicy, ScopePolicy } from '@shared/ai/routing';
+import type { InferencePolicy, ScopePolicy } from '@/lib/mobileProviders';
 import { api, BASE_URL } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 

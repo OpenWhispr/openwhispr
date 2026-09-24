@@ -1,4 +1,4 @@
-import type { InferenceScope, InferenceSelection, InferenceRoute } from '@shared/ai/routing';
+import type { InferenceScope, InferenceSelection, InferenceRoute } from '@/lib/mobileProviders';
 
 export type ProcessingMode = 'cloud' | 'private' | 'providers';
 export type TranscriptionProvider = 'local' | 'cloud' | 'byok';

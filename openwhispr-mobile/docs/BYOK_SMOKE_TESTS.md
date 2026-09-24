@@ -1,6 +1,6 @@
 # Personal BYOK release checks
 
-The shared catalog describes more providers than the mobile app ships. This release offers exactly four: OpenAI, Groq, OpenRouter (text only) and Custom (any OpenAI-compatible server). All real-provider and physical-device results below are **unverified** until a maintainer records the device, OS, build commit, date, and sanitized result. Do not release based only on mocked tests or a successful model-list request.
+This release offers exactly four: OpenAI, Groq, OpenRouter (text only) and Custom (any OpenAI-compatible server). All real-provider and physical-device results below are **unverified** until a maintainer records the device, OS, build commit, date, and sanitized result. Do not release based only on mocked tests or a successful model-list request.
 
 | Provider   | Credential                      | Capability                           | Required result                                          | Device/build result |
 | ---------- | ------------------------------- | ------------------------------------ | -------------------------------------------------------- | ------------------- |
@@ -9,7 +9,7 @@ The shared catalog describes more providers than the mobile app ships. This rele
 | OpenRouter | API key                         | Text                                 | Discovery/manual model; inference reaches selected model | Unverified          |
 | Custom     | Optional endpoint-bound API key | OpenAI-compatible transcription/text | Discovery/manual model; expected server receives request | Unverified          |
 
-Not offered on mobile in this release: Anthropic, Gemini, xAI, Mistral, Corti, Tinfoil, Deepgram, AssemblyAI, and Live Meetings over a personal provider. Adding one is a data change (the allowlist in `src/lib/mobileProviders.ts`, plus a chat endpoint in `shared/ai/routing.ts` for text) only when its request shape is the OpenAI-compatible batch/chat protocol; anything else needs its own adapter and device verification.
+Not offered on mobile in this release: Anthropic, Gemini, xAI, Mistral, Corti, Tinfoil, Deepgram, AssemblyAI, and Live Meetings over a personal provider. Adding one is a data change (the allowlist and, for text, a chat endpoint in `src/lib/mobileProviders.ts`, plus its models in `src/config/providerCatalog.json`) only when its request shape is the OpenAI-compatible batch/chat protocol; anything else needs its own adapter and device verification.
 
 ## Automated validation
 

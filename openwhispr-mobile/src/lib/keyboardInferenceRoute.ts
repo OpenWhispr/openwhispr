@@ -1,7 +1,7 @@
 import { BackgroundUploader } from '../../modules/background-uploader/src';
 import { AppGroupStorage } from '../../modules/app-group-storage/src';
 import { snapshotTranscriptionJob, type TranscriptionJobRoute } from './inferenceRouting';
-import type { InferenceSelection } from '@shared/ai/routing';
+import type { InferenceSelection } from '@/lib/mobileProviders';
 import { resolveMobileInferenceRoute } from '@/lib/mobileProviders';
 
 const STORAGE_KEY = 'keyboard_inference_route';
