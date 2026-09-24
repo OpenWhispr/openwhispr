@@ -4,9 +4,19 @@
 
 export const COMPOSE_TARGETS = ["gmail", "outlookWork", "outlookPersonal", "mailto"];
 
-// Electron caps mailto: URLs at 2,081 characters on Windows. Every target
-// uses the same limit so a long body behaves the same everywhere.
-export const MAX_COMPOSE_URL_LENGTH = 2000;
+// Windows caps every URL shell.openExternal opens at 2,081 characters, and
+// the Outlook links and mailto handlers are unmeasured, so they stay at
+// 2,000. Gmail on macOS and Linux takes much longer links (checked 2026-09-24:
+// 6,000 characters open, even through the signed-out redirect; 12,000 is an
+// HTTP 400), which matters because every non-ASCII character costs 6 to 12.
+const DEFAULT_COMPOSE_URL_LENGTH = 2000;
+const GMAIL_COMPOSE_URL_LENGTH = 6000;
+
+export function maxComposeUrlLength(target, platform) {
+  return target === "gmail" && (platform === "darwin" || platform === "linux")
+    ? GMAIL_COMPOSE_URL_LENGTH
+    : DEFAULT_COMPOSE_URL_LENGTH;
+}
 
 // Undocumented but widely used compose deep links (spec §7.1, [S9][S10]).
 const COMPOSE_BASES = {
@@ -70,9 +80,10 @@ function buildUrl(target, { to, cc, subject, body }) {
 
 // Every returned URL fits the limit. What doesn't fit moves to the clipboard,
 // body first, then subject; recipients that alone don't fit are refused.
-export function buildComposeRequest({ target, to, cc = [], subject = "", body = "" }) {
+export function buildComposeRequest({ target, to, cc = [], subject = "", body = "", platform }) {
   if (!COMPOSE_TARGETS.includes(target)) throw new Error(`Unknown compose target: ${target}`);
-  const fits = (url) => url.length <= MAX_COMPOSE_URL_LENGTH;
+  const maxLength = maxComposeUrlLength(target, platform);
+  const fits = (url) => url.length <= maxLength;
 
   const full = buildUrl(target, { to, cc, subject, body });
   if (fits(full)) return { ok: true, url: full, clipboardText: null, subjectCopied: false };

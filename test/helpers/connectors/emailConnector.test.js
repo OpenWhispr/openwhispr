@@ -10,6 +10,8 @@ function fakes() {
     deps: {
       openExternal: async (url) => calls.opened.push(url),
       writeClipboard: async (text, webContents) => calls.copied.push({ text, webContents }),
+      // The strictest link limit (2,000 for every target).
+      platform: "win32",
     },
   };
 }

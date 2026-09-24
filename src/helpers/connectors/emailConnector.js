@@ -6,7 +6,7 @@ function stringList(value) {
 
 // A compose window is the user's review step: they press Send in their own
 // mail client, so drafting needs no approval card.
-function createEmailConnector({ openExternal, writeClipboard }) {
+function createEmailConnector({ openExternal, writeClipboard, platform = process.platform }) {
   return {
     id: "email",
     actions: { draft: { kind: "direct" } },
@@ -42,6 +42,7 @@ function createEmailConnector({ openExternal, writeClipboard }) {
         cc,
         subject: typeof args.subject === "string" ? args.subject : "",
         body: typeof args.body === "string" ? args.body : "",
+        platform,
       });
       if (!request.ok) {
         return {
