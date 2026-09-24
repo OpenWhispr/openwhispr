@@ -32,3 +32,17 @@ test("the renderer target list matches the main-process compose targets", async 
   const [{ EMAIL_DRAFT_TARGETS }, { COMPOSE_TARGETS }] = await Promise.all([load(), loadCompose()]);
   assert.deepEqual([...EMAIL_DRAFT_TARGETS], COMPOSE_TARGETS);
 });
+
+test("any work account picks outlook work, regardless of order", async () => {
+  const { resolveEmailDraftTarget } = await load();
+  // personal first, work second
+  assert.equal(
+    resolveEmailDraftTarget("auto", { gcalConnected: false, mcalAccountEmails: ["me@outlook.com", "a@corp.com"] }),
+    "outlookWork"
+  );
+  // all personal
+  assert.equal(
+    resolveEmailDraftTarget("auto", { gcalConnected: false, mcalAccountEmails: ["me@outlook.com", "you@Hotmail.com"] }),
+    "outlookPersonal"
+  );
+});

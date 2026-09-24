@@ -13,10 +13,16 @@ export function resolveEmailDraftTarget(
     return setting as EmailDraftTarget;
   }
   if (context.gcalConnected) return "gmail";
-  const microsoftEmail = context.mcalAccountEmails[0];
-  if (microsoftEmail) {
-    const domain = microsoftEmail.split("@")[1]?.toLowerCase() ?? "";
-    return PERSONAL_MICROSOFT_DOMAINS.has(domain) ? "outlookPersonal" : "outlookWork";
+  // If any account is a work account (non-personal domain), use Outlook work
+  for (const email of context.mcalAccountEmails) {
+    const domain = email.split("@")[1]?.toLowerCase() ?? "";
+    if (!PERSONAL_MICROSOFT_DOMAINS.has(domain)) {
+      return "outlookWork";
+    }
+  }
+  // All accounts are personal, or list is empty
+  if (context.mcalAccountEmails.length > 0) {
+    return "outlookPersonal";
   }
   return "mailto";
 }
