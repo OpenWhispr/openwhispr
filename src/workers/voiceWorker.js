@@ -2,11 +2,18 @@
 // Silero VAD. Native aborts (e.g. an unsupported ORT provider) stay confined here.
 const fs = require("fs");
 const path = require("path");
-const { createTurnEndpointer, createSampleRing } = require("../helpers/voiceTurnEndpointer");
+const {
+  createTurnEndpointer,
+  createSampleRing,
+  withPreRoll,
+} = require("../helpers/voiceTurnEndpointer");
 const { createSmartTurnSession } = require("./smartTurnSession");
 
 const VAD_SAMPLE_RATE = 16000;
 const FALLBACK_SILENCE_SECONDS = 0.5;
+const PRE_ROLL_SAMPLES = Math.round(VAD_SAMPLE_RATE * 0.3);
+// Holds a whole multi-segment turn so its pre-roll survives; also the classifier's 8 s.
+const MIC_RING_SAMPLES = VAD_SAMPLE_RATE * 30;
 
 let logStream = null;
 try {
@@ -38,8 +45,7 @@ let vad = null;
 let vadSpeaking = false;
 let endpointer = null;
 let smartTurn = null;
-// 8 s classifier context plus pre-roll and headroom.
-let micRing = createSampleRing(VAD_SAMPLE_RATE * 10);
+let micRing = createSampleRing(MIC_RING_SAMPLES);
 let classifyQueue = Promise.resolve();
 let latestClassifyId = 0;
 let lastClassify = null;
@@ -77,7 +83,7 @@ function resetTurnState() {
   vad?.reset();
   vadSpeaking = false;
   endpointer?.reset();
-  micRing = createSampleRing(VAD_SAMPLE_RATE * 10);
+  micRing = createSampleRing(MIC_RING_SAMPLES);
   latestClassifyId = 0;
 }
 
@@ -195,7 +201,12 @@ function applyTurnActions(actions) {
       classify(action);
     } else if (action.type === "commit") {
       emit("speech-segment", {
-        samples: action.samples,
+        samples: withPreRoll({
+          ring: micRing,
+          turnStartSample: action.turnStartSample,
+          samples: action.samples,
+          preRollSamples: PRE_ROLL_SAMPLES,
+        }),
         endpoint: {
           reason: action.reason,
           probability: action.probability,

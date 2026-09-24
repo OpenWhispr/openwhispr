@@ -1,7 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { createTurnEndpointer, createSampleRing } = require("../../src/helpers/voiceTurnEndpointer");
+const {
+  createTurnEndpointer,
+  createSampleRing,
+  withPreRoll,
+} = require("../../src/helpers/voiceTurnEndpointer");
 
 const RATE = 16000;
 const ms = (value) => (value * RATE) / 1000;
@@ -166,6 +170,55 @@ test("reset drops a pending turn", () => {
   endpointer.onSegment({ ...segment(1000, 800), nowSample: ms(2000) });
   endpointer.reset();
   assert.deepEqual(endpointer.advance(ms(9000)), []);
+});
+
+test("a commit says where the turn's first segment started", () => {
+  const endpointer = createTurnEndpointer({ smartTurn: true });
+  endpointer.onSegment({ ...segment(1000, 800), nowSample: ms(2000) });
+  endpointer.onSpeechStart();
+  const second = endpointer.onSegment({ ...segment(2400, 600), nowSample: ms(3200) })[0];
+  const [commit] = endpointer.onPrediction({
+    requestId: second.requestId,
+    probability: 0.9,
+    nowSample: ms(3230),
+  });
+  assert.equal(commit.turnStartSample, ms(1000));
+});
+
+test("withPreRoll puts the audio just before the turn in front of it", () => {
+  const ring = createSampleRing(100);
+  ring.push(Float32Array.from({ length: 20 }, (_, index) => index));
+  const audio = withPreRoll({
+    ring,
+    turnStartSample: 10,
+    samples: new Float32Array([100, 101]),
+    preRollSamples: 3,
+  });
+  assert.deepEqual(Array.from(audio), [7, 8, 9, 100, 101]);
+});
+
+test("withPreRoll takes what exists when the turn starts near the stream start", () => {
+  const ring = createSampleRing(100);
+  ring.push(Float32Array.from({ length: 20 }, (_, index) => index));
+  const audio = withPreRoll({
+    ring,
+    turnStartSample: 2,
+    samples: new Float32Array([100]),
+    preRollSamples: 5,
+  });
+  assert.deepEqual(Array.from(audio), [0, 1, 100]);
+});
+
+test("withPreRoll returns the turn alone when the ring no longer holds the pre-roll", () => {
+  const ring = createSampleRing(4);
+  ring.push(Float32Array.from({ length: 20 }, (_, index) => index));
+  const audio = withPreRoll({
+    ring,
+    turnStartSample: 10,
+    samples: new Float32Array([100]),
+    preRollSamples: 3,
+  });
+  assert.deepEqual(Array.from(audio), [100]);
 });
 
 test("the sample ring returns absolute-indexed slices across the wrap point", () => {

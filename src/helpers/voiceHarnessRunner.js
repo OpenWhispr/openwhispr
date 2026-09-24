@@ -20,7 +20,10 @@ const VAD_RATE = 16000;
 const FRAME_SIZE = 512;
 const FRAME_MS = (FRAME_SIZE / VAD_RATE) * 1000;
 const LEAD_SILENCE_S = 0.3;
-const TAIL_SILENCE_S = 1.2;
+// A live mic never stops streaming; the harness does after this tail. It must
+// outlast Smart Turn's 1.2 s max silence, or a turn the classifier scores as
+// unfinished stalls until the next scenario's audio arrives.
+const TAIL_SILENCE_S = 2.0;
 const TURN_TIMEOUT_MS = 45_000;
 const WARM_UP_MS = 4000;
 const BETWEEN_TURNS_MS = 1500;
