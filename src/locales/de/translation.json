@@ -702,6 +702,11 @@
       "title": "Erforderliche Modelle fehlen",
       "description": "Ihre Organisation erfordert diese Modelle auf diesem Gerät: {{models}}.",
       "download": "Herunterladen"
+    },
+    "cloudNudge": {
+      "title": "Du bist angemeldet",
+      "description": "Das Diktieren läuft weiter über deine eigene Einrichtung. Du kannst jederzeit zu OpenWhispr Cloud wechseln.",
+      "action": "Einstellungen öffnen"
     }
   },
   "reasoning": {
@@ -2752,7 +2757,8 @@
     "errors": {
       "contextTooLarge": "Das ist zu lang, als dass {{model}} es auf diesem Computer lesen könnte. Es werden etwa {{needed}} Token Kontext benötigt, aber nur {{max}} passen in den Speicher. Versuchen Sie ein Cloud-Modell oder führen Sie die Aktion für eine kürzere Auswahl aus.",
       "contextTooLargeGeneric": "Das ist zu lang, als dass {{model}} es auf diesem Computer lesen könnte. Versuchen Sie ein Cloud-Modell oder führen Sie die Aktion für eine kürzere Auswahl aus.",
-      "localServerUnavailable": "{{model}} konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut oder wechseln Sie zu einem Cloud-Modell."
+      "localServerUnavailable": "{{model}} konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut oder wechseln Sie zu einem Cloud-Modell.",
+      "localModelBusy": "Das lokale Modell bearbeitet noch eine andere Anfrage. Warten Sie, bis sie abgeschlossen ist, und versuchen Sie es dann erneut."
     }
   },
   "insights": {
@@ -3445,6 +3451,8 @@
     },
     "actions": {
       "done": "Fertig",
+      "chunkProgress": "Teil {{step}} von {{total}}",
+      "emptyReply": "Das Modell hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
       "manage": "Aktionen verwalten...",
       "manageTitle": "Benutzerdefinierte Aktionen",
       "addAction": "Neue Aktion",

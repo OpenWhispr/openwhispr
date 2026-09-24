@@ -58,7 +58,9 @@ const PROVIDERS = [
     // glm-5-3 is the registry default, so it is the model most Tinfoil users
     // are on — and the Tinfoil transport has no param-stripping ladder, so a
     // reasoning-param rejection there hard-errors (#1611).
-    models: ["glm-5-3", "gpt-oss-120b", "deepseek-v4-flash", "llama3-3-70b"],
+    // deepseek-v4-flash was replaced by deepseek-v4-1-flash in Tinfoil's live
+    // catalog (canary run 35322067138, 2026-09-18: HTTP 404 "model does not exist").
+    models: ["glm-5-3", "gpt-oss-120b", "deepseek-v4-1-flash", "llama3-3-70b"],
   },
   {
     id: "gemini",

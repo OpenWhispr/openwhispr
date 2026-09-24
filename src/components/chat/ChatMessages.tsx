@@ -7,9 +7,16 @@ interface ChatMessagesProps {
   messages: Message[];
   emptyState?: React.ReactNode;
   onOpenNote?: (noteId: number) => void;
+  /** Extra classes for the message column (e.g. a page-width cap); the scroll container stays full width. */
+  contentClassName?: string;
 }
 
-export function ChatMessages({ messages, emptyState, onOpenNote }: ChatMessagesProps) {
+export function ChatMessages({
+  messages,
+  emptyState,
+  onOpenNote,
+  contentClassName,
+}: ChatMessagesProps) {
   // Follow the stream only while the user is at the bottom; scrolling up to
   // re-read must not be yanked back down by the next token.
   const {
@@ -34,7 +41,7 @@ export function ChatMessages({ messages, emptyState, onOpenNote }: ChatMessagesP
       {messages.length === 0 ? (
         (emptyState ?? null)
       ) : (
-        <div className="flex flex-col gap-1.5">
+        <div className={cn("flex flex-col gap-1.5", contentClassName)}>
           {messages
             .filter((msg) => msg.role !== "tool")
             .map((msg) => (

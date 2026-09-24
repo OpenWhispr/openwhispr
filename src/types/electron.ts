@@ -1434,7 +1434,7 @@ declare global {
           updated_by_user_id?: string | null;
           left_team?: number;
         }
-      ) => Promise<{ success: boolean; note?: NoteItem }>;
+      ) => Promise<{ success: boolean; note?: NoteItem; error?: string }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
       exportNote: (
         noteId: number,
@@ -1842,6 +1842,15 @@ declare global {
         details?: Record<string, unknown>;
       }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
+      /** The largest context this machine can give a bundled model; drives chunked note generation. */
+      getLocalContextBudget: (modelId: string) => Promise<{
+        success: boolean;
+        maxContextTokens?: number;
+        modelName?: string;
+        error?: string;
+      }>;
+      /** Aborts the local request tagged with this `requestId`, if it is still in flight. */
+      cancelLocalReasoning: (requestId: string) => Promise<void>;
 
       // Anthropic reasoning
       processAnthropicReasoning: (

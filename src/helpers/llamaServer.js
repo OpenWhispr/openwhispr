@@ -73,6 +73,7 @@ class LlamaServerManager {
     this.process = null;
     this.port = null;
     this.ready = false;
+    this.activeRequest = null;
     this.modelPath = null;
     // draftModelPath is the REQUESTED drafter (stable across identical requests, drives
     // the start() restart check); activeDraftModelPath is the one that actually loaded.
@@ -720,18 +721,20 @@ class LlamaServerManager {
       stream: false,
     };
 
-    // Without this, Qwen chat templates leave `message.content` empty and
-    // route output into `reasoning_content`. Non-Qwen templates ignore it.
-    if (options.disableThinking !== false) {
+    // Without this, Qwen chat templates think into `reasoning_content` first
+    // and can spend the whole budget there. Non-Qwen templates ignore it.
+    const suppressThinking = options.disableThinking !== false;
+    if (suppressThinking) {
       requestBody.chat_template_kwargs = { enable_thinking: false };
     }
 
     const body = JSON.stringify(requestBody);
 
+    let req;
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
 
-      const req = http.request(
+      req = http.request(
         {
           hostname: "127.0.0.1",
           port: this.port,
@@ -761,18 +764,29 @@ class LlamaServerManager {
 
             try {
               const response = JSON.parse(data);
-              if (
-                options.requireCompleteOutput &&
-                ["length", "max_tokens"].includes(response.choices?.[0]?.finish_reason)
-              ) {
+              const choice = response.choices?.[0];
+              const message = choice?.message;
+              const truncated = ["length", "max_tokens"].includes(choice?.finish_reason);
+              // A cut-off reply with no content spent its whole budget reasoning
+              // (#2187): there is no answer to return, whichever field the
+              // reasoning sits in. Lenient callers still accept a partial answer.
+              if (truncated && (options.requireCompleteOutput || !message?.content?.trim())) {
                 // The renderer maps the code to the cleanup toast's wording (#2091).
                 const error = new Error("Model output was truncated");
                 error.code = "OUTPUT_TRUNCATED";
                 reject(error);
                 return;
               }
-              const message = response.choices?.[0]?.message;
-              const text = message?.content || message?.reasoning_content || "";
+              if (truncated) {
+                debugLogger.warn("llama-server reply was cut off at max_tokens", {
+                  maxTokens: requestBody.max_tokens,
+                });
+              }
+              // Some builds still route a suppressed-thinking answer into
+              // `reasoning_content` (#809). With thinking on, that field is the
+              // reasoning itself, which must never stand in for the answer.
+              const text =
+                message?.content || (suppressThinking && message?.reasoning_content) || "";
               resolve(text.trim());
             } catch (e) {
               reject(new Error(`Failed to parse llama-server response: ${e.message}`));
@@ -789,9 +803,18 @@ class LlamaServerManager {
         reject(new Error("llama-server request timed out"));
       });
 
+      this.activeRequest = req;
       req.write(body);
       req.end();
-    }).finally(() => this.resetIdleTimer());
+    }).finally(() => {
+      if (this.activeRequest === req) this.activeRequest = null;
+      this.resetIdleTimer();
+    });
+  }
+
+  // Closing the connection is what makes llama-server stop generating.
+  cancelInference() {
+    this.activeRequest?.destroy(new Error("cancelled"));
   }
 
   async stop() {

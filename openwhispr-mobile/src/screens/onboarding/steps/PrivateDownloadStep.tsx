@@ -1,0 +1,249 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, ActivityIndicator, Pressable } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
+import { SystemIcon } from '@/components/ui/SystemIcon';
+import { chooseOnboardingMode } from '@/lib/onboardingMode';
+import { useModelDownloadStore, type LocalModelKey } from '@/store/useModelDownloadStore';
+import { LocalTranscriptionService } from '@/services/transcription/LocalTranscriptionService';
+import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
+import { getLocalModelCatalog, type LocalModelCatalogEntry } from '@/lib/localModelCatalog';
+import { getPrivateModeUnavailableMessage } from '@/lib/privateMode';
+import { SlowDownloadSheet } from './SlowDownloadSheet';
+
+// Show the "taking a while?" sheet only if the download is still under halfway
+// after this delay — fast connections finish first and never see it.
+const SLOW_AFTER_MS = 8000;
+const SLOW_BELOW = 0.5;
+
+function formatModelSize(bytes: number): string {
+  return `~${Math.round(bytes / (1024 * 1024))} MB`;
+}
+
+export function PrivateDownloadStep() {
+  const { progress: stepProgress, goBack } = useOnboardingStep('private-download');
+  const downloads = useModelDownloadStore((s) => s.downloads);
+  const startDownload = useModelDownloadStore((s) => s.startDownload);
+  const cancelDownload = useModelDownloadStore((s) => s.cancelDownload);
+  const cancelActiveDownloads = useModelDownloadStore((s) => s.cancelActiveDownloads);
+
+  const available = LocalTranscriptionService.isAvailable();
+  // The language step just ran, so the selection is settled; pick the model it routes to.
+  const languages = useMemo(() => getPreferredTranscriptionLanguages(), []);
+  const [recommended, setRecommended] = useState<LocalModelCatalogEntry | null>(null);
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const startedRef = useRef(false);
+  const mountedRef = useRef(true);
+  const [discoveryAttempt, setDiscoveryAttempt] = useState(0);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!available) return;
+    let cancelled = false;
+    setDiscoveryError(null);
+    LocalTranscriptionService.getAvailability()
+      .then((availability) => {
+        if (cancelled) return;
+        // Catalog is sorted recommended-first; on platforms without Parakeet the first
+        // visible entry is the Whisper fallback.
+        const model = getLocalModelCatalog(languages, availability)[0];
+        if (!model) throw new Error('No local model is available for these languages.');
+        setRecommended(model);
+      })
+      .catch(() => {
+        if (!cancelled)
+          setDiscoveryError('Could not find a local model. Check your connection and try again.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [available, languages, discoveryAttempt]);
+
+  const modelKey: LocalModelKey | null = recommended?.key ?? null;
+  const download = modelKey ? downloads[modelKey] : null;
+  const status = download?.status ?? 'idle';
+  const progress = download?.progress ?? 0;
+  const error = download?.error;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!available || !modelKey || startedRef.current) return;
+    startedRef.current = true;
+    const needsDownload = !recommended?.downloaded && status === 'idle';
+    // Going back to change languages can leave the previous recommendation transferring. It's no
+    // longer needed, and startDownload refuses to run beside it.
+    cancelActiveDownloads(modelKey).then(() => {
+      if (needsDownload && mountedRef.current) startDownload(modelKey);
+    });
+  }, [available, modelKey, recommended?.downloaded, status, startDownload, cancelActiveDownloads]);
+
+  useEffect(() => {
+    if (!available || !modelKey) return;
+    const timer = setTimeout(() => {
+      const entry = useModelDownloadStore.getState().downloads[modelKey];
+      if (entry.status === 'downloading' && entry.progress < SLOW_BELOW) setSheetVisible(true);
+    }, SLOW_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [available, modelKey]);
+
+  const switchToCloud = useCallback(async (): Promise<void> => {
+    await chooseOnboardingMode('cloud', 'private-download');
+  }, []);
+
+  const continueCloudKeepDownloading = useCallback(async () => {
+    // Download keeps running in the background (store not reset).
+    await switchToCloud();
+    setSheetVisible(false);
+  }, [switchToCloud]);
+
+  // The auto-start effect only fires once, from idle, so a retry has to start the download itself.
+  const retryDownload = useCallback(() => {
+    if (modelKey) startDownload(modelKey);
+  }, [modelKey, startDownload]);
+
+  const switchToCloudStop = useCallback(async (): Promise<void> => {
+    // Validate Cloud and save the choice before discarding the local download.
+    await switchToCloud();
+    if (modelKey && (status === 'downloading' || status === 'preparing' || status === 'error')) {
+      await cancelDownload(modelKey);
+    }
+  }, [cancelDownload, modelKey, status, switchToCloud]);
+
+  if (!available) {
+    return (
+      <OnboardingShell
+        progress={stepProgress}
+        onBack={goBack}
+        title="Private mode needs the full app"
+        subtitle={getPrivateModeUnavailableMessage()}
+        ctaLabel="Use Cloud instead"
+        onCta={switchToCloud}
+      >
+        <View className="flex-1 items-center justify-center">
+          <View className="h-28 w-28 items-center justify-center rounded-2xl bg-secondarySystemGroupedBackground">
+            <SystemIcon name="lock.slash.fill" mdName="LockOpen" size={48} color="secondaryLabel" />
+          </View>
+        </View>
+      </OnboardingShell>
+    );
+  }
+
+  if (discoveryError) {
+    return (
+      <OnboardingShell
+        progress={stepProgress}
+        onBack={goBack}
+        title="Local setup needs another try"
+        subtitle={discoveryError}
+        ctaLabel="Retry model selection"
+        onCta={() => setDiscoveryAttempt((attempt) => attempt + 1)}
+        secondaryCtaLabel="Use Cloud instead"
+        onSecondaryCta={switchToCloud}
+      />
+    );
+  }
+
+  const done = recommended?.downloaded === true || status === 'completed';
+  const preparing = status === 'preparing';
+  const percent = done ? 100 : Math.round(progress * 100);
+  const modelTitle = recommended?.title ?? 'On-device model';
+  const modelSize = recommended ? formatModelSize(recommended.sizeBytes) : '';
+
+  return (
+    <>
+      <OnboardingShell
+        progress={stepProgress}
+        onBack={goBack}
+        title="Set up Private mode"
+        titleAccent="Private"
+        subtitle={`Private runs entirely on your device. It needs a one-time ${
+          modelSize || 'model'
+        } download, matched to your languages.`}
+        ctaLabel={done ? 'Continue with Private' : 'Continue · available when ready'}
+        ctaDisabled={!done}
+        onCta={() => chooseOnboardingMode('private', 'private-download')}
+        secondaryCtaLabel={done ? 'Use Cloud instead' : "Don't use Private — switch to Cloud"}
+        onSecondaryCta={switchToCloudStop}
+      >
+        <View className="flex-1 pt-2">
+          <View className="rounded-xl border border-separator bg-secondarySystemGroupedBackground p-4">
+            <View className="flex-row items-center gap-3">
+              <View className="h-9 w-9 items-center justify-center rounded-lg bg-quaternarySystemFill">
+                <SystemIcon
+                  name={done ? 'checkmark' : 'arrow.down'}
+                  mdName={done ? 'Check' : 'Download'}
+                  size={18}
+                  color={done ? 'systemGreen' : 'brand'}
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="text-[16px] font-semibold text-label">{modelTitle}</Text>
+                <Text className="mt-0.5 text-[13px] text-secondaryLabel">
+                  {recommended
+                    ? `${recommended.languagesNote} · ${modelSize}`
+                    : 'Choosing the best model…'}
+                </Text>
+              </View>
+              {done ? (
+                <View className="rounded-md bg-systemGreen/15 px-2 py-0.5">
+                  <Text className="text-[11px] font-semibold text-systemGreen">Ready</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View className="mt-4 h-1.5 overflow-hidden rounded-full bg-quaternarySystemFill">
+              <View
+                className={`h-full rounded-full ${done ? 'bg-systemGreen' : 'bg-brand'}`}
+                style={{ width: `${done || preparing ? 100 : Math.max(percent, 6)}%` }}
+              />
+            </View>
+            <View className="mt-2 flex-row items-center justify-between">
+              {preparing ? (
+                <View className="flex-row items-center gap-1.5">
+                  <ActivityIndicator size="small" />
+                  <Text className="text-[12px] text-secondaryLabel">
+                    Preparing model for your device… (one time)
+                  </Text>
+                </View>
+              ) : (
+                <Text className="text-[12px] text-secondaryLabel">
+                  {done ? 'Downloaded · stored on device' : 'Downloading…'}
+                </Text>
+              )}
+              {!preparing ? (
+                <Text className="text-[12px] text-secondaryLabel">{percent}%</Text>
+              ) : null}
+            </View>
+
+            {status === 'error' && error ? (
+              <Text className="mt-2 text-[12px] text-systemRed">{error}</Text>
+            ) : null}
+            {status === 'error' ? (
+              <Pressable
+                onPress={retryDownload}
+                hitSlop={8}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                className="mt-1 self-start"
+              >
+                <Text className="text-[12px] font-medium text-brand">Try again</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </OnboardingShell>
+
+      <SlowDownloadSheet
+        visible={sheetVisible}
+        onContinueCloud={continueCloudKeepDownloading}
+        onKeepWaiting={() => setSheetVisible(false)}
+      />
+    </>
+  );
+}

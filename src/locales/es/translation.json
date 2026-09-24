@@ -702,6 +702,11 @@
       "title": "Faltan modelos requeridos",
       "description": "Tu organización requiere estos modelos en este dispositivo: {{models}}.",
       "download": "Descargar"
+    },
+    "cloudNudge": {
+      "title": "Has iniciado sesión",
+      "description": "El dictado sigue usando tu propia configuración. Puedes cambiar a OpenWhispr Cloud cuando quieras.",
+      "action": "Abrir Ajustes"
     }
   },
   "reasoning": {
@@ -2712,7 +2717,8 @@
     "errors": {
       "contextTooLarge": "Esto es demasiado largo para que {{model}} lo lea en este equipo. Necesita unos {{needed}} tokens de contexto, pero solo caben {{max}} en la memoria. Prueba con un modelo en la nube o ejecuta la acción sobre una selección más corta.",
       "contextTooLargeGeneric": "Esto es demasiado largo para que {{model}} lo lea en este equipo. Prueba con un modelo en la nube o ejecuta la acción sobre una selección más corta.",
-      "localServerUnavailable": "No se pudo iniciar {{model}} en este ordenador. Inténtalo de nuevo o cambia a un modelo en la nube."
+      "localServerUnavailable": "No se pudo iniciar {{model}} en este ordenador. Inténtalo de nuevo o cambia a un modelo en la nube.",
+      "localModelBusy": "El modelo local todavía está procesando otra solicitud. Espera a que termine y vuelve a intentarlo."
     }
   },
   "referral": {
@@ -3156,6 +3162,8 @@
       "runAction": "Ejecutar {{name}}",
       "selectAction": "Seleccionar acción",
       "done": "Listo",
+      "chunkProgress": "Parte {{step}} de {{total}}",
+      "emptyReply": "El modelo devolvió una respuesta vacía. Vuelve a intentarlo o elige otro modelo.",
       "builtin": {
         "generateNotes": {
           "name": "Generar notas",

@@ -54,6 +54,7 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
+import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import {
   SPLIT_BUTTON_DIVIDER_CLASS,
   SPLIT_BUTTON_GROUP_CLASS,
@@ -61,6 +62,7 @@ import {
 } from "../ui/splitButton";
 import type { NoteItem, FolderItem } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
+import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
 import NoteRecordControl, { RecordingWave } from "./NoteRecordControl";
@@ -196,6 +198,8 @@ interface NoteEditorProps {
   onGenerateSummary?: () => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
+  actionProgress?: NoteActionProgress | null;
+  onCancelAction?: () => void;
   diarizationSessionId?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
   sessionDiarizationEnabled?: boolean;
@@ -229,6 +233,8 @@ export default function NoteEditor({
   onGenerateSummary,
   actionProcessingState,
   actionName,
+  actionProgress,
+  onCancelAction,
   diarizationSessionId,
   onLiveSpeakerLock,
   sessionDiarizationEnabled,
@@ -831,7 +837,7 @@ export default function NoteEditor({
   return (
     <div className="flex h-full min-h-0">
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="px-5 pt-5 pb-0">
+        <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-5 pt-5 pb-0")}>
           <div
             dir="auto"
             ref={titleRef}
@@ -1109,37 +1115,39 @@ export default function NoteEditor({
         {conflict && (
           <div
             className={cn(
-              "flex items-center gap-2 px-5 h-8 mt-2 shrink-0",
+              "h-8 mt-2 shrink-0",
               "bg-amber-400/5 dark:bg-amber-400/[0.07]",
               "border-y border-amber-400/15 dark:border-amber-400/20",
               "animate-in slide-in-from-top-2 duration-300"
             )}
           >
-            <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
-            <p className="text-[11px] text-foreground/50 flex-1 truncate">
-              {t("notes.spaces.conflictBanner")}
-              {conflictEditorName && (
-                <span className="text-foreground/45">
-                  {" "}
-                  {t("notes.spaces.editedBy", {
-                    name: conflictEditorName,
-                    time: formatRelativeTime(conflict.updated_at, t, locale),
-                  })}
-                </span>
-              )}
-            </p>
-            <button
-              onClick={handleConflictRefresh}
-              className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-            >
-              {t("notes.spaces.conflictRefresh")}
-            </button>
-            <button
-              onClick={handleConflictKeep}
-              className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-            >
-              {t("notes.spaces.conflictKeep")}
-            </button>
+            <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
+              <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
+              <p className="text-[11px] text-foreground/50 flex-1 truncate">
+                {t("notes.spaces.conflictBanner")}
+                {conflictEditorName && (
+                  <span className="text-foreground/45">
+                    {" "}
+                    {t("notes.spaces.editedBy", {
+                      name: conflictEditorName,
+                      time: formatRelativeTime(conflict.updated_at, t, locale),
+                    })}
+                  </span>
+                )}
+              </p>
+              <button
+                onClick={handleConflictRefresh}
+                className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              >
+                {t("notes.spaces.conflictRefresh")}
+              </button>
+              <button
+                onClick={handleConflictKeep}
+                className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              >
+                {t("notes.spaces.conflictKeep")}
+              </button>
+            </div>
           </div>
         )}
 
@@ -1148,6 +1156,7 @@ export default function NoteEditor({
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
+                  contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   speakerMappings={speakerMappings}
                   speakerProfiles={speakerProfiles}
                   participants={parsedParticipants}
@@ -1164,6 +1173,7 @@ export default function NoteEditor({
                 />
               ) : (
                 <MeetingTranscriptChat
+                  contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   segments={displaySegments}
                   speakerMappings={speakerMappings}
                   speakerProfiles={knownSpeakers}
@@ -1189,7 +1199,7 @@ export default function NoteEditor({
                 icon={Mic}
                 title={t("notes.editor.transcriptEmptyTitle")}
                 description={t("notes.editor.transcriptEmptyDescription")}
-                className="mt-2"
+                className={cn(PAGE_CONTENT_WIDTH_CLASS, "mt-2")}
               >
                 {canEditNote && recordingAllowed && (
                   <Button size="sm" onClick={onStartRecording} disabled={isProcessing}>
@@ -1219,6 +1229,8 @@ export default function NoteEditor({
           <ActionProcessingOverlay
             state={actionProcessingState ?? "idle"}
             actionName={actionName ?? null}
+            progress={actionProgress ?? null}
+            onCancel={onCancelAction}
           />
           <div
             className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none"

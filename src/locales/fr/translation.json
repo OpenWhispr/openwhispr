@@ -702,6 +702,11 @@
       "title": "Modèles requis manquants",
       "description": "Votre organisation exige ces modèles sur cet appareil : {{models}}.",
       "download": "Télécharger"
+    },
+    "cloudNudge": {
+      "title": "Vous êtes connecté",
+      "description": "La dictée utilise toujours votre propre configuration. Vous pouvez passer à OpenWhispr Cloud à tout moment.",
+      "action": "Ouvrir les Réglages"
     }
   },
   "reasoning": {
@@ -2752,7 +2757,8 @@
     "errors": {
       "contextTooLarge": "C’est trop long pour que {{model}} puisse le lire sur cet ordinateur. Il faut environ {{needed}} jetons de contexte, mais seuls {{max}} tiennent en mémoire. Essayez un modèle cloud ou exécutez l’action sur une sélection plus courte.",
       "contextTooLargeGeneric": "C’est trop long pour que {{model}} puisse le lire sur cet ordinateur. Essayez un modèle cloud ou exécutez l’action sur une sélection plus courte.",
-      "localServerUnavailable": "Impossible de démarrer {{model}} sur cet ordinateur. Réessayez ou passez à un modèle cloud."
+      "localServerUnavailable": "Impossible de démarrer {{model}} sur cet ordinateur. Réessayez ou passez à un modèle cloud.",
+      "localModelBusy": "Le modèle local traite encore une autre requête. Attendez qu'elle se termine, puis réessayez."
     }
   },
   "insights": {
@@ -3445,6 +3451,8 @@
     },
     "actions": {
       "done": "Terminé",
+      "chunkProgress": "Partie {{step}} sur {{total}}",
+      "emptyReply": "Le modèle a renvoyé une réponse vide. Réessayez ou choisissez un autre modèle.",
       "manage": "Gérer les actions...",
       "manageTitle": "Actions personnalisées",
       "addAction": "Nouvelle action",
