@@ -391,3 +391,142 @@ test("an older streaming session cannot clean up the active session listeners", 
   assert.equal(manager.streamingFinalText, "current transcript");
   assert.equal(manager.streamingPartialText, "current partial");
 });
+
+test("Orukeet commits only after the worklet flush and skips settling sleeps", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  const order = [];
+  const delays = [];
+  const originalTimeout = globalThis.setTimeout;
+  t.mock.method(globalThis, "setTimeout", (callback, ms, ...args) => {
+    delays.push(ms);
+    return originalTimeout(callback, ms, ...args);
+  });
+  manager.streamingProcessor = {
+    port: {
+      postMessage(message) {
+        assert.equal(message, "stop");
+        queueMicrotask(() => {
+          order.push("last-pcm");
+          manager._streamingFlushResolve();
+        });
+      },
+    },
+    disconnect() {
+      order.push("capture-stopped");
+    },
+  };
+  manager.getStreamingProvider = () => ({
+    finalizeAcknowledged: true,
+    async finalize() {
+      order.push("commit");
+      return { success: true, text: "" };
+    },
+    async stop() {
+      order.push("socket-stopped");
+      return { success: true, text: "" };
+    },
+  });
+  manager.awaitStreamingTextSettled = () => {
+    throw new Error("Unexpected settling delay");
+  };
+  await manager.stopStreamingRecording();
+  assert.deepEqual(order, ["last-pcm", "capture-stopped", "commit", "socket-stopped"]);
+  assert.equal(delays.includes(120), false);
+  assert.equal(delays.includes(300), false);
+});
+
+test("acknowledged streaming silence does not trigger another transcription", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  manager.recordingStartTime = Date.now() - 5000;
+  manager.streamingFallbackChunks = [new Blob([new Uint8Array(100)])];
+  manager.finishStreamingFallbackSegment = async () => new Blob([new Uint8Array(100)]);
+  manager.mergeRecordedSegments = async () => new Blob([new Uint8Array(100)]);
+  let fallbackCalls = 0;
+  manager.processWithOpenAIAPI = async () => {
+    fallbackCalls += 1;
+    return { text: "unexpected" };
+  };
+  manager.getStreamingProvider = () => ({
+    finalizeAcknowledged: true,
+    finalize: async () => ({ success: true, text: "" }),
+    stop: async () => ({ success: true, text: "" }),
+  });
+  const completions = [];
+  manager.onTranscriptionComplete = (result) => completions.push(result);
+  assert.equal(await manager.stopStreamingRecording(), true);
+  assert.equal(completions.length, 1);
+  assert.equal(completions[0].text, "");
+  assert.equal(fallbackCalls, 0);
+});
+
+test("a stream without a final falls back to batch for every provider, tagged only for Orukeet", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  globalThis.__streamingFinalizationSettings = {
+    ...globalThis.__streamingFinalizationSettings,
+    cloudTranscriptionMode: "openwhispr",
+    isSignedIn: true,
+  };
+  const uploads = [];
+  for (const providerName of ["orukeet", "openai-realtime", "deepgram"]) {
+    const { manager } = createFinalizingManager(AudioManager);
+    manager.recordingStartTime = Date.now() - 5000;
+    manager.mergeRecordedSegments = async () => new Blob([new Uint8Array(100)]);
+    manager.getStreamingProviderName = () => providerName;
+    manager.processWithOpenWhisprCloud = async (_blob, metadata) => {
+      uploads.push([providerName, metadata.streamingFallbackReason]);
+      return { text: "" };
+    };
+    await manager.stopStreamingRecording();
+  }
+
+  assert.deepEqual(uploads, [
+    ["orukeet", "stream_no_final"],
+    ["openai-realtime", undefined],
+    ["deepgram", undefined],
+  ]);
+});
+
+test("Orukeet uses the acknowledged final even if the transcript event is delayed", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  manager.getStreamingProvider = () => ({
+    finalizeAcknowledged: true,
+    finalize: async () => ({ success: true, text: "Acknowledged final" }),
+    stop: async () => ({ success: true, text: "" }),
+  });
+  let usageReported;
+  const usage = new Promise((resolve) => {
+    usageReported = resolve;
+  });
+  globalThis.window.electronAPI.cloudStreamingUsage = async () => ({ success: true });
+  globalThis.window.dispatchEvent = () => usageReported();
+  const results = [];
+  manager.onTranscriptionComplete = (result) => results.push(result);
+  await manager.stopStreamingRecording();
+  await usage;
+  assert.equal(results[0].text, "Acknowledged final");
+});
+
+test("missing Orukeet capture flush never commits a partial recording", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  const originalTimeout = globalThis.setTimeout;
+  t.mock.method(globalThis, "setTimeout", (callback, ms, ...args) =>
+    originalTimeout(callback, Math.min(ms, 10), ...args)
+  );
+  let stopped = false;
+  manager.streamingProcessor = { port: { postMessage() {} }, disconnect() {} };
+  manager.getStreamingProvider = () => ({
+    finalizeAcknowledged: true,
+    finalize: async () => assert.fail("incomplete PCM must not be committed"),
+    stop: async () => {
+      stopped = true;
+      return { success: true, text: "" };
+    },
+  });
+  await manager.stopStreamingRecording();
+  assert.equal(stopped, true);
+  assert.equal(manager.streamingProcessor, null);
+});

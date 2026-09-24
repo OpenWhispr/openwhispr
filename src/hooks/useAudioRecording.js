@@ -53,6 +53,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const pushForceStoppedRef = useRef(false);
   const stopLockRef = useRef(false);
   const preparationGenerationRef = useRef(0);
+  const dictationErrorGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
   const demoKindRef = useRef("dictation");
@@ -80,6 +81,13 @@ export const useAudioRecording = (toast, options = {}) => {
   useEffect(() => {
     interceptVoiceAgentToggleRef.current = interceptVoiceAgentToggle;
   });
+
+  useEffect(
+    () => () => {
+      dictationErrorGenerationRef.current += 1;
+    },
+    []
+  );
 
   useEffect(() => {
     onDemoEventRef.current = onDemoEvent;
@@ -204,11 +212,15 @@ export const useAudioRecording = (toast, options = {}) => {
           audioManagerRef.current.beginSelectionCapture();
         }
 
-        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready).
-        // Await it only when it can change the start decision (signed-in
-        // OpenWhispr-cloud streaming); for local STT or a signed-out session the
-        // fetch stalls on auth resolution and would delay the mic open (#1673).
-        if (!audioManagerRef.current.sttConfig) {
+        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready),
+        // and refresh a copy older than its TTL so a server-side rollout change
+        // reaches a long-running app. Await it only when it can change the start
+        // decision (no config yet, signed-in OpenWhispr-cloud streaming); for
+        // local STT or a signed-out session the fetch stalls on auth resolution
+        // and would delay the mic open (#1673). A stale-but-present copy is
+        // refreshed in the background and this recording keeps the old decision.
+        if (audioManagerRef.current.isSttConfigStale()) {
+          const hadConfig = Boolean(audioManagerRef.current.sttConfig);
           const configFetch = (async () => {
             const config = await window.electronAPI.getSttConfig?.();
             if (config?.success) {
@@ -217,7 +229,7 @@ export const useAudioRecording = (toast, options = {}) => {
           })().catch((error) => {
             logger.warn("STT config fetch failed", { error: error?.message });
           });
-          if (needsSttConfigBeforeStart(getSettings())) {
+          if (!hadConfig && needsSttConfigBeforeStart(getSettings())) {
             await configFetch;
           }
         }
@@ -226,7 +238,10 @@ export const useAudioRecording = (toast, options = {}) => {
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
         recordingStarted = didStart;
-        if (didStart) dismissDictationError?.();
+        if (didStart) {
+          dictationErrorGenerationRef.current += 1;
+          dismissDictationError?.();
+        }
 
         // A stop that landed while the start was still awaiting the mic open was
         // dropped (isRecording was still false), leaving a runaway recording
@@ -336,9 +351,97 @@ export const useAudioRecording = (toast, options = {}) => {
         audioManagerRef.current?.streamingPartialText
       ).trim() || fallback.trim();
 
-    const showDictationError = ({ title, description, transcript = "", duration }) => {
+    const showDictationError = ({
+      title,
+      description,
+      transcript = "",
+      duration,
+      code,
+      settingsLaunchFailed = false,
+    }) => {
+      const errorGeneration = ++dictationErrorGenerationRef.current;
       const recoverAssistant = Boolean(audioManagerRef.current?.voiceAgentRequested);
       onDictationError?.({ recoverAssistant });
+      if (code === "ACCESSIBILITY_PERMISSION_REQUIRED") {
+        let settingsOpening = false;
+        const isCurrent = () => errorGeneration === dictationErrorGenerationRef.current;
+        const actions = [
+          {
+            label: t("hooks.audioRecording.pastePermission.openSettings"),
+            icon: "settings",
+            dismissOnClick: false,
+            onClick: async () => {
+              if (settingsOpening || !isCurrent()) return;
+              settingsOpening = true;
+              let opened = false;
+              try {
+                const result = await window.electronAPI?.openAccessibilitySettings?.();
+                opened = result?.success === true;
+              } catch {
+                // Keep the manual path available if System Settings cannot open.
+              } finally {
+                settingsOpening = false;
+              }
+              // A recording that is starting owns the pill; re-showing the card now would
+              // dismiss that recording's live transcript.
+              if (!opened && isCurrent() && !startLockRef.current) {
+                showDictationError({
+                  title,
+                  description,
+                  transcript,
+                  code,
+                  settingsLaunchFailed: true,
+                });
+              }
+            },
+          },
+        ];
+        if (transcript.trim()) {
+          actions.push({
+            label: t("hooks.audioRecording.pastePermission.copyToClipboard"),
+            icon: "copy",
+            dismissOnClick: false,
+            feedback: {
+              successLabel: t("common.copied"),
+              failureLabel: t("hooks.audioRecording.pastePermission.copyFailed"),
+            },
+            onClick: async () => {
+              if (!isCurrent()) return;
+              let copied = false;
+              try {
+                const result = await window.electronAPI?.writeClipboard?.(transcript);
+                copied = result?.success === true;
+              } catch {
+                copied = false;
+              }
+              if (isCurrent()) return copied;
+            },
+          });
+        }
+        toast({
+          title,
+          description: [
+            settingsLaunchFailed
+              ? t("hooks.audioRecording.pastePermission.settingsFailed")
+              : description,
+            transcript.trim()
+              ? t("hooks.audioRecording.pastePermission.manualPaste", { shortcut: "Cmd+V" })
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" "),
+          descriptionHotkey: transcript.trim() ? "Cmd+V" : undefined,
+          variant: "destructive",
+          presentation: "dictation-error",
+          duration: 0,
+          dismissible: true,
+          onClose: () => {
+            if (isCurrent()) dictationErrorGenerationRef.current += 1;
+          },
+          actions,
+        });
+        return;
+      }
       const recoverableTranscript = getRecoverableTranscript(transcript);
       const actions = [
         {
@@ -442,6 +545,8 @@ export const useAudioRecording = (toast, options = {}) => {
             title,
             description,
             duration: error?.code === "AUTH_EXPIRED" ? 8000 : undefined,
+            code: error?.code,
+            transcript: error?.transcript,
           });
         }
         if (getSettings().pauseMediaOnDictation) {
@@ -490,6 +595,7 @@ export const useAudioRecording = (toast, options = {}) => {
       },
       onTranscriptionComplete: async (result) => {
         if (result.success) {
+          dictationErrorGenerationRef.current += 1;
           dismissDictationError?.();
           const transcribedText = result.text?.trim();
 

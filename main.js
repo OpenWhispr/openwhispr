@@ -531,6 +531,9 @@ function initializeCoreManagers() {
   windowManager.selectionManager = selectionManager;
   windowManager.windowsKeyManager = windowsKeyManager;
   windowManager.linuxKeyManager = linuxKeyManager;
+  if (process.platform === "linux") {
+    windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
+  }
 
   // IPC handlers must be registered before window content loads
   ipcHandlers = new IPCHandlers({
@@ -1784,8 +1787,15 @@ async function startApp() {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"
         );
-        if (isLiveWindow(windowManager.mainWindow)) {
-          windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
+        // GNOME, KDE and Hyprland run this listener only as a spare release
+        // source in Hold; their own shortcut still presses and releases.
+        if (!hotkeyManager.reliesOnLinuxKeyListener()) return;
+        // Settings owns the recovery (toast, Hold disabled, back to Tap) and it
+        // renders in the control panel, not the pill this event used to reach.
+        for (const browserWindow of BrowserWindow.getAllWindows()) {
+          if (!browserWindow.isDestroyed()) {
+            browserWindow.webContents.send("linux-ptt-permission-denied");
+          }
         }
       });
     }

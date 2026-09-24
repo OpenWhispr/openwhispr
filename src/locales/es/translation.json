@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Los atajos con botones del ratón solo son compatibles con macOS por ahora.",
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" no se puede usar en este escritorio, cuyos atajos necesitan una tecla normal. Añade una tecla, como Control+Alt+Space.",
       "holdNeedsReleaseKey": "Mantener para hablar necesita una tecla cuya liberación macOS pueda detectar: Globo, una tecla derecha como Opción derecha o un atajo con modificador. Pulsar funciona con cualquier tecla.",
       "registrationFailed": "No se pudo registrar \"{{hotkey}}\". Puede estar en uso por otra aplicación.",
       "updateFailedCheckFormat": "No se pudo actualizar el atajo a \"{{hotkey}}\". Comprueba que el formato sea válido.",
@@ -940,6 +941,18 @@
         "unavailable": "OpenWhispr no pudo leer de forma segura el texto seleccionado. Revisa los permisos de accesibilidad o automatización.",
         "tooLarge": "La selección es demasiado grande. Selecciona 6.000 caracteres o menos.",
         "reasoningFailed": "La IA no pudo completar la edición. El texto original no se modificó."
+      },
+      "pastePermission": {
+        "title": "Permitir el pegado automático",
+        "description": "Activa OpenWhispr en Ajustes del Sistema → Privacidad y seguridad → Accesibilidad.",
+        "settingsFailed": "No se pudieron abrir los ajustes. Abre Ajustes del Sistema → Privacidad y seguridad → Accesibilidad y activa OpenWhispr.",
+        "manualPaste": "Copia tu texto abajo y pulsa {{shortcut}} para pegarlo.",
+        "openSettings": "Abrir ajustes",
+        "copyToClipboard": "Copiar al portapapeles",
+        "copyFailed": "Error al copiar"
+      },
+      "pasteFailed": {
+        "title": "No se pudo pegar automáticamente"
       }
     },
     "clipboard": {
@@ -2713,7 +2726,8 @@
     "errors": {
       "contextTooLarge": "Esto es demasiado largo para que {{model}} lo lea en este equipo. Necesita unos {{needed}} tokens de contexto, pero solo caben {{max}} en la memoria. Prueba con un modelo en la nube o ejecuta la acción sobre una selección más corta.",
       "contextTooLargeGeneric": "Esto es demasiado largo para que {{model}} lo lea en este equipo. Prueba con un modelo en la nube o ejecuta la acción sobre una selección más corta.",
-      "localServerUnavailable": "No se pudo iniciar {{model}} en este ordenador. Inténtalo de nuevo o cambia a un modelo en la nube."
+      "localServerUnavailable": "No se pudo iniciar {{model}} en este ordenador. Inténtalo de nuevo o cambia a un modelo en la nube.",
+      "localModelBusy": "El modelo local todavía está procesando otra solicitud. Espera a que termine y vuelve a intentarlo."
     }
   },
   "referral": {
@@ -3157,6 +3171,8 @@
       "runAction": "Ejecutar {{name}}",
       "selectAction": "Seleccionar acción",
       "done": "Listo",
+      "chunkProgress": "Parte {{step}} de {{total}}",
+      "emptyReply": "El modelo devolvió una respuesta vacía. Vuelve a intentarlo o elige otro modelo.",
       "builtin": {
         "generateNotes": {
           "name": "Generar notas",

@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" can't be used on this desktop, whose shortcuts need a regular key. Add a key, such as Control+Alt+Space.",
       "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
@@ -940,6 +941,18 @@
         "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
         "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
         "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."
+      },
+      "pastePermission": {
+        "title": "Allow automatic pasting",
+        "description": "Enable OpenWhispr in System Settings → Privacy & Security → Accessibility.",
+        "settingsFailed": "Couldn't open Settings. Open System Settings → Privacy & Security → Accessibility and enable OpenWhispr.",
+        "manualPaste": "Copy your text below, then press {{shortcut}} to paste it.",
+        "openSettings": "Open Settings",
+        "copyToClipboard": "Copy to clipboard",
+        "copyFailed": "Copy failed"
+      },
+      "pasteFailed": {
+        "title": "Couldn't paste automatically"
       }
     },
     "clipboard": {
@@ -2753,7 +2766,8 @@
     "errors": {
       "contextTooLarge": "This is too long for {{model}} to read on this computer. It needs about {{needed}} tokens of context, but only {{max}} fit in memory. Try a cloud model, or run the action on a shorter selection.",
       "contextTooLargeGeneric": "This is too long for {{model}} to read on this computer. Try a cloud model, or run the action on a shorter selection.",
-      "localServerUnavailable": "{{model}} couldn't be started on this computer. Try again, or switch to a cloud model."
+      "localServerUnavailable": "{{model}} couldn't be started on this computer. Try again, or switch to a cloud model.",
+      "localModelBusy": "The local model is still working on another request. Wait for it to finish, then try again."
     }
   },
   "sidebar": {
@@ -3446,6 +3460,8 @@
     },
     "actions": {
       "done": "Done",
+      "chunkProgress": "Part {{step}} of {{total}}",
+      "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
       "manage": "Manage Actions...",
       "manageTitle": "Custom Actions",
       "addAction": "New Action",

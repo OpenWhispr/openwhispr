@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import {
   Image,
   Keyboard,
   PlatformColor,
-  Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -12,47 +12,95 @@ import {
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SpaceGrotesk } from '@/lib/fonts';
-import { getStepProgress, useOnboardingStore } from '@/store/useOnboardingStore';
+import { OnboardingError } from '@/lib/onboardingErrors';
+import { useOnboardingPracticeMode } from '@/hooks/useOnboardingPracticeMode';
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useHandoffStore } from '@/store/useHandoffStore';
+import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-storage/src';
 
-const STEP_ID = 'dictation-email';
-
-const SAMPLE_EMAIL = `Hey Tim, excited to chat. Are you free next Friday at 3pm… actually, 4pm? Thanks, Chad`;
+const SAMPLE_EMAIL =
+  'Hey Tim, excited to chat. Are you free next Friday at 3pm… actually, 4pm? Thanks, Chad';
 
 const GMAIL_ICON = require('../../../../assets/onboarding/app-icons/gmail.png');
 const MAIL_ICON = require('../../../../assets/onboarding/app-icons/mail.png');
 const OUTLOOK_ICON = require('../../../../assets/onboarding/app-icons/outlook.png');
 
-export function DictationEmailStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+export function DictationEmailStep(): ReactElement {
+  const { goNext, progress } = useOnboardingStep('dictation-email');
+  const { localSelected } = useOnboardingPracticeMode();
+  const user = useAuthStore((state) => state.user);
+  const ensureSession = useAuthStore((state) => state.ensureAnonymousSession);
+  const isTranscribing = useHandoffStore((state) => state.isTranscribing);
+  const input = useRef<TextInput>(null);
+  const dismissOnInsert = useRef(false);
   const [value, setValue] = useState('');
-
-  // Auto-hide the keyboard the moment a dictation finishes — scoped to this step
-  // only, so the transcribed email and the Continue button are immediately visible.
-  // Everywhere else the keyboard stays up for continuous dictation. Dictation into
-  // this in-app field is "self-hosted", so useHandoffStore.isActive never flips;
-  // isTranscribing is the flag that toggles true→false as the transcript lands.
-  const isTranscribing = useHandoffStore((s) => s.isTranscribing);
-  const wasTranscribing = useRef(false);
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState<string | null>(null);
+  const liveAvailable = !localSelected && !!user;
+  const busy =
+    status === 'recording' || status === 'transcribing' || status === 'cleaning' || isTranscribing;
 
   useEffect(() => {
-    if (wasTranscribing.current && !isTranscribing) {
-      Keyboard.dismiss();
-    }
-    wasTranscribing.current = isTranscribing;
-  }, [isTranscribing]);
+    const subscription = addKeyboardStatusChangedListener((event) => {
+      if (!event.status) return;
+      setStatus(event.status);
+      if (event.status === 'ready') dismissOnInsert.current = true;
+      if (
+        event.status === 'error' ||
+        event.status === 'no_speech' ||
+        event.status === 'setup_required'
+      ) {
+        setError(
+          event.status === 'no_speech'
+            ? 'No speech detected. Try again.'
+            : event.error || 'Dictation could not finish. Try again.',
+        );
+        Keyboard.dismiss();
+      } else if (event.status === 'recording') {
+        // The keyboard settles back to idle after a failure, so only a new attempt clears it.
+        setError(null);
+      }
+    });
+    return () => subscription?.remove();
+  }, []);
+
+  const retry = useCallback(async (): Promise<void> => {
+    await ensureSession();
+    if (!useAuthStore.getState().user)
+      throw new OnboardingError('Still no connection. Check it and try again, or skip for now.');
+    setError(null);
+    setStatus('idle');
+    setValue('');
+    input.current?.focus();
+  }, [ensureSession]);
+
+  const note = localSelected
+    ? 'Practice uses Cloud. Skip it to keep Local.'
+    : !user
+      ? 'Cloud practice needs a connection. Try again or skip for now.'
+      : status === 'recording'
+        ? 'Listening…'
+        : busy
+          ? 'Transcribing…'
+          : value.trim()
+            ? 'Your email is ready'
+            : 'Tap the field, then the keyboard mic. Practice uses Cloud.';
 
   return (
     <OnboardingShell
-      progress={getStepProgress(STEP_ID)}
-      onSkip={goNext}
+      progress={progress}
+      onSkip={busy ? undefined : goNext}
       title="Try dictating an email"
       titleAccent="email"
       subtitle="Don't type — just talk naturally. OpenWhispr formats it for you."
       ctaLabel="Continue"
+      ctaDisabled={busy}
       onCta={goNext}
+      secondaryCtaLabel={!localSelected && (error || !user) ? 'Retry' : undefined}
+      onSecondaryCta={retry}
     >
-      <Pressable className="flex-1" onPress={Keyboard.dismiss}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* Compose-style card — a light email hint (To / Subject), not a real client */}
         <View className="overflow-hidden rounded-2xl border border-separator bg-secondarySystemGroupedBackground">
           <View className="flex-row items-center gap-3 border-b border-separator px-4 py-3">
@@ -73,19 +121,38 @@ export function DictationEmailStep() {
               Read this aloud
             </Text>
             <TextInput
+              ref={input}
+              accessibilityLabel="Your dictated email"
               value={value}
-              onChangeText={setValue}
+              onChangeText={(text) => {
+                setValue(text);
+                // Native readiness precedes the keyboard consuming its pending transcript, and the
+                // status stays ready afterwards, so dismiss once per dictation, not on every edit.
+                if (dismissOnInsert.current && text.trim()) {
+                  dismissOnInsert.current = false;
+                  Keyboard.dismiss();
+                }
+              }}
+              editable={liveAvailable}
+              autoFocus={liveAvailable}
               multiline
               placeholder={SAMPLE_EMAIL}
               placeholderTextColor="#9CA3AF"
               style={styles.emailInput}
               textAlignVertical="top"
               autoCorrect={false}
-              autoFocus
               scrollEnabled
             />
           </View>
         </View>
+
+        <Text
+          accessibilityRole={error ? 'alert' : undefined}
+          accessibilityLiveRegion="polite"
+          className={`mt-3 text-[13px] ${error ? 'text-systemRed' : 'text-secondaryLabel'}`}
+        >
+          {error ?? note}
+        </Text>
 
         {/* Reassurance — works anywhere */}
         <View className="mt-4 flex-row items-center justify-center">
@@ -94,7 +161,7 @@ export function DictationEmailStep() {
           <AppIcon source={OUTLOOK_ICON} size={27} overlap />
           <Text className="ml-2.5 text-[12px] text-tertiaryLabel">works in any email app</Text>
         </View>
-      </Pressable>
+      </ScrollView>
     </OnboardingShell>
   );
 }
@@ -107,7 +174,7 @@ function AppIcon({
   source: ImageSourcePropType;
   overlap?: boolean;
   size?: number;
-}) {
+}): ReactElement {
   return (
     <View
       className={`h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-systemBackground bg-white ${
