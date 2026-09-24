@@ -25,6 +25,9 @@ jest.mock('expo-crypto', () => ({
 }));
 
 const stored = new Map<string, string>();
+const appStorage = new Map<string, string>();
+const installMarker = 'openwhispr.provider-credentials.installed.v1';
+const clearAppStorage = jest.fn((): void => appStorage.clear());
 const getItem = jest.mocked(SecureStore.getItemAsync);
 const setItem = jest.mocked(SecureStore.setItemAsync);
 const deleteItem = jest.mocked(SecureStore.deleteItemAsync);
@@ -33,6 +36,21 @@ const openaiReference = 'provider.openai';
 beforeEach(() => {
   jest.clearAllMocks();
   stored.clear();
+  appStorage.clear();
+  // App storage (unlike the Keychain) is deleted with the app, so it marks this install.
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string): string | null => appStorage.get(key) ?? null,
+      setItem: (key: string, value: string): void => {
+        appStorage.set(key, value);
+      },
+      removeItem: (key: string): void => {
+        appStorage.delete(key);
+      },
+      clear: clearAppStorage,
+    },
+  });
   getItem.mockImplementation(async (key): Promise<string | null> => stored.get(key) ?? null);
   setItem.mockImplementation(async (key, value): Promise<void> => {
     stored.set(key, value);
@@ -187,14 +205,12 @@ it('blocks all references on a partial reset and retries failed physical deletio
 });
 
 it('auth token removal preserves provider keys but full app reset deletes them', async () => {
-  const clear = jest.fn();
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { clear } });
   await setProviderCredential(openaiReference, { apiKey: 'fixture' });
   await SecureStorageService.clearAuthToken();
   expect(await getProviderCredential(openaiReference)).toEqual({ apiKey: 'fixture' });
   await StorageService.clearAll();
   expect(await getProviderCredential(openaiReference)).toBeNull();
-  expect(clear).toHaveBeenCalledTimes(1);
+  expect(clearAppStorage).toHaveBeenCalledTimes(1);
 });
 
 it('does not reactivate an old secret when replacement fails after a removal failure', async () => {
@@ -245,12 +261,10 @@ it('binds local-network endpoint credentials to the port and strips supported AP
 });
 
 it('leaves app data available for retry when secure credential reset fails', async () => {
-  const clear = jest.fn();
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { clear } });
   await setProviderCredential(openaiReference, { apiKey: 'fixture' });
   deleteItem.mockRejectedValueOnce(new Error('native unavailable'));
   await expect(StorageService.clearAll()).rejects.toThrow('Unable to clear provider credentials');
-  expect(clear).not.toHaveBeenCalled();
+  expect(clearAppStorage).not.toHaveBeenCalled();
 });
 
 it('treats an unreadable registry as empty so save and reset still work', async () => {
@@ -279,4 +293,68 @@ it('reset deletes built-in provider keys even when the registry is corrupt', asy
     await SecureStore.getItemAsync('openwhispr.provider-credentials.v1.provider.openrouter'),
   ).toBeNull();
   expect([...stored.values()].join('')).not.toContain('fixture');
+});
+
+describe('after the app is reinstalled', () => {
+  function reload(): typeof import('../ProviderCredentials') {
+    let reloaded!: typeof import('../ProviderCredentials');
+    jest.isolateModules(() => {
+      reloaded =
+        jest.requireActual<typeof import('../ProviderCredentials')>('../ProviderCredentials');
+    });
+    return reloaded;
+  }
+
+  it('erases keys a previous install left in the Keychain before anything reads them', async () => {
+    await setProviderCredential(openaiReference, { apiKey: 'fixture-old-install' });
+    appStorage.clear();
+    const changes: (string | null)[] = [];
+    const fresh = reload();
+    const unsubscribe = fresh.subscribeProviderCredentialChanges((reference): void => {
+      changes.push(reference);
+    });
+    try {
+      expect(await fresh.getProviderCredential(openaiReference)).toBeNull();
+    } finally {
+      unsubscribe();
+    }
+    expect([...stored.values()].join('')).not.toContain('fixture-old-install');
+    expect(appStorage.get(installMarker)).toBeDefined();
+    expect(changes).toEqual([]);
+  });
+
+  it('runs the check at launch without any credential request', async () => {
+    await setProviderCredential(openaiReference, { apiKey: 'fixture-old-install' });
+    appStorage.clear();
+    await reload().eraseProviderCredentialsFromPreviousInstall();
+    expect(stored.size).toBe(0);
+  });
+
+  it('keeps keys across launches of the same install', async () => {
+    await setProviderCredential(openaiReference, { apiKey: 'fixture' });
+    const relaunched = reload();
+    await relaunched.eraseProviderCredentialsFromPreviousInstall();
+    expect(await relaunched.getProviderCredential(openaiReference)).toEqual({ apiKey: 'fixture' });
+  });
+
+  it('keeps a key saved after a full app data reset', async () => {
+    await StorageService.clearAll();
+    await setProviderCredential(openaiReference, { apiKey: 'fixture-after-reset' });
+    expect(await reload().getProviderCredential(openaiReference)).toEqual({
+      apiKey: 'fixture-after-reset',
+    });
+  });
+
+  it('retries the erase on the next request when a deletion fails', async () => {
+    await setProviderCredential(openaiReference, { apiKey: 'fixture-old-install' });
+    appStorage.clear();
+    const fresh = reload();
+    deleteItem.mockRejectedValueOnce(new Error('native unavailable'));
+    await expect(fresh.getProviderCredential(openaiReference)).rejects.toThrow(
+      'Unable to read provider credential',
+    );
+    expect(appStorage.get(installMarker)).toBeUndefined();
+    expect(await fresh.getProviderCredential(openaiReference)).toBeNull();
+    expect([...stored.values()].join('')).not.toContain('fixture-old-install');
+  });
 });

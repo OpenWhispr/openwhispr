@@ -1,8 +1,8 @@
-import type { InferencePolicy } from '@/lib/mobileProviders';
+import { resolveMobileInferenceRoute, type InferencePolicy } from '@/lib/mobileProviders';
 
 const mockGet = jest.fn();
 let mockAuthState: {
-  user: { id: string } | null;
+  user: { id: string; isAnonymous?: boolean } | null;
   isGuest: boolean;
   sessionCookie: string | null;
 };
@@ -17,6 +17,15 @@ jest.mock('@/lib/apiClient', () => ({
 }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: (): typeof mockAuthState => mockAuthState },
+}));
+const mockCredentialListeners = new Set<(reference: string | null) => void>();
+jest.mock('../ProviderCredentials', () => ({
+  subscribeProviderCredentialChanges: (listener: (reference: string | null) => void) => {
+    mockCredentialListeners.add(listener);
+    return (): void => {
+      mockCredentialListeners.delete(listener);
+    };
+  },
 }));
 
 function managedEnvelope(options: { allowed?: boolean; updatedAt?: string } = {}): unknown {
@@ -54,6 +63,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 beforeEach(() => {
   jest.resetModules();
+  mockCredentialListeners.clear();
   mockGet.mockReset();
   stored.clear();
   mockAuthState = { user: { id: 'account-a' }, isGuest: false, sessionCookie: 'fixture-session-a' };
@@ -222,4 +232,102 @@ it('sends one policy-awareness header through the real API client', async () => 
   await expect(getProviderPolicy()).resolves.toEqual(denied);
   const options = fetch.mock.calls.at(-1)?.[1] as RequestInit;
   expect(new Headers(options.headers).get('x-openwhispr-policy-version')).toBe('1');
+});
+
+describe('after signing out', () => {
+  const signedOut = { user: null, isGuest: false, sessionCookie: null };
+  const unmanaged = { data: { managed: false, policy: null, policyUpdatedAt: null } };
+  const openaiCleanup = {
+    scope: 'cleanup' as const,
+    selection: {
+      mode: 'providers' as const,
+      providerId: 'openai',
+      modelId: 'gpt-4.1-mini',
+      credentialRef: 'provider.openai',
+    },
+  };
+
+  it('keeps enforcing the last managed policy, so a blocked provider stays blocked', async () => {
+    mockGet.mockResolvedValueOnce(managedEnvelope());
+    await getProviderPolicy();
+    mockAuthState = signedOut;
+    const policy = await getProviderPolicy();
+    expect(policy).toEqual(denied);
+    expect(resolveMobileInferenceRoute({ ...openaiCleanup, policy })).toEqual({
+      ok: false,
+      code: 'POLICY_BLOCKED',
+    });
+    mockAuthState = { ...signedOut, isGuest: true };
+    await expect(getProviderPolicy()).resolves.toEqual(denied);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('remembers the policy across an app restart', async () => {
+    mockGet.mockResolvedValueOnce(managedEnvelope());
+    await getProviderPolicy();
+    jest.resetModules();
+    mockAuthState = signedOut;
+    const reloaded = jest.requireActual<typeof import('../ProviderPolicy')>('../ProviderPolicy');
+    await expect(reloaded.getProviderPolicy()).resolves.toEqual(denied);
+  });
+
+  it('stays unresolved when the member policy could not be read', async () => {
+    mockGet.mockRejectedValueOnce(
+      Object.assign(new Error('unresolved'), { code: 'POLICY_UNRESOLVABLE' }),
+    );
+    await getProviderPolicy();
+    mockAuthState = signedOut;
+    await expect(getProviderPolicy()).resolves.toEqual({ status: 'pending' });
+  });
+
+  it('is replaced by a different account that signs in', async () => {
+    mockGet.mockResolvedValueOnce(managedEnvelope());
+    await getProviderPolicy();
+    mockAuthState = { user: { id: 'account-b' }, isGuest: false, sessionCookie: 'fixture-b' };
+    mockGet.mockResolvedValueOnce(managedEnvelope({ allowed: true }));
+    await getProviderPolicy();
+    mockAuthState = signedOut;
+    await expect(getProviderPolicy()).resolves.toMatchObject({
+      status: 'managed',
+      llm: { allowedByokProviders: ['openai'] },
+    });
+    mockAuthState = { user: { id: 'account-c' }, isGuest: false, sessionCookie: 'fixture-c' };
+    mockGet.mockResolvedValueOnce(unmanaged);
+    await getProviderPolicy();
+    mockAuthState = signedOut;
+    await expect(getProviderPolicy()).resolves.toEqual({ status: 'unmanaged' });
+  });
+
+  it('is lifted when the same account leaves the organization', async () => {
+    mockGet.mockResolvedValueOnce(managedEnvelope());
+    await getProviderPolicy();
+    mockGet.mockResolvedValueOnce(unmanaged);
+    await getProviderPolicy();
+    mockAuthState = signedOut;
+    await expect(getProviderPolicy()).resolves.toEqual({ status: 'unmanaged' });
+  });
+
+  it('is not lifted by an automatic anonymous session', async () => {
+    mockGet.mockResolvedValueOnce(managedEnvelope());
+    await getProviderPolicy();
+    mockAuthState = {
+      user: { id: 'anonymous-1', isAnonymous: true },
+      isGuest: false,
+      sessionCookie: 'fixture-anonymous',
+    };
+    mockGet.mockResolvedValue(unmanaged);
+    await expect(getProviderPolicy()).resolves.toEqual(denied);
+    mockAuthState = signedOut;
+    await expect(getProviderPolicy()).resolves.toEqual(denied);
+  });
+
+  it('is cleared when every provider key is reset', async () => {
+    mockGet.mockResolvedValueOnce(managedEnvelope());
+    await getProviderPolicy();
+    mockCredentialListeners.forEach((listener) => listener('provider.openai'));
+    mockAuthState = signedOut;
+    await expect(getProviderPolicy()).resolves.toEqual(denied);
+    mockCredentialListeners.forEach((listener) => listener(null));
+    await expect(getProviderPolicy()).resolves.toEqual({ status: 'unmanaged' });
+  });
 });

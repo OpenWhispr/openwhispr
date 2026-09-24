@@ -115,6 +115,18 @@ export function providerDisplayName(providerId: string): string {
   );
 }
 
+function isAllowedByScopePolicy(policy: ScopePolicy, selection: InferenceSelection): boolean {
+  if (selection.mode !== 'providers') return policy.allowedModes.includes(selection.mode);
+  const providerAllowed =
+    policy.allowedModes.includes('providers') &&
+    policy.allowedByokProviders.includes(selection.providerId ?? '');
+  // Desktop runs a custom server as its "self-hosted" mode, which has no provider
+  // allowlist, or as the "custom" provider under "providers". Either admits it.
+  if (selection.providerId === 'custom')
+    return providerAllowed || policy.allowedModes.includes('self-hosted');
+  return providerAllowed;
+}
+
 export function resolveMobileInferenceRoute(input: {
   scope: InferenceScope;
   selection: InferenceSelection;
@@ -131,9 +143,7 @@ export function resolveMobileInferenceRoute(input: {
   if (policy.status === 'managed') {
     const scopedPolicy = isTranscriptionScope(scope) ? policy.transcription : policy.llm;
     if (
-      !scopedPolicy.allowedModes.includes(selection.mode) ||
-      (selection.mode === 'providers' &&
-        !scopedPolicy.allowedByokProviders.includes(selection.providerId ?? '')) ||
+      !isAllowedByScopePolicy(scopedPolicy, selection) ||
       (scope === 'agent' && policy.agentEnabled === false)
     )
       return { ok: false, code: 'POLICY_BLOCKED' };

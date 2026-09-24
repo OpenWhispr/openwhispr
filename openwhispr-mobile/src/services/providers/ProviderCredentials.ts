@@ -1,3 +1,4 @@
+import 'expo-sqlite/localStorage/install';
 import * as SecureStore from 'expo-secure-store';
 import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
 import { isSecureHttpEndpoint, normalizeBaseUrl } from '@/lib/providerEndpoints';
@@ -18,6 +19,7 @@ type CredentialChangeListener = (reference: string | null) => void;
 
 const REGISTRY_KEY = 'openwhispr.provider-credentials.registry.v1';
 const CREDENTIAL_PREFIX = 'openwhispr.provider-credentials.v1.';
+const INSTALL_MARKER_KEY = 'openwhispr.provider-credentials.installed.v1';
 const SECURE_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
   requireAuthentication: false,
@@ -40,11 +42,23 @@ function validateReference(reference: string): void {
   }
 }
 
+// The Keychain outlives an uninstall but app storage does not, so a missing
+// marker means any saved keys belong to a previous install (or a full app data
+// reset). They are erased before any credential operation can read one.
+async function eraseCredentialsFromPreviousInstall(): Promise<void> {
+  if (localStorage.getItem(INSTALL_MARKER_KEY) !== null) return;
+  await eraseAllCredentials();
+  localStorage.setItem(INSTALL_MARKER_KEY, '1');
+}
+
 function serialize<T>(operation: () => Promise<T>, errorMessage: string): Promise<T> {
-  const result = pendingOperation.then(operation).catch(() => {
-    // Native storage errors may include their arguments; do not forward them to telemetry/UI.
-    throw new Error(errorMessage);
-  });
+  const result = pendingOperation
+    .then(eraseCredentialsFromPreviousInstall)
+    .then(operation)
+    .catch(() => {
+      // Native storage errors may include their arguments; do not forward them to telemetry/UI.
+      throw new Error(errorMessage);
+    });
   pendingOperation = result.catch(() => undefined);
   return result;
 }
@@ -181,21 +195,31 @@ export async function removeProviderCredential(reference: string): Promise<void>
   }, 'Unable to remove provider credential');
 }
 
+async function eraseAllCredentials(onRemoved?: () => void): Promise<void> {
+  const registry = await readRegistry();
+  const references = Object.keys(registry);
+  for (const reference of references) registry[reference] = 'removed';
+  if (references.length) await writeRegistry(registry);
+  onRemoved?.();
+  const targets = [...new Set([...references, ...BUILT_IN_REFERENCES])];
+  const results = await Promise.allSettled(
+    targets.map((reference) =>
+      SecureStore.deleteItemAsync(`${CREDENTIAL_PREFIX}${reference}`, SECURE_OPTIONS),
+    ),
+  );
+  // Keep tombstones until every deletion succeeds so reset can be retried after an app restart.
+  if (results.some((result) => result.status === 'rejected')) throw new Error('Deletion failed');
+  await SecureStore.deleteItemAsync(REGISTRY_KEY, SECURE_OPTIONS);
+}
+
 export async function clearProviderCredentials(): Promise<void> {
-  await serialize(async (): Promise<void> => {
-    const registry = await readRegistry();
-    const references = Object.keys(registry);
-    for (const reference of references) registry[reference] = 'removed';
-    if (references.length) await writeRegistry(registry);
-    notifyCredentialChange(null);
-    const targets = [...new Set([...references, ...BUILT_IN_REFERENCES])];
-    const results = await Promise.allSettled(
-      targets.map((reference) =>
-        SecureStore.deleteItemAsync(`${CREDENTIAL_PREFIX}${reference}`, SECURE_OPTIONS),
-      ),
-    );
-    // Keep tombstones until every deletion succeeds so reset can be retried after an app restart.
-    if (results.some((result) => result.status === 'rejected')) throw new Error('Deletion failed');
-    await SecureStore.deleteItemAsync(REGISTRY_KEY, SECURE_OPTIONS);
-  }, 'Unable to clear provider credentials');
+  await serialize(
+    () => eraseAllCredentials(() => notifyCredentialChange(null)),
+    'Unable to clear provider credentials',
+  );
+}
+
+// Run at launch so a previous install's keys are erased even if nothing reads them.
+export async function eraseProviderCredentialsFromPreviousInstall(): Promise<void> {
+  await serialize(async (): Promise<void> => undefined, 'Unable to clear provider credentials');
 }

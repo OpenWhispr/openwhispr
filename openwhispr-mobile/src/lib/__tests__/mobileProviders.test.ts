@@ -147,6 +147,47 @@ it('applies managed allowlists separately to speech and text', () => {
   ).toBe(true);
 });
 
+// Desktop enforces a custom server either as its own "self-hosted" mode, which
+// needs no provider allowlist, or as the "custom" provider under "providers".
+describe.each(['dictation', 'cleanup'] as const)('managed custom server policy (%s)', (scope) => {
+  const customSelection = {
+    mode: 'providers' as const,
+    providerId: 'custom',
+    modelId: 'my-model',
+    endpoint: 'http://192.168.1.10:8000/v1',
+  };
+  const managed = (allowedModes: string[], allowedByokProviders: string[]) => {
+    const scopePolicy = { allowedModes, allowedByokProviders };
+    return { status: 'managed' as const, transcription: scopePolicy, llm: scopePolicy };
+  };
+
+  it.each([
+    ['self-hosted only', managed(['self-hosted'], []), true],
+    ['providers with custom allowlisted', managed(['providers'], ['custom']), true],
+    ['providers without custom allowlisted', managed(['providers'], ['openai']), false],
+    ['custom allowlisted without either mode', managed(['local'], ['custom']), false],
+  ])('an org that allows %s', (_label, policy, allowed) => {
+    expect(resolveMobileInferenceRoute({ scope, selection: customSelection, policy }).ok).toBe(
+      allowed,
+    );
+  });
+
+  it('self-hosted mode does not open built-in providers', () => {
+    expect(
+      resolveMobileInferenceRoute({
+        scope,
+        selection: {
+          mode: 'providers',
+          providerId: 'openai',
+          modelId: scope === 'dictation' ? 'whisper-1' : 'gpt-4.1-mini',
+          credentialRef: 'provider.openai',
+        },
+        policy: managed(['self-hosted'], ['openai']),
+      }),
+    ).toEqual({ ok: false, code: 'POLICY_BLOCKED' });
+  });
+});
+
 it('keeps a built-in provider on its own endpoint', () => {
   expect(
     resolveMobileInferenceRoute({

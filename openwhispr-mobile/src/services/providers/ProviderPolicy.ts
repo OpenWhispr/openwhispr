@@ -2,6 +2,7 @@ import 'expo-sqlite/localStorage/install';
 import type { InferencePolicy, ScopePolicy } from '@/lib/mobileProviders';
 import { api, BASE_URL } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
+import { subscribeProviderCredentialChanges } from './ProviderCredentials';
 
 interface PolicyShape {
   version: 1;
@@ -92,6 +93,25 @@ function cacheKey(accountId: string): string {
   return `openwhispr.provider-policy.v1.${encodeURIComponent(getApiOrigin())}.${encodeURIComponent(accountId)}`;
 }
 
+// Provider keys and workflow settings survive sign-out, so the last managed
+// account's policy keeps applying until another account replaces it or every
+// provider key is reset.
+function signedOutAccountKey(): string {
+  return `openwhispr.provider-policy.v1.${encodeURIComponent(getApiOrigin())}.signed-out-account`;
+}
+
+function forgetSignedOutAccount(): void {
+  try {
+    localStorage.removeItem(signedOutAccountKey());
+  } catch {
+    // Nothing more to do: a failed removal keeps the stricter policy.
+  }
+}
+
+subscribeProviderCredentialChanges((reference): void => {
+  if (reference === null) forgetSignedOutAccount();
+});
+
 function readCache(accountId: string): PolicyCache {
   const existing = snapshots.get(accountId);
   if (existing) return existing;
@@ -118,7 +138,18 @@ function readCache(accountId: string): PolicyCache {
   return { data: null, requiresManagedPolicy: false };
 }
 
-function writeCache(accountId: string, cached: PolicyCache): void {
+function writeCache(identity: PolicyIdentity, cached: PolicyCache): void {
+  const { accountId } = identity;
+  // An automatic anonymous session must never lift a restriction.
+  if (!identity.user?.isAnonymous) {
+    try {
+      if (cached.data?.managed || cached.requiresManagedPolicy)
+        localStorage.setItem(signedOutAccountKey(), accountId);
+      else localStorage.removeItem(signedOutAccountKey());
+    } catch {
+      // Unwritable storage leaves the previous signed-out policy in place.
+    }
+  }
   snapshots.set(accountId, cached);
   try {
     localStorage.setItem(
@@ -163,9 +194,19 @@ function fallbackPolicy(accountId: string): InferencePolicy {
   return toInferencePolicy(cached.data);
 }
 
-function markManagedPolicyRequired(accountId: string): void {
-  const cached = readCache(accountId);
-  if (!cached.data?.managed) writeCache(accountId, { ...cached, requiresManagedPolicy: true });
+function markManagedPolicyRequired(identity: PolicyIdentity): void {
+  const cached = readCache(identity.accountId);
+  if (!cached.data?.managed) writeCache(identity, { ...cached, requiresManagedPolicy: true });
+}
+
+function signedOutPolicy(): InferencePolicy | null {
+  let accountId: string | null;
+  try {
+    accountId = localStorage.getItem(signedOutAccountKey());
+  } catch {
+    return { status: 'pending' };
+  }
+  return accountId ? fallbackPolicy(accountId) : null;
 }
 
 async function fetchPolicy(identity: PolicyIdentity): Promise<InferencePolicy> {
@@ -180,8 +221,7 @@ async function fetchPolicy(identity: PolicyIdentity): Promise<InferencePolicy> {
     const rawData = isRecord(response) ? response.data : null;
     const data = parsePolicyData(rawData);
     if (!data) {
-      if (isRecord(rawData) && rawData.managed === true)
-        markManagedPolicyRequired(identity.accountId);
+      if (isRecord(rawData) && rawData.managed === true) markManagedPolicyRequired(identity);
       return fallbackPolicy(identity.accountId);
     }
     const current = readCache(identity.accountId).data;
@@ -196,12 +236,12 @@ async function fetchPolicy(identity: PolicyIdentity): Promise<InferencePolicy> {
     ) {
       return toInferencePolicy(current);
     }
-    writeCache(identity.accountId, { data, requiresManagedPolicy: false });
+    writeCache(identity, { data, requiresManagedPolicy: false });
     return toInferencePolicy(data);
   } catch (error: unknown) {
     if (!identityIsCurrent(identity)) return { status: 'pending' };
     if (isRecord(error) && error.code === 'POLICY_UNRESOLVABLE')
-      markManagedPolicyRequired(identity.accountId);
+      markManagedPolicyRequired(identity);
     return fallbackPolicy(identity.accountId);
   } finally {
     clearTimeout(timeout);
@@ -210,7 +250,11 @@ async function fetchPolicy(identity: PolicyIdentity): Promise<InferencePolicy> {
 
 export async function getProviderPolicy(): Promise<InferencePolicy> {
   const current = useAuthStore.getState();
-  if (current.isGuest || !current.user) return { status: 'unmanaged' };
+  if (current.isGuest || !current.user) return signedOutPolicy() ?? { status: 'unmanaged' };
+  if (current.user.isAnonymous) {
+    const remembered = signedOutPolicy();
+    if (remembered) return remembered;
+  }
   const identity: PolicyIdentity = {
     accountId: current.user.id,
     user: current.user,
