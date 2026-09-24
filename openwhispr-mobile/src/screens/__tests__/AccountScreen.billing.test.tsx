@@ -1,3 +1,7 @@
+jest.mock('@/store/useAffiliateOfferStore', () => ({
+  presentAffiliateOffer: jest.fn().mockResolvedValue(false),
+  closeAffiliateOffer: jest.fn(),
+}));
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
@@ -23,6 +27,11 @@ const mockAuthState: {
   signOut: jest.fn(),
   deleteAccount: jest.fn(),
 };
+const mockPrepareAffiliate = jest.fn().mockResolvedValue(true);
+jest.mock('@/store/useAffiliateStore', () => ({
+  useAffiliateStore: { getState: () => ({ prepare: mockPrepareAffiliate }) },
+}));
+jest.mock('@/components/onboarding/CreatorLinkField', () => ({ CreatorLinkField: () => null }));
 const mockRegisterSuperwallGate = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockCreateStripeBillingPortalSession = jest.fn();
@@ -170,7 +179,17 @@ function getRegisteredGateOptions(): RegisteredGateOptions {
 }
 
 describe('AccountScreen billing management', () => {
+  it('checks a creator link before opening an unsubscribed billing purchase', async () => {
+    mockUsageStoreState.usage = mockUnsubscribedUsage;
+    mockPrepareAffiliate.mockResolvedValue(false);
+    const { getByText } = render(<AccountScreen />);
+    fireEvent.press(getByText('Plans & Billing'));
+    await waitFor(() => expect(mockPrepareAffiliate).toHaveBeenCalled());
+    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
+    mockPrepareAffiliate.mockResolvedValue(true);
     jest.clearAllMocks();
     mockAuthState.user = mockUser;
     mockAuthState.sessionCookie = 'session-cookie';

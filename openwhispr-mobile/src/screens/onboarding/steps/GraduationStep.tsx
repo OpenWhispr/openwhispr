@@ -1,3 +1,6 @@
+import { useAffiliateStore } from '@/store/useAffiliateStore';
+import { CreatorLinkField } from '@/components/onboarding/CreatorLinkField';
+import { KeyboardAvoidingView } from 'react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
@@ -142,6 +145,9 @@ const TARGETS: AppTarget[] = [
 
 export function GraduationStep() {
   const finish = useOnboardingStore((s) => s.finish);
+  const goNext = useOnboardingStore((s) => s.goNext);
+  const affiliateSequence = useOnboardingStore((s) => s.affiliateSequence);
+  const checking = useAffiliateStore((s) => s.checking);
   const completing = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -195,6 +201,10 @@ export function GraduationStep() {
       setBusy(true);
       setError(null);
       try {
+        if (affiliateSequence) {
+          if (await useAffiliateStore.getState().prepare()) await goNext('graduation');
+          return;
+        }
         await finish();
         if (url) await Linking.openURL(url);
       } catch (cause) {
@@ -204,41 +214,54 @@ export function GraduationStep() {
         setBusy(false);
       }
     },
-    [finish],
+    [finish, goNext, affiliateSequence],
   );
 
   return (
-    <OnboardingShell
-      title="Start speaking instead of typing."
-      titleAccent="speaking"
-      subtitle="Try OpenWhispr anywhere — tap and hold the globe key in any app to switch keyboards."
-      ctaLabel="Start using OpenWhispr"
-      onCta={() => complete()}
-      ctaLoading={busy}
+    <KeyboardAvoidingView
+      className="flex-1"
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {error ? (
-        <Text accessibilityRole="alert" className="mb-3 text-systemRed">
-          {error}
-        </Text>
-      ) : null}
-      <ScrollView
-        contentContainerStyle={{
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          gap: 12,
-          paddingBottom: 16,
-        }}
+      <OnboardingShell
+        title="Start speaking instead of typing."
+        titleAccent="speaking"
+        subtitle="Try OpenWhispr anywhere — tap and hold the globe key in any app to switch keyboards."
+        ctaLabel="Start using OpenWhispr"
+        onCta={() => complete()}
+        ctaLoading={busy || checking}
+        ctaDisabled={busy || checking}
+        beforeCta={
+          affiliateSequence ? <CreatorLinkField onSubmit={() => void complete()} /> : undefined
+        }
       >
-        {visibleTargets.map((target) => (
-          <TargetCard
-            key={target.key}
-            target={target}
-            disabled={busy}
-            onPress={() => void complete(target.url)}
-          />
-        ))}
-      </ScrollView>
-    </OnboardingShell>
+        {error ? (
+          <Text accessibilityRole="alert" className="mb-3 text-systemRed">
+            {error}
+          </Text>
+        ) : null}
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 12,
+            paddingBottom: 16,
+          }}
+        >
+          {visibleTargets.map((target) => (
+            <TargetCard
+              key={target.key}
+              target={target}
+              disabled={busy}
+              onPress={() => {
+                if (affiliateSequence && target.url) Linking.openURL(target.url).catch(() => {});
+                else void complete(target.url);
+              }}
+            />
+          ))}
+        </ScrollView>
+      </OnboardingShell>
+    </KeyboardAvoidingView>
   );
 }
 

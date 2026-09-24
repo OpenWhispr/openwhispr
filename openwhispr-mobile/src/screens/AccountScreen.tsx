@@ -1,3 +1,4 @@
+import { presentAffiliateOffer } from '@/store/useAffiliateOfferStore';
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Alert, Platform, View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
@@ -24,6 +25,8 @@ import { safeHaptics } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
 import { getAccountDisplay } from '@/lib/accountDisplay';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
+import { useAffiliateStore } from '@/store/useAffiliateStore';
+import { CreatorLinkField } from '@/components/onboarding/CreatorLinkField';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 
 const MUTED_ICON_BG = iosColor('systemGray2');
@@ -154,6 +157,9 @@ export default function AccountScreen() {
     }
 
     const managementUsage = currentUsage;
+    if (!currentUsage?.isSubscribed && !(await useAffiliateStore.getState().prepare())) return;
+
+    if (!currentUsage?.isSubscribed && (await presentAffiliateOffer())) return;
 
     await registerSuperwallGate({
       placement: SUPERWALL_PLACEMENTS.accountBillingOpen,
@@ -279,6 +285,15 @@ export default function AccountScreen() {
         ) : null}
 
         <SettingsSection title="Subscription">
+          {user && usage && !usage.isSubscribed ? (
+            <View className="px-4">
+              <CreatorLinkField
+                onSubmit={() => {
+                  handleBillingPress().catch(() => {});
+                }}
+              />
+            </View>
+          ) : null}
           <SettingsRow
             iconStyle="line"
             icon="creditcard"

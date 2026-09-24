@@ -29,6 +29,7 @@ interface OnboardingShellProps {
   onSecondaryCta?: () => void | Promise<unknown>;
   secondaryCtaVariant?: 'link' | 'card';
   children?: ReactNode;
+  beforeCta?: ReactNode;
 }
 
 type OnboardingAction = 'primary' | 'secondary' | 'back' | 'skip';
@@ -51,6 +52,7 @@ export function OnboardingShell({
   onSecondaryCta,
   secondaryCtaVariant = 'link',
   children,
+  beforeCta,
 }: OnboardingShellProps): ReactElement {
   const inFlight = useRef(false);
   const failedAction = useRef<OnboardingAction | null>(null);
@@ -149,6 +151,7 @@ export function OnboardingShell({
         </View>
 
         <View className="px-6 pb-4">
+          {beforeCta}
           {error ? (
             <View className="mb-3 flex-row items-center gap-3">
               <Text accessibilityRole="alert" className="flex-1 text-[14px] text-systemRed">

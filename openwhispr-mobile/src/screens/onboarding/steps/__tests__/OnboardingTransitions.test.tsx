@@ -1,3 +1,23 @@
+let mockAffiliateSequence = false;
+const mockPrepare = jest.fn();
+const mockAffiliateState = {
+  checking: false,
+  link: '',
+  saved: false,
+  error: null,
+  edit: jest.fn(),
+  prepare: mockPrepare,
+};
+jest.mock('@/store/useAffiliateStore', () => ({
+  useAffiliateStore: Object.assign(
+    (select?: (state: typeof mockAffiliateState) => unknown) =>
+      select ? select(mockAffiliateState) : mockAffiliateState,
+    { getState: () => mockAffiliateState },
+  ),
+}));
+jest.mock('@/lib/affiliateLink', () => ({
+  getAffiliateClientConfig: () => ({ domain: 'sandbox.dub.link', publishableKey: 'dub_pk_TEST' }),
+}));
 import type React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import {
@@ -86,6 +106,7 @@ jest.mock('@/store/useOnboardingStore', () => ({
     selector({
       goNext: mockNext,
       finish: mockFinish,
+      affiliateSequence: mockAffiliateSequence,
       setPermissionGranted: mockPermission,
       setKeyboardInstalled: mockKeyboardInstalled,
     }),
@@ -99,6 +120,8 @@ jest.mock('@/lib/notifications', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAffiliateSequence = false;
+  mockPrepare.mockResolvedValue(true);
   mockNext.mockResolvedValue(undefined);
   mockFinish.mockResolvedValue(undefined);
   mockPermission.mockResolvedValue(undefined);
@@ -270,4 +293,22 @@ it('brings the keyboard back after the help sheet has closed', async () => {
 
   act(() => screen.UNSAFE_getByType(Modal).props.onDismiss());
   expect(focus).toHaveBeenCalledTimes(1);
+});
+
+it('checks the creator on the graduation CTA before advancing to payment', async () => {
+  mockAffiliateSequence = true;
+  const screen = render(<GraduationStep />);
+  fireEvent.press(screen.getByText('Have a creator link?'));
+  expect(screen.getByLabelText('Creator link (optional)')).toBeTruthy();
+  mockPrepare.mockResolvedValueOnce(false);
+  await act(async () => {
+    fireEvent.press(screen.getByText('Start using OpenWhispr'));
+  });
+  expect(mockNext).not.toHaveBeenCalled();
+  expect(mockFinish).not.toHaveBeenCalled();
+  await act(async () => {
+    fireEvent.press(screen.getByText('Start using OpenWhispr'));
+  });
+  expect(mockNext).toHaveBeenCalledWith('graduation');
+  expect(mockFinish).not.toHaveBeenCalled();
 });

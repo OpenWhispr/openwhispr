@@ -26,6 +26,13 @@ export async function createStripeBillingPortalSession(): Promise<string> {
   return response.url;
 }
 
-export async function reconcileMobileBilling(platform: 'ios' | 'android'): Promise<UsageInfo> {
-  return api.post<UsageInfo>('/api/billing/reconcile', { platform });
+export async function reconcileMobileBilling(
+  platform: 'ios' | 'android',
+  sessionCookie?: string,
+): Promise<UsageInfo> {
+  return api.post<UsageInfo>(
+    '/api/billing/reconcile',
+    { platform },
+    sessionCookie ? { authenticated: false, headers: { Cookie: sessionCookie } } : undefined,
+  );
 }

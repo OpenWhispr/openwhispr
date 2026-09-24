@@ -8,6 +8,7 @@ import {
 import { logTutorialCompletion } from '@/lib/appsflyer';
 import { useConfigStore } from './useConfigStore';
 import type { ProcessingMode } from '@/types';
+import { getAffiliateClientConfig } from '@/lib/affiliateLink';
 
 export type OnboardingStepId =
   | 'get-started'
@@ -65,9 +66,26 @@ const BACK_DESTINATIONS: Partial<Record<OnboardingStepId, OnboardingStepId>> = {
   'private-download': 'language',
 };
 
-export function getOnboardingRoute(mode: ProcessingMode | null): OnboardingStepId[] {
-  return STEP_ORDER.filter((step) =>
-    step === 'private-download' ? mode === 'private' : step !== 'paywall',
+export function getOnboardingRoute(
+  mode: ProcessingMode | null,
+  affiliateSequence = false,
+): OnboardingStepId[] {
+  const order = affiliateSequence
+    ? ([
+        ...STEP_ORDER.filter(
+          (step) =>
+            !['graduation', 'paywall', 'create-account', 'tracking-permission'].includes(step),
+        ),
+        'graduation',
+        'paywall',
+        'create-account',
+        'tracking-permission',
+      ] as OnboardingStepId[])
+    : STEP_ORDER;
+  return order.filter((step) =>
+    step === 'private-download'
+      ? mode === 'private'
+      : step !== 'paywall' || (affiliateSequence && mode === 'cloud'),
   );
 }
 
@@ -129,6 +147,7 @@ interface OnboardingStore {
   paywallHandled: boolean;
   paywallNextStep: PaywallNextStep;
   tutorialCompleted: boolean;
+  affiliateSequence: boolean;
   keyboardInstalled: boolean;
   trackingAuthorizationRequestAttempted: boolean;
   permissionsGranted: { microphone: boolean; notifications: boolean };
@@ -155,6 +174,7 @@ function snapshot(state: OnboardingStore): OnboardingProgress {
     paywallHandled: state.paywallHandled,
     paywallNextStep: state.paywallNextStep,
     tutorialCompleted: state.tutorialCompleted,
+    affiliateSequence: state.affiliateSequence,
     keyboardInstalled: state.keyboardInstalled,
     permissionsGranted: state.permissionsGranted,
   };
@@ -186,6 +206,7 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
     paywallHandled: false,
     paywallNextStep: 'language',
     tutorialCompleted: false,
+    affiliateSequence: false,
     keyboardInstalled: false,
     trackingAuthorizationRequestAttempted: false,
     permissionsGranted: { microphone: false, notifications: false },
@@ -216,6 +237,11 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
           ? progress.paywallNextStep
           : 'language',
         tutorialCompleted: progress.tutorialCompleted === true,
+        // Pin the route once setup starts; enabling offers in an update must not
+        // repeat an earlier paywall or move signup for an existing installation.
+        affiliateSequence:
+          progress.affiliateSequence ??
+          (step === FIRST_ONBOARDING_STEP && Boolean(getAffiliateClientConfig())),
         keyboardInstalled: progress.keyboardInstalled,
         trackingAuthorizationRequestAttempted,
         permissionsGranted: progress.permissionsGranted,
@@ -237,15 +263,20 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
     goNext: async (from) => {
       const state = get();
       if (state.currentStep !== from || state.transitioning) return;
-      const route = getOnboardingRoute(state.selectedMode);
+      if (from === 'tracking-permission' && state.affiliateSequence) {
+        await get().finish();
+        return;
+      }
+      const route = getOnboardingRoute(state.selectedMode, state.affiliateSequence);
       const next = from === 'paywall' ? state.paywallNextStep : route[route.indexOf(from) + 1];
-      if (!next || from === 'graduation') return;
+      if (!next || (from === 'graduation' && !state.affiliateSequence)) return;
       // Legacy installs can resume past the tone preview, so leaving it or any later step counts.
       const completesTutorial =
         !state.tutorialCompleted && STEP_ORDER.indexOf(from) >= STEP_ORDER.indexOf('tone');
       await transition(from, {
         currentStep: next,
         paywallHandled: state.paywallHandled || from === 'paywall',
+        paywallNextStep: state.affiliateSequence ? 'create-account' : state.paywallNextStep,
         tutorialCompleted: state.tutorialCompleted || completesTutorial,
       });
       if (completesTutorial) {
@@ -266,7 +297,8 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
       await transition(from, {
         selectedMode: mode,
         paywallNextStep: next,
-        currentStep: mode === 'cloud' && !get().paywallHandled ? 'paywall' : next,
+        currentStep:
+          mode === 'cloud' && !get().paywallHandled && !get().affiliateSequence ? 'paywall' : next,
       });
     },
 
@@ -283,7 +315,8 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
       await OnboardingService.setProgress(snapshot(get()));
     },
     finish: () => {
-      if (get().finished || get().currentStep !== 'graduation') return Promise.resolve();
+      const finalStep = get().affiliateSequence ? 'tracking-permission' : 'graduation';
+      if (get().finished || get().currentStep !== finalStep) return Promise.resolve();
       if (finishInFlight) return finishInFlight;
       finishInFlight = (async (): Promise<void> => {
         try {
@@ -308,6 +341,7 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
         paywallHandled: false,
         paywallNextStep: 'language',
         tutorialCompleted: false,
+        affiliateSequence: Boolean(getAffiliateClientConfig()),
         keyboardInstalled: false,
         trackingAuthorizationRequestAttempted: attempted,
         permissionsGranted: { microphone: false, notifications: false },

@@ -29,6 +29,11 @@ const mockAuthState: {
   signOut: jest.fn(),
   deleteAccount: jest.fn(),
 };
+const mockPrepareAffiliate = jest.fn().mockResolvedValue(true);
+jest.mock('@/store/useAffiliateStore', () => ({
+  useAffiliateStore: { getState: () => ({ prepare: mockPrepareAffiliate }) },
+}));
+jest.mock('@/components/onboarding/CreatorLinkField', () => ({ CreatorLinkField: () => null }));
 const mockRegisterSuperwallGate = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockCreateStripeBillingPortalSession = jest.fn();
@@ -180,6 +185,7 @@ const anonymousUser = {
 // the API. What it needs is a way to create the account.
 describe('AccountScreen with an anonymous session', () => {
   beforeEach(() => {
+    mockPrepareAffiliate.mockResolvedValue(true);
     jest.clearAllMocks();
     mockAuthState.user = anonymousUser;
     mockAuthState.sessionCookie = 'session-cookie';

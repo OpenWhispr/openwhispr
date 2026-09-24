@@ -1,3 +1,8 @@
+import { presentAffiliateOffer } from '@/store/useAffiliateOfferStore';
+jest.mock('@/store/useAffiliateOfferStore', () => ({
+  presentAffiliateOffer: jest.fn().mockResolvedValue(false),
+  closeAffiliateOffer: jest.fn(),
+}));
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
@@ -209,4 +214,11 @@ it('allows retrying continuation after a progress save fails', async () => {
   fireEvent.press(screen.getByText('Continue'));
   await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(2));
   expect(mockRegister).toHaveBeenCalledTimes(1);
+});
+
+it('continues after an affiliate offer dismissal without showing a second paywall', async () => {
+  jest.mocked(presentAffiliateOffer).mockResolvedValueOnce(true);
+  render(<PaywallStep />);
+  await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(1));
+  expect(mockRegister).not.toHaveBeenCalled();
 });

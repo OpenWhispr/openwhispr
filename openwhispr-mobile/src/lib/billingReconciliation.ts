@@ -1,11 +1,15 @@
 import { Platform } from 'react-native';
 import type { UsageInfo } from '@/data/remote/usageApi';
-import { useUsageStore } from '@/store/useUsageStore';
+import {
+  getBillingIdentity,
+  isBillingIdentityCurrent,
+  type BillingIdentity,
+} from './billingIdentity';
 
-let inFlight: Promise<UsageInfo> | null = null;
+let inFlight: { identity: BillingIdentity; promise: Promise<UsageInfo> } | null = null;
 
 export function reconcileStoreBilling(): Promise<UsageInfo> {
-  if (inFlight) return inFlight;
+  if (inFlight && isBillingIdentityCurrent(inFlight.identity)) return inFlight.promise;
 
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
     return Promise.reject(
@@ -14,29 +18,34 @@ export function reconcileStoreBilling(): Promise<UsageInfo> {
   }
 
   const platform = Platform.OS;
-  const billingUserId = useUsageStore.getState().usage?.billingUserId;
-  if (!billingUserId) {
+  const identity = getBillingIdentity();
+  if (!identity) {
     return Promise.reject(new Error('Billing identity is unavailable'));
   }
 
-  inFlight = performReconciliation(billingUserId, platform).finally(() => {
-    inFlight = null;
+  const promise = performReconciliation(identity, platform).finally(() => {
+    if (inFlight?.promise === promise) inFlight = null;
   });
-  return inFlight;
+  inFlight = { identity, promise };
+  return promise;
 }
 
 async function performReconciliation(
-  billingUserId: string,
+  identity: BillingIdentity,
   platform: 'ios' | 'android',
 ): Promise<UsageInfo> {
   // Load the native billing path only when reconciliation actually runs. This
   // keeps screens that merely import a usage gate independent of native SDKs.
-  const [{ reconcileMobileBilling }, { identifyRevenueCatUser, syncRevenueCatPurchases }] =
-    await Promise.all([import('@/data/remote/billingApi'), import('@/lib/revenuecat')]);
+  const { reconcileMobileBilling } =
+    require('@/data/remote/billingApi') as typeof import('@/data/remote/billingApi');
+  const { reconcileRevenueCatPurchases } =
+    require('@/lib/revenuecat') as typeof import('@/lib/revenuecat');
 
-  const identified = await identifyRevenueCatUser(billingUserId);
-  if (!identified) throw new Error('RevenueCat identity is unavailable');
-  const synced = await syncRevenueCatPurchases();
+  const current = () => isBillingIdentityCurrent(identity);
+  const synced = await reconcileRevenueCatPurchases(identity.billingUserId, current);
   if (!synced) throw new Error('RevenueCat purchase sync is unavailable');
-  return reconcileMobileBilling(platform);
+  if (!current()) throw new Error('Billing account changed');
+  const usage = await reconcileMobileBilling(platform, identity.sessionCookie);
+  if (!current()) throw new Error('Billing account changed');
+  return usage;
 }

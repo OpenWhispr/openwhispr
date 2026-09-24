@@ -1,20 +1,15 @@
+import { presentAffiliateOffer, closeAffiliateOffer } from '@/store/useAffiliateOfferStore';
+import { PaywallHighlights } from '@/components/onboarding/PaywallHighlights';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
-import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { describeOnboardingError } from '@/lib/onboardingErrors';
-
-const HIGHLIGHTS: { icon: string; mdIcon: LucideIconName; label: string }[] = [
-  { icon: 'cloud', mdIcon: 'Cloud', label: 'Cloud transcription with no word limit' },
-  { icon: 'arrow.triangle.2.circlepath', mdIcon: 'RefreshCw', label: 'Sync notes across devices' },
-  { icon: 'sparkles', mdIcon: 'Sparkles', label: 'AI cleanup, actions, and note chat' },
-];
 
 // A cold launch that resumes on this step arrives before the SDK's configure
 // round trip has finished; registering then is answered immediately for a
@@ -50,6 +45,7 @@ export function PaywallStep() {
     hasAdvancedRef.current = true;
     hasPresentedRef.current = true;
     registrationRef.current?.abort();
+    closeAffiliateOffer();
     setAdvanceError(null);
     try {
       await goNext();
@@ -64,6 +60,7 @@ export function PaywallStep() {
     return () => {
       unmountedRef.current = true;
       registrationRef.current?.abort();
+      closeAffiliateOffer();
     };
   }, []);
 
@@ -104,7 +101,16 @@ export function PaywallStep() {
     // only thing that cancels the advance; effect re-runs must not.
     const controller = new AbortController();
     registrationRef.current = controller;
-    register({ placement: SUPERWALL_PLACEMENTS.onboardingPaywall, signal: controller.signal })
+    presentAffiliateOffer(
+      () => !unmountedRef.current && !hasAdvancedRef.current && !controller.signal.aborted,
+    )
+      .then((shown) => {
+        if (!shown && !unmountedRef.current && !controller.signal.aborted)
+          return register({
+            placement: SUPERWALL_PLACEMENTS.onboardingPaywall,
+            signal: controller.signal,
+          });
+      })
       .catch(() => {})
       .finally(() => {
         if (!unmountedRef.current) void advance();
@@ -131,12 +137,7 @@ export function PaywallStep() {
             {advanceError}
           </Text>
         ) : null}
-        {HIGHLIGHTS.map((item) => (
-          <View key={item.label} className="flex-row items-center gap-3">
-            <SystemIcon name={item.icon} mdName={item.mdIcon} size={20} />
-            <Text className="flex-1 text-[16px] text-label">{item.label}</Text>
-          </View>
-        ))}
+        <PaywallHighlights />
       </View>
     </OnboardingShell>
   );
