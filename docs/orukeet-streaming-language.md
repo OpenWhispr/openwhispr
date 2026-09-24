@@ -25,3 +25,9 @@ Orukeet supports these 25 language codes:
 `bg cs da de el en es et fi fr hr hu it lt lv mt nl pl pt ro ru sk sl sv uk`
 
 Keep the original recording until routing is settled. Prefer the six-second estimate for automatic fallback, and apply a confidence threshold. Do not route from an early low-confidence guess. An explicit user language outside the supported set can use the existing provider directly.
+
+## Short-window evaluation
+
+On 330 human-read FLEURS clips across 33 languages (all 25 supported languages and eight unsupported languages), exact language accuracy was 172/330 (52.1%) at two seconds and 256/330 (77.6%) at three seconds. Among the 315 clips containing a full six seconds, it was 293/315 (93.0%). These are classifier results on read speech, not ASR word accuracy or production calibration.
+
+At a score threshold of 0.90, the two-second estimate caught 28/80 unsupported-language clips and incorrectly flagged 6/250 supported-language clips. At six seconds those counts were 69/75 and 1/240. The deployed first/update windows therefore remain three and six seconds. A two-second guess is too unreliable to recommend for automatic provider routing. Clips without a sufficiently confident result should retain the user's configured provider or language policy.

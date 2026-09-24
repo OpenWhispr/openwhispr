@@ -8357,6 +8357,7 @@ class IPCHandlers {
     };
 
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+    const ORUKEET_IDLE_TIMEOUT_MS = 60 * 1000;
 
     const clearDictationIdleTimer = () => {
       if (this._dictationIdleTimer) {
@@ -8367,13 +8368,17 @@ class IPCHandlers {
 
     const startDictationIdleTimer = () => {
       clearDictationIdleTimer();
+      const idleTimeoutMs =
+        this._dictationStreaming instanceof OrukeetStreaming
+          ? ORUKEET_IDLE_TIMEOUT_MS
+          : DICTATION_IDLE_TIMEOUT_MS;
       this._dictationIdleTimer = setTimeout(() => {
         if (this._dictationStreaming) {
           debugLogger.debug("Closing idle dictation warmup connection");
           this._dictationStreaming.disconnect().catch(() => {});
           this._dictationStreaming = null;
         }
-      }, DICTATION_IDLE_TIMEOUT_MS);
+      }, idleTimeoutMs);
     };
 
     // What a dictation connection was opened for; a start or warmup reuses one

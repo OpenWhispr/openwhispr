@@ -4,15 +4,33 @@
 // Never import this module or its service key into the desktop distribution.
 const BASE_URL = "https://orukeet.gizmovoice.ai";
 
-async function issueSession({ serviceKey, fetchImpl = globalThis.fetch } = {}) {
+async function issueSession({
+  serviceKey,
+  accountId,
+  socketRole = "warm",
+  fetchImpl = globalThis.fetch,
+} = {}) {
   if (typeof serviceKey !== "string" || !serviceKey.trim()) {
     throw new Error("ORUKEET_SERVICE_KEY is required on the backend");
+  }
+  // Derive this opaque ID from the authenticated backend user, never desktop input.
+  if (
+    accountId !== undefined &&
+    (typeof accountId !== "string" || !/^[A-Za-z0-9_-]{8,128}$/.test(accountId))
+  ) {
+    throw new Error("accountId must be an opaque 8–128 character identifier");
+  }
+  if (!["warm", "active"].includes(socketRole)) {
+    throw new Error("socketRole must be warm or active");
   }
   let response;
   try {
     response = await fetchImpl(`${BASE_URL}/v1/client-token`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${serviceKey}` },
+      headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(
+        accountId === undefined ? {} : { account_id: accountId, socket_role: socketRole }
+      ),
       signal: AbortSignal.timeout(10000),
       redirect: "error",
       cache: "no-store",
@@ -35,7 +53,8 @@ async function issueSession({ serviceKey, fetchImpl = globalThis.fetch } = {}) {
     !/^[A-Za-z0-9._-]{1,96}$/.test(data.token) ||
     data.single_use !== true ||
     data.expires_in !== 60 ||
-    data.protocol !== "orukeet.pcm.v1"
+    data.protocol !== "orukeet.pcm.v1" ||
+    (accountId !== undefined && data.account_limits !== true)
   ) {
     throw new Error("Invalid Orukeet session response");
   }

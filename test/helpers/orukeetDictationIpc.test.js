@@ -320,3 +320,24 @@ test("a warmup never reuses a socket that has already carried audio", async () =
   assert.notEqual(target._dictationStreaming, used);
   await handlers.get("dictation-realtime-stop")();
 });
+
+test("an idle Orukeet warm socket closes after 60 seconds and start cancels expiry", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  backendResponse = async () => Response.json(cloudSession);
+  await handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  const first = target._dictationStreaming;
+  assert.equal(target._dictationIdleTimer._idleTimeout, 60000);
+
+  // Exercise the registered expiry callback without advancing WebSocket timers.
+  const expire = target._dictationIdleTimer._onTimeout;
+  clearTimeout(target._dictationIdleTimer);
+  expire();
+  assert.equal(first.isConnected, false);
+  assert.equal(target._dictationStreaming, null);
+  await handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  assert.ok(target._dictationIdleTimer);
+  await handlers.get("dictation-realtime-start")(event, managedOptions);
+  assert.equal(target._dictationIdleTimer, null);
+  assert.equal(target._dictationStreaming.isConnected, true);
+  await handlers.get("dictation-realtime-stop")();
+});

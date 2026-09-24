@@ -29,6 +29,42 @@ test("missing backend credential fails before any network call", async () => {
   );
 });
 
+test("backend binds an opaque account and requires gateway acknowledgement", async () => {
+  const session = await issueSession({
+    serviceKey: "private",
+    accountId: "opaque-user-1234",
+    fetchImpl: async (_url, options) => {
+      assert.deepEqual(JSON.parse(options.body), {
+        account_id: "opaque-user-1234",
+        socket_role: "warm",
+      });
+      return { ok: true, json: async () => ({ ...payload, account_limits: true }) };
+    },
+  });
+  assert.ok(!JSON.stringify(session).includes("opaque-user-1234"));
+  await assert.rejects(
+    issueSession({
+      serviceKey: "private",
+      accountId: "opaque-user-1234",
+      fetchImpl: async () => ({ ok: true, json: async () => payload }),
+    }),
+    /Invalid Orukeet session response/
+  );
+});
+
+test("invalid account claims fail before network access", async () => {
+  for (const accountId of ["email@example.com", "short", null, 123]) {
+    await assert.rejects(
+      issueSession({
+        serviceKey: "private",
+        accountId,
+        fetchImpl: () => assert.fail("network called"),
+      }),
+      /accountId must/
+    );
+  }
+});
+
 test("upstream errors do not disclose credentials or response bodies", async () => {
   await assert.rejects(
     issueSession({
