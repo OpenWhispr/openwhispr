@@ -9,7 +9,7 @@ const helperPath = require.resolve("../../src/helpers/linuxUrlSchemeHandler");
 const originalLoad = Module._load;
 
 // Assigning undefined to process.env coerces to the string "undefined".
-const MANAGED_ENV = ["XDG_DATA_HOME", "APPIMAGE", "FLATPAK_ID", "SNAP"];
+const MANAGED_ENV = ["XDG_DATA_HOME", "APPIMAGE", "FLATPAK_ID"];
 const HANDLER_FILE = "openwhispr-url-handler.desktop";
 const MIME_TYPE = "x-scheme-handler/openwhispr";
 
@@ -50,7 +50,7 @@ function withInstall(fn) {
 // Stands in for xdg-utils: it keeps the scheme's default handler, so a query
 // answers whatever the last `xdg-mime default` set.
 function createXdg({ defaultHandler = "", missing = [], ignoresDefault = false } = {}) {
-  const xdg = { calls: [], options: [], defaultHandler, warnings: [] };
+  const xdg = { calls: [], options: [], defaultHandler };
   xdg.execFileSync = (command, args, options) => {
     xdg.calls.push([command, args]);
     xdg.options.push(options);
@@ -70,13 +70,6 @@ function loadHelper(xdg) {
   delete require.cache[helperPath];
   Module._load = function loadWithStubs(request, parent, isMain) {
     if (request === "child_process") return { execFileSync: xdg.execFileSync };
-    if (request === "./debugLogger") {
-      return {
-        info() {},
-        debug() {},
-        warn: (message, meta) => xdg.warnings.push({ message, meta }),
-      };
-    }
     return originalLoad.call(this, request, parent, isMain);
   };
   try {
@@ -107,51 +100,50 @@ test("the handler entry is hidden and declares only the scheme", () => {
   );
 });
 
-// Newer xdg-mime takes the first space-separated word of Exec as the program,
-// quotes included, and refuses the entry if it is not executable. So a plain
-// path stays bare and only a path the spec says must be quoted gets quotes.
-test("Exec quotes only arguments that need it and escapes percent signs", () => {
+test("Exec escapes percent signs and keeps every argument", () => {
   const { buildHandlerEntry } = loadHelper(createXdg());
   const execLine = (launchCommand) =>
     buildHandlerEntry("openwhispr", launchCommand).match(/^Exec=(.*)$/m)[1];
 
-  assert.equal(
-    execLine(["/home/u/My Apps/OpenWhispr.AppImage"]),
-    '"/home/u/My Apps/OpenWhispr.AppImage" %U'
-  );
   assert.equal(execLine(["/home/u/100%/OpenWhispr"]), "/home/u/100%%/OpenWhispr %U");
-  assert.equal(execLine(['/home/u/"$HOME"/x']), '"/home/u/\\"\\$HOME\\"/x" %U');
   assert.equal(execLine(["/repo/electron", "/repo"]), "/repo/electron /repo %U");
 });
 
+// Generic-mode xdg-open takes the first space-separated word of Exec as the
+// program, quotes included, so a path that needs quoting could never launch.
 test(
-  "only AppImage and unpacked runs register themselves",
-  withInstall(async ({ resourcesPath }) => {
-    const { getLinuxInstallType } = loadHelper(createXdg());
+  "a launch path that needs quoting is not registered",
+  withInstall(async ({ applicationsDir }) => {
+    const xdg = createXdg();
+    const { registerLinuxUrlSchemeHandler } = loadHelper(xdg);
+    process.env.APPIMAGE = "/home/u/My Apps/OpenWhispr.AppImage";
 
-    assert.equal(getLinuxInstallType(), "unpacked");
+    const result = registerLinuxUrlSchemeHandler("openwhispr");
 
-    process.env.APPIMAGE = "/home/user/OpenWhispr.AppImage";
-    assert.equal(getLinuxInstallType(), "appimage");
-    setEnv("APPIMAGE", undefined);
+    assert.equal(result.registered, false);
+    assert.match(result.reason, /My Apps/);
+    assert.deepEqual(xdg.calls, []);
+    assert.equal(fs.existsSync(applicationsDir), false);
+  })
+);
 
-    // electron-builder writes this marker into deb and rpm builds only.
-    fs.writeFileSync(path.join(resourcesPath, "package-type"), "deb");
-    assert.equal(getLinuxInstallType(), "package");
-    fs.rmSync(path.join(resourcesPath, "package-type"));
+test(
+  "Flatpak and Nix installs are left to their own desktop entry",
+  withInstall(async ({ applicationsDir }) => {
+    const xdg = createXdg();
+    const { registerLinuxUrlSchemeHandler } = loadHelper(xdg);
 
     process.env.FLATPAK_ID = "com.gizmolabs.openwhispr";
-    assert.equal(getLinuxInstallType(), "flatpak");
+    assert.deepEqual(registerLinuxUrlSchemeHandler("openwhispr"), { registered: false });
     setEnv("FLATPAK_ID", undefined);
-
-    process.env.SNAP = "/snap/openwhispr/1";
-    assert.equal(getLinuxInstallType(), "snap");
-    setEnv("SNAP", undefined);
 
     // The Nix package wraps the AppImage, so APPIMAGE may be set too.
     process.env.APPIMAGE = "/nix/store/abc-openwhispr/OpenWhispr.AppImage";
     setProcessPath("execPath", "/nix/store/abc-openwhispr-extracted/open-whispr-app");
-    assert.equal(getLinuxInstallType(), "nix");
+    assert.deepEqual(registerLinuxUrlSchemeHandler("openwhispr"), { registered: false });
+
+    assert.deepEqual(xdg.calls, []);
+    assert.equal(fs.existsSync(applicationsDir), false);
   })
 );
 
@@ -162,7 +154,7 @@ test(
     const { registerLinuxUrlSchemeHandler } = loadHelper(xdg);
     process.env.APPIMAGE = "/home/user/Applications/OpenWhispr.AppImage";
 
-    assert.equal(registerLinuxUrlSchemeHandler("openwhispr"), true);
+    assert.deepEqual(registerLinuxUrlSchemeHandler("openwhispr"), { registered: true });
 
     assert.ok(readHandler(applicationsDir).includes(`\nExec=${process.env.APPIMAGE} %U\n`));
     assert.deepEqual(xdg.calls, [
@@ -171,7 +163,10 @@ test(
       ["xdg-mime", ["default", HANDLER_FILE, MIME_TYPE]],
       ["xdg-mime", ["query", "default", MIME_TYPE]],
     ]);
-    assert.ok(xdg.options.every((options) => !options.shell), "xdg tools must run without a shell");
+    assert.ok(
+      xdg.options.every((options) => !options.shell),
+      "xdg tools must run without a shell"
+    );
     assert.equal(xdg.defaultHandler, HANDLER_FILE);
   })
 );
@@ -182,7 +177,7 @@ test(
     const { registerLinuxUrlSchemeHandler } = loadHelper(createXdg());
     fs.writeFileSync(path.join(root, "install", "open-whispr"), "#!/bin/bash\n");
 
-    assert.equal(registerLinuxUrlSchemeHandler("openwhispr"), true);
+    assert.deepEqual(registerLinuxUrlSchemeHandler("openwhispr"), { registered: true });
 
     const wrapper = path.join(root, "install", "open-whispr");
     assert.ok(readHandler(applicationsDir).includes(`\nExec=${wrapper} %U\n`));
@@ -196,7 +191,9 @@ test(
     const { registerLinuxUrlSchemeHandler } = loadHelper(xdg);
     setProcessPath("execPath", "/repo/node_modules/electron/dist/electron");
 
-    assert.equal(registerLinuxUrlSchemeHandler("openwhispr-staging", ["/repo"]), true);
+    assert.deepEqual(registerLinuxUrlSchemeHandler("openwhispr-staging", ["/repo"]), {
+      registered: true,
+    });
 
     const entry = fs.readFileSync(
       path.join(applicationsDir, "openwhispr-staging-url-handler.desktop"),
@@ -218,7 +215,7 @@ test(
     const firstEntry = readHandler(applicationsDir);
     xdg.calls.length = 0;
 
-    assert.equal(registerLinuxUrlSchemeHandler("openwhispr"), true);
+    assert.deepEqual(registerLinuxUrlSchemeHandler("openwhispr"), { registered: true });
 
     assert.deepEqual(xdg.calls, [["xdg-mime", ["query", "default", MIME_TYPE]]]);
     assert.equal(readHandler(applicationsDir), firstEntry);
@@ -235,7 +232,7 @@ test(
     xdg.calls.length = 0;
 
     process.env.APPIMAGE = "/home/user/Applications/OpenWhispr.AppImage";
-    assert.equal(registerLinuxUrlSchemeHandler("openwhispr"), true);
+    assert.deepEqual(registerLinuxUrlSchemeHandler("openwhispr"), { registered: true });
 
     assert.ok(readHandler(applicationsDir).includes(`\nExec=${process.env.APPIMAGE} %U\n`));
     assert.deepEqual(xdg.calls, [
@@ -246,16 +243,31 @@ test(
 );
 
 test(
-  "a deb or rpm install is left entirely to its packaged desktop entry",
+  "a deb or rpm install writes no entry and leaves another default alone",
   withInstall(async ({ resourcesPath, applicationsDir }) => {
-    const xdg = createXdg();
+    const xdg = createXdg({ defaultHandler: "open-whispr.desktop" });
     const { registerLinuxUrlSchemeHandler } = loadHelper(xdg);
     fs.writeFileSync(path.join(resourcesPath, "package-type"), "rpm");
 
-    assert.equal(registerLinuxUrlSchemeHandler("openwhispr"), false);
+    assert.deepEqual(registerLinuxUrlSchemeHandler("openwhispr"), { registered: false });
 
-    assert.deepEqual(xdg.calls, []);
+    assert.deepEqual(xdg.calls, [["xdg-mime", ["query", "default", MIME_TYPE]]]);
     assert.equal(fs.existsSync(applicationsDir), false);
+  })
+);
+
+// In xdg-utils' generic mode, xdg-settings would revert to the AppImage's entry,
+// which stops working once the AppImage is deleted.
+test(
+  "a deb or rpm install takes the default back from an AppImage's entry",
+  withInstall(async ({ resourcesPath }) => {
+    const xdg = createXdg({ defaultHandler: HANDLER_FILE });
+    const { registerLinuxUrlSchemeHandler } = loadHelper(xdg);
+    fs.writeFileSync(path.join(resourcesPath, "package-type"), "deb");
+
+    assert.deepEqual(registerLinuxUrlSchemeHandler("openwhispr"), { registered: false });
+
+    assert.equal(xdg.defaultHandler, "open-whispr.desktop");
   })
 );
 
@@ -265,34 +277,37 @@ test(
     const xdg = createXdg({ missing: ["update-desktop-database"] });
     const { registerLinuxUrlSchemeHandler } = loadHelper(xdg);
 
-    assert.equal(registerLinuxUrlSchemeHandler("openwhispr"), true);
+    assert.deepEqual(registerLinuxUrlSchemeHandler("openwhispr"), { registered: true });
     assert.equal(xdg.defaultHandler, HANDLER_FILE);
   })
 );
 
 test(
-  "without xdg-mime it reports not registered and logs instead of throwing",
+  "without xdg-mime it reports not registered with the reason instead of throwing",
   withInstall(async () => {
     const xdg = createXdg({ missing: ["xdg-mime"] });
     const { registerLinuxUrlSchemeHandler } = loadHelper(xdg);
 
-    assert.equal(registerLinuxUrlSchemeHandler("openwhispr"), false);
-    assert.equal(xdg.warnings.length, 1);
-    assert.match(xdg.warnings[0].meta.error, /ENOENT/);
+    const result = registerLinuxUrlSchemeHandler("openwhispr");
+
+    assert.equal(result.registered, false);
+    assert.match(result.reason, /ENOENT/);
   })
 );
 
 test(
-  "an unwritable data directory reports not registered and logs instead of throwing",
+  "an unwritable data directory reports not registered with the reason instead of throwing",
   withInstall(async ({ root }) => {
     const xdg = createXdg();
     const { registerLinuxUrlSchemeHandler } = loadHelper(xdg);
     // A file where the directory should be fails the same way a read-only home does.
     fs.writeFileSync(path.join(root, "data"), "");
 
-    assert.equal(registerLinuxUrlSchemeHandler("openwhispr"), false);
+    const result = registerLinuxUrlSchemeHandler("openwhispr");
+
+    assert.equal(result.registered, false);
+    assert.ok(result.reason);
     assert.deepEqual(xdg.calls, []);
-    assert.equal(xdg.warnings.length, 1);
   })
 );
 
@@ -302,8 +317,9 @@ test(
     const xdg = createXdg({ defaultHandler: "other.desktop", ignoresDefault: true });
     const { registerLinuxUrlSchemeHandler } = loadHelper(xdg);
 
-    assert.equal(registerLinuxUrlSchemeHandler("openwhispr"), false);
-    assert.equal(xdg.warnings.length, 1);
-    assert.equal(xdg.warnings[0].meta.handler, "other.desktop");
+    assert.deepEqual(registerLinuxUrlSchemeHandler("openwhispr"), {
+      registered: false,
+      reason: "default stayed other.desktop",
+    });
   })
 );

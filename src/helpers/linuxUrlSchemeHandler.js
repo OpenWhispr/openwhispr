@@ -2,37 +2,13 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { execFileSync } = require("child_process");
-const debugLogger = require("./debugLogger");
-const { quoteExecPath, resolveExecutablePath } = require("./linuxAutostart");
+const { resolveExecutablePath } = require("./linuxAutostart");
 
 const XDG_TOOL_TIMEOUT_MS = 3000;
+const PACKAGED_DESKTOP_FILE = "open-whispr.desktop";
 
 // Characters the Desktop Entry spec says must be quoted in an Exec argument.
 const EXEC_RESERVED_CHARACTERS = /[\s"'\\><~|&;$*?#()`]/;
-
-// Only AppImage and unpacked runs (tar.gz, development) lack a desktop entry for
-// the scheme. deb/rpm ship one with MimeType=x-scheme-handler/…, and Flatpak,
-// Snap and Nix install their own entry from a sandbox or read-only store.
-function getLinuxInstallType() {
-  if (process.env.FLATPAK_ID) return "flatpak";
-  if (process.env.SNAP) return "snap";
-  if (process.execPath.startsWith("/nix/store/")) return "nix";
-  if (process.env.APPIMAGE) return "appimage";
-  // electron-builder writes this marker into deb/rpm builds only, after the
-  // AppImage and tar.gz are packed; electron-updater reads it the same way.
-  if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, "package-type"))) {
-    return "package";
-  }
-  return "unpacked";
-}
-
-// Quotes only when the spec requires it: xdg-mime default reads the program as
-// the first space-separated word of Exec, quotes included, and newer releases
-// refuse an entry whose program is not executable (xdg-utils #253).
-function formatExecArg(arg) {
-  const escaped = arg.replace(/%/g, "%%");
-  return EXEC_RESERVED_CHARACTERS.test(escaped) ? quoteExecPath(escaped) : escaped;
-}
 
 // NoDisplay keeps it out of app menus, where a deb/rpm or the AppImage's own
 // entry already appears; it exists only to receive the sign-in callback.
@@ -41,7 +17,7 @@ function buildHandlerEntry(protocol, launchCommand) {
     "[Desktop Entry]",
     "Type=Application",
     "Name=OpenWhispr",
-    `Exec=${[...launchCommand.map(formatExecArg), "%U"].join(" ")}`,
+    `Exec=${[...launchCommand.map((arg) => arg.replace(/%/g, "%%")), "%U"].join(" ")}`,
     "Terminal=false",
     "NoDisplay=true",
     `MimeType=x-scheme-handler/${protocol};`,
@@ -66,50 +42,72 @@ function readFileOrNull(filePath) {
 function refreshDesktopDatabase(applicationsDir) {
   try {
     runXdgTool("update-desktop-database", [applicationsDir]);
-  } catch (error) {
-    debugLogger.debug("update-desktop-database unavailable", { error: error.message });
+  } catch {
+    // Not installed; nothing to refresh.
   }
 }
 
-// Named after the scheme, not open-whispr.desktop: a user entry with the packaged
-// name would shadow a deb/rpm install's entry, and staging/dev keep their own.
-function registerLinuxUrlSchemeHandler(protocol, appArgs = []) {
-  const installType = getLinuxInstallType();
-  if (installType !== "appimage" && installType !== "unpacked") return false;
+// A deb/rpm entry declares the scheme itself, but an AppImage or tar.gz run on
+// the same machine may have made its own entry the default. Point it back here
+// with xdg-mime: in xdg-utils' generic mode, xdg-settings reverts to the previous
+// default when the app is not also the text/html browser.
+function reclaimFromOwnHandler(fileName, mimeType) {
+  try {
+    if (runXdgTool("xdg-mime", ["query", "default", mimeType]) === fileName) {
+      runXdgTool("xdg-mime", ["default", PACKAGED_DESKTOP_FILE, mimeType]);
+    }
+  } catch {
+    // xdg-mime unavailable; registerOpenWhisprProtocol reports the outcome.
+  }
+}
 
+// Only AppImage and unpacked runs (tar.gz, development) lack a desktop entry for
+// the scheme, so only they write one. Flatpak and Nix install their own entry
+// from a sandbox or read-only store. Named after the scheme, not
+// open-whispr.desktop: a user entry with the packaged name would shadow a
+// deb/rpm install's entry, and staging/dev keep their own.
+function registerLinuxUrlSchemeHandler(protocol, appArgs = []) {
   const fileName = `${protocol}-url-handler.desktop`;
   const mimeType = `x-scheme-handler/${protocol}`;
+  if (process.env.FLATPAK_ID || process.execPath.startsWith("/nix/store/")) {
+    return { registered: false };
+  }
+  // electron-builder writes this marker into deb/rpm builds only, after the
+  // AppImage and tar.gz are packed; electron-updater reads it the same way.
+  if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, "package-type"))) {
+    reclaimFromOwnHandler(fileName, mimeType);
+    return { registered: false };
+  }
+
+  const launchCommand = [resolveExecutablePath(), ...appArgs];
+  // Generic-mode xdg-open takes the first space-separated word of Exec as the
+  // program, quotes included, so a quoted Exec would register but never launch.
+  if (launchCommand.some((arg) => EXEC_RESERVED_CHARACTERS.test(arg))) {
+    return { registered: false, reason: `launch path needs quoting: ${launchCommand[0]}` };
+  }
+
   try {
     const dataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
     const applicationsDir = path.join(dataHome, "applications");
     const filePath = path.join(applicationsDir, fileName);
     // Rewriting on any change also re-points the entry after the AppImage moves.
-    const contents = buildHandlerEntry(protocol, [resolveExecutablePath(), ...appArgs]);
+    const contents = buildHandlerEntry(protocol, launchCommand);
     if (readFileOrNull(filePath) !== contents) {
       fs.mkdirSync(applicationsDir, { recursive: true });
       fs.writeFileSync(filePath, contents, { mode: 0o644 });
       refreshDesktopDatabase(applicationsDir);
     }
 
-    if (runXdgTool("xdg-mime", ["query", "default", mimeType]) === fileName) return true;
+    if (runXdgTool("xdg-mime", ["query", "default", mimeType]) === fileName) {
+      return { registered: true };
+    }
     runXdgTool("xdg-mime", ["default", fileName, mimeType]);
     const handler = runXdgTool("xdg-mime", ["query", "default", mimeType]);
-    if (handler === fileName) return true;
-
-    debugLogger.warn("URL scheme handler did not become the default", {
-      protocol,
-      installType,
-      handler,
-    });
-    return false;
+    if (handler === fileName) return { registered: true };
+    return { registered: false, reason: `default stayed ${handler || "unset"}` };
   } catch (error) {
-    debugLogger.warn("Could not register URL scheme handler", {
-      protocol,
-      installType,
-      error: error.message,
-    });
-    return false;
+    return { registered: false, reason: error.message };
   }
 }
 
-module.exports = { buildHandlerEntry, getLinuxInstallType, registerLinuxUrlSchemeHandler };
+module.exports = { buildHandlerEntry, registerLinuxUrlSchemeHandler };

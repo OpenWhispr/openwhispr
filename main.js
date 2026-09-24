@@ -188,9 +188,10 @@ function restoreHtmlHandlerIfChanged(original) {
 
 // True source of truth for whether openwhispr:// resolves on Linux — the same
 // MIME database xdg-open consults. Returns true for deb/rpm/flatpak/AUR installs
-// (scheme registered via the packaged .desktop MimeType) and false for AppImage/
-// tar.gz runs whose own registration failed, so we never enable a dead-end
-// OAuth flow. Used to recover from setAsDefaultProtocolClient's KDE false negative.
+// (scheme registered via the packaged .desktop MimeType; registerLinuxUrlSchemeHandler
+// first takes it back from an AppImage/tar.gz entry) and false for AppImage/tar.gz
+// runs whose own registration failed, so we never enable a dead-end OAuth flow.
+// Used to recover from setAsDefaultProtocolClient's KDE false negative.
 function isOAuthSchemeRegistered() {
   if (process.platform !== "linux") return false;
   try {
@@ -239,11 +240,12 @@ function registerOpenWhisprProtocol() {
 // since it returns a false negative on KDE/Wayland, fall back to probing the
 // system MIME database for an actual handler. This keeps OAuth enabled where the
 // callback can resolve and correctly gated where it can't.
+const linuxSchemeHandler =
+  process.platform === "linux"
+    ? registerLinuxUrlSchemeHandler(OAUTH_PROTOCOL, getProtocolAppArgs())
+    : null;
 const protocolRegistered =
-  (process.platform === "linux" &&
-    registerLinuxUrlSchemeHandler(OAUTH_PROTOCOL, getProtocolAppArgs())) ||
-  registerOpenWhisprProtocol() ||
-  isOAuthSchemeRegistered();
+  linuxSchemeHandler?.registered || registerOpenWhisprProtocol() || isOAuthSchemeRegistered();
 if (!protocolRegistered) {
   console.warn(`[Auth] Failed to register ${OAUTH_PROTOCOL}:// protocol handler`);
 }
@@ -438,6 +440,13 @@ function initializeCoreManagers() {
 
   debugLogger = require("./src/helpers/debugLogger");
   debugLogger.ensureFileLogging();
+  // Registration runs before app ready, when the logger cannot write its file yet.
+  if (linuxSchemeHandler?.reason) {
+    debugLogger.warn("Could not register the URL scheme handler", {
+      protocol: OAUTH_PROTOCOL,
+      reason: linuxSchemeHandler.reason,
+    });
+  }
 
   environmentManager = new EnvironmentManager();
   const uiLanguage = environmentManager.getUiLanguage(app.getLocale());
