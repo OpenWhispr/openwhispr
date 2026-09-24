@@ -143,7 +143,7 @@ export default function DictionaryView() {
           if (e.key === "Enter") handleAdd();
           if (e.key === "Escape" && userWords.length === 0) setShowEmptyInput(false);
         }}
-        className="h-10 w-full pe-24 text-sm placeholder:text-foreground/45"
+        className="h-10 w-full rounded-full pe-24 text-sm placeholder:text-foreground/45"
       />
       <div className="absolute end-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
         <button
@@ -170,14 +170,14 @@ export default function DictionaryView() {
   const emptyState = (
     <div className="flex min-h-64 items-start px-6 py-6">
       <div className="relative z-10 w-full min-w-0 md:w-3/5">
-        <h2 className="text-xl font-semibold text-foreground">{t("dictionary.emptyTitle")}</h2>
-        <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
+        <h2 className="text-xl font-medium text-foreground">{t("dictionary.emptyTitle")}</h2>
+        <p className="mt-3 max-w-xl text-base leading-relaxed text-foreground/50 dark:text-foreground/65">
           {t("dictionary.emptyDescription", { agentName })}
         </p>
         {showEmptyInput ? (
           <div className="mt-6 max-w-md">{addWordInput}</div>
         ) : (
-          <Button className="mt-6 px-5" onClick={() => setShowEmptyInput(true)}>
+          <Button className="mt-6 px-5 font-normal" onClick={() => setShowEmptyInput(true)}>
             <Plus size={16} />
             {t("dictionary.addFirstWord")}
           </Button>

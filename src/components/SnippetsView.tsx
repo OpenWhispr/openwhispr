@@ -182,7 +182,7 @@ export default function SnippetsView() {
             if (e.key === "Escape" && snippets.length === 0 && !panelOpen) setShowEmptyInput(false);
           }}
           maxLength={80}
-          className="h-10 w-full pe-16 text-sm placeholder:text-foreground/45"
+          className="h-10 w-full rounded-full pe-16 text-sm placeholder:text-foreground/45"
         />
         <button
           onClick={openPanel}
@@ -274,10 +274,10 @@ export default function SnippetsView() {
         {snippets.length === 0 ? (
           <div className="flex min-h-64 items-start px-6 py-6">
             <div className="relative z-10 w-full min-w-0 md:w-3/5">
-              <h2 className="text-xl font-semibold leading-snug text-foreground">
+              <h2 className="text-xl font-medium leading-snug text-foreground">
                 {t("dictionary.snippets.emptyTitle")} {t("dictionary.snippets.emptyTitleAccent")}
               </h2>
-              <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
+              <p className="mt-3 max-w-xl text-base leading-relaxed text-foreground/50 dark:text-foreground/65">
                 {t("dictionary.snippets.emptyDescription")}
               </p>
               {showEmptyInput ? (
@@ -286,7 +286,7 @@ export default function SnippetsView() {
                   {panelOpen && expansionPanel}
                 </div>
               ) : (
-                <Button className="mt-6 px-5" onClick={() => setShowEmptyInput(true)}>
+                <Button className="mt-6 px-5 font-normal" onClick={() => setShowEmptyInput(true)}>
                   <Plus size={16} />
                   {t("dictionary.snippets.new")}
                 </Button>

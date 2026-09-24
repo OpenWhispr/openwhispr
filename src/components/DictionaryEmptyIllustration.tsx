@@ -43,18 +43,20 @@ export default function DictionaryEmptyIllustration({ variant }: DictionaryEmpty
             dir="ltr"
             className="absolute left-16 top-7 flex flex-col gap-1 rounded-2xl border border-border/70 bg-card px-4 py-2.5 text-sm shadow-sm dark:bg-surface-window"
           >
-            <span className="italic text-muted-foreground">“brb”</span>
+            <span className="italic text-foreground/50 dark:text-foreground/65">“brb”</span>
             <span className="italic text-primary">
-              <span className="mr-2 text-muted-foreground">↳</span>be right back
+              <span className="mr-2 text-foreground/50 dark:text-foreground/65">↳</span>be right
+              back
             </span>
           </span>
           <span
             dir="ltr"
             className="absolute bottom-7 right-2 flex flex-col gap-1 rounded-2xl border border-border/70 bg-card px-4 py-2.5 text-sm shadow-sm dark:bg-surface-window"
           >
-            <span className="italic text-muted-foreground">“my linkedin”</span>
+            <span className="italic text-foreground/50 dark:text-foreground/65">“my linkedin”</span>
             <span className="italic text-primary">
-              <span className="mr-2 text-muted-foreground">↳</span>www.linkedin.com/in/your-profile
+              <span className="mr-2 text-foreground/50 dark:text-foreground/65">↳</span>
+              www.linkedin.com/in/your-profile
             </span>
           </span>
         </>
@@ -64,14 +66,18 @@ export default function DictionaryEmptyIllustration({ variant }: DictionaryEmpty
             dir="ltr"
             className="absolute left-16 top-7 flex items-center gap-2 rounded-full border border-border/70 bg-card px-4 py-2.5 text-sm shadow-sm dark:bg-surface-window"
           >
-            <span className="italic text-muted-foreground line-through">open whisper</span>
+            <span className="italic text-foreground/50 line-through dark:text-foreground/65">
+              open whisper
+            </span>
             <span className="font-medium text-primary">OpenWhispr</span>
           </span>
           <span
             dir="ltr"
             className="absolute bottom-7 right-2 flex items-center gap-2 rounded-full border border-border/70 bg-card px-4 py-2.5 text-sm shadow-sm dark:bg-surface-window"
           >
-            <span className="italic text-muted-foreground line-through">Cameren</span>
+            <span className="italic text-foreground/50 line-through dark:text-foreground/65">
+              Cameren
+            </span>
             <span className="font-medium text-primary">Cameron</span>
           </span>
         </>
