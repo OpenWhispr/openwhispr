@@ -14,7 +14,6 @@ interface UseChatMessageSenderOptions {
   persistence: ChatPersistence;
   streaming: Pick<ChatStreaming, "sendToAI">;
   createConversation: (text: string) => Promise<number>;
-  onBeforeSend?: () => void;
   onMessagePersisted?: (context: PersistedMessageContext) => void | Promise<void>;
   onSendingChange?: (sending: boolean) => void;
 }
@@ -45,7 +44,6 @@ export function useChatMessageSender({
   persistence,
   streaming,
   createConversation,
-  onBeforeSend,
   onMessagePersisted,
   onSendingChange,
 }: UseChatMessageSenderOptions): (text: string, options?: SendToAIOptions) => Promise<boolean> {
@@ -59,7 +57,6 @@ export function useChatMessageSender({
       return await submissionLockRef.current!.run(async () => {
         onSendingChange?.(true);
         try {
-          onBeforeSend?.();
           const convId = conversationId ?? (await createConversation(text));
           const previousMessages = persistence.messages;
           const userMessage: Message = {
@@ -85,7 +82,6 @@ export function useChatMessageSender({
     [
       conversationId,
       createConversation,
-      onBeforeSend,
       onMessagePersisted,
       onSendingChange,
       persistence,

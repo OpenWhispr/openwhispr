@@ -32,7 +32,6 @@ interface ChatInputProps {
   focusOnIdle?: boolean;
   expandOnFocus?: boolean;
   expandOnFocusSize?: "standard" | "compact";
-  disabled?: boolean;
 }
 
 function RecordingIndicator() {
@@ -82,7 +81,6 @@ export function ChatInput({
   focusOnIdle = true,
   expandOnFocus = false,
   expandOnFocusSize = "standard",
-  disabled = false,
 }: ChatInputProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -115,13 +113,19 @@ export function ChatInput({
   const isVoiceTranscribing = voice.status === "transcribing";
   const isCompactNote = variant === "note" && !outlined;
 
+  const isIdle = agentState === "idle";
+  const isListening = agentState === "listening";
+  const isTranscribing = agentState === "transcribing";
+  const isBusy =
+    agentState === "thinking" || agentState === "streaming" || agentState === "tool-executing";
+
   const handleSubmit = useCallback(() => {
     const text = inputText.trim();
-    if (!text || !onTextSubmit || disabled) return;
+    if (!text || !onTextSubmit || isBusy) return;
     onTextSubmit(text);
     setInputText("");
     focusAfterFrame();
-  }, [inputText, onTextSubmit, setInputText, disabled, focusAfterFrame]);
+  }, [inputText, onTextSubmit, setInputText, isBusy, focusAfterFrame]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -140,12 +144,6 @@ export function ChatInput({
     [handleSubmit, onEscape]
   );
 
-  const isIdle = agentState === "idle";
-  const isListening = agentState === "listening";
-  const isTranscribing = agentState === "transcribing";
-  const isBusy =
-    agentState === "thinking" || agentState === "streaming" || agentState === "tool-executing";
-
   useLayoutEffect(() => {
     const input = inputRef.current;
     if (!input) return;
@@ -157,24 +155,13 @@ export function ChatInput({
     }
   }, [inputText, isVoiceRecording, isVoiceTranscribing, expandOnFocus, variant, isCompactNote]);
 
-  // The input is disabled while a reply streams, which drops its focus; hand it back when the
-  // reply ends, even where focusOnIdle is off so the composer doesn't grab focus on mount,
-  // unless the user has since focused something else.
-  const wasBusyRef = useRef(false);
   useEffect(() => {
-    if (isBusy) wasBusyRef.current = true;
-    if (!isIdle) return;
-    const replyFinished = wasBusyRef.current;
-    wasBusyRef.current = false;
-    if (!focusOnIdle && !replyFinished) return;
+    if (!isIdle || !focusOnIdle) return;
     const frameId = requestAnimationFrame(() => {
-      if (!allowDeferredFocusRef.current) return;
-      const focusMovedOn = document.activeElement && document.activeElement !== document.body;
-      if (!focusOnIdle && focusMovedOn) return;
-      inputRef.current?.focus();
+      if (allowDeferredFocusRef.current) inputRef.current?.focus();
     });
     return () => cancelAnimationFrame(frameId);
-  }, [isIdle, isBusy, focusOnIdle]);
+  }, [isIdle, focusOnIdle]);
 
   return (
     <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
@@ -305,7 +292,8 @@ export function ChatInput({
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={onFocus}
-              disabled={isBusy || disabled}
+              // Read-only, not disabled: disabling would drop focus for the length of every reply.
+              readOnly={isBusy}
               autoFocus={autoFocus}
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
@@ -314,7 +302,7 @@ export function ChatInput({
                 "text-foreground placeholder:text-muted-foreground/70",
                 "min-w-0 min-h-8 max-h-32 resize-none overflow-y-auto border-0 px-0 py-1.5 leading-5",
                 (expandOnFocus || variant === "sidebar" || isCompactNote) && "min-h-0 max-h-none",
-                (isBusy || disabled) && "text-muted-foreground/70 cursor-not-allowed"
+                isBusy && "text-muted-foreground/70 cursor-not-allowed"
               )}
             />
             {isIdle && !inputText.trim() && trailingContent}
@@ -336,7 +324,7 @@ export function ChatInput({
             ) : isIdle && (inputText.trim() || !voiceDraft) ? (
               <button
                 onClick={handleSubmit}
-                disabled={!inputText.trim() || disabled}
+                disabled={!inputText.trim()}
                 aria-label={t("agentMode.input.send")}
                 className={cn(
                   "rounded-full shrink-0",
@@ -361,7 +349,7 @@ export function ChatInput({
             ) : isIdle ? (
               <button
                 onClick={voice.start}
-                disabled={voice.streamingOnlyProvider || disabled}
+                disabled={voice.streamingOnlyProvider}
                 aria-label={t("notes.editor.transcribe")}
                 title={
                   voice.streamingOnlyProvider
@@ -373,7 +361,7 @@ export function ChatInput({
                   GRADIENT_CIRCLE,
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-all duration-100",
-                  voice.streamingOnlyProvider || disabled
+                  voice.streamingOnlyProvider
                     ? "opacity-30 saturate-0 cursor-default"
                     : "hover:brightness-110 active:scale-95"
                 )}

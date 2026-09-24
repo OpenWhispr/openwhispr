@@ -14,7 +14,6 @@ interface NoteBottomBarProps {
   onAskSubmit: (text: string) => void;
   onInputFocus?: () => void;
   onInputEscape?: () => void;
-  askDisabled?: boolean;
   actionPicker?: React.ReactNode;
   callout?: React.ReactNode;
   hideInput?: boolean;
@@ -32,7 +31,6 @@ export default function NoteBottomBar({
   onAskSubmit,
   onInputFocus,
   onInputEscape,
-  askDisabled,
   actionPicker,
   callout,
   hideInput = false,
@@ -123,7 +121,6 @@ export default function NoteBottomBar({
             onFocus={onInputFocus}
             onEscape={onInputEscape}
             focusOnIdle={chatOpen}
-            disabled={askDisabled}
             voiceDraft={chatOpen}
             placeholder={t("chat.inputPlaceholder")}
             trailingContent={

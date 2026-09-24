@@ -51,7 +51,7 @@ export function ContainerOverview({
   const isTreeLoading = useIsTreeLoading();
   const [spaceNotes, setSpaceNotes] = useState<NoteItem[] | null>(null);
   const [spaceNotesError, setSpaceNotesError] = useState(false);
-  const [failedFolderKey, setFailedFolderKey] = useState<string | null>(null);
+  const [folderNotesError, setFolderNotesError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
@@ -84,10 +84,10 @@ export function ContainerOverview({
     let stale = false;
     void ensureContainerLoaded(key)
       .then(() => {
-        if (!stale) setFailedFolderKey(null);
+        if (!stale) setFolderNotesError(false);
       })
       .catch(() => {
-        if (!stale) setFailedFolderKey(key);
+        if (!stale) setFolderNotesError(true);
       });
     return () => {
       stale = true;
@@ -99,7 +99,7 @@ export function ContainerOverview({
   const folderNotesLoaded = folderKey !== null && notesByContainer[folderKey] !== undefined;
   const isLoaded = !isTreeLoading && (folder ? folderNotesLoaded : spaceNotes !== null);
   const loadFailed = folder
-    ? failedFolderKey === folderKey && !folderNotesLoaded
+    ? folderNotesError && !folderNotesLoaded
     : spaceNotesError && spaceNotes === null;
 
   const chat = useContainerChat({ space, folder, notes });
@@ -142,8 +142,8 @@ export function ContainerOverview({
           <button
             onClick={() => {
               if (folderKey) {
-                setFailedFolderKey(null);
-                void ensureContainerLoaded(folderKey).catch(() => setFailedFolderKey(folderKey));
+                setFolderNotesError(false);
+                void ensureContainerLoaded(folderKey).catch(() => setFolderNotesError(true));
               } else {
                 setSpaceNotes(null);
                 setSpaceNotesError(false);

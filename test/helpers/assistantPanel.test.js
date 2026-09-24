@@ -577,7 +577,7 @@ test("the Assistant exposes an accessible new-conversation control only after me
 test("a reopened Assistant blocks typed actions until retained history finishes loading", async (t) => {
   const markup = await renderAssistantPanel(t, [], { initialConversationId: 42 });
 
-  assert.match(markup, /<textarea\b[^>]*disabled=""/);
+  assert.match(markup, /<textarea\b[^>]*readOnly=""/);
   assert.doesNotMatch(markup, /Summarize my recent notes/);
 });
 
@@ -891,13 +891,23 @@ test("a follow-up into an open panel strips caret delivery and stays panel-first
 
   assistant.openRef.current = true;
   await React.act(async () => {
-    assistant.handleCommand({ text: "draft a reply", attachment: null, selectedContext: null, delivery });
+    assistant.handleCommand({
+      text: "draft a reply",
+      attachment: null,
+      selectedContext: null,
+      delivery,
+    });
   });
   assert.equal(assistant.pendingCommand.delivery, null);
 
   assistant.openRef.current = false;
   await React.act(async () => {
-    assistant.handleCommand({ text: "draft a reply", attachment: null, selectedContext: null, delivery });
+    assistant.handleCommand({
+      text: "draft a reply",
+      attachment: null,
+      selectedContext: null,
+      delivery,
+    });
   });
   assert.deepEqual(assistant.pendingCommand.delivery, delivery);
 });

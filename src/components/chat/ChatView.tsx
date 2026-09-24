@@ -115,7 +115,9 @@ export default function ChatView() {
     persistence,
     streaming,
     createConversation,
-    onBeforeSend: markChatStarted,
+    // After the message lands, not before: marking the chat started while the conversation is
+    // still being created leaves a render with no active chat, which remounts the composer.
+    onMessagePersisted: markChatStarted,
   });
 
   const handleArchive = useCallback(
