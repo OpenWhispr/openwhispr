@@ -4711,7 +4711,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // and can drop a socket mid-recording. The fallback recorder has the
         // whole capture, so keep recording and let stop upload it to Cloud
         // rather than cutting the user off behind an error.
-        if (managedOrukeet) {
+        if (managedOrukeet && this.streamingFallbackRecorder) {
           this._streamingFailoverReason ??= "stream_no_final";
           return;
         }

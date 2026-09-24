@@ -748,6 +748,36 @@ test("a managed Orukeet stream refused mid-recording keeps recording and uploads
   assert.deepEqual(errors, []);
 });
 
+test("a managed Orukeet drop without a fallback recorder surfaces and auto-stops", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  globalThis.MediaRecorder = class {
+    constructor() {
+      throw new Error("MediaRecorder unavailable");
+    }
+  };
+  let raise;
+  const provider = startingOrukeetProvider({
+    onError: (listener) => {
+      raise = listener;
+      return () => {};
+    },
+  });
+  const { manager, errors } = createStartingManager(AudioManager, {
+    providerName: "orukeet",
+    provider,
+  });
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  raise("Account already has an active recording");
+
+  // Nothing holds the capture, so there is nothing to fail over to.
+  assert.equal(errors[0]?.title, "Streaming Error");
+  assert.ok(manager._streamingStopPromise, "the recording auto-stops");
+  await manager._streamingStopPromise;
+});
+
 test("other streaming providers still surface a dropped stream and auto-stop", async (t) => {
   const AudioManager = await loadManagerClass(t);
   useManagedOrukeetSettings();
