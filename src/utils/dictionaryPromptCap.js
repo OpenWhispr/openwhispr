@@ -35,10 +35,10 @@ export const TRANSCRIBE_PROMPT_CHARS = 8000;
 
 // Only the 4o transcribe family is known to read past a Whisper decoder's
 // prompt window, so it earns the generous budget, as does gpt-transcribe's
-// keyword overflow. Everything else falls
-// back to the Whisper budget on purpose: custom and self-hosted endpoints take
-// whatever model name the user typed, and most of those servers are
-// Whisper-family under a name that never says "whisper".
+// keyword overflow. Everything else falls back to the Whisper budget on
+// purpose: custom and self-hosted endpoints take whatever model name the user
+// typed, and most of those servers are Whisper-family under a name that never
+// says "whisper".
 export function dictionaryPromptLimit({ provider = "", endpoint = "", model = "" } = {}) {
   if (provider === "groq" || endpoint.includes("api.groq.com")) return GROQ_PROMPT_CHARS;
   if (model.toLowerCase().startsWith("gpt-4o")) return TRANSCRIBE_PROMPT_CHARS;
