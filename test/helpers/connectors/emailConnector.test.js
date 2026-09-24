@@ -116,6 +116,24 @@ test("a failure to open the mail app is reported, not thrown", async () => {
   assert.equal(result.destinationLabel, "a@example.com");
 });
 
+test("a draft that fails to open leaves the user's clipboard alone", async () => {
+  const { createEmailConnector } = await load();
+  const copied = [];
+  const connector = createEmailConnector({
+    openExternal: async () => {
+      throw new Error("no handler");
+    },
+    writeClipboard: async (text) => copied.push(text),
+  });
+  const result = await connector.runDirect(
+    "draft",
+    { target: "mailto", to: ["a@example.com"], subject: "Notes", body: "word ".repeat(600) },
+    {}
+  );
+  assert.equal(result.errorCode, "open_failed");
+  assert.deepEqual(copied, []);
+});
+
 test("the email connector is always connected and has no approval actions", async () => {
   const { createEmailConnector } = await load();
   const connector = createEmailConnector(fakes().deps);

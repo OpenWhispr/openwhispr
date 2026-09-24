@@ -54,9 +54,6 @@ function createEmailConnector({ openExternal, writeClipboard }) {
       }
 
       try {
-        if (request.clipboardText !== null) {
-          await writeClipboard(request.clipboardText, runtime.webContents ?? null);
-        }
         await openExternal(request.url);
       } catch {
         return {
@@ -65,6 +62,11 @@ function createEmailConnector({ openExternal, writeClipboard }) {
           message: "Couldn't open your email app.",
           destinationLabel,
         };
+      }
+      // Only once the window opened, so a failed open leaves the user's
+      // clipboard as it was.
+      if (request.clipboardText !== null) {
+        await writeClipboard(request.clipboardText, runtime.webContents ?? null);
       }
       // The compose URL carries the body, so it is never returned or logged.
       return {
