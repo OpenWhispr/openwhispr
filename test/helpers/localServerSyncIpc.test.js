@@ -79,7 +79,10 @@ test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  target = { signedIn: false, _syncStartupEnv: () => {} };
+  target = { signedIn: false, envKeys: [] };
+  target._syncStartupEnv = (setVars, clearVars) => {
+    target.envKeys = [...Object.keys(setVars), ...clearVars];
+  };
   target._hasActiveAccountScope = () => target.signedIn;
   Ctor.prototype.setupHandlers.call(
     new Proxy(target, {
@@ -125,9 +128,10 @@ test("a window sync stops the server once no scope needs its model", async () =>
   assert.equal(modelManager.stops, 1);
 });
 
-test("a signed-in window waits for its workspace policy before stopping the server", async () => {
+test("a signed-in window waits for its workspace policy before touching the server", async () => {
   await sync({ loaded: MODEL, signedIn: true, policyResolved: false });
   assert.equal(modelManager.stops, 0);
+  assert.equal(target.envKeys.includes("CLEANUP_PROVIDER"), false, "no pre-warm change either");
 
   await sync({ loaded: MODEL, signedIn: true, policyResolved: true });
   assert.equal(modelManager.stops, 1);

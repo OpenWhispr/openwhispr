@@ -45,7 +45,9 @@ test("typed chat on a local model keeps the server once cleanup moves to the clo
   );
 
   s.setResolvedLLMConfig("dictationCleanup", { mode: "openwhispr", cloudMode: "openwhispr" });
-  const needs = s.resolveLocalServerNeeds(s.selectLocalServerPrefs(s.getSettings(), UNMANAGED));
+  const needs = s.resolveLocalServerNeeds(
+    s.selectLocalServerPrefs(s.useSettingsStore.getState(), UNMANAGED)
+  );
 
   assert.deepEqual(needs.models, [MODEL]);
   assert.equal(s.shouldStopLocalServer(needs, MODEL), false);
@@ -64,7 +66,7 @@ test("note formatting counts the local model it inherits from cleanup", async (t
     "openwhispr-local-server-prefs-notes-test-"
   );
 
-  const prefs = s.selectLocalServerPrefs(s.getSettings(), UNMANAGED);
+  const prefs = s.selectLocalServerPrefs(s.useSettingsStore.getState(), UNMANAGED);
 
   assert.equal(prefs.noteFormattingMode, "local");
   assert.equal(prefs.noteFormattingModel, MODEL);
@@ -78,7 +80,9 @@ test("the server stops once the last local scope leaves", async (t) => {
   );
 
   s.setResolvedLLMConfig("dictationAgent", { mode: "openwhispr", cloudMode: "openwhispr" });
-  const needs = s.resolveLocalServerNeeds(s.selectLocalServerPrefs(s.getSettings(), UNMANAGED));
+  const needs = s.resolveLocalServerNeeds(
+    s.selectLocalServerPrefs(s.useSettingsStore.getState(), UNMANAGED)
+  );
 
   assert.deepEqual(needs.models, []);
   assert.equal(s.shouldStopLocalServer(needs, MODEL), true);
