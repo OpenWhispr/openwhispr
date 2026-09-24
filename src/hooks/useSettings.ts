@@ -253,7 +253,8 @@ function useSettingsInternal() {
         model: model || undefined,
         language: preferredLanguage || undefined,
         ...localServerPrefs,
-        policyResolved: localHistoryPolicyResolved,
+        // idle/loading means a signed-in window hasn't applied its policy yet.
+        policySettled: policySnapshot.status !== "idle" && policySnapshot.status !== "loading",
       })
       .catch((err) =>
         logger.warn(
@@ -270,7 +271,7 @@ function useSettingsInternal() {
     cohereModel,
     preferredLanguage,
     localServerPrefs,
-    localHistoryPolicyResolved,
+    policySnapshot.status,
   ]);
 
   return {

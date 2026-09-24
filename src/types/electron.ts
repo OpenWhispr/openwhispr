@@ -1688,7 +1688,7 @@ declare global {
           localTranscriptionProvider: LocalTranscriptionProvider;
           model?: string;
           language?: string;
-          policyResolved: boolean;
+          policySettled: boolean;
         }
       ) => Promise<void>;
 

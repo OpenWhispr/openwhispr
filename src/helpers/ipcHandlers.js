@@ -5209,10 +5209,10 @@ class IPCHandlers {
       // the read fallback is removed (~2 releases after this lands).
       clearVars.push("REASONING_PROVIDER", "LOCAL_REASONING_MODEL");
 
-      // A signed-in window that hasn't loaded its workspace policy yet reports
+      // A signed-in window whose workspace policy is still loading reports
       // unclamped modes, so it neither pre-warms nor stops the shared
       // llama-server; signed out, the policy never loads.
-      if (prefs.policyResolved || !this._hasActiveAccountScope()) {
+      if (prefs.policySettled || !this._hasActiveAccountScope()) {
         const localServer = resolveLocalServerNeeds(prefs);
 
         if (localServer.cleanup) {

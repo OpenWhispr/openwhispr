@@ -96,7 +96,7 @@ test.after(() => {
   Module._load = originalLoad;
 });
 
-function sync({ loaded, signedIn = false, policyResolved = true, ...scopes }) {
+function sync({ loaded, signedIn = false, policySettled = true, ...scopes }) {
   modelManager.currentServerModelId = loaded;
   modelManager.stops = 0;
   target.signedIn = signedIn;
@@ -112,7 +112,7 @@ function sync({ loaded, signedIn = false, policyResolved = true, ...scopes }) {
       chatAgentMode: "openwhispr",
       useDictationTranslation: false,
       translationMode: "openwhispr",
-      policyResolved,
+      policySettled,
       ...scopes,
     }
   );
@@ -129,15 +129,15 @@ test("a window sync stops the server once no scope needs its model", async () =>
 });
 
 test("a signed-in window waits for its workspace policy before touching the server", async () => {
-  await sync({ loaded: MODEL, signedIn: true, policyResolved: false });
+  await sync({ loaded: MODEL, signedIn: true, policySettled: false });
   assert.equal(modelManager.stops, 0);
   assert.equal(target.envKeys.includes("CLEANUP_PROVIDER"), false, "no pre-warm change either");
 
-  await sync({ loaded: MODEL, signedIn: true, policyResolved: true });
+  await sync({ loaded: MODEL, signedIn: true, policySettled: true });
   assert.equal(modelManager.stops, 1);
 });
 
 test("signed out, the policy never loads, so an unresolved policy does not block the stop", async () => {
-  await sync({ loaded: MODEL, signedIn: false, policyResolved: false });
+  await sync({ loaded: MODEL, signedIn: false, policySettled: false });
   assert.equal(modelManager.stops, 1);
 });
