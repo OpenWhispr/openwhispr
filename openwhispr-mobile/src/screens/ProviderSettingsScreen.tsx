@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { Input } from '@/components/ui/Input';
@@ -7,16 +8,16 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import type { ProcessingMode, UserConfig } from '@/types';
+import type { UserConfig } from '@/types';
 import {
-  clearProviderCredentials,
   getProviderCredentialReference,
   getProviderCredentialStatus,
   removeProviderCredential,
   setProviderCredential,
 } from '@/services/providers/ProviderCredentials';
-import { confirmDestructive } from '@/lib/alerts';
 import { dictationModeConfig } from '@/lib/inferenceModes';
+import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
+import { UNSET_PROVIDER_NOTES, parseWorkflow, unsetSelection } from '@/lib/byokWorkflows';
 import {
   discoverProviderModels,
   testProviderConnection,
@@ -26,58 +27,23 @@ import { getProviderPolicy } from '@/services/providers/ProviderPolicy';
 import { isSecureHttpEndpoint, normalizeBaseUrl } from '@shared/ai/endpoints';
 import { pickDefaultModelId } from '@shared/ai/providerDefaultModel';
 import { type InferenceMode, type InferenceSelection } from '@shared/ai/routing';
-import {
-  getMobileProvidersForScope,
-  resolveMobileInferenceRoute,
-  type MobileInferenceScope,
-} from '@/lib/mobileProviders';
+import { getMobileProvidersForScope, resolveMobileInferenceRoute } from '@/lib/mobileProviders';
 
-const SCOPES: Record<MobileInferenceScope, string> = {
-  dictation: 'Dictation & Keyboard',
-  upload: 'Uploads',
-  cleanup: 'Text Cleanup',
-  notes: 'Note Formatting & Titles',
-  agent: 'Chat & Voice Assistant',
-};
-const MODES: Record<InferenceMode, string> = {
-  openwhispr: 'OpenWhispr Cloud',
-  local: 'On-Device',
-  providers: 'Providers',
-};
-type Picker = 'scope' | 'mode' | 'provider' | 'model';
+type Picker = 'provider' | 'model';
 const PROVIDER_SETUP_URLS: Record<string, string> = {
   openai: 'https://platform.openai.com/api-keys',
   groq: 'https://console.groq.com/keys',
   openrouter: 'https://openrouter.ai/keys',
 };
 
-// Providers dictation skips these workflows until a selection is saved for them.
-const UNSET_PROVIDER_NOTES: Partial<Record<MobileInferenceScope, string>> = {
-  cleanup: 'Not saved yet. Cleanup is skipped until you save a selection.',
-  agent:
-    'Not saved yet. The voice assistant is skipped until you save a selection; note chat uses OpenWhispr Cloud.',
-};
-
-// What a workflow with no saved selection runs: On-Device mode keeps everything
-// local, and Providers dictation waits for a provider before cleanup or the agent.
-function unsetSelection(
-  scope: MobileInferenceScope,
-  activeMode: ProcessingMode,
-): InferenceSelection {
-  if (activeMode === 'private') return { mode: 'local' };
-  if (activeMode === 'providers' && (scope === 'dictation' || UNSET_PROVIDER_NOTES[scope]))
-    return { mode: 'providers' };
-  return { mode: 'openwhispr' };
-}
-
 export function ProviderSettingsScreen(): React.JSX.Element {
   const config = useConfigStore((state) => state.config);
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const setActiveMode = useProcessingModeStore((state) => state.setActiveMode);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
-  const [scope, setScope] = useState<MobileInferenceScope>('dictation');
+  const scope = parseWorkflow(useLocalSearchParams<{ scope?: string }>().scope);
   const [selection, setSelection] = useState<InferenceSelection>(
-    config?.inference?.dictation ?? unsetSelection('dictation', activeMode),
+    config?.inference?.[scope] ?? unsetSelection(scope, activeMode),
   );
   const remembered = useRef<Record<string, InferenceSelection>>({});
   const [picker, setPicker] = useState<Picker | null>(null);
@@ -136,12 +102,16 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     setPicker(picker === next ? null : next);
   }
 
-  function chooseScope(next: MobileInferenceScope): void {
-    remembered.current[scope] = selection;
-    setScope(next);
-    setDiscoveredModels([]);
+  function chooseMode(mode: InferenceMode): void {
+    if (busy) return;
     setSelection(
-      remembered.current[next] ?? config?.inference?.[next] ?? unsetSelection(next, activeMode),
+      mode === 'providers' && !selection.providerId && provider
+        ? (config?.rememberedInference?.[scope]?.[provider.id] ?? {
+            mode,
+            providerId: provider.id,
+            modelId: pickDefaultModelId(provider),
+          })
+        : { ...selection, mode },
     );
     setPicker(null);
     clearInputs();
@@ -149,10 +119,10 @@ export function ProviderSettingsScreen(): React.JSX.Element {
 
   function chooseProvider(nextProviderId: string): void {
     setDiscoveredModels([]);
-    if (provider) remembered.current[`${scope}:${provider.id}`] = { ...selection, modelId };
+    if (provider) remembered.current[provider.id] = { ...selection, modelId };
     const next = providers.find((candidate) => candidate.id === nextProviderId);
     setSelection(
-      remembered.current[`${scope}:${nextProviderId}`] ??
+      remembered.current[nextProviderId] ??
         config?.rememberedInference?.[scope]?.[nextProviderId] ?? {
           mode: 'providers',
           providerId: nextProviderId,
@@ -226,7 +196,7 @@ export function ProviderSettingsScreen(): React.JSX.Element {
           ? dictationModeConfig(currentConfig, processingMode).inference
           : {
               ...currentConfig?.inference,
-              // Pin uploads to the mode dictation is leaving for Providers.
+              // Pin uploads to the mode dictation is leaving for Bring Your Own Key.
               ...(scope === 'dictation' && !currentConfig?.inference?.upload
                 ? { upload: { mode: activeMode === 'private' ? 'local' : 'openwhispr' } }
                 : {}),
@@ -252,7 +222,6 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         return;
       }
       if (scope === 'dictation') setActiveMode(processingMode, true);
-      remembered.current[scope] = saved;
       setSelection(saved);
       clearInputs();
       setNotice('Selection saved.');
@@ -343,29 +312,6 @@ export function ProviderSettingsScreen(): React.JSX.Element {
     }
   }
 
-  function removeAllCredentials(): void {
-    confirmDestructive(
-      'Remove all provider keys?',
-      'Every provider key saved on this iPhone is deleted, including keys for Custom endpoints you no longer use. Workflows that use them stop until you add a key again.',
-      async (): Promise<void> => {
-        setBusy(true);
-        setError(null);
-        setNotice(null);
-        try {
-          await clearProviderCredentials();
-          setConfigured(false);
-          clearInputs();
-          setNotice('All provider keys were removed.');
-        } catch {
-          setError('Unable to remove every provider key. Please try again.');
-        } finally {
-          setBusy(false);
-        }
-      },
-      { destructiveLabel: 'Remove' },
-    );
-  }
-
   function choice(title: string, selected: boolean, onPress: () => void): React.JSX.Element {
     return (
       <SettingsRow
@@ -394,48 +340,12 @@ export function ProviderSettingsScreen(): React.JSX.Element {
 
   return (
     <SettingsScreen keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
-      <Text className="mb-4 px-8 text-[13px] text-secondaryLabel">
-        Use your own provider without an OpenWhispr account or Pro. Your provider bills usage
-        separately.
-      </Text>
-      <SettingsSection>
-        <SettingsRow
-          icon="slider.horizontal.3"
-          mdIcon="SlidersHorizontal"
-          iconStyle="line"
-          title="Workflow"
-          subtitle={SCOPES[scope]}
-          onPress={busy ? undefined : () => openPicker('scope')}
-        />
-        {picker === 'scope' &&
-          (Object.keys(SCOPES) as MobileInferenceScope[]).map((item) =>
-            choice(SCOPES[item], item === scope, () => chooseScope(item)),
-          )}
-        <SettingsRow
-          icon="cpu"
-          mdIcon="Cpu"
-          iconStyle="line"
-          title="Inference mode"
-          subtitle={MODES[selection.mode]}
-          onPress={busy ? undefined : () => openPicker('mode')}
-        />
-        {picker === 'mode' &&
-          (Object.keys(MODES) as InferenceMode[]).map((mode) =>
-            choice(MODES[mode], mode === selection.mode, () => {
-              setSelection(
-                mode === 'providers' && !selection.providerId && provider
-                  ? (config?.rememberedInference?.[scope]?.[provider.id] ?? {
-                      mode,
-                      providerId: provider.id,
-                      modelId: pickDefaultModelId(provider),
-                    })
-                  : { ...selection, mode },
-              );
-              setPicker(null);
-              clearInputs();
-            }),
-          )}
-      </SettingsSection>
+      <InferenceModePicker
+        scope={scope === 'dictation' || scope === 'upload' ? 'speech' : 'text'}
+        title="Mode"
+        selectedMode={selection.mode}
+        onSelect={chooseMode}
+      />
       {unsetNote ? (
         <Text className="-mt-4 mb-6 px-8 text-[13px] text-secondaryLabel">{unsetNote}</Text>
       ) : null}
@@ -576,9 +486,6 @@ export function ProviderSettingsScreen(): React.JSX.Element {
         ) : null}
         <Button loading={busy} onPress={save}>
           Save selection
-        </Button>
-        <Button variant="ghost" disabled={busy} onPress={removeAllCredentials}>
-          Remove all provider keys
         </Button>
       </View>
     </SettingsScreen>

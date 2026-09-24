@@ -10,10 +10,10 @@ export type ModeDescriptor = {
   description: string;
 };
 
-export type InferenceScope = 'speech';
+export type InferenceScope = 'speech' | 'text';
 
 const BASE: Record<InferenceMode, Omit<ModeDescriptor, 'description'>> = {
-  providers: { mode: 'providers', icon: 'key', mdIcon: 'KeyRound', title: 'Providers' },
+  providers: { mode: 'providers', icon: 'key', mdIcon: 'KeyRound', title: 'Bring Your Own Key' },
   openwhispr: {
     mode: 'openwhispr',
     icon: 'cloud',
@@ -24,39 +24,31 @@ const BASE: Record<InferenceMode, Omit<ModeDescriptor, 'description'>> = {
     mode: 'local',
     icon: 'iphone',
     mdIcon: 'Smartphone',
-    title: 'Local',
+    title: 'On-Device',
   },
 };
 
-const SPEECH_DESCRIPTIONS: Record<InferenceMode, string> = {
-  providers: 'Use your own provider key. Billed by your provider.',
-  openwhispr: 'Hosted by OpenWhispr. Requires sign-in.',
-  local: 'Audio never leaves this phone.',
-};
-
-const SPEECH_TITLES: Partial<Record<InferenceMode, string>> = {
-  local: 'On-Device',
-};
-
-const SCOPE_MODES: Record<InferenceScope, InferenceMode[]> = {
-  speech: ['openwhispr', 'local', 'providers'],
+const DESCRIPTIONS: Record<InferenceScope, Record<InferenceMode, string>> = {
+  speech: {
+    providers: 'Use your own provider key. Billed by your provider.',
+    openwhispr: 'Hosted by OpenWhispr. Requires sign-in.',
+    local: 'Audio never leaves this phone.',
+  },
+  text: {
+    providers: 'Use your own provider key. Billed by your provider.',
+    openwhispr: 'Hosted by OpenWhispr. Requires sign-in.',
+    local: 'Text never leaves this phone.',
+  },
 };
 
 export function getInferenceModes(scope: InferenceScope): ModeDescriptor[] {
-  return SCOPE_MODES[scope]
+  return (['openwhispr', 'local', 'providers'] as const)
     .filter((mode) => mode !== 'providers' || Platform.OS === 'ios')
-    .map((mode) => {
-      const base = BASE[mode];
-      return {
-        ...base,
-        title: SPEECH_TITLES[mode] || base.title,
-        description: SPEECH_DESCRIPTIONS[mode],
-      };
-    });
+    .map((mode) => ({ ...BASE[mode], description: DESCRIPTIONS[scope][mode] }));
 }
 
 export const MODE_LABELS: Record<InferenceMode, string> = {
-  providers: 'Providers',
+  providers: 'Bring Your Own Key',
   openwhispr: 'OpenWhispr Cloud',
   local: 'On-Device',
 };

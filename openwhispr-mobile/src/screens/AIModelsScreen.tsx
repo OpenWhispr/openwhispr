@@ -64,9 +64,9 @@ export default function AIModelsScreen() {
         <SettingsSection>
           <SettingsRow
             iconStyle="line"
-            icon="network"
-            mdIcon="Network"
-            title="Providers"
+            icon="key"
+            mdIcon="KeyRound"
+            title="Bring Your Own Key"
             description="Use your own API keys for transcription and text AI."
             onPress={() => router.push('/(account)/providers')}
           />

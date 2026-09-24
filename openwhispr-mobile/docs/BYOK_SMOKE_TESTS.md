@@ -17,7 +17,7 @@ Run from `openwhispr-mobile/`: `npm test -- --runInBand`, `npm run typecheck`, `
 
 ## Credentials and access
 
-- Use Providers while signed out and without Pro. Confirm no OpenWhispr hosted inference or allowance consumption.
+- Use Bring Your Own Key while signed out and without Pro. Confirm no OpenWhispr hosted inference or allowance consumption.
 - Replace/remove credentials and retry a job. Removal must reject credential reuse; it must not switch provider or model.
 - Sign-out keeps personal settings/credentials. Deleting the app does not remove Keychain items; "Remove credential" and "Remove all provider keys" do, including keys for a Custom endpoint that was since changed.
 - Reboot an iPhone, unlock once, lock again, and verify background credential access without a biometric prompt.
@@ -27,12 +27,12 @@ Run from `openwhispr-mobile/`: `npm test -- --runInBand`, `npm run typecheck`, `
 ## Privacy, keyboard, and recovery
 
 - Start each workflow with one selection; change settings before completion/retry. The job must keep its original provider, model, endpoint, cleanup, and agent routes.
-- Exercise private mode/private-note consent at each stage. No remote stage may bypass privacy because Providers is selected. An On-Device text selection must never reach OpenWhispr Cloud, even after the consent dialog.
+- Exercise private mode/private-note consent at each stage. No remote stage may bypass privacy because Bring Your Own Key is selected. An On-Device text selection must never reach OpenWhispr Cloud, even after the consent dialog.
 - Make transcription succeed and cleanup fail. Retain raw text/audio and show the cleanup failure without calling hosted inference.
 - Exercise keyboard recording, imports, explicit retry, suspension, OS termination/relaunch, and user force-quit separately.
 - Start a newer keyboard job before an old native upload completes. The older completion must not overwrite current status or insert text twice.
 - Force-quit during a keyboard agent command. On relaunch the spoken instruction must be neither inserted nor added to history.
-- Toggle Cloud/On-Device on Home while not recording, then confirm dictation, Speech-to-Text and Providers screens agree; the toggle is disabled while recording.
+- Toggle Cloud/On-Device on Home while not recording, then confirm dictation, Speech-to-Text and Bring Your Own Key screens agree; the toggle is disabled while recording.
 - Record over 25 MB (or import a large file) and confirm the "25 MB provider limit" refusal happens before any upload.
 
 ## Network and native gates

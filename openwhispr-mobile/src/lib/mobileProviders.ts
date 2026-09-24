@@ -18,6 +18,15 @@ export function getMobileProvidersForScope(scope: MobileInferenceScope): Provide
   );
 }
 
+// Names a provider the way the settings screens do.
+export function providerDisplayName(providerId: string): string {
+  if (providerId === 'custom') return 'Custom server';
+  return (
+    getMobileProvidersForScope('cleanup').find((provider) => provider.id === providerId)?.name ??
+    providerId
+  );
+}
+
 export function resolveMobileInferenceRoute(
   input: Parameters<typeof resolveInferenceRoute>[0],
 ): RouteResolution {

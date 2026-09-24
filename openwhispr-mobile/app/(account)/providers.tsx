@@ -1,1 +1,1 @@
-export { ProviderSettingsScreen as default } from '@/screens/ProviderSettingsScreen';
+export { ByokWorkflowsScreen as default } from '@/screens/ByokWorkflowsScreen';

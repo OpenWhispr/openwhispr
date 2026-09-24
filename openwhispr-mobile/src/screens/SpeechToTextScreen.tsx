@@ -24,7 +24,7 @@ export default function SpeechToTextScreen() {
   const handleSelectMode = useCallback(
     async (mode: InferenceMode) => {
       if (mode === 'providers') {
-        router.push('/(account)/providers');
+        router.push({ pathname: '/(account)/provider-workflow', params: { scope: 'dictation' } });
         return;
       }
       if (mode === selectedMode) return;

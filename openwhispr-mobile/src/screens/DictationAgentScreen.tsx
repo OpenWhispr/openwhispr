@@ -46,7 +46,7 @@ export function DictationAgentScreen(): React.JSX.Element {
           <Text className="text-[13px] text-secondaryLabel">
             When you say your assistant’s name while dictating, OpenWhispr rewrites what you said
             into polished, ready-to-use text instead of inserting it word for word. Requires Cloud
-            or Providers mode.
+            or Bring Your Own Key mode.
           </Text>
         </View>
 

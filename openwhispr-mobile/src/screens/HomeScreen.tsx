@@ -551,7 +551,9 @@ export default function HomeScreen() {
             accessibilityRole="switch"
             accessibilityState={{ checked: !isPrivateMode, disabled: isRecording }}
             accessibilityLabel={
-              activeMode === 'providers' ? 'Provider transcription settings' : 'Cloud transcription'
+              activeMode === 'providers'
+                ? 'Bring Your Own Key transcription'
+                : 'Cloud transcription'
             }
             className="h-9 flex-row items-center rounded-full px-1 active:opacity-80"
             style={{
@@ -561,7 +563,7 @@ export default function HomeScreen() {
           >
             {!isPrivateMode && (
               <Text className="ml-2 mr-1 text-xs font-bold text-white">
-                {activeMode === 'providers' ? 'Providers' : 'On'}
+                {activeMode === 'providers' ? 'Own key' : 'On'}
               </Text>
             )}
             <View className="h-7 w-7 items-center justify-center rounded-full bg-white">

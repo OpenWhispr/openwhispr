@@ -4,7 +4,7 @@ import type { InferenceRoute } from '@shared/ai/routing';
 import { isTranscriptionScope } from '@shared/ai/routing';
 import { buildApiUrl, isSecureHttpEndpoint, normalizeBaseUrl } from '@shared/ai/endpoints';
 import modelCatalog from '@shared/ai/modelRegistryData.json';
-import { MOBILE_PROVIDER_IDS, getMobileProvidersForScope } from '@/lib/mobileProviders';
+import { MOBILE_PROVIDER_IDS, providerDisplayName } from '@/lib/mobileProviders';
 import {
   getProviderCredential,
   getProviderCredentialReference,
@@ -90,15 +90,6 @@ export interface ProviderConnectionResult {
   scope: ProviderRoute['scope'];
 }
 
-// Error copy names the provider the way the settings screen does.
-function providerName(providerId: string): string {
-  if (providerId === 'custom') return 'Custom server';
-  return (
-    getMobileProvidersForScope('cleanup').find((provider) => provider.id === providerId)?.name ??
-    providerId
-  );
-}
-
 export class ProviderExecutionError extends Error {
   public readonly code: string;
   public readonly status?: number;
@@ -121,41 +112,41 @@ function errorForStatus(providerId: string, status: number): ProviderExecutionEr
   if (status === 401 || status === 403) {
     return new ProviderExecutionError(
       'INVALID_CREDENTIAL',
-      `${providerName(providerId)} rejected the configured credential.`,
+      `${providerDisplayName(providerId)} rejected the configured credential.`,
       { status },
     );
   }
   if (status === 402) {
     return new ProviderExecutionError(
       'PROVIDER_QUOTA_EXCEEDED',
-      `${providerName(providerId)} reports a billing or quota problem for this key.`,
+      `${providerDisplayName(providerId)} reports a billing or quota problem for this key.`,
       { status },
     );
   }
   if (status === 404) {
     return new ProviderExecutionError(
       'MODEL_NOT_FOUND',
-      `${providerName(providerId)} did not find the selected model or endpoint.`,
+      `${providerDisplayName(providerId)} did not find the selected model or endpoint.`,
       { status },
     );
   }
   if (status === 429) {
     return new ProviderExecutionError(
       'PROVIDER_RATE_LIMITED',
-      `${providerName(providerId)} is rate limited. Try again later.`,
+      `${providerDisplayName(providerId)} is rate limited. Try again later.`,
       { status },
     );
   }
   if (status >= 500) {
     return new ProviderExecutionError(
       'PROVIDER_UNAVAILABLE',
-      `${providerName(providerId)} is temporarily unavailable.`,
+      `${providerDisplayName(providerId)} is temporarily unavailable.`,
       { status, retryable: true },
     );
   }
   return new ProviderExecutionError(
     'PROVIDER_REQUEST_FAILED',
-    `${providerName(providerId)} rejected the request (${status}).`,
+    `${providerDisplayName(providerId)} rejected the request (${status}).`,
     { status },
   );
 }
@@ -164,7 +155,7 @@ function assertSupportedProvider(route: ProviderRoute): void {
   if (!MOBILE_PROVIDER_IDS.includes(route.providerId)) {
     throw new ProviderExecutionError(
       'PROVIDER_UNSUPPORTED',
-      `${providerName(route.providerId)} is not available on this device.`,
+      `${providerDisplayName(route.providerId)} is not available on this device.`,
     );
   }
 }
@@ -189,7 +180,7 @@ async function apiKeyForRoute(
     if (route.providerId === 'custom') return null;
     throw new ProviderExecutionError(
       'CREDENTIAL_MISSING',
-      `Configure credentials for ${providerName(route.providerId)}.`,
+      `Configure credentials for ${providerDisplayName(route.providerId)}.`,
     );
   }
   const expectedReference = await getProviderCredentialReference(route.providerId, route.endpoint);
@@ -203,7 +194,7 @@ async function apiKeyForRoute(
   if (!credential) {
     throw new ProviderExecutionError(
       'CREDENTIAL_MISSING',
-      `Configure credentials for ${providerName(route.providerId)}.`,
+      `Configure credentials for ${providerDisplayName(route.providerId)}.`,
     );
   }
   return credential.apiKey;
@@ -274,7 +265,7 @@ function normalizeTransportFailure(error: unknown, providerId: string): Error {
   }
   return new ProviderExecutionError(
     'PROVIDER_NETWORK_ERROR',
-    `Unable to reach ${providerName(providerId)}.`,
+    `Unable to reach ${providerDisplayName(providerId)}.`,
     {
       retryable: true,
     },
@@ -287,7 +278,7 @@ async function parseJson(response: Response, providerId: string): Promise<unknow
   } catch {
     throw new ProviderExecutionError(
       'PROVIDER_RESPONSE_INVALID',
-      `${providerName(providerId)} returned an invalid response.`,
+      `${providerDisplayName(providerId)} returned an invalid response.`,
     );
   }
 }
@@ -306,7 +297,7 @@ function requireText(text: string | null, providerId: string): string {
   if (text) return text;
   throw new ProviderExecutionError(
     'PROVIDER_RESPONSE_INVALID',
-    `${providerName(providerId)} returned an empty or malformed response.`,
+    `${providerDisplayName(providerId)} returned an empty or malformed response.`,
   );
 }
 
@@ -451,7 +442,7 @@ async function discoverModels(
   if (!models.length) {
     throw new ProviderExecutionError(
       'PROVIDER_RESPONSE_INVALID',
-      `${providerName(route.providerId)} returned no usable models.`,
+      `${providerDisplayName(route.providerId)} returned no usable models.`,
     );
   }
   return { models, verification: 'catalog-only' };

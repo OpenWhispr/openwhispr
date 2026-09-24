@@ -38,6 +38,7 @@ export function SettingsRow({
     <Pressable
       onPress={onPress}
       disabled={!onPress && !rightElement}
+      accessibilityState={{ selected }}
       className={selected ? 'bg-brand/10 active:bg-brand/20' : 'active:bg-tertiarySystemFill'}
     >
       <View

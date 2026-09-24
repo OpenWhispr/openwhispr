@@ -1,22 +1,22 @@
 import React from 'react';
-import { Alert } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
 const mockSetActiveMode = jest.fn();
 const mockSetCredential = jest.fn().mockResolvedValue(undefined);
 const mockRemoveCredential = jest.fn().mockResolvedValue(undefined);
-const mockClearCredentials = jest.fn().mockResolvedValue(undefined);
 const mockTestConnection = jest.fn();
 const mockDiscoverModels = jest.fn();
 const mockPolicy = jest.fn();
 let mockActiveMode = 'cloud';
 const mockCredentialStatus = jest.fn().mockResolvedValue({ isConfigured: false });
 let mockConfig: Record<string, unknown> | null = null;
+let mockScope: string | undefined;
 
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/GradientGlassSurface', () => ({ GradientGlassSurface: () => null }));
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ scope: mockScope }) }));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: Object.assign(
     (selector: (state: unknown) => unknown) =>
@@ -41,7 +41,6 @@ jest.mock('@/services/providers/ProviderCredentials', () => ({
   getProviderCredentialStatus: (...args: unknown[]) => mockCredentialStatus(...args),
   setProviderCredential: (...args: unknown[]) => mockSetCredential(...args),
   removeProviderCredential: (...args: unknown[]) => mockRemoveCredential(...args),
-  clearProviderCredentials: (...args: unknown[]) => mockClearCredentials(...args),
 }));
 
 import { ProviderSettingsScreen } from '../ProviderSettingsScreen';
@@ -52,13 +51,21 @@ function chooseProvider(provider: string): void {
 }
 
 function enableProviders(): void {
-  fireEvent.press(screen.getByText('Inference mode'));
-  fireEvent.press(screen.getByText('Providers'));
+  fireEvent.press(screen.getByText('Bring Your Own Key'));
+}
+
+function selectedMode(): string | undefined {
+  return ['OpenWhispr Cloud', 'On-Device', 'Bring Your Own Key'].find((title) => {
+    let row = screen.getByText(title).parent;
+    while (row && !row.props.accessibilityState) row = row.parent;
+    return row?.props.accessibilityState.selected;
+  });
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockConfig = null;
+  mockScope = undefined;
   mockActiveMode = 'cloud';
   mockPolicy.mockResolvedValue({ status: 'unmanaged' });
   mockTestConnection.mockResolvedValue({ ok: true, verification: 'catalog-only' });
@@ -145,7 +152,7 @@ it('removes an existing credential and requires a replacement before saving', as
   expect(mockUpdateConfig).not.toHaveBeenCalled();
 });
 
-it('lists only the supported providers and no Live Meetings workflow', async () => {
+it('lists only the supported providers', async () => {
   render(<ProviderSettingsScreen />);
   enableProviders();
   fireEvent.press(screen.getByText('Provider'));
@@ -155,16 +162,13 @@ it('lists only the supported providers and no Live Meetings workflow', async () 
   expect(screen.getByText('Custom')).toBeTruthy();
   expect(screen.queryByText('Corti')).toBeNull();
   expect(screen.queryByText('Tinfoil')).toBeNull();
-  fireEvent.press(screen.getByText('Workflow'));
-  expect(screen.queryByText('Live Meetings')).toBeNull();
   await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
 });
 
 it('saves text workflow selection independently from the dictation mode', async () => {
   mockConfig = { defaultMode: 'private', inference: { dictation: { mode: 'local' } } };
+  mockScope = 'cleanup';
   render(<ProviderSettingsScreen />);
-  fireEvent.press(screen.getByText('Workflow'));
-  fireEvent.press(screen.getByText('Text Cleanup'));
   enableProviders();
   chooseProvider('Groq');
   fireEvent.changeText(screen.getByLabelText('API key'), 'test-text-key');
@@ -264,17 +268,15 @@ it('checks a provider from On-Device mode, since a check sends no user content',
   expect(mockTestConnection).toHaveBeenCalled();
 });
 
-it('shows cleanup as waiting for a provider when Providers dictation will skip it', async () => {
+it('shows cleanup as waiting for a provider when Bring Your Own Key dictation will skip it', async () => {
   mockConfig = {
     defaultMode: 'providers',
     inference: { dictation: { mode: 'providers', providerId: 'openai', modelId: 'whisper-1' } },
   };
   mockActiveMode = 'providers';
+  mockScope = 'cleanup';
   render(<ProviderSettingsScreen />);
-  fireEvent.press(screen.getByText('Workflow'));
-  fireEvent.press(screen.getByText('Text Cleanup'));
-  expect(screen.getByText('Providers')).toBeTruthy();
-  expect(screen.queryByText('OpenWhispr Cloud')).toBeNull();
+  expect(selectedMode()).toBe('Bring Your Own Key');
   expect(
     screen.getByText('Not saved yet. Cleanup is skipped until you save a selection.'),
   ).toBeTruthy();
@@ -284,7 +286,7 @@ it('shows a guest held in On-Device mode as On-Device, not a stale Cloud prefere
   mockConfig = { defaultMode: 'cloud' };
   mockActiveMode = 'private';
   render(<ProviderSettingsScreen />);
-  expect(screen.getByText('On-Device')).toBeTruthy();
+  expect(selectedMode()).toBe('On-Device');
 });
 
 it('discovers custom models before choosing a model, without silently selecting one', async () => {
@@ -304,13 +306,12 @@ it('discovers custom models before choosing a model, without silently selecting 
 it('defaults an unselected workflow to On-Device for a private-mode user', () => {
   mockConfig = { defaultMode: 'private' };
   mockActiveMode = 'private';
+  mockScope = 'upload';
   render(<ProviderSettingsScreen />);
-  fireEvent.press(screen.getByText('Workflow'));
-  fireEvent.press(screen.getByText('Uploads'));
-  expect(screen.getByText('On-Device')).toBeTruthy();
+  expect(selectedMode()).toBe('On-Device');
 });
 
-it('keeps uploads on the previous mode when dictation switches to Providers', async () => {
+it('keeps uploads on the previous mode when dictation switches to Bring Your Own Key', async () => {
   mockConfig = { defaultMode: 'private' };
   mockActiveMode = 'private';
   mockCredentialStatus.mockResolvedValue({ isConfigured: true });
@@ -325,7 +326,7 @@ it('keeps uploads on the previous mode when dictation switches to Providers', as
   expect(saved.inference.upload).toEqual({ mode: 'local' });
 });
 
-it('releases the upload pin when dictation moves from Providers to Cloud', async () => {
+it('releases the upload pin when dictation moves from Bring Your Own Key to Cloud', async () => {
   mockConfig = {
     defaultMode: 'providers',
     inference: {
@@ -335,7 +336,6 @@ it('releases the upload pin when dictation moves from Providers to Cloud', async
   };
   mockActiveMode = 'providers';
   render(<ProviderSettingsScreen />);
-  fireEvent.press(screen.getByText('Inference mode'));
   fireEvent.press(screen.getByText('OpenWhispr Cloud'));
   fireEvent.press(screen.getByText('Save selection'));
   await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
@@ -360,7 +360,7 @@ it('pins uploads to the mode the app is in, not a stale saved Cloud preference',
   expect(saved.inference.upload).toEqual({ mode: 'local' });
 });
 
-it('keeps an existing BYOK user uploads on Cloud when dictation is re-saved as Providers', async () => {
+it('keeps uploads on Cloud when an existing user re-saves dictation with their own key', async () => {
   mockConfig = {
     defaultMode: 'providers',
     inference: {
@@ -375,7 +375,7 @@ it('keeps an existing BYOK user uploads on Cloud when dictation is re-saved as P
   mockActiveMode = 'providers';
   mockCredentialStatus.mockResolvedValue({ isConfigured: true });
   render(<ProviderSettingsScreen />);
-  // Dictation already opens in Providers mode for this config.
+  // Dictation already opens in Bring Your Own Key mode for this config.
   chooseProvider('OpenAI');
   fireEvent.press(screen.getByText('Save selection'));
   await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
@@ -383,14 +383,4 @@ it('keeps an existing BYOK user uploads on Cloud when dictation is re-saved as P
     inference: Record<string, { mode: string }>;
   };
   expect(saved.inference.upload).toEqual({ mode: 'openwhispr' });
-});
-
-it('removes every saved provider key after confirmation', async () => {
-  jest
-    .spyOn(Alert, 'alert')
-    .mockImplementation((_title, _message, buttons) => buttons?.[1]?.onPress?.());
-  render(<ProviderSettingsScreen />);
-  fireEvent.press(screen.getByText('Remove all provider keys'));
-  await screen.findByText('All provider keys were removed.');
-  expect(mockClearCredentials).toHaveBeenCalledTimes(1);
 });

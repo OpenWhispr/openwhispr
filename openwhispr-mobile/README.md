@@ -6,7 +6,7 @@ The mobile app lives in the main [`OpenWhispr/openwhispr`](https://github.com/Op
 
 ## Highlights
 
-- **Cloud, Private, or Providers** — choose hosted transcription, on-device inference, or your own provider on iOS
+- **Cloud, Private, or Bring Your Own Key** — choose hosted transcription, on-device inference, or your own provider key on iOS
 - **iOS dictation keyboard** — dictate from any text field system-wide via a custom keyboard extension
 - **Markdown notes** — folders, full-text search, AI-assisted cleanup
 - **Native iOS feel** — Liquid Glass tab bar and headers on iOS 26+, blur fallback on iOS 18
@@ -50,7 +50,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for platform prerequisites, configurati
 
 ## Personal provider setup (iOS)
 
-Open **AI Models → Providers**, choose a workflow, then select a provider and model. Dictation/keyboard, uploads, cleanup, note formatting/titles, and chat/voice assistant keep separate selections. This release supports OpenAI, Groq, OpenRouter (text), and any OpenAI-compatible Custom server. Other providers in the shared catalog are not offered on mobile yet. Available models follow the shared desktop catalog; actual release readiness is tracked in the [provider smoke-test matrix](./docs/BYOK_SMOKE_TESTS.md).
+Open **AI Models → Bring Your Own Key** and tap a workflow. Each workflow (dictation/keyboard, uploads, cleanup, note formatting/titles, and chat/voice assistant) has its own mode; choose **Bring Your Own Key**, then a provider and model. The list shows what each workflow currently runs. This release supports OpenAI, Groq, OpenRouter (text), and any OpenAI-compatible Custom server. Other providers in the shared catalog are not offered on mobile yet. Available models follow the shared desktop catalog; actual release readiness is tracked in the [provider smoke-test matrix](./docs/BYOK_SMOKE_TESTS.md).
 
 Enter a provider API key and save. No OpenWhispr account or Pro subscription is required for personal provider use; your provider bills requests separately. Hosted inference and sync retain their existing account requirements. Provider credentials live in device-local secure storage, are not synced, and survive sign-out. Remove credential deletes one key; Remove all provider keys deletes every saved key, including keys for Custom endpoints you no longer use. Deleting the app does not remove Keychain items, so remove the keys first if you want them gone.
 
@@ -58,9 +58,9 @@ Enter a provider API key and save. No OpenWhispr account or Pro subscription is 
 
 For an OpenAI-compatible server, choose **Custom** and enter its base URL and model ID. Credentials are optional. Public servers require HTTPS; private-network HTTP is validated separately in both shared code and the native transport. On an iPhone, `localhost` means that iPhone, not your computer. Use the server's LAN address and allow Local Network access when prompted. If access fails, check **Settings → Privacy & Security → Local Network**, the server binding, firewall, and address. Platform ATS restrictions may still require HTTPS for LAN IP or Tailscale hosts; see the smoke-test matrix.
 
-Providers are remote inference. Privacy settings and organization policy still apply. Changing settings does not change a job's captured route, and failed cleanup preserves the original transcript. The iOS-first rollout does not enable provider setup on Android.
+Bring Your Own Key runs remote inference. Privacy settings and organization policy still apply. Changing settings does not change a job's captured route, and failed cleanup preserves the original transcript. The iOS-first rollout does not enable provider setup on Android.
 
-A providers-only developer build needs no OpenWhispr production credentials; the `.env.local` copied during setup works as is. Native modules require a development build rather than Expo Go. Configure your own signing identifiers as described in [CONTRIBUTING.md](./CONTRIBUTING.md). Provider keys belong in the app's secure credential fields, never in `EXPO_PUBLIC_` variables.
+A developer build that only uses your own keys needs no OpenWhispr production credentials; the `.env.local` copied during setup works as is. Native modules require a development build rather than Expo Go. Configure your own signing identifiers as described in [CONTRIBUTING.md](./CONTRIBUTING.md). Provider keys belong in the app's secure credential fields, never in `EXPO_PUBLIC_` variables.
 
 ## Project layout
 
