@@ -87,6 +87,7 @@ import {
   resolveStreamingFallbackTarget,
   resolveStreamingStartFallback,
 } from "./transcriptionFallback";
+import { transcriptionFailureOutcome } from "./transcriptionFailureOutcome";
 import {
   executeTranslationChain,
   hasTextContent,
@@ -111,7 +112,6 @@ import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValida
 import { isEmptyRecording } from "./recordingGuard";
 import {
   analyzeDictionaryPromptFragment,
-  DICTIONARY_ECHO_CODE,
   dictionaryEchoError,
   matchesDictionaryPrompt,
   payloadSendsDictionaryBias,
@@ -164,29 +164,6 @@ const cloudSignInRequiredError = () => {
   err.code = "AUTH_REQUIRED";
   err.messageKey = "hooks.audioRecording.errorDescriptions.sessionExpired";
   return err;
-};
-
-// How a transcription failure ends, for batch recordings and failed-over
-// streaming ones alike. Silence is not reported. A transcript discarded as an
-// echo of the dictionary prompt reads as silence, but its recording is kept for
-// a manual retry like any real failure's, or the utterance vanishes (#1547).
-const transcriptionFailureOutcome = (error) => {
-  if (error.code === DICTIONARY_ECHO_CODE) return { noAudio: true, keepAudio: true, report: null };
-  if (error.message === "No audio detected") {
-    return { noAudio: true, keepAudio: false, report: null };
-  }
-  return {
-    noAudio: false,
-    keepAudio: true,
-    report: {
-      title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
-      description: error.selectionEditFatal
-        ? error.message
-        : `Transcription failed: ${error.message}`,
-      code: error.code,
-      messageKey: error.messageKey,
-    },
-  };
 };
 
 const micDeviceKey = (settings) =>
@@ -5442,7 +5419,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let usedBatchFallback = false;
     let batchWarning = null;
     let batchFallbackResult = null;
-    let failoverReport = null;
+    let failureReport = null;
     const failoverReason = this._streamingFailoverReason;
     // No stream will transcribe a failed-over recording, so it uploads at any
     // length, unless it was the silence the batch speech gate skips.
@@ -5453,10 +5430,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       logger.info("Speech gate skipped the failed-over upload", { failoverReason }, "streaming");
     }
     // A failed-over recording has no other transcript, so a failure to
-    // transcribe it ends as a batch recording's would.
-    const failFailover = (error) => {
+    // transcribe it ends as a batch recording's would. A stream that produced
+    // no text still ends quietly on a real failure, but keeps a recording that
+    // reads as silence for a retry, as batch does.
+    const failBatchFallback = (error) => {
       const outcome = transcriptionFailureOutcome(error);
-      failoverReport = outcome.report;
+      if (!failoverReason && outcome.report) return;
+      failureReport = outcome.report;
       if (outcome.keepAudio) {
         this.saveFailedTranscription(error.message, error.code || null, {
           durationSeconds,
@@ -5476,7 +5456,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           {},
           "streaming"
         );
-        if (failoverReason) failFailover(cloudSignInRequiredError());
+        failBatchFallback(cloudSignInRequiredError());
       } else {
         logger.info(
           "Streaming produced no text, falling back to batch transcription",
@@ -5515,7 +5495,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           // The cancelled upload's rejection is the expected outcome.
           if (wasCancelled()) return true;
           logger.error("Batch fallback failed", { error: fallbackErr.message }, "streaming");
-          if (failoverReason) failFailover(fallbackErr);
+          failBatchFallback(fallbackErr);
         }
       }
     }
@@ -5629,8 +5609,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     if (wasCancelled()) return true;
 
-    if (failoverReport) {
-      this.onError?.(failoverReport);
+    if (failureReport) {
+      this.onError?.(failureReport);
     } else if (!finalText) {
       // Match the batch pipeline: settle processing first, then publish the
       // empty outcome so the warning cannot interrupt the thinking transition.

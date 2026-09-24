@@ -488,6 +488,33 @@ test("a stream without a final falls back to batch for every provider, tagged on
   ]);
 });
 
+test("a no-final stream whose Cloud upload finds no speech keeps the recording quietly", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  globalThis.__streamingFinalizationSettings = {
+    ...globalThis.__streamingFinalizationSettings,
+    cloudTranscriptionMode: "openwhispr",
+    isSignedIn: true,
+  };
+  const { manager } = createFinalizingManager(AudioManager);
+  manager.recordingStartTime = Date.now() - 5000;
+  manager.mergeRecordedSegments = async () => new Blob([new Uint8Array(100)]);
+  const saved = [];
+  const errors = [];
+  const completions = [];
+  manager.saveFailedTranscription = (message, code) => saved.push({ message, code });
+  manager.onError = (error) => errors.push(error);
+  manager.onTranscriptionComplete = (result) => completions.push(result);
+  manager.processWithOpenWhisprCloud = async () => {
+    throw Object.assign(new Error("No speech detected in audio"), { code: "NO_SPEECH_DETECTED" });
+  };
+
+  await manager.stopStreamingRecording();
+
+  assert.deepEqual(saved, [{ message: "No speech detected in audio", code: "NO_SPEECH_DETECTED" }]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(completions, [{ success: true, text: "" }]);
+});
+
 test("Orukeet uses the acknowledged final even if the transcript event is delayed", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager } = createFinalizingManager(AudioManager);
