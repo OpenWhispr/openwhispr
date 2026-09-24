@@ -196,6 +196,29 @@ test("a warm index keeps answering while an edit drains in the background", asyn
   assert.equal(h.pending.size, 0);
 });
 
+test("an existing collection answers while activation drains; a new one waits for the drain", async () => {
+  for (const created of [false, true]) {
+    const h = harness();
+    h.index.ensureCollection = async () => ({ created });
+    const started = deferred();
+    const gate = deferred();
+    h.index.upsertNote = () => {
+      started.resolve();
+      return gate.promise;
+    };
+    h.notes.set(1, { title: "Queued", content: "" });
+    h.pending.set(1, 1);
+    const activation = h.lifecycle.warmUp();
+    await started.promise;
+    assert.deepEqual(
+      await h.lifecycle.search("query"),
+      created ? null : [{ noteId: 1, score: 0.9 }]
+    );
+    gate.resolve(true);
+    assert.equal(await activation, true);
+  }
+});
+
 test("activation drains purges, live updates and deletions before readiness", async () => {
   const h = harness();
   h.pending.set(1, 1);

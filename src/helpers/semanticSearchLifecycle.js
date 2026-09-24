@@ -204,7 +204,9 @@ class SemanticSearchLifecycle {
     this.vectorIndex.init(this.qdrant.getPort());
     this.indexPort = this.qdrant.getPort();
     const collection = await this.vectorIndex.ensureCollection();
+    // An existing collection answers while the journal catches it up; a new one is empty.
     if (collection.created) this.database.enqueueAllVectorChanges();
+    else this.ready = true;
     await this._drainPending();
     if (this.closed) return false;
     this.ready = true;

@@ -654,8 +654,8 @@ class IPCHandlers {
     this._granolaImportPending = null;
     this._analyticsHistoryBackfillPromise = null;
     this.speakerDiarizationEnabled = true;
-    // Meeting detectors stay off until the renderer syncs its saved notification
-    // preferences (see meetingDetectionPreferencePolicy.js).
+    // Default for the saved process-detection toggle. The engine keeps both detectors
+    // off until the renderer syncs (see meetingDetectionPreferencePolicy.js).
     this.meetingProcessDetection = true;
     this.activeMeetingSpeakerConfig = null;
     this.whisperVadSettings = {
@@ -2567,8 +2567,8 @@ class IPCHandlers {
     ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder) => {
       const result = this.databaseManager.relocateRevokedFolder(id, privateSpaceId, preserveFolder);
       if (result?.success) {
-        // The triggers journaled the relocated and deleted notes; the markdown
-        // mirror files by folder — refresh relocated notes, drop the server-owned ones.
+        // The triggers journaled the relocated and deleted notes. Mirror files live by
+        // folder, so rewrite the relocated notes and drop the server-owned ones.
         this.notifyVectorChanges();
         for (const note of result.relocatedNotes ?? []) {
           this._asyncMirrorWrite(note);
