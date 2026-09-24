@@ -113,6 +113,7 @@ export function ChatInput({
   });
   const isVoiceRecording = voice.status === "recording";
   const isVoiceTranscribing = voice.status === "transcribing";
+  const isCompactNote = variant === "note" && !outlined;
 
   const handleSubmit = useCallback(() => {
     const text = inputText.trim();
@@ -148,13 +149,13 @@ export function ChatInput({
   useLayoutEffect(() => {
     const input = inputRef.current;
     if (!input) return;
-    if (expandOnFocus || variant === "sidebar") {
+    if (expandOnFocus || variant === "sidebar" || isCompactNote) {
       input.style.height = "100%";
     } else {
       input.style.height = "auto";
       input.style.height = `${input.scrollHeight}px`;
     }
-  }, [inputText, isVoiceRecording, isVoiceTranscribing, expandOnFocus, variant]);
+  }, [inputText, isVoiceRecording, isVoiceTranscribing, expandOnFocus, variant, isCompactNote]);
 
   useEffect(() => {
     if (!isIdle || !focusOnIdle) return;
@@ -172,6 +173,7 @@ export function ChatInput({
           variant === "sidebar"
             ? "h-14 items-end rounded-3xl bg-background ps-4 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-2"
             : "rounded-3xl ps-4 pe-1.5 py-1.5",
+          isCompactNote && "h-12 overflow-hidden",
           variant === "assistant"
             ? "min-h-12 bg-card shadow-sm dark:bg-surface-2"
             : variant === "note"
@@ -280,7 +282,7 @@ export function ChatInput({
           <div
             className={cn(
               "flex items-end gap-2 w-full",
-              (expandOnFocus || variant === "sidebar") && "h-full"
+              (expandOnFocus || variant === "sidebar" || isCompactNote) && "h-full"
             )}
           >
             <textarea
@@ -299,7 +301,7 @@ export function ChatInput({
                 variant === "default" ? "text-[13px]" : "text-sm",
                 "text-foreground placeholder:text-muted-foreground/70",
                 "min-w-0 min-h-8 max-h-32 resize-none overflow-y-auto border-0 px-0 py-1.5 leading-5",
-                (expandOnFocus || variant === "sidebar") && "min-h-0 max-h-none",
+                (expandOnFocus || variant === "sidebar" || isCompactNote) && "min-h-0 max-h-none",
                 (isBusy || disabled) && "text-muted-foreground/70 cursor-not-allowed"
               )}
             />
