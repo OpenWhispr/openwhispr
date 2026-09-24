@@ -450,7 +450,12 @@ function initializeCoreManagers() {
   const { createPendingActions } = require("./src/helpers/connectors/pendingActions");
   const { createActionLog } = require("./src/helpers/connectors/actionLog");
   connectorManager = createConnectorManager({
-    connectors: [],
+    connectors: [
+      require("./src/helpers/connectors/emailConnector").createEmailConnector({
+        openExternal: (url) => require("./src/helpers/externalUrlOpener").openExternalUrl(url),
+        writeClipboard: (text, webContents) => clipboardManager.writeClipboard(text, webContents),
+      }),
+    ],
     pendingActions: createPendingActions(),
     actionLog: createActionLog(databaseManager),
     logger: debugLogger,
