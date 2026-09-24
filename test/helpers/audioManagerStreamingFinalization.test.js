@@ -391,3 +391,20 @@ test("an older streaming session cannot clean up the active session listeners", 
   assert.equal(manager.streamingFinalText, "current transcript");
   assert.equal(manager.streamingPartialText, "current partial");
 });
+
+test("streaming stop keeps a trailing partial after earlier finalized turns", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  globalThis.window.dispatchEvent = () => true;
+  let completion;
+  manager.streamingFinalText = "The first sentence.";
+  manager.streamingPartialText = "and the last ten seconds";
+  manager.finalizeChineseScript = async (text) => text;
+  manager.onTranscriptionComplete = (result) => {
+    completion = result;
+  };
+
+  await manager.stopStreamingRecording();
+
+  assert.equal(completion.text, "The first sentence. and the last ten seconds");
+});

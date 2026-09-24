@@ -37,6 +37,19 @@ function buildGeminiLiveUrl({ mode, token }) {
   return `${WS_BASE}.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${token}`;
 }
 
+// Same rules as src/helpers/streamingTranscript.js (ESM, renderer). A stop can
+// land while the last turn is still an interim, so the handover must include it.
+function mergeStreamingTranscript(committed, partial) {
+  const a = String(committed || "").trim();
+  const b = String(partial || "").trim();
+  if (!b) return a;
+  if (!a) return b;
+  if (a === b) return a;
+  if (a.endsWith(b) || a.includes(b)) return a;
+  if (b.startsWith(a) || b.includes(a)) return b;
+  return `${a} ${b}`;
+}
+
 // Every Live failure arrives as a close frame after the upgrade succeeded (the
 // socket's `error` event never carries them), and the server truncates close
 // reasons to the 123-byte WebSocket limit — classify on the code alone; the
@@ -85,6 +98,7 @@ class GeminiLiveStreaming {
     this._audioStreamEndSentAt = null;
     this._turnEnded = false;
     this._turnEndResolve = null;
+    this._latestPartial = "";
   }
 
   // Starts buffering audio before the socket exists, covering the token fetch
@@ -96,7 +110,7 @@ class GeminiLiveStreaming {
   }
 
   getFullTranscript() {
-    return this.completedSegments.join(" ");
+    return mergeStreamingTranscript(this.completedSegments.join(" "), this._latestPartial);
   }
 
   // Test seam: overridden to point at a loopback server.
@@ -145,6 +159,7 @@ class GeminiLiveStreaming {
     this._connectionLossNotified = false;
     this._audioStreamEndSentAt = null;
     this._turnEnded = false;
+    this._latestPartial = "";
 
     try {
       await this._openSocket(options);
@@ -238,12 +253,14 @@ class GeminiLiveStreaming {
       const partial = serverContent.interimInputTranscription?.text;
       if (partial) {
         this._turnEnded = false;
+        this._latestPartial = partial;
         this.onPartialTranscript?.(partial);
       }
 
       const final = serverContent.inputTranscription?.text?.trim();
       if (final) {
         this.completedSegments.push(final);
+        this._latestPartial = "";
         const fullText = this.getFullTranscript();
         this.onFinalTranscript?.(fullText, Date.now());
         debugLogger.debug("Gemini Live turn completed", {
@@ -417,7 +434,10 @@ class GeminiLiveStreaming {
 
     if (closeStream && this.ws.readyState === WebSocket.OPEN && this.audioBytesSent > 0) {
       this.finalize();
-      if (!this._turnEnded) await this._awaitTurnEnd();
+      // A new utterance can still be sitting in `_latestPartial` after an
+      // earlier generationComplete flipped `_turnEnded`. Wait again so that
+      // last turn can finalize; if it never does, `_takeTranscript` keeps the partial.
+      if (!this._turnEnded || this._latestPartial) await this._awaitTurnEnd();
     }
 
     const result = this._takeTranscript();
@@ -450,6 +470,7 @@ class GeminiLiveStreaming {
   _takeTranscript() {
     const result = { text: this.getFullTranscript() };
     this.completedSegments = [];
+    this._latestPartial = "";
     return result;
   }
 

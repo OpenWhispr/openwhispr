@@ -30,6 +30,7 @@ import { followsSystemDefaultMic } from "./micSelectionRecovery";
 import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
+import { mergeStreamingTranscript } from "./streamingTranscript";
 import {
   ANALYTICS_COUNTER_VERSION,
   countSpokenWords,
@@ -5043,20 +5044,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
     const tTerminate = performance.now();
 
-    finalText = this.streamingFinalText || "";
-
-    if (!finalText && this.streamingPartialText) {
-      finalText = this.streamingPartialText;
-      logger.debug("Using partial text as fallback", { textLength: finalText.length }, "streaming");
-    }
-
-    if (!finalText && stopResult?.text) {
-      finalText = stopResult.text;
+    finalText = mergeStreamingTranscript(this.streamingFinalText, this.streamingPartialText);
+    if (finalText && this.streamingPartialText?.trim() && this.streamingFinalText?.trim()) {
       logger.debug(
-        "Using disconnect result text as fallback",
+        "Merged trailing streaming partial into committed transcript",
         { textLength: finalText.length },
         "streaming"
       );
+    } else if (!this.streamingFinalText && this.streamingPartialText) {
+      logger.debug("Using partial text as fallback", { textLength: finalText.length }, "streaming");
+    }
+
+    if (stopResult?.text) {
+      const mergedWithStop = mergeStreamingTranscript(finalText, stopResult.text);
+      if (mergedWithStop !== finalText) {
+        finalText = mergedWithStop;
+        logger.debug(
+          "Using disconnect result text as fallback",
+          { textLength: finalText.length },
+          "streaming"
+        );
+      }
     }
 
     this.cleanupStreamingListeners(sessionId);
