@@ -50,3 +50,31 @@ test("excludes made-sure conditionals and other non-claims", async () => {
     assert.equal(findUnbackedActionClaim(answer, []), null, answer);
   }
 });
+
+// R13: reading back a first-person note is not the assistant claiming the action.
+test("ignores the user's own words read back from a note or snippet", async () => {
+  const { findUnbackedActionClaim } = await load();
+  for (const answer of [
+    "Your standup note says: I finished the report, I updated the tests, and I fixed the build.",
+    "Here's your snippet: I made the changes you asked for.",
+    'The note reads "I added the tests."',
+    "Your note reads “I created the draft, I saved it.”",
+    "It says 'I moved the meeting to Friday.' Want me to read the rest?",
+    'Your note, word for word: "I\'ve already updated the doc."',
+  ]) {
+    assert.equal(findUnbackedActionClaim(answer, []), null, answer);
+  }
+});
+
+test("apostrophes and quoted names do not hide a real claim", async () => {
+  const { findUnbackedActionClaim } = await load();
+  assert.equal(
+    findUnbackedActionClaim("I've updated the note called 'Standup'.", []),
+    "I've updated"
+  );
+  assert.equal(
+    findUnbackedActionClaim('Your note says "hi". I\'ve added a reply.', []),
+    "I've added"
+  );
+  assert.equal(findUnbackedActionClaim("At 3:30 today. I saved it.", []), "I saved");
+});
