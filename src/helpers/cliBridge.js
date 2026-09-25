@@ -98,7 +98,11 @@ function parsePositiveIntQuery(query, key, fallback) {
 
 function unwrapMutationResult(result, label) {
   if (!result?.success || !result[label]) {
-    throw new Error(result?.error || `Failed to write ${label}`);
+    const err = new Error(result?.error || `Failed to write ${label}`);
+    if (result?.error && /not found/i.test(result.error)) {
+      err.code = "NOT_FOUND";
+    }
+    throw err;
   }
   return result[label];
 }
