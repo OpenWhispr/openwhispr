@@ -253,10 +253,11 @@ test("the Upload tab never offers bring-your-own-key through live-only providers
   });
 });
 
-// Upload inherits dictation's endpoint, except a built-in provider's URL when
-// dictation is on another provider: a Custom upload without an endpoint of its
-// own then fails closed instead of posting the Custom key to that provider.
-test("an upload never borrows another built-in provider's endpoint", async (t) => {
+// Upload inherits dictation's endpoint from the member's saved settings, and only
+// while it stays on the provider they chose. The policy view carries built-in
+// providers' URLs the overlay wrote, and a policy fallback to Custom must stay
+// unconfigured rather than post the Custom key anywhere.
+test("a Custom upload inherits only the endpoint its member saved for it", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-upload-endpoint-inheritance-test-",
@@ -264,38 +265,29 @@ test("an upload never borrows another built-in provider's endpoint", async (t) =
   const { useSettingsStore, selectResolvedUploadTranscription } = await vite.ssrLoadModule(
     "/stores/settingsStore.ts"
   );
-  const base = useSettingsStore.getState();
-  const resolvedUrl = (overrides) =>
-    selectResolvedUploadTranscription({
-      ...base,
-      uploadCloudTranscriptionProvider: "custom",
-      uploadCloudTranscriptionBaseUrl: "",
-      ...overrides,
-    }).cloudTranscriptionBaseUrl;
+  const saved = {
+    ...useSettingsStore.getState(),
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
+    uploadCloudTranscriptionProvider: "custom",
+    uploadCloudTranscriptionBaseUrl: "",
+  };
+  const url = (...args) => selectResolvedUploadTranscription(...args).cloudTranscriptionBaseUrl;
 
-  assert.equal(
-    resolvedUrl({
-      cloudTranscriptionProvider: "deepgram",
-      cloudTranscriptionBaseUrl: "https://api.deepgram.com/v1",
-    }),
-    "",
-    "a built-in provider's URL stays with that provider"
-  );
-  // The Custom tab's own endpoint survives a later switch of dictation to another
-  // provider, as when onboarding set up Custom for every scope.
-  assert.equal(
-    resolvedUrl({
-      cloudTranscriptionProvider: "openai",
-      cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
-    }),
-    "https://stt.example.com/v1"
-  );
-  assert.equal(
-    resolvedUrl({
-      cloudTranscriptionProvider: "custom",
-      cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
-      uploadCloudTranscriptionProvider: "",
-    }),
-    "https://stt.example.com/v1"
-  );
+  // Without a policy the view is the saved settings: the Custom tab's endpoint
+  // survives dictation moving to another provider (onboarding sets Custom everywhere).
+  assert.equal(url(saved), "https://stt.example.com/v1");
+  const policyView = {
+    ...saved,
+    cloudTranscriptionProvider: "deepgram",
+    cloudTranscriptionBaseUrl: "https://api.deepgram.com/v1",
+  };
+  assert.equal(url(policyView, saved), "https://stt.example.com/v1", "the member chose Custom");
+  // The policy moved an inheriting upload to Custom: no endpoint, even a saved one.
+  const inheriting = {
+    ...saved,
+    cloudTranscriptionProvider: "deepgram",
+    uploadCloudTranscriptionProvider: "",
+  };
+  assert.equal(url(policyView, inheriting), "", "a policy fallback to Custom stays unconfigured");
 });

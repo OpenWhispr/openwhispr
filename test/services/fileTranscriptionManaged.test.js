@@ -181,8 +181,9 @@ test("the upload lane refuses providers the workspace policy does not allow", as
       },
     });
   const upload = (config) => transcribeFileWithSpeakers("/tmp/a.wav", config, noDiarization);
+  // As UploadAudioView resolves it: the policy view plus the member's saved settings.
   const uploadAsResolved = () => {
-    const resolved = selectResolvedUploadTranscription(getSettings());
+    const resolved = selectResolvedUploadTranscription(getSettings(), useSettingsStore.getState());
     return upload(
       cfg({
         cloudTranscriptionProvider: resolved.cloudTranscriptionProvider,

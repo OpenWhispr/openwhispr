@@ -297,7 +297,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     remoteTranscriptionModel,
   } = useSettingsStore(
     useShallow((settings) =>
-      selectResolvedUploadTranscription(selectPolicyEffectiveSettings(settings, policyState))
+      selectResolvedUploadTranscription(
+        selectPolicyEffectiveSettings(settings, policyState),
+        settings
+      )
     )
   );
   const uploadAllowedByPolicy = useTranscriptionContextAllowed("upload");

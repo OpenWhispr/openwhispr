@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
+import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
@@ -149,10 +149,6 @@ function transcriptionModelBelongsToProvider(
   if (providerId === "custom") return Boolean(modelId);
   return transcriptionProviderModels(providerId, context).some((model) => model.id === modelId);
 }
-
-const REGISTRY_TRANSCRIPTION_BASE_URLS = new Set(
-  modelRegistryData.transcriptionProviders.map((provider) => normalizeBaseUrl(provider.baseUrl))
-);
 
 function canonicalTranscriptionBaseUrl(providerId: string): string | null {
   return (
@@ -2802,26 +2798,30 @@ export interface ResolvedUploadTranscription {
   remoteTranscriptionModel: string;
 }
 
+const resolveUploadCloudProvider = (state: SettingsState): string =>
+  state.uploadCloudTranscriptionProvider ||
+  (STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider)
+    ? DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER
+    : state.cloudTranscriptionProvider);
+
 // Audio upload is batch (not streaming), so unset values fall back to the base
 // dictation settings — matching the behavior before upload had its own context.
 // A realtime-only dictation provider is the exception: it has no batch route, so
 // inheriting it would fail every upload closed. Uploads take the default provider
 // instead, and the dictation model stays behind with the provider it belongs to.
-// Dictation's endpoint is inherited too, except a built-in provider's URL when
-// dictation is on a different provider: a Custom upload without an endpoint of its
-// own then fails closed instead of posting the Custom key to that provider (the
-// policy overlay writes those URLs). The self-hosted server is the exception the other way: it
+// The inherited endpoint comes from `saved`, the member's own settings, and only
+// while the upload stays on the provider they chose: under a workspace policy the
+// caller passes the policy view as `state`, whose endpoints the overlay binds to
+// built-in providers, and a policy fallback to Custom stays unconfigured, as it
+// does for dictation. The self-hosted server is the exception the other way: it
 // never inherits, so uploads go only to the server the Upload tab shows (#2049).
 // migrateUploadSelfHosted() seeds it once for profiles from before the tab had its own.
 export const selectResolvedUploadTranscription = (
-  state: SettingsState
+  state: SettingsState,
+  saved: SettingsState = state
 ): ResolvedUploadTranscription => {
   const inheritsDictationProvider = !STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider);
-  const cloudTranscriptionProvider =
-    state.uploadCloudTranscriptionProvider ||
-    (inheritsDictationProvider
-      ? state.cloudTranscriptionProvider
-      : DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER);
+  const cloudTranscriptionProvider = resolveUploadCloudProvider(state);
   return {
     useLocalWhisper: state.uploadUseLocalWhisper,
     whisperModel: state.uploadWhisperModel || state.whisperModel,
@@ -2834,9 +2834,8 @@ export const selectResolvedUploadTranscription = (
       (inheritsDictationProvider ? state.cloudTranscriptionModel : ""),
     cloudTranscriptionBaseUrl:
       state.uploadCloudTranscriptionBaseUrl ||
-      (cloudTranscriptionProvider === state.cloudTranscriptionProvider ||
-      !REGISTRY_TRANSCRIPTION_BASE_URLS.has(normalizeBaseUrl(state.cloudTranscriptionBaseUrl))
-        ? state.cloudTranscriptionBaseUrl
+      (cloudTranscriptionProvider === resolveUploadCloudProvider(saved)
+        ? saved.cloudTranscriptionBaseUrl
         : ""),
     cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
     transcriptionMode: state.uploadTranscriptionMode,
