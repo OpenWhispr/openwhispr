@@ -497,6 +497,37 @@ it('adds no pins when an existing user re-saves dictation with their own key', a
   expect(saved.inference.notes).toBeUndefined();
 });
 
+it.each([
+  [
+    'cleanup',
+    'On-Device mode keeps the raw transcript, so cleanup is skipped. Your choice applies when dictation leaves On-Device.',
+  ],
+  [
+    'agent',
+    'In On-Device mode the voice assistant is off, and note chat asks before sending a note off this iPhone.',
+  ],
+  [
+    'notes',
+    'On-Device mode formats notes on this iPhone and asks before sending one to your choice here.',
+  ],
+])('explains what On-Device mode means for %s', (scope, note) => {
+  mockConfig = { defaultMode: 'private' };
+  mockActiveMode = 'private';
+  mockScope = scope;
+  render(<ProviderSettingsScreen />);
+  expect(screen.getByText(note)).toBeTruthy();
+});
+
+it('does not save a workflow that was never set until something is chosen', async () => {
+  mockConfig = { defaultMode: 'private' };
+  mockActiveMode = 'private';
+  mockScope = 'agent';
+  render(<ProviderSettingsScreen />);
+  fireEvent.press(screen.getByText('Save selection'));
+  await act(async () => undefined);
+  expect(mockUpdateConfig).not.toHaveBeenCalled();
+});
+
 it('explains that On-Device mode keeps a workflow on this phone, and still saves it', async () => {
   mockConfig = {
     defaultMode: 'private',

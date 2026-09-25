@@ -36,12 +36,14 @@ export default function CleanupPromptScreen() {
   const baseline = override ?? DEFAULT_CLEANUP_PROMPT;
   const [draft, setDraft] = useState(baseline);
 
-  // Every cleanup route uses the prompt; Bring Your Own Key skips cleanup until it has a selection.
+  // On-Device transcripts stay raw, and Bring Your Own Key skips cleanup until it has a selection.
   const inactiveNotice = !cleanupEnabled
     ? 'Dictation Cleanup is off. Your prompt is saved and applies once you turn it on.'
-    : activeMode === 'providers' && !cleanupSelected
-      ? 'Bring Your Own Key skips cleanup until Text Cleanup has a selection. Your prompt is saved and applies once it does.'
-      : null;
+    : activeMode === 'private'
+      ? 'On-Device mode keeps the raw transcript, so cleanup is skipped. Your prompt is saved and applies when dictation leaves On-Device.'
+      : activeMode === 'providers' && !cleanupSelected
+        ? 'Bring Your Own Key skips cleanup until Text Cleanup has a selection. Your prompt is saved and applies once it does.'
+        : null;
   const isDirty = draft !== baseline;
   const missingPlaceholder = !hasAgentNamePlaceholder(draft);
 

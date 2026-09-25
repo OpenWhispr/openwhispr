@@ -29,6 +29,7 @@ import {
 import { useAuthStore } from '@/store/useAuthStore';
 import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
 import {
+  ON_DEVICE_MODE_NOTES,
   UNSET_PROVIDER_NOTES,
   confirmSpeechModeReady,
   parseWorkflow,
@@ -149,8 +150,8 @@ function WorkflowSettings({
   const providerId = provider?.id;
   const models = provider?.models.length ? provider.models : discoveredModels;
   const modeNote =
-    activeMode === 'private' && scope !== 'dictation'
-      ? 'On-Device mode keeps this on your iPhone. Your choice applies when dictation leaves On-Device.'
+    activeMode === 'private'
+      ? ON_DEVICE_MODE_NOTES[scope]
       : activeMode === 'providers' && !config?.inference?.[scope]
         ? UNSET_PROVIDER_NOTES[scope]
         : undefined;
@@ -629,7 +630,13 @@ function WorkflowSettings({
               {notice}
             </Text>
           ) : null}
-          <Button loading={busy} onPress={save}>
+          {/* A workflow that was never set is not saved until something is chosen, so the
+              default shown here never becomes an explicit choice. */}
+          <Button
+            loading={busy}
+            disabled={!hasUnsavedChanges && !config?.inference?.[scope]}
+            onPress={save}
+          >
             Save selection
           </Button>
         </View>

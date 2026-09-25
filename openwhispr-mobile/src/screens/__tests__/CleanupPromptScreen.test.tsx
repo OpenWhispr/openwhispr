@@ -92,10 +92,10 @@ describe('CleanupPromptScreen — guidance', () => {
     expect(screen.queryByText(/requires Cloud mode/)).not.toBeOnTheScreen();
   });
 
-  it('treats On-Device cleanup as using the prompt', () => {
+  it('says the prompt has no effect while On-Device mode keeps the raw transcript', () => {
     mockActiveMode = 'private';
     render(<CleanupPromptScreen />);
-    expect(screen.queryByText(NOTICE)).not.toBeOnTheScreen();
+    expect(screen.getByText(/On-Device mode keeps the raw transcript/)).toBeTruthy();
   });
 
   it('treats provider cleanup as using the prompt', () => {

@@ -82,7 +82,7 @@ it('removes every saved provider key after confirmation', async () => {
   expect(mockClearCredentials).toHaveBeenCalledTimes(1);
 });
 
-it('shows every workflow as On-Device while On-Device mode keeps them on this phone', () => {
+it('shows what each workflow really does while On-Device mode is on', () => {
   mockActiveMode = 'private';
   mockConfig = {
     defaultMode: 'private',
@@ -93,8 +93,25 @@ it('shows every workflow as On-Device while On-Device mode keeps them on this ph
     },
   };
   render(<ByokWorkflowsScreen />);
-  expect(screen.getAllByText('On-Device')).toHaveLength(5);
+  // Dictation, uploads and note formatting stay on the phone whatever is saved.
+  expect(screen.getAllByText('On-Device')).toHaveLength(3);
   expect(screen.queryByText('OpenAI')).not.toBeOnTheScreen();
+  // On-Device transcripts stay raw, so cleanup never runs.
+  expect(screen.getByText('Skipped')).toBeTruthy();
+  // Note chat keeps its own selection, which is OpenWhispr Cloud when unset.
+  expect(screen.getByText('OpenWhispr Cloud')).toBeTruthy();
+});
+
+it('shows provider note chat as On-Device, which answers it on this iPhone first', () => {
+  mockActiveMode = 'private';
+  mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+  mockConfig = {
+    defaultMode: 'private',
+    inference: { agent: { mode: 'providers', providerId: 'groq', modelId: 'llama' } },
+  };
+  render(<ByokWorkflowsScreen />);
+  expect(screen.getAllByText('On-Device')).toHaveLength(4);
+  expect(screen.queryByText('Groq')).not.toBeOnTheScreen();
 });
 
 it('flags a provider workflow whose key was removed', async () => {
