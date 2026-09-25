@@ -121,6 +121,32 @@ test("rejects public HTTP endpoints but allows private hosts", async () => {
   );
 });
 
+test("treats the whole fe80::/10 IPv6 link-local range as private, matching isSecureHttpEndpoint", () => {
+  // isSecureHttpEndpoint (src/utils/urlUtils.ts) allows plain HTTP to any
+  // fe80::/10 address, so the connection test must accept the same range or it
+  // rejects a configuration that real requests use.
+  for (const baseUrl of [
+    "http://[fe80::1]/v1",
+    "http://[fe90::1]/v1",
+    "http://[feaa::1]/v1",
+    "http://[febf::1]/v1",
+  ]) {
+    assert.equal(
+      resolveProviderRequest({ provider: "custom", baseUrl }).endpoints.length > 0,
+      true,
+      baseUrl
+    );
+  }
+});
+
+test("still rejects public IPv6 endpoints over HTTP", async () => {
+  assert.equal(
+    (await testProviderConnection({ provider: "custom", baseUrl: "http://[2607:f8b0::1]/v1" }))
+      .errorCode,
+    "httpsRequired"
+  );
+});
+
 test("rejects invalid custom endpoints with error codes", async () => {
   assert.deepEqual(await testProviderConnection({ provider: "custom", baseUrl: "" }), {
     success: false,
