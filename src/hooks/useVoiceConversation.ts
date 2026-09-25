@@ -52,7 +52,6 @@ interface TurnMetrics {
   answer: string;
 }
 
-const DEFAULT_PARAKEET_MODEL = "parakeet-unified-en-0.6b";
 // Spoken replies stop after three sentences; the panel keeps the full answer. Doing
 // this in code, not the prompt: brevity pressure in the prompt made the model skip tools.
 const MAX_SPOKEN_SENTENCES = 3;
@@ -71,6 +70,21 @@ const READINESS_MESSAGE_KEYS = {
   "speech-model-missing": "voiceConversation.errors.speechModelMissing",
   "brain-not-downloaded": "voiceConversation.errors.brainNotDownloaded",
 } as const;
+
+/**
+ * The local speech model dictation already runs, so a voice turn reuses the shared
+ * sherpa-onnx server instead of swapping it out. Main falls back to a downloaded
+ * Parakeet model when this one isn't downloaded (e.g. Whisper or cloud dictation).
+ */
+function dictationSpeechModel(settings: {
+  localTranscriptionProvider: string;
+  parakeetModel: string;
+  cohereModel: string;
+}): string {
+  return settings.localTranscriptionProvider === "cohere"
+    ? settings.cohereModel
+    : settings.parakeetModel;
+}
 
 /**
  * The { mode, model } sent to getReadiness and used to decide which local model (if
@@ -185,6 +199,8 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
     if (pendingSpeaksRef.current > 0 || playerRef.current?.isPlaying()) return;
     utteranceRef.current = null;
     logTurn(chunkIndexRef.current === 0 ? "empty" : "spoke");
+    // A turn that spoke nothing (empty or failed answer) never reaches the player's onIdle.
+    if (activeRef.current) setState("listening");
   }, [logTurn]);
 
   const speakChunk = useCallback(
@@ -270,10 +286,16 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         playerRef.current?.enqueue(event.samples);
       } else if (event.type === "error") {
         logger.warn("Voice conversation error", { stage: event.stage, message: event.message }, "voice-conversation");
-        onErrorRef.current?.(event.message);
+        if (event.stage === "worker") {
+          // Main has already ended the session; release the mic and player too.
+          onErrorRef.current?.(t("voiceConversation.errors.workerStopped"));
+          void stopRef.current();
+        } else {
+          onErrorRef.current?.(event.message);
+        }
       }
     },
-    [api, bargeIn]
+    [api, bargeIn, t]
   );
 
   const handleEventRef = useRef(handleEvent);
@@ -323,7 +345,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       const { config: voiceModel } = resolveChatStreamingInference(settings, {
         inferenceScope: "dictationAgent",
       });
-      const parakeetModel = settings.parakeetModel || DEFAULT_PARAKEET_MODEL;
+      const parakeetModel = dictationSpeechModel(settings);
       const brain = resolveVoiceBrain(voiceModel, brainOverride);
       // The harness plays English speech and must not depend on user settings (same
       // reason `enabled` ORs in `harnessAvailable`), so it checks readiness as English

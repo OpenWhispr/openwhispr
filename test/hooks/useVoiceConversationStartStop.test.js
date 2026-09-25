@@ -25,18 +25,30 @@ function deferred() {
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-async function mountVoiceConversation(t) {
+async function mountVoiceConversation(t, { settings = {} } = {}) {
   const rootRef = { current: null };
   t.after(async () => {
     if (rootRef.current) await React.act(async () => rootRef.current.unmount());
   });
 
-  const calls = { readiness: [], starts: 0, stops: 0, micOpens: 0, micStops: 0, playerCloses: 0 };
+  const calls = {
+    readiness: [],
+    starts: 0,
+    stops: 0,
+    micOpens: 0,
+    micStops: 0,
+    playerCloses: 0,
+    errors: [],
+  };
+  const events = { emit: () => {} };
   const pending = { readiness: [], start: [], mic: [] };
   const api = {
     isHarness: async () => false,
     brainOverride: async () => null,
-    onEvent: () => () => {},
+    onEvent: (callback) => {
+      events.emit = callback;
+      return () => {};
+    },
     onHarnessDone: () => () => {},
     getReadiness: (request) => {
       calls.readiness.push(request);
@@ -62,6 +74,13 @@ async function mountVoiceConversation(t) {
     reportTurnEvent: () => {},
   };
   globalThis.__voiceStartStop = {
+    settings: {
+      localTranscriptionProvider: "nvidia",
+      parakeetModel: "parakeet-unified-en-0.6b",
+      cohereModel: "cohere-transcribe-03-2026",
+      preferredLanguage: "en",
+      ...settings,
+    },
     startMicStream: () => {
       calls.micOpens += 1;
       const next = deferred();
@@ -91,7 +110,7 @@ async function mountVoiceConversation(t) {
       `,
       "/stores/settingsStore": `
         export function getSettings() {
-          return { parakeetModel: "parakeet-unified-en-0.6b", preferredLanguage: "en" };
+          return globalThis.__voiceStartStop.settings;
         }
         export function useSettingsStore(selector) {
           return selector({ voiceConversationEnabled: true });
@@ -121,7 +140,10 @@ async function mountVoiceConversation(t) {
 
   const hook = { current: null };
   function Harness() {
-    hook.current = useVoiceConversation({ onUserTurn: () => {}, onError: () => {} });
+    hook.current = useVoiceConversation({
+      onUserTurn: () => {},
+      onError: (message) => calls.errors.push(message),
+    });
     return null;
   }
   const root = createRoot(container);
@@ -141,7 +163,13 @@ async function mountVoiceConversation(t) {
     };
     return mic;
   };
-  return { hook, calls, pending, act, openMic };
+  const startListening = async () => {
+    await act(() => hook.current.toggle());
+    await act(() => pending.readiness.at(-1).resolve({ ready: true }));
+    await act(() => pending.start.at(-1).resolve({ sampleRate: 24000 }));
+    await act(() => pending.mic.at(-1).resolve(openMic()));
+  };
+  return { hook, calls, pending, act, openMic, events, startListening };
 }
 
 test("stop while readiness is pending: the start never opens anything", async (t) => {
@@ -215,4 +243,49 @@ test("a start cancelled by stop and replaced by a new start leaves the new sessi
   await act(() => pending.mic[0].resolve(openMic()));
   assert.equal(calls.micOpens, 1);
   assert.equal(hook.current.state, "listening");
+});
+
+test("a voice worker crash ends the session and releases the mic", async (t) => {
+  const { hook, calls, act, events, startListening } = await mountVoiceConversation(t);
+  await startListening();
+  assert.equal(hook.current.state, "listening");
+
+  await act(() =>
+    events.emit({ type: "error", stage: "worker", message: "voice worker exited (134)" })
+  );
+
+  assert.equal(hook.current.state, "off");
+  assert.equal(calls.micStops, 1);
+  assert.deepEqual(calls.errors, ["voiceConversation.errors.workerStopped"]);
+});
+
+test("a turn that ends without speaking goes back to listening and can idle out", async (t) => {
+  const { hook, act, events, startListening } = await mountVoiceConversation(t);
+  await startListening();
+
+  await act(() =>
+    events.emit({
+      type: "transcript",
+      text: "what's on today",
+      speechMs: 900,
+      sttMs: 80,
+      endedAt: 0,
+      endpoint: null,
+    })
+  );
+  assert.equal(hook.current.state, "thinking");
+  // A failed or empty answer: the panel reports the response done with nothing spoken.
+  await act(() => hook.current.speechTap.onResponseDone());
+
+  assert.equal(hook.current.state, "listening");
+});
+
+test("voice turns use the speech model dictation already runs", async (t) => {
+  const { hook, calls, act } = await mountVoiceConversation(t, {
+    settings: { localTranscriptionProvider: "cohere", parakeetModel: "parakeet-tdt-0.6b-v3" },
+  });
+
+  await act(() => hook.current.toggle());
+
+  assert.equal(calls.readiness[0].parakeetModel, "cohere-transcribe-03-2026");
 });

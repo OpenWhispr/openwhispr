@@ -4189,7 +4189,8 @@
       "languageUnsupported": "Voice conversation understands English only for now. Set your dictation language to English or Auto.",
       "voiceModelsMissing": "Voice conversation needs its voice models. Download them in Settings.",
       "speechModelMissing": "Voice conversation needs a Parakeet speech model. Download one in Settings → Speech to Text.",
-      "brainNotDownloaded": "The Voice Assistant's local model isn't downloaded yet."
+      "brainNotDownloaded": "The Voice Assistant's local model isn't downloaded yet.",
+      "workerStopped": "Voice conversation stopped because its voice engine quit unexpectedly. Press the hotkey to start again."
     }
   }
 }

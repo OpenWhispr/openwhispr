@@ -92,6 +92,8 @@ interface UseChatStreamingOptions {
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
+  /** Fires when a request ends without onStreamComplete: blocked by policy or failed (never on cancel). */
+  onStreamFailed?: () => void;
   /** Fires exactly once when displayable assistant content or tool activity becomes available. */
   onResponseContent?: () => void;
   /** Receives each streamed content delta as it arrives (voice conversation speaks them). */
@@ -191,6 +193,7 @@ export function useChatStreaming({
   noteContext: externalNoteContext,
   searchScope,
   onStreamComplete,
+  onStreamFailed,
   onResponseContent,
   onContentDelta,
   onToolCall,
@@ -203,6 +206,8 @@ export function useChatStreaming({
   const { t } = useTranslation();
   const onContentDeltaRef = useRef(onContentDelta);
   onContentDeltaRef.current = onContentDelta;
+  const onStreamFailedRef = useRef(onStreamFailed);
+  onStreamFailedRef.current = onStreamFailed;
   const voiceRepliesRef = useRef(voiceReplies);
   voiceRepliesRef.current = voiceReplies;
   // Voice turns: each user message exactly as sent, so later turns replay it verbatim.
@@ -353,6 +358,7 @@ export function useChatStreaming({
           ...prev,
           { id: crypto.randomUUID(), role: "assistant", content: restriction, isStreaming: false },
         ]);
+        onStreamFailedRef.current?.();
         return;
       }
 
@@ -543,9 +549,17 @@ export function useChatStreaming({
                     displayText: t("agentMode.tools.invalidArgs", { name }),
                   };
                 }
+                const execute = () =>
+                  dryRunNames.has(name)
+                    ? Promise.resolve({
+                        success: true,
+                        data: DRY_RUN_RESULT,
+                        displayText: DRY_RUN_RESULT.note,
+                      })
+                    : tool.execute(args);
                 const result = writeOnceGuard
-                  ? await runToolResultOnce(writeOnceGuard, name, () => tool.execute(args))
-                  : await tool.execute(args);
+                  ? await runToolResultOnce(writeOnceGuard, name, execute)
+                  : await execute();
                 const data = result.success
                   ? typeof result.data === "string"
                     ? result.data
@@ -746,6 +760,7 @@ export function useChatStreaming({
                 : m
             )
           );
+          onStreamFailedRef.current?.();
         }
       }
 
