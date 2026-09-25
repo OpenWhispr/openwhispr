@@ -1,5 +1,8 @@
 import { EventEmitter, requireNativeModule } from 'expo';
 import { Platform } from 'react-native';
+import { NO_RETURN_TARGET, parseReturnOutcome, type ReturnOutcome } from './returnOutcome';
+
+export { parseReturnOutcome, type ReturnOutcome } from './returnOutcome';
 
 type EventSubscription = {
   remove(): void;
@@ -14,7 +17,8 @@ interface AppGroupStorageModule {
   analyzeSpeechActivity(fileUri: string): Promise<SpeechActivityAnalysis>;
   convertRecordingToWav(fileUri: string): Promise<RecordingConversionResult>;
   getActiveInputModes(): string[];
-  returnToPreviousApp(): void;
+  returnToPreviousApp(): Promise<unknown>;
+  openHostApp(): Promise<unknown>;
   startNativeRecording(): boolean;
   stopNativeRecording(): void;
   endProcessingTask(): void;
@@ -137,9 +141,24 @@ export const AppGroupStorage = {
     }
   },
 
-  returnToPreviousApp(): void {
-    if (!NativeModule) return;
-    NativeModule.returnToPreviousApp();
+  /** Sends the user back to the keyboard's host app. Resolves `no_target` whenever it can't. */
+  async returnToPreviousApp(): Promise<ReturnOutcome> {
+    if (!NativeModule) return NO_RETURN_TARGET;
+    try {
+      return parseReturnOutcome(await NativeModule.returnToPreviousApp());
+    } catch {
+      return NO_RETURN_TARGET;
+    }
+  },
+
+  /** "Back to <App>" button: reopens the host resolved by the last return. */
+  async openHostApp(): Promise<ReturnOutcome> {
+    if (!NativeModule) return NO_RETURN_TARGET;
+    try {
+      return parseReturnOutcome(await NativeModule.openHostApp());
+    } catch {
+      return NO_RETURN_TARGET;
+    }
   },
 
   startNativeRecording(): boolean {
