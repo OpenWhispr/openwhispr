@@ -1,5 +1,5 @@
 import { AppGroupStorage, type ReturnOutcome } from '../../modules/app-group-storage/src';
-import { useHandoffStore } from '@/store/useHandoffStore';
+import { useHandoffStore, type HandoffReturnState } from '@/store/useHandoffStore';
 
 /**
  * Upper bound on a return. Native always resolves (the observer wait is 2 s),
@@ -25,4 +25,18 @@ export async function returnToHost(
   } finally {
     clearTimeout(timer);
   }
+}
+
+export type HandoffView = 'no_speech' | 'transcribing' | 'returning' | 'back_to_host' | 'swipe';
+
+export function selectHandoffView(input: {
+  noSpeech: boolean;
+  transcribing: boolean;
+  returnState: HandoffReturnState;
+  returnHostName: string | null;
+}): HandoffView {
+  if (input.noSpeech) return 'no_speech';
+  if (input.transcribing) return 'transcribing';
+  if (input.returnState === 'returning') return 'returning';
+  return input.returnHostName ? 'back_to_host' : 'swipe';
 }

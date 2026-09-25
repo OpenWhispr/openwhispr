@@ -4,7 +4,12 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
 }));
 
 import { useHandoffStore } from '@/store/useHandoffStore';
-import { applyReturnOutcome, returnToHost, RETURN_OUTCOME_TIMEOUT_MS } from '../handoffReturn';
+import {
+  applyReturnOutcome,
+  returnToHost,
+  RETURN_OUTCOME_TIMEOUT_MS,
+  selectHandoffView,
+} from '../handoffReturn';
 
 function returnSnapshot(): { returnState: string; returnHostName: string | null } {
   const { returnState, returnHostName } = useHandoffStore.getState();
@@ -71,5 +76,35 @@ describe('returnToHost', () => {
     jest.advanceTimersByTime(RETURN_OUTCOME_TIMEOUT_MS);
     await pending;
     expect(returnSnapshot()).toEqual({ returnState: 'manual', returnHostName: null });
+  });
+});
+
+describe('selectHandoffView', () => {
+  const base = {
+    noSpeech: false,
+    transcribing: false,
+    returnState: 'returning' as const,
+    returnHostName: null,
+  };
+
+  it('shows the quiet returning screen until the return reports back', () => {
+    expect(selectHandoffView(base)).toBe('returning');
+  });
+
+  it('offers the button when the host is known', () => {
+    expect(selectHandoffView({ ...base, returnState: 'manual', returnHostName: 'Slack' })).toBe(
+      'back_to_host',
+    );
+  });
+
+  it('falls back to the swipe screen when the host is unknown', () => {
+    expect(selectHandoffView({ ...base, returnState: 'manual' })).toBe('swipe');
+  });
+
+  it('lets no-speech and transcribing win over the return state', () => {
+    expect(selectHandoffView({ ...base, noSpeech: true, transcribing: true })).toBe('no_speech');
+    expect(selectHandoffView({ ...base, transcribing: true, returnState: 'manual' })).toBe(
+      'transcribing',
+    );
   });
 });

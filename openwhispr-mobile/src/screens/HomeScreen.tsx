@@ -46,6 +46,8 @@ import { TranscriptModal } from '@/components/features/TranscriptModal';
 import { RecordingOverlay } from '@/components/features/RecordingOverlay';
 import { ParakeetNudgeBanner } from '@/components/features/ParakeetNudgeBanner';
 import { KeyboardFullAccessBanner } from '@/components/features/KeyboardFullAccessBanner';
+import { KeyboardHandoffReturnView } from '@/components/features/KeyboardHandoffReturnView';
+import { returnToHost, selectHandoffView } from '@/lib/handoffReturn';
 import { SwipeableCard } from '@/components/ui/SwipeableCard';
 import { Glass } from '@/components/ui/Glass';
 import { CloudIcon } from '@/components/ui/CloudIcon';
@@ -125,6 +127,8 @@ export default function HomeScreen() {
   const isCheckingInitialUrl = useHandoffStore((s) => s.isCheckingInitialUrl);
   const handoffNoSpeech = useHandoffStore((s) => s.noSpeechDetected);
   const handoffTranscribing = useHandoffStore((s) => s.isTranscribing);
+  const handoffReturnState = useHandoffStore((s) => s.returnState);
+  const handoffReturnHostName = useHandoffStore((s) => s.returnHostName);
   const [showNoSpeechToast, setShowNoSpeechToast] = useState(false);
   const { register: registerSuperwallGate } = useSuperwallGate();
   const transcripts = useTranscriptStore((state) => state.transcripts);
@@ -267,6 +271,11 @@ export default function HomeScreen() {
     safeHaptics('light');
     AppGroupStorage.setItem(APP_GROUP_KEYS.KEYBOARD_CANCEL_REQUESTED, '1');
     AppGroupStorage.stopNativeRecording();
+  };
+
+  const handleBackToHost = () => {
+    safeHaptics('light');
+    void returnToHost(() => AppGroupStorage.openHostApp());
   };
 
   const handleRecordPress = async () => {
@@ -470,7 +479,25 @@ export default function HomeScreen() {
   }
 
   if (isKeyboardHandoffSession) {
-    if (handoffNoSpeech) {
+    const handoffView = selectHandoffView({
+      noSpeech: handoffNoSpeech,
+      transcribing: handoffTranscribing,
+      returnState: handoffReturnState,
+      returnHostName: handoffReturnHostName,
+    });
+
+    if (handoffView === 'returning' || handoffView === 'back_to_host') {
+      return (
+        <KeyboardHandoffReturnView
+          mode={handoffView}
+          hostName={handoffReturnHostName}
+          onCancel={handleCancelHandoffRecording}
+          onBackToHost={handleBackToHost}
+        />
+      );
+    }
+
+    if (handoffView === 'no_speech') {
       return (
         <View className="flex-1 bg-systemBackground items-center justify-center px-10">
           <SystemIcon name="mic.slash.fill" mdName="MicOff" size={48} color="tertiaryLabel" />
