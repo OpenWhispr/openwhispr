@@ -20,8 +20,7 @@ import { safeHaptics } from '@/lib/utils';
 import { confirmDestructive } from '@/lib/alerts';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
 import { VoiceProfilePromptCard } from '@/components/notes/VoiceProfilePromptCard';
-import { useSyncStore } from '@/sync/useSyncStore';
-import { requestSync } from '@/sync/syncEngine';
+import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { useConfigStore } from '@/store/useConfigStore';
 
 export default function NotesListScreen() {
@@ -124,10 +123,7 @@ export default function NotesListScreen() {
   // still be able to report "no results".
   const showSpaceFolders = spaceId != null && spaceFolders.length > 0 && !searchQuery;
 
-  const syncStatus = useSyncStore((s) => s.status);
-  const onRefresh = useCallback(() => {
-    requestSync('manual');
-  }, []);
+  const { refreshing, onRefresh } = useManualSyncRefresh();
 
   const handleNotePress = useCallback(
     (id: number) => {
@@ -313,9 +309,7 @@ export default function NotesListScreen() {
         }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        refreshControl={
-          <RefreshControl refreshing={syncStatus === 'running'} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Text className="mb-2 text-[15px] text-tertiaryLabel">{`${totalCount} ${totalCount === 1 ? 'Note' : 'Notes'}`}</Text>
         <SyncStatusLabel />

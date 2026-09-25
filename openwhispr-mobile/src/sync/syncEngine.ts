@@ -37,6 +37,8 @@ export type SyncReason = 'after-write' | 'foreground' | 'sign-in' | 'manual';
 
 let inFlight = false;
 let pendingTrigger: SyncReason | null = null;
+// Callers waiting on the queued run (see requestSync); settled once it ends.
+let pendingTriggerWaiters: Array<() => void> = [];
 let postWriteTimer: ReturnType<typeof setTimeout> | null = null;
 
 // The snippets endpoints (/api/snippets/*) may not be deployed yet on the
@@ -203,7 +205,7 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
   if (!auth.user || auth.isGuest) return;
   if (inFlight) {
     pendingTrigger = reason;
-    return;
+    return new Promise((resolve) => pendingTriggerWaiters.push(resolve));
   }
 
   const cloudBackupEnabled = useConfigStore.getState().config?.cloudBackupEnabled ?? true;
@@ -460,22 +462,30 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
     inFlight = false;
     if (pendingTrigger) {
       const next = pendingTrigger;
+      const waiters = pendingTriggerWaiters;
       pendingTrigger = null;
-      runSyncNow(next).catch(() => {});
+      pendingTriggerWaiters = [];
+      runSyncNow(next)
+        .catch(() => {})
+        .finally(() => waiters.forEach((resolve) => resolve()));
     }
   }
 }
 
-export function requestSync(reason: SyncReason): void {
+// Resolves once the run this request started, or was queued behind, has ended —
+// success, failure or an early return alike — and never rejects. Pull-to-refresh
+// holds its spinner on it. An 'after-write' request only arms the debounce, so
+// it resolves right away.
+export function requestSync(reason: SyncReason): Promise<void> {
   if (reason === 'after-write') {
     if (postWriteTimer) clearTimeout(postWriteTimer);
     postWriteTimer = setTimeout(() => {
       postWriteTimer = null;
       runSyncNow('after-write').catch(() => {});
     }, POST_WRITE_DEBOUNCE_MS);
-    return;
+    return Promise.resolve();
   }
-  runSyncNow(reason).catch(() => {});
+  return runSyncNow(reason).catch(() => {});
 }
 
 let unsubscribeAuth: (() => void) | null = null;
