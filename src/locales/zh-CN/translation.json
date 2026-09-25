@@ -3319,6 +3319,7 @@
     "import": "导入",
     "yourDictionary": "你的词典",
     "promptLimitNotice": "词典当前共 {{chars}} 个字符。Groq 和 Whisper 模型只会读取其中最后几百个字符，因此列表越短效果越好；其他模型会收到完整列表。",
+    "openRouterIgnoredNotice": "OpenRouter 不会将你的词典传给其语音模型，因此在听写选用 OpenRouter 期间，这些词不会影响转写结果。",
     "exportDictionary": "导出词典",
     "exportFailed": "导出失败",
     "editWord": "编辑 {{word}}",

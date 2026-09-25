@@ -3247,6 +3247,7 @@
     "import": "インポート",
     "yourDictionary": "あなたの辞書",
     "promptLimitNotice": "辞書は現在{{chars}}文字です。GroqとWhisperのモデルはその末尾の数百文字しか読み取らないため、リストは短いほうが効果的です。その他のモデルには全リストが送信されます。",
+    "openRouterIgnoredNotice": "OpenRouterは辞書を音声モデルに渡さないため、ディクテーションでOpenRouterを選択している間は、これらの単語は文字起こしに反映されません。",
     "exportDictionary": "辞書をエクスポート",
     "exportFailed": "エクスポートに失敗しました",
     "editWord": "{{word}} を編集",

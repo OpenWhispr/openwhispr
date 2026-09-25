@@ -3373,6 +3373,7 @@
     "import": "Importar",
     "yourDictionary": "Tu diccionario",
     "promptLimitNotice": "Tu diccionario tiene {{chars}} caracteres. Los modelos de Groq y Whisper solo leen los últimos cientos de caracteres, así que allí funciona mejor una lista más corta. Los demás modelos reciben la lista completa.",
+    "openRouterIgnoredNotice": "OpenRouter no envía tu diccionario a sus modelos de voz, así que estas palabras no guiarán la transcripción mientras esté seleccionado para el dictado.",
     "exportDictionary": "Exportar diccionario",
     "exportFailed": "Error al exportar",
     "editWord": "Editar {{word}}",

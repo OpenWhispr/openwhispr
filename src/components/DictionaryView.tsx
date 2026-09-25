@@ -14,7 +14,14 @@ import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
 import { parseDictionaryImportText } from "../helpers/dictionaryImport";
 import { getDictionaryHintWords } from "../utils/snippets";
-import { WHISPER_DECODER_PROMPT_CHARS } from "../utils/dictionaryPromptCap";
+import {
+  WHISPER_DECODER_PROMPT_CHARS,
+  dictionaryReachesTranscriptionModel,
+} from "../utils/dictionaryPromptCap";
+import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
+import { usePolicySnapshot } from "../hooks/usePolicy";
+import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
+import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
 
 export default function DictionaryView() {
   const { t } = useTranslation();
@@ -39,6 +46,27 @@ export default function DictionaryView() {
     () => getDictionaryHintWords({ customDictionary, snippets }).join(", ").length,
     [customDictionary, snippets]
   );
+
+  // Where dictation posts when it uses a bring-your-own-key batch provider,
+  // resolved the way dictation resolves it (audioManager.resolveBatchRoute).
+  // Local models, OpenWhispr Cloud and managed workspaces get the dictionary
+  // their own way.
+  const policyState = usePolicySnapshot();
+  const enterpriseTranscriptionSetupMode = useSettingsStore(
+    (s) => s.enterpriseTranscriptionSetupMode
+  );
+  const personalDictation =
+    useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode).kind === "manual";
+  const dictationEndpoint = useSettingsStore((settings) => {
+    const s = selectPolicyEffectiveSettings(settings, policyState);
+    if (s.useLocalWhisper || s.cloudTranscriptionMode === "openwhispr") return null;
+    const route = resolveTranscriptionRoute({ settings: s });
+    return route.transport === "http-batch" ? route.endpoint : null;
+  });
+  const dictionaryIgnored =
+    personalDictation &&
+    dictationEndpoint !== null &&
+    !dictionaryReachesTranscriptionModel(dictationEndpoint);
 
   // Same membership rule as agentNameDictionaryChanges: a stored spelling that
   // differs only by case is still the agent name's entry, so keep it hidden.
@@ -339,11 +367,17 @@ export default function DictionaryView() {
             )}
           </div>
 
-          {/* ─── Provider prompt-limit notice ─── */}
-          {promptChars > WHISPER_DECODER_PROMPT_CHARS && (
+          {/* ─── Provider notices ─── */}
+          {dictionaryIgnored ? (
             <p className="text-xs text-foreground/45 leading-relaxed">
-              {t("dictionary.promptLimitNotice", { chars: promptChars })}
+              {t("dictionary.openRouterIgnoredNotice")}
             </p>
+          ) : (
+            promptChars > WHISPER_DECODER_PROMPT_CHARS && (
+              <p className="text-xs text-foreground/45 leading-relaxed">
+                {t("dictionary.promptLimitNotice", { chars: promptChars })}
+              </p>
+            )
           )}
         </div>
       </TabsContent>
