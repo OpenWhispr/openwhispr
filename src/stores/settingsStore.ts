@@ -2809,19 +2809,24 @@ const resolveUploadCloudProvider = (state: SettingsState): string =>
 // A realtime-only dictation provider is the exception: it has no batch route, so
 // inheriting it would fail every upload closed. Uploads take the default provider
 // instead, and the dictation model stays behind with the provider it belongs to.
-// The inherited endpoint comes from `saved`, the member's own settings, and only
-// while the upload stays on the provider they chose: under a workspace policy the
-// caller passes the policy view as `state`, whose endpoints the overlay binds to
-// built-in providers, and a policy fallback to Custom stays unconfigured, as it
-// does for dictation. The self-hosted server is the exception the other way: it
+// The inherited endpoint comes from `saved`, the member's own settings, never
+// from the policy view in `state`, whose endpoints the overlay binds to built-in
+// providers. It is reused for the upload provider the member chose, or for the
+// provider dictation still uses under the policy; any other policy fallback to
+// Custom stays unconfigured. Callers without a policy pass the same settings twice.
+// The self-hosted server is the exception the other way: it
 // never inherits, so uploads go only to the server the Upload tab shows (#2049).
 // migrateUploadSelfHosted() seeds it once for profiles from before the tab had its own.
 export const selectResolvedUploadTranscription = (
   state: SettingsState,
-  saved: SettingsState = state
+  saved: SettingsState
 ): ResolvedUploadTranscription => {
   const inheritsDictationProvider = !STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider);
   const cloudTranscriptionProvider = resolveUploadCloudProvider(state);
+  const usesSavedEndpoint =
+    cloudTranscriptionProvider === resolveUploadCloudProvider(saved) ||
+    (cloudTranscriptionProvider === saved.cloudTranscriptionProvider &&
+      state.cloudTranscriptionProvider === saved.cloudTranscriptionProvider);
   return {
     useLocalWhisper: state.uploadUseLocalWhisper,
     whisperModel: state.uploadWhisperModel || state.whisperModel,
@@ -2834,9 +2839,7 @@ export const selectResolvedUploadTranscription = (
       (inheritsDictationProvider ? state.cloudTranscriptionModel : ""),
     cloudTranscriptionBaseUrl:
       state.uploadCloudTranscriptionBaseUrl ||
-      (cloudTranscriptionProvider === resolveUploadCloudProvider(saved)
-        ? saved.cloudTranscriptionBaseUrl
-        : ""),
+      (usesSavedEndpoint ? saved.cloudTranscriptionBaseUrl : ""),
     cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
     transcriptionMode: state.uploadTranscriptionMode,
     remoteTranscriptionUrl: state.uploadRemoteTranscriptionUrl,

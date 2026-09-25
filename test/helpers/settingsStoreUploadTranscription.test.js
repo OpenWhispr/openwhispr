@@ -25,9 +25,10 @@ test("upload transcription never inherits a realtime-only dictation provider", a
   );
   const { STREAMING_ONLY_PROVIDERS } = await vite.ssrLoadModule("/helpers/transcriptionRoute.ts");
   const base = useSettingsStore.getState();
+  const resolveWithoutPolicy = (settings) => selectResolvedUploadTranscription(settings, settings);
 
   for (const provider of STREAMING_ONLY_PROVIDERS) {
-    const resolved = selectResolvedUploadTranscription({
+    const resolved = resolveWithoutPolicy({
       ...base,
       cloudTranscriptionProvider: provider,
       cloudTranscriptionModel: "nova-3",
@@ -40,7 +41,7 @@ test("upload transcription never inherits a realtime-only dictation provider", a
 
   // An explicit upload choice always wins, even a realtime-only one — the
   // route guard then reports it truthfully instead of silently rerouting.
-  const explicit = selectResolvedUploadTranscription({
+  const explicit = resolveWithoutPolicy({
     ...base,
     cloudTranscriptionProvider: "deepgram",
     uploadCloudTranscriptionProvider: "groq",
@@ -50,7 +51,7 @@ test("upload transcription never inherits a realtime-only dictation provider", a
   assert.equal(explicit.cloudTranscriptionModel, "whisper-large-v3");
 
   // Batch-capable dictation providers keep inheriting provider and model.
-  const inherited = selectResolvedUploadTranscription({
+  const inherited = resolveWithoutPolicy({
     ...base,
     cloudTranscriptionProvider: "groq",
     cloudTranscriptionModel: "whisper-large-v3-turbo",
@@ -92,7 +93,8 @@ test("audio upload has its own self-hosted server", async (t) => {
     const mod = await vite.ssrLoadModule("/stores/settingsStore.ts");
     return { mod, store: mod.useSettingsStore };
   };
-  const resolved = (mod, store) => mod.selectResolvedUploadTranscription(store.getState());
+  const resolved = (mod, store) =>
+    mod.selectResolvedUploadTranscription(store.getState(), store.getState());
 
   await t.test(
     "uploads use only the Upload tab's URL and model, and never write dictation's",
@@ -276,7 +278,7 @@ test("a Custom upload inherits only the endpoint its member saved for it", async
 
   // Without a policy the view is the saved settings: the Custom tab's endpoint
   // survives dictation moving to another provider (onboarding sets Custom everywhere).
-  assert.equal(url(saved), "https://stt.example.com/v1");
+  assert.equal(url(saved, saved), "https://stt.example.com/v1");
   const policyView = {
     ...saved,
     cloudTranscriptionProvider: "deepgram",
@@ -290,4 +292,16 @@ test("a Custom upload inherits only the endpoint its member saved for it", async
     uploadCloudTranscriptionProvider: "",
   };
   assert.equal(url(policyView, inheriting), "", "a policy fallback to Custom stays unconfigured");
+  // A Custom-only policy keeps dictation on the member's own endpoint, so an upload
+  // the policy moves to Custom uses that same endpoint.
+  const dictatingOnCustom = {
+    ...saved,
+    cloudTranscriptionProvider: "custom",
+    uploadCloudTranscriptionProvider: "openai",
+  };
+  assert.equal(
+    url({ ...dictatingOnCustom, uploadCloudTranscriptionProvider: "custom" }, dictatingOnCustom),
+    "https://stt.example.com/v1",
+    "dictation still uses that endpoint"
+  );
 });
