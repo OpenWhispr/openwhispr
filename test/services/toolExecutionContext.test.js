@@ -72,13 +72,13 @@ test("toAISDKFormat without a context factory passes no context", async () => {
 test("a tool execution scope shares one signal and aborts it once", async () => {
   const { createToolExecutionScope } = await loadScope();
   let approvals = 0;
-  let holds = 0;
+  const holds = [];
   const scope = createToolExecutionScope({
     onApprovalRequested: () => {
       approvals += 1;
     },
-    onHoldDelivery: () => {
-      holds += 1;
+    onHoldDelivery: (options) => {
+      holds.push(options);
     },
   });
   const first = scope.createContext("call-a");
@@ -88,9 +88,9 @@ test("a tool execution scope shares one signal and aborts it once", async () => 
   assert.equal(first.signal, second.signal);
   assert.equal(first.signal.aborted, false);
   first.onApprovalRequested();
-  second.onHoldDelivery();
+  second.onHoldDelivery({ preserveClipboard: true });
   assert.equal(approvals, 1);
-  assert.equal(holds, 1);
+  assert.deepEqual(holds, [{ preserveClipboard: true }]);
 
   scope.abort();
   scope.abort();
@@ -268,17 +268,14 @@ test("the cloud tool loop passes each call's id to executeToolCall", async (t) =
   });
 
   const received = [];
-  const stream = reasoningService.processTextStreamingCloud(
-    [{ role: "user", content: "hi" }],
-    {
-      systemPrompt: "s",
-      tools: [{ name: "record_context", description: "d", parameters: {} }],
-      executeToolCall: async (name, _args, toolCallId) => {
-        received.push({ name, toolCallId });
-        return { data: "ok", displayText: "ok" };
-      },
-    }
-  );
+  const stream = reasoningService.processTextStreamingCloud([{ role: "user", content: "hi" }], {
+    systemPrompt: "s",
+    tools: [{ name: "record_context", description: "d", parameters: {} }],
+    executeToolCall: async (name, _args, toolCallId) => {
+      received.push({ name, toolCallId });
+      return { data: "ok", displayText: "ok" };
+    },
+  });
   for await (const _chunk of stream) {
     // drain
   }

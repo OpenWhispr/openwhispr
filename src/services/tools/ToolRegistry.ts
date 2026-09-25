@@ -7,6 +7,11 @@ export interface ToolResult {
   displayText: string;
 }
 
+export interface HoldDeliveryOptions {
+  /** The tool may have put user content on the clipboard; don't copy the answer over it. */
+  preserveClipboard?: boolean;
+}
+
 /**
  * Per-call context from the chat turn that invoked the tool. Absent when a
  * tool runs outside a chat turn (tests, direct calls).
@@ -18,17 +23,19 @@ export interface ToolExecutionContext {
   /** Tells the chat surface an approval card needs the user's attention. */
   onApprovalRequested: () => void;
   /**
-   * The turn's answer must stay in the chat surface instead of being pasted or
-   * copied at the user's caret: the tool opened something outside the app,
-   * put user content on the clipboard, or needs the user to answer.
+   * The turn's answer must stay in the chat surface instead of being pasted at
+   * the user's caret: the tool opened something outside the app or needs the
+   * user to answer.
    */
-  onHoldDelivery: () => void;
+  onHoldDelivery: (options?: HoldDeliveryOptions) => void;
   /**
    * Counts one use of `key` in this turn and reports whether it stays within
    * `limit`, so a tool can cap what one turn does (drafts opened, clipboard
    * writes). Synchronous, so tool calls running in parallel can't overshoot.
    */
   claimTurnSlot: (key: string, limit: number) => boolean;
+  /** Gives back a claimed use of `key` whose action never happened. */
+  releaseTurnSlot: (key: string) => void;
 }
 
 export interface ToolDefinition {

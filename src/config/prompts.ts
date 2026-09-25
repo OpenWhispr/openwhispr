@@ -75,12 +75,12 @@ function getLocalCalendarContext(): string {
   return `Current local date and time: ${formatLocalRfc3339(now)}. IANA time zone: ${timeZone}.`;
 }
 
-export const CONNECTOR_TOOL_NAMES = ["find_contact", "email_draft"];
+const CONNECTOR_TOOL_NAMES = ["find_contact", "email_draft"];
 
 // Each result that must not be retried says so in its own guidance, so the
 // rule needs no list of statuses (and grows with no new connector).
 const CONNECTOR_TOOL_RULES =
-  "When a connector tool returns needs_clarification, ask the user before calling it again. Follow the guidance in each connector result, including when not to retry.";
+  "Follow the guidance and message in each connector result, including when not to retry. When a result leaves it unclear who or what the user meant (a needs_clarification result that lists candidates, or find_contact finding no one or several people), ask the user before acting.";
 
 export function getAgentSystemPrompt(availableTools?: string[], noteContext?: string): string {
   let prompt = resolvePrompt("chatAgent", { agentName: null });

@@ -1,4 +1,4 @@
-import type { ToolExecutionContext } from "../../services/tools/ToolRegistry";
+import type { HoldDeliveryOptions, ToolExecutionContext } from "../../services/tools/ToolRegistry";
 
 export interface ToolExecutionScope {
   createContext: (toolCallId: string) => ToolExecutionContext;
@@ -7,7 +7,7 @@ export interface ToolExecutionScope {
 
 interface ToolExecutionHandlers {
   onApprovalRequested?: () => void;
-  onHoldDelivery?: () => void;
+  onHoldDelivery?: (options?: HoldDeliveryOptions) => void;
 }
 
 /**
@@ -20,14 +20,20 @@ interface ToolExecutionHandlers {
 export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): ToolExecutionScope {
   const controller = new AbortController();
   const turnSlots = new Map<string, number>();
-  const notify = (handler?: () => void) => () => {
-    if (!controller.signal.aborted) handler?.();
-  };
+  const notify =
+    <Args extends unknown[]>(handler?: (...args: Args) => void) =>
+    (...args: Args): void => {
+      if (!controller.signal.aborted) handler?.(...args);
+    };
   const claimTurnSlot = (key: string, limit: number): boolean => {
     const used = turnSlots.get(key) ?? 0;
     if (used >= limit) return false;
     turnSlots.set(key, used + 1);
     return true;
+  };
+  const releaseTurnSlot = (key: string): void => {
+    const used = turnSlots.get(key) ?? 0;
+    if (used > 0) turnSlots.set(key, used - 1);
   };
   return {
     createContext: (toolCallId) => ({
@@ -36,6 +42,7 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       onApprovalRequested: notify(handlers.onApprovalRequested),
       onHoldDelivery: notify(handlers.onHoldDelivery),
       claimTurnSlot,
+      releaseTurnSlot,
     }),
     abort: () => controller.abort(),
   };

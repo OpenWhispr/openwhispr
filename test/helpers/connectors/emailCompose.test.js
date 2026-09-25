@@ -40,6 +40,19 @@ test("mailto keeps addresses readable and uses CRLF line breaks", async () => {
   assert.match(url, /^mailto:gabe%2Blunch@example\.com,dana@example\.org\?/);
 });
 
+test("mailto turns every kind of line break into CRLF and keeps the subject on one line", async () => {
+  const { buildComposeRequest } = await load();
+  const { url } = buildComposeRequest({
+    target: "mailto",
+    to: ["a@example.com"],
+    subject: "Hi\r\nBcc: evil@example.com",
+    body: "one\rtwo\nthree\r\nfour",
+  });
+  const parsed = new URL(url);
+  assert.equal(parsed.searchParams.get("subject"), "Hi Bcc: evil@example.com");
+  assert.equal(parsed.searchParams.get("body"), "one\r\ntwo\r\nthree\r\nfour");
+});
+
 test("empty fields are left out of the URL", async () => {
   const { buildComposeRequest } = await load();
   const { url } = buildComposeRequest({ target: "outlookWork", to: ["a@example.com"] });
@@ -49,13 +62,14 @@ test("empty fields are left out of the URL", async () => {
 test("a body that would push the URL past the limit moves to the clipboard", async () => {
   const { buildComposeRequest } = await load();
   const body = "é".repeat(400);
-  const { url, clipboardText } = buildComposeRequest({
+  const { url, clipboardText, bodyCopied } = buildComposeRequest({
     target: "gmail",
     to: ["a@example.com"],
     subject: "Notes",
     body,
   });
   assert.equal(clipboardText, body);
+  assert.equal(bodyCopied, true);
   assert.equal(new URL(url).searchParams.get("body"), null);
   assert.equal(new URL(url).searchParams.get("su"), "Notes");
   assert.ok(url.length <= 2000);
@@ -64,7 +78,11 @@ test("a body that would push the URL past the limit moves to the clipboard", asy
 test("a body that fits stays in the URL", async () => {
   const { buildComposeRequest } = await load();
   const body = "x".repeat(1500);
-  const { url, clipboardText } = buildComposeRequest({ target: "mailto", to: ["a@example.com"], body });
+  const { url, clipboardText } = buildComposeRequest({
+    target: "mailto",
+    to: ["a@example.com"],
+    body,
+  });
   assert.equal(clipboardText, null);
   assert.equal(new URL(url).searchParams.get("body"), body);
 });
@@ -73,10 +91,16 @@ test("a subject too long for any link moves to the clipboard, even with no body"
   const { buildComposeRequest } = await load();
   const subject = "Quarterly planning ".repeat(120).trim();
   for (const body of ["", "See the agenda below."]) {
-    const result = buildComposeRequest({ target: "outlookWork", to: ["a@example.com"], subject, body });
+    const result = buildComposeRequest({
+      target: "outlookWork",
+      to: ["a@example.com"],
+      subject,
+      body,
+    });
     assert.equal(result.ok, true);
     assert.equal(result.subjectCopied, true);
     assert.equal(result.clipboardText, body ? `${subject}\n\n${body}` : subject);
+    assert.equal(result.bodyCopied, Boolean(body));
     assert.equal(new URL(result.url).searchParams.get("subject"), null);
     assert.ok(result.url.length <= 2000);
   }
@@ -147,11 +171,22 @@ test("email address validation", async () => {
     "o'neil@example.com",
     "josé@münchen.de",
     "a@xn--80ak6aa92e.com",
+    "info@пример.рф",
+    "a@παράδειγμα.gr",
     "first.last@sub-domain.example.org",
   ]) {
     assert.equal(isValidEmailAddress(good), true, good);
   }
-  for (const bad of ["Gabe", "gabe@", "@example.com", "a@b", "a b@example.com", "a@example.com,b@example.com", "", null]) {
+  for (const bad of [
+    "Gabe",
+    "gabe@",
+    "@example.com",
+    "a@b",
+    "a b@example.com",
+    "a@example.com,b@example.com",
+    "",
+    null,
+  ]) {
     assert.equal(isValidEmailAddress(bad), false, String(bad));
   }
 });
@@ -170,12 +205,34 @@ test("addresses that could disguise the recipient or carry URL junk are refused"
     "a@b..com",
     "a@b.com/../x",
     "a@-corp.com",
+    "alice@corp\u3164.com", // Hangul filler: a letter that renders as nothing
+    "alice@corp.com\u3164",
+    "alice\u034F@corp.com", // combining grapheme joiner
+    "alice@corp\u2060.com", // word joiner
+    "alice@c\u043Erp.com", // Cyrillic о inside a Latin label
+    "alice@\u03B1pple.com", // Greek α inside a Latin label
   ]) {
     assert.equal(isValidEmailAddress(bad), false, JSON.stringify(bad));
   }
 });
 
+test("a display-name form keeps only the address inside the brackets", async () => {
+  const { bareEmailAddress } = await load();
+  assert.equal(bareEmailAddress("Josh Lee <josh@example.com>"), "josh@example.com");
+  assert.equal(bareEmailAddress(' "Lee, Josh" < josh@example.com > '), "josh@example.com");
+  assert.equal(bareEmailAddress("  josh@example.com "), "josh@example.com");
+  // Anything else is left for the validator to refuse.
+  assert.equal(
+    bareEmailAddress("Josh <josh@example.com> <evil@example.com>"),
+    "Josh <josh@example.com> <evil@example.com>"
+  );
+  assert.equal(bareEmailAddress("Josh"), "Josh");
+});
+
 test("an unknown target is rejected", async () => {
   const { buildComposeRequest } = await load();
-  assert.throws(() => buildComposeRequest({ target: "yahoo", to: ["a@example.com"] }), /Unknown compose target/);
+  assert.throws(
+    () => buildComposeRequest({ target: "yahoo", to: ["a@example.com"] }),
+    /Unknown compose target/
+  );
 });

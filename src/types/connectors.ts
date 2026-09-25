@@ -36,8 +36,15 @@ export type ConnectorCommitResult =
   | { state: "not_sent"; reason: string };
 
 export type ConnectorDirectResult =
-  | { state: "sent"; destinationLabel: string; bodyCopied?: boolean; subjectCopied?: boolean }
+  | {
+      state: "sent";
+      destinationLabel: string;
+      bodyCopied?: boolean;
+      subjectCopied?: boolean;
+      copyFailed?: boolean;
+    }
   | { state: "failed"; errorCode: string; message: string; destinationLabel?: string }
+  | { state: "unknown"; errorCode: string; message: string }
   | { state: "unavailable"; reason: string }
   | { state: "not_sent"; reason: string };
 
