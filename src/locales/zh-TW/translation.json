@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "滑鼠按鍵快捷鍵目前僅在 macOS 上受支援。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" 無法在此桌面上使用，其快捷鍵需要包含一個一般按鍵。請加入一個按鍵，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住說話需要 macOS 能偵測到放開的按鍵：Globe、右側 Option 之類的右側按鍵，或帶修飾鍵的快速鍵。點按可用於任何按鍵。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
       "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
@@ -919,6 +920,7 @@
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
         "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。",
         "cleanupTruncated": "AI 模型的輸出長度達到上限，未能完成聽寫清理。",
+        "cleanupDuplicated": "AI 清理重複了轉錄內容。已保留原始文字。",
         "cleanupEmptyReply": "AI 模型傳回空白回應，沒有產生清理後的文字。"
       },
       "translationFallback": {
@@ -940,6 +942,18 @@
         "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
         "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
         "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"
+      },
+      "pastePermission": {
+        "title": "允許自動貼上",
+        "description": "請在系統設定 → 隱私權與安全性 → 輔助使用中啟用 OpenWhispr。",
+        "settingsFailed": "無法開啟設定。請開啟系統設定 → 隱私權與安全性 → 輔助使用，並啟用 OpenWhispr。",
+        "manualPaste": "點擊下方按鈕複製文字，然後按 {{shortcut}} 貼上。",
+        "openSettings": "開啟設定",
+        "copyToClipboard": "複製到剪貼板",
+        "copyFailed": "複製失敗"
+      },
+      "pasteFailed": {
+        "title": "無法自動貼上"
       }
     },
     "clipboard": {
@@ -2958,7 +2972,35 @@
       "conversationWillAppear": "對話將顯示在這裡...",
       "linkedEvent": "關聯行程",
       "noFolder": "無資料夾",
-      "participants": "參與者"
+      "participants": "參與者",
+      "table": {
+        "actions": "表格操作",
+        "insertRowAbove": "在上方插入列",
+        "insertRowBelow": "在下方插入列",
+        "insertColumnLeft": "在左側插入欄",
+        "insertColumnRight": "在右側插入欄",
+        "deleteRow": "刪除列",
+        "deleteColumn": "刪除欄",
+        "deleteTable": "刪除表格"
+      },
+      "format": {
+        "toolbar": "格式",
+        "withShortcut": "{{action}}（{{shortcut}}）",
+        "bold": "粗體",
+        "italic": "斜體",
+        "strike": "刪除線",
+        "code": "程式碼",
+        "textStyle": "文字樣式",
+        "paragraph": "內文",
+        "heading1": "標題 1",
+        "heading2": "標題 2",
+        "heading3": "標題 3",
+        "bulletList": "項目符號清單",
+        "orderedList": "編號清單",
+        "taskList": "核取清單",
+        "blockquote": "引用",
+        "table": "插入表格"
+      }
     },
     "participants": {
       "attendee": "位與會者",

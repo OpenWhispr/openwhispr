@@ -61,3 +61,16 @@ test("returns false for non-self-hosted mode even with URL configured", async ()
     false
   );
 });
+
+test("custom Orukeet keeps its API key in the self-hosted fallback", async () => {
+  const { shouldSkipTranscriptionApiKey } = await import("../../src/helpers/transcriptionAuth.js");
+  assert.equal(
+    shouldSkipTranscriptionApiKey({
+      transcriptionMode: "self-hosted",
+      remoteTranscriptionUrl: "https://orukeet.gizmovoice.ai/v1",
+      remoteTranscriptionModel: "orukeet-v0.1.0",
+      cloudTranscriptionProvider: "custom",
+    }),
+    false
+  );
+});

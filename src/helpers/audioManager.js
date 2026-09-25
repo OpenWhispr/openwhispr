@@ -1,5 +1,6 @@
 import ReasoningService from "../services/ReasoningService";
 import logger from "../utils/logger";
+import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
@@ -14,6 +15,7 @@ import {
   createLocalSpeechGateState,
   getLocalSpeechGateDecision,
   recordLocalSpeechWindow,
+  recordPcm16SpeechWindow,
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
 import { isMicWarm, WARMUP_ACQUIRE_TIMEOUT_MS } from "./micWarmState";
@@ -77,10 +79,16 @@ import {
 import { getTranscriptionApiKey } from "../services/fileTranscription";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
+  isOrukeetStreaming,
   isSelfHostedTranscription,
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription";
-import { resolveStreamingFallbackTarget } from "./transcriptionFallback";
+import {
+  isManagedOrukeetStream,
+  resolveStreamingFallbackTarget,
+  resolveStreamingStartFallback,
+} from "./transcriptionFallback";
+import { transcriptionFailureOutcome } from "./transcriptionFailureOutcome";
 import {
   executeTranslationChain,
   hasTextContent,
@@ -105,13 +113,16 @@ import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValida
 import { isEmptyRecording } from "./recordingGuard";
 import {
   analyzeDictionaryPromptFragment,
-  DICTIONARY_ECHO_CODE,
   dictionaryEchoError,
   matchesDictionaryPrompt,
   payloadSendsDictionaryBias,
 } from "../utils/dictionaryEchoFilter.js";
 import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionaryPromptCap.js";
-import { dictionaryKeywords, usesTranscriptionKeywords } from "../utils/dictionaryKeywords.js";
+import {
+  dictionaryKeywordOverflow,
+  dictionaryKeywords,
+  usesTranscriptionKeywords,
+} from "../utils/dictionaryKeywords.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 import { getAgentName } from "../utils/agentName";
@@ -125,11 +136,17 @@ import {
 import {
   REALTIME_MODELS,
   defaultStreamingProviderName,
+  orukeetDetectedLanguageFields,
+  resolveManagedOrukeetRoute,
   resolveStreamingProviderName,
   buildStreamingSessionOptions,
+  shouldRetranscribeOrukeetLanguage,
 } from "./dictationStreamingRouting";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
+// A server-side rollout change (a provider switched on or rolled back) must
+// reach a long-running app without a restart.
+const STT_CONFIG_TTL_MS = 15 * 60 * 1000;
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
 // Failure detector only: fires when the worklet or audio graph is dead and never flushes.
 const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
@@ -146,6 +163,15 @@ const cleanupFailureFromError = (error) => ({
   ...(error?.copyCommand ? { copyCommand: error.copyCommand } : {}),
   ...(error?.technicalDetails ? { technicalDetails: error.technicalDetails } : {}),
 });
+
+const cloudSignInRequiredError = () => {
+  const err = new Error(
+    "OpenWhispr Cloud requires sign-in. Please sign in again or switch to BYOK mode."
+  );
+  err.code = "AUTH_REQUIRED";
+  err.messageKey = "hooks.audioRecording.errorDescriptions.sessionExpired";
+  return err;
+};
 
 const micDeviceKey = (settings) =>
   `${settings.microphoneSelectionMode}|${settings.selectedMicDeviceId}`;
@@ -224,7 +250,7 @@ function resolveReasoningRoute(
   const kind = resolveDictationRouteKind({
     cleanupReachable,
     agentReachable: agent.reachable,
-    // A translation recording never routes to the agent, so skip the scan.
+    // A translation recording ignores the wake word, so skip the scan.
     agentInvoked:
       !translationRequested &&
       !!agentName &&
@@ -392,6 +418,11 @@ const STREAMING_PROVIDERS = {
     onSessionEnd: (cb) => window.electronAPI.onAssemblyAiSessionEnd(cb),
   },
   "openai-realtime": makeDictationRealtimeProvider("openai-realtime"),
+  orukeet: {
+    ...makeDictationRealtimeProvider("orukeet"),
+    finalizeAcknowledged: true,
+    finalize: () => window.electronAPI.dictationRealtimeFinalize(),
+  },
   gemini: {
     // The final transcript lands ~500ms after audioStreamEnd (which finalize
     // sends), ~2s at the p95 tail, so the stop sequence waits for it under a
@@ -619,6 +650,10 @@ class AudioManager {
     this.screenContextPromise = null;
     this.selectionCapturePromise = null;
     this.sttConfig = null;
+    this.sttConfigFetchedAt = null;
+    this.streamingFallbackReason = null;
+    this._streamingFailoverReason = null;
+    this._streamingSpeechGateState = null;
     this.warmupFailureStreak = 0;
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
@@ -968,6 +1003,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   setSttConfig(config) {
     this.sttConfig = config;
+    this.sttConfigFetchedAt = Date.now();
+  }
+
+  isSttConfigStale(now = Date.now()) {
+    return (
+      !this.sttConfig ||
+      !this.sttConfigFetchedAt ||
+      now - this.sttConfigFetchedAt > STT_CONFIG_TTL_MS
+    );
+  }
+
+  invalidateSttConfig() {
+    this.sttConfig = null;
+    this.sttConfigFetchedAt = null;
   }
 
   getStreamingProvider() {
@@ -977,10 +1026,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   getStreamingProviderName() {
     // Every AudioManager instance records dictation; notes and meetings have
     // their own routing, so the context is a literal here.
+    const settings = getSettings();
     const name = resolveStreamingProviderName({
-      settings: getSettings(),
+      settings,
       context: "dictation",
       sttConfig: this.sttConfig,
+      language: this.getEffectiveSttLanguage(settings),
     });
     // A server-driven sttConfig.streamingProvider we don't recognize must fall
     // back to a provider we can run — and the reported name must match the
@@ -2019,14 +2070,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         }
       } else if (isOpenWhisprCloudMode) {
-        if (!isSignedIn) {
-          const err = new Error(
-            "OpenWhispr Cloud requires sign-in. Please sign in again or switch to BYOK mode."
-          );
-          err.code = "AUTH_REQUIRED";
-          err.messageKey = "hooks.audioRecording.errorDescriptions.sessionExpired";
-          throw err;
-        }
+        if (!isSignedIn) throw cloudSignInRequiredError();
         activeModel = "openwhispr-cloud";
         result = await this.processWithOpenWhisprCloud(audioBlob, metadata, wasCancelled);
       } else {
@@ -2104,31 +2148,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "performance"
       );
 
-      if (error.code === DICTIONARY_ECHO_CODE) {
-        // The transcript was discarded as an echo of the dictionary prompt.
-        // Surface the shared soft no-audio outcome and keep the recording for
-        // a manual retry — otherwise the whole utterance disappears with no
-        // feedback (#1547).
-        noAudioDetected = true;
-        if (this.lastAudioBlob) {
-          this.saveFailedTranscription(error.message, error.code, metadata);
-        }
-      } else if (error.message === "No audio detected") {
-        noAudioDetected = true;
-      } else {
-        this.onError?.({
-          title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
-          description: error.selectionEditFatal
-            ? error.message
-            : `Transcription failed: ${error.message}`,
-          code: error.code,
-          messageKey: error.messageKey,
-        });
-
-        // Save failed transcription with audio so the user can retry later
-        if (this.lastAudioBlob) {
-          this.saveFailedTranscription(error.message, error.code || null, metadata);
-        }
+      const outcome = transcriptionFailureOutcome(error);
+      noAudioDetected = outcome.noAudio;
+      if (outcome.report) this.onError?.(outcome.report);
+      if (outcome.keepAudio && this.lastAudioBlob) {
+        this.saveFailedTranscription(error.message, error.code || null, metadata);
       }
     } finally {
       const shouldNotifyNoAudio =
@@ -2676,7 +2700,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // and previews stay truthful.
   _bankAssistantDirective(transcript, config, options = {}) {
     if (!this.isProcessing) return;
-    const { selectedContext, deliverySessionId } = options || {};
+    const { selectedContext, deliverySessionId, deliveryAcceptsMarkdown } = options || {};
     this.pendingAssistantConversation = {
       transcript,
       // resolveReasoningRoute mirrors an attached screenContext into
@@ -2685,7 +2709,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // (the panel re-decides for its own request).
       screenContext: config?.rawScreenContext ?? null,
       ...(selectedContext ? { selectedContext } : {}),
-      ...(deliverySessionId ? { deliverySessionId } : {}),
+      ...(deliverySessionId ? { deliverySessionId, deliveryAcceptsMarkdown } : {}),
     };
   }
 
@@ -2711,7 +2735,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     text,
     agentName,
     config,
-    { selectedContext, selectedText, deliverySessionId } = {}
+    { selectedContext, selectedText, deliverySessionId, deliveryAcceptsMarkdown } = {}
   ) {
     this.assertAgentAllowedByPolicy();
     const settings = getSettings();
@@ -2724,7 +2748,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           config?.snippets ?? settings.snippets
         );
     const transcript = selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
-    this._bankAssistantDirective(transcript, config, { selectedContext, deliverySessionId });
+    this._bankAssistantDirective(transcript, config, {
+      selectedContext,
+      deliverySessionId,
+      deliveryAcceptsMarkdown,
+    });
     return text;
   }
 
@@ -2761,6 +2789,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       captureDisposition === "caret" && getSettings().autoPasteEnabled
         ? capture.sessionId
         : undefined;
+    const deliveryAcceptsMarkdown = capture?.acceptsMarkdown === true;
 
     if (!config?.selectionEditReachable) {
       // No in-place editor: the panel never types, so only a readable
@@ -2771,6 +2800,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             ? capture.text
             : undefined,
         deliverySessionId,
+        deliveryAcceptsMarkdown,
       });
     }
 
@@ -2788,7 +2818,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (captureDisposition === "standalone" || captureDisposition === "caret") {
-      return this._bankPanelAgentCommand(text, agentName, config, { deliverySessionId });
+      return this._bankPanelAgentCommand(text, agentName, config, {
+        deliverySessionId,
+        deliveryAcceptsMarkdown,
+      });
     }
 
     if (capture?.status !== "selected") {
@@ -2928,13 +2961,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async runTranslationChain({ text, settings, agentName, route, cleanup }) {
     const runCleanup = async (currentText) => {
       if (cleanup.mode === "cloudReason") {
+        const customPrompt = this.getCustomPrompt();
         const reasonResult = await withSessionRefresh(async () => {
           const res = await window.electronAPI.cloudReason(currentText, {
             agentName,
             promptMode: "cleanup",
             purpose: "cleanup",
             customDictionary: getDictionaryHintWords(settings),
-            customPrompt: this.getCustomPrompt(),
+            customPrompt,
             language: this.getCleanupLanguage(settings),
             locale: settings.uiLanguage || "en",
             ...(cleanup.meta || {}),
@@ -2946,6 +2980,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           return res;
         });
+        if (!customPrompt && hasTextContent(reasonResult.text)) {
+          assertValidCleanupOutput(currentText, reasonResult.text);
+        }
         return reasonResult.success && reasonResult.text ? reasonResult.text : null;
       }
       const cleanupModel = cleanup.model;
@@ -3340,14 +3377,26 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const opts = {};
     const analyticsOccurredAt = new Date(metadata.analyticsOccurredAt || Date.now());
     if (language) opts.language = language;
+    const streamingFallbackReason =
+      metadata.streamingFallbackReason ?? this.consumeStreamingFallbackReason(settings);
+    if (streamingFallbackReason) opts.streamingFallbackReason = streamingFallbackReason;
+    // Orukeet's audio estimate rides along for the backend's per-user gate
+    // only. It is never the declared `language`: /api/transcribe picks models
+    // by declared language, and the fallback must be the request the user
+    // would make without Orukeet.
+    const detectedLanguageFields = metadata.detectedLanguageFields || {};
+    Object.assign(opts, detectedLanguageFields);
     if (analyticsSyncEnabled(settings)) {
       opts.analyticsOccurredAt = analyticsOccurredAt.toISOString();
       opts.localDate = localDateKey(analyticsOccurredAt);
     }
     const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
+    // Only cloud cleanup writes a combined STT log; translation alone does not.
+    // A voice assistant recording never runs cleanup, so this upload is its log.
     if (
-      (settings.useCleanupModel && cleanupCloudMode === "openwhispr") ||
-      (this.translationRequested && translationChainReachable(settings) && isCloudTranslationMode())
+      settings.useCleanupModel &&
+      cleanupCloudMode === "openwhispr" &&
+      !this.voiceAgentRequested
     ) {
       opts.sendLogs = "false";
     }
@@ -3410,15 +3459,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
           if (hasTextContent(reasoned)) processedText = reasoned;
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
+          const customPrompt = this.getCustomPrompt();
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(processedText, {
               agentName,
               promptMode: "cleanup",
               purpose: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
-              customPrompt: this.getCustomPrompt(),
+              customPrompt,
               language: this.getCleanupLanguage(settings),
               locale: settings.uiLanguage || "en",
+              streamingFallbackReason,
+              ...detectedLanguageFields,
               sttProvider: result.sttProvider,
               sttModel: result.sttModel,
               sttProcessingMs: result.sttProcessingMs,
@@ -3438,6 +3490,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
           // Cloud cleanup can return success with empty text; keep the raw transcription instead of wiping it.
           if (reasonResult.success && hasTextContent(reasonResult.text)) {
+            if (!customPrompt) assertValidCleanupOutput(processedText, reasonResult.text);
             processedText = reasonResult.text;
           }
         } else if (route.kind === "cleanup") {
@@ -3462,6 +3515,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 ? {
                     mode: "cloudReason",
                     meta: {
+                      streamingFallbackReason,
+                      ...detectedLanguageFields,
                       sttProvider: result.sttProvider,
                       sttModel: result.sttModel,
                       sttProcessingMs: result.sttProcessingMs,
@@ -3672,14 +3727,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       formData.append("file", uploadAudio, `audio.${extension}`);
       formData.append("model", model);
 
-      if (language) {
+      if (language && model !== "orukeet-v0.1.0") {
         formData.append("language", language);
       }
 
       const endpoint = this.getTranscriptionEndpoint(route);
 
       // gpt-transcribe takes the dictionary on its own keywords[] channel (see
-      // dictionaryKeywords), so its prompt carries only the Chinese script bias.
+      // dictionaryKeywords), so its prompt carries only the Chinese script bias and
+      // the terms past the keyword cap.
       const usesKeywords = usesTranscriptionKeywords(model);
       const dictionary = this.getCustomDictionaryPrompt();
 
@@ -3690,11 +3746,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Whisper decoders read the tail of whatever they are given.
       const MAX_PROMPT_CHARS = dictionaryPromptLimit({ provider, endpoint, model });
       const trimmedPrompt = trimDictionaryPrompt(
-        this.getWhisperPrompt(apiSettings, usesKeywords ? null : dictionary),
+        this.getWhisperPrompt(
+          apiSettings,
+          usesKeywords ? dictionaryKeywordOverflow(dictionary) : dictionary
+        ),
         MAX_PROMPT_CHARS
       );
       const dictionaryPrompt = trimmedPrompt.prompt;
-      if (dictionaryPrompt) {
+      if (dictionaryPrompt && model !== "orukeet-v0.1.0") {
         if (trimmedPrompt.truncated) {
           logger.debug(
             "Custom dictionary prompt truncated",
@@ -4019,6 +4078,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async safePaste(text, options = {}) {
     try {
       const result = await window.electronAPI.pasteText(text, options);
+      if (
+        result?.success === false &&
+        result.code === "ACCESSIBILITY_PERMISSION_REQUIRED" &&
+        result.clipboardCopied === true
+      ) {
+        this.onError?.({
+          title: "Paste Error",
+          code: result.code,
+          clipboardCopied: true,
+          transcript: text,
+        });
+        return false;
+      }
       return result?.pasted === true;
     } catch (error) {
       const message =
@@ -4026,7 +4098,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         (typeof error?.toString === "function" ? error.toString() : String(error));
       this.onError?.({
         title: "Paste Error",
-        description: `Failed to paste text. Please check accessibility permissions. ${message}`,
+        code: "PASTE_FAILED",
+        // Keep the platform's guidance, without Electron's IPC wrapper around it.
+        description: message.replace(/^Error invoking remote method '[^']+': (?:\w*Error: )?/, ""),
       });
       return false;
     }
@@ -4220,8 +4294,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // setups; an error resolution must fail closed on the batch path too.
     if (getManagedTranscriptionResolution()) return false;
 
+    if (isOrukeetStreaming(s)) return Boolean(s.customTranscriptionApiKey);
+
     // Self-hosted transcription is batch HTTP to the user's server, never cloud realtime WS.
     if (isSelfHostedTranscription(s)) return false;
+
+    if (
+      s.cloudTranscriptionMode === "openwhispr" &&
+      this.sttConfig?.streamingProvider === "orukeet"
+    ) {
+      // A language the model does not cover takes the batch path, which
+      // carries the language, instead of a socket that would ignore it.
+      const route = resolveManagedOrukeetRoute({
+        settings: s,
+        sttConfig: this.sttConfig,
+        language: this.getEffectiveSttLanguage(s),
+      });
+      return route === "orukeet" && Boolean(isSignedInOverride ?? s.isSignedIn);
+    }
 
     // Corti (BYOK) streams over its own WSS — independent of OpenWhispr Cloud.
     if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
@@ -4460,6 +4550,65 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     for (const resolve of this._streamingStartSettlementWaiters.splice(0)) resolve();
   }
 
+  // Turns a failed dictation-realtime-start result into a batch fallback or
+  // the error the user must see.
+  classifyStreamingStartResult(res, { useLocalWhisper }) {
+    if (res.success) return res;
+    if (res.code === "NO_API") return { needsFallback: true };
+    if (res.code === "NETWORK_ERROR" && useLocalWhisper) {
+      this.onError?.({
+        code: "NETWORK_ERROR",
+        title: "streaming.errors.cloudUnreachable.title",
+        description: "Cloud unreachable — using local engine for this recording.",
+        messageKey: "streaming.errors.cloudUnreachable.fallback",
+      });
+      return { needsFallback: true };
+    }
+    const fallbackReason = resolveStreamingStartFallback({
+      providerName: this.getStreamingProviderName(),
+      cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+      result: res,
+    });
+    if (fallbackReason) {
+      // The cached config advertised a route the server no longer grants: drop
+      // it so the next recording refetches instead of retrying a denied route.
+      if (res.code === "FEATURE_NOT_ENABLED") this.invalidateSttConfig();
+      this.streamingFallbackReason = fallbackReason;
+      logger.warn(
+        "Managed Orukeet session unavailable, falling back to batch recording",
+        { code: res.code, status: res.status, reason: fallbackReason, error: res.error },
+        "streaming"
+      );
+      return { needsFallback: true };
+    }
+    if (res.code === "LIMIT_REACHED" && Number.isFinite(res.details?.wordsUsed)) {
+      // Same upgrade prompt a batch upload opens when it crosses the quota.
+      window.electronAPI?.notifyLimitReached?.({
+        wordsUsed: res.details.wordsUsed,
+        limit: Number.isFinite(res.details.limit) ? res.details.limit : 2000,
+      });
+    }
+    const err = new Error(res.error || "Failed to start streaming session");
+    err.code = res.code;
+    err.messageKey = res.messageKey;
+    err.networkCode = res.networkCode;
+    throw err;
+  }
+
+  // Why this cloud upload is batch instead of the managed Orukeet stream, for
+  // the rollout's fallback-rate metric. Cleared on read: it describes one recording.
+  consumeStreamingFallbackReason(settings) {
+    const reason = this.streamingFallbackReason;
+    this.streamingFallbackReason = null;
+    if (reason) return reason;
+    const route = resolveManagedOrukeetRoute({
+      settings,
+      sttConfig: this.sttConfig,
+      language: this.getEffectiveSttLanguage(settings),
+    });
+    return route === "language_unsupported" ? route : undefined;
+  }
+
   async startStreamingRecording(forceDefaultMic = false) {
     let acquiredStream = null;
     let usedPreparedCapture = false;
@@ -4484,6 +4633,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.stopRequestedDuringStreamingStart = false;
       sessionId = (this._streamingSessionGeneration || 0) + 1;
       this._streamingSessionGeneration = sessionId;
+      this.streamingFallbackReason = null;
+      this._streamingFailoverReason = null;
+      this._streamingSpeechGateState = createLocalSpeechGateState();
       this._activeStreamingSessionId = sessionId;
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
@@ -4548,13 +4700,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
       const provider = this.getStreamingProvider();
+      // Decided once, with the provider, so a config refresh mid-recording
+      // cannot change how this session's stream errors are handled. Only a
+      // session whose fallback recorder started has a capture to fail over
+      // to; stop finishes that recorder before a refused commit can arrive.
+      const failsOver =
+        Boolean(this.streamingFallbackRecorder) &&
+        isManagedOrukeetStream({
+          providerName: this.getStreamingProviderName(),
+          cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+        });
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
         // on stop; the sentinel must not be sent as audio (realtime backends
         // reject the odd-length non-PCM bytes with "Invalid audio data").
-        if (!ownsSession() || !this.isStreaming || event.data === "flushed") return;
-        provider.send(event.data);
+        if (!ownsSession() || !this.isStreaming) return;
+        if (event.data === "flushed") {
+          this._streamingFlushResolve?.();
+          return;
+        }
+        // Measured from the first chunk: a recording that fails over later
+        // still has its opening words in the gate.
+        recordPcm16SpeechWindow(this._streamingSpeechGateState, event.data);
+        if (!this._streamingFailoverReason) provider.send(event.data);
       };
 
       this.isStreaming = true;
@@ -4593,6 +4762,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const errorCleanup = provider.onError((error) => {
         if (!ownsSession()) return;
         logger.error("Streaming provider error", { error }, "streaming");
+        // Managed Orukeet refuses a second concurrent recording on the account
+        // and can drop a socket mid-recording. The fallback recorder has the
+        // whole capture, so keep recording and let stop upload it to Cloud
+        // rather than cutting the user off behind an error.
+        if (failsOver) {
+          this._streamingFailoverReason ??= "stream_no_final";
+          return;
+        }
         this.onError?.({
           title: "Streaming Error",
           description: error,
@@ -4648,30 +4825,29 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           })
         );
 
-        if (!res.success) {
-          if (res.code === "NO_API") {
-            return { needsFallback: true };
-          }
-          if (res.code === "NETWORK_ERROR" && useLocalWhisper) {
-            this.onError?.({
-              code: "NETWORK_ERROR",
-              title: "streaming.errors.cloudUnreachable.title",
-              description: "Cloud unreachable — using local engine for this recording.",
-              messageKey: "streaming.errors.cloudUnreachable.fallback",
-            });
-            return { needsFallback: true };
-          }
-          const err = new Error(res.error || "Failed to start streaming session");
-          err.code = res.code;
-          err.messageKey = res.messageKey;
-          err.networkCode = res.networkCode;
-          throw err;
-        }
-        return res;
+        return this.classifyStreamingStartResult(res, { useLocalWhisper });
       });
       const tWs = performance.now();
       this._settleStreamingStart();
       if (startWasCancelled()) return false;
+
+      // A managed Orukeet start failure (refused socket, account cap, outage)
+      // keeps this capture: the fallback recorder has held the audio since the
+      // mic opened, and reopening the mic for a batch recording would lose it.
+      if (result.needsFallback && this.streamingFallbackReason && this.streamingFallbackRecorder) {
+        this._streamingFailoverReason = this.streamingFallbackReason;
+        this.streamingFallbackReason = null;
+        logger.info(
+          "Managed Orukeet unavailable, recording for the Cloud upload",
+          { reason: this._streamingFailoverReason },
+          "streaming"
+        );
+        if (this.stopRequestedDuringStreamingStart) {
+          this.stopRequestedDuringStreamingStart = false;
+          return this.stopStreamingRecording();
+        }
+        return true;
+      }
 
       if (result.needsFallback) {
         this.isRecording = false;
@@ -4680,11 +4856,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         await this.cleanupStreaming();
         if (ownsSession()) this._activeStreamingSessionId = null;
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
-        logger.debug(
-          "Streaming API not configured, falling back to regular recording",
-          {},
-          "streaming"
-        );
+        logger.debug("Streaming unavailable, falling back to regular recording", {}, "streaming");
         return this.startRecording();
       }
 
@@ -4761,6 +4933,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       } else if (error.code === "NETWORK_ERROR") {
         errorTitle = "streaming.errors.cloudUnreachable.title";
         errorDescription = error.messageKey || "streaming.errors.cloudUnreachable.generic";
+      } else if (error.code === "LIMIT_REACHED") {
+        // Titled by getRecordingErrorTitle, like the batch upload's limit error.
+        errorDescription = error.message;
       } else if (error.name === "MicUnusableError") {
         errorTitle = "Microphone Muted";
         errorDescription =
@@ -4979,14 +5154,46 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const t0 = performance.now();
     let finalText = this.streamingFinalText || "";
 
-    // 1. Stop the processor — it flushes its remaining buffer on "stop".
-    //    Keep isStreaming TRUE so the port.onmessage handler forwards the flush to WebSocket.
-    if (this.streamingProcessor) {
+    const provider = this.getStreamingProvider();
+    let acknowledgedFinal = null;
+    let finalAcknowledged = false;
+    let orukeetFinal = null;
+    // The worklet emits PCM followed by "flushed" on the same message port.
+    // IPC sends and the finalize invoke preserve that order in the main process.
+    if (this.streamingProcessor && provider.finalizeAcknowledged) {
+      const processor = this.streamingProcessor;
+      let watchdog;
+      const flushed = new Promise((resolve, reject) => {
+        this._streamingFlushResolve = resolve;
+        watchdog = setTimeout(
+          () => reject(new Error("Audio worklet did not flush")),
+          PREVIEW_FLUSH_WATCHDOG_MS
+        );
+      });
+      processor.port.postMessage("stop");
+      try {
+        await flushed;
+      } catch (error) {
+        // Incomplete capture must use the retained recording, never commit a
+        // truncated stream. Keep cleanup running so the microphone is released.
+        acknowledgedFinal = Promise.resolve({ success: false, error: error.message });
+      } finally {
+        clearTimeout(watchdog);
+        this._streamingFlushResolve = null;
+        processor.disconnect();
+        this.streamingProcessor = null;
+      }
+      if (wasCancelled()) return abandonFinalization();
+      acknowledgedFinal ||= provider.finalize().catch((error) => ({
+        success: false,
+        error: error.message,
+      }));
+    } else if (this.streamingProcessor) {
       try {
         this.streamingProcessor.port.postMessage("stop");
         this.streamingProcessor.disconnect();
-      } catch (e) {
-        // Ignore
+      } catch {
+        /* Capture is already stopped. */
       }
       this.streamingProcessor = null;
     }
@@ -5032,18 +5239,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     // 2. Wait for flushed buffer to travel: port -> main thread -> IPC -> WebSocket -> server.
     //    Then mark streaming done so no further audio is forwarded.
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    if (!provider.finalizeAcknowledged) await new Promise((resolve) => setTimeout(resolve, 120));
     if (wasCancelled()) return abandonFinalization();
     this.isStreaming = false;
     const tFlush = performance.now();
 
     // 3. Finalize tells the provider to process any buffered audio and send final results.
     //    Wait for the transcript to settle before disconnecting.
-    const provider = this.getStreamingProvider();
-    provider.finalize?.();
-    if (provider.awaitsFinalTranscript) {
+    if (provider.finalizeAcknowledged) {
+      const result = await (acknowledgedFinal || provider.finalize());
+      finalAcknowledged = result?.success === true;
+      if (finalAcknowledged) orukeetFinal = result;
+      if (finalAcknowledged && typeof result.text === "string") {
+        this.streamingFinalText = result.text;
+      }
+      if (!result?.success) {
+        logger.warn("Streaming finalization failed", { error: result?.error }, "streaming");
+      }
+    } else if (provider.awaitsFinalTranscript) {
+      provider.finalize?.();
       await this.awaitStreamingTextSettled(provider.finalCeilingMs);
     } else {
+      provider.finalize?.();
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
     if (wasCancelled()) return abandonFinalization();
@@ -5100,8 +5317,79 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // the batch path, which already keeps raw and processed text separate.
     const rawStreamingText = finalText;
 
+    let usedBatchFallback = false;
+    let batchWarning = null;
+    let batchFallbackResult = null;
+    let failureReport = null;
+    const isOrukeetStream = this.getStreamingProviderName() === "orukeet";
+    const detectedLanguageFields = isOrukeetStream
+      ? orukeetDetectedLanguageFields(orukeetFinal)
+      : {};
+
+    // Orukeet renders speech outside its 25 languages as confident nonsense.
+    // With a confident final estimate, send the kept recording through Cloud
+    // as the same "auto" request the user makes without Orukeet, before any
+    // cleanup spends a call on the discarded text.
+    if (
+      isOrukeetStream &&
+      fallbackBlob?.size > 0 &&
+      resolveStreamingFallbackTarget(stSettings) === "cloud" &&
+      shouldRetranscribeOrukeetLanguage({ language: streamingSttLanguage, final: orukeetFinal })
+    ) {
+      logger.info(
+        "Orukeet detected an unsupported language, re-transcribing through Cloud",
+        detectedLanguageFields,
+        "streaming"
+      );
+      // Orukeet's text is the nonsense this path exists to catch, so it is
+      // never kept: a failed re-transcription ends as a batch recording's would.
+      const failLanguageFallback = (error) => {
+        logger.error(
+          "Language re-transcription failed, discarding the Orukeet transcript",
+          { error: error.message, code: error.code },
+          "streaming"
+        );
+        finalText = "";
+        const outcome = transcriptionFailureOutcome(error);
+        failureReport = outcome.report;
+        if (outcome.keepAudio) {
+          this.saveFailedTranscription(error.message, error.code || null, {
+            durationSeconds,
+            analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+          });
+        }
+      };
+      try {
+        const batchResult = await this.processWithOpenWhisprCloud(
+          fallbackBlob,
+          {
+            durationSeconds,
+            analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+            streamingFallbackReason: "language_detected_unsupported",
+            detectedLanguageFields,
+          },
+          wasCancelled
+        );
+        if (wasCancelled()) return true;
+        if (batchResult?.text) {
+          finalText = batchResult.text;
+          usedBatchFallback = true;
+          batchFallbackResult = batchResult;
+          batchWarning = batchResult.warning || null;
+        } else {
+          failLanguageFallback(
+            Object.assign(new Error("No speech detected in audio"), { code: "NO_SPEECH_DETECTED" })
+          );
+        }
+      } catch (languageFallbackErr) {
+        if (wasCancelled()) return true;
+        failLanguageFallback(languageFallbackErr);
+      }
+    }
+
     let usedCloudReasoning = false;
-    if (finalText) {
+    // The Cloud batch path already ran its own cleanup, agent or translation.
+    if (finalText && !usedBatchFallback) {
       const reasoningStart = performance.now();
       const agentName = getAgentName();
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
@@ -5139,13 +5427,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "streaming"
           );
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
+          const customPrompt = this.getCustomPrompt();
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(finalText, {
               agentName,
               promptMode: "cleanup",
               purpose: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
-              customPrompt: this.getCustomPrompt(),
+              customPrompt,
               language: this.getCleanupLanguage(stSettings),
               locale: stSettings.uiLanguage || "en",
               sttProvider: this.getStreamingProviderName(),
@@ -5153,6 +5442,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               sttProcessingMs: streamingSttProcessingMs,
               sttWordCount: streamingSttWordCount,
               sttLanguage: streamingSttLanguage,
+              ...detectedLanguageFields,
               audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
               audioSizeBytes: streamingAudioBytesSent || undefined,
               audioFormat: "linear16",
@@ -5165,10 +5455,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             return res;
           });
 
+          usedCloudReasoning = true;
           if (reasonResult.success && hasTextContent(reasonResult.text)) {
+            if (!customPrompt) assertValidCleanupOutput(finalText, reasonResult.text);
             finalText = reasonResult.text;
           }
-          usedCloudReasoning = true;
 
           logger.info(
             "Streaming reasoning complete",
@@ -5210,6 +5501,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                       sttProcessingMs: streamingSttProcessingMs,
                       sttWordCount: streamingSttWordCount,
                       sttLanguage: streamingSttLanguage,
+                      ...detectedLanguageFields,
                       audioDurationMs: durationSeconds
                         ? Math.round(durationSeconds * 1000)
                         : undefined,
@@ -5256,10 +5548,35 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     // If streaming produced no text, fall back to batch — routed so BYOK audio
     // and cloud audio never cross over (see resolveStreamingFallbackTarget).
-    let usedBatchFallback = false;
-    let batchWarning = null;
-    let batchFallbackResult = null;
-    if (!finalText && durationSeconds > 2 && fallbackBlob?.size > 0) {
+    const failoverReason = this._streamingFailoverReason;
+    // No stream will transcribe a failed-over recording, so it uploads at any
+    // length, unless it was the silence the batch speech gate skips.
+    const failoverSilent =
+      Boolean(failoverReason) &&
+      getLocalSpeechGateDecision(this._streamingSpeechGateState).reason === "silence";
+    if (failoverSilent) {
+      logger.info("Speech gate skipped the failed-over upload", { failoverReason }, "streaming");
+    }
+    // A failed-over recording has no other transcript, so a failure to
+    // transcribe it ends as a batch recording's would. A stream that produced
+    // no text still ends quietly on a real failure, but keeps a recording that
+    // reads as silence for a retry, as batch does.
+    const failBatchFallback = (error) => {
+      const outcome = transcriptionFailureOutcome(error);
+      if (!failoverReason && outcome.report) return;
+      failureReport = outcome.report;
+      if (outcome.keepAudio) {
+        this.saveFailedTranscription(error.message, error.code || null, {
+          durationSeconds,
+          analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+        });
+      }
+    };
+    if (
+      !finalText &&
+      (failoverReason ? !failoverSilent : !finalAcknowledged && durationSeconds > 2) &&
+      fallbackBlob?.size > 0
+    ) {
       const target = resolveStreamingFallbackTarget(getSettings());
       if (target === "skip") {
         logger.warn(
@@ -5267,6 +5584,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           {},
           "streaming"
         );
+        failBatchFallback(cloudSignInRequiredError());
       } else {
         logger.info(
           "Streaming produced no text, falling back to batch transcription",
@@ -5282,6 +5600,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   {
                     durationSeconds,
                     analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+                    // The tag feeds the Orukeet rollout's fallback rate; other
+                    // providers still fall back, just untagged. Only managed
+                    // Orukeet fails over, and its reason outlives the cached
+                    // config a refused start drops.
+                    ...(failoverReason || isOrukeetStream
+                      ? { streamingFallbackReason: failoverReason || "stream_no_final" }
+                      : {}),
                   },
                   wasCancelled
                 )
@@ -5295,7 +5620,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
           }
         } catch (fallbackErr) {
+          // The cancelled upload's rejection is the expected outcome.
+          if (wasCancelled()) return true;
           logger.error("Batch fallback failed", { error: fallbackErr.message }, "streaming");
+          failBatchFallback(fallbackErr);
         }
       }
     }
@@ -5328,6 +5656,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         source: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
         clientTranscriptionId,
         analyticsOccurredAt: resultAnalyticsOccurredAt,
+        // The upgrade prompt opens on these, as after a batch recording.
+        ...(batchFallbackResult?.limitReached
+          ? {
+              limitReached: true,
+              wordsUsed: batchFallbackResult.wordsUsed,
+              wordsRemaining: batchFallbackResult.wordsRemaining,
+            }
+          : {}),
         ...this._takePendingResultExtras(),
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
@@ -5345,6 +5681,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   sttModel: streamingSttModel,
                   sttProcessingMs: streamingSttProcessingMs,
                   sttLanguage: streamingSttLanguage,
+                  ...detectedLanguageFields,
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
                   clientTotalMs,
@@ -5401,7 +5738,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     if (wasCancelled()) return true;
 
-    if (!finalText) {
+    if (failureReport) {
+      this.onError?.(failureReport);
+    } else if (!finalText) {
       // Match the batch pipeline: settle processing first, then publish the
       // empty outcome so the warning cannot interrupt the thinking transition.
       this.onTranscriptionComplete?.({ success: true, text: "" });
@@ -5466,6 +5805,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   cleanupStreamingAudio() {
+    this._streamingFlushResolve?.();
+    this._streamingFlushResolve = null;
     if (this.streamingFallbackRecorder?.state === "recording") {
       try {
         this.streamingFallbackRecorder.stop();

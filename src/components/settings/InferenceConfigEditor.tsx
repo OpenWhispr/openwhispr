@@ -148,11 +148,6 @@ export default function InferenceConfigEditor({
         patch.model = "";
       }
       setResolvedLLMConfig(scope, patch);
-
-      if (mode === "openwhispr" || mode === "self-hosted" || mode === "enterprise") {
-        window.electronAPI?.llamaServerStop?.();
-      }
-
       onModeChange?.(mode);
     },
     [scope, config.provider, effectiveMode, isSignedIn, onModeChange, isModeAllowed]

@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" can't be used on this desktop, whose shortcuts need a regular key. Add a key, such as Control+Alt+Space.",
       "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
@@ -919,6 +920,7 @@
         "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
         "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text.",
         "cleanupTruncated": "The AI model ran out of room before it finished cleaning up your dictation.",
+        "cleanupDuplicated": "AI cleanup repeated the transcript. The original text was kept.",
         "cleanupEmptyReply": "The AI model returned an empty reply instead of the cleaned-up dictation."
       },
       "translationFallback": {
@@ -940,6 +942,18 @@
         "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
         "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
         "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."
+      },
+      "pastePermission": {
+        "title": "Allow automatic pasting",
+        "description": "Enable OpenWhispr in System Settings → Privacy & Security → Accessibility.",
+        "settingsFailed": "Couldn't open Settings. Open System Settings → Privacy & Security → Accessibility and enable OpenWhispr.",
+        "manualPaste": "Copy your text below, then press {{shortcut}} to paste it.",
+        "openSettings": "Open Settings",
+        "copyToClipboard": "Copy to clipboard",
+        "copyFailed": "Copy failed"
+      },
+      "pasteFailed": {
+        "title": "Couldn't paste automatically"
       }
     },
     "clipboard": {
@@ -3301,7 +3315,35 @@
       "conversationWillAppear": "Conversation will appear here...",
       "linkedEvent": "Linked event",
       "noFolder": "No folder",
-      "participants": "Participants"
+      "participants": "Participants",
+      "table": {
+        "actions": "Table actions",
+        "insertRowAbove": "Insert row above",
+        "insertRowBelow": "Insert row below",
+        "insertColumnLeft": "Insert column left",
+        "insertColumnRight": "Insert column right",
+        "deleteRow": "Delete row",
+        "deleteColumn": "Delete column",
+        "deleteTable": "Delete table"
+      },
+      "format": {
+        "toolbar": "Formatting",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Bold",
+        "italic": "Italic",
+        "strike": "Strikethrough",
+        "code": "Code",
+        "textStyle": "Text style",
+        "paragraph": "Normal text",
+        "heading1": "Heading 1",
+        "heading2": "Heading 2",
+        "heading3": "Heading 3",
+        "bulletList": "Bulleted list",
+        "orderedList": "Numbered list",
+        "taskList": "Checklist",
+        "blockquote": "Quote",
+        "table": "Insert table"
+      }
     },
     "participants": {
       "attendee": "attendee",

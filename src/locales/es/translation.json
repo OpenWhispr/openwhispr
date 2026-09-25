@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Los atajos con botones del ratón solo son compatibles con macOS por ahora.",
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" no se puede usar en este escritorio, cuyos atajos necesitan una tecla normal. Añade una tecla, como Control+Alt+Space.",
       "holdNeedsReleaseKey": "Mantener para hablar necesita una tecla cuya liberación macOS pueda detectar: Globo, una tecla derecha como Opción derecha o un atajo con modificador. Pulsar funciona con cualquier tecla.",
       "registrationFailed": "No se pudo registrar \"{{hotkey}}\". Puede estar en uso por otra aplicación.",
       "updateFailedCheckFormat": "No se pudo actualizar el atajo a \"{{hotkey}}\". Comprueba que el formato sea válido.",
@@ -919,6 +920,7 @@
         "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
         "providerKeyMissing": "No hay ninguna clave de API configurada para tu proveedor de transcripción. Añádela en Ajustes → Voz a texto.",
         "cleanupTruncated": "El modelo de IA se quedó sin espacio antes de terminar de limpiar tu dictado.",
+        "cleanupDuplicated": "La limpieza con IA repitió la transcripción. Se conservó el texto original.",
         "cleanupEmptyReply": "El modelo de IA devolvió una respuesta vacía en lugar del dictado limpio."
       },
       "translationFallback": {
@@ -940,6 +942,18 @@
         "unavailable": "OpenWhispr no pudo leer de forma segura el texto seleccionado. Revisa los permisos de accesibilidad o automatización.",
         "tooLarge": "La selección es demasiado grande. Selecciona 6.000 caracteres o menos.",
         "reasoningFailed": "La IA no pudo completar la edición. El texto original no se modificó."
+      },
+      "pastePermission": {
+        "title": "Permitir el pegado automático",
+        "description": "Activa OpenWhispr en Ajustes del Sistema → Privacidad y seguridad → Accesibilidad.",
+        "settingsFailed": "No se pudieron abrir los ajustes. Abre Ajustes del Sistema → Privacidad y seguridad → Accesibilidad y activa OpenWhispr.",
+        "manualPaste": "Copia tu texto abajo y pulsa {{shortcut}} para pegarlo.",
+        "openSettings": "Abrir ajustes",
+        "copyToClipboard": "Copiar al portapapeles",
+        "copyFailed": "Error al copiar"
+      },
+      "pasteFailed": {
+        "title": "No se pudo pegar automáticamente"
       }
     },
     "clipboard": {
@@ -3011,7 +3025,35 @@
       "conversationWillAppear": "La conversación aparecerá aquí...",
       "linkedEvent": "Evento vinculado",
       "noFolder": "Sin carpeta",
-      "participants": "Participantes"
+      "participants": "Participantes",
+      "table": {
+        "actions": "Acciones de tabla",
+        "insertRowAbove": "Insertar fila arriba",
+        "insertRowBelow": "Insertar fila abajo",
+        "insertColumnLeft": "Insertar columna a la izquierda",
+        "insertColumnRight": "Insertar columna a la derecha",
+        "deleteRow": "Eliminar fila",
+        "deleteColumn": "Eliminar columna",
+        "deleteTable": "Eliminar tabla"
+      },
+      "format": {
+        "toolbar": "Formato",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Negrita",
+        "italic": "Cursiva",
+        "strike": "Tachado",
+        "code": "Código",
+        "textStyle": "Estilo de texto",
+        "paragraph": "Texto normal",
+        "heading1": "Encabezado 1",
+        "heading2": "Encabezado 2",
+        "heading3": "Encabezado 3",
+        "bulletList": "Lista con viñetas",
+        "orderedList": "Lista numerada",
+        "taskList": "Lista de verificación",
+        "blockquote": "Cita",
+        "table": "Insertar tabla"
+      }
     },
     "participants": {
       "attendee": "asistente",

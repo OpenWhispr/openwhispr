@@ -197,6 +197,8 @@ export function AssistantPanel({
     const commandId = pendingCommand.id;
     const delivery = pendingCommand.delivery;
     const targetsCapturedInput = delivery?.mode === "paste";
+    // A caret in a markdown-friendly app still keeps the compact pill.
+    const plainTextResponse = delivery?.mode === "paste" && delivery.plainText;
     let responseDelivered = false;
     if (pendingCommand.selectedContext) {
       setSelectedContext(null);
@@ -206,6 +208,7 @@ export function AssistantPanel({
       attachment: pendingCommand.attachment ?? undefined,
       selectedContext: pendingCommand.selectedContext ?? undefined,
       suppressResponseContent: targetsCapturedInput,
+      plainTextResponse,
       onComplete: delivery
         ? async ({ content }) => {
             const result = await deliverAssistantResponse(delivery, content);

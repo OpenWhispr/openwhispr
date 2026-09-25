@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Les raccourcis avec les boutons de la souris ne sont actuellement pris en charge que sur macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" est déjà enregistré par une autre application.",
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
+      "rightModifierNeedsListener": "« {{hotkey}} » ne peut pas être utilisé sur ce bureau, dont les raccourcis exigent une touche normale. Ajoutez une touche, par exemple Control+Alt+Space.",
       "holdNeedsReleaseKey": "Maintenir pour parler nécessite une touche dont macOS détecte le relâchement : Globe, une touche droite comme Option droite, ou un raccourci avec modificateur. Appuyer fonctionne avec n’importe quelle touche.",
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
       "updateFailedCheckFormat": "Impossible de mettre à jour le raccourci vers \"{{hotkey}}\". Vérifiez que le format est valide.",
@@ -919,6 +920,7 @@
         "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives.",
         "providerKeyMissing": "Aucune clé API n'est définie pour votre fournisseur de transcription. Ajoutez-la dans Réglages → Parole en texte.",
         "cleanupTruncated": "Le modèle d'IA a manqué de place avant de terminer le nettoyage de votre dictée.",
+        "cleanupDuplicated": "Le nettoyage par IA a répété la transcription. Le texte original a été conservé.",
         "cleanupEmptyReply": "Le modèle d'IA a renvoyé une réponse vide au lieu de la dictée nettoyée."
       },
       "translationFallback": {
@@ -940,6 +942,18 @@
         "unavailable": "OpenWhispr n’a pas pu lire la sélection en toute sécurité. Vérifiez les autorisations d’accessibilité ou d’automatisation.",
         "tooLarge": "La sélection est trop grande. Sélectionnez au maximum 6 000 caractères.",
         "reasoningFailed": "L’IA n’a pas pu terminer la modification. Le texte d’origine n’a pas été modifié."
+      },
+      "pastePermission": {
+        "title": "Autoriser le collage automatique",
+        "description": "Activez OpenWhispr dans Réglages Système → Confidentialité et sécurité → Accessibilité.",
+        "settingsFailed": "Impossible d’ouvrir les réglages. Ouvrez Réglages Système → Confidentialité et sécurité → Accessibilité et activez OpenWhispr.",
+        "manualPaste": "Copiez votre texte ci-dessous, puis appuyez sur {{shortcut}} pour le coller.",
+        "openSettings": "Ouvrir les réglages",
+        "copyToClipboard": "Copier le texte",
+        "copyFailed": "Échec de la copie"
+      },
+      "pasteFailed": {
+        "title": "Collage automatique impossible"
       }
     },
     "clipboard": {
@@ -3301,7 +3315,35 @@
       "conversationWillAppear": "La conversation apparaîtra ici...",
       "linkedEvent": "Événement lié",
       "noFolder": "Aucun dossier",
-      "participants": "Participants"
+      "participants": "Participants",
+      "table": {
+        "actions": "Actions du tableau",
+        "insertRowAbove": "Insérer une ligne au-dessus",
+        "insertRowBelow": "Insérer une ligne en dessous",
+        "insertColumnLeft": "Insérer une colonne à gauche",
+        "insertColumnRight": "Insérer une colonne à droite",
+        "deleteRow": "Supprimer la ligne",
+        "deleteColumn": "Supprimer la colonne",
+        "deleteTable": "Supprimer le tableau"
+      },
+      "format": {
+        "toolbar": "Mise en forme",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Gras",
+        "italic": "Italique",
+        "strike": "Barré",
+        "code": "Code",
+        "textStyle": "Style de texte",
+        "paragraph": "Texte normal",
+        "heading1": "Titre 1",
+        "heading2": "Titre 2",
+        "heading3": "Titre 3",
+        "bulletList": "Liste à puces",
+        "orderedList": "Liste numérotée",
+        "taskList": "Liste de tâches",
+        "blockquote": "Citation",
+        "table": "Insérer un tableau"
+      }
     },
     "participants": {
       "attendee": "participant",
