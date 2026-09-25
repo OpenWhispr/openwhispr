@@ -118,6 +118,8 @@ export default function ShareNoteDialog({
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [busyGrantId, setBusyGrantId] = useState<string | null>(null);
   const [confirmingReplaceLink, setConfirmingReplaceLink] = useState(false);
+  // Copy on open waits for this: the cached share can be hours old.
+  const [refreshedCloudId, setRefreshedCloudId] = useState<string | null>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const copyTimeoutRef = useRef<number | null>(null);
   const localShareStateRef = useRef({
@@ -228,6 +230,7 @@ export default function ShareNoteDialog({
     refreshShareCache()
       .then((res) => {
         if (cancelled || !res) return;
+        setRefreshedCloudId(cloudId);
         const update = reconcileLocalShareState(localShareStateRef.current, res.share);
         if (update) {
           void persistNoteShareState(note.id, update).catch((err) =>
@@ -255,6 +258,8 @@ export default function ShareNoteDialog({
       setEmailInput("");
       setInputError(null);
       setCopied(false);
+      setConfirmingReplaceLink(false);
+      setRefreshedCloudId(null);
     }
   }, [open]);
 
@@ -417,40 +422,43 @@ export default function ShareNoteDialog({
     }
   }, [cloudId, canManageAccess, note.id, copyLink, t, toast, shareActionAllowed]);
 
+  // Reads the cache rather than render state: a Create link click, or a
+  // refresh that lands while the replace confirm is open, may have changed it.
+  const copyCurrentLink = useCallback(
+    async (replaceConfirmed: boolean) => {
+      const entry = cloudId ? getShareCacheEntry(cloudId) : null;
+      if (!entry || entry.share.visibility === "private") {
+        toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
+        return;
+      }
+      const link = resolveShareLink(entry.share, [note.share_token, entry.rawToken]);
+      if (link.kind === "copy") await copyLink(link.url);
+      else if (link.needsConfirmation && !replaceConfirmed) setConfirmingReplaceLink(true);
+      else await rotateAndCopy();
+    },
+    [cloudId, note.share_token, copyLink, rotateAndCopy, t, toast]
+  );
+
   const handleLinkButton = useCallback(async () => {
     if (!cloudId || !share || !canUseLink) return;
     setLinkBusy(true);
     try {
-      let current = share;
-      let createdToken: string | null = null;
-      if (share.visibility === "private") {
-        // Create link: the click is the sharing consent.
-        const res = await applyVisibility("link");
-        if (!res) return;
-        current = res.share;
-        createdToken = res.raw_token;
-      }
-      const link = resolveShareLink(current, [
-        createdToken,
-        note.share_token,
-        getShareCacheEntry(cloudId)?.rawToken,
-      ]);
-      if (link.kind === "copy") await copyLink(link.url);
-      else if (link.needsConfirmation) setConfirmingReplaceLink(true);
-      else await rotateAndCopy();
+      // Create link: the click is the sharing consent.
+      if (share.visibility === "private" && !(await applyVisibility("link"))) return;
+      await copyCurrentLink(false);
     } finally {
       setLinkBusy(false);
     }
-  }, [cloudId, share, canUseLink, note.share_token, applyVisibility, copyLink, rotateAndCopy]);
+  }, [cloudId, share, canUseLink, applyVisibility, copyCurrentLink]);
 
   const handleReplaceLink = useCallback(async () => {
     setLinkBusy(true);
     try {
-      await rotateAndCopy();
+      await copyCurrentLink(true);
     } finally {
       setLinkBusy(false);
     }
-  }, [rotateAndCopy]);
+  }, [copyCurrentLink]);
 
   const copyIntentHandled = useRef(false);
   useEffect(() => {
@@ -458,11 +466,17 @@ export default function ShareNoteDialog({
       copyIntentHandled.current = false;
       return;
     }
-    if (copyLinkOnOpen && !copyIntentHandled.current && share && !loading && canUseLink) {
+    if (
+      copyLinkOnOpen &&
+      !copyIntentHandled.current &&
+      share &&
+      refreshedCloudId === cloudId &&
+      canUseLink
+    ) {
       copyIntentHandled.current = true;
       void handleLinkButton();
     }
-  }, [open, copyLinkOnOpen, share, loading, canUseLink, handleLinkButton]);
+  }, [open, copyLinkOnOpen, share, refreshedCloudId, cloudId, canUseLink, handleLinkButton]);
 
   const handleInvite = useCallback(async () => {
     if (!cloudId || !canInvite) return;
