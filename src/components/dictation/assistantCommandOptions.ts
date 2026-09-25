@@ -27,7 +27,8 @@ const PANEL_DELIVERY: AssistantResponseDelivery = { mode: "clipboard" };
  * and a tool can ask for the hold (it opened a compose window that took focus,
  * or needs the user to answer a question that must not land in their
  * document). A held answer is still copied like any panel answer, unless the
- * tool may have put content on the clipboard that the copy would overwrite.
+ * tool may have put content on the clipboard that the copy would overwrite, or
+ * the caret delivery promised to leave the user's clipboard as it was.
  */
 export function buildAssistantCommandSendOptions(
   command: CommandInput,
@@ -54,7 +55,10 @@ export function buildAssistantCommandSendOptions(
       onHoldDelivery: holdInPanel,
       onComplete: delivery
         ? async ({ content }) => {
-            if (clipboardPreserved) return;
+            const keepsClipboard =
+              clipboardPreserved ||
+              (pasteHeld && delivery.mode === "paste" && delivery.restoreClipboard);
+            if (keepsClipboard) return;
             const result = await handlers.deliver(pasteHeld ? PANEL_DELIVERY : delivery, content);
             delivered = result.pasted;
             if (result.copied) handlers.confirmCopied(content);

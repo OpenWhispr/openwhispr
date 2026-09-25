@@ -9,6 +9,8 @@ const PASTE = {
   restoreClipboard: true,
   allowClipboardFallback: false,
 };
+// Keep Transcription in Clipboard on: the caret delivery may leave the answer there.
+const PASTE_KEEPING_ANSWER = { ...PASTE, restoreClipboard: false };
 
 function handlers(deliverResult = { pasted: true, copied: false }) {
   const calls = { opened: 0, delivered: [], copied: [] };
@@ -46,7 +48,7 @@ test("an approval opens the hidden panel and cancels caret delivery", async () =
   const { buildAssistantCommandSendOptions } = await load();
   const h = handlers();
   const built = buildAssistantCommandSendOptions(
-    { attachment: null, selectedContext: null, delivery: PASTE },
+    { attachment: null, selectedContext: null, delivery: PASTE_KEEPING_ANSWER },
     h.value
   );
 
@@ -62,7 +64,7 @@ test("an approval opens the hidden panel and cancels caret delivery", async () =
 
 test("a held answer stays in the panel and is copied instead of pasted", async () => {
   const { buildAssistantCommandSendOptions } = await load();
-  for (const delivery of [PASTE, { mode: "clipboard" }]) {
+  for (const delivery of [PASTE_KEEPING_ANSWER, { mode: "clipboard" }]) {
     const h = handlers();
     const built = buildAssistantCommandSendOptions(
       { attachment: null, selectedContext: null, delivery },
@@ -80,6 +82,40 @@ test("a held answer stays in the panel and is copied instead of pasted", async (
     );
     assert.deepEqual(h.calls.copied, ["Dana is dana@example.com."], delivery.mode);
     assert.equal(built.wasDelivered(), false, delivery.mode);
+  }
+});
+
+test("a held caret answer leaves the clipboard alone when the delivery would restore it", async () => {
+  const { buildAssistantCommandSendOptions } = await load();
+  for (const hold of ["onHoldDelivery", "onApprovalRequested"]) {
+    const h = handlers();
+    const built = buildAssistantCommandSendOptions(
+      { attachment: null, selectedContext: null, delivery: PASTE },
+      h.value
+    );
+
+    built.options[hold]();
+    await built.options.onComplete({ assistantId: "a", content: "Which Dana did you mean?" });
+
+    assert.equal(h.calls.opened, 1, hold);
+    assert.equal(h.calls.delivered.length, 0, hold);
+    assert.equal(h.calls.copied.length, 0, hold);
+    assert.equal(built.wasDelivered(), false, hold);
+  }
+});
+
+test("the command's screenshot and selection ride along with the send", async () => {
+  const { buildAssistantCommandSendOptions } = await load();
+  const attachment = { image: "base64", mediaType: "image/jpeg" };
+  const selectedContext = { text: "selected words", sourceMessageId: "m1" };
+  for (const delivery of [PASTE, { mode: "clipboard" }, null]) {
+    const built = buildAssistantCommandSendOptions(
+      { attachment, selectedContext, delivery },
+      handlers().value
+    );
+
+    assert.equal(built.options.attachment, attachment);
+    assert.equal(built.options.selectedContext, selectedContext);
   }
 });
 
