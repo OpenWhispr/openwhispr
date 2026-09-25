@@ -275,10 +275,12 @@ class MicrosoftCalendarManager {
     if (deltaLink) {
       this.databaseManager.updateMicrosoftCalendarSyncToken(calendar.id, deltaLink, tokenExpiresAt);
     }
-    if (contactsToUpsert.length > 0) this.databaseManager.upsertContacts(contactsToUpsert);
-    // Older builds stored rooms and the user's own address as contacts, and
-    // nothing else prunes that table.
-    if (notContacts.length > 0) this.databaseManager.removeContacts(notContacts);
+    this.databaseManager.syncCalendarContacts(
+      "microsoft",
+      accountEmail,
+      contactsToUpsert,
+      notContacts
+    );
   }
 
   // Merges each stripped occurrence with its series master (fetched once per

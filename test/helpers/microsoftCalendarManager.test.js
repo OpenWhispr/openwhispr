@@ -144,8 +144,7 @@ function createManager(MicrosoftCalendarManager, upserted, contacts = [], overri
       upsertCalendarEvents: (events) => upserted.push(...events),
       removeCalendarEvents: () => {},
       updateMicrosoftCalendarSyncToken: () => {},
-      upsertContacts: (rows) => contacts.push(...rows),
-      removeContacts: () => {},
+      syncCalendarContacts: (_provider, _accountEmail, rows) => contacts.push(...rows),
       getCalendarEventById: () => null,
       ...overrides,
     },
@@ -313,10 +312,9 @@ test("_syncCalendar keeps the stored row when a stripped occurrence's master fet
 test("_syncCalendar flags rooms and resources and keeps them and the user out of contacts", async () => {
   const MicrosoftCalendarManager = loadManagerModule();
   const upserted = [];
-  const contacts = [];
-  const removed = [];
-  const manager = createManager(MicrosoftCalendarManager, upserted, contacts, {
-    removeContacts: (emails) => removed.push(...emails),
+  const synced = [];
+  const manager = createManager(MicrosoftCalendarManager, upserted, [], {
+    syncCalendarContacts: (...args) => synced.push(args),
   });
   manager._apiGet = async () => ({
     "@odata.deltaLink": "delta-link",
@@ -352,10 +350,13 @@ test("_syncCalendar flags rooms and resources and keeps them and the user out of
   const attendees = JSON.parse(upserted[0].attendees);
   assert.equal(attendees[0].resource, undefined);
   assert.equal(attendees[1].resource, true);
-  assert.deepEqual(
-    contacts.map((contact) => contact.email),
-    ["ana@example.com"]
-  );
   // Rows older builds stored for the room and the user are purged.
-  assert.deepEqual(removed, ["boardroom@example.com", "Me@example.com"]);
+  assert.deepEqual(synced, [
+    [
+      "microsoft",
+      "me@example.com",
+      [{ email: "ana@example.com", displayName: "Ana" }],
+      ["boardroom@example.com", "Me@example.com"],
+    ],
+  ]);
 });

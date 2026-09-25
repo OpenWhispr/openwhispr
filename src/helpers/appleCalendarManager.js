@@ -283,10 +283,7 @@ class AppleCalendarManager {
           else contacts.push({ email: attendee.email, displayName: attendee.name });
         }
       }
-      if (contacts.length > 0) this.databaseManager.upsertContacts(contacts);
-      // Older builds stored rooms and the user's own address as contacts, and
-      // nothing else prunes that table.
-      if (notContacts.length > 0) this.databaseManager.removeContacts(notContacts);
+      this.databaseManager.syncCalendarContacts("apple", null, contacts, notContacts);
 
       broadcastToWindows("acal-events-synced", {});
       this.reminderScheduler.reconcileProvider("apple");
@@ -331,7 +328,10 @@ class AppleCalendarManager {
         // Generic fallback only for the event's own URL field
         (event.url?.startsWith("https://") ? event.url : null),
       conference_data: null,
-      organizer_email: event.organizer_email || null,
+      // Dropped when the user organized it, which contact lookup (this
+      // column's only reader) can't otherwise tell: Apple has no account email
+      // to exclude, and EventKit often leaves the organizer out of attendees.
+      organizer_email: event.organizer_self ? null : event.organizer_email || null,
       attendees_count: attendees.length,
       attendees: attendees.length
         ? JSON.stringify(

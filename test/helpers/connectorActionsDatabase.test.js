@@ -217,8 +217,11 @@ test("contact lookup sources cover meetings, synced contacts and the user's acco
     { ...event("evt-cancelled", soon, "cancelled@example.com"), status: "cancelled" },
     { ...event("evt-declined", soon, "declined@example.com"), self_response_status: "declined" },
   ]);
-  db.upsertContacts([{ email: "Priya@Example.com", displayName: "Priya Shah" }]);
-  db.saveGoogleCalendars([{ id: "primary", summary: "Chad" }], "chad@example.com");
+  db.upsertContacts([{ email: "Priya@Example.com", displayName: "Priya Shah" }], "manual");
+  db.saveGoogleCalendars(
+    [{ id: "primary", summary: "Chad", is_primary: true }],
+    "chad@example.com"
+  );
   db.saveMicrosoftCalendars([{ id: "work", summary: "Calendar" }], "chad@corp.test");
 
   const sources = db.getContactLookupSources();
@@ -229,29 +232,171 @@ test("contact lookup sources cover meetings, synced contacts and the user's acco
     ["soon@example.com", "later@example.com"]
   );
   assert.match(sources.meetings[0].attendees, /Someone/);
-  assert.equal(sources.meetings[0].provider, "google");
+  assert.equal(sources.meetings[0].self_is_user, 1);
   assert.deepEqual(sources.contacts, [{ email: "priya@example.com", display_name: "Priya Shah" }]);
   assert.deepEqual([...sources.accountEmails].sort(), ["chad@corp.test", "chad@example.com"]);
   db.db.close();
 });
 
-test("contacts come most recently synced first, and removeContacts purges addresses", (t) => {
+test("contacts come most recently synced first, and a sync purges the addresses it keeps out", (t) => {
   const db = createDb(t);
   if (!db) return;
-  db.upsertContacts([
-    { email: "old@example.com", displayName: "Josh Old" },
-    { email: "new@example.com", displayName: "Josh New" },
-  ]);
-  db.db.prepare("UPDATE contacts SET updated_at = '2020-01-01 00:00:00' WHERE email = ?").run("old@example.com");
+  db.upsertContacts(
+    [
+      { email: "old@example.com", displayName: "Josh Old" },
+      { email: "new@example.com", displayName: "Josh New" },
+    ],
+    "manual"
+  );
+  db.db
+    .prepare("UPDATE contacts SET updated_at = '2020-01-01 00:00:00' WHERE email = ?")
+    .run("old@example.com");
 
   assert.deepEqual(
     db.getContactLookupSources().contacts.map((row) => row.email),
     ["new@example.com", "old@example.com"]
   );
-  db.removeContacts(["New@Example.com"]);
+  db.syncCalendarContacts("apple", null, [], ["New@Example.com"]);
   assert.deepEqual(
     db.getContactLookupSources().contacts.map((row) => row.email),
     ["old@example.com"]
+  );
+  db.db.close();
+});
+
+test("an attendee's self flag means the user except on a colleague's shared Google calendar", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.saveGoogleCalendars(
+    [
+      { id: "me@example.com", summary: "Me" },
+      { id: "dana@example.com", summary: "Dana" },
+    ],
+    "me@example.com"
+  );
+  const soon = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const event = (id, provider, calendarId) => ({
+    id,
+    calendar_id: calendarId,
+    provider,
+    start_time: soon,
+    end_time: soon,
+    is_all_day: false,
+    status: "confirmed",
+    organizer_email: `${id}@example.com`,
+    attendees_count: 0,
+    attendees: null,
+  });
+  db.upsertCalendarEvents([
+    event("own", "google", "me@example.com"),
+    event("shared", "google", "dana@example.com"),
+    event("work", "microsoft", "work"),
+    event("home", "apple", "home"),
+  ]);
+
+  const selfIsUser = Object.fromEntries(
+    db.getContactLookupSources().meetings.map((row) => [row.organizer_email, row.self_is_user])
+  );
+  assert.deepEqual(selfIsUser, {
+    "own@example.com": 1,
+    "shared@example.com": 0,
+    "work@example.com": 1,
+    "home@example.com": 1,
+  });
+  db.db.close();
+});
+
+function storedContactEmails(db) {
+  return db.db
+    .prepare("SELECT email FROM contacts ORDER BY email")
+    .all()
+    .map((row) => row.email);
+}
+
+test("contact lookup only sees hand-added contacts and connected accounts' contacts", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.saveGoogleCalendars([{ id: "g-cal", summary: "Me" }], "me@gmail.test");
+  db.saveMicrosoftCalendars([{ id: "m-cal", summary: "Calendar" }], "me@corp.test");
+  db.saveAppleCalendars([{ id: "a-cal", title: "Home" }]);
+  db.syncCalendarContacts("google", "me@gmail.test", [{ email: "g@example.com" }], []);
+  db.syncCalendarContacts("microsoft", "me@corp.test", [{ email: "m@example.com" }], []);
+  db.syncCalendarContacts("apple", null, [{ email: "a@example.com" }], []);
+  db.upsertContacts([{ email: "hand@example.com" }], "manual");
+  // Synced by both accounts: the latest sync owns it.
+  db.syncCalendarContacts("google", "me@gmail.test", [{ email: "both@example.com" }], []);
+  db.syncCalendarContacts("microsoft", "me@corp.test", [{ email: "both@example.com" }], []);
+  // Stored by an older build, before contacts had a source.
+  db.db
+    .prepare("INSERT INTO contacts (email, display_name) VALUES (?, ?)")
+    .run("lincoln-room@corp.test", "Lincoln Room");
+
+  const lookup = () =>
+    db
+      .getContactLookupSources()
+      .contacts.map((row) => row.email)
+      .sort();
+  assert.deepEqual(lookup(), [
+    "a@example.com",
+    "both@example.com",
+    "g@example.com",
+    "hand@example.com",
+    "m@example.com",
+  ]);
+  // Note-participant autocomplete still offers the legacy row.
+  assert.equal(db.searchContacts("lincoln").length, 1);
+
+  const stored = () => storedContactEmails(db);
+  db.removeGoogleAccount("me@gmail.test");
+  assert.deepEqual(stored(), [
+    "a@example.com",
+    "both@example.com",
+    "hand@example.com",
+    "lincoln-room@corp.test",
+    "m@example.com",
+  ]);
+  db.removeMicrosoftAccount("me@corp.test");
+  db.clearAppleCalendarData();
+  assert.deepEqual(stored(), ["hand@example.com", "lincoln-room@corp.test"]);
+  assert.deepEqual(lookup(), ["hand@example.com"]);
+  // A snapshot that lands after the disconnect still isn't a connected account.
+  db.syncCalendarContacts("apple", null, [{ email: "late@example.com" }], []);
+  assert.deepEqual(lookup(), ["hand@example.com"]);
+  db.db.close();
+});
+
+test("clearing a provider removes every one of its accounts' contacts", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.syncCalendarContacts("google", "a@gmail.test", [{ email: "g1@example.com" }], []);
+  db.syncCalendarContacts("google", "b@gmail.test", [{ email: "g2@example.com" }], []);
+  db.syncCalendarContacts("microsoft", "a@corp.test", [{ email: "m1@example.com" }], []);
+  db.syncCalendarContacts("microsoft", "b@corp.test", [{ email: "m2@example.com" }], []);
+  db.upsertContacts([{ email: "hand@example.com" }], "manual");
+
+  db.clearGoogleCalendarData();
+  assert.deepEqual(storedContactEmails(db), [
+    "hand@example.com",
+    "m1@example.com",
+    "m2@example.com",
+  ]);
+  db.clearMicrosoftCalendarData();
+  assert.deepEqual(storedContactEmails(db), ["hand@example.com"]);
+  db.db.close();
+});
+
+test("a hand-added contact stays the user's when a calendar later syncs it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.saveGoogleCalendars([{ id: "g-cal", summary: "Me" }], "me@gmail.test");
+  db.upsertContacts([{ email: "hand@example.com" }], "manual");
+  db.syncCalendarContacts("google", "me@gmail.test", [{ email: "hand@example.com" }], []);
+
+  db.removeGoogleAccount("me@gmail.test");
+  assert.deepEqual(storedContactEmails(db), ["hand@example.com"]);
+  assert.deepEqual(
+    db.getContactLookupSources().contacts.map((row) => row.email),
+    ["hand@example.com"]
   );
   db.db.close();
 });

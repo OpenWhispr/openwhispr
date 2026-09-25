@@ -73,6 +73,7 @@ export interface CalendarAttendee {
   displayName: string | null;
   responseStatus: CalendarResponseStatus | null;
   self: boolean;
+  resource?: boolean;
 }
 
 export interface Contact {

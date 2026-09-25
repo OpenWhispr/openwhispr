@@ -51,10 +51,9 @@ function collectPeople({ meetings = [], contacts = [], accountEmails = [] }, now
   for (const row of meetings) {
     const attendees = parseAttendees(row.attendees);
     for (const attendee of attendees) {
-      // Only Apple's self flag means the user (EventKit's current user); on a
-      // colleague's shared Google calendar it marks that colleague. The
-      // account emails already cover the Google and Microsoft user.
-      const isUser = attendee?.self && row.provider === "apple";
+      // On a colleague's shared Google calendar self marks that colleague;
+      // self_is_user is set wherever it means the user.
+      const isUser = attendee?.self && row.self_is_user;
       if ((isUser || attendee?.resource) && typeof attendee.email === "string") {
         excluded.add(attendee.email.toLowerCase());
       }
@@ -64,15 +63,16 @@ function collectPeople({ meetings = [], contacts = [], accountEmails = [] }, now
     }
     remember(row.organizer_email, null, row.start_time, row.is_all_day);
   }
-  // Every sync adds its attendees here and nothing prunes them, so people
-  // whose meetings aged out of the calendar cache are still found. They come
-  // most recently synced first, which is how ties between them are broken.
+  // Every sync adds its attendees here and only a disconnect prunes them, so
+  // people whose meetings aged out of the calendar cache are still found. They
+  // come most recently synced first, which is how ties between them are broken.
   for (const contact of contacts) remember(contact.email, contact.display_name, null);
   for (const email of excluded) people.delete(email);
   return [...people.values()];
 }
 
-function score(person, query, queryTokens) {
+function score(person, query, queryTokens, typedEmail) {
+  if (person.email.toLowerCase() === typedEmail) return 5;
   const name = normalize(person.name);
   const localPart = normalize(person.email.split("@")[0]);
   if (name && name === query) return 4;
@@ -86,23 +86,31 @@ function score(person, query, queryTokens) {
   ) {
     return 2;
   }
-  if (compactName.includes(compactQuery) || normalize(person.email).includes(query)) return 1;
+  // The domain only counts once the query has an @, or "al" would match
+  // everyone at alias.com.
+  const address = query.includes("@") ? normalize(person.email) : localPart;
+  if (compactName.includes(compactQuery) || address.includes(query)) return 1;
   return 0;
 }
 
 /**
  * People matching a name or address in the user's calendar meetings and
- * synced contacts. Ties go to whoever the user meets closest to now, then to
- * whoever was synced most recently; lastMet is the most recent past meeting
- * still on record, or null. hasMore says the limit left matches out, so the
- * model asks for a last name instead of offering the wrong few.
+ * synced contacts. A typed address ranks its owner first. Ties go to whoever
+ * the user meets closest to now, then to whoever was synced most recently;
+ * lastMet is the most recent past meeting still on record, or null. hasMore
+ * says the limit left matches out, so the model asks for a last name instead
+ * of offering the wrong few.
  */
 function searchContacts(sources, query, { limit = 5, now = Date.now() } = {}) {
   const normalizedQuery = normalize(query);
   if (!normalizedQuery) return { contacts: [], hasMore: false };
   const queryTokens = normalizedQuery.split(" ");
+  const typedEmail = String(query).trim().toLowerCase();
   const matches = collectPeople(sources, now)
-    .map((person) => ({ person, score: score(person, normalizedQuery, queryTokens) }))
+    .map((person) => ({
+      person,
+      score: score(person, normalizedQuery, queryTokens, typedEmail),
+    }))
     .filter((match) => match.score > 0)
     .sort((a, b) => b.score - a.score || a.person.distance - b.person.distance);
   return {

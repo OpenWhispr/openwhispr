@@ -39,7 +39,7 @@ test("_syncCalendar fetches all pages when nextPageToken is returned", async () 
     updateCalendarSyncToken: (calendarId, syncToken) => {
       savedSyncToken = syncToken;
     },
-    upsertContacts: () => {},
+    syncCalendarContacts: () => {},
   };
 
   const reminderScheduler = {
@@ -113,7 +113,7 @@ test("_syncCalendar preserves incremental sync parameters across pages", async (
     upsertCalendarEvents: () => {},
     removeCalendarEvents: () => {},
     updateCalendarSyncToken: () => {},
-    upsertContacts: () => {},
+    syncCalendarContacts: () => {},
   };
   const reminderScheduler = {
     scheduleNextMeeting: () => {},
@@ -158,7 +158,7 @@ test("_syncCalendar discards an expired sync token and re-runs a full window syn
     updateCalendarSyncToken: (calendarId, syncToken, expiresAt) => {
       savedToken = { calendarId, syncToken, expiresAt };
     },
-    upsertContacts: () => {},
+    syncCalendarContacts: () => {},
   };
   const reminderScheduler = { scheduleNextMeeting: () => {}, reset: () => {} };
   const manager = new GoogleCalendarManager(databaseManager, null, reminderScheduler);
@@ -200,7 +200,7 @@ test("_syncCalendar keeps the stored expiry when an incremental sync reuses the 
     updateCalendarSyncToken: (calendarId, syncToken, expiresAt) => {
       savedToken = { calendarId, syncToken, expiresAt };
     },
-    upsertContacts: () => {},
+    syncCalendarContacts: () => {},
   };
   const reminderScheduler = { scheduleNextMeeting: () => {}, reset: () => {} };
   const manager = new GoogleCalendarManager(databaseManager, null, reminderScheduler);
@@ -235,7 +235,7 @@ test("_syncCalendar preserves meeting links from Google event location and descr
     },
     removeCalendarEvents: () => {},
     updateCalendarSyncToken: () => {},
-    upsertContacts: () => {},
+    syncCalendarContacts: () => {},
   };
   const reminderScheduler = {
     scheduleNextMeeting: () => {},
@@ -291,16 +291,14 @@ test("_syncCalendar preserves meeting links from Google event location and descr
 test("_syncCalendar flags rooms and resources and keeps them and the user out of contacts", async () => {
   const GoogleCalendarManager = loadManagerModule();
   const upsertedEvents = [];
-  const contacts = [];
-  const removed = [];
+  const synced = [];
   const databaseManager = {
     getGoogleAccounts: () => [],
     removeStaleCalendarEvents: () => {},
     upsertCalendarEvents: (events) => upsertedEvents.push(...events),
     removeCalendarEvents: () => {},
     updateCalendarSyncToken: () => {},
-    upsertContacts: (rows) => contacts.push(...rows),
-    removeContacts: (emails) => removed.push(...emails),
+    syncCalendarContacts: (...args) => synced.push(args),
   };
   const manager = new GoogleCalendarManager(databaseManager, null, {
     scheduleNextMeeting: () => {},
@@ -327,10 +325,55 @@ test("_syncCalendar flags rooms and resources and keeps them and the user out of
   const attendees = JSON.parse(upsertedEvents[0].attendees);
   assert.equal(attendees[0].resource, undefined);
   assert.equal(attendees[1].resource, true);
-  assert.deepEqual(
-    contacts.map((contact) => contact.email),
-    ["ana@example.com"]
-  );
   // Rows older builds stored for the room and the user are purged.
-  assert.deepEqual(removed, ["boardroom@corp.test", "Me@example.com"]);
+  assert.deepEqual(synced, [
+    [
+      "google",
+      "me@example.com",
+      [{ email: "ana@example.com", displayName: "Ana" }],
+      ["boardroom@corp.test", "Me@example.com"],
+    ],
+  ]);
+});
+
+test("_syncCalendar trusts self as the user only on the account's primary calendar", async () => {
+  const GoogleCalendarManager = loadManagerModule();
+  const synced = [];
+  const manager = new GoogleCalendarManager(
+    {
+      getGoogleAccounts: () => [],
+      removeStaleCalendarEvents: () => {},
+      upsertCalendarEvents: () => {},
+      removeCalendarEvents: () => {},
+      updateCalendarSyncToken: () => {},
+      syncCalendarContacts: (...args) => synced.push(args),
+    },
+    null,
+    { scheduleNextMeeting: () => {}, reset: () => {} }
+  );
+  manager._apiGet = async () => ({
+    items: [
+      {
+        id: "event-1",
+        start: { dateTime: "2026-08-12T10:00:00Z" },
+        // Self on the user's primary calendar is them (under an alias here);
+        // on a colleague's shared calendar it is that colleague.
+        attendees: [{ email: "dana@example.com", self: true }],
+      },
+    ],
+    nextSyncToken: "sync-token",
+  });
+
+  await manager._syncCalendar({ id: "me@example.com", account_email: "me@example.com" });
+  await manager._syncCalendar({ id: "cal-2", account_email: "me@example.com", is_primary: 1 });
+  await manager._syncCalendar({ id: "dana@example.com", account_email: "me@example.com" });
+
+  assert.deepEqual(
+    synced.map(([, , contacts, notContacts]) => [contacts.length, notContacts]),
+    [
+      [0, ["dana@example.com"]],
+      [0, ["dana@example.com"]],
+      [1, []],
+    ]
+  );
 });

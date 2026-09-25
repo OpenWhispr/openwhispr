@@ -11539,7 +11539,7 @@ class IPCHandlers {
 
     ipcMain.handle("upsert-contact", async (_event, contact) => {
       try {
-        this.databaseManager.upsertContacts([contact]);
+        this.databaseManager.upsertContacts([contact], "manual");
         return { success: true };
       } catch (error) {
         return { success: false };

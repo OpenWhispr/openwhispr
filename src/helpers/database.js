@@ -124,6 +124,12 @@ const SELECTED_CALENDAR_EVENT_FILTER = `(
   ))
 )`;
 
+// A contacts row's source: "google:<account email>", "microsoft:<account
+// email>", "apple", or "manual" (added by hand to a note).
+function contactSource(provider, accountEmail = null) {
+  return accountEmail ? `${provider}:${accountEmail}` : provider;
+}
+
 class DatabaseManager {
   constructor() {
     this.db = null;
@@ -691,8 +697,8 @@ class DatabaseManager {
 
       // One-time reset (user_version 3): older builds stored rooms without a
       // resource flag, and incremental syncs never resend unchanged events; a
-      // forced full sync stores them flagged and purges the rooms those builds
-      // wrote to contacts.
+      // forced full sync stores them flagged, purges the rooms those builds
+      // wrote to contacts and tags the contacts it sees with their source.
       if (this.db.pragma("user_version", { simple: true }) < 3) {
         this.db.exec("UPDATE google_calendars SET sync_token = NULL, sync_token_expires_at = NULL");
         this.db.exec(
@@ -812,6 +818,14 @@ class DatabaseManager {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
+
+      // Where each contact came from (see contactSource), so a disconnect
+      // removes that account's people. Rows older builds stored stay NULL.
+      try {
+        this.db.exec("ALTER TABLE contacts ADD COLUMN source TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS speaker_mappings (
@@ -4486,6 +4500,9 @@ class DatabaseManager {
         }
         this.db.prepare("DELETE FROM google_calendars WHERE account_email = ?").run(email);
         this.db.prepare("DELETE FROM google_calendar_tokens WHERE google_email = ?").run(email);
+        this.db
+          .prepare("DELETE FROM contacts WHERE source = ?")
+          .run(contactSource("google", email));
       });
       transaction();
       return { success: true };
@@ -4862,37 +4879,56 @@ class DatabaseManager {
 
   // What find_contact searches. calendar_events only holds a sync window
   // (about two days back to a month ahead), so the meetings nearest to now go
-  // first, and the contacts table (every synced attendee, never pruned) covers
-  // older ones, most recently seen first. A cancelled or declined meeting is
-  // one the user never had, so it can't count as meeting someone; its people
-  // are still in contacts. The connected calendar accounts are the user's own
-  // addresses.
+  // first, and the contacts table (every synced attendee until its account is
+  // disconnected) covers older ones, most recently seen first. A cancelled or
+  // declined meeting is one the user never had, so it can't count as meeting
+  // someone; its people are still in contacts. The connected calendar
+  // accounts are the user's own addresses. self_is_user says an attendee's
+  // self flag means the user: on a colleague's shared Google calendar it marks
+  // that colleague instead. Contacts come only from hand-added rows and
+  // connected accounts; rows older builds stored have no source and are left
+  // out.
   getContactLookupSources(meetingLimit = 1000) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const meetings = this.db
         .prepare(
-          `SELECT provider, start_time, is_all_day, organizer_email, attendees
-             FROM calendar_events
-            WHERE (attendees IS NOT NULL OR organizer_email IS NOT NULL)
-              AND status IN ('confirmed', 'tentative')
-              AND self_response_status != 'declined'
-            ORDER BY ABS(julianday(start_time) - julianday('now')) IS NULL,
-                     ABS(julianday(start_time) - julianday('now'))
+          `SELECT e.start_time, e.is_all_day, e.organizer_email, e.attendees,
+                  e.provider != 'google' OR g.is_primary = 1 OR e.calendar_id = g.account_email
+                    AS self_is_user
+             FROM calendar_events e
+             LEFT JOIN google_calendars g ON e.provider = 'google' AND g.id = e.calendar_id
+            WHERE (e.attendees IS NOT NULL OR e.organizer_email IS NOT NULL)
+              AND e.status IN ('confirmed', 'tentative')
+              AND e.self_response_status != 'declined'
+            ORDER BY ABS(julianday(e.start_time) - julianday('now')) IS NULL,
+                     ABS(julianday(e.start_time) - julianday('now'))
             LIMIT ?`
         )
         .all(meetingLimit);
-      const contacts = this.db
-        .prepare("SELECT email, display_name FROM contacts ORDER BY updated_at DESC")
-        .all();
-      const accountEmails = this.db
+      const accounts = this.db
         .prepare(
-          `SELECT account_email FROM google_calendars WHERE account_email IS NOT NULL
+          `SELECT 'google' AS provider, account_email FROM google_calendars
+            WHERE account_email IS NOT NULL
            UNION
-           SELECT account_email FROM microsoft_calendars WHERE account_email IS NOT NULL`
+           SELECT 'microsoft', account_email FROM microsoft_calendars
+            WHERE account_email IS NOT NULL`
         )
-        .all()
-        .map((row) => row.account_email);
+        .all();
+      const appleConnected = Boolean(this.db.prepare("SELECT 1 FROM apple_calendars").get());
+      const sources = [
+        contactSource("manual"),
+        ...(appleConnected ? [contactSource("apple")] : []),
+        ...accounts.map((row) => contactSource(row.provider, row.account_email)),
+      ];
+      const contacts = this.db
+        .prepare(
+          `SELECT email, display_name FROM contacts
+            WHERE source IN (${sources.map(() => "?").join(", ")})
+            ORDER BY updated_at DESC`
+        )
+        .all(...sources);
+      const accountEmails = accounts.map((row) => row.account_email);
       return { meetings, contacts, accountEmails };
     } catch (error) {
       debugLogger.error("Error reading contact lookup sources", { error: error.message });
@@ -4925,15 +4961,19 @@ class DatabaseManager {
     }
   }
 
-  upsertContacts(contacts) {
+  // A contact the user added by hand stays theirs; otherwise the latest
+  // syncing account owns it, and disconnecting that account removes it until
+  // another account's next full sync sees it again.
+  upsertContacts(contacts, provider, accountEmail = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const source = contactSource(provider, accountEmail);
       const transaction = this.db.transaction((list) => {
         const stmt = this.db.prepare(
-          "INSERT INTO contacts (email, display_name, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(email) DO UPDATE SET display_name = COALESCE(excluded.display_name, contacts.display_name), updated_at = CURRENT_TIMESTAMP"
+          "INSERT INTO contacts (email, display_name, source, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(email) DO UPDATE SET display_name = COALESCE(excluded.display_name, contacts.display_name), source = CASE WHEN contacts.source = 'manual' THEN 'manual' ELSE excluded.source END, updated_at = CURRENT_TIMESTAMP"
         );
         for (const c of list) {
-          if (c.email) stmt.run(c.email.toLowerCase().trim(), c.displayName || null);
+          if (c.email) stmt.run(c.email.toLowerCase().trim(), c.displayName || null, source);
         }
       });
       transaction(contacts);
@@ -4959,13 +4999,21 @@ class DatabaseManager {
     }
   }
 
+  // A calendar sync's attendees. Rooms and the user's own addresses are
+  // deleted rather than stored: older builds stored them, and nothing else
+  // prunes this table.
+  syncCalendarContacts(provider, accountEmail, contacts, notContacts) {
+    if (contacts.length > 0) this.upsertContacts(contacts, provider, accountEmail);
+    if (notContacts.length > 0) this.removeContacts(notContacts);
+  }
+
   searchContacts(query) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const pattern = `%${query || ""}%`;
       return this.db
         .prepare(
-          "SELECT * FROM contacts WHERE email LIKE ? OR display_name LIKE ? ORDER BY display_name ASC, email ASC LIMIT 20"
+          "SELECT email, display_name, created_at, updated_at FROM contacts WHERE email LIKE ? OR display_name LIKE ? ORDER BY display_name ASC, email ASC LIMIT 20"
         )
         .all(pattern, pattern);
     } catch (error) {
@@ -4981,6 +5029,9 @@ class DatabaseManager {
         this.db.prepare("DELETE FROM calendar_events WHERE provider = 'google'").run();
         this.db.prepare("DELETE FROM google_calendars").run();
         this.db.prepare("DELETE FROM google_calendar_tokens").run();
+        this.db
+          .prepare("DELETE FROM contacts WHERE source LIKE ?")
+          .run(contactSource("google", "%"));
       });
       transaction();
       return { success: true };
@@ -5149,6 +5200,9 @@ class DatabaseManager {
         this.db
           .prepare("DELETE FROM microsoft_calendar_tokens WHERE microsoft_email = ?")
           .run(email);
+        this.db
+          .prepare("DELETE FROM contacts WHERE source = ?")
+          .run(contactSource("microsoft", email));
       });
       transaction();
       return { success: true };
@@ -5237,6 +5291,9 @@ class DatabaseManager {
         this.db.prepare("DELETE FROM calendar_events WHERE provider = 'microsoft'").run();
         this.db.prepare("DELETE FROM microsoft_calendars").run();
         this.db.prepare("DELETE FROM microsoft_calendar_tokens").run();
+        this.db
+          .prepare("DELETE FROM contacts WHERE source LIKE ?")
+          .run(contactSource("microsoft", "%"));
       });
       transaction();
       return { success: true };
@@ -5327,6 +5384,7 @@ class DatabaseManager {
       const transaction = this.db.transaction(() => {
         this.db.prepare("DELETE FROM calendar_events WHERE provider = 'apple'").run();
         this.db.prepare("DELETE FROM apple_calendars").run();
+        this.db.prepare("DELETE FROM contacts WHERE source = ?").run(contactSource("apple"));
       });
       transaction();
       return { success: true };
