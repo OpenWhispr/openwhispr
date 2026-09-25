@@ -109,6 +109,8 @@ jobs:
           persist-credentials: false
       - name: Run native provider transport tests
         run: python3 openwhispr-mobile/modules/background-uploader/tests/run-provider-transport-tests.py
+      - name: Run Live Activity resolver tests
+        run: sh openwhispr-mobile/modules/live-activity/tests/run-resolver-tests.sh
 
   mobile-status:
     name: Mobile CI

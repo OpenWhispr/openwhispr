@@ -25,6 +25,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { canRunCloudMeeting } from '@/lib/accountAccess';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useCloudMeeting } from '@/hooks/useCloudMeeting';
+import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMeetingLiveActivity';
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { Sentry } from '@/lib/sentry';
@@ -48,6 +49,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const [noteId, setNoteId] = useState<number | null>(null);
   const [count, setCount] = useState<number | undefined>(undefined);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  // Wall-clock start of the current meeting (local or cloud), for the Live Activity timer.
+  // recordingStartedAtRef is local-only and is cleared as soon as processing starts.
+  const [meetingStartedAt, setMeetingStartedAt] = useState<number | null>(null);
   const [rawNotes, setRawNotes] = useState('');
   const [calendarEvents, setCalendarEvents] = useState<GoogleCalendarEvent[]>([]);
   const [selectedCalendarEventId, setSelectedCalendarEventId] = useState<number | null>(null);
@@ -208,7 +212,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     setRawNotes(note.content);
     lastSavedRawNotesRef.current = note.content;
     setNoteId(note.id);
-    recordingStartedAtRef.current = Date.now();
+    const startedAt = Date.now();
+    recordingStartedAtRef.current = startedAt;
+    setMeetingStartedAt(startedAt);
     setPhase('recording');
   };
 
@@ -312,6 +318,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     setRawNotes(note.content);
     lastSavedRawNotesRef.current = note.content;
     setNoteId(note.id);
+    setMeetingStartedAt(Date.now());
     setPhase('cloud-recording');
   };
 
@@ -340,6 +347,22 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       setPhase('prompt');
     }
   };
+
+  const meetingActivityPhase: MeetingActivityPhase =
+    phase === 'recording' || phase === 'cloud-recording'
+      ? 'recording'
+      : phase === 'processing'
+        ? 'processing'
+        : 'idle';
+  useMeetingLiveActivity({
+    phase: meetingActivityPhase,
+    title: selectedMeetingContext?.title ?? null,
+    startedAt: meetingStartedAt,
+    onEndRequested: () => {
+      const stop = phase === 'cloud-recording' ? finishCloud : finish;
+      stop().catch(Sentry.captureException);
+    },
+  });
 
   if (phase === 'prompt') {
     return (
