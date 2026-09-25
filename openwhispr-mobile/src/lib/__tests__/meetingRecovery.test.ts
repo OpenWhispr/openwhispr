@@ -230,4 +230,14 @@ describe('createdBeforeRuntime', () => {
   it('keeps a note with no creation stamp', () => {
     expect(createdBeforeRuntime({ createdAt: null }, runtimeStartedAtMs)).toBe(true);
   });
+
+  it('keeps a note whose creation stamp cannot be parsed', () => {
+    expect(createdBeforeRuntime({ createdAt: 'not a date' }, runtimeStartedAtMs)).toBe(true);
+  });
+
+  it('reads offset stamps instead of treating them as now', () => {
+    expect(
+      createdBeforeRuntime({ createdAt: '2026-09-25T09:59:59+00:00' }, runtimeStartedAtMs),
+    ).toBe(true);
+  });
 });

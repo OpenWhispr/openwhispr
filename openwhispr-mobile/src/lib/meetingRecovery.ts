@@ -3,7 +3,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import type { Note } from '@/data';
 import { notesRepository } from '@/data';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
-import { parseNoteTimestamp } from '@/lib/parseNoteTimestamp';
+import { tryParseNoteTimestamp } from '@/lib/parseNoteTimestamp';
 import { Sentry } from '@/lib/sentry';
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import { useNotesStore } from '@/store/useNotesStore';
@@ -71,8 +71,8 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
       continue;
     }
 
-    // Before the marker: a background launch killed while waiting has not spent
-    // the note's one resume.
+    // Before the marker: the note is already failed, so a background launch
+    // killed while waiting leaves it failed with Retry and no stale marker.
     await deps.waitUntilActive();
     deps.storage.setItem(markerKey, '1');
     try {
@@ -115,10 +115,12 @@ export function createdBeforeRuntime(
   note: Pick<Note, 'createdAt'>,
   runtimeStartedAtMs: number,
 ): boolean {
-  // The column defaults to datetime('now'), so a missing stamp is legacy data.
-  if (!note.createdAt) return true;
+  // The column defaults to datetime('now'), so a missing or unreadable stamp is
+  // legacy data; recovering it beats leaving it stuck mid-pipeline.
+  const createdAt = tryParseNoteTimestamp(note.createdAt);
+  if (!createdAt) return true;
   const cutoffMs = Math.floor(runtimeStartedAtMs / 1000) * 1000;
-  return parseNoteTimestamp(note.createdAt).getTime() < cutoffMs;
+  return createdAt.getTime() < cutoffMs;
 }
 
 let hasStarted = false;

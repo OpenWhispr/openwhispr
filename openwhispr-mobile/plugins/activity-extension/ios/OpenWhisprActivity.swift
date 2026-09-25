@@ -5,6 +5,9 @@ import SwiftUI
 
 private let recordingRed = Color(red: 1.0, green: 0.27, blue: 0.23)
 private let brandBlue = Color(red: 0.141, green: 0.341, blue: 0.839)
+// Timer text reserves the width of the widest value in its range. ActivityKit
+// ends an activity at 8 hours, so meeting timers never need to reach "23:59:59".
+private let meetingTimerSpan: TimeInterval = 8 * 60 * 60
 
 // MARK: - Brand mark
 
@@ -56,9 +59,10 @@ struct ElapsedText: View {
   let startedAt: Date
   var color: Color = .white
   var size: CGFloat = 15
+  var span: TimeInterval = 60 * 60 * 24
 
   var body: some View {
-    Text(timerInterval: startedAt...startedAt.addingTimeInterval(60 * 60 * 24), countsDown: false)
+    Text(timerInterval: startedAt...startedAt.addingTimeInterval(span), countsDown: false)
       .monospacedDigit()
       .font(.system(size: size, weight: .semibold))
       .foregroundColor(color)
@@ -191,7 +195,7 @@ struct MeetingSubtitle: View {
         RecordingDot(size: size * 0.54)
         (Text("Recording · ")
           + Text(
-            timerInterval: state.startedAt...state.startedAt.addingTimeInterval(60 * 60 * 24),
+            timerInterval: state.startedAt...state.startedAt.addingTimeInterval(meetingTimerSpan),
             countsDown: false))
           .monospacedDigit()
           .font(.system(size: size))
@@ -295,7 +299,7 @@ struct RecordingLiveActivity: Widget {
     } compactTrailing: {
       if state.phase == .recording {
         // Meetings run past an hour, and "1:02:03" is wider than the 44 pt slot.
-        ElapsedText(startedAt: state.startedAt, color: recordingRed)
+        ElapsedText(startedAt: state.startedAt, color: recordingRed, span: meetingTimerSpan)
           .lineLimit(1)
           .minimumScaleFactor(0.6)
           .frame(maxWidth: 44)

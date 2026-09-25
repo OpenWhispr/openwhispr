@@ -152,8 +152,12 @@ final class LiveActivityController {
   func endMeeting() {
     onMain {
       self.meeting = nil
-      // Release the background task only once the hand-back has landed.
-      self.reconcile { self.endBackgroundWork() }
+      // Release the background task only once the hand-back has landed, and only
+      // if it is still this meeting's: a newer meeting may have begun its own.
+      let heldTask = self.backgroundTask
+      self.reconcile {
+        if self.backgroundTask == heldTask { self.endBackgroundWork() }
+      }
     }
   }
 
