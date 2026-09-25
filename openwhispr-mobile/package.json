@@ -85,7 +85,7 @@
     "react-hook-form": "^7.64.0",
     "react-native": "0.83.10",
     "react-native-appsflyer": "^7.0.2",
-    "react-native-css-interop": "^0.2.1",
+    "react-native-css-interop": "^0.2.7",
     "react-native-gesture-handler": "~2.30.0",
     "react-native-purchases": "^10.4.1",
     "react-native-reanimated": "4.2.1",
