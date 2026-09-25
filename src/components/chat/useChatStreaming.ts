@@ -25,7 +25,11 @@ import {
 } from "../../config/prompts";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { createToolRegistry } from "../../services/tools";
-import { executeTool, type ToolRegistry } from "../../services/tools/ToolRegistry";
+import {
+  executeTool,
+  type HoldDeliveryOptions,
+  type ToolRegistry,
+} from "../../services/tools/ToolRegistry";
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { Message, AgentState, ChatImageAttachment, ToolCallInfo } from "./types";
@@ -114,7 +118,7 @@ export interface SendToAIOptions {
   /** Fires when a tool shows an approval card, so a hidden panel can open. */
   onApprovalRequested?: () => void;
   /** Fires when this turn's answer must not be pasted at the caret (see ToolExecutionContext). */
-  onHoldDelivery?: () => void;
+  onHoldDelivery?: (options?: HoldDeliveryOptions) => void;
 }
 
 export interface ChatStreaming {
