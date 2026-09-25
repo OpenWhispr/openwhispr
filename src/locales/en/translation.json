@@ -4051,6 +4051,7 @@
       "unavailable": "Connectors aren't available right now.",
       "failed": "That didn't work.",
       "unknown": "Not confirmed. Check whether it went through before trying again.",
+      "draftUnknown": "Not confirmed: the draft to {{destination}} may not have opened. Check before trying again.",
       "contactsFound": "Contacts found: {{total}}",
       "draftLimit": "Only {{count}} drafts can open per request.",
       "clipboardBusy": "Not opened: another draft's text is still on your clipboard.",

@@ -174,6 +174,22 @@ test("email address validation", async () => {
     "info@пример.рф",
     "a@παράδειγμα.gr",
     "first.last@sub-domain.example.org",
+    // Scripts that spell words with combining marks after a label's first letter.
+    "a@उदाहरण.भारत",
+    "उपयोगकर्ता@उदाहरण.कॉम",
+    "a@ตัวอย่าง.ไทย",
+    "a@مِثال.com",
+    "a@উদাহরণ.বাংলা",
+    "a@இந்தியா.இந்தியா",
+    "jo\u0308rg@mu\u0308ller.de",
+    "山田@例え.jp",
+    "用户@例子.广告",
+    "사용자@예시.한국",
+    "משתמש@דוגמה.ישראל",
+    "a@ምሳሌ.et",
+    "a@straße.de",
+    "a@2гис.рф",
+    "a@xn--p1b6ci4b4b3a.xn--h2brj9c",
   ]) {
     assert.equal(isValidEmailAddress(good), true, good);
   }
@@ -211,6 +227,14 @@ test("addresses that could disguise the recipient or carry URL junk are refused"
     "alice@corp\u2060.com", // word joiner
     "alice@c\u043Erp.com", // Cyrillic о inside a Latin label
     "alice@\u03B1pple.com", // Greek α inside a Latin label
+    "alice@\u0585rp.com", // Armenian օ inside a Latin label
+    "a@я\u043D\u0434екс-mail.ru",
+    "alice\uD800@corp.com", // lone surrogate
+    "alice@corp\u200C.com", // zero-width non-joiner
+    "a\uFE0Fb@corp.com", // variation selector
+    "a\u00ADb@corp.com", // soft hyphen
+    "a@xn--zz.com", // punycode that decodes to nothing valid
+    "a@example.123", // no domain has an all-numeric top level
   ]) {
     assert.equal(isValidEmailAddress(bad), false, JSON.stringify(bad));
   }
@@ -227,6 +251,43 @@ test("a display-name form keeps only the address inside the brackets", async () 
     "Josh <josh@example.com> <evil@example.com>"
   );
   assert.equal(bareEmailAddress("Josh"), "Josh");
+  // A decomposed umlaut becomes the same address as the composed one.
+  assert.equal(bareEmailAddress("jo\u0308rg@mu\u0308ller.de"), "jörg@müller.de");
+});
+
+test("a recipient with a non-ASCII domain is labelled with the ASCII form it routes to", async () => {
+  const { recipientLabel } = await load();
+  assert.equal(recipientLabel("josh@example.com"), "josh@example.com");
+  assert.equal(recipientLabel("jörg@example.com"), "jörg@example.com");
+  // A whole-script look-alike of apple.com.
+  assert.equal(recipientLabel("a@аррӏе.com"), "a@аррӏе.com (xn--80ak6aa92e.com)");
+  assert.equal(recipientLabel("a@müller.de"), "a@müller.de (xn--mller-kva.de)");
+  assert.equal(recipientLabel("a@ｅｘａｍｐｌｅ.com"), "a@ｅｘａｍｐｌｅ.com (example.com)");
+  assert.equal(recipientLabel("a@उदाहरण.भारत"), "a@उदाहरण.भारत (xn--p1b6ci4b4b3a.xn--h2brj9c)");
+});
+
+test("half an emoji in the subject or body can't break the link", async () => {
+  const { buildComposeRequest } = await load();
+  for (const target of ["gmail", "mailto"]) {
+    const { url } = buildComposeRequest({
+      target,
+      to: ["a@example.com"],
+      subject: "Hi \uD83D",
+      body: "\uDC00 done",
+      platform: "darwin",
+    });
+    const params = new URL(url).searchParams;
+    assert.equal(params.get(target === "gmail" ? "su" : "subject"), "Hi \uFFFD");
+    assert.equal(params.get("body").replace(/\r/g, ""), "\uFFFD done");
+  }
+  // An overflowing body keeps the replacement on the clipboard too.
+  const { clipboardText } = buildComposeRequest({
+    target: "mailto",
+    to: ["a@example.com"],
+    body: `${"word ".repeat(600)}\uD83D`,
+    platform: "win32",
+  });
+  assert.ok(clipboardText.endsWith("\uFFFD"));
 });
 
 test("an unknown target is rejected", async () => {

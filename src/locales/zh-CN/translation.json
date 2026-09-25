@@ -3882,6 +3882,7 @@
       "unavailable": "连接器暂时不可用。",
       "failed": "操作未成功。",
       "unknown": "未确认。请先检查是否已完成，再重试。",
+      "draftUnknown": "未确认：发给 {{destination}} 的草稿可能没有打开。请先检查，再重试。",
       "contactsFound": "找到的联系人：{{total}}",
       "draftLimit": "每次请求最多只能打开 {{count}} 份草稿。",
       "clipboardBusy": "未打开：另一份草稿的文字仍在剪贴板中。",

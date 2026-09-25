@@ -30,39 +30,71 @@ const COMPOSE_BASES = {
   outlookPersonal: "https://outlook.live.com/mail/0/deeplink/compose",
 };
 
+// Combining marks may follow a label's first character: Devanagari, Thai and
+// Arabic with harakat spell words with them.
 const EMAIL_ADDRESS_PATTERN =
-  /^[^\s@<>()[\],;:"]+@(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?\.)+[\p{L}\p{N}-]{2,}$/u;
+  /^[^\s@<>()[\],;:"]+@(?:[\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]*[\p{L}\p{N}\p{M}])?\.)+[\p{L}\p{N}-][\p{L}\p{N}\p{M}-]+$/u;
 
 // The To field is the user's only look at the recipient, so nothing may hide
-// or fake part of it: control, format and default-ignorable characters are
-// refused anywhere (a right-to-left override can make evil.io read as
-// corp.com; a Hangul filler shows as nothing), and a domain label may not mix
-// Latin, Cyrillic and Greek, which share look-alike letters (cоrp with a
-// Cyrillic о). A label written in one script (münchen, пример) is allowed.
-const HIDDEN_CHARACTER = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/u;
-const LOOKALIKE_SCRIPTS = [/\p{Script=Latin}/u, /\p{Script=Cyrillic}/u, /\p{Script=Greek}/u];
+// or fake part of it: control, format, surrogate and default-ignorable
+// characters are refused anywhere (a right-to-left override can make evil.io
+// read as corp.com; a Hangul filler shows as nothing), and a domain label may
+// not mix Latin, Cyrillic, Greek and Armenian, which share look-alike letters
+// (cоrp with a Cyrillic о). A label written in one script (münchen, пример) is
+// allowed; recipientLabel shows its punycode so a whole-script look-alike
+// (аррӏе) stands out.
+const HIDDEN_CHARACTER = /[\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}]/u;
+const LOOKALIKE_SCRIPTS = [
+  /\p{Script=Latin}/u,
+  /\p{Script=Cyrillic}/u,
+  /\p{Script=Greek}/u,
+  /\p{Script=Armenian}/u,
+];
 
 function mixesLookalikeScripts(label) {
   return LOOKALIKE_SCRIPTS.filter((script) => script.test(label)).length > 1;
 }
 
+// The ASCII (punycode) form a mail server routes to, or null when the domain
+// has no valid one. The URL API applies the same IDNA mapping in main and in
+// the renderer.
+function asciiDomain(domain) {
+  try {
+    return new URL(`http://${domain}`).hostname;
+  } catch {
+    return null;
+  }
+}
+
 export function isValidEmailAddress(value) {
-  return (
-    typeof value === "string" &&
-    value.length <= 254 &&
-    EMAIL_ADDRESS_PATTERN.test(value) &&
-    !HIDDEN_CHARACTER.test(value) &&
-    !value.split("@")[1].split(".").some(mixesLookalikeScripts)
-  );
+  if (
+    typeof value !== "string" ||
+    value.length > 254 ||
+    !EMAIL_ADDRESS_PATTERN.test(value) ||
+    HIDDEN_CHARACTER.test(value)
+  ) {
+    return false;
+  }
+  const domain = value.split("@")[1];
+  return !domain.split(".").some(mixesLookalikeScripts) && asciiDomain(domain) !== null;
+}
+
+// How a recipient is shown to the user and the model: a non-ASCII domain also
+// gets the ASCII form it routes to.
+export function recipientLabel(address) {
+  const domain = address.slice(address.lastIndexOf("@") + 1);
+  const ascii = /[^\x00-\x7F]/.test(domain) ? asciiDomain(domain) : null;
+  return ascii ? `${address} (${ascii})` : address;
 }
 
 // Models often write "Josh Lee <josh@example.com>"; only the address inside
 // the brackets is kept, so the name can't disguise it.
 const DISPLAY_NAME_FORM = /^[^<>]*<([^<>]*)>$/;
 
+// NFC, so a decomposed ü (u + combining diaeresis) is the same address as ü.
 export function bareEmailAddress(value) {
   const trimmed = value.trim();
-  return trimmed.match(DISPLAY_NAME_FORM)?.[1].trim() ?? trimmed;
+  return (trimmed.match(DISPLAY_NAME_FORM)?.[1].trim() ?? trimmed).normalize("NFC");
 }
 
 function encodeAddresses(addresses) {
@@ -118,6 +150,9 @@ function buildUrl(target, { to, cc, subject, body }) {
 // body first, then subject; recipients that alone don't fit are refused.
 export function buildComposeRequest({ target, to, cc = [], subject = "", body = "", platform }) {
   if (!COMPOSE_TARGETS.includes(target)) throw new Error(`Unknown compose target: ${target}`);
+  // A lone surrogate (half an emoji from a model) would make encodeURIComponent throw.
+  subject = subject.toWellFormed();
+  body = body.toWellFormed();
   const maxLength = maxComposeUrlLength(target, platform);
   const fits = (url) => url.length <= maxLength;
 

@@ -4,6 +4,7 @@ import {
   bareEmailAddress,
   buildComposeRequest,
   isValidEmailAddress,
+  recipientLabel,
 } from "../../../helpers/connectors/emailCompose";
 import type { ConnectorDirectResult } from "../../../types/connectors";
 import type { EmailDraftTarget } from "../../../utils/emailDraftTarget";
@@ -26,9 +27,22 @@ function addressList(value: unknown): string[] {
     : [];
 }
 
-function draftOpenedGuidance(result: Extract<ConnectorDirectResult, { state: "sent" }>): string {
+interface Overflow {
+  subject: boolean;
+  body: boolean;
+}
+
+function overflowedText({ subject, body }: Overflow): string {
+  return subject && body ? "subject and body" : subject ? "subject" : "body";
+}
+
+function draftOpenedGuidance(
+  result: Extract<ConnectorDirectResult, { state: "sent" }>,
+  overflow: Overflow
+): string {
   if (result.copyFailed) {
-    return "The draft opened, but its text was too long for a link and couldn't be copied to the clipboard. Put the subject and body in your reply so the user can paste them into the draft.";
+    const text = overflowedText(overflow);
+    return `The draft opened, but its ${text} didn't fit in a link and couldn't be copied to the clipboard. Put the ${text} in your reply so the user can paste it into the draft.`;
   }
   if (result.subjectCopied && result.bodyCopied) {
     return "The subject and body were too long for a link, so they are on the user's clipboard (subject first, then a blank line, then the body). Tell them to paste the subject and body into the draft.";
@@ -71,8 +85,7 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
     ): Promise<ToolResult> {
       // Every outcome keeps the turn off the caret: an opened compose window
       // takes focus, and a question back must not land in the user's document.
-      // An overflowing body goes to the clipboard, so the answer must not follow it.
-      context?.onHoldDelivery({ preserveClipboard: true });
+      context?.onHoldDelivery();
       const to = addressList(args.to);
       const cc = addressList(args.cc);
       const invalid = [...to, ...cc].filter((address) => !isValidEmailAddress(address));
@@ -84,13 +97,6 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
       }
 
       if (context?.signal.aborted) return notSentResult("cancelled");
-      if (context && !context.claimTurnSlot("email_draft", MAX_DRAFTS_PER_TURN)) {
-        return notSentResult(
-          "draft_limit",
-          `Only ${MAX_DRAFTS_PER_TURN} drafts can open per request. Tell the user which drafts opened and ask them to request the rest again.`,
-          i18n.t("connectors.toolStatus.draftLimit", { count: MAX_DRAFTS_PER_TURN })
-        );
-      }
       const draft = {
         target,
         to,
@@ -101,9 +107,25 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
       // Main builds the same request; checking it here claims the clipboard
       // before any await, so a second overflowing draft in the turn can't
       // replace the first one's text before the user pastes it. Main refuses
-      // to use the clipboard unless this draft reserved it.
+      // to use the clipboard unless this draft reserved it. Built before the
+      // slots are claimed, so nothing can throw between a claim and its release.
       const preview = buildComposeRequest({ ...draft, platform: getCachedPlatform() });
       const clipboardReserved = preview.ok && preview.clipboardText !== null;
+      const overflow = {
+        subject: preview.ok && preview.subjectCopied,
+        body: preview.ok && preview.bodyCopied,
+      };
+      // Shown to the user and in guidance with any punycode form; the data
+      // keeps bare addresses so the model can reuse them in a retry.
+      const destination = to.map(recipientLabel).join(", ");
+
+      if (context && !context.claimTurnSlot("email_draft", MAX_DRAFTS_PER_TURN)) {
+        return notSentResult(
+          "draft_limit",
+          `Only ${MAX_DRAFTS_PER_TURN} drafts can open per request. Tell the user which drafts opened and ask them to request the rest again.`,
+          i18n.t("connectors.toolStatus.draftLimit", { count: MAX_DRAFTS_PER_TURN })
+        );
+      }
       if (clipboardReserved && context && !context.claimTurnSlot("clipboard", 1)) {
         context.releaseTurnSlot("email_draft");
         return notSentResult(
@@ -125,26 +147,25 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
       const cancelRun = () =>
         void window.electronAPI?.connectorCancel?.(runId, "cancelled_by_user");
       context?.signal.addEventListener("abort", cancelRun, { once: true });
-      let result;
-      try {
-        result = await window.electronAPI?.connectorRunDirect?.(
-          "email",
-          "draft",
-          { ...draft, clipboardReserved },
-          runId
-        );
-      } finally {
-        context?.signal.removeEventListener("abort", cancelRun);
-      }
+      // A rejected call (no handler in main) is treated like a missing API.
+      const result = await window.electronAPI
+        ?.connectorRunDirect?.("email", "draft", { ...draft, clipboardReserved }, runId)
+        .catch(() => undefined);
+      context?.signal.removeEventListener("abort", cancelRun);
       if (!result) {
         releaseSlots();
         return unavailableResult("connectors_unavailable");
       }
+      // Sticky for the turn once text may be on the clipboard, so the answer
+      // isn't copied over it.
+      const preserveClipboard = (): void => context?.onHoldDelivery({ preserveClipboard: true });
       // An unknown run may have opened a window and used the clipboard, so
       // it keeps its slots.
       if (result.state === "unknown") {
+        if (clipboardReserved) preserveClipboard();
         return unknownResult(
-          "The draft may or may not have opened. Ask the user to check for a draft window."
+          `The draft to ${destination} may or may not have opened. Ask the user to check for a draft window.`,
+          i18n.t("connectors.toolStatus.draftUnknown", { destination })
         );
       }
       if (result.state !== "sent") releaseSlots();
@@ -155,6 +176,7 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
 
       const bodyCopied = Boolean(result.bodyCopied);
       const subjectCopied = Boolean(result.subjectCopied);
+      if (bodyCopied || subjectCopied) preserveClipboard();
 
       return {
         success: true,
@@ -163,7 +185,7 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
           recipients: to,
           bodyCopied,
           subjectCopied,
-          guidance: draftOpenedGuidance(result),
+          guidance: draftOpenedGuidance(result, overflow),
         },
         displayText: i18n.t(
           subjectCopied && bodyCopied
@@ -173,7 +195,7 @@ export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
               : bodyCopied
                 ? "connectors.toolStatus.draftOpenedBodyCopied"
                 : "connectors.toolStatus.draftOpened",
-          { destination: result.destinationLabel }
+          { destination }
         ),
       };
     },

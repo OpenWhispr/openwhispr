@@ -4051,6 +4051,7 @@
       "unavailable": "Konnektoren sind gerade nicht verfügbar.",
       "failed": "Das hat nicht funktioniert.",
       "unknown": "Nicht bestätigt. Prüfe, ob es geklappt hat, bevor du es erneut versuchst.",
+      "draftUnknown": "Nicht bestätigt: Der Entwurf an {{destination}} wurde möglicherweise nicht geöffnet. Prüfe das, bevor du es erneut versuchst.",
       "contactsFound": "Gefundene Kontakte: {{total}}",
       "draftLimit": "Pro Anfrage können nur {{count}} Entwürfe geöffnet werden.",
       "clipboardBusy": "Nicht geöffnet: Der Text eines anderen Entwurfs ist noch in deiner Zwischenablage.",

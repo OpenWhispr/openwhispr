@@ -3882,6 +3882,7 @@
       "unavailable": "Os conectores não estão disponíveis no momento.",
       "failed": "Não funcionou.",
       "unknown": "Não confirmado. Verifique se foi concluído antes de tentar novamente.",
+      "draftUnknown": "Não confirmado: o rascunho para {{destination}} pode não ter sido aberto. Verifique antes de tentar novamente.",
       "contactsFound": "Contatos encontrados: {{total}}",
       "draftLimit": "Só é possível abrir {{count}} rascunhos por solicitação.",
       "clipboardBusy": "Não aberto: o texto de outro rascunho ainda está na sua área de transferência.",

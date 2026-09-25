@@ -3,6 +3,15 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../../src/helpers/connectors/emailConnector.js");
 
+// Stands in for child_process.execFile: answers with an exit code and stdout.
+function fakeExecFile(code, stdout, calls = []) {
+  return (file, args, _options, callback) => {
+    calls.push([file, ...args]);
+    const error = code === 0 ? null : Object.assign(new Error("xdg-mime failed"), { code });
+    callback(error, stdout, "");
+  };
+}
+
 function fakes() {
   const calls = { opened: [], copied: [] };
   return {
@@ -131,6 +140,64 @@ test("a clipboard write that fails still reports the opened draft, without the t
     subjectCopied: false,
     copyFailed: true,
   });
+});
+
+test("a clipboard writer that reports failure counts as a failed copy", async () => {
+  const { createEmailConnector } = await load();
+  const connector = createEmailConnector({
+    openExternal: async () => {},
+    writeClipboard: async () => ({ success: false }),
+    platform: "win32",
+  });
+
+  const result = await connector.runDirect(
+    "draft",
+    { target: "mailto", to: ["a@example.com"], body: "word ".repeat(600), clipboardReserved: true },
+    {}
+  );
+
+  assert.equal(result.copyFailed, true);
+  assert.equal(result.bodyCopied, false);
+});
+
+test("a recipient with a non-ASCII domain is labelled with its punycode", async () => {
+  const { createEmailConnector } = await load();
+  const result = await createEmailConnector(fakes().deps).runDirect(
+    "draft",
+    { target: "gmail", to: ["a@аррӏе.com", "b@example.com"] },
+    {}
+  );
+  assert.equal(result.destinationLabel, "a@аррӏе.com (xn--80ak6aa92e.com), b@example.com");
+});
+
+test("the Linux mail-app probe refuses only a clear 'no default'", async () => {
+  const { hasLinuxMailtoHandler } = await load();
+  const probe = (code, stdout, env = {}) =>
+    hasLinuxMailtoHandler({ execFile: fakeExecFile(code, stdout), env });
+
+  assert.equal(await probe(0, "thunderbird.desktop\n"), true);
+  assert.equal(await probe(0, "\n"), false);
+  // KDE 5's xdg-mime exits 4 with nothing to say when no default is set.
+  assert.equal(await probe(4, ""), false);
+  // Any other failure (xdg-mime missing, a timeout, a syntax error) lets the
+  // open go ahead and report itself.
+  assert.equal(await probe("ENOENT", ""), true);
+  assert.equal(await probe(null, ""), true);
+  assert.equal(await probe(1, ""), true);
+});
+
+test("inside Flatpak the probe doesn't ask xdg-mime", async () => {
+  const { hasLinuxMailtoHandler } = await load();
+  const calls = [];
+  const result = await hasLinuxMailtoHandler({
+    execFile: fakeExecFile(0, "", calls),
+    env: { FLATPAK_ID: "com.openwhispr.App" },
+  });
+  assert.equal(result, true);
+  assert.deepEqual(calls, []);
+
+  await hasLinuxMailtoHandler({ execFile: fakeExecFile(0, "", calls), env: {} });
+  assert.deepEqual(calls, [["xdg-mime", "query", "default", "x-scheme-handler/mailto"]]);
 });
 
 test("on Linux, a mailto draft with no default mail app opens nothing", async () => {

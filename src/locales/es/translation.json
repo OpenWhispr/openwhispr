@@ -3935,6 +3935,7 @@
       "unavailable": "Los conectores no están disponibles en este momento.",
       "failed": "No funcionó.",
       "unknown": "Sin confirmar. Comprueba si se completó antes de volver a intentarlo.",
+      "draftUnknown": "Sin confirmar: puede que el borrador para {{destination}} no se haya abierto. Compruébalo antes de volver a intentarlo.",
       "contactsFound": "Contactos encontrados: {{total}}",
       "draftLimit": "Solo se pueden abrir {{count}} borradores por solicitud.",
       "clipboardBusy": "No se abrió: el texto de otro borrador sigue en tu portapapeles.",

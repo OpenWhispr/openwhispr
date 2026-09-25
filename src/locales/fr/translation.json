@@ -4051,6 +4051,7 @@
       "unavailable": "Les connecteurs ne sont pas disponibles pour le moment.",
       "failed": "Cela n'a pas fonctionné.",
       "unknown": "Non confirmé. Vérifiez si l'action a abouti avant de réessayer.",
+      "draftUnknown": "Non confirmé : le brouillon pour {{destination}} ne s'est peut-être pas ouvert. Vérifiez avant de réessayer.",
       "contactsFound": "Contacts trouvés : {{total}}",
       "draftLimit": "Seuls {{count}} brouillons peuvent s'ouvrir par demande.",
       "clipboardBusy": "Non ouvert : le texte d'un autre brouillon est encore dans votre presse-papiers.",

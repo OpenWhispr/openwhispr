@@ -48,11 +48,14 @@ export function failedResult(errorCode: string, message: string): ToolResult {
   };
 }
 
-export function unknownResult(guidance: string): ToolResult {
+export function unknownResult(
+  guidance: string,
+  displayText: string = i18n.t("connectors.toolStatus.unknown")
+): ToolResult {
   return {
     success: true,
     data: { status: "unknown", guidance: `${guidance} ${NO_RETRY}` },
-    displayText: i18n.t("connectors.toolStatus.unknown"),
+    displayText,
   };
 }
 

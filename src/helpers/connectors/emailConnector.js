@@ -1,5 +1,10 @@
 const { execFile } = require("child_process");
-const { buildComposeRequest, isValidEmailAddress, COMPOSE_TARGETS } = require("./emailCompose");
+const {
+  buildComposeRequest,
+  isValidEmailAddress,
+  recipientLabel,
+  COMPOSE_TARGETS,
+} = require("./emailCompose");
 
 function stringList(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
@@ -7,17 +12,21 @@ function stringList(value) {
 
 // Electron hands a Linux mailto link to xdg-email without waiting for it, so
 // a missing mail app would still look like an opened draft. Only a clear "no
-// default" answer refuses; if xdg-mime itself fails, the open reports it.
+// default" answer refuses: empty output, which KDE 5's xdg-mime pairs with
+// exit code 4. Any other failure lets the open go ahead and report itself.
 // Inside Flatpak the sandbox's MIME database is empty and the portal picks
 // the handler, so there is nothing to ask.
-function hasLinuxMailtoHandler() {
-  if (process.env.FLATPAK_ID) return Promise.resolve(true);
+function hasLinuxMailtoHandler({ execFile: run = execFile, env = process.env } = {}) {
+  if (env.FLATPAK_ID) return Promise.resolve(true);
   return new Promise((resolve) => {
-    execFile(
+    run(
       "xdg-mime",
       ["query", "default", "x-scheme-handler/mailto"],
       { timeout: 2000 },
-      (error, stdout) => resolve(Boolean(error) || stdout.trim() !== "")
+      (error, stdout) => {
+        const noDefault = stdout.trim() === "" && (!error || error.code === 4);
+        resolve(!noDefault);
+      }
     );
   });
 }
@@ -49,7 +58,7 @@ function createEmailConnector({
       const to = stringList(args.to);
       const cc = stringList(args.cc);
       // Failures carry it too, so the receipt says whose draft didn't open.
-      const destinationLabel = to.join(", ");
+      const destinationLabel = to.map(recipientLabel).join(", ");
       const failed = (errorCode, message) => ({
         state: "failed",
         errorCode,
@@ -98,8 +107,8 @@ function createEmailConnector({
       let copied = false;
       if (request.clipboardText !== null) {
         try {
-          await writeClipboard(request.clipboardText, runtime.webContents ?? null);
-          copied = true;
+          const written = await writeClipboard(request.clipboardText, runtime.webContents ?? null);
+          copied = written?.success !== false;
         } catch {
           // The draft is open without its text; the result says so.
         }
@@ -116,4 +125,4 @@ function createEmailConnector({
   };
 }
 
-module.exports = { createEmailConnector };
+module.exports = { createEmailConnector, hasLinuxMailtoHandler };

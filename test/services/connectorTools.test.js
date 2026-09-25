@@ -304,7 +304,7 @@ test("a draft whose outcome is unknown says so, and keeps the clipboard claimed"
   const second = await tool.execute(draft, scope.createContext("2"));
 
   assert.equal(first.data.status, "unknown");
-  assert.match(first.data.guidance, /may or may not have opened/);
+  assert.match(first.data.guidance, /The draft to josh@example\.com may or may not have opened/);
   assert.match(first.data.guidance, /Do not retry/);
   // It may have put its text on the clipboard; another draft must not replace it.
   assert.equal(second.data.reason, "clipboard_in_use");
@@ -357,25 +357,121 @@ test("email_draft guidance names exactly what went to the clipboard", async (t) 
     },
   });
   const tool = (await loadEmail()).createEmailDraftTool("mailto");
-  const draft = { to: ["a@example.com"], subject: "s", body: "b" };
 
-  const subjectOnly = await tool.execute(draft, countingContext());
+  const subjectOnly = await tool.execute(
+    { to: ["a@example.com"], subject: "s", body: "b" },
+    countingContext()
+  );
   assert.match(subjectOnly.data.guidance, /subject was too long/);
   assert.doesNotMatch(subjectOnly.data.guidance, /body/);
 
-  const copyFailed = await tool.execute(draft, countingContext());
-  assert.match(copyFailed.data.guidance, /couldn't be copied/);
-  assert.match(copyFailed.data.guidance, /in your reply/);
+  // Only the body overflowed, so only the body is missing from the draft.
+  const copyFailed = await tool.execute(
+    { to: ["a@example.com"], subject: "Recap", body: "word ".repeat(600) },
+    countingContext()
+  );
+  assert.match(copyFailed.data.guidance, /its body didn't fit/);
+  assert.match(copyFailed.data.guidance, /Put the body in your reply/);
+  assert.doesNotMatch(copyFailed.data.guidance, /subject/);
 });
 
-test("email_draft keeps its turn out of the user's document, whatever the outcome", async (t) => {
+test("a draft whose text couldn't be copied gives the clipboard back to the turn", async (t) => {
+  const results = [{ copyFailed: true }, { bodyCopied: true }];
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
         connectorRunDirect: async () => ({
           state: "sent",
           destinationLabel: "a@example.com",
-          bodyCopied: false,
+          ...results.shift(),
+        }),
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  const { createToolExecutionScope } = await loadScope();
+  const scope = createToolExecutionScope();
+  const tool = createEmailDraftTool("mailto");
+  const draft = { to: ["a@example.com"], subject: "Recap", body: "word ".repeat(600) };
+
+  await tool.execute(draft, scope.createContext("1"));
+  const second = await tool.execute(draft, scope.createContext("2"));
+
+  // Nothing of the first draft reached the clipboard, so the second may use it.
+  assert.equal(second.data.status, "draft_opened");
+  assert.equal(second.data.bodyCopied, true);
+});
+
+test("malformed text or a failed call never leaks the turn's slots", async (t) => {
+  const sent = [];
+  let reject = true;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async (_connector, _action, args) => {
+          if (reject) {
+            reject = false;
+            throw new Error("No handler registered for 'connector-run-direct'");
+          }
+          sent.push(args);
+          return { state: "sent", destinationLabel: "a@example.com", bodyCopied: true };
+        },
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  const { createToolExecutionScope } = await loadScope();
+  const scope = createToolExecutionScope();
+  const tool = createEmailDraftTool("mailto");
+  // Half an emoji, as a model sometimes emits it, in a body too long for a link.
+  const draft = { to: ["a@example.com"], subject: "\uD83D", body: `${"word ".repeat(600)}\uDC00` };
+
+  const failedCall = await tool.execute(draft, scope.createContext("1"));
+  assert.equal(failedCall.data.status, "unavailable");
+  const results = [];
+  for (const id of ["2", "3", "4"])
+    results.push(await tool.execute(draft, scope.createContext(id)));
+
+  // The rejected call gave back its draft and clipboard slots.
+  assert.equal(results[0].data.status, "draft_opened");
+  assert.equal(sent.length, 1);
+  assert.equal(results[1].data.reason, "clipboard_in_use");
+});
+
+test("a recipient with a non-ASCII domain is shown with its punycode form", async (t) => {
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async () => ({ state: "sent", destinationLabel: "ignored" }),
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  await useEnglish();
+
+  // All-Cyrillic "apple": one script, so allowed, but its punycode gives it away.
+  const result = await createEmailDraftTool("gmail").execute(
+    { to: ["a@аррӏе.com", "b@example.com"], subject: "s", body: "b" },
+    countingContext()
+  );
+
+  // The data keeps bare addresses, so the model can reuse them in a retry.
+  assert.deepEqual(result.data.recipients, ["a@аррӏе.com", "b@example.com"]);
+  assert.equal(
+    result.displayText,
+    "Opened a draft to a@аррӏе.com (xn--80ak6aa92e.com), b@example.com."
+  );
+});
+
+test("email_draft keeps its turn out of the user's document, whatever the outcome", async (t) => {
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async (_connector, _action, args) => ({
+          state: "sent",
+          destinationLabel: "a@example.com",
+          bodyCopied: args.clipboardReserved === true && !args.body.startsWith("unwritable"),
+          copyFailed: args.body.startsWith("unwritable"),
         }),
       },
     },
@@ -390,11 +486,27 @@ test("email_draft keeps its turn out of the user's document, whatever the outcom
   // A question back to the user must not be pasted into their document.
   const clarifying = countingContext();
   await tool.execute({ to: ["Gabe"], subject: "s", body: "b" }, clarifying);
+  const overflowing = countingContext();
+  await tool.execute(
+    { to: ["a@example.com"], subject: "s", body: "word ".repeat(2000) },
+    overflowing
+  );
+  const uncopied = countingContext();
+  await tool.execute(
+    { to: ["a@example.com"], subject: "s", body: `unwritable ${"word ".repeat(2000)}` },
+    uncopied
+  );
 
   assert.equal(opened.holds, 1);
   assert.equal(clarifying.holds, 1);
+  // A draft that fits its link leaves the clipboard alone, so the held answer
+  // can still be copied.
+  assert.equal(opened.preservesClipboard, false);
+  assert.equal(clarifying.preservesClipboard, false);
   // An overflowing body goes to the clipboard; the answer must not replace it.
-  assert.equal(opened.preservesClipboard, true);
+  assert.equal(overflowing.preservesClipboard, true);
+  // Nothing reached the clipboard, so the answer (which carries the text) is copied.
+  assert.equal(uncopied.preservesClipboard, false);
 });
 
 test("email_draft opens nothing once its turn is cancelled", async (t) => {
