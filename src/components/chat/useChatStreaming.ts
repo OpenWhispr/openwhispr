@@ -255,6 +255,9 @@ export function useChatStreaming({
     async (userText: string, allMessages: Message[], options?: SendToAIOptions) => {
       const sendGeneration = ++sendGenerationRef.current;
       const cancelled = () => sendGeneration !== sendGenerationRef.current;
+      // This send supersedes any still running, so that turn's tools are
+      // released now rather than when (or if) they settle.
+      toolScopeRef.current?.abort();
       const toolScope = createToolExecutionScope({
         onApprovalRequested: options?.onApprovalRequested,
         onHoldDelivery: options?.onHoldDelivery,

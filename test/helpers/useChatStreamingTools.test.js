@@ -307,3 +307,88 @@ for (const [ending, finishStream] of Object.entries(STREAM_ENDINGS)) {
     assert.deepEqual(cancels, ["cancelled_by_user"]);
   });
 }
+
+// Sends that each wait on an email draft main never finishes, so a turn only
+// ends once its tool scope is aborted. Returns the run ids main was asked to
+// open and to cancel, in order.
+async function renderDraftTurns(t, streamForSend) {
+  const opened = [];
+  const cancelled = [];
+  let notifyOpened = () => {};
+  const { captured, reasoningService } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    electronAPI: {
+      connectorRunDirect: (_connector, _action, _draft, runId) => {
+        opened.push(runId);
+        notifyOpened();
+        return new Promise(() => {});
+      },
+      connectorCancel: async (runId) => cancelled.push(runId),
+    },
+  });
+  let sends = 0;
+  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
+    streamForSend(sends++, config)
+  );
+  const nextDraftOpened = () =>
+    new Promise((resolve) => {
+      notifyOpened = resolve;
+    });
+  return { captured, opened, cancelled, nextDraftOpened };
+}
+
+function awaitDraft(config, callId) {
+  return (async function* () {
+    await config.executeToolCall(
+      "email_draft",
+      JSON.stringify({ to: ["zed@example.com"], subject: "Hi", body: "Hello" }),
+      callId
+    );
+    yield { type: "done", finishReason: "stop" };
+  })();
+}
+
+const settlesWithin = (promise, ms = 1000) =>
+  Promise.race([
+    promise.then(() => "settled"),
+    new Promise((resolve) => setTimeout(() => resolve("still waiting"), ms)),
+  ]);
+
+test("a newer send releases the tools of the send it replaces", async (t) => {
+  const { captured, opened, cancelled, nextDraftOpened } = await renderDraftTurns(
+    t,
+    (send, config) =>
+      send === 0
+        ? awaitDraft(config, "srv-old")
+        : (async function* () {
+            yield { type: "done", finishReason: "stop" };
+          })()
+  );
+
+  const draftOpened = nextDraftOpened();
+  const first = captured.sendToAI("Email Zed", []);
+  await draftOpened;
+  await captured.sendToAI("Never mind", []);
+
+  assert.equal(await settlesWithin(first), "settled");
+  assert.deepEqual(cancelled, opened);
+});
+
+test("a replaced send that ends leaves the newer send cancellable", async (t) => {
+  const { captured, opened, cancelled, nextDraftOpened } = await renderDraftTurns(
+    t,
+    (send, config) => awaitDraft(config, `srv-${send}`)
+  );
+
+  let draftOpened = nextDraftOpened();
+  const first = captured.sendToAI("Email Zed", []);
+  await draftOpened;
+  draftOpened = nextDraftOpened();
+  const second = captured.sendToAI("Email Zed again", []);
+  await draftOpened;
+  // The first send's cleanup runs now; it must not drop the second's scope.
+  assert.equal(await settlesWithin(first), "settled");
+  captured.cancelStream();
+
+  assert.equal(await settlesWithin(second), "settled");
+  assert.deepEqual(cancelled, opened);
+});

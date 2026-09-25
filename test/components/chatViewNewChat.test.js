@@ -10,7 +10,8 @@ const { installInteractiveDom } = require("../lib/interactiveDom");
 const MOCKS = {
   "/useChatStreaming": `
     import { useCallback, useState } from "react";
-    export function useChatStreaming() {
+    export function useChatStreaming(options) {
+      globalThis.__chatStreamingOptions = options;
       const [agentState, setAgentState] = useState("idle");
       const cancelStream = useCallback(() => {
         globalThis.__cancelCount += 1;
@@ -60,6 +61,34 @@ const MOCKS = {
   `,
 };
 
+async function renderChatView(t) {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    delete globalThis.__pendingSend;
+    delete globalThis.__chatInput;
+    delete globalThis.__conversationList;
+    delete globalThis.__cancelCount;
+    delete globalThis.__chatStreamingOptions;
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  globalThis.__cancelCount = 0;
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-chat-view-new-chat-test-",
+    mockModules: MOCKS,
+  });
+  const { default: ChatView } = await vite.ssrLoadModule("/components/chat/ChatView.tsx");
+  const { createRoot } = require("react-dom/client");
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(ChatView)));
+}
+
+test("typed chat offers the connector tools", async (t) => {
+  await renderChatView(t);
+  assert.equal(globalThis.__chatStreamingOptions.allowConnectors, true);
+});
+
 // Each way of leaving the conversation cancels its running reply.
 const LEAVE_CONVERSATION = {
   "New chat": (list) => list.onNewChat(),
@@ -68,29 +97,11 @@ const LEAVE_CONVERSATION = {
 
 for (const [leave, leaveConversation] of Object.entries(LEAVE_CONVERSATION)) {
   test(`${leave} cancels the reply, and the input stays busy until it lets go`, async (t) => {
-    let root = null;
-    t.after(async () => {
-      if (root) await React.act(async () => root.unmount());
-      delete globalThis.__pendingSend;
-      delete globalThis.__chatInput;
-      delete globalThis.__conversationList;
-      delete globalThis.__cancelCount;
-    });
-    installBrowserGlobals(t);
-    const container = installInteractiveDom(t);
     let settleSend;
     globalThis.__pendingSend = new Promise((resolve) => {
       settleSend = resolve;
     });
-    globalThis.__cancelCount = 0;
-    const vite = await createRendererServer(t, {
-      cachePrefix: "openwhispr-chat-view-new-chat-test-",
-      mockModules: MOCKS,
-    });
-    const { default: ChatView } = await vite.ssrLoadModule("/components/chat/ChatView.tsx");
-    const { createRoot } = require("react-dom/client");
-    root = createRoot(container);
-    await React.act(async () => root.render(React.createElement(ChatView)));
+    await renderChatView(t);
 
     await React.act(async () => {
       void globalThis.__chatInput.onTextSubmit("Search the web for flights");
