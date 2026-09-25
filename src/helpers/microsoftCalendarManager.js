@@ -165,6 +165,7 @@ class MicrosoftCalendarManager {
       } catch (err) {
         debugLogger.error("Error fetching calendars", { email, error: err.message }, "mcal");
       }
+      await this._refreshOwnAddresses(email);
     }
 
     this.databaseManager.applyMicrosoftPrimaryOnlyToSelection(this.primaryOnly);
@@ -238,7 +239,10 @@ class MicrosoftCalendarManager {
     const toUpsert = [];
     const contactsToUpsert = [];
     const notContacts = [];
-    const ownEmail = (accountEmail || "").toLowerCase();
+    const ownAddresses = new Set([
+      (accountEmail || "").toLowerCase(),
+      ...this.databaseManager.getMicrosoftOwnAddresses(accountEmail),
+    ]);
     for (const item of events) {
       // An occurrence still stripped after backfill (master fetch failed) has no
       // subject, attendees, or join link. Overwriting a row a previous sync
@@ -251,8 +255,8 @@ class MicrosoftCalendarManager {
       for (const a of item.attendees || []) {
         const address = a.emailAddress?.address;
         if (!address) continue;
-        // Rooms and the user's own address aren't people to write to.
-        if (a.type === "resource" || address.toLowerCase() === ownEmail) {
+        // Rooms and the user's own addresses aren't people to write to.
+        if (a.type === "resource" || ownAddresses.has(address.toLowerCase())) {
           notContacts.push(address);
         } else {
           contactsToUpsert.push({ email: address, displayName: a.emailAddress.name || null });
@@ -386,6 +390,30 @@ class MicrosoftCalendarManager {
 
   _getAccountEmails() {
     return Array.from(this.accounts.keys());
+  }
+
+  // Attendee lists address the user by their primary SMTP address or an
+  // alias, which can differ from the sign-in name the account is stored under.
+  async _refreshOwnAddresses(email) {
+    try {
+      const me = await this._apiGet("/me?$select=mail,userPrincipalName,proxyAddresses", email);
+      const aliases = (me.proxyAddresses || [])
+        .filter((entry) => /^smtp:/i.test(entry))
+        .map((entry) => entry.slice("smtp:".length));
+      const addresses = [me.mail, me.userPrincipalName, ...aliases]
+        .filter((address) => typeof address === "string" && address.includes("@"))
+        .map((address) => address.toLowerCase());
+      const ownAddresses = [...new Set(addresses)];
+      this.databaseManager.saveMicrosoftOwnAddresses(email, ownAddresses);
+      // Syncs before this lookup may have stored an alias as a contact.
+      this.databaseManager.removeContacts(ownAddresses);
+    } catch (err) {
+      debugLogger.warn(
+        "Error fetching Microsoft account addresses",
+        { email, error: err.message },
+        "mcal"
+      );
+    }
   }
 
   // calendarView/delta expands recurrences into occurrences and returns a

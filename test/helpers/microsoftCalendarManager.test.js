@@ -146,6 +146,7 @@ function createManager(MicrosoftCalendarManager, upserted, contacts = [], overri
       updateMicrosoftCalendarSyncToken: () => {},
       syncCalendarContacts: (_provider, _accountEmail, rows) => contacts.push(...rows),
       getCalendarEventById: () => null,
+      getMicrosoftOwnAddresses: () => [],
       ...overrides,
     },
     {}
@@ -359,4 +360,90 @@ test("_syncCalendar flags rooms and resources and keeps them and the user out of
       ["boardroom@example.com", "Me@example.com"],
     ],
   ]);
+});
+
+test("_syncCalendar keeps the user's other Microsoft addresses out of contacts", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const synced = [];
+  const manager = createManager(MicrosoftCalendarManager, [], [], {
+    getMicrosoftOwnAddresses: (email) =>
+      email === "cpiha@corp.test" ? ["chad.piha@corp.test"] : [],
+    syncCalendarContacts: (...args) => synced.push(args),
+  });
+  manager._apiGet = async () => ({
+    "@odata.deltaLink": "delta-link",
+    value: [
+      {
+        id: "evt-1",
+        subject: "Planning",
+        start: { dateTime: "2026-07-20T17:00:00.0000000" },
+        end: { dateTime: "2026-07-20T17:30:00.0000000" },
+        attendees: [
+          { type: "required", emailAddress: { address: "ana@corp.test", name: "Ana" } },
+          { type: "required", emailAddress: { address: "Chad.Piha@corp.test", name: "Chad" } },
+        ],
+      },
+    ],
+  });
+
+  await manager._syncCalendar({ id: "cal-1", account_email: "cpiha@corp.test" });
+
+  assert.deepEqual(synced[0].slice(2), [
+    [{ email: "ana@corp.test", displayName: "Ana" }],
+    ["Chad.Piha@corp.test"],
+  ]);
+});
+
+test("fetchCalendars stores the account's mail, sign-in name and SMTP aliases", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const saved = [];
+  const manager = new MicrosoftCalendarManager(
+    {
+      saveMicrosoftCalendars: () => {},
+      saveMicrosoftOwnAddresses: (email, addresses) => saved.push([email, addresses]),
+      applyMicrosoftPrimaryOnlyToSelection: () => {},
+      removeEventsFromDeselectedCalendars: () => {},
+    },
+    {}
+  );
+  const paths = [];
+  manager._apiGet = async (path) => {
+    paths.push(path);
+    if (path.startsWith("/me/calendars")) return { value: [] };
+    return {
+      mail: "Chad.Piha@corp.test",
+      userPrincipalName: "cpiha@corp.test",
+      proxyAddresses: ["SMTP:Chad.Piha@corp.test", "smtp:chad@old-corp.test", "SIP:chad@corp.test"],
+    };
+  };
+
+  await manager.fetchCalendars("cpiha@corp.test");
+
+  assert.deepEqual(saved, [
+    ["cpiha@corp.test", ["chad.piha@corp.test", "cpiha@corp.test", "chad@old-corp.test"]],
+  ]);
+  assert.ok(paths.includes("/me?$select=mail,userPrincipalName,proxyAddresses"));
+});
+
+test("fetchCalendars still saves the calendars when the address lookup fails", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const savedCalendars = [];
+  const manager = new MicrosoftCalendarManager(
+    {
+      saveMicrosoftCalendars: (calendars) => savedCalendars.push(...calendars),
+      saveMicrosoftOwnAddresses: () => assert.fail("nothing to save"),
+      applyMicrosoftPrimaryOnlyToSelection: () => {},
+      removeEventsFromDeselectedCalendars: () => {},
+    },
+    {}
+  );
+  manager._apiGet = async (path) => {
+    if (path.startsWith("/me?")) throw new Error("API error 400");
+    return { value: [{ id: "cal-1", name: "Calendar", isDefaultCalendar: true }] };
+  };
+
+  const calendars = await manager.fetchCalendars("me@outlook.test");
+
+  assert.equal(calendars.length, 1);
+  assert.equal(savedCalendars.length, 1);
 });

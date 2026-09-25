@@ -676,6 +676,11 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      try {
+        this.db.exec("ALTER TABLE microsoft_calendar_tokens ADD COLUMN own_addresses TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS microsoft_calendars (
@@ -813,12 +818,22 @@ class DatabaseManager {
         )
       `);
 
-      // Where each contact came from (see contactSource), so a disconnect
-      // removes that account's people. Rows older builds stored stay NULL.
-      try {
-        this.db.exec("ALTER TABLE contacts ADD COLUMN source TEXT");
-      } catch (err) {
-        if (!err.message.includes("duplicate column")) throw err;
+      // Every source (see contactSource) that has seen a contact, so a
+      // disconnect only removes people no other source still has. Rows older
+      // builds stored have none.
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS contact_sources (
+          email TEXT NOT NULL REFERENCES contacts(email) ON DELETE CASCADE,
+          source TEXT NOT NULL,
+          PRIMARY KEY (email, source)
+        )
+      `);
+      // Pre-release builds kept a single source in contacts.source.
+      if (this.db.pragma("table_info(contacts)").some((column) => column.name === "source")) {
+        this.db.exec(
+          "INSERT OR IGNORE INTO contact_sources (email, source) SELECT email, source FROM contacts WHERE source IS NOT NULL"
+        );
+        this.db.exec("UPDATE contacts SET source = NULL WHERE source IS NOT NULL");
       }
 
       this.db.exec(`
@@ -4506,9 +4521,7 @@ class DatabaseManager {
         }
         this.db.prepare("DELETE FROM google_calendars WHERE account_email = ?").run(email);
         this.db.prepare("DELETE FROM google_calendar_tokens WHERE google_email = ?").run(email);
-        this.db
-          .prepare("DELETE FROM contacts WHERE source = ?")
-          .run(contactSource("google", email));
+        this._removeContactSources("source = ?", contactSource("google", email));
       });
       transaction();
       return { success: true };
@@ -4884,30 +4897,32 @@ class DatabaseManager {
 
   // What find_contact searches. calendar_events only holds a sync window
   // (about two days back to a month ahead), so the meetings nearest to now go
-  // first, and the contacts table (every synced attendee until its account is
-  // disconnected) covers older ones, most recently seen first. A cancelled or
-  // declined meeting is one the user never had, so it can't count as meeting
-  // someone; its people are still in contacts. The connected calendar
-  // accounts are the user's own addresses. self_is_user says an attendee's
-  // self flag means the user: on a colleague's shared Google calendar it marks
-  // that colleague instead. Contacts come only from hand-added rows and
-  // connected accounts; rows older builds stored have no source and are left
-  // out.
+  // first, and the contacts table (every synced attendee until its last
+  // source is disconnected) covers older ones, most recently seen first. Only
+  // the user's own meetings count: not cancelled or declined ones, not a
+  // colleague's shared Google calendar (whose people still come through
+  // contacts). Contacts come only from hand-added rows and connected
+  // accounts; rows older builds stored have no source and are left out.
+  // excludedEmails are the user's own addresses and every address a stored
+  // event flags as a room or resource.
   getContactLookupSources(meetingLimit = 1000) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const meetings = this.db
         .prepare(
-          `SELECT e.start_time, e.is_all_day, e.organizer_email, e.attendees,
-                  e.provider != 'google' OR g.is_primary = 1 OR e.calendar_id = g.account_email
-                    AS self_is_user
-             FROM calendar_events e
-             LEFT JOIN google_calendars g ON e.provider = 'google' AND g.id = e.calendar_id
-            WHERE (e.attendees IS NOT NULL OR e.organizer_email IS NOT NULL)
-              AND e.status IN ('confirmed', 'tentative')
-              AND e.self_response_status != 'declined'
-            ORDER BY ABS(julianday(e.start_time) - julianday('now')) IS NULL,
-                     ABS(julianday(e.start_time) - julianday('now'))
+          `SELECT start_time, is_all_day, organizer_email, attendees
+             FROM calendar_events
+            WHERE (attendees IS NOT NULL OR organizer_email IS NOT NULL)
+              AND status IN ('confirmed', 'tentative')
+              AND self_response_status != 'declined'
+              AND ${SELECTED_CALENDAR_EVENT_FILTER}
+              AND (provider != 'google' OR EXISTS (
+                SELECT 1 FROM google_calendars
+                 WHERE google_calendars.id = calendar_events.calendar_id
+                   AND (google_calendars.is_primary = 1 OR google_calendars.id = google_calendars.account_email)
+              ))
+            ORDER BY ABS(julianday(start_time) - julianday('now')) IS NULL,
+                     ABS(julianday(start_time) - julianday('now'))
             LIMIT ?`
         )
         .all(meetingLimit);
@@ -4929,15 +4944,37 @@ class DatabaseManager {
       const contacts = this.db
         .prepare(
           `SELECT email, display_name FROM contacts
-            WHERE source IN (${sources.map(() => "?").join(", ")})
+            WHERE email IN (
+              SELECT email FROM contact_sources
+               WHERE source IN (${sources.map(() => "?").join(", ")})
+            )
             ORDER BY updated_at DESC`
         )
         .all(...sources);
-      const accountEmails = accounts.map((row) => row.account_email);
-      return { meetings, contacts, accountEmails };
+      const microsoftAliases = this.db
+        .prepare(
+          "SELECT own_addresses FROM microsoft_calendar_tokens WHERE own_addresses IS NOT NULL"
+        )
+        .all()
+        .flatMap((row) => JSON.parse(row.own_addresses));
+      const resources = this.db
+        .prepare(
+          `SELECT DISTINCT attendee.value ->> '$.email' AS email
+             FROM calendar_events, json_each(calendar_events.attendees) AS attendee
+            WHERE json_valid(calendar_events.attendees)
+              AND attendee.value ->> '$.resource' = 1`
+        )
+        .all()
+        .map((row) => row.email);
+      const excludedEmails = [
+        ...accounts.map((row) => row.account_email),
+        ...microsoftAliases,
+        ...resources,
+      ];
+      return { meetings, contacts, excludedEmails };
     } catch (error) {
       debugLogger.error("Error reading contact lookup sources", { error: error.message });
-      return { meetings: [], contacts: [], accountEmails: [] };
+      return { meetings: [], contacts: [], excludedEmails: [] };
     }
   }
 
@@ -4966,19 +5003,23 @@ class DatabaseManager {
     }
   }
 
-  // A contact the user added by hand stays theirs; otherwise the latest
-  // syncing account owns it, and disconnecting that account removes it until
-  // another account's next full sync sees it again.
-  upsertContacts(contacts, provider, accountEmail = null) {
+  // With a source (see contactSource), records that it has seen these
+  // contacts.
+  upsertContacts(contacts, source = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const source = contactSource(provider, accountEmail);
       const transaction = this.db.transaction((list) => {
-        const stmt = this.db.prepare(
-          "INSERT INTO contacts (email, display_name, source, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(email) DO UPDATE SET display_name = COALESCE(excluded.display_name, contacts.display_name), source = CASE WHEN contacts.source = 'manual' THEN 'manual' ELSE excluded.source END, updated_at = CURRENT_TIMESTAMP"
+        const upsert = this.db.prepare(
+          "INSERT INTO contacts (email, display_name, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(email) DO UPDATE SET display_name = COALESCE(excluded.display_name, contacts.display_name), updated_at = CURRENT_TIMESTAMP"
+        );
+        const addSource = this.db.prepare(
+          "INSERT OR IGNORE INTO contact_sources (email, source) VALUES (?, ?)"
         );
         for (const c of list) {
-          if (c.email) stmt.run(c.email.toLowerCase().trim(), c.displayName || null, source);
+          if (!c.email) continue;
+          const email = c.email.toLowerCase().trim();
+          upsert.run(email, c.displayName || null);
+          if (source) addSource.run(email, source);
         }
       });
       transaction(contacts);
@@ -4989,12 +5030,26 @@ class DatabaseManager {
     }
   }
 
+  // A note participant becomes a hand-added contact only when nothing stored
+  // it before: picking a synced contact from autocomplete leaves it to the
+  // accounts that synced it.
+  addManualContact(contact) {
+    if (!this.db) throw new Error("Database not initialized");
+    const email = contact.email?.toLowerCase().trim();
+    const isNew =
+      Boolean(email) && !this.db.prepare("SELECT 1 FROM contacts WHERE email = ?").get(email);
+    return this.upsertContacts([contact], isNew ? contactSource("manual") : null);
+  }
+
+  // Hand-added contacts stay, whatever a sync says about the address.
   removeContacts(emails) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const stmt = this.db.prepare("DELETE FROM contacts WHERE email = ?");
+      const stmt = this.db.prepare(
+        "DELETE FROM contacts WHERE email = ? AND email NOT IN (SELECT email FROM contact_sources WHERE source = ?)"
+      );
       const transaction = this.db.transaction((list) => {
-        for (const email of list) stmt.run(email.toLowerCase().trim());
+        for (const email of list) stmt.run(email.toLowerCase().trim(), contactSource("manual"));
       });
       transaction(emails);
       return { success: true };
@@ -5004,11 +5059,24 @@ class DatabaseManager {
     }
   }
 
+  // Drops the matching sources and deletes the contacts no other source still
+  // has. Rows older builds stored have no sources and stay.
+  _removeContactSources(match, value) {
+    this.db
+      .prepare(
+        `DELETE FROM contacts
+          WHERE email IN (SELECT email FROM contact_sources WHERE ${match})
+            AND email NOT IN (SELECT email FROM contact_sources WHERE NOT (${match}))`
+      )
+      .run(value, value);
+    this.db.prepare(`DELETE FROM contact_sources WHERE ${match}`).run(value);
+  }
+
   // A calendar sync's attendees. Rooms and the user's own addresses are
   // deleted rather than stored: older builds stored them, and nothing else
   // prunes this table.
   syncCalendarContacts(provider, accountEmail, contacts, notContacts) {
-    if (contacts.length > 0) this.upsertContacts(contacts, provider, accountEmail);
+    if (contacts.length > 0) this.upsertContacts(contacts, contactSource(provider, accountEmail));
     if (notContacts.length > 0) this.removeContacts(notContacts);
   }
 
@@ -5034,9 +5102,7 @@ class DatabaseManager {
         this.db.prepare("DELETE FROM calendar_events WHERE provider = 'google'").run();
         this.db.prepare("DELETE FROM google_calendars").run();
         this.db.prepare("DELETE FROM google_calendar_tokens").run();
-        this.db
-          .prepare("DELETE FROM contacts WHERE source LIKE ?")
-          .run(contactSource("google", "%"));
+        this._removeContactSources("source LIKE ?", contactSource("google", "%"));
       });
       transaction();
       return { success: true };
@@ -5187,6 +5253,26 @@ class DatabaseManager {
     }
   }
 
+  // The account's other addresses (primary SMTP address, aliases), which
+  // attendee lists use instead of the sign-in name.
+  saveMicrosoftOwnAddresses(email, addresses) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db
+        .prepare("UPDATE microsoft_calendar_tokens SET own_addresses = ? WHERE microsoft_email = ?")
+        .run(JSON.stringify(addresses), email);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error saving Microsoft addresses", { error: error.message }, "mcal");
+      throw error;
+    }
+  }
+
+  getMicrosoftOwnAddresses(email) {
+    const row = this.getMicrosoftTokensByEmail(email);
+    return row?.own_addresses ? JSON.parse(row.own_addresses) : [];
+  }
+
   removeMicrosoftAccount(email) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -5207,9 +5293,7 @@ class DatabaseManager {
         this.db
           .prepare("DELETE FROM microsoft_calendar_tokens WHERE microsoft_email = ?")
           .run(email);
-        this.db
-          .prepare("DELETE FROM contacts WHERE source = ?")
-          .run(contactSource("microsoft", email));
+        this._removeContactSources("source = ?", contactSource("microsoft", email));
       });
       transaction();
       return { success: true };
@@ -5298,9 +5382,7 @@ class DatabaseManager {
         this.db.prepare("DELETE FROM calendar_events WHERE provider = 'microsoft'").run();
         this.db.prepare("DELETE FROM microsoft_calendars").run();
         this.db.prepare("DELETE FROM microsoft_calendar_tokens").run();
-        this.db
-          .prepare("DELETE FROM contacts WHERE source LIKE ?")
-          .run(contactSource("microsoft", "%"));
+        this._removeContactSources("source LIKE ?", contactSource("microsoft", "%"));
       });
       transaction();
       return { success: true };
@@ -5391,7 +5473,7 @@ class DatabaseManager {
       const transaction = this.db.transaction(() => {
         this.db.prepare("DELETE FROM calendar_events WHERE provider = 'apple'").run();
         this.db.prepare("DELETE FROM apple_calendars").run();
-        this.db.prepare("DELETE FROM contacts WHERE source = ?").run(contactSource("apple"));
+        this._removeContactSources("source = ?", contactSource("apple"));
       });
       transaction();
       return { success: true };

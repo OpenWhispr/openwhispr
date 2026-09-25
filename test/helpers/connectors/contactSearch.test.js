@@ -5,12 +5,11 @@ const load = () => import("../../../src/helpers/connectors/contactSearch.js");
 
 const NOW = Date.parse("2026-09-24T12:00:00Z");
 
-function meeting(startTime, attendees, organizer = null, selfIsUser = 1) {
+function meeting(startTime, attendees, organizer = null) {
   return {
     start_time: startTime,
     organizer_email: organizer,
     attendees: JSON.stringify(attendees),
-    self_is_user: selfIsUser,
   };
 }
 
@@ -54,16 +53,6 @@ const SOURCES = {
         displayName: "Holidays in United States",
       },
     ]),
-    // A colleague's shared Google calendar: Google flags its owner as self.
-    meeting(
-      "2026-09-25T09:00:00Z",
-      [
-        { email: "dana@example.com", displayName: "Dana Wu", self: true },
-        { email: "chad@example.com", displayName: "Chad" },
-      ],
-      null,
-      0
-    ),
     // Addresses outside the account table: an Apple account, a Google alias.
     meeting("2026-09-24T08:00:00Z", [
       { email: "chad@icloud.com", displayName: "Chad", self: true },
@@ -80,8 +69,11 @@ const SOURCES = {
     { email: "jean-luc@example.fr", display_name: "Jean-Luc Picard" },
     { email: "miles@example.com", display_name: "Miles O'Brien" },
     { email: "boardroom@corp.test", display_name: "Boardroom" },
+    // The owner of a colleague's shared Google calendar, synced from its events.
+    { email: "dana@example.com", display_name: "Dana Wu" },
   ],
-  accountEmails: ["chad@example.com", "Chad.Work@corp.test"],
+  // The user's addresses and a room some stored event flags.
+  excludedEmails: ["chad@example.com", "Chad.Work@corp.test", "boardroom@corp.test"],
 };
 
 const search = async (query, options = {}) => {
@@ -124,6 +116,7 @@ test("the user, rooms, resources and holiday calendars never appear", async () =
 
 test("accents, email local parts and spoken name forms match", async () => {
   assert.equal((await search("zoe"))[0].name, "Zoë Müller");
+  assert.equal((await search("zoe muller"))[0].name, "Zoë Müller");
   assert.equal((await search("boss"))[0].email, "boss@example.com");
   assert.equal((await search("sam lee"))[0].email, "sam.lee@example.com");
   assert.equal((await search("jean luc"))[0].name, "Jean-Luc Picard");
@@ -134,6 +127,7 @@ test("accents, email local parts and spoken name forms match", async () => {
 test("an empty query and the limit are respected, and a cut-off list says so", async () => {
   const { searchContacts } = await load();
   assert.deepEqual(searchContacts(SOURCES, "   ", { now: NOW }), { contacts: [], hasMore: false });
+  assert.deepEqual(searchContacts(SOURCES, "@", { now: NOW }), { contacts: [], hasMore: false });
   const limited = searchContacts(SOURCES, "gab", { now: NOW, limit: 1 });
   assert.equal(limited.contacts.length, 1);
   assert.equal(limited.hasMore, true);

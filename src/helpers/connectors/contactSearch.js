@@ -25,8 +25,8 @@ function parseAttendees(value) {
   }
 }
 
-function collectPeople({ meetings = [], contacts = [], accountEmails = [] }, now) {
-  const excluded = new Set(accountEmails.map((email) => String(email).toLowerCase()));
+function collectPeople({ meetings = [], contacts = [], excludedEmails = [] }, now) {
+  const excluded = new Set(excludedEmails.map((email) => String(email).toLowerCase()));
   const people = new Map();
 
   const remember = (email, name, startTime, isAllDay) => {
@@ -51,10 +51,7 @@ function collectPeople({ meetings = [], contacts = [], accountEmails = [] }, now
   for (const row of meetings) {
     const attendees = parseAttendees(row.attendees);
     for (const attendee of attendees) {
-      // On a colleague's shared Google calendar self marks that colleague;
-      // self_is_user is set wherever it means the user.
-      const isUser = attendee?.self && row.self_is_user;
-      if ((isUser || attendee?.resource) && typeof attendee.email === "string") {
+      if (attendee?.self && typeof attendee.email === "string") {
         excluded.add(attendee.email.toLowerCase());
       }
     }
@@ -63,9 +60,10 @@ function collectPeople({ meetings = [], contacts = [], accountEmails = [] }, now
     }
     remember(row.organizer_email, null, row.start_time, row.is_all_day);
   }
-  // Every sync adds its attendees here and only a disconnect prunes them, so
-  // people whose meetings aged out of the calendar cache are still found. They
-  // come most recently synced first, which is how ties between them are broken.
+  // Every sync adds its attendees here and only disconnecting their last
+  // source prunes them, so people whose meetings aged out of the calendar
+  // cache are still found. They come most recently synced first, which is how
+  // ties between them are broken.
   for (const contact of contacts) remember(contact.email, contact.display_name, null);
   for (const email of excluded) people.delete(email);
   return [...people.values()];
@@ -103,7 +101,8 @@ function score(person, query, queryTokens, typedEmail) {
  */
 function searchContacts(sources, query, { limit = 5, now = Date.now() } = {}) {
   const normalizedQuery = normalize(query);
-  if (!normalizedQuery) return { contacts: [], hasMore: false };
+  // A query without a letter or digit ("@", "-") would match everyone.
+  if (!/[\p{L}\p{N}]/u.test(normalizedQuery)) return { contacts: [], hasMore: false };
   const queryTokens = normalizedQuery.split(" ");
   const typedEmail = String(query).trim().toLowerCase();
   const matches = collectPeople(sources, now)

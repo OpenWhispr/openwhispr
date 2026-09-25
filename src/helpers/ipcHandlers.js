@@ -11547,7 +11547,7 @@ class IPCHandlers {
 
     ipcMain.handle("upsert-contact", async (_event, contact) => {
       try {
-        this.databaseManager.upsertContacts([contact], "manual");
+        this.databaseManager.addManualContact(contact);
         return { success: true };
       } catch (error) {
         return { success: false };
