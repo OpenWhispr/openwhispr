@@ -47,49 +47,6 @@ public class AppGroupStorageModule: Module {
   private static var darwinAgentActionNotificationName: String {
     "\(notificationPrefix).agentAction"
   }
-  private static let hostBundleFallbackUrls: [String: String] = [
-    "com.whatsapp.WhatsApp": "whatsapp://send",
-    "net.whatsapp.WhatsApp": "whatsapp://send",
-    "net.whatsapp.WhatsAppSMB": "whatsapp-business://",
-    "com.burbn.instagram": "instagram://",
-    "com.atebits.Tweetie2": "twitter://",
-    "com.facebook.Facebook": "fb://",
-    "com.facebook.Messenger": "fb-messenger://",
-    "com.tinyspeck.chatlyio": "slack://",
-    "com.skype.skype": "skype://",
-    "ph.telegra.Telegraph": "tg://",
-    "org.whispersystems.signal": "sgnl://",
-    "com.viber": "viber://",
-    "jp.naver.line": "line://",
-    "com.google.Gmail": "googlegmail://",
-    "com.google.Docs": "googledocs://",
-    "com.microsoft.Office.Outlook": "ms-outlook://",
-    "com.microsoft.skype.teams": "msteams://",
-    "com.apple.mobilemail": "message://",
-    "com.apple.MobileSMS": "sms://",
-    "com.apple.mobilenotes": "mobilenotes://",
-    "com.microsoft.teams": "msteams://",
-    "notion.id": "notion://",
-    "com.discord.Discord": "discord://",
-    "com.linkedin.LinkedIn": "linkedin://",
-    "com.reddit.Reddit": "reddit://",
-    "com.hammerandchisel.discord": "discord://",
-    "us.zoom.videomeetings": "zoomus://",
-    "com.openai.chat": "chatgpt://",
-    "com.google.chrome.ios": "googlechrome://",
-    "com.apple.mobilesafari": "x-web-search://",
-    "com.zhiliaoapp.musically": "snssdk1128://",
-    "com.snapchat.snapchat": "snapchat://",
-    "com.toyopagroup.picaboo": "snapchat://"
-  ]
-  private static let normalizedHostBundleFallbackUrls: [String: String] = {
-    var normalized: [String: String] = [:]
-    for (bundle, url) in hostBundleFallbackUrls {
-      normalized[bundle.lowercased()] = url
-    }
-    return normalized
-  }()
-
   private let audioStateLock = NSLock()
   // Serializes session/engine lifecycle (start/stop/arm/release/rebuild).
   // startNativeRecording runs on the JS thread while the foreground re-arm and
@@ -140,9 +97,10 @@ public class AppGroupStorageModule: Module {
   private var foregroundHeartbeatTimer: Timer?
   private let containingAppForegroundKey = "containing_app_foreground_at_ms"
 
-  private var returnNavigationInFlight: Bool = false
-  private var lastReturnAttemptUrl: String?
-  private var lastReturnAttemptAt: Date?
+  private let returnAttemptGate = ReturnAttemptGate()
+  // The host the last return resolved, kept for the "Back to <App>" button:
+  // the extension keys are cleared on read and the observed host goes stale.
+  private var lastReturnTarget: ReturnTarget?
 
   public func definition() -> ModuleDefinition {
     Name("AppGroupStorage")
@@ -259,13 +217,21 @@ public class AppGroupStorageModule: Module {
       return modes.compactMap { $0.primaryLanguage }
     }
 
-    Function("returnToPreviousApp") { () -> Void in
+    AsyncFunction("returnToPreviousApp") { (promise: Promise) in
       self.logMarker("returnToPreviousApp.invoked")
+      let invokedAt = Date()
       DispatchQueue.main.async {
-        // On a cold launch UIApplication.open can fail while the app is still
-        // transitioning to active; a couple of short retries covers that
-        // window. Retrying a failed open is safe — nothing happened.
-        self.navigateBackToPreviousApp(maxRetries: 2)
+        self.returnToHost(invokedAt: invokedAt) { outcome in
+          promise.resolve(outcome.payload)
+        }
+      }
+    }
+
+    AsyncFunction("openHostApp") { (promise: Promise) in
+      DispatchQueue.main.async {
+        self.openLastHost { outcome in
+          promise.resolve(outcome.payload)
+        }
       }
     }
 
@@ -2013,127 +1979,125 @@ public class AppGroupStorageModule: Module {
 
   // MARK: - Return to Previous App
 
-  private func navigateBackToPreviousApp(maxRetries: Int = 0, delay: TimeInterval = 0.2) {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else {
-      #if DEBUG
-      NSLog("[AppGroupStorage] navigateBack: no app group defaults")
-      #endif
+  private func returnToHost(invokedAt: Date, completion: @escaping (ReturnOutcome) -> Void) {
+    guard let finish = beginReturnAttempt(
+      timeoutOutcome: {
+        // Resolved but never heard back from `open`: offer the button for that host.
+        guard let target = self.lastReturnTarget else {
+          return ReturnOutcome(status: .noTarget, hostName: nil)
+        }
+        return ReturnOutcome(status: .failed, hostName: target.hostName)
+      },
+      completion: completion
+    ) else { return }
+    lastReturnTarget = nil
+
+    let defaults = UserDefaults(suiteName: appGroupId)
+    defaults?.synchronize()
+    let extensionUrl = defaults?.string(forKey: "keyboard_return_url")
+    let extensionBundle = defaults?.string(forKey: "keyboard_return_bundle")
+    // One handoff, one read. A key left behind after a failed return would
+    // send a later handoff (whose host the extension can't see) to this app.
+    defaults?.removeObject(forKey: "keyboard_return_url")
+    defaults?.removeObject(forKey: "keyboard_return_bundle")
+    defaults?.synchronize()
+
+    let since = invokedAt.addingTimeInterval(-ReturnTargetResolver.observerLookBack)
+    let openResolved: (String?) -> Void = { observedBundle in
+      guard let target = ReturnTargetResolver.resolve(
+        extensionUrl: extensionUrl,
+        extensionBundle: extensionBundle,
+        observedBundle: observedBundle
+      ) else {
+        self.logMarker("navigateBack.missingUrl")
+        finish(ReturnOutcome(status: .noTarget, hostName: nil))
+        return
+      }
+      self.lastReturnTarget = target
+      self.logMarker("navigateBack.resolved", extra: "source=\(target.source.rawValue)")
+      self.open(target, retriesLeft: 2, delay: 0.2, completion: finish)
+    }
+
+    let observer = HostAppObserver.shared
+    let observed = observer.latest(since: since)
+    if ReturnTargetResolver.resolve(
+      extensionUrl: extensionUrl,
+      extensionBundle: extensionBundle,
+      observedBundle: observed
+    ) != nil {
+      openResolved(observed)
+    } else {
+      // JS usually asks before the observer has seen the host. Wait for a new
+      // observation: the observer also reports every other app that shows a
+      // keyboard (Spotlight, say), and an unresolvable one inside the look-back
+      // window would otherwise end the wait at once.
+      observer.waitForHost(since: Date(), timeout: ReturnTargetResolver.observerWaitTimeout, completion: openResolved)
+    }
+  }
+
+  private func openLastHost(completion: @escaping (ReturnOutcome) -> Void) {
+    guard let target = lastReturnTarget else {
+      completion(ReturnOutcome(status: .noTarget, hostName: nil))
       return
     }
-    defaults.synchronize()
+    guard let finish = beginReturnAttempt(
+      timeoutOutcome: { ReturnOutcome(status: .failed, hostName: target.hostName) },
+      completion: completion
+    ) else { return }
+    // A button tap is user-initiated and the app is active: one attempt, no retries.
+    open(target, retriesLeft: 0, delay: 0, completion: finish)
+  }
 
-    guard let url = resolveReturnUrl(defaults: defaults) else {
-      #if DEBUG
-      NSLog("[AppGroupStorage] navigateBack: no return URL found in UserDefaults")
-      #endif
-      logMarker("navigateBack.missingUrl")
-      return
+  /// Nil (after resolving `skipped`) while another return is in flight.
+  private func beginReturnAttempt(
+    timeoutOutcome: @escaping () -> ReturnOutcome,
+    completion: @escaping (ReturnOutcome) -> Void
+  ) -> ((ReturnOutcome) -> Void)? {
+    let finish = returnAttemptGate.begin(
+      deadline: ReturnTargetResolver.returnDeadline,
+      schedule: { delay, work in DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work) },
+      timeoutOutcome: {
+        self.logMarker("navigateBack.deadline")
+        return timeoutOutcome()
+      },
+      completion: completion
+    )
+    if finish == nil {
+      logMarker("navigateBack.skippedInFlight")
+      completion(ReturnOutcome(status: .skipped, hostName: nil))
     }
+    return finish
+  }
 
-    let urlString = url.absoluteString
-    if returnNavigationInFlight {
-      #if DEBUG
-      NSLog("[AppGroupStorage] navigateBack: open already in flight, skipping duplicate")
-      #endif
-      logMarker("navigateBack.skippedInFlight", extra: "url=\(urlString)")
-      return
-    }
-
-    let now = Date()
-    if let lastUrl = lastReturnAttemptUrl,
-      let lastAttemptAt = lastReturnAttemptAt,
-      lastUrl == urlString,
-      now.timeIntervalSince(lastAttemptAt) < 1.2
-    {
-      #if DEBUG
-      NSLog("[AppGroupStorage] navigateBack: skipping rapid duplicate for %@", urlString)
-      #endif
-      logMarker("navigateBack.skippedRapidDuplicate", extra: "url=\(urlString)")
-      return
-    }
-
-    returnNavigationInFlight = true
-    lastReturnAttemptUrl = urlString
-    lastReturnAttemptAt = now
-
-    #if DEBUG
-    NSLog("[AppGroupStorage] navigateBack: attempting open %@", urlString)
-    #endif
+  private func open(
+    _ target: ReturnTarget,
+    retriesLeft: Int,
+    delay: TimeInterval,
+    completion: @escaping (ReturnOutcome) -> Void
+  ) {
+    let urlString = target.url.absoluteString
     logMarker("navigateBack.attemptOpen", extra: "url=\(urlString)")
-    UIApplication.shared.open(url, options: [:]) { [weak self] success in
-      guard let self else { return }
-      self.returnNavigationInFlight = false
-      #if DEBUG
-      NSLog("[AppGroupStorage] navigateBack: open result=%@", success ? "success" : "failed")
-      #endif
+    let appWasActive = UIApplication.shared.applicationState == .active
+    UIApplication.shared.open(target.url, options: [:]) { success in
       self.logMarker(
         success ? "navigateBack.openSuccess" : "navigateBack.openFailed",
         extra: "url=\(urlString)"
       )
       if success {
-        defaults.removeObject(forKey: "keyboard_return_url")
-        defaults.removeObject(forKey: "keyboard_return_bundle")
-        defaults.synchronize()
-        self.lastReturnAttemptUrl = nil
-        self.lastReturnAttemptAt = nil
+        completion(ReturnOutcome(status: .opened, hostName: target.hostName))
         return
       }
-
-      guard maxRetries > 0 else {
-        #if DEBUG
-        NSLog("[AppGroupStorage] navigateBack: exhausted retries for %@", urlString)
-        #endif
-        self.logMarker("navigateBack.retryExhausted", extra: "url=\(urlString)")
+      guard ReturnTargetResolver.shouldRetry(
+        openSucceeded: false, appWasActive: appWasActive, retriesLeft: retriesLeft
+      ) else {
+        self.logMarker("navigateBack.openFinalFailure", extra: "wasActive=\(appWasActive)")
+        completion(ReturnOutcome(status: .failed, hostName: target.hostName))
         return
       }
-
       DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-        self.navigateBackToPreviousApp(
-          maxRetries: maxRetries - 1,
-          delay: min(delay * 1.6, 1.0)
-        )
+        self.open(target, retriesLeft: retriesLeft - 1, delay: min(delay * 1.6, 1.0), completion: completion)
       }
     }
-  }
-
-  private func resolveReturnUrl(defaults: UserDefaults) -> URL? {
-    if let rawUrl = defaults.string(forKey: "keyboard_return_url"),
-       let normalizedUrl = normalizeReturnUrl(rawUrl) {
-      defaults.set(normalizedUrl.absoluteString, forKey: "keyboard_return_url")
-      defaults.synchronize()
-      return normalizedUrl
-    }
-
-    guard let hostBundle = defaults.string(forKey: "keyboard_return_bundle") else {
-      return nil
-    }
-
-    let trimmedBundle = hostBundle.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmedBundle.isEmpty else {
-      return nil
-    }
-
-    guard let fallbackUrlString =
-      Self.hostBundleFallbackUrls[trimmedBundle]
-      ?? Self.normalizedHostBundleFallbackUrls[trimmedBundle.lowercased()],
-      let fallbackUrl = URL(string: fallbackUrlString) else {
-      return nil
-    }
-
-    defaults.set(fallbackUrlString, forKey: "keyboard_return_url")
-    defaults.synchronize()
-    return fallbackUrl
-  }
-
-  private func normalizeReturnUrl(_ rawUrl: String) -> URL? {
-    let trimmed = rawUrl.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else {
-      return nil
-    }
-
-    let normalized =
-      trimmed.caseInsensitiveCompare("whatsapp://") == .orderedSame ? "whatsapp://send" : trimmed
-    return URL(string: normalized)
   }
 
   // MARK: - Background Task

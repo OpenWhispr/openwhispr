@@ -17,7 +17,7 @@ import {
 - `setItem(key, value)`, `getItem(key)`, `removeItem(key)` — KV access on the shared suite
 - `startNativeRecording()`, `stopNativeRecording()`, `endProcessingTask()` — keyboard-extension recording lifecycle bridges
 - `convertRecordingToWav(fileUri)` — converts a keyboard recording to `16 kHz` mono WAV for provider-format fallback
-- `returnToPreviousApp()` — return-to-host-app deep link after a keyboard handoff
+- `returnToPreviousApp()`, `openHostApp()` — send the user back to the keyboard's host app after a handoff; resolve a `ReturnOutcome` (`opened` / `failed` / `no_target` / `skipped`). On iOS 26.4+ the host comes from `HostAppObserver` (the extension can no longer see it)
 - Three event subscriptions emitted by the iOS keyboard extension when a recording finishes, errors, or starts in the background
 
 ## Keys it stores

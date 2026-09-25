@@ -26,6 +26,7 @@ const mockHandoffStoreState = {
   setCheckingInitialUrl: jest.fn(),
   setNoSpeechDetected: jest.fn(),
   setTranscribing: jest.fn(),
+  setReturnState: jest.fn(),
   reset: jest.fn(),
 };
 const mockSubscription = { remove: jest.fn() };
@@ -208,6 +209,7 @@ beforeEach(() => {
   storage.getItem.mockReturnValue(null);
   storage.setItem.mockReset().mockReturnValue(true);
   storage.startNativeRecording.mockReturnValue(true);
+  storage.returnToPreviousApp.mockResolvedValue({ status: 'opened', hostName: 'Slack' });
   mockCleanupTranscript.mockResolvedValue('clean transcript');
   mockTranscribeAndCleanup.mockResolvedValue({
     text: 'clean transcript',
@@ -771,6 +773,38 @@ describe('provider job lifecycle', () => {
     expect(mockTranscribe).not.toHaveBeenCalled();
     expect(generateForJob).not.toHaveBeenCalled();
     expect(storage.setKeyboardStatus).toHaveBeenCalledWith('agent_error', 'agent_setup_required');
+  });
+});
+
+describe('useKeyboardHandoff — return to the host app', () => {
+  it('returns to the host after starting a recording and records the outcome', async () => {
+    storage.returnToPreviousApp.mockResolvedValue({ status: 'failed', hostName: 'Slack' });
+    mountWithInitialUrl('openwhispr://keyboard-dictation?source=keyboard');
+
+    await waitFor(() =>
+      expect(mockHandoffStoreState.setReturnState).toHaveBeenCalledWith('manual', 'Slack'),
+    );
+    expect(storage.startNativeRecording).toHaveBeenCalled();
+    expect(storage.returnToPreviousApp).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the swipe screen when there is no host to return to', async () => {
+    storage.returnToPreviousApp.mockResolvedValue({ status: 'no_target' });
+    mountWithInitialUrl('openwhispr://keyboard-dictation?source=keyboard');
+
+    await waitFor(() =>
+      expect(mockHandoffStoreState.setReturnState).toHaveBeenCalledWith('manual', null),
+    );
+  });
+
+  // The keyboard inside OpenWhispr records in place; there is nowhere to return to.
+  it('never returns when the keyboard is hosted by OpenWhispr itself', async () => {
+    mountWithInitialUrl(
+      'openwhispr://keyboard-dictation?source=keyboard&hostBundle=com.gizmolabs.openwhispr',
+    );
+
+    await waitFor(() => expect(storage.startNativeRecording).toHaveBeenCalled());
+    expect(storage.returnToPreviousApp).not.toHaveBeenCalled();
   });
 });
 
