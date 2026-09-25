@@ -8,9 +8,9 @@ const SHUTDOWN_TIMEOUT_MS = 3000;
 const WORKER_SCRIPT = path.join(__dirname, "..", "workers", "voiceWorker.js");
 
 /**
- * Spike client for the voice worker. Unlike the ONNX worker it streams events
- * (TTS audio, VAD transitions) besides request replies; a crash rejects what is
- * in flight and the next request spawns a fresh worker.
+ * Voice conversation client for the voice worker. Unlike the ONNX worker it
+ * streams events (TTS audio, VAD transitions) besides request replies; a crash
+ * rejects what is in flight and the next request spawns a fresh worker.
  */
 class VoiceWorkerClient extends EventEmitter {
   constructor() {

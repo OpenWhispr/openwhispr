@@ -1,4 +1,4 @@
-// Utility process for the local voice-conversation spike: sherpa-onnx TTS and
+// Utility process for local voice conversation: sherpa-onnx TTS and
 // Silero VAD. Native aborts (e.g. an unsupported ORT provider) stay confined here.
 const fs = require("fs");
 const path = require("path");

@@ -132,9 +132,9 @@ test("a policy that forbids local inference reports the clamped mode", async (t)
 // voice session actually talks to is whatever Chat resolves to, and
 // resolveLocalServerNeeds already counts the chat scope unconditionally.
 // These tests pin that the brain a voice session uses is always in the
-// server's needs, without a dedicated voiceConversationEnabled plumbing
-// through LocalServerPrefs (see task-7-brief-ruled.md for why that plan was
-// dropped).
+// server's needs, without plumbing voiceConversationEnabled through
+// LocalServerPrefs: that would pre-warm and pin a dictationAgent model a voice
+// session never talks to while the Voice Assistant is off.
 test("a voice session's brain stays in llama-server's needs when the Voice Assistant is off", async (t) => {
   const s = await loadStore(
     t,
