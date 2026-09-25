@@ -9,6 +9,8 @@ import {
   isManagedTranscriptionActive,
 } from "./managedTranscription";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
+import { usePolicyStore } from "../stores/policyStore";
+import type { PolicyDecisionSnapshot } from "../stores/policyRules";
 import type { LocalTranscriptionProvider } from "../types/electron";
 
 export interface FileTranscriptionResult {
@@ -56,6 +58,9 @@ export interface FileTranscriptionConfig {
   transcriptionMode?: string;
   remoteTranscriptionUrl?: string;
   remoteTranscriptionModel?: string;
+  // Workspace policy whose provider allowlist the route enforces; set by the
+  // upload lane (transcribeFileWithSpeakers).
+  policy?: PolicyDecisionSnapshot | null;
 }
 
 export interface TranscriptionApiKeys {
@@ -96,9 +101,9 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
 }
 
 // Pre-flight through the shared resolver: code-carrying errors (incl. the
-// Tinfoil-URL and fail-closed custom guards) surface here without an IPC
-// round-trip; the main-process handler re-resolves the same fields as
-// defense in depth.
+// Tinfoil-URL, fail-closed custom and workspace-policy guards) surface here
+// without an IPC round-trip; the main-process handler re-resolves the same
+// fields as defense in depth.
 export function resolveFileTranscriptionRoute(
   cfg: FileTranscriptionConfig,
   managed: ManagedTranscriptionResolution | null = null
@@ -114,6 +119,7 @@ export function resolveFileTranscriptionRoute(
       cortiEnvironment: cfg.cortiEnvironment,
       cortiTenant: cfg.cortiTenant,
     },
+    policy: cfg.policy,
     providers: getTranscriptionProviders(),
     managed,
     request: { effectiveLanguage: cfg.language || undefined },
@@ -265,7 +271,7 @@ export async function transcribeFileWithSpeakers(
       : Promise.resolve(null);
 
   const [transcribed, diar] = await Promise.all([
-    transcribeFile(filePath, cfg, byokDiarize, opts),
+    transcribeFile(filePath, { ...cfg, policy: usePolicyStore.getState() }, byokDiarize, opts),
     diarizePromise,
   ]);
 

@@ -140,3 +140,95 @@ test("managed transcription outranks OpenWhispr Cloud and local Whisper on the u
   assert.equal(calls.local, 0);
   assert.equal(calls.byok.length, 3);
 });
+
+// Audio Upload (single file and batch) sends files through transcribeFileWithSpeakers.
+// Under a managed policy that lane refuses a provider the policy does not allow,
+// whatever the settings layer resolved; allowed use is untouched.
+test("the upload lane refuses providers the workspace policy does not allow", async (t) => {
+  const { window } = installBrowserGlobals(t, {
+    initialStorage: {
+      _providerSettingsMigrated: "1",
+      uploadTranscriptionMigrated: "true",
+      meetingFollowsTranscription: "false",
+      transcriptionMode: "providers",
+      useLocalWhisper: "false",
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "openai",
+      uploadTranscriptionMode: "providers",
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-upload-policy-lane-",
+    mockModules: { "/lib/auth": "export const withSessionRefresh = (fn) => fn();" },
+  });
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { getSettings, selectResolvedUploadTranscription } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const { transcribeFileWithSpeakers } = await vite.ssrLoadModule("/services/fileTranscription.ts");
+  const sent = [];
+  window.electronAPI.transcribeAudioFileByok = async (args) => {
+    sent.push(`${args.transcriptionMode}:${args.provider}`);
+    return { success: true, text: "sent" };
+  };
+  const noDiarization = { enabled: false, localModelsReady: false, numSpeakers: null };
+  const allow = (allowedModes, allowedByokProviders) =>
+    usePolicyStore.setState({
+      status: "managed",
+      appVersion: "1.10.2",
+      policy: {
+        ...policy,
+        transcription: { allowedModes, allowedByokProviders, allowedEnterpriseProviders: [] },
+      },
+    });
+  const upload = (config) => transcribeFileWithSpeakers("/tmp/a.wav", config, noDiarization);
+  const uploadAsResolved = () => {
+    const resolved = selectResolvedUploadTranscription(getSettings());
+    return upload(
+      cfg({
+        cloudTranscriptionProvider: resolved.cloudTranscriptionProvider,
+        cloudTranscriptionModel: resolved.cloudTranscriptionModel,
+        transcriptionMode: resolved.transcriptionMode,
+      })
+    );
+  };
+
+  // Only live-only providers allowed: nothing can serve an upload, so the
+  // resolver's OpenAI default is refused rather than sent with the member's key.
+  allow(["providers"], ["deepgram"]);
+  assert.equal((await uploadAsResolved()).code, "POLICY_RESTRICTED");
+  // A saved provider the policy does not allow is refused too.
+  allow(["providers"], ["openai"]);
+  assert.equal(
+    (await upload(cfg({ cloudTranscriptionProvider: "groq" }))).code,
+    "POLICY_RESTRICTED"
+  );
+  assert.deepEqual(sent, []);
+
+  // Everything the policy allows still goes out, as does unmanaged and signed-out use.
+  allow(["providers"], ["openai", "deepgram"]);
+  assert.equal((await uploadAsResolved()).text, "sent");
+  allow(["providers"], ["custom"]);
+  const custom = cfg({
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
+  });
+  assert.equal((await upload(custom)).text, "sent");
+  allow(["self-hosted"], []);
+  const selfHosted = cfg({
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl: "https://stt.example.com",
+  });
+  assert.equal((await upload(selfHosted)).text, "sent");
+  for (const status of ["unmanaged", "idle"]) {
+    usePolicyStore.setState({ status, appVersion: "1.10.2", policy: null });
+    assert.equal((await upload(cfg({ cloudTranscriptionProvider: "groq" }))).text, "sent", status);
+  }
+  assert.deepEqual(sent, [
+    "providers:openai",
+    "providers:custom",
+    "self-hosted:openai",
+    "providers:groq",
+    "providers:groq",
+  ]);
+});
