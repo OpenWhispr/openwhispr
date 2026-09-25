@@ -75,6 +75,11 @@ export const TRANSCRIPTION_POLICY_PROVIDER_IDS = [
   "custom",
 ] as const;
 
+// Audio Upload transcribes finished files, which live-only providers cannot do.
+export const UPLOAD_TRANSCRIPTION_POLICY_PROVIDER_IDS = TRANSCRIPTION_POLICY_PROVIDER_IDS.filter(
+  (provider) => !STREAMING_ONLY_PROVIDERS.has(provider)
+);
+
 export const LLM_POLICY_PROVIDER_IDS = [
   ...modelRegistryData.cloudProviders.map((provider) => provider.id),
   "openrouter",
@@ -91,6 +96,11 @@ const TRANSCRIPTION_POLICY_CATALOG = {
   modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"] as const,
   byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS,
   enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
+};
+
+const UPLOAD_TRANSCRIPTION_POLICY_CATALOG = {
+  ...TRANSCRIPTION_POLICY_CATALOG,
+  byokProviders: UPLOAD_TRANSCRIPTION_POLICY_PROVIDER_IDS,
 };
 
 const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
@@ -3054,7 +3064,9 @@ export function selectPolicyEffectiveSettings(
       rawSelection,
       keys.context === "meeting"
         ? MEETING_TRANSCRIPTION_POLICY_CATALOG
-        : TRANSCRIPTION_POLICY_CATALOG
+        : keys.context === "upload"
+          ? UPLOAD_TRANSCRIPTION_POLICY_CATALOG
+          : TRANSCRIPTION_POLICY_CATALOG
     );
     if (!selection) continue;
 

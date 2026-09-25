@@ -2,8 +2,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const React = require("react");
+const { createRoot } = require("react-dom/client");
 const { renderToStaticMarkup } = require("react-dom/server");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installHookDom,
+} = require("../lib/rendererTestHarness");
 
 // Upload inherits unset values from dictation, but a realtime-only dictation
 // provider has no batch route — inheriting it would fail every upload closed
@@ -157,5 +162,94 @@ test("audio upload has its own self-hosted server", async (t) => {
       !html.includes(DICTATION_URL) && !html.includes(DICTATION_MODEL),
       "dictation's server hidden"
     );
+  });
+});
+
+
+function findElement(node, predicate) {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const match = findElement(child, predicate);
+      if (match) return match;
+    }
+    return null;
+  }
+  if (!node || typeof node !== "object") return null;
+  return predicate(node) ? node : findElement(node.props?.children, predicate);
+}
+
+// The Upload tab must offer only modes an upload can run. When a managed
+// policy's only allowed providers are live-only, bring-your-own-key is not one
+// of them, and the tab shows the same fallback uploads actually use.
+test("the Upload tab never offers bring-your-own-key through live-only providers", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _providerSettingsMigrated: "1",
+      uploadTranscriptionMigrated: "true",
+      uploadSelfHostedMigrated: "true",
+      isSignedIn: "true",
+      transcriptionMode: "providers",
+      cloudTranscriptionProvider: "openai",
+      uploadTranscriptionMode: "providers",
+    },
+  });
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-upload-tab-policy-test-",
+    resolveAlias: { "@": path.resolve(__dirname, "../../src") },
+  });
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { UploadTranscriptionPanel } = await vite.ssrLoadModule(
+    "/components/settings/UploadSettings.tsx"
+  );
+  const offered = async (allowedByokProviders) => {
+    usePolicyStore.setState({
+      status: "managed",
+      managed: true,
+      appVersion: "1.10.2",
+      policy: {
+        version: 1,
+        transcription: {
+          allowedModes: ["openwhispr", "providers", "local"],
+          allowedByokProviders,
+          allowedEnterpriseProviders: [],
+        },
+        llm: {
+          allowedModes: ["openwhispr"],
+          allowedByokProviders: [],
+          allowedEnterpriseProviders: [],
+        },
+        features: { agentEnabled: true, webSearchEnabled: true },
+        sharing: { externalLinkSharing: "allowed" },
+        dataRetention: {
+          audioRetentionMaxDays: null,
+          localHistoryMode: "user_choice",
+          cloudBackupAllowed: true,
+        },
+        minAppVersion: null,
+      },
+    });
+    let tree = null;
+    function Harness() {
+      tree = UploadTranscriptionPanel();
+      return null;
+    }
+    const root = createRoot(container);
+    await React.act(async () => root.render(React.createElement(Harness)));
+    await React.act(async () => root.unmount());
+    const selector = findElement(tree, (node) => Array.isArray(node.props?.modes));
+    return {
+      modes: selector.props.modes.map((mode) => mode.id),
+      active: selector.props.activeMode,
+    };
+  };
+
+  assert.deepEqual(await offered(["deepgram"]), {
+    modes: ["openwhispr", "local"],
+    active: "openwhispr",
+  });
+  assert.deepEqual(await offered(["openai", "deepgram"]), {
+    modes: ["openwhispr", "providers", "local"],
+    active: "providers",
   });
 });
