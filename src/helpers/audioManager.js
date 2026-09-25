@@ -118,7 +118,11 @@ import {
   matchesDictionaryPrompt,
   payloadSendsDictionaryBias,
 } from "../utils/dictionaryEchoFilter.js";
-import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionaryPromptCap.js";
+import {
+  dictionaryPromptLimit,
+  dictionaryReachesTranscriptionModel,
+  trimDictionaryPrompt,
+} from "../utils/dictionaryPromptCap.js";
 import {
   dictionaryKeywordOverflow,
   dictionaryKeywords,
@@ -3733,6 +3737,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       const endpoint = this.getTranscriptionEndpoint(route);
+      // OpenRouter drops `prompt` on this path (see dictionaryPromptCap), so the
+      // dictionary stays on the device there and nothing can echo it back.
+      const sendsDictionary = dictionaryReachesTranscriptionModel(endpoint);
 
       // gpt-transcribe takes the dictionary on its own keywords[] channel (see
       // dictionaryKeywords), so its prompt carries only the Chinese script bias and
@@ -3754,7 +3761,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         MAX_PROMPT_CHARS
       );
       const dictionaryPrompt = trimmedPrompt.prompt;
-      if (dictionaryPrompt && model !== "orukeet-v0.1.0") {
+      if (dictionaryPrompt && sendsDictionary && model !== "orukeet-v0.1.0") {
         if (trimmedPrompt.truncated) {
           logger.debug(
             "Custom dictionary prompt truncated",
@@ -3768,7 +3775,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         formData.append("prompt", dictionaryPrompt);
       }
-      if (usesKeywords) {
+      if (usesKeywords && sendsDictionary) {
         for (const keyword of dictionaryKeywords(dictionary)) {
           formData.append("keywords[]", keyword);
         }
@@ -3914,7 +3921,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // Check for text - handle both empty string and missing field
       if (result.text && result.text.trim().length > 0) {
-        if (this.isDictionaryEcho(result.text)) {
+        if (sendsDictionary && this.isDictionaryEcho(result.text)) {
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);

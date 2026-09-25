@@ -381,6 +381,14 @@ test("a 402 from OpenRouter reads as out of credits, whichever tab sent it", asy
   );
 });
 
+test("OpenRouter is recognised by its host, not by a lookalike", async () => {
+  const { isOpenRouterEndpoint } = await load();
+  assert.equal(isOpenRouterEndpoint("https://openrouter.ai/api/v1/audio/transcriptions"), true);
+  assert.equal(isOpenRouterEndpoint("https://openrouter.ai.example.com/v1"), false);
+  assert.equal(isOpenRouterEndpoint("https://api.openai.com/v1/audio/transcriptions"), false);
+  assert.equal(isOpenRouterEndpoint(""), false);
+});
+
 test("managed policy is a fail-closed floor", async () => {
   const blocked = await resolve(
     { transcriptionMode: "providers", cloudTranscriptionProvider: "groq" },

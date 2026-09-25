@@ -62,14 +62,20 @@ const PROVIDER_KEY_MISSING_MESSAGE_KEY =
 const OPENROUTER_OUT_OF_CREDITS_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.openrouterOutOfCredits";
 
+// OpenRouter is reached from its own tab or from a Custom endpoint typed by
+// hand. Both post to this host and share its limits, so every OpenRouter rule
+// (credits, dictionary, upload pieces) keys on the host, not the provider id.
+export function isOpenRouterEndpoint(endpoint: string | null | undefined): boolean {
+  return matchesHost(endpoint, "openrouter.ai");
+}
+
 // OpenRouter answers 402 once the account's prepaid credit is spent, and its
-// JSON body would otherwise become the error text. Matched on the host so a
-// Custom endpoint pointed at OpenRouter reads the same as the OpenRouter tab.
+// JSON body would otherwise become the error text.
 export function batchTranscriptionHttpError(
   status: number,
   endpoint: string
 ): { code: string; messageKey: string } | null {
-  if (status === 402 && matchesHost(endpoint, "openrouter.ai")) {
+  if (status === 402 && isOpenRouterEndpoint(endpoint)) {
     return { code: "OPENROUTER_OUT_OF_CREDITS", messageKey: OPENROUTER_OUT_OF_CREDITS_MESSAGE_KEY };
   }
   return null;
