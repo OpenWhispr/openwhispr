@@ -46,6 +46,7 @@ import {
 } from '../../modules/app-group-storage/src';
 import { LiveActivity } from '../../modules/live-activity/src';
 import { isNoSpeechError } from '@/lib/permissions';
+import { returnToHost } from '@/lib/handoffReturn';
 
 const NO_SPEECH_DISPLAY_MS = 2200;
 
@@ -573,7 +574,7 @@ export function useKeyboardHandoff() {
       if (intent === 'agent-action') {
         runAgentAction(`url:${intent}`);
         if (!selfHosted) {
-          AppGroupStorage.returnToPreviousApp();
+          void returnToHost();
         }
         return;
       }
@@ -585,7 +586,7 @@ export function useKeyboardHandoff() {
           // in OpenWhispr either. Bounce back so the keyboard shows the live
           // recording/transcribing state instead of a dead tap.
           if (!selfHosted) {
-            AppGroupStorage.returnToPreviousApp();
+            void returnToHost();
           }
           return;
         }
@@ -608,7 +609,7 @@ export function useKeyboardHandoff() {
         setKeyboardStatus('setup_required', 'Complete provider setup in AI Models.');
         cleanup({ resetStatus: false });
         if (!selfHosted) {
-          AppGroupStorage.returnToPreviousApp();
+          void returnToHost();
         }
         return;
       }
@@ -642,7 +643,7 @@ export function useKeyboardHandoff() {
         // surfaces the error state there. Leaving them in OpenWhispr with no
         // visible failure is the worst outcome.
         if (!selfHosted) {
-          AppGroupStorage.returnToPreviousApp();
+          void returnToHost();
         }
         return;
       }
@@ -650,7 +651,7 @@ export function useKeyboardHandoff() {
       LiveActivity.startSession();
 
       if (!selfHosted) {
-        AppGroupStorage.returnToPreviousApp();
+        void returnToHost();
       }
     };
 
