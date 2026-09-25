@@ -625,8 +625,8 @@ class IPCHandlers {
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
     // requestId -> AbortControllers for in-flight audio-upload work (cloud
-    // upload, OpenRouter's piece-by-piece upload, or local transcription +
-    // diarization sharing one id), so a cancel can abort the exact job.
+    // upload, bring-your-own-key upload, or local transcription + diarization
+    // sharing one id), so a cancel can abort the exact job.
     this._uploadCancelRegistry = createUploadCancelRegistry();
     this._agentStreamRequests = new AgentStreamRequestRegistry();
     this._cloudReasonRequests = new AgentStreamRequestRegistry();
@@ -9952,9 +9952,9 @@ class IPCHandlers {
       }
     });
 
-    // Unknown ids are a no-op: of the BYOK providers only OpenRouter's
-    // piece-by-piece upload registers a controller, and the renderer fires this
-    // for every cancel.
+    // Unknown ids are a no-op, and the renderer fires this for every cancel.
+    // Every BYOK upload registers, but only OpenRouter's piece-by-piece upload
+    // acts on the signal.
     ipcMain.handle("cancel-upload-transcription", async (_event, requestId) => {
       return { success: this._uploadCancelRegistry.cancel(requestId) > 0 };
     });
@@ -9983,6 +9983,9 @@ class IPCHandlers {
       ) => {
         const fs = require("fs");
         let cleanupUpload = null;
+        // Registered before the first await, as the Cloud upload does: a Cancel
+        // that arrives while the route loads must still stop OpenRouter's pieces.
+        const { signal, release } = this._uploadCancelRegistry.register(requestId);
         try {
           if (typeof filePath !== "string") {
             return { success: false, error: "Invalid file path" };
@@ -10025,7 +10028,6 @@ class IPCHandlers {
             if (!apiKey && route.provider !== "custom") {
               throw new Error("No API key configured. Add your key in Settings.");
             }
-            const { signal, release } = this._uploadCancelRegistry.register(requestId);
             const url = new URL(route.endpoint);
             const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined;
             try {
@@ -10078,8 +10080,6 @@ class IPCHandlers {
                 return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
               }
               throw error;
-            } finally {
-              release();
             }
           }
 
@@ -10299,6 +10299,7 @@ class IPCHandlers {
           };
         } finally {
           cleanupUpload?.();
+          release();
         }
       }
     );

@@ -100,6 +100,9 @@ async function transcribeOpenRouterChunks({
     let firstLoss = null;
     let stoppedBy = null;
     for (let index = 0; index < totalChunks; index++) {
+      // No piece starts once the upload is cancelled, even over a transport
+      // that has not yet noticed the signal.
+      signal?.throwIfAborted();
       try {
         const { text } = await transcribeWithRetries(pieces[index]);
         results[index] = text?.trim() ? { text } : SILENT_CHUNK;

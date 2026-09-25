@@ -811,3 +811,17 @@ test("upload: cancelling an OpenRouter upload stops at the piece in flight", asy
     assert.equal(fetches.length, 1);
   });
 });
+
+// A Cancel can reach the main process while the upload is still loading its
+// route. Registered only after that await, the upload never heard it and sent,
+// and billed, every piece.
+test("upload: a Cancel that lands while an OpenRouter upload starts is not lost", async () => {
+  await withReplies(() => okReply("piece"), 3, async () => {
+    const pending = invokeUpload({ ...OPENROUTER_UPLOAD, requestId: "upload-cancel-early" });
+    const cancel = await handlers.get("cancel-upload-transcription")({}, "upload-cancel-early");
+    assert.equal(cancel.success, true, "registered before its first await");
+    const result = await pending;
+    assert.equal(result.code, "UPLOAD_CANCELLED");
+    assert.equal(fetches.length, 0, "no piece is sent");
+  });
+});
