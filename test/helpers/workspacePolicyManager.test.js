@@ -790,6 +790,65 @@ test("a stale-but-successful refresh still counts toward the refresh TTL", async
   assert.equal(fetches, 2, "a lagging server must not defeat the refresh TTL");
 });
 
+test("peekPolicy returns the verdict held in memory without a refresh", async (t) => {
+  let fetches = 0;
+  const context = setup(async () => {
+    fetches += 1;
+    return response(200, validPolicy());
+  });
+  t.after(context.cleanup);
+
+  assert.equal(context.manager.peekPolicy({ expectedAuthGeneration: 1 }), null);
+  await context.manager.getPolicy({ expectedAuthGeneration: 1 });
+  const held = context.manager.peekPolicy({ expectedAuthGeneration: 1 });
+
+  assert.equal(fetches, 1);
+  assert.equal(held.success, true);
+  assert.equal(held.status, "cached");
+  assert.equal(held.managed, true);
+
+  context.tokenState.generation = 2;
+  assert.equal(context.manager.peekPolicy({ expectedAuthGeneration: 1 }), null);
+});
+
+test("peekPolicy never offers one account's verdict to another", async (t) => {
+  const context = setup(async (_url, init) =>
+    init.headers.Authorization === "Bearer token-a"
+      ? response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } })
+      : response(200, validPolicy())
+  );
+  t.after(context.cleanup);
+
+  await context.manager.getPolicy({ expectedAuthGeneration: 1 });
+  assert.equal(context.manager.peekPolicy({ expectedAuthGeneration: 1 }).managed, false);
+
+  context.tokenState.token = "token-b";
+  context.tokenState.generation = 2;
+  assert.equal(context.manager.peekPolicy({ expectedAuthGeneration: 2 }), null);
+
+  await context.manager.getPolicy({ expectedAuthGeneration: 2 });
+  assert.equal(context.manager.peekPolicy({ expectedAuthGeneration: 2 }).managed, true);
+});
+
+test("peekPolicy never offers an unmanaged verdict once the org policy is unresolvable", async (t) => {
+  const responses = [
+    response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } }),
+    response(503, {
+      error: "Organization policy could not be resolved.",
+      code: "POLICY_UNRESOLVABLE",
+    }),
+  ];
+  const context = setup(async () => responses.shift());
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+
+  await context.manager.getPolicy(request);
+  assert.equal(context.manager.peekPolicy(request)?.managed, false);
+  await context.manager.getPolicy(request);
+
+  assert.equal(context.manager.peekPolicy(request), null);
+});
+
 test("a policy request without a validated auth generation fails closed", async (t) => {
   const context = setup(async () => response(200, { data: validPolicy().data }));
   t.after(context.cleanup);

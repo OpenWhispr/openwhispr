@@ -3723,6 +3723,8 @@
     },
     "tools": {
       "search_notesName": "Поиск заметок",
+      "email_draftName": "Черновик письма",
+      "find_contactName": "Найти контакт",
       "get_noteName": "Получить заметку",
       "create_noteName": "Создать заметку",
       "update_noteName": "Обновить заметку",
@@ -3735,6 +3737,8 @@
       "update_dictionaryName": "Обновить словарь",
       "update_snippetsName": "Обновить сниппеты",
       "search_notesStatus": "Поиск в заметках...",
+      "email_draftStatus": "Открытие черновика письма...",
+      "find_contactStatus": "Поиск контактов...",
       "web_searchStatus": "Поиск в интернете...",
       "copy_to_clipboardStatus": "Копирование в буфер обмена...",
       "get_calendar_eventsStatus": "Проверка календаря...",
@@ -3826,6 +3830,7 @@
       "connectFailedDescription": "При подключении к Calendar.app произошла ошибка. Перезапустите OpenWhispr и попробуйте снова."
     },
     "sections": {
+      "connectors": "Коннекторы",
       "calendar": "Календарь",
       "api": "API",
       "mcp": "MCP",
@@ -3884,6 +3889,80 @@
     "notABot": {
       "title": "OpenWhispr — это запись встреч, а не бот",
       "description": "OpenWhispr захватывает аудио напрямую из вашей системы — он никогда не присоединяется к встречам как участник. Просто подключите календарь и делайте заметки как обычно."
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Отправить в {{destination}}"
+      },
+      "identity": "От имени {{account}}",
+      "identityWithWorkspace": "От имени {{account}} в {{workspace}}",
+      "send": "Отправить",
+      "edit": "Изменить",
+      "doneEditing": "Готово",
+      "cancel": "Отмена",
+      "titleLabel": "Заголовок",
+      "bodyLabel": "Сообщение",
+      "sending": "Отправка…",
+      "sent": "Отправлено в {{destination}}.",
+      "open": "Открыть",
+      "failed": "Не удалось отправить: {{message}}",
+      "unknown": "Не удалось подтвердить отправку. Проверьте {{destination}}.",
+      "cancelled": "Отменено. Ничего не отправлено.",
+      "notSent": "Не отправлено."
+    },
+    "policyOff": "Ваша организация отключила коннекторы.",
+    "email": {
+      "title": "Черновики писем",
+      "description": "Ассистент открывает предзаполненный черновик в вашем почтовом приложении. Вы проверяете его и сами нажимаете «Отправить».",
+      "proRequired": "Перейдите на платный план, чтобы ассистент составлял для вас черновики писем.",
+      "unavailable": "Черновики писем сейчас недоступны.",
+      "targetLabel": "Создавать черновики писем в",
+      "autoResolved": "Автоматически · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (рабочий или учебный)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Почтовое приложение по умолчанию"
+      }
+    },
+    "recent": {
+      "title": "Последние действия",
+      "actions": {
+        "email_draft": "Черновик для {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "Черновик письма"
+      },
+      "states": {
+        "pending": "Ожидание",
+        "committing": "Выполняется",
+        "sent": "Готово",
+        "failed": "Не удалось",
+        "unknown": "Не подтверждено",
+        "cancelled": "Отменено",
+        "expired": "Истекло"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Открыт черновик для {{destination}}.",
+      "draftOpenedBodyCopied": "Открыт черновик для {{destination}}. Текст письма в буфере обмена.",
+      "draftOpenedSubjectCopied": "Открыт черновик для {{destination}}. Тема и текст письма в буфере обмена.",
+      "draftOpenedOnlySubjectCopied": "Открыт черновик для {{destination}}. Тема скопирована в буфер обмена.",
+      "needsDetails": "Нужны уточнения.",
+      "unavailable": "Коннекторы сейчас недоступны.",
+      "failed": "Не получилось.",
+      "unknown": "Не подтверждено. Проверьте, выполнено ли действие, прежде чем повторять.",
+      "draftUnknown": "Не подтверждено: черновик для {{destination}} мог не открыться. Проверьте, прежде чем повторять.",
+      "contactsFound": "Найдено контактов: {{total}}",
+      "draftLimit": "Лимит черновиков на один запрос: {{count}}.",
+      "clipboardBusy": "Не открыто: текст другого черновика всё ещё в буфере обмена.",
+      "errors": {
+        "open_failed": "Не удалось открыть почтовое приложение.",
+        "draft_too_long": "Слишком много получателей для ссылки на черновик.",
+        "invalid_address": "Нужны полные адреса электронной почты."
+      }
     }
   },
   "calendar": {

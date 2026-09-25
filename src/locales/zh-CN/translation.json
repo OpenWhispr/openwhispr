@@ -3679,6 +3679,8 @@
     },
     "tools": {
       "search_notesName": "搜索笔记",
+      "email_draftName": "邮件草稿",
+      "find_contactName": "查找联系人",
       "get_noteName": "获取笔记",
       "create_noteName": "创建笔记",
       "update_noteName": "更新笔记",
@@ -3691,6 +3693,8 @@
       "update_dictionaryName": "更新词典",
       "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜索笔记...",
+      "email_draftStatus": "正在打开邮件草稿...",
+      "find_contactStatus": "正在查找联系人...",
       "web_searchStatus": "正在搜索网页...",
       "copy_to_clipboardStatus": "正在复制到剪贴板...",
       "get_calendar_eventsStatus": "正在查看日历...",
@@ -3782,6 +3786,7 @@
       "connectFailedDescription": "连接 Calendar.app 时出错。请重启 OpenWhispr 后重试。"
     },
     "sections": {
+      "connectors": "连接器",
       "calendar": "日历",
       "api": "API",
       "mcp": "MCP",
@@ -3840,6 +3845,80 @@
     "notABot": {
       "title": "OpenWhispr 是会议录制工具，不是机器人",
       "description": "OpenWhispr 直接从您的系统捕获音频 — 它不会以参与者身份加入您的会议。只需连接日历，正常记录笔记即可。"
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "发送到 {{destination}}"
+      },
+      "identity": "以 {{account}} 身份",
+      "identityWithWorkspace": "以 {{account}}（{{workspace}}）身份",
+      "send": "发送",
+      "edit": "编辑",
+      "doneEditing": "编辑完成",
+      "cancel": "取消",
+      "titleLabel": "标题",
+      "bodyLabel": "消息",
+      "sending": "发送中…",
+      "sent": "已发送到 {{destination}}。",
+      "open": "打开",
+      "failed": "发送失败：{{message}}",
+      "unknown": "无法确认是否已发送，请检查 {{destination}}。",
+      "cancelled": "已取消，未发送任何内容。",
+      "notSent": "未发送。"
+    },
+    "policyOff": "您的组织已关闭连接器。",
+    "email": {
+      "title": "邮件草稿",
+      "description": "助手会在您的邮件应用中打开预填好的草稿，由您检查并亲自点击发送。",
+      "proRequired": "升级到付费计划，让助手为您起草邮件。",
+      "unavailable": "邮件草稿暂时不可用。",
+      "targetLabel": "在此处起草邮件",
+      "autoResolved": "自动 · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook（工作或学校）",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "默认邮件应用"
+      }
+    },
+    "recent": {
+      "title": "最近的操作",
+      "actions": {
+        "email_draft": "发送给 {{destination}} 的草稿"
+      },
+      "unlabeledActions": {
+        "email_draft": "邮件草稿"
+      },
+      "states": {
+        "pending": "等待中",
+        "committing": "进行中",
+        "sent": "已完成",
+        "failed": "失败",
+        "unknown": "未确认",
+        "cancelled": "已取消",
+        "expired": "已过期"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "已打开发送给 {{destination}} 的草稿。",
+      "draftOpenedBodyCopied": "已打开发送给 {{destination}} 的草稿。正文已在剪贴板中。",
+      "draftOpenedSubjectCopied": "已打开发送给 {{destination}} 的草稿。主题和正文已在剪贴板中。",
+      "draftOpenedOnlySubjectCopied": "已打开发给 {{destination}} 的草稿。主题已在剪贴板中。",
+      "needsDetails": "需要更多信息。",
+      "unavailable": "连接器暂时不可用。",
+      "failed": "操作未成功。",
+      "unknown": "未确认。请先检查是否已完成，再重试。",
+      "draftUnknown": "未确认：发给 {{destination}} 的草稿可能没有打开。请先检查，再重试。",
+      "contactsFound": "找到的联系人：{{total}}",
+      "draftLimit": "每次请求最多只能打开 {{count}} 份草稿。",
+      "clipboardBusy": "未打开：另一份草稿的文字仍在剪贴板中。",
+      "errors": {
+        "open_failed": "无法打开您的邮件应用。",
+        "draft_too_long": "收件人太多，无法生成草稿链接。",
+        "invalid_address": "需要完整的电子邮件地址。"
+      }
     }
   },
   "calendar": {

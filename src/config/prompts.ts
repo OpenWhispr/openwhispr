@@ -50,6 +50,10 @@ const TOOL_INSTRUCTIONS: Record<string, string> = {
     "Use get_calendar_events to check the user's schedule, upcoming meetings, or calendar events.",
   get_calendar_availability:
     "Use get_calendar_availability when the user asks when they are free or requests open time slots. Pass timezone-aware RFC3339 start and end timestamps, deriving the correct offset for each future date from the IANA time zone rather than assuming the current offset across a daylight-saving transition. Treat the returned slotCount and each slot's localized date, weekday, times, and duration as authoritative: use them exactly and never recalculate, add, omit, merge, or invent slots. For a broad multi-day request without daily-hour bounds, ask which hours of each day to consider, then make a separate call for each day. Results reflect the local calendar cache across the user's selected connected calendars, so describe free results as no scheduled conflicts found rather than guaranteed real-time availability, and never infer event details from availability facts.",
+  find_contact:
+    "Use find_contact to look up a person's email address by name before drafting an email to them.",
+  email_draft:
+    "Use email_draft to open a pre-filled email draft for the user to review and send themselves; it never sends.",
 };
 
 const twoDigits = (value: number): string => String(value).padStart(2, "0");
@@ -71,6 +75,13 @@ function getLocalCalendarContext(): string {
   return `Current local date and time: ${formatLocalRfc3339(now)}. IANA time zone: ${timeZone}.`;
 }
 
+const CONNECTOR_TOOL_NAMES = ["find_contact", "email_draft"];
+
+// Each result that must not be retried says so in its own guidance, so the
+// rule needs no list of statuses (and grows with no new connector).
+const CONNECTOR_TOOL_RULES =
+  "Follow the guidance and message in each connector result, including when not to retry. When a result leaves it unclear who or what the user meant (a needs_clarification result that lists candidates, or find_contact finding no one or several people), ask the user before acting.";
+
 export function getAgentSystemPrompt(availableTools?: string[], noteContext?: string): string {
   let prompt = resolvePrompt("chatAgent", { agentName: null });
 
@@ -78,6 +89,9 @@ export function getAgentSystemPrompt(availableTools?: string[], noteContext?: st
     const toolLines = availableTools.map((name) => TOOL_INSTRUCTIONS[name]).filter(Boolean);
     if (toolLines.length > 0) {
       prompt += "\n\nYou have access to tools. " + toolLines.join(" ");
+    }
+    if (availableTools.some((name) => CONNECTOR_TOOL_NAMES.includes(name))) {
+      prompt += "\n\n" + CONNECTOR_TOOL_RULES;
     }
     if (availableTools.includes("get_calendar_availability")) {
       prompt += "\n\n" + getLocalCalendarContext();

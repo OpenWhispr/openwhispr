@@ -3732,6 +3732,8 @@
     },
     "tools": {
       "search_notesName": "Buscar notas",
+      "email_draftName": "Borrador de correo",
+      "find_contactName": "Buscar contacto",
       "get_noteName": "Obtener nota",
       "create_noteName": "Crear nota",
       "update_noteName": "Actualizar nota",
@@ -3744,6 +3746,8 @@
       "update_dictionaryName": "Actualizar diccionario",
       "update_snippetsName": "Actualizar snippets",
       "search_notesStatus": "Buscando notas...",
+      "email_draftStatus": "Abriendo un borrador de correo...",
+      "find_contactStatus": "Buscando contactos...",
       "web_searchStatus": "Buscando en la web...",
       "copy_to_clipboardStatus": "Copiando al portapapeles...",
       "get_calendar_eventsStatus": "Consultando calendario...",
@@ -3835,6 +3839,7 @@
       "connectFailedDescription": "Se produjo un error al conectar con Calendar.app. Reinicia OpenWhispr e inténtalo de nuevo."
     },
     "sections": {
+      "connectors": "Conectores",
       "calendar": "Calendario",
       "api": "API",
       "mcp": "MCP",
@@ -3893,6 +3898,80 @@
     "notABot": {
       "title": "OpenWhispr es un grabador de reuniones, no un bot",
       "description": "OpenWhispr captura el audio directamente de tu sistema — nunca se une a tus reuniones como participante. Solo conecta tu calendario y toma notas con normalidad."
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Enviar a {{destination}}"
+      },
+      "identity": "Como {{account}}",
+      "identityWithWorkspace": "Como {{account}} en {{workspace}}",
+      "send": "Enviar",
+      "edit": "Editar",
+      "doneEditing": "Edición terminada",
+      "cancel": "Cancelar",
+      "titleLabel": "Título",
+      "bodyLabel": "Mensaje",
+      "sending": "Enviando…",
+      "sent": "Enviado a {{destination}}.",
+      "open": "Abrir",
+      "failed": "No se pudo enviar: {{message}}",
+      "unknown": "No se pudo confirmar el envío. Verifica {{destination}}.",
+      "cancelled": "Cancelado. No se envió nada.",
+      "notSent": "No enviado."
+    },
+    "policyOff": "Tu organización ha desactivado los conectores.",
+    "email": {
+      "title": "Borradores de correo",
+      "description": "El asistente abre un borrador prellenado en tu aplicación de correo. Tú lo revisas y pulsas Enviar.",
+      "proRequired": "Actualiza a un plan de pago para que el asistente redacte correos por ti.",
+      "unavailable": "Los borradores de correo no están disponibles en este momento.",
+      "targetLabel": "Redactar correos en",
+      "autoResolved": "Automático · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (trabajo o escuela)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Aplicación de correo predeterminada"
+      }
+    },
+    "recent": {
+      "title": "Acciones recientes",
+      "actions": {
+        "email_draft": "Borrador a {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "Borrador de correo"
+      },
+      "states": {
+        "pending": "Esperando",
+        "committing": "En curso",
+        "sent": "Listo",
+        "failed": "Fallido",
+        "unknown": "Sin confirmar",
+        "cancelled": "Cancelado",
+        "expired": "Caducado"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Se abrió un borrador para {{destination}}.",
+      "draftOpenedBodyCopied": "Se abrió un borrador para {{destination}}. El cuerpo está en tu portapapeles.",
+      "draftOpenedSubjectCopied": "Se abrió un borrador para {{destination}}. El asunto y el cuerpo están en tu portapapeles.",
+      "draftOpenedOnlySubjectCopied": "Se abrió un borrador para {{destination}}. El asunto está en tu portapapeles.",
+      "needsDetails": "Faltan detalles.",
+      "unavailable": "Los conectores no están disponibles en este momento.",
+      "failed": "No funcionó.",
+      "unknown": "Sin confirmar. Comprueba si se completó antes de volver a intentarlo.",
+      "draftUnknown": "Sin confirmar: puede que el borrador para {{destination}} no se haya abierto. Compruébalo antes de volver a intentarlo.",
+      "contactsFound": "Contactos encontrados: {{total}}",
+      "draftLimit": "Solo se pueden abrir {{count}} borradores por solicitud.",
+      "clipboardBusy": "No se abrió: el texto de otro borrador sigue en tu portapapeles.",
+      "errors": {
+        "open_failed": "No se pudo abrir tu aplicación de correo.",
+        "draft_too_long": "Demasiados destinatarios para un enlace de borrador.",
+        "invalid_address": "Se necesitan direcciones de correo completas."
+      }
     }
   },
   "calendar": {

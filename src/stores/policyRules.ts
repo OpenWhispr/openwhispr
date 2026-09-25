@@ -211,6 +211,28 @@ export function isScreenContextAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.screenContextEnabled !== false);
 }
 
+/**
+ * Whether agent connectors may run. They are agent tools, so turning the
+ * agent off turns them off too. Servers that predate the field send none;
+ * absent means allowed.
+ */
+export function isConnectorsAllowed(state: PolicyDecisionSnapshot): boolean {
+  return managedPolicyDecision(
+    state,
+    (policy) => policy.features.agentEnabled && policy.features.connectorsEnabled !== false
+  );
+}
+
+/**
+ * Whether a resolved org policy turned connectors off. Unlike
+ * isConnectorsAllowed, a policy that is still loading or failed to load is not
+ * reported as an org decision, and neither is one that only requires a newer
+ * app version (the update banner says that).
+ */
+export function isConnectorsBlockedByOrg(state: PolicyDecisionSnapshot): boolean {
+  return state.status === "managed" && isPolicyActionAllowed(state) && !isConnectorsAllowed(state);
+}
+
 const warnedUnknownRequiredModelIds = new Set<string>();
 
 /**

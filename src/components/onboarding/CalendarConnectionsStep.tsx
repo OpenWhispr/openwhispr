@@ -55,7 +55,7 @@ export default function CalendarConnectionsStep() {
             const current = useSettingsStore.getState().mcalAccounts;
             store.setMcalAccounts([
               ...current.filter((account) => account.email !== result.email),
-              { email: result.email },
+              { email: result.email, tenantId: result.tenantId },
             ]);
           } else if (!result?.error?.includes("access_denied")) {
             setError(t("integrations.microsoftCalendar.connectFailedDescription"));

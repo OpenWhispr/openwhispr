@@ -124,6 +124,12 @@ const SELECTED_CALENDAR_EVENT_FILTER = `(
   ))
 )`;
 
+// A contacts row's source: "google:<account email>", "microsoft:<account
+// email>", "apple", or "manual" (added by hand to a note).
+function contactSource(provider, accountEmail = null) {
+  return accountEmail ? `${provider}:${accountEmail}` : provider;
+}
+
 class DatabaseManager {
   constructor() {
     this.db = null;
@@ -496,6 +502,31 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      // Receipts for agent connector actions. Never holds message content:
+      // destination labels, states and result links only.
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS connector_actions (
+          id TEXT PRIMARY KEY,
+          account_id TEXT,
+          connector TEXT NOT NULL,
+          action TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          destination_label TEXT,
+          state TEXT NOT NULL,
+          result_url TEXT,
+          error_code TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      try {
+        this.db.exec("ALTER TABLE connector_actions ADD COLUMN account_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      this.db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_connector_actions_connector ON connector_actions(connector, created_at)"
+      );
       try {
         this.db.exec("ALTER TABLE agent_conversations ADD COLUMN cloud_id TEXT");
       } catch (err) {
@@ -640,6 +671,17 @@ class DatabaseManager {
         )
       `);
 
+      try {
+        this.db.exec("ALTER TABLE microsoft_calendar_tokens ADD COLUMN tenant_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE microsoft_calendar_tokens ADD COLUMN own_addresses TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS microsoft_calendars (
           id TEXT PRIMARY KEY,
@@ -662,6 +704,18 @@ class DatabaseManager {
           "UPDATE microsoft_calendars SET sync_token = NULL, sync_token_expires_at = NULL"
         );
         this.db.pragma("user_version = 2");
+      }
+
+      // One-time reset (user_version 3): older builds stored rooms without a
+      // resource flag, and incremental syncs never resend unchanged events; a
+      // forced full sync stores them flagged, purges the rooms those builds
+      // wrote to contacts and tags the contacts it sees with their source.
+      if (this.db.pragma("user_version", { simple: true }) < 3) {
+        this.db.exec("UPDATE google_calendars SET sync_token = NULL, sync_token_expires_at = NULL");
+        this.db.exec(
+          "UPDATE microsoft_calendars SET sync_token = NULL, sync_token_expires_at = NULL"
+        );
+        this.db.pragma("user_version = 3");
       }
 
       this.db.exec(`
@@ -763,6 +817,24 @@ class DatabaseManager {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
+
+      // Every source (see contactSource) that has seen a contact, so a
+      // disconnect only removes people no other source still has. Rows older
+      // builds stored have none.
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS contact_sources (
+          email TEXT NOT NULL REFERENCES contacts(email) ON DELETE CASCADE,
+          source TEXT NOT NULL,
+          PRIMARY KEY (email, source)
+        )
+      `);
+      // Pre-release builds kept a single source in contacts.source.
+      if (this.db.pragma("table_info(contacts)").some((column) => column.name === "source")) {
+        this.db.exec(
+          "INSERT OR IGNORE INTO contact_sources (email, source) SELECT email, source FROM contacts WHERE source IS NOT NULL"
+        );
+        this.db.exec("UPDATE contacts SET source = NULL WHERE source IS NOT NULL");
+      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS speaker_profiles (
@@ -3301,6 +3373,7 @@ class DatabaseManager {
       }
       this.db.prepare("DELETE FROM analytics_events WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM analytics_clear_requests WHERE account_id = ?").run(accountId);
+      this.db.prepare("DELETE FROM connector_actions WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM space_accounts WHERE account_id = ?").run(accountId);
     };
 
@@ -4448,6 +4521,7 @@ class DatabaseManager {
         }
         this.db.prepare("DELETE FROM google_calendars WHERE account_email = ?").run(email);
         this.db.prepare("DELETE FROM google_calendar_tokens WHERE google_email = ?").run(email);
+        this._removeContactSources("source = ?", contactSource("google", email));
       });
       transaction();
       return { success: true };
@@ -4726,6 +4800,184 @@ class DatabaseManager {
     }
   }
 
+  // accountId is the account the action ran under (resolved from its
+  // credential by the connector IPC), not this.activeAccountId, which lags a
+  // sign-in or account switch.
+  insertConnectorAction({
+    id,
+    accountId,
+    connector,
+    action,
+    kind,
+    destinationLabel = null,
+    state,
+    resultUrl = null,
+    errorCode = null,
+  }) {
+    if (!this.db) throw new Error("Database not initialized");
+    this.db
+      .prepare(
+        `INSERT INTO connector_actions
+           (id, account_id, connector, action, kind, destination_label, state, result_url, error_code)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(id, accountId, connector, action, kind, destinationLabel, state, resultUrl, errorCode);
+  }
+
+  // With fromState, only a row still in that state moves, so a caller can tell
+  // a durable transition (1 row) from a missing or already-moved row (0).
+  updateConnectorActionState(
+    id,
+    { state, destinationLabel = null, resultUrl = null, errorCode = null },
+    fromState = null
+  ) {
+    if (!this.db) throw new Error("Database not initialized");
+    const guard = fromState === null ? "" : " AND state = ?";
+    const params = [
+      state,
+      destinationLabel,
+      resultUrl,
+      errorCode,
+      id,
+      ...(fromState === null ? [] : [fromState]),
+    ];
+    return this.db
+      .prepare(
+        `UPDATE connector_actions
+           SET state = ?,
+               destination_label = COALESCE(?, destination_label),
+               result_url = COALESCE(?, result_url),
+               error_code = COALESCE(?, error_code),
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?${guard}`
+      )
+      .run(...params).changes;
+  }
+
+  // Receipts name the people a user wrote to, so only the account that took
+  // the action sees them.
+  listRecentConnectorActions(connector, limit, accountId) {
+    if (!this.db) throw new Error("Database not initialized");
+    if (!accountId) return [];
+    return this.db
+      .prepare(
+        `SELECT id, connector, action, kind,
+                destination_label AS destinationLabel, state,
+                result_url AS resultUrl, error_code AS errorCode,
+                created_at AS createdAt
+           FROM connector_actions
+          WHERE connector = ? AND account_id = ?
+          ORDER BY created_at DESC, rowid DESC
+          LIMIT ?`
+      )
+      .all(connector, accountId, limit);
+  }
+
+  // A quit mid-send can't tell whether the provider acted, so committing rows
+  // become unknown; pending rows were never sent. Rows without an account
+  // (only pre-release builds wrote them) are listed to no one and no account
+  // deletion reaches them, so they are deleted.
+  reconcileInterruptedConnectorActions() {
+    if (!this.db) throw new Error("Database not initialized");
+    const unknown = this.db
+      .prepare(
+        "UPDATE connector_actions SET state = 'unknown', error_code = 'app_quit', updated_at = CURRENT_TIMESTAMP WHERE state = 'committing'"
+      )
+      .run().changes;
+    const cancelled = this.db
+      .prepare(
+        "UPDATE connector_actions SET state = 'cancelled', error_code = 'app_quit', updated_at = CURRENT_TIMESTAMP WHERE state = 'pending'"
+      )
+      .run().changes;
+    const orphaned = this.db
+      .prepare("DELETE FROM connector_actions WHERE account_id IS NULL")
+      .run().changes;
+    return { unknown, cancelled, orphaned };
+  }
+
+  // What find_contact searches. calendar_events only holds a sync window
+  // (about two days back to a month ahead), so the meetings nearest to now go
+  // first, and the contacts table (every synced attendee until its last
+  // source is disconnected) covers older ones, most recently seen first. Only
+  // the user's own meetings count: not cancelled or declined ones, not a
+  // colleague's shared Google calendar (whose people still come through
+  // contacts). Contacts come only from hand-added rows and connected
+  // accounts; rows older builds stored have no source and are left out.
+  // excludedEmails are the user's own addresses and every address a stored
+  // event flags as a room or resource.
+  getContactLookupSources(meetingLimit = 1000) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const meetings = this.db
+        .prepare(
+          `SELECT start_time, is_all_day, organizer_email, attendees
+             FROM calendar_events
+            WHERE (attendees IS NOT NULL OR organizer_email IS NOT NULL)
+              AND status IN ('confirmed', 'tentative')
+              AND self_response_status != 'declined'
+              AND ${SELECTED_CALENDAR_EVENT_FILTER}
+              AND (provider != 'google' OR EXISTS (
+                SELECT 1 FROM google_calendars
+                 WHERE google_calendars.id = calendar_events.calendar_id
+                   AND (google_calendars.is_primary = 1 OR google_calendars.id = google_calendars.account_email)
+              ))
+            ORDER BY ABS(julianday(start_time) - julianday('now')) IS NULL,
+                     ABS(julianday(start_time) - julianday('now'))
+            LIMIT ?`
+        )
+        .all(meetingLimit);
+      const accounts = this.db
+        .prepare(
+          `SELECT 'google' AS provider, account_email FROM google_calendars
+            WHERE account_email IS NOT NULL
+           UNION
+           SELECT 'microsoft', account_email FROM microsoft_calendars
+            WHERE account_email IS NOT NULL`
+        )
+        .all();
+      const appleConnected = Boolean(this.db.prepare("SELECT 1 FROM apple_calendars").get());
+      const sources = [
+        contactSource("manual"),
+        ...(appleConnected ? [contactSource("apple")] : []),
+        ...accounts.map((row) => contactSource(row.provider, row.account_email)),
+      ];
+      const contacts = this.db
+        .prepare(
+          `SELECT email, display_name FROM contacts
+            WHERE email IN (
+              SELECT email FROM contact_sources
+               WHERE source IN (${sources.map(() => "?").join(", ")})
+            )
+            ORDER BY updated_at DESC`
+        )
+        .all(...sources);
+      const microsoftAliases = this.db
+        .prepare(
+          "SELECT own_addresses FROM microsoft_calendar_tokens WHERE own_addresses IS NOT NULL"
+        )
+        .all()
+        .flatMap((row) => JSON.parse(row.own_addresses));
+      const resources = this.db
+        .prepare(
+          `SELECT DISTINCT attendee.value ->> '$.email' AS email
+             FROM calendar_events, json_each(calendar_events.attendees) AS attendee
+            WHERE json_valid(calendar_events.attendees)
+              AND attendee.value ->> '$.resource' = 1`
+        )
+        .all()
+        .map((row) => row.email);
+      const excludedEmails = [
+        ...accounts.map((row) => row.account_email),
+        ...microsoftAliases,
+        ...resources,
+      ];
+      return { meetings, contacts, excludedEmails };
+    } catch (error) {
+      debugLogger.error("Error reading contact lookup sources", { error: error.message });
+      return { meetings: [], contacts: [], excludedEmails: [] };
+    }
+  }
+
   getNoteByCalendarEventId(eventId, excludeNoteId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -4751,15 +5003,23 @@ class DatabaseManager {
     }
   }
 
-  upsertContacts(contacts) {
+  // With a source (see contactSource), records that it has seen these
+  // contacts.
+  upsertContacts(contacts, source = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const transaction = this.db.transaction((list) => {
-        const stmt = this.db.prepare(
+        const upsert = this.db.prepare(
           "INSERT INTO contacts (email, display_name, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(email) DO UPDATE SET display_name = COALESCE(excluded.display_name, contacts.display_name), updated_at = CURRENT_TIMESTAMP"
         );
+        const addSource = this.db.prepare(
+          "INSERT OR IGNORE INTO contact_sources (email, source) VALUES (?, ?)"
+        );
         for (const c of list) {
-          if (c.email) stmt.run(c.email.toLowerCase().trim(), c.displayName || null);
+          if (!c.email) continue;
+          const email = c.email.toLowerCase().trim();
+          upsert.run(email, c.displayName || null);
+          if (source) addSource.run(email, source);
         }
       });
       transaction(contacts);
@@ -4770,13 +5030,63 @@ class DatabaseManager {
     }
   }
 
+  // A note participant becomes a hand-added contact only when nothing stored
+  // it before: picking a synced contact from autocomplete leaves it to the
+  // accounts that synced it.
+  addManualContact(contact) {
+    if (!this.db) throw new Error("Database not initialized");
+    const email = contact.email?.toLowerCase().trim();
+    const isNew =
+      Boolean(email) && !this.db.prepare("SELECT 1 FROM contacts WHERE email = ?").get(email);
+    return this.upsertContacts([contact], isNew ? contactSource("manual") : null);
+  }
+
+  // Hand-added contacts stay, whatever a sync says about the address.
+  removeContacts(emails) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const stmt = this.db.prepare(
+        "DELETE FROM contacts WHERE email = ? AND email NOT IN (SELECT email FROM contact_sources WHERE source = ?)"
+      );
+      const transaction = this.db.transaction((list) => {
+        for (const email of list) stmt.run(email.toLowerCase().trim(), contactSource("manual"));
+      });
+      transaction(emails);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error removing contacts", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // Drops the matching sources and deletes the contacts no other source still
+  // has. Rows older builds stored have no sources and stay.
+  _removeContactSources(match, value) {
+    this.db
+      .prepare(
+        `DELETE FROM contacts
+          WHERE email IN (SELECT email FROM contact_sources WHERE ${match})
+            AND email NOT IN (SELECT email FROM contact_sources WHERE NOT (${match}))`
+      )
+      .run(value, value);
+    this.db.prepare(`DELETE FROM contact_sources WHERE ${match}`).run(value);
+  }
+
+  // A calendar sync's attendees. Rooms and the user's own addresses are
+  // deleted rather than stored: older builds stored them, and nothing else
+  // prunes this table.
+  syncCalendarContacts(provider, accountEmail, contacts, notContacts) {
+    if (contacts.length > 0) this.upsertContacts(contacts, contactSource(provider, accountEmail));
+    if (notContacts.length > 0) this.removeContacts(notContacts);
+  }
+
   searchContacts(query) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const pattern = `%${query || ""}%`;
       return this.db
         .prepare(
-          "SELECT * FROM contacts WHERE email LIKE ? OR display_name LIKE ? ORDER BY display_name ASC, email ASC LIMIT 20"
+          "SELECT email, display_name, created_at, updated_at FROM contacts WHERE email LIKE ? OR display_name LIKE ? ORDER BY display_name ASC, email ASC LIMIT 20"
         )
         .all(pattern, pattern);
     } catch (error) {
@@ -4792,6 +5102,7 @@ class DatabaseManager {
         this.db.prepare("DELETE FROM calendar_events WHERE provider = 'google'").run();
         this.db.prepare("DELETE FROM google_calendars").run();
         this.db.prepare("DELETE FROM google_calendar_tokens").run();
+        this._removeContactSources("source LIKE ?", contactSource("google", "%"));
       });
       transaction();
       return { success: true };
@@ -4885,13 +5196,14 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const stmt = this.db.prepare(
-        `INSERT INTO microsoft_calendar_tokens (microsoft_email, access_token, refresh_token, expires_at, scope)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO microsoft_calendar_tokens (microsoft_email, access_token, refresh_token, expires_at, scope, tenant_id)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(microsoft_email) DO UPDATE SET
            access_token = excluded.access_token,
            refresh_token = excluded.refresh_token,
            expires_at = excluded.expires_at,
            scope = excluded.scope,
+           tenant_id = COALESCE(excluded.tenant_id, tenant_id),
            updated_at = CURRENT_TIMESTAMP`
       );
       stmt.run(
@@ -4899,7 +5211,8 @@ class DatabaseManager {
         tokens.access_token,
         tokens.refresh_token,
         tokens.expires_at,
-        tokens.scope
+        tokens.scope,
+        tokens.tenant_id ?? null
       );
       return { success: true };
     } catch (error) {
@@ -4931,13 +5244,33 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
         .prepare(
-          "SELECT microsoft_email AS email FROM microsoft_calendar_tokens ORDER BY created_at ASC"
+          "SELECT microsoft_email AS email, tenant_id AS tenantId FROM microsoft_calendar_tokens ORDER BY created_at ASC"
         )
         .all();
     } catch (error) {
       debugLogger.error("Error getting Microsoft accounts", { error: error.message }, "mcal");
       throw error;
     }
+  }
+
+  // The account's other addresses (primary SMTP address, aliases), which
+  // attendee lists use instead of the sign-in name.
+  saveMicrosoftOwnAddresses(email, addresses) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db
+        .prepare("UPDATE microsoft_calendar_tokens SET own_addresses = ? WHERE microsoft_email = ?")
+        .run(JSON.stringify(addresses), email);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error saving Microsoft addresses", { error: error.message }, "mcal");
+      throw error;
+    }
+  }
+
+  getMicrosoftOwnAddresses(email) {
+    const row = this.getMicrosoftTokensByEmail(email);
+    return row?.own_addresses ? JSON.parse(row.own_addresses) : [];
   }
 
   removeMicrosoftAccount(email) {
@@ -4960,6 +5293,7 @@ class DatabaseManager {
         this.db
           .prepare("DELETE FROM microsoft_calendar_tokens WHERE microsoft_email = ?")
           .run(email);
+        this._removeContactSources("source = ?", contactSource("microsoft", email));
       });
       transaction();
       return { success: true };
@@ -5048,6 +5382,7 @@ class DatabaseManager {
         this.db.prepare("DELETE FROM calendar_events WHERE provider = 'microsoft'").run();
         this.db.prepare("DELETE FROM microsoft_calendars").run();
         this.db.prepare("DELETE FROM microsoft_calendar_tokens").run();
+        this._removeContactSources("source LIKE ?", contactSource("microsoft", "%"));
       });
       transaction();
       return { success: true };
@@ -5138,6 +5473,7 @@ class DatabaseManager {
       const transaction = this.db.transaction(() => {
         this.db.prepare("DELETE FROM calendar_events WHERE provider = 'apple'").run();
         this.db.prepare("DELETE FROM apple_calendars").run();
+        this._removeContactSources("source = ?", contactSource("apple"));
       });
       transaction();
       return { success: true };

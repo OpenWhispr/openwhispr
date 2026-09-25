@@ -33,6 +33,11 @@ const {
 } = require("./policyResponseError");
 const { classifyAndLog } = require("./networkErrors");
 const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
+const {
+  registerConnectorIpc,
+  createConnectorPolicyResolver,
+} = require("./connectors/connectorIpc");
+const { searchContacts } = require("./connectors/contactSearch");
 // The renderer's ModelRegistry is not main-loadable; the raw registry data is
 // packaged, and the route resolver only needs {id, baseUrl} per provider.
 const transcriptionProviderBaseUrls = () =>
@@ -609,6 +614,7 @@ class IPCHandlers {
     this.whisperCudaManager = managers.whisperCudaManager;
     this.whisperVulkanManager = managers.whisperVulkanManager;
     this.googleCalendarManager = managers.googleCalendarManager;
+    this.connectorManager = managers.connectorManager;
     this.microsoftCalendarManager = managers.microsoftCalendarManager;
     this.appleCalendarManager = managers.appleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
@@ -6046,6 +6052,28 @@ class IPCHandlers {
       broadcast: (snapshot) => broadcastToWindows("workspace-policy-changed", snapshot),
       logger: debugLogger,
     });
+    if (this.connectorManager) {
+      registerConnectorIpc({
+        ipcMain,
+        manager: this.connectorManager,
+        getPolicyState: createConnectorPolicyResolver({
+          getAuthHeader,
+          getPolicy: (options) => workspacePolicyManager.getPolicy(options),
+          peekPolicy: (options) => workspacePolicyManager.peekPolicy(options),
+          getAuthGeneration: () => tokenStore.getState().generation,
+        }),
+        // The account bound to the credential in use, the same binding
+        // get-active-account-scope serves (not the separately synced
+        // database scope, which lags a sign-in or account switch).
+        getAccountScope: () =>
+          accountScopeBinding.resolveActiveAccountScope({
+            ...tokenStore.getState(),
+            binding: accountScopeBinding.read(),
+          }),
+        findContacts: (query) =>
+          searchContacts(this.databaseManager.getContactLookupSources(), query),
+      });
+    }
     this.enterpriseIdentityManager = createEnterpriseIdentityManager({
       cachePath: path.join(app.getPath("userData"), "managed-enterprise-config.json"),
       getApiUrl,
@@ -11535,7 +11563,7 @@ class IPCHandlers {
 
     ipcMain.handle("upsert-contact", async (_event, contact) => {
       try {
-        this.databaseManager.upsertContacts([contact]);
+        this.databaseManager.addManualContact(contact);
         return { success: true };
       } catch (error) {
         return { success: false };

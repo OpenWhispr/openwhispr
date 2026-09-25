@@ -3848,6 +3848,8 @@
     },
     "tools": {
       "search_notesName": "Notizen durchsuchen",
+      "email_draftName": "E-Mail-Entwurf",
+      "find_contactName": "Kontakt suchen",
       "get_noteName": "Notiz abrufen",
       "create_noteName": "Notiz erstellen",
       "update_noteName": "Notiz aktualisieren",
@@ -3860,6 +3862,8 @@
       "update_dictionaryName": "Wörterbuch aktualisieren",
       "update_snippetsName": "Snippets aktualisieren",
       "search_notesStatus": "Notizen werden durchsucht...",
+      "email_draftStatus": "E-Mail-Entwurf wird geöffnet...",
+      "find_contactStatus": "Kontakte werden gesucht...",
       "web_searchStatus": "Websuche...",
       "copy_to_clipboardStatus": "In Zwischenablage kopieren...",
       "get_calendar_eventsStatus": "Kalender wird geprüft...",
@@ -3951,6 +3955,7 @@
       "connectFailedDescription": "Beim Verbinden mit Calendar.app ist ein Fehler aufgetreten. Starte OpenWhispr neu und versuche es erneut."
     },
     "sections": {
+      "connectors": "Konnektoren",
       "calendar": "Kalender",
       "api": "API",
       "mcp": "MCP",
@@ -4009,6 +4014,80 @@
     "notABot": {
       "title": "OpenWhispr ist ein Meeting-Rekorder, kein Bot",
       "description": "OpenWhispr erfasst Audio direkt von deinem System — es nimmt niemals als Teilnehmer an deinen Meetings teil. Verbinde einfach deinen Kalender und mach Notizen wie gewohnt."
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "An {{destination}} senden"
+      },
+      "identity": "Als {{account}}",
+      "identityWithWorkspace": "Als {{account}} in {{workspace}}",
+      "send": "Senden",
+      "edit": "Bearbeiten",
+      "doneEditing": "Bearbeitung fertig",
+      "cancel": "Abbrechen",
+      "titleLabel": "Titel",
+      "bodyLabel": "Nachricht",
+      "sending": "Wird gesendet…",
+      "sent": "An {{destination}} gesendet.",
+      "open": "Öffnen",
+      "failed": "Senden fehlgeschlagen: {{message}}",
+      "unknown": "Konnte nicht bestätigt werden. Bitte {{destination}} prüfen.",
+      "cancelled": "Abgebrochen. Es wurde nichts gesendet.",
+      "notSent": "Nicht gesendet."
+    },
+    "policyOff": "Konnektoren wurden von deiner Organisation deaktiviert.",
+    "email": {
+      "title": "E-Mail-Entwürfe",
+      "description": "Der Assistent öffnet einen vorausgefüllten Entwurf in deiner E-Mail-App. Du prüfst ihn und klickst selbst auf Senden.",
+      "proRequired": "Upgrade auf einen kostenpflichtigen Plan, damit der Assistent E-Mails für dich entwirft.",
+      "unavailable": "E-Mail-Entwürfe sind gerade nicht verfügbar.",
+      "targetLabel": "E-Mails entwerfen in",
+      "autoResolved": "Automatisch · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (geschäftlich oder Schule)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Standard-E-Mail-App"
+      }
+    },
+    "recent": {
+      "title": "Letzte Aktionen",
+      "actions": {
+        "email_draft": "Entwurf an {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "E-Mail-Entwurf"
+      },
+      "states": {
+        "pending": "Wartet",
+        "committing": "Läuft",
+        "sent": "Erledigt",
+        "failed": "Fehlgeschlagen",
+        "unknown": "Nicht bestätigt",
+        "cancelled": "Abgebrochen",
+        "expired": "Abgelaufen"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Entwurf an {{destination}} geöffnet.",
+      "draftOpenedBodyCopied": "Entwurf an {{destination}} geöffnet. Der Text ist in deiner Zwischenablage.",
+      "draftOpenedSubjectCopied": "Entwurf an {{destination}} geöffnet. Betreff und Text sind in deiner Zwischenablage.",
+      "draftOpenedOnlySubjectCopied": "Entwurf an {{destination}} geöffnet. Der Betreff ist in deiner Zwischenablage.",
+      "needsDetails": "Es fehlen Angaben.",
+      "unavailable": "Konnektoren sind gerade nicht verfügbar.",
+      "failed": "Das hat nicht funktioniert.",
+      "unknown": "Nicht bestätigt. Prüfe, ob es geklappt hat, bevor du es erneut versuchst.",
+      "draftUnknown": "Nicht bestätigt: Der Entwurf an {{destination}} wurde möglicherweise nicht geöffnet. Prüfe das, bevor du es erneut versuchst.",
+      "contactsFound": "Gefundene Kontakte: {{total}}",
+      "draftLimit": "Pro Anfrage können nur {{count}} Entwürfe geöffnet werden.",
+      "clipboardBusy": "Nicht geöffnet: Der Text eines anderen Entwurfs ist noch in deiner Zwischenablage.",
+      "errors": {
+        "open_failed": "Deine E-Mail-App konnte nicht geöffnet werden.",
+        "draft_too_long": "Zu viele Empfänger für einen Entwurfslink.",
+        "invalid_address": "Vollständige E-Mail-Adressen erforderlich."
+      }
     }
   },
   "notesView": {

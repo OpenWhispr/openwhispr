@@ -57,6 +57,8 @@ function isValidPolicyShape(policy) {
     // Additive within policy version 1: absent (older server) means allowed.
     (policy.features?.screenContextEnabled === undefined ||
       typeof policy.features.screenContextEnabled === "boolean") &&
+    (policy.features?.connectorsEnabled === undefined ||
+      typeof policy.features.connectorsEnabled === "boolean") &&
     SHARING_MODES.includes(policy.sharing?.externalLinkSharing) &&
     LOCAL_HISTORY_MODES.includes(policy.dataRetention?.localHistoryMode) &&
     typeof policy.dataRetention?.cloudBackupAllowed === "boolean" &&

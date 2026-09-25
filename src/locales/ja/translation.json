@@ -3679,6 +3679,8 @@
     },
     "tools": {
       "search_notesName": "ノートを検索",
+      "email_draftName": "メールの下書き",
+      "find_contactName": "連絡先を検索",
       "get_noteName": "ノートを取得",
       "create_noteName": "ノートを作成",
       "update_noteName": "ノートを更新",
@@ -3691,6 +3693,8 @@
       "update_dictionaryName": "辞書を更新",
       "update_snippetsName": "スニペットを更新",
       "search_notesStatus": "ノートを検索中...",
+      "email_draftStatus": "メールの下書きを開いています...",
+      "find_contactStatus": "連絡先を検索中...",
       "web_searchStatus": "ウェブを検索中...",
       "copy_to_clipboardStatus": "クリップボードにコピー中...",
       "get_calendar_eventsStatus": "カレンダーを確認中...",
@@ -3782,6 +3786,7 @@
       "connectFailedDescription": "Calendar.app への接続中にエラーが発生しました。OpenWhispr を再起動してもう一度お試しください。"
     },
     "sections": {
+      "connectors": "コネクタ",
       "calendar": "カレンダー",
       "api": "API",
       "mcp": "MCP",
@@ -3840,6 +3845,80 @@
     "notABot": {
       "title": "OpenWhispr はミーティング録音ツールであり、ボットではありません",
       "description": "OpenWhispr はシステムから直接オーディオをキャプチャします — 参加者としてミーティングに参加することはありません。カレンダーを接続して、通常通りノートを取るだけです。"
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "{{destination}} に送信"
+      },
+      "identity": "{{account}} として",
+      "identityWithWorkspace": "{{workspace}} の {{account}} として",
+      "send": "送信",
+      "edit": "編集",
+      "doneEditing": "編集完了",
+      "cancel": "キャンセル",
+      "titleLabel": "タイトル",
+      "bodyLabel": "メッセージ",
+      "sending": "送信中…",
+      "sent": "{{destination}} に送信しました。",
+      "open": "開く",
+      "failed": "送信できませんでした: {{message}}",
+      "unknown": "送信されたか確認できませんでした。{{destination}} を確認してください。",
+      "cancelled": "キャンセルしました。何も送信されていません。",
+      "notSent": "送信されていません。"
+    },
+    "policyOff": "組織によってコネクタが無効にされています。",
+    "email": {
+      "title": "メール下書き",
+      "description": "アシスタントがメールアプリに下書きを自動入力して開きます。内容を確認し、自分で送信を押してください。",
+      "proRequired": "アシスタントにメールの下書きを作成させるには、有料プランへのアップグレードが必要です。",
+      "unavailable": "現在メール下書きを利用できません。",
+      "targetLabel": "メールを作成するアプリ",
+      "autoResolved": "自動 · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook（職場または学校）",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "既定のメールアプリ"
+      }
+    },
+    "recent": {
+      "title": "最近のアクション",
+      "actions": {
+        "email_draft": "{{destination}} 宛ての下書き"
+      },
+      "unlabeledActions": {
+        "email_draft": "メール下書き"
+      },
+      "states": {
+        "pending": "待機中",
+        "committing": "処理中",
+        "sent": "完了",
+        "failed": "失敗",
+        "unknown": "未確認",
+        "cancelled": "キャンセル済み",
+        "expired": "期限切れ"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "{{destination}} 宛ての下書きを開きました。",
+      "draftOpenedBodyCopied": "{{destination}} 宛ての下書きを開きました。本文はクリップボードにあります。",
+      "draftOpenedSubjectCopied": "{{destination}} 宛ての下書きを開きました。件名と本文はクリップボードにあります。",
+      "draftOpenedOnlySubjectCopied": "{{destination}} 宛ての下書きを開きました。件名はクリップボードにあります。",
+      "needsDetails": "詳細が必要です。",
+      "unavailable": "現在コネクタを利用できません。",
+      "failed": "うまくいきませんでした。",
+      "unknown": "未確認です。再試行する前に完了したかどうかを確認してください。",
+      "draftUnknown": "未確認：{{destination}} 宛ての下書きが開かなかった可能性があります。再試行する前に確認してください。",
+      "contactsFound": "見つかった連絡先: {{total}}",
+      "draftLimit": "1回のリクエストで開ける下書きは{{count}}件までです。",
+      "clipboardBusy": "開いていません：別の下書きのテキストがまだクリップボードにあります。",
+      "errors": {
+        "open_failed": "メールアプリを開けませんでした。",
+        "draft_too_long": "下書きリンクには宛先が多すぎます。",
+        "invalid_address": "完全なメールアドレスが必要です。"
+      }
     }
   },
   "calendar": {

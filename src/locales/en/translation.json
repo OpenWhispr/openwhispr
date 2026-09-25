@@ -3848,6 +3848,8 @@
     },
     "tools": {
       "search_notesName": "Search notes",
+      "email_draftName": "Email draft",
+      "find_contactName": "Find contact",
       "get_noteName": "Get note",
       "create_noteName": "Create note",
       "update_noteName": "Update note",
@@ -3860,6 +3862,8 @@
       "update_dictionaryName": "Update dictionary",
       "update_snippetsName": "Update snippets",
       "search_notesStatus": "Searching notes...",
+      "email_draftStatus": "Opening an email draft...",
+      "find_contactStatus": "Looking up contacts...",
       "web_searchStatus": "Searching the web...",
       "copy_to_clipboardStatus": "Copying to clipboard...",
       "get_calendar_eventsStatus": "Checking calendar...",
@@ -3951,6 +3955,7 @@
       "connectFailedDescription": "Something went wrong while connecting to Calendar.app. Please restart OpenWhispr and try again."
     },
     "sections": {
+      "connectors": "Connectors",
       "calendar": "Calendar",
       "api": "API",
       "mcp": "MCP",
@@ -4009,6 +4014,80 @@
     "notABot": {
       "title": "OpenWhispr is a meeting recorder, not a bot",
       "description": "OpenWhispr captures audio directly from your system — it never joins your meetings as a participant. Just connect your calendar and take notes as normal."
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Send to {{destination}}"
+      },
+      "identity": "As {{account}}",
+      "identityWithWorkspace": "As {{account}} in {{workspace}}",
+      "send": "Send",
+      "edit": "Edit",
+      "doneEditing": "Done editing",
+      "cancel": "Cancel",
+      "titleLabel": "Title",
+      "bodyLabel": "Message",
+      "sending": "Sending…",
+      "sent": "Sent to {{destination}}.",
+      "open": "Open",
+      "failed": "Couldn't send: {{message}}",
+      "unknown": "Couldn't confirm it was sent. Check {{destination}}.",
+      "cancelled": "Cancelled. Nothing was sent.",
+      "notSent": "Not sent."
+    },
+    "policyOff": "Connectors are turned off by your organization.",
+    "email": {
+      "title": "Email drafts",
+      "description": "The assistant opens a pre-filled draft in your email app. You review it and press Send yourself.",
+      "proRequired": "Upgrade to a paid plan to let the assistant draft emails for you.",
+      "unavailable": "Email drafts aren't available right now.",
+      "targetLabel": "Draft emails in",
+      "autoResolved": "Automatic · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (work or school)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Default mail app"
+      }
+    },
+    "recent": {
+      "title": "Recent actions",
+      "actions": {
+        "email_draft": "Draft to {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "Email draft"
+      },
+      "states": {
+        "pending": "Waiting",
+        "committing": "In progress",
+        "sent": "Done",
+        "failed": "Failed",
+        "unknown": "Not confirmed",
+        "cancelled": "Cancelled",
+        "expired": "Expired"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Opened a draft to {{destination}}.",
+      "draftOpenedBodyCopied": "Opened a draft to {{destination}}. The body is on your clipboard.",
+      "draftOpenedSubjectCopied": "Opened a draft to {{destination}}. The subject and body are on your clipboard.",
+      "draftOpenedOnlySubjectCopied": "Opened a draft to {{destination}}. The subject is on your clipboard.",
+      "needsDetails": "Needs more details.",
+      "unavailable": "Connectors aren't available right now.",
+      "failed": "That didn't work.",
+      "unknown": "Not confirmed. Check whether it went through before trying again.",
+      "draftUnknown": "Not confirmed: the draft to {{destination}} may not have opened. Check before trying again.",
+      "contactsFound": "Contacts found: {{total}}",
+      "draftLimit": "Only {{count}} drafts can open per request.",
+      "clipboardBusy": "Not opened: another draft's text is still on your clipboard.",
+      "errors": {
+        "open_failed": "Couldn't open your email app.",
+        "draft_too_long": "Too many recipients for a draft link.",
+        "invalid_address": "Needs full email addresses."
+      }
     }
   },
   "notesView": {

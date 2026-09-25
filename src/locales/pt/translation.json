@@ -3679,6 +3679,8 @@
     },
     "tools": {
       "search_notesName": "Pesquisar notas",
+      "email_draftName": "Rascunho de e-mail",
+      "find_contactName": "Encontrar contato",
       "get_noteName": "Obter nota",
       "create_noteName": "Criar nota",
       "update_noteName": "Atualizar nota",
@@ -3691,6 +3693,8 @@
       "update_dictionaryName": "Atualizar dicionário",
       "update_snippetsName": "Atualizar snippets",
       "search_notesStatus": "Pesquisando notas...",
+      "email_draftStatus": "Abrindo um rascunho de e-mail...",
+      "find_contactStatus": "Procurando contatos...",
       "web_searchStatus": "Pesquisando na web...",
       "copy_to_clipboardStatus": "Copiando para a área de transferência...",
       "get_calendar_eventsStatus": "Verificando calendário...",
@@ -3782,6 +3786,7 @@
       "connectFailedDescription": "Ocorreu um erro ao conectar ao Calendar.app. Reinicie o OpenWhispr e tente novamente."
     },
     "sections": {
+      "connectors": "Conectores",
       "calendar": "Calendário",
       "api": "API",
       "mcp": "MCP",
@@ -3840,6 +3845,80 @@
     "notABot": {
       "title": "O OpenWhispr é um gravador de reuniões, não um bot",
       "description": "O OpenWhispr captura áudio diretamente do seu sistema — ele nunca entra nas suas reuniões como participante. Basta conectar seu calendário e fazer anotações normalmente."
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Enviar para {{destination}}"
+      },
+      "identity": "Como {{account}}",
+      "identityWithWorkspace": "Como {{account}} em {{workspace}}",
+      "send": "Enviar",
+      "edit": "Editar",
+      "doneEditing": "Edição concluída",
+      "cancel": "Cancelar",
+      "titleLabel": "Título",
+      "bodyLabel": "Mensagem",
+      "sending": "Enviando…",
+      "sent": "Enviado para {{destination}}.",
+      "open": "Abrir",
+      "failed": "Não foi possível enviar: {{message}}",
+      "unknown": "Não foi possível confirmar o envio. Verifique {{destination}}.",
+      "cancelled": "Cancelado. Nada foi enviado.",
+      "notSent": "Não enviado."
+    },
+    "policyOff": "Sua organização desativou os conectores.",
+    "email": {
+      "title": "Rascunhos de e-mail",
+      "description": "O assistente abre um rascunho pré-preenchido no seu aplicativo de e-mail. Você revisa e aperta Enviar.",
+      "proRequired": "Atualize para um plano pago para que o assistente escreva rascunhos de e-mail para você.",
+      "unavailable": "Os rascunhos de e-mail não estão disponíveis no momento.",
+      "targetLabel": "Criar rascunhos de e-mail em",
+      "autoResolved": "Automático · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (trabalho ou escola)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Aplicativo de e-mail padrão"
+      }
+    },
+    "recent": {
+      "title": "Ações recentes",
+      "actions": {
+        "email_draft": "Rascunho para {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "Rascunho de e-mail"
+      },
+      "states": {
+        "pending": "Aguardando",
+        "committing": "Em andamento",
+        "sent": "Concluído",
+        "failed": "Falhou",
+        "unknown": "Não confirmado",
+        "cancelled": "Cancelado",
+        "expired": "Expirado"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Rascunho aberto para {{destination}}.",
+      "draftOpenedBodyCopied": "Rascunho aberto para {{destination}}. O corpo está na sua área de transferência.",
+      "draftOpenedSubjectCopied": "Rascunho aberto para {{destination}}. O assunto e o corpo estão na sua área de transferência.",
+      "draftOpenedOnlySubjectCopied": "Rascunho para {{destination}} aberto. O assunto está na sua área de transferência.",
+      "needsDetails": "Faltam detalhes.",
+      "unavailable": "Os conectores não estão disponíveis no momento.",
+      "failed": "Não funcionou.",
+      "unknown": "Não confirmado. Verifique se foi concluído antes de tentar novamente.",
+      "draftUnknown": "Não confirmado: o rascunho para {{destination}} pode não ter sido aberto. Verifique antes de tentar novamente.",
+      "contactsFound": "Contatos encontrados: {{total}}",
+      "draftLimit": "Só é possível abrir {{count}} rascunhos por solicitação.",
+      "clipboardBusy": "Não aberto: o texto de outro rascunho ainda está na sua área de transferência.",
+      "errors": {
+        "open_failed": "Não foi possível abrir seu aplicativo de e-mail.",
+        "draft_too_long": "Destinatários demais para um link de rascunho.",
+        "invalid_address": "São necessários endereços de e-mail completos."
+      }
     }
   },
   "calendar": {

@@ -6,6 +6,8 @@ import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import type { ToolCallInfo } from "./types";
 import { extractNoteCards } from "./noteCards";
 import { toolIcons } from "./toolIcons";
+import { ApprovalCard } from "./ApprovalCard";
+import { useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -120,6 +122,13 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
   );
 }
 
+// Subscribes to its own approval entry only, so editing one card doesn't
+// re-render every message in the thread.
+function ToolCallItem({ toolCall }: { toolCall: ToolCallInfo }) {
+  const approval = useConnectorApprovalStore((state) => state.entries[toolCall.id]);
+  return approval ? <ApprovalCard entry={approval} /> : <ToolCallStep toolCall={toolCall} />;
+}
+
 function NoteCard({
   noteId,
   title,
@@ -226,7 +235,7 @@ export function ChatMessage({
             )}
           >
             {toolCalls.map((tc) => (
-              <ToolCallStep key={tc.id} toolCall={tc} />
+              <ToolCallItem key={tc.id} toolCall={tc} />
             ))}
           </div>
         )}

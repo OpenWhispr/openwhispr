@@ -3679,6 +3679,8 @@
     },
     "tools": {
       "search_notesName": "Cerca nelle note",
+      "email_draftName": "Bozza email",
+      "find_contactName": "Trova contatto",
       "get_noteName": "Ottieni nota",
       "create_noteName": "Crea nota",
       "update_noteName": "Aggiorna nota",
@@ -3691,6 +3693,8 @@
       "update_dictionaryName": "Aggiorna dizionario",
       "update_snippetsName": "Aggiorna snippet",
       "search_notesStatus": "Ricerca nelle note...",
+      "email_draftStatus": "Apertura di una bozza email...",
+      "find_contactStatus": "Ricerca contatti...",
       "web_searchStatus": "Ricerca sul web...",
       "copy_to_clipboardStatus": "Copia negli appunti...",
       "get_calendar_eventsStatus": "Controllo del calendario...",
@@ -3782,6 +3786,7 @@
       "connectFailedDescription": "Si è verificato un errore durante la connessione a Calendar.app. Riavvia OpenWhispr e riprova."
     },
     "sections": {
+      "connectors": "Connettori",
       "calendar": "Calendario",
       "api": "API",
       "mcp": "MCP",
@@ -3840,6 +3845,80 @@
     "notABot": {
       "title": "OpenWhispr è un registratore di riunioni, non un bot",
       "description": "OpenWhispr cattura l'audio direttamente dal tuo sistema — non entra mai nelle tue riunioni come partecipante. Basta collegare il calendario e prendere appunti normalmente."
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Invia a {{destination}}"
+      },
+      "identity": "Come {{account}}",
+      "identityWithWorkspace": "Come {{account}} in {{workspace}}",
+      "send": "Invia",
+      "edit": "Modifica",
+      "doneEditing": "Modifica completata",
+      "cancel": "Annulla",
+      "titleLabel": "Titolo",
+      "bodyLabel": "Messaggio",
+      "sending": "Invio in corso…",
+      "sent": "Inviato a {{destination}}.",
+      "open": "Apri",
+      "failed": "Invio non riuscito: {{message}}",
+      "unknown": "Impossibile confermare l'invio. Controlla {{destination}}.",
+      "cancelled": "Annullato. Non è stato inviato nulla.",
+      "notSent": "Non inviato."
+    },
+    "policyOff": "La tua organizzazione ha disattivato i connettori.",
+    "email": {
+      "title": "Bozze email",
+      "description": "L'assistente apre una bozza precompilata nella tua app di posta. La rivedi e premi Invia tu stesso.",
+      "proRequired": "Passa a un piano a pagamento per far scrivere all'assistente le bozze delle email.",
+      "unavailable": "Le bozze email non sono disponibili al momento.",
+      "targetLabel": "Crea bozze email in",
+      "autoResolved": "Automatico · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (lavoro o scuola)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "App di posta predefinita"
+      }
+    },
+    "recent": {
+      "title": "Azioni recenti",
+      "actions": {
+        "email_draft": "Bozza a {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "Bozza email"
+      },
+      "states": {
+        "pending": "In attesa",
+        "committing": "In corso",
+        "sent": "Completato",
+        "failed": "Non riuscito",
+        "unknown": "Non confermato",
+        "cancelled": "Annullato",
+        "expired": "Scaduto"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Bozza aperta per {{destination}}.",
+      "draftOpenedBodyCopied": "Bozza aperta per {{destination}}. Il testo è negli appunti.",
+      "draftOpenedSubjectCopied": "Bozza aperta per {{destination}}. L'oggetto e il testo sono negli appunti.",
+      "draftOpenedOnlySubjectCopied": "Bozza per {{destination}} aperta. L'oggetto è negli appunti.",
+      "needsDetails": "Servono più dettagli.",
+      "unavailable": "I connettori non sono disponibili al momento.",
+      "failed": "Non ha funzionato.",
+      "unknown": "Non confermato. Controlla se è andato a buon fine prima di riprovare.",
+      "draftUnknown": "Non confermato: la bozza per {{destination}} potrebbe non essersi aperta. Controlla prima di riprovare.",
+      "contactsFound": "Contatti trovati: {{total}}",
+      "draftLimit": "Si possono aprire solo {{count}} bozze per richiesta.",
+      "clipboardBusy": "Non aperta: il testo di un'altra bozza è ancora negli appunti.",
+      "errors": {
+        "open_failed": "Impossibile aprire l'app email.",
+        "draft_too_long": "Troppi destinatari per un link di bozza.",
+        "invalid_address": "Servono indirizzi email completi."
+      }
     }
   },
   "calendar": {

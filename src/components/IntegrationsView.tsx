@@ -6,7 +6,7 @@ import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
 import { cn } from "./lib/utils";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Badge } from "./ui/badge";
-import { SettingsPanel, SettingsPanelRow, SettingsRow } from "./ui/SettingsSection";
+import { SectionLabel, SettingsPanel, SettingsPanelRow, SettingsRow } from "./ui/SettingsSection";
 import { Toggle } from "./ui/toggle";
 import {
   AlertDialog,
@@ -20,10 +20,11 @@ import {
 import { useSettingsStore } from "../stores/settingsStore";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
-import type { CalendarAccount } from "../types/calendar";
+import type { CalendarAccount, MicrosoftCalendarAccount } from "../types/calendar";
 import ApiKeysSection from "./ApiKeysSection";
 import CliIntegrationCard from "./CliIntegrationCard";
 import McpIntegrationCard from "./McpIntegrationCard";
+import { ConnectorsSection } from "./ConnectorsSection";
 import googleCalendarIcon from "../assets/icons/google-calendar.svg";
 import microsoftCalendarIcon from "../assets/icons/microsoft-calendar.svg";
 import appleCalendarIcon from "../assets/icons/apple-calendar.svg";
@@ -33,14 +34,6 @@ const API_DOCS_URL = "https://docs.openwhispr.com/api/overview";
 interface IntegrationsViewProps {
   isPaid: boolean;
   onUpgrade: () => void;
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 mb-2 ps-1">
-      {children}
-    </div>
-  );
 }
 
 interface ProviderRowProps {
@@ -224,7 +217,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
         const current = useSettingsStore.getState().mcalAccounts;
         setMcalAccounts([
           ...current.filter((a) => a.email !== result.email),
-          { email: result.email },
+          { email: result.email, tenantId: result.tenantId },
         ]);
       } else if (!result?.error?.includes("access_denied")) {
         setOauthErrorKey("integrations.microsoftCalendar");
@@ -336,7 +329,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
 
   useEffect(() => {
     const unsub = window.electronAPI?.onMcalConnectionChanged?.(
-      (data: { accounts?: Array<{ email: string }> }) => {
+      (data: { accounts?: MicrosoftCalendarAccount[] }) => {
         if (data.accounts) setMcalAccounts(data.accounts);
       }
     );
@@ -361,6 +354,11 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
   return (
     <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-6 space-y-5")}>
       <p className="text-xs text-muted-foreground/70">{t("integrations.description")}</p>
+
+      <div>
+        <SectionLabel>{t("integrations.sections.connectors")}</SectionLabel>
+        <ConnectorsSection onUpgrade={onUpgrade} />
+      </div>
 
       <div>
         <SectionLabel>{t("integrations.sections.calendar")}</SectionLabel>

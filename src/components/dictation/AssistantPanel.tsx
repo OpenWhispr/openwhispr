@@ -42,6 +42,9 @@ import {
   deliverAssistantResponse,
   type AssistantResponseDelivery,
 } from "../../helpers/assistantResponseDelivery";
+import { buildAssistantCommandSendOptions } from "./assistantCommandOptions";
+import { ApprovalCard } from "../chat/ApprovalCard";
+import { useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 
 export interface AssistantCommand {
   id: number;
@@ -117,6 +120,7 @@ export function AssistantPanel({
     setMessages,
     // Spoken commands answer on the Voice Assistant scope, not the Chat one.
     inferenceScope: "dictationAgent",
+    allowConnectors: true,
     onStreamComplete: (_assistantId, content, toolCalls) => {
       void persistence.saveAssistantMessage(content, toolCalls);
     },
@@ -195,28 +199,19 @@ export function AssistantPanel({
     }
     consumedCommandIdRef.current = pendingCommand.id;
     const commandId = pendingCommand.id;
-    const delivery = pendingCommand.delivery;
-    const targetsCapturedInput = delivery?.mode === "paste";
-    // A caret in a markdown-friendly app still keeps the compact pill.
-    const plainTextResponse = delivery?.mode === "paste" && delivery.plainText;
-    let responseDelivered = false;
+    const { options: sendOptions, wasDelivered } = buildAssistantCommandSendOptions(
+      pendingCommand,
+      {
+        onResponseContent,
+        deliver: deliverAssistantResponse,
+        confirmCopied: (content) => confirmCopied(content, AUTO_COPY_FEEDBACK_MS),
+      }
+    );
     if (pendingCommand.selectedContext) {
       setSelectedContext(null);
       onSelectionContextChange(null);
     }
-    void sendMessage(pendingCommand.text, {
-      attachment: pendingCommand.attachment ?? undefined,
-      selectedContext: pendingCommand.selectedContext ?? undefined,
-      suppressResponseContent: targetsCapturedInput,
-      plainTextResponse,
-      onComplete: delivery
-        ? async ({ content }) => {
-            const result = await deliverAssistantResponse(delivery, content);
-            responseDelivered = result.pasted;
-            if (result.copied) confirmCopied(content, AUTO_COPY_FEEDBACK_MS);
-          }
-        : undefined,
-    })
+    void sendMessage(pendingCommand.text, sendOptions)
       .then((sent) => {
         if (sent) {
           onCommandConsumed(commandId);
@@ -244,7 +239,7 @@ export function AssistantPanel({
           },
         ]);
       })
-      .finally(() => onCommandSettled(commandId, { showPanel: !responseDelivered }));
+      .finally(() => onCommandSettled(commandId, { showPanel: !wasDelivered() }));
   }, [
     historyReady,
     submissionInFlight,
@@ -253,13 +248,21 @@ export function AssistantPanel({
     onCommandDiscarded,
     onCommandSettled,
     onSelectionContextChange,
+    onResponseContent,
     confirmCopied,
     sendMessage,
     setMessages,
     t,
   ]);
 
-  const isToolExecuting = Boolean(streaming.activeToolName);
+  const approvalEntries = useConnectorApprovalStore((state) => state.entries);
+  const panelApprovals = (latestAssistantMessage?.toolCalls ?? [])
+    .map((toolCall) => approvalEntries[toolCall.id])
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  const approvalAwaitingUser = panelApprovals.some(
+    (entry) => entry.state === "pending" || entry.state === "committing"
+  );
+  const isToolExecuting = Boolean(streaming.activeToolName) && !approvalAwaitingUser;
   const isBusy = resolveAssistantPanelBusy({
     agentState: streaming.agentState,
     activeToolName: streaming.activeToolName,
@@ -519,6 +522,9 @@ export function AssistantPanel({
                 )}
               </div>
             ) : null}
+            {panelApprovals.map((entry) => (
+              <ApprovalCard key={entry.toolCallId} entry={entry} />
+            ))}
             {thinking && (
               <div role="status">
                 <span className="sr-only">{t("agentMode.input.thinking")}</span>

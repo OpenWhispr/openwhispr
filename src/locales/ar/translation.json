@@ -650,6 +650,7 @@
       "connectFailedDescription": "حدث خطأ ما أثناء الاتصال بتطبيق Calendar.app. يرجى إعادة تشغيل OpenWhispr والمحاولة مرة أخرى."
     },
     "sections": {
+      "connectors": "الموصلات",
       "calendar": "التقويم (Calendar)",
       "api": "API",
       "mcp": "MCP",
@@ -708,6 +709,80 @@
     "notABot": {
       "title": "OpenWhispr هو مسجل اجتماعات، وليس روبوتًا",
       "description": "يلتقط OpenWhispr الصوت مباشرة من نظامك — فهو لا ينضم أبدًا إلى اجتماعاتك كمشارك. ما عليك سوى ربط التقويم الخاص بك وتدوين الملاحظات كالمعتاد."
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "إرسال إلى {{destination}}"
+      },
+      "identity": "بصفتك {{account}}",
+      "identityWithWorkspace": "بصفتك {{account}} في {{workspace}}",
+      "send": "إرسال",
+      "edit": "تعديل",
+      "doneEditing": "تم التعديل",
+      "cancel": "إلغاء",
+      "titleLabel": "العنوان",
+      "bodyLabel": "الرسالة",
+      "sending": "جارٍ الإرسال…",
+      "sent": "تم الإرسال إلى {{destination}}.",
+      "open": "فتح",
+      "failed": "تعذّر الإرسال: {{message}}",
+      "unknown": "تعذّر تأكيد الإرسال. تحقق من {{destination}}.",
+      "cancelled": "تم الإلغاء. لم يتم إرسال شيء.",
+      "notSent": "لم يُرسل."
+    },
+    "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
+    "email": {
+      "title": "مسودات البريد الإلكتروني",
+      "description": "يفتح المساعد مسودة معبأة مسبقًا في تطبيق البريد الإلكتروني الخاص بك. راجعها واضغط إرسال بنفسك.",
+      "proRequired": "قم بالترقية إلى خطة مدفوعة ليكتب المساعد مسودات رسائلك الإلكترونية.",
+      "unavailable": "مسودات البريد الإلكتروني غير متاحة حاليًا.",
+      "targetLabel": "صياغة رسائل البريد الإلكتروني في",
+      "autoResolved": "تلقائي · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (العمل أو المدرسة)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "تطبيق البريد الافتراضي"
+      }
+    },
+    "recent": {
+      "title": "الإجراءات الأخيرة",
+      "actions": {
+        "email_draft": "مسودة إلى {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "مسودة بريد إلكتروني"
+      },
+      "states": {
+        "pending": "قيد الانتظار",
+        "committing": "قيد التنفيذ",
+        "sent": "تم",
+        "failed": "فشل",
+        "unknown": "لم يتم التأكيد",
+        "cancelled": "أُلغي",
+        "expired": "منتهي الصلاحية"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "فُتحت مسودة إلى {{destination}}.",
+      "draftOpenedBodyCopied": "فُتحت مسودة إلى {{destination}}. نص الرسالة في الحافظة.",
+      "draftOpenedSubjectCopied": "فُتحت مسودة إلى {{destination}}. الموضوع ونص الرسالة في الحافظة.",
+      "draftOpenedOnlySubjectCopied": "تم فتح مسودة إلى {{destination}}. الموضوع موجود في الحافظة.",
+      "needsDetails": "يلزم مزيد من التفاصيل.",
+      "unavailable": "الموصلات غير متاحة حاليًا.",
+      "failed": "لم ينجح ذلك.",
+      "unknown": "لم يتم التأكيد. تحقق مما إذا كان الإجراء قد تم قبل المحاولة مرة أخرى.",
+      "draftUnknown": "لم يتم التأكيد: ربما لم تُفتح المسودة إلى {{destination}}. تحقق قبل المحاولة مرة أخرى.",
+      "contactsFound": "جهات الاتصال التي عُثر عليها: {{total}}",
+      "draftLimit": "يمكن فتح {{count}} مسودات فقط لكل طلب.",
+      "clipboardBusy": "لم تُفتح: نص مسودة أخرى لا يزال في الحافظة.",
+      "errors": {
+        "open_failed": "تعذّر فتح تطبيق البريد الإلكتروني.",
+        "draft_too_long": "عدد المستلمين كبير جدًا لرابط المسودة.",
+        "invalid_address": "يلزم إدخال عناوين بريد إلكتروني كاملة."
+      }
     }
   },
   "auth": {
@@ -1248,6 +1323,8 @@
     },
     "tools": {
       "search_notesName": "البحث في الملاحظات",
+      "email_draftName": "مسودة بريد إلكتروني",
+      "find_contactName": "البحث عن جهة اتصال",
       "get_noteName": "الحصول على الملاحظة",
       "create_noteName": "إنشاء ملاحظة",
       "update_noteName": "تحديث الملاحظة",
@@ -1260,6 +1337,8 @@
       "update_dictionaryName": "تحديث القاموس",
       "update_snippetsName": "تحديث المقتطفات",
       "search_notesStatus": "جاري البحث في الملاحظات...",
+      "email_draftStatus": "جارٍ فتح مسودة بريد إلكتروني...",
+      "find_contactStatus": "جارٍ البحث عن جهات الاتصال...",
       "web_searchStatus": "جاري البحث في الويب...",
       "copy_to_clipboardStatus": "جاري النسخ إلى الحافظة...",
       "get_calendar_eventsStatus": "جاري التحقق من التقويم...",
