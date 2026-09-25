@@ -78,6 +78,49 @@ function defaultDeps() {
   };
 }
 
+const stagingPrefix = (model) => `.${model.target}.partial-`;
+
+function findMissingFile(model, rootDir) {
+  return model.requiredFiles.find((file) => !fs.existsSync(path.join(rootDir, file)));
+}
+
+// Status only checks that files exist, so an archive must never be extracted
+// in place: a crash mid-write would leave every file present and one truncated
+// (reported ready, then the worker fails), and a status check during
+// extraction could see it ready early. Extract beside the target, verify, then
+// swap the whole directory in with one rename.
+async function extractArchiveModel(model, archivePath, modelsDir, extractTarBz2) {
+  const stagingDir = path.join(modelsDir, `${stagingPrefix(model)}${process.pid}-${Date.now()}`);
+  fs.mkdirSync(stagingDir, { recursive: true });
+  try {
+    await extractTarBz2(archivePath, stagingDir);
+    const missingFile = findMissingFile(model, stagingDir);
+    if (missingFile) {
+      throw new Error(`${model.id}: download finished but ${missingFile} is missing`);
+    }
+    const targetDir = path.join(modelsDir, model.target);
+    if (fs.existsSync(targetDir)) {
+      // An incomplete earlier copy; moved into staging so the finally drops it.
+      fs.renameSync(targetDir, path.join(stagingDir, "previous"));
+    }
+    fs.renameSync(path.join(stagingDir, model.target), targetDir);
+  } finally {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+  }
+}
+
+// A crash skips the finally above; clear staging left by an earlier process.
+function removeStaleStaging(modelsDir) {
+  const ownPrefixes = VOICE_MODELS.filter((model) => model.archive).map(stagingPrefix);
+  const ownPid = `${process.pid}-`;
+  for (const name of fs.readdirSync(modelsDir)) {
+    const prefix = ownPrefixes.find((candidate) => name.startsWith(candidate));
+    if (prefix && !name.slice(prefix.length).startsWith(ownPid)) {
+      fs.rmSync(path.join(modelsDir, name), { recursive: true, force: true });
+    }
+  }
+}
+
 /** Downloads whatever is missing; resolves with the final status or throws. */
 async function downloadVoiceModels({
   modelsDir = getVoiceModelsDir(),
@@ -87,8 +130,11 @@ async function downloadVoiceModels({
 } = {}) {
   const { downloadFile, extractTarBz2 } = { ...defaultDeps(), ...deps };
   fs.mkdirSync(modelsDir, { recursive: true });
+  removeStaleStaging(modelsDir);
   for (const model of VOICE_MODELS) {
     if (isPresent(model, modelsDir, fs.existsSync)) continue;
+    // Single-file models land atomically: downloadFile writes `${dest}.tmp`
+    // and renames it into place only once complete.
     const dest = path.join(modelsDir, model.archive ? `${model.target}.tar.bz2` : model.target);
     await downloadFile(model.url, dest, {
       signal,
@@ -97,12 +143,12 @@ async function downloadVoiceModels({
     });
     if (model.archive) {
       try {
-        await extractTarBz2(dest, modelsDir);
+        await extractArchiveModel(model, dest, modelsDir, extractTarBz2);
       } finally {
         fs.rmSync(dest, { force: true });
       }
     }
-    const missingFile = model.requiredFiles.find((file) => !fs.existsSync(path.join(modelsDir, file)));
+    const missingFile = findMissingFile(model, modelsDir);
     if (missingFile) {
       throw new Error(`${model.id}: download finished but ${missingFile} is missing`);
     }
