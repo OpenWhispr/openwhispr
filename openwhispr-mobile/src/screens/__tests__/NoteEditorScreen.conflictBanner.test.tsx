@@ -62,6 +62,10 @@ const mockDictionaryState = {
   addLearnedWords: mockAddLearnedWords,
 };
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: '7' }),
   useRouter: () => ({

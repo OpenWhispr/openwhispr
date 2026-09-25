@@ -70,6 +70,10 @@ const mockDictionaryState = {
   addLearnedWords: mockAddLearnedWords,
 };
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: '7' }),
   useRouter: () => ({
@@ -285,12 +289,16 @@ jest.mock('@/components/notes/VoiceprintSuggestionSheet', () => ({
 jest.mock('@/components/notes/NoteChatSheet', () => ({
   NoteChatSheet: ({
     draft,
+    suggestions,
     onDraftChange,
     onSend,
+    onSuggestion,
   }: {
     draft: string;
+    suggestions: readonly { label: string; prompt: string }[];
     onDraftChange: (text: string) => void;
     onSend: () => void;
+    onSuggestion: (prompt: string) => void;
   }) =>
     (() => {
       const {
@@ -302,6 +310,13 @@ jest.mock('@/components/notes/NoteChatSheet', () => ({
         <MockView>
           <MockTextInput testID="chat-draft" value={draft} onChangeText={onDraftChange} />
           <MockPressable testID="chat-send" onPress={onSend} />
+          {suggestions.map((suggestion) => (
+            <MockPressable
+              key={suggestion.label}
+              testID={`chat-suggestion-${suggestion.label}`}
+              onPress={() => onSuggestion(suggestion.prompt)}
+            />
+          ))}
         </MockView>
       );
     })(),
@@ -544,15 +559,83 @@ describe('NoteEditorScreen generated meeting context', () => {
 });
 
 describe('NoteEditorScreen note chat', () => {
-  it('offers Ask about this note while Chat & Voice Assistant is on', () => {
-    const { getByText } = render(<NoteEditorScreen />);
-    expect(getByText('Ask about this note')).toBeTruthy();
+  const PILL = 'note-ask-pill';
+
+  it('shows the Ask pill instead of the menu entry once a meeting has finished', () => {
+    const { getByTestId, queryByText } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
+    expect(queryByText('Ask about this note')).toBeNull();
   });
 
-  it('hides Ask about this note when Chat & Voice Assistant is off', () => {
+  it('shows the Ask pill for a synced meeting that kept the local idle status', () => {
+    mockNote = note({ transcriptionStatus: 'idle' });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
+  });
+
+  it('keeps the Ask pill once notes have been generated', () => {
+    mockNote = note({
+      enhancedContent: 'Generated calendar-aware notes',
+      enhancementPrompt: 'Transform this meeting into notes.',
+    });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
+  });
+
+  it.each(['recording', 'transcribing', 'diarizing'] as const)(
+    'hides the Ask pill while the meeting is %s',
+    (transcriptionStatus) => {
+      mockNote = note({ transcriptionStatus });
+      mockNotesState.notes = [mockNote];
+      const { queryByTestId } = render(<NoteEditorScreen />);
+      expect(queryByTestId(PILL)).toBeNull();
+    },
+  );
+
+  it('keeps Ask about this note in the menu and note-worded shortcuts for a plain note', () => {
+    mockNote = note({
+      noteType: 'personal',
+      diarizationEnabled: 0,
+      calendarEventId: null,
+      participants: null,
+    });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    const { getByText, getByTestId, queryByTestId } = render(<NoteEditorScreen />);
+    expect(getByText('Ask about this note')).toBeTruthy();
+    expect(queryByTestId(PILL)).toBeNull();
+    expect(getByTestId('chat-suggestion-Summarize')).toBeTruthy();
+    expect(queryByTestId('chat-suggestion-Key decisions')).toBeNull();
+  });
+
+  it('offers note-worded shortcuts for an uploaded recording', () => {
+    mockNote = note({ noteType: 'upload', diarizationEnabled: 0, calendarEventId: null });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId, queryByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
+    expect(getByTestId('chat-suggestion-Summarize')).toBeTruthy();
+    expect(queryByTestId('chat-suggestion-Key decisions')).toBeNull();
+  });
+
+  it('hides every Ask entry point when Chat & Voice Assistant is off', () => {
     mockConfigState.config.dictationAgentEnabled = false;
-    const { queryByText } = render(<NoteEditorScreen />);
+    const { queryByText, queryByTestId } = render(<NoteEditorScreen />);
     expect(queryByText('Ask about this note')).toBeNull();
+    expect(queryByTestId(PILL)).toBeNull();
+  });
+
+  it('sends a meeting shortcut prompt immediately when its chip is tapped', async () => {
+    (ReasoningService.chatOverNote as jest.Mock).mockResolvedValue({ text: 'Answer', model: 'x' });
+    const { getByTestId } = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(getByTestId('chat-suggestion-List action items'));
+    });
+    await waitFor(() => expect(ReasoningService.chatOverNote).toHaveBeenCalledTimes(1));
+    expect((ReasoningService.chatOverNote as jest.Mock).mock.calls[0][0].question).toBe(
+      'What are the next steps from the meeting above that I need to do?',
+    );
   });
 });
 
