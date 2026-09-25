@@ -1,3 +1,6 @@
+jest.mock('@/lib/affiliateOffer', () => ({
+  loadAffiliateOffer: jest.fn().mockResolvedValue(null),
+}));
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';

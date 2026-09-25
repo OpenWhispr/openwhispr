@@ -1,4 +1,7 @@
-import { presentAffiliateOffer } from '@/store/useAffiliateOfferStore';
+import { loadAffiliateOffer } from '@/lib/affiliateOffer';
+jest.mock('@/lib/affiliateOffer', () => ({
+  loadAffiliateOffer: jest.fn().mockResolvedValue(null),
+}));
 jest.mock('@/store/useAffiliateOfferStore', () => ({
   presentAffiliateOffer: jest.fn().mockResolvedValue(false),
   closeAffiliateOffer: jest.fn(),
@@ -6,12 +9,15 @@ jest.mock('@/store/useAffiliateOfferStore', () => ({
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 let mockAffiliateEnabled = false;
 const mockPrepare = jest.fn();
+const mockConsumeInbound = jest.fn();
 jest.mock('@/lib/affiliateLink', () => ({
   getAffiliateClientConfig: () =>
     mockAffiliateEnabled ? { domain: 'sandbox.dub.link', publishableKey: 'dub_pk_TEST' } : null,
 }));
 jest.mock('@/store/useAffiliateStore', () => ({
-  useAffiliateStore: { getState: () => ({ prepare: mockPrepare }) },
+  useAffiliateStore: {
+    getState: () => ({ prepare: mockPrepare, consumeInboundOffer: mockConsumeInbound }),
+  },
 }));
 jest.mock('@/components/onboarding/CreatorLinkField', () => ({
   CreatorLinkField: () => {
@@ -70,6 +76,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockAffiliateEnabled = false;
   mockPrepare.mockResolvedValue(true);
+  mockConsumeInbound.mockResolvedValue(false);
+  jest.mocked(loadAffiliateOffer).mockResolvedValue(null);
   mockGoNext.mockResolvedValue(undefined);
   mockRegister.mockResolvedValue(true);
   mockAuthState = { user: { id: 'anon-user', isAnonymous: true } };
@@ -77,51 +85,19 @@ beforeEach(() => {
   mockGate = { isConfigured: true, state: { status: 'idle' } };
 });
 
-it('uses the existing consent step before creator entry and the early paywall', async () => {
+it('opens the shared paywall directly after existing consent, without claiming or allocating', async () => {
   mockAffiliateEnabled = true;
   const screen = render(<PaywallStep />);
   expect(screen.queryByText('Have a creator link?')).toBeNull();
-  expect(mockPrepare).not.toHaveBeenCalled();
   expect(mockRegister).not.toHaveBeenCalled();
   await act(async () => {
     fireEvent.press(screen.getByText('Existing tracking choice'));
   });
-  expect(screen.getByText('Have a creator link?')).toBeTruthy();
-  expect(mockRegister).not.toHaveBeenCalled();
-  mockPrepare.mockResolvedValueOnce(false);
-  await act(async () => {
-    fireEvent.press(screen.getByText('Continue'));
-  });
-  expect(mockRegister).not.toHaveBeenCalled();
-  expect(mockGoNext).not.toHaveBeenCalled();
-  await act(async () => {
-    fireEvent.press(screen.getByText('Continue'));
-  });
-  expect(mockPrepare).toHaveBeenCalledTimes(2);
+  expect(screen.queryByText('Have a creator link?')).toBeNull();
+  expect(mockPrepare).not.toHaveBeenCalled();
+  expect(loadAffiliateOffer).not.toHaveBeenCalled();
   expect(mockRegister).toHaveBeenCalledTimes(1);
   expect(mockGoNext).toHaveBeenCalledTimes(1);
-});
-
-it('ignores a late creator check after the early paywall step unmounts', async () => {
-  mockAffiliateEnabled = true;
-  let done!: (value: boolean) => void;
-  mockPrepare.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        done = resolve;
-      }),
-  );
-  const screen = render(<PaywallStep />);
-  await act(async () => {
-    fireEvent.press(screen.getByText('Existing tracking choice'));
-  });
-  fireEvent.press(screen.getByText('Continue'));
-  screen.unmount();
-  await act(async () => {
-    done(true);
-  });
-  expect(mockRegister).not.toHaveBeenCalled();
-  expect(mockGoNext).not.toHaveBeenCalled();
 });
 
 afterEach(() => {
@@ -289,9 +265,38 @@ it('allows retrying continuation after a progress save fails', async () => {
   expect(mockRegister).toHaveBeenCalledTimes(1);
 });
 
-it('continues after an affiliate offer dismissal without showing a second paywall', async () => {
-  jest.mocked(presentAffiliateOffer).mockResolvedValueOnce(true);
+it('closing the shared paywall continues once with no second paywall or stock allocation', async () => {
   render(<PaywallStep />);
   await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(1));
-  expect(mockRegister).not.toHaveBeenCalled();
+  expect(mockRegister).toHaveBeenCalledTimes(1);
+  expect(loadAffiliateOffer).not.toHaveBeenCalled();
+});
+
+it('seeds the shared Cloud paywall only for an explicit trusted inbound intent', async () => {
+  mockAffiliateEnabled = true;
+  mockConsumeInbound.mockResolvedValue(true);
+  const offer = { productId: 'monthly' } as Awaited<ReturnType<typeof loadAffiliateOffer>>;
+  jest.mocked(loadAffiliateOffer).mockResolvedValue(offer);
+  const screen = render(<PaywallStep />);
+  expect(loadAffiliateOffer).not.toHaveBeenCalled();
+  await act(async () => fireEvent.press(screen.getByText('Existing tracking choice')));
+  expect(loadAffiliateOffer).toHaveBeenCalledTimes(1);
+  expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ creatorOffer: offer }));
+});
+it('keeps ordinary Cloud purchasing available when an inbound offer is refused', async () => {
+  mockAffiliateEnabled = true;
+  mockConsumeInbound.mockResolvedValue(true);
+  jest.mocked(loadAffiliateOffer).mockResolvedValue(null);
+  const screen = render(<PaywallStep />);
+  await act(async () => fireEvent.press(screen.getByText('Existing tracking choice')));
+  expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ creatorOffer: undefined }));
+});
+
+it('still presents ordinary purchasing if consuming an optional inbound intent fails', async () => {
+  mockAffiliateEnabled = true;
+  mockConsumeInbound.mockRejectedValueOnce(new Error('storage unavailable'));
+  const screen = render(<PaywallStep />);
+  await act(async () => fireEvent.press(screen.getByText('Existing tracking choice')));
+  expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ creatorOffer: undefined }));
+  expect(loadAffiliateOffer).not.toHaveBeenCalled();
 });

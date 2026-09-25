@@ -7,7 +7,7 @@ jest.mock('@dub/react-native', () => ({ init: jest.fn(), trackOpen: jest.fn() })
 jest.mock('../apiClient', () => ({ api: { post: jest.fn() } }));
 jest.mock('../affiliateLink', () => ({
   getAffiliateClientConfig: () => ({ domain: 'sandbox.dub.link', publishableKey: 'dub_pk_test' }),
-  parseAffiliateLink: (value: string) => new URL(value),
+  parseAffiliateInput: jest.requireActual('../affiliateLink').parseAffiliateInput,
 }));
 const link = 'https://sandbox.dub.link/creator';
 beforeEach(() => {
@@ -100,4 +100,22 @@ it('stops before Dub if tracking is revoked while validating the link', async ()
   expect(dub.init).not.toHaveBeenCalled();
   expect(dub.trackOpen).not.toHaveBeenCalled();
   expect(api.post).toHaveBeenCalledTimes(1);
+});
+
+it('an explicit short-code submission uses the exact trusted full link', async () => {
+  await checkAndClaimAffiliate('creator', null, 'session-a', () => true, jest.fn());
+  expect(dub.trackOpen).toHaveBeenCalledWith(link);
+  expect(api.post).toHaveBeenNthCalledWith(
+    1,
+    '/api/affiliate/check-link',
+    { link },
+    expect.any(Object),
+  );
+});
+it('ambiguous short-code case never reaches tracking or claim', async () => {
+  await expect(
+    checkAndClaimAffiliate('Creator', null, 'session-a', () => true, jest.fn()),
+  ).rejects.toThrow();
+  expect(dub.trackOpen).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
 });

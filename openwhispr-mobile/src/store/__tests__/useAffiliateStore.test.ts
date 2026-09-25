@@ -40,6 +40,7 @@ beforeEach(async () => {
     clickId: null,
     saved: false,
     autoSubmit: false,
+    inboundOfferPending: false,
     hydrated: true,
     checking: false,
     error: null,
@@ -178,4 +179,66 @@ it('disabling affiliate configuration never blocks ordinary onboarding with a ca
   jest.mocked(getAffiliateClientConfig).mockReturnValue(null);
   expect(await useAffiliateStore.getState().prepare()).toBe(true);
   expect(claim).not.toHaveBeenCalled();
+});
+
+it('keeps inbound intent after claiming, consumes it once, and does not invent it for typing', async () => {
+  await useAffiliateStore.getState().edit('demo');
+  expect(await useAffiliateStore.getState().consumeInboundOffer(() => true)).toBe(false);
+  expect(claim).not.toHaveBeenCalled();
+  await useAffiliateStore.getState().edit('https://sandbox.dub.link/demo', true);
+  await useAffiliateStore.getState().prepare();
+  expect(useAffiliateStore.getState()).toMatchObject({
+    saved: true,
+    autoSubmit: false,
+    inboundOfferPending: true,
+  });
+  const results = await Promise.all([
+    useAffiliateStore.getState().consumeInboundOffer(() => true),
+    useAffiliateStore.getState().consumeInboundOffer(() => true),
+  ]);
+  expect(results.filter(Boolean)).toHaveLength(1);
+  expect(claim).toHaveBeenCalledTimes(1);
+});
+it('retains refused inbound intent and cannot consume it after navigation or account changes', async () => {
+  await useAffiliateStore.getState().edit('https://sandbox.dub.link/demo', true);
+  config.usageAnalyticsEnabled = false;
+  expect(await useAffiliateStore.getState().consumeInboundOffer(() => true)).toBe(false);
+  expect(claim).not.toHaveBeenCalled();
+  expect(useAffiliateStore.getState().inboundOfferPending).toBe(true);
+  expect(await useAffiliateStore.getState().consumeInboundOffer(() => false)).toBe(false);
+  auth.user = { id: 'other' };
+  expect(await useAffiliateStore.getState().consumeInboundOffer(() => true)).toBe(false);
+  expect(useAffiliateStore.getState().inboundOfferPending).toBe(false);
+});
+it('old persisted candidates do not acquire a new inbound offer intent', async () => {
+  jest.mocked(AsyncStorage.getItem).mockResolvedValue(
+    JSON.stringify({
+      ownerId: 'anonymous-a',
+      link: 'https://sandbox.dub.link/demo',
+      clickId: 'fixture',
+      saved: true,
+      autoSubmit: false,
+    }),
+  );
+  useAffiliateStore.setState({ hydrated: false });
+  await useAffiliateStore.getState().hydrate();
+  expect(useAffiliateStore.getState().inboundOfferPending).toBe(false);
+});
+it('waits for the arrival claim without making a second one', async () => {
+  let finish!: (status: 'provisional') => void;
+  claim.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await useAffiliateStore.getState().edit('https://sandbox.dub.link/demo', true);
+  const preparing = useAffiliateStore.getState().prepare();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  const consuming = useAffiliateStore.getState().consumeInboundOffer(() => true);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  expect(claim).toHaveBeenCalledTimes(1);
+  finish('provisional');
+  await preparing;
+  expect(await consuming).toBe(true);
 });

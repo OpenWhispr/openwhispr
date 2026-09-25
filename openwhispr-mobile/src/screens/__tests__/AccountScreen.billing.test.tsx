@@ -1,10 +1,7 @@
-jest.mock('@/store/useAffiliateOfferStore', () => ({
-  closeAffiliateOffer: jest.fn(),
-  presentAffiliateOffer: jest.fn().mockResolvedValue(false),
-}));
+jest.mock('@/lib/affiliateOffer', () => ({ loadAffiliateOffer: jest.fn() }));
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { closeAffiliateOffer, presentAffiliateOffer } from '@/store/useAffiliateOfferStore';
+import { loadAffiliateOffer, type AffiliateOffer } from '@/lib/affiliateOffer';
 import { Alert } from 'react-native';
 import type { UsageInfo } from '@/data/remote/usageApi';
 import { ApiError } from '@/lib/apiClient';
@@ -14,6 +11,7 @@ const mockUser = {
   email: 'user@example.com',
   name: 'Test User',
   emailVerified: true,
+  isAnonymous: false,
 };
 const mockAuthState: {
   user: typeof mockUser | null;
@@ -203,19 +201,20 @@ function getRegisteredGateOptions(): RegisteredGateOptions {
 }
 
 describe('AccountScreen billing management', () => {
-  it('checks a creator link before opening an unsubscribed billing purchase', async () => {
+  it('opens ordinary plans without claiming a candidate or allocating an offer', async () => {
     mockUsageStoreState.usage = mockUnsubscribedUsage;
     mockPrepareAffiliate.mockResolvedValue(false);
     const { getByText } = render(<AccountScreen />);
     fireEvent.press(getByText('Plans & Billing'));
-    await waitFor(() => expect(mockPrepareAffiliate).toHaveBeenCalled());
-    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockRegisterSuperwallGate).toHaveBeenCalled());
+    expect(mockPrepareAffiliate).not.toHaveBeenCalled();
+    expect(loadAffiliateOffer).not.toHaveBeenCalled();
   });
 
   beforeEach(() => {
+    jest.resetAllMocks();
     mockPrepareAffiliate.mockResolvedValue(true);
-    jest.clearAllMocks();
-    jest.mocked(presentAffiliateOffer).mockResolvedValue(false);
+    jest.mocked(loadAffiliateOffer).mockResolvedValue(null);
     mockAuthState.user = mockUser;
     mockAuthState.sessionCookie = 'session-cookie';
     mockAuthState.isGuest = false;
@@ -244,7 +243,7 @@ describe('AccountScreen billing management', () => {
     jest.restoreAllMocks();
   });
 
-  it('discards a delayed creator check when Plans & Billing is left', async () => {
+  it('discards a delayed creator check when Account is left', async () => {
     mockUsageStoreState.usage = mockUnsubscribedUsage;
     let resolve!: (value: boolean) => void;
     mockPrepareAffiliate.mockImplementationOnce(
@@ -254,12 +253,12 @@ describe('AccountScreen billing management', () => {
         }),
     );
     const screen = render(<AccountScreen />);
-    fireEvent.press(screen.getByText('Plans & Billing'));
+    fireEvent.press(screen.getByText('Submit creator link'));
     screen.unmount();
     await act(async () => {
       resolve(true);
     });
-    expect(presentAffiliateOffer).not.toHaveBeenCalled();
+    expect(loadAffiliateOffer).not.toHaveBeenCalled();
     expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
   });
 
@@ -273,31 +272,31 @@ describe('AccountScreen billing management', () => {
         }),
     );
     const screen = render(<AccountScreen />);
-    fireEvent.press(screen.getByText('Plans & Billing'));
+    fireEvent.press(screen.getByText('Submit creator link'));
     mockAuthState.sessionCookie = 'another-session';
     await act(async () => {
       resolve(true);
     });
-    expect(presentAffiliateOffer).not.toHaveBeenCalled();
+    expect(loadAffiliateOffer).not.toHaveBeenCalled();
     expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
   });
 
   it('closes a pending offer on exit without opening a fallback paywall', async () => {
     mockUsageStoreState.usage = mockUnsubscribedUsage;
-    let resolve!: (value: boolean) => void;
-    jest.mocked(presentAffiliateOffer).mockImplementationOnce(
+    let resolve!: (value: AffiliateOffer | null) => void;
+    jest.mocked(loadAffiliateOffer).mockImplementationOnce(
       () =>
         new Promise((done) => {
           resolve = done;
         }),
     );
     const screen = render(<AccountScreen />);
-    fireEvent.press(screen.getByText('Plans & Billing'));
-    await waitFor(() => expect(presentAffiliateOffer).toHaveBeenCalled());
+    fireEvent.press(screen.getByText('Submit creator link'));
+    await waitFor(() => expect(loadAffiliateOffer).toHaveBeenCalled());
     screen.unmount();
-    expect(closeAffiliateOffer).toHaveBeenCalled();
+    expect(jest.mocked(loadAffiliateOffer).mock.calls[0][0]!()).toBe(false);
     await act(async () => {
-      resolve(false);
+      resolve(null);
     });
     expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
   });
@@ -616,18 +615,18 @@ describe('AccountScreen billing management', () => {
 
 describe('Account creator offer intent', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     mockAuthState.user = mockUser;
     mockAuthState.sessionCookie = 'session-cookie';
     mockUsageStoreState.usage = mockUnsubscribedUsage;
     mockPrepareAffiliate.mockResolvedValue(true);
-    jest.mocked(presentAffiliateOffer).mockResolvedValue(false);
+    jest.mocked(loadAffiliateOffer).mockResolvedValue(null);
   });
 
   it('checks and shows the offer directly, with no full-price fallback when unavailable', async () => {
     const screen = render(<AccountScreen />);
     fireEvent.press(screen.getByText('Submit creator link'));
-    await waitFor(() => expect(presentAffiliateOffer).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(loadAffiliateOffer).toHaveBeenCalledTimes(1));
     expect(mockPrepareAffiliate).toHaveBeenCalledWith(expect.any(Function));
     expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
   });
@@ -637,7 +636,7 @@ describe('Account creator offer intent', () => {
     fireEvent.press(screen.getByText('View plans'));
     await waitFor(() => expect(mockRegisterSuperwallGate).toHaveBeenCalledTimes(1));
     expect(mockPrepareAffiliate).not.toHaveBeenCalled();
-    expect(presentAffiliateOffer).not.toHaveBeenCalled();
+    expect(loadAffiliateOffer).not.toHaveBeenCalled();
   });
 
   it('does not present an offer after a failed or denied creator check', async () => {
@@ -645,13 +644,13 @@ describe('Account creator offer intent', () => {
     const screen = render(<AccountScreen />);
     fireEvent.press(screen.getByText('Submit creator link'));
     await waitFor(() => expect(mockPrepareAffiliate).toHaveBeenCalledTimes(1));
-    expect(presentAffiliateOffer).not.toHaveBeenCalled();
+    expect(loadAffiliateOffer).not.toHaveBeenCalled();
     expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
   });
 
   it('ignores repeated submits and billing taps while checking and never follows a dismissed offer with Superwall', async () => {
-    let finish!: (shown: boolean) => void;
-    jest.mocked(presentAffiliateOffer).mockImplementationOnce(
+    let finish!: (offer: AffiliateOffer | null) => void;
+    jest.mocked(loadAffiliateOffer).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           finish = resolve;
@@ -659,14 +658,14 @@ describe('Account creator offer intent', () => {
     );
     const screen = render(<AccountScreen />);
     fireEvent.press(screen.getByText('Submit creator link'));
-    await waitFor(() => expect(presentAffiliateOffer).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(loadAffiliateOffer).toHaveBeenCalledTimes(1));
     fireEvent.press(screen.getByText('Submit creator link'));
     fireEvent.press(screen.getByText('Plans & Billing'));
     await act(async () => {
-      finish(true);
+      finish(null);
     });
     expect(mockPrepareAffiliate).toHaveBeenCalledTimes(1);
-    expect(presentAffiliateOffer).toHaveBeenCalledTimes(1);
+    expect(loadAffiliateOffer).toHaveBeenCalledTimes(1);
     expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
   });
 
@@ -687,7 +686,31 @@ describe('Account creator offer intent', () => {
     await act(async () => {
       finish(true);
     });
-    expect(presentAffiliateOffer).not.toHaveBeenCalled();
+    expect(loadAffiliateOffer).not.toHaveBeenCalled();
     expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
   });
+  it.each([false, true])(
+    'opens the shared paywall with a private offer for anonymous=%s and aborts on leaving Account',
+    async (anonymous) => {
+      mockAuthState.user = { ...mockUser, isAnonymous: anonymous };
+      const offer = {
+        productId: 'monthly',
+        redemptionUrl: 'https://apps.apple.com/redeem?code=TEST',
+      } as AffiliateOffer;
+      jest.mocked(loadAffiliateOffer).mockResolvedValue(offer);
+      mockRegisterSuperwallGate.mockReturnValue(new Promise(() => {}));
+      const screen = render(<AccountScreen />);
+      fireEvent.press(screen.getByText('Submit creator link'));
+      await waitFor(() => expect(mockRegisterSuperwallGate).toHaveBeenCalledTimes(1));
+      const options = mockRegisterSuperwallGate.mock.calls[0][0];
+      expect(options.creatorOffer).toBe(offer);
+      expect(options.requiresAccount).toBe(false);
+      expect(options.onAccessGrantedWithoutPurchase).toBeUndefined();
+      expect(JSON.stringify(options.params)).not.toContain('apps.apple.com');
+      expect(options.signal.aborted).toBe(false);
+      screen.unmount();
+      expect(options.signal.aborted).toBe(true);
+      expect(mockRegisterSuperwallGate).toHaveBeenCalledTimes(1);
+    },
+  );
 });

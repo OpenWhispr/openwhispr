@@ -1,6 +1,6 @@
 import dub from '@dub/react-native';
 import { api } from './apiClient';
-import { getAffiliateClientConfig, parseAffiliateLink } from './affiliateLink';
+import { getAffiliateClientConfig, parseAffiliateInput } from './affiliateLink';
 import { getTrackingAuthorizationStatus } from './trackingTransparency';
 
 export type AffiliateClaimStatus = 'provisional' | 'pending' | 'registered' | 'review';
@@ -20,7 +20,7 @@ export async function checkAndClaimAffiliate(
 ): Promise<AffiliateClaimStatus> {
   const config = getAffiliateClientConfig();
   if (!config) throw new Error('Creator links are not available yet.');
-  const link = parseAffiliateLink(input, config.domain).toString();
+  const link = parseAffiliateInput(input, config.domain).toString();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   const options = {

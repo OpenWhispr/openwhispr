@@ -31,7 +31,7 @@ export function presentAffiliateOffer(isCurrent: () => boolean = () => true): Pr
   const promise = (async () => {
     const { loadAffiliateOffer } =
       require('@/lib/affiliateOffer') as typeof import('@/lib/affiliateOffer');
-    const offer = await loadAffiliateOffer();
+    const offer = await loadAffiliateOffer(() => isCurrent() && version === revision);
     if (
       !isCurrent() ||
       version !== revision ||

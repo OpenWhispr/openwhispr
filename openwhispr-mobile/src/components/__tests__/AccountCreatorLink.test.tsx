@@ -66,7 +66,7 @@ it('expands the menu and auto-checks the exact pasted link once without a billin
   const viewPlans = jest.fn();
   const screen = render(<AccountCreatorLink onCheckOffer={check} onViewPlans={viewPlans} />);
   expect(screen.queryByTestId('creator-input')).toBeNull();
-  fireEvent.press(screen.getByText('Have a creator link?'));
+  fireEvent.press(screen.getByText('Have a creator code?'));
   fireEvent(screen.getByTestId('creator-input'), 'paste', link);
   fireEvent(screen.getByTestId('creator-input'), 'paste', link);
   await waitFor(() => expect(check).toHaveBeenCalledTimes(1));
@@ -77,7 +77,7 @@ it('expands the menu and auto-checks the exact pasted link once without a billin
     useAffiliateStore.setState({ saved: true });
     finish('shown');
   });
-  expect(screen.getByText('Creator link saved')).toBeTruthy();
+  expect(screen.getByText('Creator saved')).toBeTruthy();
   expect(screen.getByText('Check offer')).toBeTruthy();
   expect(screen.queryByText(/couldn’t verify/)).toBeNull();
   expect(viewPlans).not.toHaveBeenCalled();
@@ -86,7 +86,7 @@ it('expands the menu and auto-checks the exact pasted link once without a billin
 it('does not claim during typing and uses the complete native value on Go', async () => {
   const check = jest.fn().mockResolvedValue('invalid');
   const screen = render(<AccountCreatorLink onCheckOffer={check} onViewPlans={jest.fn()} />);
-  fireEvent.press(screen.getByText('Have a creator link?'));
+  fireEvent.press(screen.getByText('Have a creator code?'));
   fireEvent(screen.getByTestId('creator-input'), 'changeText', link);
   await act(async () => {});
   expect(check).not.toHaveBeenCalled();
@@ -102,13 +102,13 @@ it('keeps an unavailable offer inline and opens ordinary plans only by choice', 
   });
   const viewPlans = jest.fn();
   const screen = render(<AccountCreatorLink onCheckOffer={check} onViewPlans={viewPlans} />);
-  fireEvent.press(screen.getByText('Have a creator link?'));
+  fireEvent.press(screen.getByText('Have a creator code?'));
   fireEvent(screen.getByTestId('creator-input'), 'paste', link);
   await waitFor(() => expect(screen.getByText('View plans')).toBeTruthy());
   expect(viewPlans).not.toHaveBeenCalled();
   fireEvent.press(screen.getByText('Not now'));
   expect(screen.queryByText('View plans')).toBeNull();
-  fireEvent.press(screen.getByText('Creator link saved'));
+  fireEvent.press(screen.getByText('Creator saved'));
   fireEvent.press(screen.getByText('Check offer'));
   await waitFor(() => expect(screen.getByText('View plans')).toBeTruthy());
   fireEvent.press(screen.getByText('View plans'));
@@ -125,15 +125,16 @@ it.each([
     return 'invalid' as const;
   });
   const screen = render(<AccountCreatorLink onCheckOffer={check} onViewPlans={jest.fn()} />);
-  fireEvent.press(screen.getByText('Have a creator link?'));
+  fireEvent.press(screen.getByText('Have a creator code?'));
   fireEvent(screen.getByTestId('creator-input'), 'paste', link);
-  await waitFor(() => expect(screen.getByText('Clear link')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Try again')).toBeTruthy());
+  expect(screen.queryByText('Clear link')).toBeNull();
   expect(screen.getByText(error)).toBeTruthy();
   expect(useAffiliateStore.getState().link).toBe(link);
   fireEvent.press(screen.getByText('Try again'));
   await waitFor(() => expect(check).toHaveBeenCalledTimes(2));
   await act(async () => {
-    fireEvent.press(screen.getByText('Clear link'));
+    fireEvent(screen.getByTestId('creator-input'), 'changeText', '');
   });
   expect(useAffiliateStore.getState().link).toBe('');
 });
@@ -141,7 +142,7 @@ it.each([
 it('does not submit an empty paste or a paste that completes after leaving Account', async () => {
   const check = jest.fn();
   const screen = render(<AccountCreatorLink onCheckOffer={check} onViewPlans={jest.fn()} />);
-  fireEvent.press(screen.getByText('Have a creator link?'));
+  fireEvent.press(screen.getByText('Have a creator code?'));
   fireEvent(screen.getByTestId('creator-input'), 'paste', '');
   await act(async () => {});
   expect(check).not.toHaveBeenCalled();
@@ -154,7 +155,7 @@ it('does not submit an empty paste or a paste that completes after leaving Accou
 it('rejects late paste and typing callbacks after blur, even after returning', async () => {
   const check = jest.fn();
   const screen = render(<AccountCreatorLink onCheckOffer={check} onViewPlans={jest.fn()} />);
-  fireEvent.press(screen.getByText('Have a creator link?'));
+  fireEvent.press(screen.getByText('Have a creator code?'));
   const input = screen.getByTestId('creator-input');
   const paste = input.props.onPaste;
   const type = input.props.onChangeText;
@@ -180,7 +181,7 @@ it('rejects late paste and typing callbacks after blur, even after returning', a
 it('rejects a callback from the previous account before a React rerender', async () => {
   const check = jest.fn();
   const screen = render(<AccountCreatorLink onCheckOffer={check} onViewPlans={jest.fn()} />);
-  fireEvent.press(screen.getByText('Have a creator link?'));
+  fireEvent.press(screen.getByText('Have a creator code?'));
   const paste = screen.getByTestId('creator-input').props.onPaste;
   mockAuth.user = { id: 'user-b' };
   mockAuth.sessionCookie = 'cookie-b';

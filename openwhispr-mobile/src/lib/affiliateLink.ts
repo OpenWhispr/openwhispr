@@ -37,6 +37,16 @@ export function parseAffiliateLink(input: string, domain: string): URL {
   return url;
 }
 
+// Short entry is an exact lowercase key, not case folding of a creator identity.
+// Full links preserve their original key case and strict trusted-domain checks.
+export function parseAffiliateInput(input: string, domain: string): URL {
+  const value = input.trim();
+  if (/^[a-z0-9][a-z0-9_-]{0,63}$/.test(value)) {
+    return parseAffiliateLink(`https://${domain}/${value}`, domain);
+  }
+  return parseAffiliateLink(value, domain);
+}
+
 // Native routing can run before auth/config hydration. Keep that explicit arrival
 // until the root hook can bind it to the correct session; never navigate to its destination.
 let arrival: string | null = null;

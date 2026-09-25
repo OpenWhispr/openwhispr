@@ -1,4 +1,4 @@
-import { presentAffiliateOffer, closeAffiliateOffer } from '@/store/useAffiliateOfferStore';
+import { loadAffiliateOffer, type AffiliateOffer } from '@/lib/affiliateOffer';
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Alert, Platform, View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
@@ -137,13 +137,14 @@ export default function AccountScreen() {
   billingContextRef.current.userId = user?.id;
   billingContextRef.current.sessionCookie = sessionCookie;
   const affiliatePendingRef = useRef(false);
+  const billingRegistrationRef = useRef<AbortController | null>(null);
   useFocusEffect(
     useCallback(() => {
       billingContextRef.current.active = true;
       return () => {
         billingContextRef.current.active = false;
         billingContextRef.current.generation += 1;
-        if (affiliatePendingRef.current) closeAffiliateOffer();
+        billingRegistrationRef.current?.abort();
       };
     }, []),
   );
@@ -194,19 +195,26 @@ export default function AccountScreen() {
           return 'cancelled';
         if (
           !currentUsage?.isSubscribed &&
-          intent !== 'standard' &&
+          intent === 'creator' &&
           !(await useAffiliateStore.getState().prepare(isCurrent))
         )
           return 'invalid';
         if (!isCurrent()) return 'cancelled';
-        if (!currentUsage?.isSubscribed && intent !== 'standard') {
-          if (await presentAffiliateOffer(isCurrent)) return 'shown';
+        let creatorOffer: AffiliateOffer | undefined;
+        if (!currentUsage?.isSubscribed && intent === 'creator') {
+          creatorOffer = (await loadAffiliateOffer(isCurrent)) ?? undefined;
+          if (!isCurrent()) return 'cancelled';
+          if (!creatorOffer) return 'unavailable';
         }
         if (!isCurrent()) return 'cancelled';
-        if (intent === 'creator') return 'unavailable';
 
+        const registration = new AbortController();
+        billingRegistrationRef.current = registration;
         await registerSuperwallGate({
+          signal: registration.signal,
           placement: SUPERWALL_PLACEMENTS.accountBillingOpen,
+          creatorOffer,
+          requiresAccount: creatorOffer ? false : undefined,
           params: currentUsage
             ? {
                 plan: currentUsage.plan,
@@ -215,11 +223,12 @@ export default function AccountScreen() {
                 isTrial: currentUsage.isTrial,
               }
             : undefined,
-          onAccessGrantedWithoutPurchase: managementUsage
-            ? () => {
-                openGrantedBillingManagement(managementUsage).catch(() => {});
-              }
-            : undefined,
+          onAccessGrantedWithoutPurchase:
+            managementUsage && !creatorOffer
+              ? () => {
+                  openGrantedBillingManagement(managementUsage).catch(() => {});
+                }
+              : undefined,
           onPurchaseComplete: (completion) => {
             router.replace({
               pathname: '/(tabs)/(record)',
@@ -227,7 +236,7 @@ export default function AccountScreen() {
             });
           },
         });
-        return 'cancelled';
+        return creatorOffer ? 'shown' : 'cancelled';
       } finally {
         affiliatePendingRef.current = false;
       }

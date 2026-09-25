@@ -46,3 +46,21 @@ it('keeps affiliate UI and capture disabled on Android even with shared config',
     Object.defineProperty(Platform, 'OS', { value: previous, configurable: true });
   }
 });
+
+it('maps only bounded lowercase creator keys and preserves full-link key case', () => {
+  const { parseAffiliateInput } = require('../affiliateLink') as typeof import('../affiliateLink');
+  expect(parseAffiliateInput(' demo_creator-1 ', 'sandbox.dub.link').href).toBe(
+    'https://sandbox.dub.link/demo_creator-1',
+  );
+  expect(parseAffiliateInput('https://sandbox.dub.link/Demo', 'sandbox.dub.link').pathname).toBe(
+    '/Demo',
+  );
+});
+it.each(['Demo', 'démø', 'demo/name', 'demo?x=1', 'demo#tag', 'demo name', 'a'.repeat(65), ''])(
+  'rejects ambiguous short input %s',
+  (input) => {
+    const { parseAffiliateInput } =
+      require('../affiliateLink') as typeof import('../affiliateLink');
+    expect(() => parseAffiliateInput(input, 'sandbox.dub.link')).toThrow();
+  },
+);

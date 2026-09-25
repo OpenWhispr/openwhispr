@@ -1,3 +1,9 @@
+import { getTrackingAuthorizationStatus } from '../trackingTransparency';
+const mockConfig = { config: { usageAnalyticsEnabled: true } };
+jest.mock('@/store/useConfigStore', () => ({ useConfigStore: { getState: () => mockConfig } }));
+jest.mock('../trackingTransparency', () => ({
+  getTrackingAuthorizationStatus: jest.fn(async () => 'authorized'),
+}));
 import Purchases from 'react-native-purchases';
 import { api } from '../apiClient';
 import { loadAffiliateOffer, validAffiliateOffer } from '../affiliateOffer';
@@ -27,6 +33,8 @@ const offer = {
 };
 beforeEach(() => {
   jest.clearAllMocks();
+  mockConfig.config.usageAnalyticsEnabled = true;
+  jest.mocked(getTrackingAuthorizationStatus).mockResolvedValue('authorized');
   mockAuth.user.id = 'buyer';
   mockUsage.isSubscribed = false;
   jest.mocked(getAppStorefrontCountryCode).mockResolvedValue('USA');
@@ -98,4 +106,80 @@ it('uses the currency precision for zero- and three-decimal storefronts', () => 
       'KWT',
     ),
   ).toBe(true);
+});
+
+it('does not allocate stock after the presenting caller leaves during storefront lookup', async () => {
+  let current = true;
+  jest.mocked(getAppStorefrontCountryCode).mockImplementation(async () => {
+    current = false;
+    return 'USA';
+  });
+  expect(await loadAffiliateOffer(() => current)).toBeNull();
+  expect(api.post).not.toHaveBeenCalled();
+});
+it('a cancelled caller cannot start an offer lookup', async () => {
+  expect(await loadAffiliateOffer(() => false)).toBeNull();
+  expect(getAppStorefrontCountryCode).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+});
+
+it('does not allocate after dismissal during billing identity lookup', async () => {
+  let current = true;
+  jest.mocked(Purchases.getAppUserID).mockImplementation(async () => {
+    current = false;
+    return 'billing-id';
+  });
+  expect(await loadAffiliateOffer(() => current)).toBeNull();
+  expect(api.post).not.toHaveBeenCalled();
+});
+it('discards an allocation arriving after dismissal without looking up products', async () => {
+  let current = true;
+  jest.mocked(api.post).mockImplementation(async () => {
+    current = false;
+    return { data: offer };
+  });
+  expect(await loadAffiliateOffer(() => current)).toBeNull();
+  expect(Purchases.getProducts).not.toHaveBeenCalled();
+});
+it('discards verified product data arriving after dismissal', async () => {
+  let current = true;
+  jest.mocked(Purchases.getProducts).mockImplementation(async () => {
+    current = false;
+    return [
+      { identifier: 'pro.monthly', price: 9.99, currencyCode: 'USD', subscriptionPeriod: 'P1M' },
+    ] as Awaited<ReturnType<typeof Purchases.getProducts>>;
+  });
+  expect(await loadAffiliateOffer(() => current)).toBeNull();
+});
+
+it('does not allocate stock when a saved creator has Analytics disabled or tracking denied', async () => {
+  mockConfig.config.usageAnalyticsEnabled = false;
+  expect(await loadAffiliateOffer()).toBeNull();
+  mockConfig.config.usageAnalyticsEnabled = true;
+  jest.mocked(getTrackingAuthorizationStatus).mockResolvedValue('denied');
+  expect(await loadAffiliateOffer()).toBeNull();
+  expect(api.post).not.toHaveBeenCalled();
+});
+it('rechecks tracking after native identity lookup before allocating stock', async () => {
+  jest.mocked(Purchases.getAppUserID).mockImplementation(async () => {
+    jest.mocked(getTrackingAuthorizationStatus).mockResolvedValue('denied');
+    return 'billing-id';
+  });
+  expect(await loadAffiliateOffer()).toBeNull();
+  expect(api.post).not.toHaveBeenCalled();
+});
+
+it('rejects an offer which expires during the native product lookup', async () => {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date('2026-09-25T12:00:00Z'));
+  jest
+    .mocked(api.post)
+    .mockResolvedValue({ data: { ...offer, expiresAt: '2026-09-25T12:00:01Z' } });
+  jest.mocked(Purchases.getProducts).mockImplementation(async () => {
+    jest.setSystemTime(new Date('2026-09-25T12:00:02Z'));
+    return [
+      { identifier: 'pro.monthly', price: 9.99, currencyCode: 'USD', subscriptionPeriod: 'P1M' },
+    ] as Awaited<ReturnType<typeof Purchases.getProducts>>;
+  });
+  expect(await loadAffiliateOffer()).toBeNull();
 });

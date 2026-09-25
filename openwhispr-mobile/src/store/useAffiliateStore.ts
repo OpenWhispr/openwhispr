@@ -14,6 +14,7 @@ const candidateSchema = z.object({
   clickId: z.string().nullable(),
   saved: z.boolean(),
   autoSubmit: z.boolean(),
+  inboundOfferPending: z.boolean().default(false),
 });
 type Candidate = z.infer<typeof candidateSchema>;
 const empty: Candidate = {
@@ -22,6 +23,7 @@ const empty: Candidate = {
   clickId: null,
   saved: false,
   autoSubmit: false,
+  inboundOfferPending: false,
 };
 interface AffiliateState extends Candidate {
   hydrated: boolean;
@@ -31,6 +33,7 @@ interface AffiliateState extends Candidate {
   bindSession: () => Promise<void>;
   edit: (link: string, autoSubmit?: boolean) => Promise<void>;
   prepare: (isCallerCurrent?: () => boolean) => Promise<boolean>;
+  consumeInboundOffer: (isCallerCurrent: () => boolean) => Promise<boolean>;
 }
 let revision = 0;
 let writeQueue: Promise<void> = Promise.resolve();
@@ -46,6 +49,7 @@ function snapshot(state: Candidate): Candidate {
     clickId: state.clickId,
     saved: state.saved,
     autoSubmit: state.autoSubmit,
+    inboundOfferPending: state.inboundOfferPending,
   };
 }
 export const useAffiliateStore = create<AffiliateState>((set, get) => ({
@@ -93,6 +97,7 @@ export const useAffiliateStore = create<AffiliateState>((set, get) => ({
       clickId: null,
       error: null,
       autoSubmit,
+      inboundOfferPending: autoSubmit,
       ownerId: useAuthStore.getState().user?.id ?? null,
     });
     try {
@@ -100,6 +105,40 @@ export const useAffiliateStore = create<AffiliateState>((set, get) => ({
     } catch {
       set({ error: 'We couldn’t save your link. Try again.' });
     }
+  },
+  consumeInboundOffer: async (isCallerCurrent) => {
+    await get().hydrate();
+    await get().bindSession();
+    if (!isCallerCurrent() || !get().inboundOfferPending) return false;
+    const version = revision;
+    const current = () => isCallerCurrent() && revision === version;
+    // The arrival hook may already be claiming this exact link after consent.
+    // Let its bounded request settle rather than submitting a duplicate claim.
+    if (get().checking)
+      await new Promise<void>((resolve) => {
+        let unsubscribe = () => {};
+        const finish = () => {
+          clearTimeout(timer);
+          unsubscribe();
+          resolve();
+        };
+        const timer = setTimeout(finish, 10_000);
+        unsubscribe = useAffiliateStore.subscribe((state) => {
+          if (!state.checking || !current()) finish();
+        });
+      });
+    if (
+      !current() ||
+      get().checking ||
+      !(await get().prepare(current)) ||
+      !get().saved ||
+      !current() ||
+      !get().inboundOfferPending
+    )
+      return false;
+    set({ inboundOfferPending: false });
+    await persist(snapshot(get()));
+    return current();
   },
   prepare: async (isCallerCurrent = () => true) => {
     if (!getAffiliateClientConfig()) return true;

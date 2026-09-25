@@ -1,4 +1,3 @@
-import { presentAffiliateOffer, closeAffiliateOffer } from '@/store/useAffiliateOfferStore';
 import { PaywallHighlights } from '@/components/onboarding/PaywallHighlights';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -6,13 +5,13 @@ import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useAffiliateStore } from '@/store/useAffiliateStore';
+import { loadAffiliateOffer, type AffiliateOffer } from '@/lib/affiliateOffer';
 import { useUsageStore } from '@/store/useUsageStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { describeOnboardingError } from '@/lib/onboardingErrors';
-import { CreatorLinkField } from '@/components/onboarding/CreatorLinkField';
 import { getAffiliateClientConfig } from '@/lib/affiliateLink';
-import { useAffiliateStore } from '@/store/useAffiliateStore';
 import { TrackingPermissionStep } from './TrackingPermissionStep';
 
 // A cold launch that resumes on this step arrives before the SDK's configure
@@ -45,33 +44,7 @@ export function PaywallStep() {
   const [escapeElapsed, setEscapeElapsed] = useState(false);
   const affiliateEnabled = Boolean(getAffiliateClientConfig());
   const [consentChecked, setConsentChecked] = useState(!affiliateEnabled);
-  const [entryReady, setEntryReady] = useState(!affiliateEnabled);
-  const [checkingLink, setCheckingLink] = useState(false);
-  const checkingLinkRef = useRef(false);
   const completeConsent = useCallback(async () => setConsentChecked(true), []);
-  const checkCreator = useCallback(async () => {
-    if (checkingLinkRef.current) return;
-    checkingLinkRef.current = true;
-    setCheckingLink(true);
-    setAdvanceError(null);
-    try {
-      const prepared = await useAffiliateStore.getState().prepare();
-      const auth = useAuthStore.getState();
-      if (
-        prepared &&
-        !unmountedRef.current &&
-        auth.user?.id === user?.id &&
-        auth.sessionCookie === sessionCookie
-      )
-        setEntryReady(true);
-    } catch (error) {
-      if (!unmountedRef.current)
-        setAdvanceError(describeOnboardingError(error, 'Could not check your link. Try again.'));
-    } finally {
-      checkingLinkRef.current = false;
-      if (!unmountedRef.current) setCheckingLink(false);
-    }
-  }, [user?.id, sessionCookie]);
 
   const [advanceError, setAdvanceError] = useState<string | null>(null);
   const advance = useCallback(async (): Promise<void> => {
@@ -79,7 +52,6 @@ export function PaywallStep() {
     hasAdvancedRef.current = true;
     hasPresentedRef.current = true;
     registrationRef.current?.abort();
-    closeAffiliateOffer();
     setAdvanceError(null);
     try {
       await goNext();
@@ -94,7 +66,6 @@ export function PaywallStep() {
     return () => {
       unmountedRef.current = true;
       registrationRef.current?.abort();
-      closeAffiliateOffer();
     };
   }, []);
 
@@ -125,7 +96,7 @@ export function PaywallStep() {
       return;
     }
 
-    if (!consentChecked || !entryReady) return;
+    if (!consentChecked) return;
 
     if (!isConfigured && !readyGraceElapsed) return;
     hasPresentedRef.current = true;
@@ -143,22 +114,31 @@ export function PaywallStep() {
       !controller.signal.aborted &&
       useAuthStore.getState().user?.id === user.id &&
       useAuthStore.getState().sessionCookie === sessionCookie;
-    presentAffiliateOffer(isCurrent)
-      .then((shown) => {
-        if (!shown && isCurrent())
-          return register({
-            placement: SUPERWALL_PLACEMENTS.onboardingPaywall,
-            signal: controller.signal,
-          });
-      })
+    (async () => {
+      // Only a trusted inbound-link intent can seed this first presentation.
+      // Ordinary rendering and typed candidates never claim or allocate stock.
+      let creatorOffer: AffiliateOffer | undefined;
+      try {
+        if (affiliateEnabled && (await useAffiliateStore.getState().consumeInboundOffer(isCurrent)))
+          creatorOffer = (await loadAffiliateOffer(isCurrent)) ?? undefined;
+      } catch {
+        // Optional referral storage must not skip ordinary purchasing.
+      }
+      if (!isCurrent()) return;
+      await register({
+        placement: SUPERWALL_PLACEMENTS.onboardingPaywall,
+        signal: controller.signal,
+        creatorOffer,
+      });
+    })()
       .catch(() => {})
       .finally(() => {
         if (isCurrent()) void advance();
       });
   }, [
     advance,
+    affiliateEnabled,
     consentChecked,
-    entryReady,
     isConfigured,
     isSubscribed,
     readyGraceElapsed,
@@ -185,14 +165,8 @@ export function PaywallStep() {
         titleAccent="Pro"
         subtitle="Unlock more with Pro, or close the offer to keep using Cloud with your current limits."
         ctaLabel="Continue"
-        ctaDisabled={ctaDisabled || checkingLink}
-        ctaLoading={checkingLink}
-        onCta={entryReady ? advance : checkCreator}
-        beforeCta={
-          affiliateEnabled && !entryReady ? (
-            <CreatorLinkField onSubmit={() => void checkCreator()} />
-          ) : undefined
-        }
+        ctaDisabled={ctaDisabled}
+        onCta={advance}
       >
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-4 pt-2">
           {advanceError ? (

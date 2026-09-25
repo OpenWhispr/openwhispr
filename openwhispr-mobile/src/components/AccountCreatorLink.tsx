@@ -82,7 +82,7 @@ export function AccountCreatorLink({
         iconStyle="line"
         icon="link"
         mdIcon="Link"
-        title={saved ? 'Creator link saved' : 'Have a creator link?'}
+        title={saved ? 'Creator saved' : 'Have a creator code?'}
         onPress={() => {
           if (!busy) setOpen(!open);
         }}
@@ -100,7 +100,7 @@ export function AccountCreatorLink({
         <View className="ml-14 mr-4 pb-4">
           {!saved && (
             <>
-              <Text className="mb-2 text-[13px] text-secondaryLabel">Creator link</Text>
+              <Text className="mb-2 text-[13px] text-secondaryLabel">Creator code</Text>
               <View className="rounded-xl border border-separator bg-secondarySystemGroupedBackground">
                 <CreatorLinkInput
                   value={link}
@@ -117,7 +117,9 @@ export function AccountCreatorLink({
                     checkOffer(value);
                   }}
                   onInvalidPaste={() =>
-                    setLocalError('This link is too long. Paste the original creator link.')
+                    setLocalError(
+                      'This entry is too long. Enter a creator code or the original link.',
+                    )
                   }
                 />
               </View>
@@ -129,8 +131,8 @@ export function AccountCreatorLink({
               : phase === 'unavailable'
                 ? 'Your creator is saved, but we couldn’t verify an available offer right now.'
                 : saved
-                  ? 'Your creator link is saved. You can check your offer whenever you’re ready.'
-                  : 'Paste your link. We’ll check it and open your offer. Typing instead? Tap Go.'}
+                  ? 'Your creator is saved. You can check your offer whenever you’re ready.'
+                  : 'Paste your code or creator link to check your offer. Typing instead? Tap Go.'}
           </Text>
           {feedback && (
             <Text accessibilityLiveRegion="polite" className="mt-2 text-[13px] text-systemRed">
@@ -150,18 +152,6 @@ export function AccountCreatorLink({
                   {feedback || phase === 'unavailable' ? 'Try again' : 'Check offer'}
                 </Text>
               </Pressable>
-              {!saved && (
-                <Pressable
-                  accessibilityRole="button"
-                  className="min-h-11 justify-center"
-                  onPress={() => {
-                    setLocalError(null);
-                    edit('');
-                  }}
-                >
-                  <Text className="text-[15px] text-brand">Clear link</Text>
-                </Pressable>
-              )}
               {phase === 'unavailable' && (
                 <>
                   <Pressable

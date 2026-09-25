@@ -107,3 +107,20 @@ it('starts a fresh offer check after an account switch and keeps it when the old
   closeAffiliateOffer();
   expect(await current).toBe(true);
 });
+
+it('invalidates the loader guard immediately when the offer closes', async () => {
+  let isCurrent!: () => boolean;
+  let release!: (value: null) => void;
+  jest.mocked(loadAffiliateOffer).mockImplementation((guard) => {
+    isCurrent = guard!;
+    return new Promise((resolve) => {
+      release = resolve;
+    });
+  });
+  const pending = presentAffiliateOffer();
+  expect(isCurrent()).toBe(true);
+  closeAffiliateOffer();
+  expect(isCurrent()).toBe(false);
+  release(null);
+  expect(await pending).toBe(false);
+});

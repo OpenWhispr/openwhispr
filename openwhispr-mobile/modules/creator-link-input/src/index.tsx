@@ -51,8 +51,8 @@ export function CreatorLinkInput({
         editable={editable}
         onChangeText={onChangeText}
         onSubmitEditing={(event) => onSubmit(event.nativeEvent.text)}
-        accessibilityLabel="Creator link"
-        placeholder="Paste your creator’s link"
+        accessibilityLabel="Creator code or link"
+        placeholder="Enter a creator code or link"
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="url"

@@ -37,8 +37,8 @@ final class CreatorLinkInputView: ExpoView, UITextFieldDelegate, UITextPasteDele
     field.smartQuotesType = .no
     field.smartDashesType = .no
     field.spellCheckingType = .no
-    field.accessibilityLabel = "Creator link"
-    field.placeholder = "Paste your creator’s link"
+    field.accessibilityLabel = "Creator code or link"
+    field.placeholder = "Enter a creator code or link"
     field.font = UIFontMetrics(forTextStyle: .body).scaledFont(
       for: UIFont(name: "SpaceGrotesk-Regular", size: 16) ?? .systemFont(ofSize: 16)
     )
