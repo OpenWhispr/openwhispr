@@ -1324,6 +1324,11 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    require("./voiceConversationIpc").registerVoiceConversationIpc({
+      parakeetManager: this.parakeetManager,
+      onSessionActiveChange: (active) => this.windowManager.setVoiceConversationActive(active),
+    });
+
     ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
       this.windowManager.setOnboardingWindowMode(mode)
     );

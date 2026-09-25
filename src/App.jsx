@@ -8,6 +8,7 @@ import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useLinuxPillInteractivity } from "./hooks/useLinuxPillInteractivity";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useAssistantPanel } from "./hooks/useAssistantPanel";
+import { useVoiceConversation } from "./hooks/useVoiceConversation";
 import { useOnboardingAssistantDemo } from "./hooks/useOnboardingAssistantDemo";
 import { useLiveTranscriptPanel } from "./hooks/useLiveTranscriptPanel";
 import { useMainWindowSizeOwner } from "./hooks/useMainWindowSizeOwner";
@@ -191,6 +192,39 @@ export default function App() {
     openPanel: openAssistantPanel,
   } = assistant;
 
+  const voiceConversation = useVoiceConversation({
+    onUserTurn: (text) =>
+      assistant.handleCommand({ text, attachment: null, selectedContext: null, delivery: null }),
+    onError: (message) =>
+      toast({ title: t("voiceConversation.title"), description: message, variant: "destructive" }),
+  });
+  const interceptVoiceAgentToggle = React.useCallback(() => {
+    // A session outlives the setting being turned off; the press must still stop it.
+    if (!voiceConversation.enabled && !voiceConversation.active) return false;
+    // Open the (empty) panel on start so the listening state is visible at once.
+    if (!voiceConversation.active) void openAssistantPanel();
+    voiceConversation.toggle();
+    return true;
+  }, [openAssistantPanel, voiceConversation]);
+  // Voice conversation harness: open the panel and start a mic-less session once, after
+  // the app has settled; the main process then plays the scripted conversation.
+  const startHarnessRef = React.useRef(null);
+  startHarnessRef.current = () => {
+    void openAssistantPanel();
+    void voiceConversation.startHarness();
+  };
+  const { harnessAvailable } = voiceConversation;
+  React.useEffect(() => {
+    if (!harnessAvailable) return undefined;
+    const timer = setTimeout(() => startHarnessRef.current?.(), 4000);
+    return () => clearTimeout(timer);
+  }, [harnessAvailable]);
+
+  const handleAssistantClose = React.useCallback(() => {
+    void voiceConversation.stop();
+    assistant.handleClose();
+  }, [assistant, voiceConversation]);
+
   const handleDictationError = React.useCallback(
     (options = {}) => {
       noteDictationError(options);
@@ -235,6 +269,7 @@ export default function App() {
       liveTranscriptApiRef.current?.showFinalText(text);
     },
     assistantOpenRef,
+    interceptVoiceAgentToggle,
   });
   const isVisuallyProcessing = isProcessing || isPreparing || isStopping;
 
@@ -506,11 +541,13 @@ export default function App() {
 
   const micTooltip = getMicTooltip();
   const assistantVoiceState =
-    isRecording && isAssistantVoice
+    voiceConversation.state === "listening"
       ? "listening"
-      : isProcessing && isAssistantVoice
-        ? "transcribing"
-        : "idle";
+      : isRecording && isAssistantVoice
+        ? "listening"
+        : isProcessing && isAssistantVoice
+          ? "transcribing"
+          : "idle";
   const anyPanelOpen = assistant.open || liveTranscript.open;
   const anyPanelMounted = assistant.mounted || liveTranscript.mounted;
   const canReopenLiveTranscript =
@@ -825,7 +862,8 @@ export default function App() {
             open={assistant.open}
             footerPhase={assistant.footerPhase}
             horizontalDirection={voiceHorizontalDirection}
-            onClose={assistant.handleClose}
+            onClose={handleAssistantClose}
+            speechTap={voiceConversation.speechTap}
             onBusyChange={assistant.setBusy}
             onResponseReadyChange={assistant.setResponseReady}
             onResponseContent={assistant.handleResponseContent}

@@ -24,6 +24,8 @@ interface ToolRegistrySettings {
   webSearchEnabled: boolean;
   /** Live dictionary and snippet access; enables the vocabulary tools. */
   vocabulary?: DictionaryActions & SnippetActions;
+  /** Tools this surface must never offer (voice turns drop snippet editing). */
+  excludeTools?: readonly string[];
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -52,6 +54,8 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     registry.register(calendarTool);
     registry.register(calendarAvailabilityTool);
   }
+
+  for (const name of settings.excludeTools ?? []) registry.unregister(name);
 
   return registry;
 }

@@ -22,6 +22,10 @@ const {
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
 } = require("./download-sherpa-onnx");
+const {
+  privatizeOnnxRuntimeDir,
+  verifyOnnxRuntimePrivatizedDir,
+} = require("./lib/privatize-onnxruntime");
 
 // ---------------------------------------------------------------------------
 // macOS resource binary signing
@@ -297,6 +301,49 @@ function verifyUnpackedBinaries(context) {
 }
 
 // ---------------------------------------------------------------------------
+// Voice conversation dependencies (sherpa-onnx-node + Smart Turn onnxruntime-web)
+// ---------------------------------------------------------------------------
+
+// sherpa-onnx-node loads `sherpa-onnx-${platform}-${os.arch()}` at runtime, so
+// the package must match the target arch, not the build host's: a mac x64
+// build on an arm64 runner only gets darwin-arm64 from `npm ci`.
+function requiredSherpaPackages({ platform, arch }) {
+  const sherpaPlatform = platform === "win32" ? "win" : platform;
+  const archs = arch === "universal" ? ["arm64", "x64"] : [arch];
+  return archs.map((name) => `sherpa-onnx-${sherpaPlatform}-${name}`);
+}
+
+// The voice worker loads sherpa-onnx-node (native, per-platform package) and
+// Smart Turn on onnxruntime-web, whose WASM threads load from real files.
+function prepareVoiceDependencies(context) {
+  const modulesDir = path.join(resolveResourcesDir(context), "app.asar.unpacked", "node_modules");
+  const sherpaDirs = requiredSherpaPackages({
+    platform: context.electronPlatformName,
+    arch: Arch[context.arch],
+  });
+  const missing = sherpaDirs.filter((name) => !fs.existsSync(path.join(modulesDir, name)));
+  if (missing.length > 0) {
+    throw new Error(
+      `afterPack: missing ${missing.join(", ")} in ${modulesDir}; voice conversation would fail to load for this target (install the target-arch platform package before packaging)`
+    );
+  }
+  const wasmPath = path.join(modulesDir, "onnxruntime-web", "dist", "ort-wasm-simd-threaded.wasm");
+  if (!fs.existsSync(wasmPath)) {
+    throw new Error(`afterPack: missing ${wasmPath}; Smart Turn would fall back to silence-only turns`);
+  }
+  if (context.electronPlatformName === "win32") {
+    for (const name of sherpaDirs) {
+      const dir = path.join(modulesDir, name);
+      const { patched } = privatizeOnnxRuntimeDir(dir);
+      console.log(
+        `  afterPack: privatized ONNX Runtime in ${name} (patched ${patched.join(", ") || "nothing"})`
+      );
+      verifyOnnxRuntimePrivatizedDir(dir);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main hook
 // ---------------------------------------------------------------------------
 
@@ -304,8 +351,11 @@ exports.default = async function (context) {
   stripOnnxruntimeBinaries(context);
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
+  prepareVoiceDependencies(context);
   verifyUnpackedBinaries(context);
   registerMacResourceBinariesForSigning(context);
 };
 
 exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
+exports.requiredSherpaPackages = requiredSherpaPackages;
+exports.prepareVoiceDependencies = prepareVoiceDependencies;

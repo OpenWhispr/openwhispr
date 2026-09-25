@@ -73,7 +73,14 @@ export const useAudioRecording = (toast, options = {}) => {
     onShowTranscript,
     onDemoEvent,
     assistantOpenRef,
+    interceptVoiceAgentToggle,
   } = options;
+
+  // Voice conversation: when it returns true, the voice-agent hotkey is handled elsewhere.
+  const interceptVoiceAgentToggleRef = useRef(interceptVoiceAgentToggle);
+  useEffect(() => {
+    interceptVoiceAgentToggleRef.current = interceptVoiceAgentToggle;
+  });
 
   useEffect(
     () => () => {
@@ -885,7 +892,23 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
+    const cancelDictationPreparation = () => {
+      preparationGenerationRef.current += 1;
+      setIsPreparing(false);
+      audioManagerRef.current?.cancelPreparedMicCapture?.();
+      if (reportedLifecycleRef.current?.startsWith("preparing:")) reportLifecycle("idle");
+    };
+
     const disposeVoiceAgentToggle = window.electronAPI.onToggleVoiceAgent?.(() => {
+      // Only an idle dictation hands the press to a voice conversation; a running
+      // one is stopped by it, as before.
+      const dictationIdle =
+        !startLockRef.current && canStartDictation(audioManagerRef.current?.getState());
+      if (dictationIdle && interceptVoiceAgentToggleRef.current?.()) {
+        // Main warmed the dictation mic ahead of this press; the voice session opens its own.
+        cancelDictationPreparation();
+        return;
+      }
       handleToggle({ voiceAgentRequested: true });
       onToggle?.();
     });
@@ -915,12 +938,9 @@ export const useAudioRecording = (toast, options = {}) => {
       void audioManagerRef.current.prepareMicCapture?.();
     });
 
-    const disposeCancelPreparation = window.electronAPI.onCancelDictationPreparation?.(() => {
-      preparationGenerationRef.current += 1;
-      setIsPreparing(false);
-      audioManagerRef.current?.cancelPreparedMicCapture?.();
-      if (reportedLifecycleRef.current?.startsWith("preparing:")) reportLifecycle("idle");
-    });
+    const disposeCancelPreparation = window.electronAPI.onCancelDictationPreparation?.(
+      cancelDictationPreparation
+    );
 
     const disposeStop = window.electronAPI.onStopDictation?.(() => {
       handleStop();

@@ -71,25 +71,94 @@ function getLocalCalendarContext(): string {
   return `Current local date and time: ${formatLocalRfc3339(now)}. IANA time zone: ${timeZone}.`;
 }
 
-export function getAgentSystemPrompt(availableTools?: string[], noteContext?: string): string {
-  let prompt = resolvePrompt("chatAgent", { agentName: null });
+export interface AgentSystemPromptParts {
+  /** Identical from turn to turn, so a local model's prompt cache can reuse it. */
+  stable: string;
+  /** Changes every turn: the clock and retrieved notes. Empty when there is none. */
+  turnContext: string;
+}
+
+export function getAgentSystemPromptParts(
+  availableTools?: string[],
+  noteContext?: string
+): AgentSystemPromptParts {
+  let stable = resolvePrompt("chatAgent", { agentName: null });
+  const turnContext: string[] = [];
 
   if (availableTools && availableTools.length > 0) {
     const toolLines = availableTools.map((name) => TOOL_INSTRUCTIONS[name]).filter(Boolean);
     if (toolLines.length > 0) {
-      prompt += "\n\nYou have access to tools. " + toolLines.join(" ");
+      stable += "\n\nYou have access to tools. " + toolLines.join(" ");
     }
     if (availableTools.includes("get_calendar_availability")) {
-      prompt += "\n\n" + getLocalCalendarContext();
+      turnContext.push(getLocalCalendarContext());
     }
   }
 
   if (noteContext) {
-    prompt +=
-      "\n\nBelow are notes from the user's library that may be relevant. " +
-      "Reference them naturally if they help answer the question.\n\n" +
-      noteContext;
+    turnContext.push(
+      "Below are notes from the user's library that may be relevant. " +
+        "Reference them naturally if they help answer the question.\n\n" +
+        noteContext
+    );
   }
 
-  return prompt;
+  return { stable, turnContext: turnContext.join("\n\n") };
+}
+
+export function getAgentSystemPrompt(availableTools?: string[], noteContext?: string): string {
+  const { stable, turnContext } = getAgentSystemPromptParts(availableTools, noteContext);
+  return turnContext ? `${stable}\n\n${turnContext}` : stable;
+}
+
+// Voice conversation: English-only for now; move into prompts.json per locale before shipping.
+// A stricter "one sentence, then stop" version cut tool recall from 9/10 to 5-7/10
+// in the voice conversation eval without shortening answers; spoken length is capped in code instead.
+const VOICE_BREVITY =
+  "Your reply will be spoken aloud in a live voice conversation. Answer in one or two short " +
+  "sentences unless the user asks for more. Never use Markdown, lists, tables, headings, " +
+  "code, URLs, or emoji. Write numbers, times, and dates the way a person would say them.";
+
+/**
+ * Spoken-reply rules, with tool guidance first: brevity alone made the local
+ * model answer from memory (2/10 tool use in the spike eval vs 9/10 with this).
+ */
+export function getVoiceReplyInstructions(availableTools: string[] = []): string {
+  const has = (name: string) => availableTools.includes(name);
+  const uses: string[] = [];
+  if (has("web_search")) {
+    uses.push("for anything current, time-sensitive, or that you don't know for certain, call web_search");
+  }
+  if (has("search_notes")) uses.push("for the user's own meetings or notes, call search_notes");
+  if (has("get_calendar_events") || has("get_calendar_availability")) {
+    uses.push("for their schedule, use the calendar tools");
+  }
+  if (uses.length === 0) return VOICE_BREVITY;
+
+  let guidance =
+    `Use your tools before answering whenever they could help: ${uses.join("; ")}. ` +
+    "Never tell the user you can't find or don't know something without first trying the relevant tool. " +
+    "Notes provided as context are only possibly relevant; if they don't answer the question, use a tool.";
+  if (has("web_search")) {
+    guidance +=
+      " Your built-in knowledge may be out of date, so for anything about the latest, current, " +
+      "today, now, prices, news, weather, sports results, schedules, or releases, always call " +
+      "web_search rather than answering from memory.";
+  }
+  guidance += " When you decide to use a tool, call it in the same response; never just say that you will check.";
+  // The harness caught "I've added Kubernetes to your dictionary" with no tool call:
+  // earlier confirmations in the conversation make the model imitate them.
+  guidance +=
+    " Never say you did something unless a tool call for it succeeded in this turn; " +
+    "if the user asks for an action, call the tool again even if a similar one ran earlier.";
+  return `${guidance}\n\n${VOICE_BREVITY}`;
+}
+
+/**
+ * Voice turns carry the per-turn context (clock, retrieved notes) in the user's
+ * message instead of the system prompt, so everything before it stays cacheable.
+ */
+export function buildVoiceTurnMessage(userText: string, turnContext: string): string {
+  if (!turnContext) return userText;
+  return `Context for this turn:\n${turnContext}\n\nThe user said: ${userText}`;
 }

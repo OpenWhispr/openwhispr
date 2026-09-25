@@ -599,6 +599,8 @@ function registerSidecars() {
   sidecarRegistry.register("llama", () => modelManager.stopServer());
   const onnxWorkerClient = require("./src/helpers/onnxWorkerClient");
   sidecarRegistry.register("onnx", () => onnxWorkerClient.stop());
+  const voiceWorkerClient = require("./src/helpers/voiceWorkerClient");
+  sidecarRegistry.register("voice", () => voiceWorkerClient.stop());
 }
 
 // Phase 2: Non-critical setup after windows are visible

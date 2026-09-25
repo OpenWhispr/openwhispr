@@ -455,6 +455,40 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getGpuPackMigrationNotice: () => ipcRenderer.invoke("get-gpu-pack-migration-notice"),
   dismissGpuPackMigrationNotice: () => ipcRenderer.invoke("dismiss-gpu-pack-migration-notice"),
 
+  // Local voice conversation, gated by the voiceConversationEnabled setting
+  // (the dev harness runs without it — see OPENWHISPR_VOICE_HARNESS)
+  voiceConversation: {
+    start: (options) => ipcRenderer.invoke("voice-conversation:start", options),
+    sendMic: (samples) => ipcRenderer.send("voice-conversation:mic", samples),
+    keepModelWarm: (modelId) => ipcRenderer.invoke("voice-conversation:keep-model-warm", modelId),
+    speak: (request) => ipcRenderer.invoke("voice-conversation:speak", request),
+    cancelSpeech: (utteranceId) =>
+      ipcRenderer.invoke("voice-conversation:cancel-speech", { utteranceId }),
+    stop: () => ipcRenderer.invoke("voice-conversation:stop"),
+    getReadiness: (request) => ipcRenderer.invoke("voice-conversation:get-readiness", request),
+    downloadModels: () => ipcRenderer.invoke("voice-conversation:download-models"),
+    cancelModelDownload: () => ipcRenderer.invoke("voice-conversation:cancel-download"),
+    onDownloadProgress: (callback) => {
+      const listener = (_event, progress) => callback(progress);
+      ipcRenderer.on("voice-conversation:download-progress", listener);
+      return () => ipcRenderer.removeListener("voice-conversation:download-progress", listener);
+    },
+    isHarness: () => ipcRenderer.invoke("voice-conversation:harness-enabled"),
+    brainOverride: () => ipcRenderer.invoke("voice-conversation:brain-override"),
+    reportTurn: (report) => ipcRenderer.send("voice-conversation:turn-report", report),
+    reportTurnEvent: (turnEvent) => ipcRenderer.send("voice-conversation:turn-event", turnEvent),
+    onHarnessDone: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on("voice-conversation:harness-done", listener);
+      return () => ipcRenderer.removeListener("voice-conversation:harness-done", listener);
+    },
+    onEvent: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on("voice-conversation:event", listener);
+      return () => ipcRenderer.removeListener("voice-conversation:event", listener);
+    },
+  },
+
   // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>
     ipcRenderer.invoke("transcribe-local-parakeet", audioBlob, options),

@@ -281,6 +281,25 @@ jobs:
           rm -f node_modules/ffmpeg-static/ffmpeg
           npm_config_arch=x64 node node_modules/ffmpeg-static/install.js
 
+      # npm ci on the arm64 runner installs only sherpa-onnx-darwin-arm64, but the
+      # x64 app loads sherpa-onnx-darwin-x64 (afterPack fails the build without it).
+      # Unpacked in place so the rest of the tree keeps the host arch.
+      - name: Install sherpa-onnx runtime for target architecture
+        if: matrix.arch == 'x64'
+        run: |
+          PKG=sherpa-onnx-darwin-x64
+          VERSION=$(node -p "require('./package-lock.json').packages['node_modules/$PKG'].version")
+          EXPECTED=$(node -p "require('./package-lock.json').packages['node_modules/$PKG'].integrity")
+          TARBALL="$RUNNER_TEMP/$PKG-$VERSION.tgz"
+          npm pack "$PKG@$VERSION" --pack-destination "$RUNNER_TEMP"
+          ACTUAL="sha512-$(openssl dgst -sha512 -binary "$TARBALL" | base64)"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::$PKG@$VERSION integrity does not match package-lock.json"
+            exit 1
+          fi
+          mkdir -p "node_modules/$PKG"
+          tar -xzf "$TARBALL" -C "node_modules/$PKG" --strip-components=1
+
       - name: Cache native binaries
         uses: actions/cache@v4
         with:

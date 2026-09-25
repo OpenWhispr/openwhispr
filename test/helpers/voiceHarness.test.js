@@ -1,0 +1,144 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+
+const {
+  HARNESS_SCENARIOS,
+  resampleLinear,
+  toFrames,
+  scoreTurn,
+  percentile,
+  summarizeHarness,
+  formatHarnessReport,
+} = require("../../src/helpers/voiceHarness");
+
+test("every scenario has an id, something to say, and the tools it expects", () => {
+  const ids = new Set();
+  for (const scenario of HARNESS_SCENARIOS) {
+    assert.ok(scenario.id && !ids.has(scenario.id), `unique id ${scenario.id}`);
+    ids.add(scenario.id);
+    assert.ok(scenario.say.length > 3);
+    assert.ok(Array.isArray(scenario.expectTools));
+  }
+  assert.ok(HARNESS_SCENARIOS.some((scenario) => scenario.bargeIn));
+  assert.ok(HARNESS_SCENARIOS.some((scenario) => scenario.expectTools.length === 0));
+});
+
+test("resampling 24 kHz to 16 kHz keeps duration and shape", () => {
+  const input = Float32Array.from({ length: 2400 }, (_, index) => index / 2400);
+  const output = resampleLinear(input, 24000, 16000);
+  assert.equal(output.length, 1600);
+  assert.ok(Math.abs(output[800] - 0.5) < 0.01);
+});
+
+test("frames are fixed-size and the last one is zero-padded", () => {
+  const frames = toFrames(Float32Array.from({ length: 1100 }, () => 1), 512);
+  assert.equal(frames.length, 3);
+  assert.ok(frames.every((frame) => frame.length === 512));
+  assert.equal(frames[2][75], 1);
+  assert.equal(frames[2][76], 0);
+});
+
+test("scoring: expected tool called, no tool when none expected, unavailable tools skip", () => {
+  const available = ["web_search", "search_notes"];
+  assert.deepEqual(scoreTurn({ expectTools: ["web_search"], calledTools: ["web_search"], availableTools: available }), {
+    status: "pass",
+  });
+  assert.equal(
+    scoreTurn({ expectTools: ["web_search"], calledTools: [], availableTools: available }).status,
+    "fail"
+  );
+  assert.equal(scoreTurn({ expectTools: [], calledTools: [], availableTools: available }).status, "pass");
+  assert.equal(
+    scoreTurn({ expectTools: [], calledTools: ["web_search"], availableTools: available }).status,
+    "fail"
+  );
+  assert.equal(
+    scoreTurn({ expectTools: ["get_calendar_events"], calledTools: [], availableTools: available }).status,
+    "skipped"
+  );
+});
+
+test("percentile uses nearest rank and ignores missing values", () => {
+  assert.equal(percentile([5, 1, 3, null, 4, 2], 50), 3);
+  assert.equal(percentile([5, 1, 3, 4, 2], 90), 5);
+  assert.equal(percentile([], 50), null);
+});
+
+const result = (overrides) => ({
+  id: "x",
+  said: "hello",
+  heard: "hello",
+  expectTools: [],
+  calledTools: [],
+  availableTools: ["web_search"],
+  ranWrites: [],
+  outcome: "spoke",
+  metrics: { speechEndToFirstAudioMs: 1000, transcriptToFirstDeltaMs: 400, firstChunkToFirstAudioMs: 300 },
+  answer: "Hi.",
+  ...overrides,
+});
+
+test("summary counts pass/fail/skip and reports latency percentiles", () => {
+  const summary = summarizeHarness([
+    result({ id: "a" }),
+    result({ id: "b", expectTools: ["web_search"], calledTools: [], metrics: { speechEndToFirstAudioMs: 3000 } }),
+    result({ id: "c", expectTools: ["get_calendar_events"] }),
+    result({ id: "d", bargeInMs: 250 }),
+  ]);
+  assert.equal(summary.passed, 2);
+  assert.equal(summary.failed, 1);
+  assert.equal(summary.skipped, 1);
+  assert.equal(summary.firstAudio.p50, 1000);
+  assert.equal(summary.firstAudio.p90, 3000);
+  assert.equal(summary.bargeIn.p90, 250);
+  assert.deepEqual(summary.failures, ["b"]);
+});
+
+test("summary includes the full wait the user feels: turn-end detection plus first audio", () => {
+  const summary = summarizeHarness([
+    result({ metrics: { speechEndToFirstAudioMs: 1000, endpointMs: 260, userStopToFirstAudioMs: 1260 } }),
+    result({ metrics: { speechEndToFirstAudioMs: 2000, endpointMs: 1200, userStopToFirstAudioMs: 3200 } }),
+  ]);
+  assert.equal(summary.userStop.p50, 1260);
+  assert.equal(summary.endpoint.p90, 1200);
+});
+
+test("the report names the machine, the headline numbers and each scenario", () => {
+  const results = [result({ id: "weather", said: "Weather in Tokyo?", calledTools: ["web_search"], expectTools: ["web_search"] })];
+  const report = formatHarnessReport({
+    results,
+    summary: summarizeHarness(results),
+    environment: { machine: "Apple M5 Pro", memoryGb: 48, brain: "qwen3.5-9b", tts: "pocket" },
+  });
+  assert.match(report, /Apple M5 Pro/);
+  assert.match(report, /First audio/);
+  assert.match(report, /You stop talking → first sound/);
+  assert.match(report, /\| weather \|/);
+  assert.match(report, /web_search/);
+});
+
+// R10: "Called" is every call the model made, including a repeat the guard
+// blocked from running; "Ran" is what the write-once guard actually let
+// through, so the two can genuinely differ (e.g. a model that repeats
+// create_note once, blocked, vs. once, let through).
+test("the report has a Ran column showing executed writes, separate from Called", () => {
+  const results = [
+    result({
+      id: "note-create",
+      calledTools: ["create_note", "create_note"],
+      ranWrites: ["create_note"],
+      expectTools: ["create_note"],
+    }),
+    result({ id: "plain-rag" }),
+  ];
+  const report = formatHarnessReport({
+    results,
+    summary: summarizeHarness(results),
+    environment: { machine: "Apple M5 Pro", memoryGb: 48, brain: "qwen3.5-9b", tts: "pocket" },
+  });
+  assert.match(report, /\| Scenario \| Result \| Heard \| Expected \| Called \| Ran \| First audio \| Answer \|/);
+  const noteCreateRow = report.split("\n").find((line) => line.startsWith("| note-create |"));
+  assert.match(noteCreateRow, /create_note, create_note \| create_note \|/);
+  const plainRagRow = report.split("\n").find((line) => line.startsWith("| plain-rag |"));
+  assert.match(plainRagRow, /\| none \| none \|/);
+});

@@ -4182,5 +4182,15 @@
     },
     "start": "開始記錄",
     "join": "加入並轉錄"
+  },
+  "voiceConversation": {
+    "title": "語音對話",
+    "errors": {
+      "languageUnsupported": "語音對話目前僅支援英文。請將聽寫語言設為英文或自動。",
+      "voiceModelsMissing": "語音對話需要其語音模型。請在設定中下載。",
+      "speechModelMissing": "語音對話需要 Parakeet 語音模型。請在設定 → 語音轉文字 中下載。",
+      "brainNotDownloaded": "語音助理的本機模型尚未下載。",
+      "workerStopped": "語音引擎意外結束，語音對話已停止。按快捷鍵即可重新開始。"
+    }
   }
 }

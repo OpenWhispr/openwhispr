@@ -26,6 +26,20 @@ const withDisabledReasoning: typeof fetch = (input, init) => {
   return fetch(input, init);
 };
 
+// llama-server switches thinking off per request through the chat template, as
+// the dictation cleanup path already does (llamaServer.js); stripping <think>
+// from the stream alone still spends the thinking tokens before any answer.
+const withLocalThinkingDisabled: typeof fetch = (input, init) => {
+  if (typeof init?.body === "string") {
+    try {
+      const body = JSON.parse(init.body);
+      body.chat_template_kwargs = { ...body.chat_template_kwargs, enable_thinking: false };
+      init = { ...init, body: JSON.stringify(body) };
+    } catch {}
+  }
+  return fetch(input, init);
+};
+
 export async function getAIModel(
   provider: string,
   model: string,
@@ -70,7 +84,11 @@ export async function getAIModel(
         ...(opts?.disableThinking ? { fetch: withDisabledReasoning } : {}),
       }).chat(model);
     case "local":
-      return createOpenAI({ apiKey: apiKey || "no-key", baseURL }).chat(model);
+      return createOpenAI({
+        apiKey: apiKey || "no-key",
+        baseURL,
+        ...(opts?.disableThinking ? { fetch: withLocalThinkingDisabled } : {}),
+      }).chat(model);
     default:
       throw new Error(`Unsupported AI SDK provider for renderer: ${provider}`);
   }

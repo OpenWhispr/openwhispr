@@ -16,9 +16,20 @@ import {
   appendDictionarySuffix,
   appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
+  buildVoiceTurnMessage,
   getAgentSystemPrompt,
+  getAgentSystemPromptParts,
+  getVoiceReplyInstructions,
 } from "../../config/prompts";
 import { getDictionaryHintWords } from "../../utils/snippets";
+import { buildVoiceHistory } from "../../services/voice/voiceHistory";
+import { compactToolResultForVoice } from "../../services/voice/voiceTools";
+import {
+  createWriteOnceGuard,
+  runToolResultOnce,
+  VOICE_EXCLUDED_TOOLS,
+  type WriteOnceGuard,
+} from "../../services/voice/voiceToolPolicy";
 import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
@@ -28,17 +39,14 @@ import {
   buildAgentRequestText,
   type AgentSelectionContext,
 } from "../../utils/agentSelectionContext";
+import { estimateModelSizeB } from "../../utils/localModelSize";
 
 const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
 const STREAM_FLUSH_INTERVAL_MS = 32;
 
 const LOCAL_TOOL_MIN_PARAMS_B = 4;
-
-function estimateModelSizeB(modelId: string): number {
-  const match = modelId.match(/-([\d.]+)[bB]/);
-  return match ? parseFloat(match[1]) : 0;
-}
+const VOICE_MAX_OUTPUT_TOKENS = 200;
 
 async function buildRAGContext(userText: string, scope?: ContainerScope): Promise<string> {
   if (!window.electronAPI?.semanticSearchNotes) return "";
@@ -84,8 +92,57 @@ interface UseChatStreamingOptions {
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
+  /** Fires when a request ends without onStreamComplete: blocked by policy or failed (never on cancel). */
+  onStreamFailed?: () => void;
   /** Fires exactly once when displayable assistant content or tool activity becomes available. */
   onResponseContent?: () => void;
+  /** Receives each streamed content delta as it arrives (voice conversation speaks them). */
+  onContentDelta?: (delta: string) => void;
+  /**
+   * Voice conversation: ask for short spoken replies and keep per-turn context out of the
+   * system prompt so a local model's prompt cache survives between turns.
+   */
+  voiceReplies?: boolean;
+  /** Voice conversation: fires when a voice turn starts calling tools, so a filler line can play. */
+  onToolCall?: (toolNames: string[]) => void;
+  /** Voice conversation: the tools offered to the model for this voice turn. */
+  onToolsAvailable?: (toolNames: string[]) => void;
+  /** Voice conversation: each write tool's outcome, so a spoken claim can be checked. */
+  onWriteToolResult?: (name: string, ok: boolean) => void;
+  /** Voice conversation harness: write tools report success without changing anything. */
+  voiceDryRunWrites?: boolean;
+  /** Voice conversation harness: local model id that answers voice turns instead of the setting. */
+  voiceModelOverride?: string | null;
+}
+
+const DRY_RUN_RESULT = { success: true, dryRun: true, note: "Test run: nothing was changed." };
+
+/**
+ * Voice turns get compacted tool results (see compactToolResultForVoice) and run
+ * each write tool at most once (see createWriteOnceGuard); in the harness, the
+ * tools named in `dryRunNames` return a canned success instead.
+ */
+function prepareVoiceTools(
+  tools: ReturnType<ToolRegistry["toAISDKFormat"]> | undefined,
+  { dryRunNames, guard }: { dryRunNames: Set<string>; guard: WriteOnceGuard }
+): ReturnType<ToolRegistry["toAISDKFormat"]> | undefined {
+  if (!tools) return tools;
+  const prepared: ReturnType<ToolRegistry["toAISDKFormat"]> = {};
+  for (const [name, tool] of Object.entries(tools)) {
+    const execute = tool.execute;
+    prepared[name] = execute
+      ? ({
+          ...tool,
+          execute: (...args: Parameters<typeof execute>) =>
+            guard.run(name, async () =>
+              dryRunNames.has(name)
+                ? DRY_RUN_RESULT
+                : compactToolResultForVoice(name, await execute(...args))
+            ),
+        } as typeof tool)
+      : tool;
+  }
+  return prepared;
 }
 
 export interface SendToAIOptions {
@@ -136,9 +193,37 @@ export function useChatStreaming({
   noteContext: externalNoteContext,
   searchScope,
   onStreamComplete,
+  onStreamFailed,
   onResponseContent,
+  onContentDelta,
+  onToolCall,
+  onToolsAvailable,
+  onWriteToolResult,
+  voiceDryRunWrites = false,
+  voiceModelOverride = null,
+  voiceReplies = false,
 }: UseChatStreamingOptions): ChatStreaming {
   const { t } = useTranslation();
+  const onContentDeltaRef = useRef(onContentDelta);
+  onContentDeltaRef.current = onContentDelta;
+  const onStreamFailedRef = useRef(onStreamFailed);
+  onStreamFailedRef.current = onStreamFailed;
+  const voiceRepliesRef = useRef(voiceReplies);
+  voiceRepliesRef.current = voiceReplies;
+  // Voice turns: each user message exactly as sent, so later turns replay it verbatim.
+  // Tool steps are deliberately not replayed: Qwen3.5's template renders an assistant
+  // turn differently once a newer question follows, so they can never match the cache.
+  const voiceSentContentRef = useRef(new Map<string, string>());
+  const onToolCallRef = useRef(onToolCall);
+  onToolCallRef.current = onToolCall;
+  const onToolsAvailableRef = useRef(onToolsAvailable);
+  onToolsAvailableRef.current = onToolsAvailable;
+  const onWriteToolResultRef = useRef(onWriteToolResult);
+  onWriteToolResultRef.current = onWriteToolResult;
+  const voiceDryRunWritesRef = useRef(voiceDryRunWrites);
+  voiceDryRunWritesRef.current = voiceDryRunWrites;
+  const voiceModelOverrideRef = useRef(voiceModelOverride);
+  voiceModelOverrideRef.current = voiceModelOverride;
   const [agentState, setAgentState] = useState<AgentState>("idle");
   const [toolStatus, setToolStatus] = useState("");
   const [activeToolName, setActiveToolName] = useState("");
@@ -240,11 +325,17 @@ export function useChatStreaming({
         if (!options?.suppressResponseContent) onResponseContent?.();
       };
       const settings = getSettings();
-      const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
+      const { config: resolvedConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
         inferenceScope,
         hasScreenContext: !!options?.attachment,
         isProviderImageWired: providerSupportsImages,
       });
+      // Voice conversation harness: pin voice turns to a local model (OPENWHISPR_VOICE_HARNESS_BRAIN)
+      // so model comparisons don't depend on, or change, the user's settings.
+      const voiceModelOverride = voiceRepliesRef.current ? voiceModelOverrideRef.current : null;
+      const llmConfig = voiceModelOverride
+        ? { ...resolvedConfig, mode: "local" as const, provider: "local", model: voiceModelOverride }
+        : resolvedConfig;
       const requestedAttachment = attachScreenContext ? (options?.attachment ?? null) : null;
       const llmMode = llmConfig.mode || "openwhispr";
       const policyState = usePolicyStore.getState();
@@ -267,6 +358,7 @@ export function useChatStreaming({
           ...prev,
           { id: crypto.randomUUID(), role: "assistant", content: restriction, isStreaming: false },
         ]);
+        onStreamFailedRef.current?.();
         return;
       }
 
@@ -301,7 +393,10 @@ export function useChatStreaming({
         const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
         // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
         const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
-        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}`;
+        // voiceReplies changes which tools this registry may offer (voice turns
+        // exclude snippet editing), so it must be part of the cache key too —
+        // otherwise a registry built for one kind of turn gets reused for the other.
+        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${voiceRepliesRef.current}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
@@ -318,6 +413,7 @@ export function useChatStreaming({
               getSnippets: () => getSettings().snippets,
               setSnippets: (snippets) => useSettingsStore.getState().setSnippets(snippets),
             },
+            ...(voiceRepliesRef.current ? { excludeTools: VOICE_EXCLUDED_TOOLS } : {}),
           });
           toolRegistryRef.current = { key: cacheKey, registry };
         }
@@ -326,20 +422,30 @@ export function useChatStreaming({
       const ragContext = await buildRAGContext(userText, scope);
       if (cancelled() || !mountedRef.current) return;
       const combinedContext = [noteContextRef.current, ragContext].filter(Boolean).join("\n\n");
+      const toolNames = registry?.getAll().map((t) => t.name);
+      const voiceTurn = voiceRepliesRef.current;
+      const promptParts = voiceTurn
+        ? getAgentSystemPromptParts(toolNames, combinedContext || undefined)
+        : null;
+      if (voiceTurn) onToolsAvailableRef.current?.(toolNames ?? []);
       // The user's dictionary rides on every conversation so replies use their
       // jargon — same suffix the dictation prompts carry.
       let systemPrompt = appendDictionarySuffix(
-        getAgentSystemPrompt(
-          registry?.getAll().map((t) => t.name),
-          combinedContext || undefined
-        ),
+        promptParts
+          ? `${promptParts.stable}\n\n${getVoiceReplyInstructions(toolNames)}`
+          : getAgentSystemPrompt(toolNames, combinedContext || undefined),
         getDictionaryHintWords(settings),
         settings.uiLanguage
       );
 
-      const history: HistoryMessage[] = allMessages
-        .slice(-20)
-        .map((m) => ({ role: m.role, content: m.content }));
+      const history: HistoryMessage[] = promptParts
+        ? buildVoiceHistory(
+            allMessages,
+            voiceSentContentRef.current,
+            promptParts.turnContext,
+            buildVoiceTurnMessage
+          )
+        : allMessages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
 
       const selectedContext = options?.selectedContext;
       if (selectedContext) {
@@ -412,6 +518,19 @@ export function useChatStreaming({
       try {
         let stream: AsyncGenerator<AgentStreamChunk>;
 
+        // Shared by both branches below: OpenWhispr Cloud runs tools via
+        // executeToolCall, BYOK/local runs them via the AI SDK's registry.toAISDKFormat()
+        // wrapper, but "each write tool runs at most once per voice turn" applies to
+        // whichever one actually answers this request. One guard per request, so
+        // "once per turn" resets with each spoken turn.
+        const writeToolNames = new Set(
+          (registry?.getAll() ?? []).filter((tool) => !tool.readOnly).map((tool) => tool.name)
+        );
+        const dryRunNames = voiceTurn && voiceDryRunWritesRef.current ? writeToolNames : new Set<string>();
+        const writeOnceGuard = voiceTurn
+          ? createWriteOnceGuard(writeToolNames, (name, ok) => onWriteToolResultRef.current?.(name, ok))
+          : null;
+
         if (isCloudAgent) {
           const executeToolCall = registry
             ? async (name: string, argsJson: string) => {
@@ -430,7 +549,17 @@ export function useChatStreaming({
                     displayText: t("agentMode.tools.invalidArgs", { name }),
                   };
                 }
-                const result = await tool.execute(args);
+                const execute = () =>
+                  dryRunNames.has(name)
+                    ? Promise.resolve({
+                        success: true,
+                        data: DRY_RUN_RESULT,
+                        displayText: DRY_RUN_RESULT.note,
+                      })
+                    : tool.execute(args);
+                const result = writeOnceGuard
+                  ? await runToolResultOnce(writeOnceGuard, name, execute)
+                  : await execute();
                 const data = result.success
                   ? typeof result.data === "string"
                     ? result.data
@@ -455,7 +584,10 @@ export function useChatStreaming({
             ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
           });
         } else {
-          const aiTools = registry?.toAISDKFormat();
+          const aiTools =
+            voiceTurn && writeOnceGuard
+              ? prepareVoiceTools(registry?.toAISDKFormat(), { dryRunNames, guard: writeOnceGuard })
+              : registry?.toAISDKFormat();
           stream = ReasoningService.processTextStreamingAI(
             llmMessages,
             llmConfig.model,
@@ -472,6 +604,8 @@ export function useChatStreaming({
               customApiKey:
                 isCustomAgent || isLanAgent ? llmConfig.customApiKey || undefined : undefined,
               disableThinking: llmConfig.disableThinking,
+              // Backstop for spoken replies; the voice prompt keeps them far shorter.
+              ...(voiceTurn ? { maxTokens: VOICE_MAX_OUTPUT_TOKENS } : {}),
             },
             aiTools
           );
@@ -485,12 +619,16 @@ export function useChatStreaming({
           if (chunk.type === "content") {
             if (chunk.text) announceResponse();
             fullContent += chunk.text;
+            if (chunk.text) onContentDeltaRef.current?.(chunk.text);
             scheduleContentFlush();
           } else if (chunk.type === "tool_calls") {
             // Text that arrived before a tool step must be on screen before the
             // step appears, not an interval after it.
             flushContentNow();
             if (chunk.calls.length > 0) announceResponse();
+            if (voiceTurn && chunk.calls.length > 0) {
+              onToolCallRef.current?.(chunk.calls.map((call) => call.name));
+            }
             for (const call of chunk.calls) {
               setAgentState("tool-executing");
               beginToolActivity(
@@ -622,6 +760,7 @@ export function useChatStreaming({
                 : m
             )
           );
+          onStreamFailedRef.current?.();
         }
       }
 

@@ -4182,5 +4182,15 @@
     },
     "start": "Tomar notas",
     "join": "Unirse y transcribir"
+  },
+  "voiceConversation": {
+    "title": "Conversación de voz",
+    "errors": {
+      "languageUnsupported": "La conversación de voz solo entiende inglés por ahora. Configura tu idioma de dictado en inglés o automático.",
+      "voiceModelsMissing": "La conversación de voz necesita sus modelos de voz. Descárgalos en Ajustes.",
+      "speechModelMissing": "La conversación de voz necesita un modelo de voz Parakeet. Descarga uno en Ajustes → Voz a texto.",
+      "brainNotDownloaded": "El modelo local del Asistente de voz aún no se ha descargado.",
+      "workerStopped": "La conversación por voz se detuvo porque su motor de voz se cerró inesperadamente. Pulsa el atajo para volver a empezar."
+    }
   }
 }

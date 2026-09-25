@@ -3,7 +3,7 @@ const fsPromises = require("fs").promises;
 const path = require("path");
 const { spawn } = require("child_process");
 const debugLogger = require("./debugLogger");
-const { runSystemTar } = require("./systemTar");
+const { extractTarBz2 } = require("./systemTar");
 const { downloadFile, createDownloadSignal, checkDiskSpace } = require("./downloadUtils");
 const { resolveBinaryPath, gracefulStopProcess } = require("../utils/serverUtils");
 const { getModelsDirForService } = require("./modelDirUtils");
@@ -255,23 +255,7 @@ class DiarizationManager {
   }
 
   async _extractTarBz2(archivePath, destDir) {
-    try {
-      await this._runSystemTar(archivePath, destDir);
-      return;
-    } catch (err) {
-      debugLogger.debug("System tar failed, falling back to JS extraction", {
-        error: err.message,
-      });
-    }
-
-    const unbzip2 = require("unbzip2-stream");
-    const tar = require("tar");
-    const { pipeline } = require("stream/promises");
-    await pipeline(fs.createReadStream(archivePath), unbzip2(), tar.x({ cwd: destDir }));
-  }
-
-  _runSystemTar(archivePath, destDir) {
-    return runSystemTar(archivePath, destDir);
+    return extractTarBz2(archivePath, destDir);
   }
 
   async cancelDownload() {

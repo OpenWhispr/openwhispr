@@ -1,0 +1,258 @@
+const path = require("path");
+const { EventEmitter } = require("events");
+const { ipcMain } = require("electron");
+const debugLogger = require("./debugLogger");
+const voiceWorker = require("./voiceWorkerClient");
+const voiceModels = require("./voiceModels");
+const { pcm16ToWav } = require("../utils/audioUtils");
+const {
+  VAD_SAMPLE_RATE,
+  buildVoiceWorkerConfig,
+  float32ToPcm16Buffer,
+  resolveVoiceParakeetModel,
+} = require("./voiceConversationConfig");
+const { checkVoiceConversationReadiness } = require("./voiceConversationReadiness");
+const { createDownloadSignal } = require("./downloadUtils");
+
+// Local voice conversation: the renderer streams echo-cancelled 16 kHz mic frames in;
+// the worker's VAD + Smart Turn cut turns, Parakeet transcribes them here, and Pocket
+// TTS audio streams back out. Gated in the renderer by the voiceConversationEnabled setting.
+function registerVoiceConversationIpc({ parakeetManager, onSessionActiveChange }) {
+  let sender = null;
+  let session = null;
+  let detachSessionRenderer = null;
+
+  // One way out of a session, whoever ends it: the renderer's stop, a worker crash,
+  // or the renderer reloading or crashing. The last never reaches stop, and a session
+  // left set would block dictation (onSessionActiveChange) until the app restarts.
+  const endSession = () => {
+    detachSessionRenderer?.();
+    detachSessionRenderer = null;
+    if (!session) return;
+    session = null;
+    onSessionActiveChange?.(false);
+  };
+
+  const beginSession = (nextSession, webContents) => {
+    detachSessionRenderer?.();
+    session = nextSession;
+    onSessionActiveChange?.(true);
+    const rendererEvents = ["did-navigate", "render-process-gone", "destroyed"];
+    for (const name of rendererEvents) webContents.once(name, endSession);
+    detachSessionRenderer = () => {
+      for (const name of rendererEvents) webContents.removeListener(name, endSession);
+    };
+  };
+  let configuredKey = null;
+  let configuredSampleRate = null;
+  let configuredSmartTurn = false;
+  const conversationEvents = new EventEmitter();
+
+  const send = (payload, transfer) => {
+    if (!sender || sender.isDestroyed()) return;
+    sender.send("voice-conversation:event", payload, transfer);
+  };
+
+  voiceWorker.on("speech-start", () => {
+    if (session) send({ type: "speech-start", at: Date.now() });
+  });
+
+  voiceWorker.on("speech-segment", async ({ samples, endpoint }) => {
+    if (!session) return;
+    const endedAt = Date.now();
+    const speechMs = Math.round((samples.length / VAD_SAMPLE_RATE) * 1000);
+    try {
+      const wav = pcm16ToWav(float32ToPcm16Buffer(samples), VAD_SAMPLE_RATE);
+      const result = await parakeetManager.transcribeLocalParakeet(wav, {
+        model: session.parakeetModel,
+        language: session.language,
+      });
+      send({
+        type: "transcript",
+        text: result?.text?.trim() || "",
+        speechMs,
+        sttMs: Date.now() - endedAt,
+        endedAt,
+        endpoint: endpoint || null,
+      });
+    } catch (error) {
+      debugLogger.error("voice conversation transcription failed", { error: error?.message });
+      send({ type: "error", stage: "stt", message: error?.message || String(error) });
+    }
+  });
+
+  voiceWorker.on("tts-audio", ({ utteranceId, chunkIndex, samples }) => {
+    send({ type: "tts-audio", utteranceId, chunkIndex, samples, at: Date.now() });
+  });
+
+  voiceWorker.on("exit", ({ code }) => {
+    configuredKey = null;
+    if (!session) return;
+    // Mic frames would otherwise go nowhere while the renderer keeps listening.
+    endSession();
+    send({ type: "error", stage: "worker", message: `voice worker exited (${code})` });
+  });
+
+  // End-to-end harness: the renderer reports each finished turn; the runner
+  // (voiceHarnessRunner.js) waits on these to score scripted conversations.
+  const harnessEnabled = process.env.OPENWHISPR_VOICE_HARNESS === "1";
+  ipcMain.handle("voice-conversation:harness-enabled", () => harnessEnabled);
+  // Local model id that answers voice turns instead of the Voice Assistant setting,
+  // so harness comparisons neither depend on nor change the user's settings.
+  ipcMain.handle("voice-conversation:brain-override", () =>
+    harnessEnabled ? (process.env.OPENWHISPR_VOICE_HARNESS_BRAIN || "").trim() || null : null
+  );
+  ipcMain.on("voice-conversation:turn-report", (_event, report) =>
+    conversationEvents.emit("turn-report", report)
+  );
+  ipcMain.on("voice-conversation:turn-event", (_event, turnEvent) =>
+    conversationEvents.emit("turn-event", turnEvent)
+  );
+  if (harnessEnabled) {
+    require("./voiceHarnessRunner")
+      .runVoiceHarness({
+        voiceWorker,
+        conversationEvents,
+        getSession: () => session,
+        sendToRenderer: (channel) => {
+          if (sender && !sender.isDestroyed()) sender.send(channel);
+        },
+      })
+      .catch((error) => debugLogger.error("voice harness failed", { error: error?.message }));
+  }
+
+  ipcMain.handle("voice-conversation:start", async (event, options = {}) => {
+    sender = event.sender;
+    if (!voiceModels.getVoiceModelStatus().ready) throw new Error("voice-models-missing");
+    const config = buildVoiceWorkerConfig({ modelPaths: voiceModels.getVoiceModelPaths() });
+    const configKey = JSON.stringify([config.vad.sileroVad.model, config.smartTurn]);
+    // The session begins before the worker loads, so dictation is already held off
+    // while it does; a stop during the load ends it and wins.
+    const starting = {
+      parakeetModel: resolveVoiceParakeetModel(options.parakeetModel, (name) =>
+        parakeetManager.isModelDownloaded(name)
+      ),
+      language: options.language,
+      sampleRate: configuredSampleRate,
+      brainModel: options.brainModel,
+      harness: !!options.harness,
+    };
+    beginSession(starting, event.sender);
+    let loadMs = 0;
+    if (configuredKey !== configKey || !voiceWorker.running) {
+      let result;
+      try {
+        result = await voiceWorker.request("configure", config);
+      } catch (error) {
+        if (session === starting) endSession();
+        throw error;
+      }
+      configuredKey = configKey;
+      configuredSmartTurn = result.smartTurn;
+      loadMs = result.loadMs;
+      starting.sampleRate = result.sampleRate;
+      configuredSampleRate = result.sampleRate;
+    } else {
+      voiceWorker.notify("vad-reset", {});
+    }
+    const { sampleRate } = starting;
+    if (session !== starting) return { sampleRate, loadMs, smartTurn: configuredSmartTurn };
+    conversationEvents.emit("session-started", session);
+    // Warm Parakeet now: a cold server start (~3 s) would otherwise land on the first turn.
+    parakeetManager.startServer(session.parakeetModel, session.language).catch((error) => {
+      debugLogger.warn("voice conversation Parakeet warm-up failed", { error: error?.message });
+    });
+    debugLogger.info("voice conversation started", {
+      smartTurn: configuredSmartTurn,
+      minSilenceMs: Math.round(config.vad.sileroVad.minSilenceDuration * 1000),
+      maxSilenceMs: config.smartTurn?.maxSilenceMs ?? null,
+      loadMs,
+      sampleRate,
+      parakeetModel: session.parakeetModel,
+    });
+    return { sampleRate, loadMs, smartTurn: configuredSmartTurn };
+  });
+
+  // Starts the voice model if needed and resets llama-server's 5-minute idle
+  // timer, which a plain start() on a running server does not do. Called at
+  // session start (so the first turn skips the cold start) and every minute after.
+  ipcMain.handle("voice-conversation:keep-model-warm", async (_event, modelId) => {
+    try {
+      const modelManager = require("./modelManagerBridge").default;
+      modelManager.ensureInitialized();
+      const modelInfo = modelManager.findModelById(modelId);
+      if (!modelInfo) return { warmed: false, reason: `unknown model ${modelId}` };
+      const modelPath = path.join(modelManager.modelsDir, modelInfo.model.fileName);
+      await modelManager.serverManager.start(modelPath, await modelManager.serverStartOptions(modelInfo));
+      modelManager.currentServerModelId = modelId;
+      modelManager.serverManager.resetIdleTimer();
+      return { warmed: true };
+    } catch (error) {
+      debugLogger.warn("voice conversation model warm-up failed", { error: error?.message });
+      return { warmed: false, reason: error?.message };
+    }
+  });
+
+  ipcMain.on("voice-conversation:mic", (_event, samples) => {
+    if (session) voiceWorker.notify("vad-feed", { samples });
+  });
+
+  ipcMain.handle("voice-conversation:speak", (_event, request) =>
+    voiceWorker.request("speak", request)
+  );
+
+  ipcMain.handle("voice-conversation:get-readiness", async (_event, request = {}) => {
+    const speechModel = resolveVoiceParakeetModel(request.parakeetModel, (name) =>
+      parakeetManager.isModelDownloaded(name)
+    );
+    const brain = request.brain || {};
+    let brainDownloaded = false;
+    if (brain.mode === "local" && brain.model) {
+      const modelManager = require("./modelManagerBridge").default;
+      modelManager.ensureInitialized();
+      brainDownloaded = await modelManager.isModelDownloaded(brain.model).catch(() => false);
+    }
+    return checkVoiceConversationReadiness({
+      modelStatus: voiceModels.getVoiceModelStatus(),
+      speechModelDownloaded: Boolean(speechModel && parakeetManager.isModelDownloaded(speechModel)),
+      language: request.language,
+      brain: { mode: brain.mode, model: brain.model, downloaded: brainDownloaded },
+    });
+  });
+
+  let modelDownload = null;
+  ipcMain.handle("voice-conversation:download-models", async (event) => {
+    if (modelDownload) return modelDownload.promise;
+    // downloadFile takes this { aborted, onAbort } signal, not an AbortSignal.
+    const { signal, abort } = createDownloadSignal();
+    const promise = voiceModels
+      .downloadVoiceModels({
+        signal,
+        onProgress: (progress) => {
+          if (!event.sender.isDestroyed()) event.sender.send("voice-conversation:download-progress", progress);
+        },
+      })
+      .finally(() => {
+        modelDownload = null;
+      });
+    modelDownload = { abort, promise };
+    return promise;
+  });
+
+  ipcMain.handle("voice-conversation:cancel-download", () => {
+    modelDownload?.abort();
+    return { cancelled: Boolean(modelDownload) };
+  });
+
+  ipcMain.handle("voice-conversation:cancel-speech", (_event, { utteranceId }) =>
+    voiceWorker.running ? voiceWorker.request("cancel", { utteranceId }) : { cancelled: true }
+  );
+
+  ipcMain.handle("voice-conversation:stop", () => {
+    endSession();
+    voiceWorker.notify("vad-reset", {});
+    return { stopped: true };
+  });
+}
+
+module.exports = { registerVoiceConversationIpc };
