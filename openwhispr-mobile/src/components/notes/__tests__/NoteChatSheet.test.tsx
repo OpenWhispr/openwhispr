@@ -69,8 +69,13 @@ describe('NoteChatSheet suggestions', () => {
     expect(queryByLabelText('List action items')).toBeNull();
   });
 
-  it('ignores chip taps while a question is in flight', () => {
-    const { getByLabelText, props } = renderSheet({ isProcessing: true });
+  it('steps aside once the user starts typing so a tap cannot discard the draft', () => {
+    const { queryByLabelText } = renderSheet({ draft: 'Who owns the' });
+    expect(queryByLabelText('List action items')).toBeNull();
+  });
+
+  it('ignores chip taps when there is nothing to ask about', () => {
+    const { getByLabelText, props } = renderSheet({ canSend: false });
     fireEvent.press(getByLabelText('List action items'));
     expect(props.onSuggestion).not.toHaveBeenCalled();
   });

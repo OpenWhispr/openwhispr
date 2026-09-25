@@ -57,8 +57,9 @@ export function NoteChatSheet({
   const keyboardHeight = useKeyboardHeight(visible);
   const canSubmit = canSend && draft.trim().length > 0 && !isProcessing;
   const hasMessages = messages.length > 0;
-  // Shortcuts only seed the first question; once a conversation exists they'd crowd the thread.
-  const showSuggestions = !hasMessages && suggestions.length > 0;
+  // Shortcuts only seed the first question: they'd crowd an existing thread, and a tap sends
+  // immediately, so they step aside once the user starts typing rather than discard the draft.
+  const showSuggestions = !hasMessages && !draft.trim() && suggestions.length > 0;
   const canUseSuggestion = canSend && !isProcessing;
   const sheetHeight = Math.min(windowHeight * 0.82, windowHeight - insets.top - 8);
   const bottomPad =
@@ -110,14 +111,15 @@ export function NoteChatSheet({
             </GlassIconButton>
           </View>
 
+          {/* With the keyboard up the sheet is short, so an empty thread must not squeeze the chips. */}
           <ScrollView
             ref={scrollRef}
-            className="min-h-[220px] flex-1"
+            className={`flex-1 ${hasMessages ? 'min-h-[220px]' : ''}`}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
           >
-            {!hasMessages ? null : (
+            {hasMessages ? (
               <View className="gap-3 pb-3">
                 {messages.map((message) => {
                   const isUser = message.role === 'user';
@@ -149,7 +151,7 @@ export function NoteChatSheet({
                   </View>
                 ) : null}
               </View>
-            )}
+            ) : null}
           </ScrollView>
 
           {error ? (
@@ -167,11 +169,11 @@ export function NoteChatSheet({
             </View>
           ) : null}
 
+          {/* Bleeds past the sheet's side padding so chips scroll edge to edge. */}
           {showSuggestions ? (
             <ScrollView
               horizontal
-              // Bleed past the sheet's side padding so chips scroll edge to edge.
-              className="-mx-5 mb-3 grow-0"
+              className="-mx-5 mb-3 shrink-0 grow-0"
               contentContainerClassName="gap-2 px-5"
               keyboardShouldPersistTaps="handled"
               showsHorizontalScrollIndicator={false}
@@ -183,6 +185,7 @@ export function NoteChatSheet({
                   disabled={!canUseSuggestion}
                   accessibilityRole="button"
                   accessibilityLabel={suggestion.label}
+                  accessibilityHint="Sends this question"
                   className="rounded-full bg-tertiarySystemFill px-4 py-2.5 active:opacity-70 disabled:opacity-50"
                   style={{ borderCurve: 'continuous' }}
                 >

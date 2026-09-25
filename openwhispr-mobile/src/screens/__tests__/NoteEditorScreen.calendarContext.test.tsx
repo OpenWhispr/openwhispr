@@ -559,10 +559,19 @@ describe('NoteEditorScreen generated meeting context', () => {
 });
 
 describe('NoteEditorScreen note chat', () => {
+  const PILL = 'note-ask-pill';
+
   it('shows the Ask pill instead of the menu entry once a meeting has finished', () => {
-    const { getByLabelText, queryByText } = render(<NoteEditorScreen />);
-    expect(getByLabelText('Ask about this note')).toBeTruthy();
+    const { getByTestId, queryByText } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
     expect(queryByText('Ask about this note')).toBeNull();
+  });
+
+  it('shows the Ask pill for a synced meeting that kept the local idle status', () => {
+    mockNote = note({ transcriptionStatus: 'idle' });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
   });
 
   it('keeps the Ask pill once notes have been generated', () => {
@@ -571,8 +580,8 @@ describe('NoteEditorScreen note chat', () => {
       enhancementPrompt: 'Transform this meeting into notes.',
     });
     mockNotesState.notes = [mockNote];
-    const { getByLabelText } = render(<NoteEditorScreen />);
-    expect(getByLabelText('Ask about this note')).toBeTruthy();
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
   });
 
   it.each(['recording', 'transcribing', 'diarizing'] as const)(
@@ -580,12 +589,12 @@ describe('NoteEditorScreen note chat', () => {
     (transcriptionStatus) => {
       mockNote = note({ transcriptionStatus });
       mockNotesState.notes = [mockNote];
-      const { queryByLabelText } = render(<NoteEditorScreen />);
-      expect(queryByLabelText('Ask about this note')).toBeNull();
+      const { queryByTestId } = render(<NoteEditorScreen />);
+      expect(queryByTestId(PILL)).toBeNull();
     },
   );
 
-  it('keeps Ask about this note in the menu for a plain note', () => {
+  it('keeps Ask about this note in the menu and note-worded shortcuts for a plain note', () => {
     mockNote = note({
       noteType: 'personal',
       diarizationEnabled: 0,
@@ -594,16 +603,27 @@ describe('NoteEditorScreen note chat', () => {
     });
     mockNotesState.notes = [mockNote];
     mockSegments = [];
-    const { getByText, queryByLabelText } = render(<NoteEditorScreen />);
+    const { getByText, getByTestId, queryByTestId } = render(<NoteEditorScreen />);
     expect(getByText('Ask about this note')).toBeTruthy();
-    expect(queryByLabelText('Ask about this note')).toBeNull();
+    expect(queryByTestId(PILL)).toBeNull();
+    expect(getByTestId('chat-suggestion-Summarize')).toBeTruthy();
+    expect(queryByTestId('chat-suggestion-Key decisions')).toBeNull();
+  });
+
+  it('offers note-worded shortcuts for an uploaded recording', () => {
+    mockNote = note({ noteType: 'upload', diarizationEnabled: 0, calendarEventId: null });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId, queryByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
+    expect(getByTestId('chat-suggestion-Summarize')).toBeTruthy();
+    expect(queryByTestId('chat-suggestion-Key decisions')).toBeNull();
   });
 
   it('hides every Ask entry point when Chat & Voice Assistant is off', () => {
     mockConfigState.config.dictationAgentEnabled = false;
-    const { queryByText, queryByLabelText } = render(<NoteEditorScreen />);
+    const { queryByText, queryByTestId } = render(<NoteEditorScreen />);
     expect(queryByText('Ask about this note')).toBeNull();
-    expect(queryByLabelText('Ask about this note')).toBeNull();
+    expect(queryByTestId(PILL)).toBeNull();
   });
 
   it('sends a meeting shortcut prompt immediately when its chip is tapped', async () => {

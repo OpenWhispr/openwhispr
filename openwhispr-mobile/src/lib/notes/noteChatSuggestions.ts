@@ -11,7 +11,7 @@ const MEETING_SUGGESTIONS: readonly NoteChatSuggestion[] = [
   {
     label: 'Write follow-up email',
     prompt:
-      'Write a follow-up email to the attendees summarizing the meeting above, including decisions and next steps.',
+      'Write a follow-up email summarizing the meeting above, including decisions and next steps.',
   },
   {
     label: 'Key decisions',

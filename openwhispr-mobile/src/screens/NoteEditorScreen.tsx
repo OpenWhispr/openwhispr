@@ -301,10 +301,11 @@ export default function NoteEditorScreen() {
       (suggestion) => suggestion.label.trim().toLowerCase() !== currentName,
     );
   }, [activeSpeakerName, calendarParticipants]);
+  const isTranscriptInProgress = ['recording', 'transcribing', 'diarizing'].includes(
+    transcriptStatus,
+  );
   const shouldShowTranscriptStatus =
-    isAudioTranscript &&
-    !hasTranscriptSegments &&
-    ['recording', 'transcribing', 'diarizing'].includes(transcriptStatus);
+    isAudioTranscript && !hasTranscriptSegments && isTranscriptInProgress;
   const shouldShowTranscriptFailed =
     isAudioTranscript && !hasTranscriptSegments && transcriptStatus === 'failed';
   const shouldRenderPlainEditor =
@@ -869,12 +870,17 @@ export default function NoteEditorScreen() {
 
   const contentEmpty = !actionInputText.trim();
   const isEnhancingHeader = processingState === 'processing';
-  // A finished meeting gets a persistent Ask pill instead of a menu entry. Segment
-  // transcripts never show the dictate FAB, so the two can't overlap.
+  // A finished meeting gets a persistent Ask pill instead of a menu entry. Status alone
+  // can't mean "finished": synced notes keep the local default 'idle' even with a full
+  // transcript. Segment transcripts never show the dictate FAB, so the two can't overlap.
   const showAskPill =
-    chatEnabled && usesSegmentTranscript && transcriptStatus === 'done' && !contentEmpty;
+    chatEnabled && usesSegmentTranscript && !isTranscriptInProgress && !contentEmpty;
   // The tab bar is hidden on the note editor, so the pill sits on the home-indicator inset.
   const askPillBottom = insets.bottom + ASK_PILL_GAP;
+  // Uploads can be lectures or voice memos, so only meetings get meeting-worded shortcuts.
+  const chatSuggestions = getNoteChatSuggestions(
+    usesSegmentTranscript && note?.noteType !== 'upload',
+  );
 
   if (!note && !isNaN(noteId)) {
     return (
@@ -1153,9 +1159,14 @@ export default function NoteEditorScreen() {
       ) : null}
       {showAskPill ? (
         <Pressable
-          onPress={handleAskNote}
+          onPress={() => {
+            safeHaptics('light');
+            handleAskNote();
+          }}
+          testID="note-ask-pill"
           accessibilityRole="button"
-          accessibilityLabel="Ask about this note"
+          accessibilityLabel="Ask anything"
+          accessibilityHint="Opens a chat about this note"
           style={{
             position: 'absolute',
             left: 20,
@@ -1187,7 +1198,7 @@ export default function NoteEditorScreen() {
         isProcessing={isChatProcessing}
         error={chatError}
         canSend={!contentEmpty}
-        suggestions={getNoteChatSuggestions(isAudioTranscript)}
+        suggestions={chatSuggestions}
         onDraftChange={setChatDraft}
         onSend={handleSendChat}
         onSuggestion={handleChatSuggestion}
