@@ -109,6 +109,8 @@ jobs:
           persist-credentials: false
       - name: Run native provider transport tests
         run: python3 openwhispr-mobile/modules/background-uploader/tests/run-provider-transport-tests.py
+      - name: Run hotkey dictation logic tests
+        run: python3 openwhispr-mobile/plugins/hotkey-dictation/tests/run-hotkey-logic-tests.py
 
   mobile-status:
     name: Mobile CI
