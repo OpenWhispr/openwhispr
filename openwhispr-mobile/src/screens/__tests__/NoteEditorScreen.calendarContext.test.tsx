@@ -223,9 +223,11 @@ jest.mock('@/components/notes/NoteActionsMenu', () => ({
   NoteActionsMenu: ({
     actions,
     onRunAction,
+    onAskNote,
   }: {
     actions: Action[];
     onRunAction: (action: Action) => void;
+    onAskNote?: () => void;
   }) =>
     (() => {
       const { Pressable: MockPressable, Text: MockText, View: MockView } = require('react-native');
@@ -240,6 +242,7 @@ jest.mock('@/components/notes/NoteActionsMenu', () => ({
               <MockText>{action.name}</MockText>
             </MockPressable>
           ))}
+          {onAskNote ? <MockText>Ask about this note</MockText> : null}
         </MockView>
       );
     })(),
@@ -417,6 +420,7 @@ beforeEach(() => {
   mockAppleAvailability = 'available';
   mockAuthState.user = { id: 'user-1', email: 'user@example.com', emailVerified: true };
   mockConfigState.config.inference = undefined;
+  mockConfigState.config.dictationAgentEnabled = undefined;
   mockProcessingModeState.activeMode = 'cloud';
   mockActions = [defaultAction()];
   mockActionsState.actions = mockActions;
@@ -536,6 +540,19 @@ describe('NoteEditorScreen generated meeting context', () => {
     const { queryByTestId } = render(<NoteEditorScreen />);
 
     expect(queryByTestId('enhanced-stale-indicator')).toBeNull();
+  });
+});
+
+describe('NoteEditorScreen note chat', () => {
+  it('offers Ask about this note while Chat & Voice Assistant is on', () => {
+    const { getByText } = render(<NoteEditorScreen />);
+    expect(getByText('Ask about this note')).toBeTruthy();
+  });
+
+  it('hides Ask about this note when Chat & Voice Assistant is off', () => {
+    mockConfigState.config.dictationAgentEnabled = false;
+    const { queryByText } = render(<NoteEditorScreen />);
+    expect(queryByText('Ask about this note')).toBeNull();
   });
 });
 

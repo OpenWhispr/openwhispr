@@ -553,7 +553,7 @@ export default function HomeScreen() {
                   accessibilityRole: 'button',
                   accessibilityState: { disabled: isRecording },
                   accessibilityLabel: 'Transcription: Bring Your Own Key',
-                  accessibilityHint: 'Opens Dictation & Keyboard settings.',
+                  accessibilityHint: 'Opens Dictation settings.',
                 }
               : {
                   accessibilityRole: 'switch',

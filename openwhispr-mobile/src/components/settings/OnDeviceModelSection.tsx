@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
+import { ModelLanguagesButton } from '@/components/settings/ModelLanguagesButton';
 import {
   getLocalModelCatalog,
   LOCAL_MODEL_TITLES,
@@ -90,6 +91,7 @@ export function OnDeviceModelSection({ scope, picked }: Props): React.JSX.Elemen
                 ? entry.languagesNote
                 : `${entry.languagesNote} · Doesn't cover your languages`
             }
+            descriptionAccessory={<ModelLanguagesButton model={entry.key} />}
             selected={effectivePick === entry.key}
             showChevron={false}
             onPress={usable(entry.key) ? () => pickLocalModel(scope, entry.key) : undefined}
@@ -102,6 +104,7 @@ export function OnDeviceModelSection({ scope, picked }: Props): React.JSX.Elemen
             iconStyle="line"
             title={entry.title}
             description={entry.languagesNote}
+            descriptionAccessory={<ModelLanguagesButton model={entry.key} />}
             subtitle="Download"
             onPress={() => router.push('/(account)/model-download')}
           />

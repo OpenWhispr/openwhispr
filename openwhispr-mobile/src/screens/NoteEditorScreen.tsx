@@ -30,6 +30,7 @@ import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer';
 import { NoteActionsMenu } from '@/components/notes/NoteActionsMenu';
 import { ConflictBanner } from '@/components/notes/ConflictBanner';
 import { NoteChatSheet } from '@/components/notes/NoteChatSheet';
+import { isDictationAgentEnabled } from '@/lib/dictationAgent';
 import { SpeakerTranscript } from '@/components/notes/SpeakerTranscript';
 import { SpeakerRenameSheet } from '@/components/notes/SpeakerRenameSheet';
 import { SpeakerMergeSheet } from '@/components/notes/SpeakerMergeSheet';
@@ -137,6 +138,8 @@ export default function NoteEditorScreen() {
   const notesMode = useConfigStore((s) => s.config?.inference?.notes?.mode);
   const notesProviderId = useConfigStore((s) => s.config?.inference?.notes?.providerId);
   const chatMode = useConfigStore((s) => s.config?.inference?.agent?.mode);
+  // Note chat shares the Chat & Voice Assistant switch with the voice assistant.
+  const chatEnabled = useConfigStore((s) => (s.config ? isDictationAgentEnabled(s.config) : true));
   const providerNotes = notesMode === 'providers';
   // Only an unset or OpenWhispr chat route reaches Cloud, so only it needs an account and the paywall.
   const cloudChat = chatMode !== 'providers' && chatMode !== 'local';
@@ -900,7 +903,7 @@ export default function NoteEditorScreen() {
             processing={isEnhancingHeader}
             onRunAction={handleRunAction}
             onManageActions={handleManageActions}
-            onAskNote={handleAskNote}
+            onAskNote={chatEnabled ? handleAskNote : undefined}
             askNoteDisabled={isChatProcessing}
             onCopyGeneratedNote={note?.enhancedContent ? handleCopyGeneratedNote : undefined}
             onCopyTranscript={usesSegmentTranscript ? handleCopyTranscript : undefined}

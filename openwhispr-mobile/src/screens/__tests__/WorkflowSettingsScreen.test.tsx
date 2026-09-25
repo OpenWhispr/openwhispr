@@ -18,6 +18,8 @@ const mockDispatch = jest.fn();
 let mockStoredPrompt = '';
 const mockPush = jest.fn();
 const mockSwitchMode = jest.fn();
+const mockPrivateReadiness = jest.fn();
+let mockFocusEffect: (() => void) | undefined;
 const MockText = require('react-native').Text;
 
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
@@ -26,6 +28,13 @@ jest.mock('@/components/ui/GradientGlassSurface', () => ({ GradientGlassSurface:
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args) },
   useLocalSearchParams: () => ({ scope: mockScope }),
+  // Tests call the latest effect to act out returning to the page.
+  useFocusEffect: (effect: () => void) => {
+    mockFocusEffect = effect;
+  },
+}));
+jest.mock('@/lib/privateMode', () => ({
+  getPrivateModeReadiness: () => mockPrivateReadiness(),
 }));
 jest.mock('@/lib/workflowModeSwitch', () => ({
   switchWorkflowMode: (...args: unknown[]) => mockSwitchMode(...args),
@@ -123,8 +132,9 @@ beforeEach(() => {
       ...mockConfig,
       inference: { ...(mockConfig?.inference as object), [scope]: { mode } },
     };
-    return true;
+    return 'switched';
   });
+  mockPrivateReadiness.mockResolvedValue({ status: 'missing', modelName: 'Parakeet v2' });
   mockActiveMode = 'cloud';
   mockPolicy.mockResolvedValue({ status: 'unmanaged' });
   mockTestConnection.mockResolvedValue({ ok: true, verification: 'catalog-only' });
@@ -476,12 +486,45 @@ it('keeps the current mode when a switch is refused', async () => {
   // No saved upload mode, so a refused switch has nothing in the config to fall back on.
   mockConfig = { defaultMode: 'cloud' };
   mockScope = 'upload';
-  mockSwitchMode.mockResolvedValue(false);
+  mockSwitchMode.mockResolvedValue('refused');
   render(<WorkflowSettingsScreen />);
   fireEvent.press(screen.getByText('On-Device'));
   await waitFor(() => expect(mockSwitchMode).toHaveBeenCalledWith('upload', 'local'));
   expect(selectedMode()).toBe('OpenWhispr Cloud');
   expect(screen.queryByText(/On-device models for/)).toBeNull();
+});
+
+it('switches to On-Device on return once a model was downloaded for it', async () => {
+  mockConfig = { defaultMode: 'cloud', inference: { upload: { mode: 'openwhispr' } } };
+  mockScope = 'upload';
+  mockSwitchMode.mockResolvedValueOnce('needs-model');
+  render(<WorkflowSettingsScreen />);
+  fireEvent.press(screen.getByText('On-Device'));
+  await waitFor(() => expect(mockSwitchMode).toHaveBeenCalledTimes(1));
+  // Back from the model list without a model: nothing changes.
+  await act(async () => mockFocusEffect?.());
+  expect(mockSwitchMode).toHaveBeenCalledTimes(1);
+  // Back again after downloading one.
+  mockPrivateReadiness.mockResolvedValue({ status: 'ready', modelName: 'Whisper base' });
+  await act(async () => mockFocusEffect?.());
+  await waitFor(() => expect(mockSwitchMode).toHaveBeenCalledTimes(2));
+  expect(mockSwitchMode).toHaveBeenLastCalledWith('upload', 'local');
+  expect(await screen.findByTestId('toast-success')).toHaveTextContent('Switched to On-Device.');
+  expect(selectedMode()).toBe('On-Device');
+});
+
+it('forgets a pending On-Device switch once another mode is chosen', async () => {
+  mockConfig = { defaultMode: 'cloud', inference: { upload: { mode: 'openwhispr' } } };
+  mockScope = 'upload';
+  mockSwitchMode.mockResolvedValueOnce('needs-model');
+  render(<WorkflowSettingsScreen />);
+  fireEvent.press(screen.getByText('On-Device'));
+  await waitFor(() => expect(mockSwitchMode).toHaveBeenCalledTimes(1));
+  fireEvent.press(screen.getByText('OpenWhispr Cloud'));
+  mockPrivateReadiness.mockResolvedValue({ status: 'ready', modelName: 'Whisper base' });
+  await act(async () => mockFocusEffect?.());
+  expect(mockSwitchMode).toHaveBeenCalledTimes(1);
+  expect(selectedMode()).toBe('OpenWhispr Cloud');
 });
 
 it('shows the on-device model list once On-Device is applied', async () => {
@@ -564,8 +607,27 @@ it('says which other workflows share the provider key', async () => {
   };
   render(<WorkflowSettingsScreen />);
   expect(
-    screen.getByText('Stays on this iPhone. Also used by Dictation & Keyboard and Uploads.'),
+    screen.getByText('Stays on this iPhone. Also used by Dictation and Uploads.'),
   ).toBeTruthy();
+  await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
+});
+
+it('leaves workflows that are switched off out of the shared-key note', async () => {
+  mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+  mockActiveMode = 'providers';
+  mockConfig = {
+    defaultMode: 'providers',
+    cleanupEnabled: false,
+    dictationAgentEnabled: false,
+    inference: {
+      dictation: { mode: 'providers', providerId: 'openai', modelId: 'whisper-1' },
+      upload: { mode: 'providers', providerId: 'openai', modelId: 'whisper-1' },
+      cleanup: { mode: 'providers', providerId: 'openai', modelId: 'gpt-5-mini' },
+      agent: { mode: 'providers', providerId: 'openai', modelId: 'gpt-5-mini' },
+    },
+  };
+  render(<WorkflowSettingsScreen />);
+  expect(screen.getByText('Stays on this iPhone. Also used by Uploads.')).toBeTruthy();
   await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
 });
 
@@ -596,6 +658,40 @@ it('keeps Save disabled until something changes', async () => {
   fireEvent.press(screen.getByText('Save'));
   await act(async () => undefined);
   expect(mockUpdateConfig).not.toHaveBeenCalled();
+});
+
+it('shows a saved key as saved, until a replacement is typed', async () => {
+  mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+  render(<WorkflowSettingsScreen />);
+  enableProviders();
+  expect(await screen.findByText('Saved')).toBeTruthy();
+  expect(screen.getByLabelText('API key').props.placeholder).toBe('••••••••••••');
+  fireEvent.changeText(screen.getByLabelText('API key'), 'r');
+  expect(screen.queryByText('Saved')).toBeNull();
+});
+
+it('asks for a key when none is saved', async () => {
+  render(<WorkflowSettingsScreen />);
+  enableProviders();
+  expect(screen.getByLabelText('API key').props.placeholder).toBe('Paste your API key');
+  expect(screen.queryByText('Saved')).toBeNull();
+  await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
+});
+
+it('turns Chat & Voice Assistant on and off from the top of its page', () => {
+  mockScope = 'agent';
+  const view = render(<WorkflowSettingsScreen />);
+  const page = JSON.stringify(view.toJSON());
+  expect(page.indexOf('Enable Chat & Voice Assistant')).toBeLessThan(
+    page.indexOf('OpenWhispr Cloud'),
+  );
+  fireEvent.press(screen.getByText('Voice Assistant'));
+  expect(mockPush).toHaveBeenCalledWith('/(account)/dictation-agent');
+  mockConfig = { defaultMode: 'cloud', dictationAgentEnabled: false };
+  view.rerender(<WorkflowSettingsScreen />);
+  expect(screen.queryByText('OpenWhispr Cloud')).toBeNull();
+  expect(screen.queryByText('Voice Assistant')).toBeNull();
+  expect(screen.getByText('Note chat and the voice assistant are off.')).toBeTruthy();
 });
 
 it('shows a default cleanup prompt as Default', () => {

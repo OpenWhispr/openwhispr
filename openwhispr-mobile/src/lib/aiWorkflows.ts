@@ -5,7 +5,7 @@ import { providerDisplayName, type MobileInferenceScope } from '@/lib/mobileProv
 import type { ProcessingMode, UserConfig } from '@/types';
 
 export const WORKFLOW_LABELS: Record<MobileInferenceScope, string> = {
-  dictation: 'Dictation & Keyboard',
+  dictation: 'Dictation',
   upload: 'Uploads',
   cleanup: 'Text Cleanup',
   notes: 'Note Formatting & Titles',

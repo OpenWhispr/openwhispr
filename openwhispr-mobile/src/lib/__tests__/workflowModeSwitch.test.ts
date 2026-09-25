@@ -45,13 +45,13 @@ beforeEach(() => {
 it('asks a signed-out user to sign in before switching to Cloud', async () => {
   mockUser = null;
   mockConfig = { defaultMode: 'private' };
-  await expect(switchWorkflowMode('cleanup', 'openwhispr')).resolves.toBe(false);
+  await expect(switchWorkflowMode('cleanup', 'openwhispr')).resolves.toBe('refused');
   expect(alert).toHaveBeenCalledWith('Sign in required', expect.any(String), expect.any(Array));
   expect(mockUpdateConfig).not.toHaveBeenCalled();
 });
 
 it('switches dictation to On-Device along with the app mode', async () => {
-  await expect(switchWorkflowMode('dictation', 'local')).resolves.toBe(true);
+  await expect(switchWorkflowMode('dictation', 'local')).resolves.toBe('switched');
   expect(mockSetActiveMode).toHaveBeenCalledWith('private', true);
   expect(mockUpdateConfig).toHaveBeenCalledWith({
     defaultMode: 'private',
@@ -59,11 +59,11 @@ it('switches dictation to On-Device along with the app mode', async () => {
   });
 });
 
-it('offers the download when the on-device transcription model is missing', async () => {
+it('opens the model list when no on-device transcription model is downloaded', async () => {
   mockPrivateReadiness.mockResolvedValue({ status: 'missing', modelName: 'Parakeet v2' });
-  await expect(switchWorkflowMode('upload', 'local')).resolves.toBe(false);
-  const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
-  buttons.find((button) => button.text === 'Download')?.onPress?.();
+  await expect(switchWorkflowMode('upload', 'local')).resolves.toBe('needs-model');
+  // Every model is offered there, not just the one recommended for the language.
+  expect(alert).not.toHaveBeenCalled();
   expect(mockPush).toHaveBeenCalledWith('/(account)/model-download');
   expect(mockUpdateConfig).not.toHaveBeenCalled();
 });
@@ -74,7 +74,7 @@ it('switches uploads to On-Device with the model picked for them before', async 
     inference: { dictation: { mode: 'openwhispr' } },
     rememberedInference: { upload: { local: { mode: 'local', modelId: 'whisper-base' } } },
   };
-  await expect(switchWorkflowMode('upload', 'local')).resolves.toBe(true);
+  await expect(switchWorkflowMode('upload', 'local')).resolves.toBe('switched');
   expect(mockUpdateConfig).toHaveBeenCalledWith({
     inference: {
       dictation: { mode: 'openwhispr' },
@@ -86,13 +86,13 @@ it('switches uploads to On-Device with the model picked for them before', async 
 
 it('explains why a text workflow cannot run on-device', async () => {
   mockLocalReasoningReadiness.mockResolvedValue({ status: 'appleIntelligenceOff' });
-  await expect(switchWorkflowMode('cleanup', 'local')).resolves.toBe(false);
+  await expect(switchWorkflowMode('cleanup', 'local')).resolves.toBe('refused');
   expect(alert).toHaveBeenCalledWith('On-Device Unavailable', 'Apple Intelligence is turned off.');
   expect(mockUpdateConfig).not.toHaveBeenCalled();
 });
 
 it('switches a text workflow to On-Device when Apple Intelligence is ready', async () => {
-  await expect(switchWorkflowMode('notes', 'local')).resolves.toBe(true);
+  await expect(switchWorkflowMode('notes', 'local')).resolves.toBe('switched');
   expect(mockUpdateConfig).toHaveBeenCalledWith({
     inference: { dictation: { mode: 'openwhispr' }, notes: { mode: 'local' } },
   });
@@ -135,7 +135,7 @@ describe('a workflow held on its old mode when dictation moved to your own key',
   });
 
   it('becomes the user choice once a mode is tapped for it', async () => {
-    await expect(switchWorkflowMode('upload', 'openwhispr')).resolves.toBe(true);
+    await expect(switchWorkflowMode('upload', 'openwhispr')).resolves.toBe('switched');
     expect(mockUpdateConfig.mock.calls[0][0]).toMatchObject({
       inference: { upload: { mode: 'openwhispr' } },
       pinnedInference: ['notes'],

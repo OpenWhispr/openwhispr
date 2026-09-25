@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Linking, Platform, Pressable, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
@@ -40,7 +40,10 @@ import {
   unsetSelection,
 } from '@/lib/aiWorkflows';
 import { isLocalModelKey } from '@/lib/localModelCatalog';
+import { getDictationAgentName, isDictationAgentEnabled } from '@/lib/dictationAgent';
+import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch';
+import { getPrivateModeReadiness } from '@/lib/privateMode';
 import {
   discoverProviderModels,
   testProviderConnection,
@@ -81,38 +84,97 @@ function joinNames(names: string[]): string {
   return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 }
 
+// A workflow that can be turned off: its switch sits above Mode, with the workflow's own
+// settings row under it while it is on.
+function WorkflowSwitchCard({
+  title,
+  description,
+  icon,
+  mdIcon,
+  enabled,
+  onToggle,
+  offNote,
+  children,
+}: {
+  title: string;
+  description: string;
+  icon: string;
+  mdIcon: LucideIconName;
+  enabled: boolean;
+  onToggle: (value: boolean) => void;
+  offNote: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <>
+      <SettingsSection>
+        <SettingsRow
+          iconStyle="line"
+          icon={icon}
+          mdIcon={mdIcon}
+          title={title}
+          description={description}
+          rightElement={<SettingsSwitch value={enabled} onValueChange={onToggle} />}
+          showChevron={false}
+        />
+        {enabled ? children : null}
+      </SettingsSection>
+      {enabled ? null : <SectionFooter>{offNote}</SectionFooter>}
+    </>
+  );
+}
+
 function CleanupSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
   const toggleCleanup = useConfigToggle('cleanupEnabled');
   const hasCustomPrompt = useCustomPromptsStore(
     (state) => resolveCustomPrompt(state.customPrompts.cleanup) !== undefined,
   );
   return (
-    <>
-      <SettingsSection>
-        <SettingsRow
-          iconStyle="line"
-          icon="sparkles"
-          mdIcon="Sparkles"
-          title="Enable Text Cleanup"
-          description="Use AI to remove filler words, fix grammar, and polish punctuation."
-          rightElement={<SettingsSwitch value={enabled} onValueChange={toggleCleanup} />}
-          showChevron={false}
-        />
-        {enabled ? (
-          <SettingsRow
-            iconStyle="line"
-            icon="text.quote"
-            mdIcon="TextQuote"
-            title="Cleanup Prompt"
-            subtitle={hasCustomPrompt ? 'Custom' : 'Default'}
-            onPress={() => router.push('/(account)/cleanup-prompt')}
-          />
-        ) : null}
-      </SettingsSection>
-      {enabled ? null : (
-        <SectionFooter>Dictation is inserted as spoken, with no AI cleanup.</SectionFooter>
-      )}
-    </>
+    <WorkflowSwitchCard
+      title="Enable Text Cleanup"
+      description="Use AI to remove filler words, fix grammar, and polish punctuation."
+      icon="sparkles"
+      mdIcon="Sparkles"
+      enabled={enabled}
+      onToggle={toggleCleanup}
+      offNote="Dictation is inserted as spoken, with no AI cleanup."
+    >
+      <SettingsRow
+        iconStyle="line"
+        icon="text.quote"
+        mdIcon="TextQuote"
+        title="Cleanup Prompt"
+        subtitle={hasCustomPrompt ? 'Custom' : 'Default'}
+        onPress={() => router.push('/(account)/cleanup-prompt')}
+      />
+    </WorkflowSwitchCard>
+  );
+}
+
+function AssistantSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
+  const toggleAssistant = useConfigToggle('dictationAgentEnabled');
+  const agentName = useConfigStore((state) =>
+    state.config ? getDictationAgentName(state.config) : undefined,
+  );
+  return (
+    <WorkflowSwitchCard
+      title="Enable Chat & Voice Assistant"
+      description="Chat with your notes, and say your assistant’s name to give it commands."
+      icon="bubble.left.and.bubble.right"
+      mdIcon="MessagesSquare"
+      enabled={enabled}
+      onToggle={toggleAssistant}
+      offNote="Note chat and the voice assistant are off."
+    >
+      <SettingsRow
+        iconStyle="line"
+        icon="person.wave.2"
+        mdIcon="UserRoundCog"
+        title="Voice Assistant"
+        subtitle={agentName}
+        onPress={() => router.push('/(account)/dictation-agent')}
+      />
+    </WorkflowSwitchCard>
   );
 }
 
@@ -180,6 +242,8 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const [configured, setConfigured] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState<'test' | 'discover' | null>(null);
+  // Set when On-Device was tapped with no model on this phone and the model list opened.
+  const [onDeviceWanted, setOnDeviceWanted] = useState(false);
   const [discoveredModels, setDiscoveredModels] = useState<{ id: string; name: string }[]>([]);
   const { toast, showToast } = useToast();
   const headerHeight = useHeaderHeight();
@@ -206,14 +270,19 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       ? 'Save to switch to Bring Your Own Key.'
       : undefined);
   const speechScope = scope === 'dictation' || scope === 'upload' ? scope : null;
-  const cleanupOff = scope === 'cleanup' && !(config?.cleanupEnabled ?? true);
   // Keys are stored per provider (per server for Custom), so every workflow on it shares one.
   const keyOwner =
     provider?.id === 'custom' ? 'this server' : providerDisplayName(provider?.id ?? '');
+  // Text Cleanup and Chat & Voice Assistant can be switched off; then they use no key.
+  const switchedOff = (workflow: MobileInferenceScope): boolean =>
+    (workflow === 'cleanup' && !(config?.cleanupEnabled ?? true)) ||
+    (workflow === 'agent' && !!config && !isDictationAgentEnabled(config));
+  const workflowOff = switchedOff(scope);
   const sharedWith = WORKFLOWS.filter((other) => {
     const saved = config?.inference?.[other];
     return (
       other !== scope &&
+      !switchedOff(other) &&
       saved?.mode === 'providers' &&
       saved.providerId === provider?.id &&
       (provider?.id !== 'custom' ||
@@ -275,8 +344,29 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     setPicker(picker === next ? null : next);
   }
 
+  // Coming back from the model list with a model downloaded finishes the On-Device switch.
+  useFocusEffect(
+    useCallback(() => {
+      if (!onDeviceWanted) return undefined;
+      let cancelled = false;
+      getPrivateModeReadiness()
+        .then(async (readiness) => {
+          if (cancelled || readiness.status !== 'ready') return;
+          setOnDeviceWanted(false);
+          if ((await switchWorkflowMode(scope, 'local')) !== 'switched') return;
+          setSelection(useConfigStore.getState().config?.inference?.[scope] ?? { mode: 'local' });
+          showToast('Switched to On-Device.', 'success');
+        })
+        .catch(() => undefined);
+      return (): void => {
+        cancelled = true;
+      };
+    }, [onDeviceWanted, scope, showToast]),
+  );
+
   async function chooseMode(mode: InferenceMode): Promise<void> {
     if (busy) return;
+    setOnDeviceWanted(false);
     setPicker(null);
     clearInputs();
     // Bring Your Own Key needs a provider and key, so it switches on Save.
@@ -292,9 +382,11 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     }
     setBusy(true);
     try {
-      if (await switchWorkflowMode(scope, mode)) {
+      const result = await switchWorkflowMode(scope, mode);
+      if (result === 'switched') {
         setSelection(useConfigStore.getState().config?.inference?.[scope] ?? { mode });
       }
+      setOnDeviceWanted(result === 'needs-model');
     } finally {
       setBusy(false);
     }
@@ -551,8 +643,9 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
       >
-        {scope === 'cleanup' ? <CleanupSettings enabled={!cleanupOff} /> : null}
-        {cleanupOff ? null : (
+        {scope === 'cleanup' ? <CleanupSettings enabled={!workflowOff} /> : null}
+        {scope === 'agent' ? <AssistantSettings enabled={!workflowOff} /> : null}
+        {workflowOff ? null : (
           <>
             <InferenceModePicker
               scope={speechScope ? 'speech' : 'text'}
@@ -656,10 +749,26 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                     autoCapitalize="none"
                     placeholder={
                       configured
-                        ? 'Saved · enter a new key to replace it'
+                        ? '••••••••••••'
                         : provider.id === 'custom'
                           ? 'Optional'
                           : 'Paste your API key'
+                    }
+                    accessibilityHint={
+                      configured ? 'A key is saved. Enter a new key to replace it.' : undefined
+                    }
+                    trailing={
+                      configured && !apiKey ? (
+                        <View className="flex-row items-center gap-1">
+                          <SystemIcon
+                            name="checkmark.circle.fill"
+                            mdName="CircleCheck"
+                            size={15}
+                            color="systemGreen"
+                          />
+                          <Text className="text-[15px] text-systemGreen">Saved</Text>
+                        </View>
+                      ) : undefined
                     }
                     editable={!busy}
                   />

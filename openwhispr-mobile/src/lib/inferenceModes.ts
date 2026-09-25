@@ -70,7 +70,7 @@ function scopesToPin(leavingMode: ProcessingMode): MobileInferenceScope[] {
   return leavingMode === 'private' ? ['upload', 'notes', 'agent'] : ['upload', 'notes'];
 }
 
-// The Home toggle and the Dictation & Keyboard page both own the dictation mode;
+// The Home toggle and the Dictation page both own the dictation mode;
 // writing the scope selection alongside defaultMode keeps routing and UI in step.
 export function dictationModeConfig(
   config: UserConfig | null,
@@ -88,7 +88,7 @@ export function dictationModeConfig(
     defaultMode: mode,
     inference: {
       ...inference,
-      // On-Device restores the model picked on the Dictation & Keyboard page.
+      // On-Device restores the model picked on the Dictation page.
       dictation:
         mode === 'private'
           ? (config?.rememberedInference?.dictation?.local ?? { mode: 'local' })

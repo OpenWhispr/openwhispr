@@ -18,6 +18,8 @@ type SettingsRowProps = {
   destructive?: boolean;
   showChevron?: boolean;
   selected?: boolean;
+  // Shown right after the description, such as a help button.
+  descriptionAccessory?: React.ReactNode;
 };
 
 export function SettingsRow({
@@ -33,6 +35,7 @@ export function SettingsRow({
   destructive = false,
   showChevron = true,
   selected = false,
+  descriptionAccessory,
 }: SettingsRowProps) {
   const isLine = iconStyle === 'line';
   return (
@@ -74,7 +77,12 @@ export function SettingsRow({
           >
             {title}
           </Text>
-          {description ? (
+          {description && descriptionAccessory ? (
+            <View className="mt-0.5 flex-row items-center gap-1.5">
+              <Text className="flex-shrink text-[13px] text-secondaryLabel">{description}</Text>
+              {descriptionAccessory}
+            </View>
+          ) : description ? (
             <Text className="mt-0.5 text-[13px] text-secondaryLabel">{description}</Text>
           ) : null}
         </View>
@@ -99,6 +107,7 @@ type SettingsTextFieldRowProps = TextInputProps & {
   icon: string;
   mdIcon?: LucideIconName;
   label?: string;
+  trailing?: React.ReactNode;
 };
 
 // A text field laid out like a SettingsRow, so it sits in the same card with aligned separators.
@@ -106,6 +115,7 @@ export function SettingsTextFieldRow({
   icon,
   mdIcon,
   label,
+  trailing,
   editable = true,
   style,
   ...inputProps
@@ -124,6 +134,7 @@ export function SettingsTextFieldRow({
         style={[{ fontFamily: SpaceGrotesk.regular }, style]}
         {...inputProps}
       />
+      {trailing}
     </View>
   );
 }

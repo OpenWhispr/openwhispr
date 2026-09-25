@@ -75,7 +75,7 @@ export function DictationAgentScreen(): React.JSX.Element {
             icon="person.wave.2"
             mdIcon="UserRoundCog"
             title="Enable Voice Assistant"
-            description="Say your assistant’s name while dictating to have OpenWhispr rewrite what you said."
+            description="Say your assistant’s name while dictating to have OpenWhispr rewrite what you said. Also turns note chat on or off."
             rightElement={
               <SettingsSwitch
                 value={enabled}

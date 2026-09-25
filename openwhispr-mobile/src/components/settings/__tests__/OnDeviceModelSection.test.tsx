@@ -49,6 +49,14 @@ beforeEach(() => {
   };
 });
 
+it('offers the language list for multi-language models only', async () => {
+  render(<OnDeviceModelSection scope="dictation" picked={undefined} />);
+  await screen.findByText('Parakeet v3');
+  expect(screen.getByLabelText('Parakeet v3 languages')).toBeTruthy();
+  expect(screen.getByLabelText('Whisper base languages')).toBeTruthy();
+  expect(screen.queryByLabelText('Parakeet v2 languages')).toBeNull();
+});
+
 it('defaults to Automatic and names the model it is using', async () => {
   render(<OnDeviceModelSection scope="dictation" picked={undefined} />);
   expect(await screen.findByText(/Using Parakeet v2/)).toBeTruthy();

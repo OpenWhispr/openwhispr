@@ -15,32 +15,30 @@ import { getPrivateModeReadiness, getPrivateModeUnavailableMessage } from '@/lib
 
 type SpeechScope = 'dictation' | 'upload';
 
+// 'needs-model' means the model list was opened because nothing on this phone can run it yet.
+export type ModeSwitchResult = 'switched' | 'needs-model' | 'refused';
+
 function isSpeechScope(scope: MobileInferenceScope): scope is SpeechScope {
   return scope === 'dictation' || scope === 'upload';
 }
 
-async function transcriptionModelReady(): Promise<boolean> {
+async function transcriptionModelReady(): Promise<ModeSwitchResult | null> {
   const readiness = await getPrivateModeReadiness().catch(() => null);
   if (!readiness) {
     Alert.alert('On-Device Unavailable', 'Unable to check the local model right now.');
-    return false;
+    return 'refused';
   }
   if (readiness.status === 'unavailable') {
     Alert.alert('On-Device Unavailable', getPrivateModeUnavailableMessage());
-    return false;
+    return 'refused';
   }
+  // Nothing to run yet: open the model list, where every on-device model can be
+  // downloaded, as the Home toggle does.
   if (readiness.status === 'missing') {
-    Alert.alert(
-      'Download required',
-      `Download the on-device model (${readiness.modelName}) before switching to on-device.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Download', onPress: () => router.push('/(account)/model-download') },
-      ],
-    );
-    return false;
+    router.push('/(account)/model-download');
+    return 'needs-model';
   }
-  return true;
+  return null;
 }
 
 async function appleIntelligenceReady(): Promise<boolean> {
@@ -51,20 +49,22 @@ async function appleIntelligenceReady(): Promise<boolean> {
 }
 
 // Applies OpenWhispr Cloud or On-Device to a workflow as soon as it is tapped, after the same
-// sign-in and model checks the Home toggle runs. Returns whether the mode changed.
+// sign-in and model checks the Home toggle runs.
 export async function switchWorkflowMode(
   scope: MobileInferenceScope,
   mode: 'openwhispr' | 'local',
-): Promise<boolean> {
+): Promise<ModeSwitchResult> {
   if (mode === 'openwhispr' && accountRequiredForCloud(useAuthStore.getState().user)) {
     showAccountRequiredAlert(isSpeechScope(scope) ? 'cloud transcription' : 'cloud AI');
-    return false;
+    return 'refused';
   }
   if (mode === 'local') {
-    const ready = isSpeechScope(scope)
+    const blocked = isSpeechScope(scope)
       ? await transcriptionModelReady()
-      : await appleIntelligenceReady();
-    if (!ready) return false;
+      : (await appleIntelligenceReady())
+        ? null
+        : 'refused';
+    if (blocked) return blocked;
   }
 
   const { config, updateConfig } = useConfigStore.getState();
@@ -75,7 +75,7 @@ export async function switchWorkflowMode(
       ? (config?.rememberedInference?.[scope]?.local ?? { mode: 'local' })
       : { mode: 'openwhispr' };
   await updateConfig(workflowSaveConfig(config, scope, selection, activeMode));
-  return true;
+  return 'switched';
 }
 
 // Saves the on-device model for a workflow; undefined means Automatic. The pick is also

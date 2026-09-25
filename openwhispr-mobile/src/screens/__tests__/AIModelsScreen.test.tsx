@@ -112,7 +112,7 @@ it('removes every saved provider key after confirmation', async () => {
 it('has no provider keys to remove on Android', async () => {
   Platform.OS = 'android';
   render(<AIModelsScreen />);
-  expect(screen.getByText('Dictation & Keyboard')).toBeTruthy();
+  expect(screen.getByText('Dictation')).toBeTruthy();
   expect(screen.queryByText('Remove All Provider Keys')).toBeNull();
   await screen.findByText(/Status: Ready/);
 });
