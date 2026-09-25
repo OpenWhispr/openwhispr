@@ -210,6 +210,10 @@ test("the upload lane refuses providers the workspace policy does not allow", as
   allow(["providers"], ["deepgram", "custom"]);
   assert.equal((await uploadAsResolved()).code, "POLICY_RESTRICTED");
   useSettingsStore.setState({ cloudTranscriptionProvider: "openai" });
+  // The policy's pick is OpenWhispr Cloud, but a view that sees no session skips
+  // the Cloud branch: the key-based send that remains is judged, and refused.
+  allow(["openwhispr", "providers", "local"], ["deepgram"]);
+  assert.equal((await uploadAsResolved()).code, "POLICY_RESTRICTED");
   assert.deepEqual(sent, []);
 
   // Everything the policy allows still goes out, as does unmanaged and signed-out use.

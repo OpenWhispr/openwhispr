@@ -58,8 +58,8 @@ export interface FileTranscriptionConfig {
   transcriptionMode?: string;
   remoteTranscriptionUrl?: string;
   remoteTranscriptionModel?: string;
-  // Workspace policy whose provider allowlist the route enforces; set by the
-  // upload lane (transcribeFileWithSpeakers).
+  // Workspace policy the route's floor enforces; set by the upload lane
+  // (transcribeFileWithSpeakers).
   policy?: PolicyDecisionSnapshot | null;
 }
 
@@ -103,14 +103,19 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
 // Pre-flight through the shared resolver: code-carrying errors (incl. the
 // Tinfoil-URL, fail-closed custom and workspace-policy guards) surface here
 // without an IPC round-trip; the main-process handler re-resolves the same
-// fields as defense in depth.
+// fields, without the policy, as defense in depth.
 export function resolveFileTranscriptionRoute(
   cfg: FileTranscriptionConfig,
   managed: ManagedTranscriptionResolution | null = null
 ): TranscriptionRoute {
   return resolveTranscriptionRoute({
     settings: {
-      transcriptionMode: cfg.transcriptionMode,
+      // The route never runs the OpenWhispr Cloud pipeline, so a Cloud selection
+      // that skipped the Cloud branch is judged as the key-based send it becomes.
+      transcriptionMode:
+        !cfg.isOpenWhisprCloud && cfg.transcriptionMode === "openwhispr"
+          ? "providers"
+          : cfg.transcriptionMode,
       remoteTranscriptionUrl: cfg.remoteTranscriptionUrl,
       remoteTranscriptionModel: cfg.remoteTranscriptionModel,
       cloudTranscriptionProvider: cfg.cloudTranscriptionProvider,
