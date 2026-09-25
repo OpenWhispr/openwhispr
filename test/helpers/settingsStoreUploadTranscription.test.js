@@ -253,3 +253,36 @@ test("the Upload tab never offers bring-your-own-key through live-only providers
     active: "providers",
   });
 });
+
+// An endpoint belongs to its provider. Upload inherits dictation's only with
+// dictation's provider, so a Custom upload without an endpoint of its own fails
+// closed instead of posting audio and the Custom key to another service.
+test("upload inherits dictation's endpoint only with dictation's provider", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-upload-endpoint-inheritance-test-",
+  });
+  const { useSettingsStore, selectResolvedUploadTranscription } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const base = useSettingsStore.getState();
+
+  const customWithoutEndpoint = selectResolvedUploadTranscription({
+    ...base,
+    cloudTranscriptionProvider: "deepgram",
+    cloudTranscriptionBaseUrl: "https://api.deepgram.com/v1",
+    uploadCloudTranscriptionProvider: "custom",
+    uploadCloudTranscriptionBaseUrl: "",
+  });
+  assert.equal(customWithoutEndpoint.cloudTranscriptionBaseUrl, "");
+
+  const inherited = selectResolvedUploadTranscription({
+    ...base,
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
+    uploadCloudTranscriptionProvider: "",
+    uploadCloudTranscriptionBaseUrl: "",
+  });
+  assert.equal(inherited.cloudTranscriptionProvider, "custom");
+  assert.equal(inherited.cloudTranscriptionBaseUrl, "https://stt.example.com/v1");
+});

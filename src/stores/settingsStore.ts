@@ -2804,29 +2804,36 @@ export interface ResolvedUploadTranscription {
 // A realtime-only dictation provider is the exception: it has no batch route, so
 // inheriting it would fail every upload closed. Uploads take the default provider
 // instead, and the dictation model stays behind with the provider it belongs to.
-// The self-hosted server is the exception the other way: it never inherits, so
-// uploads go only to the server the Upload tab shows (#2049).
+// The dictation endpoint likewise follows only dictation's own provider, so a
+// Custom upload without an endpoint fails closed instead of posting to another
+// provider's URL. The self-hosted server is the exception the other way: it
+// never inherits, so uploads go only to the server the Upload tab shows (#2049).
 // migrateUploadSelfHosted() seeds it once for profiles from before the tab had its own.
 export const selectResolvedUploadTranscription = (
   state: SettingsState
 ): ResolvedUploadTranscription => {
   const inheritsDictationProvider = !STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider);
+  const cloudTranscriptionProvider =
+    state.uploadCloudTranscriptionProvider ||
+    (inheritsDictationProvider
+      ? state.cloudTranscriptionProvider
+      : DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER);
   return {
     useLocalWhisper: state.uploadUseLocalWhisper,
     whisperModel: state.uploadWhisperModel || state.whisperModel,
     localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
     parakeetModel: state.uploadParakeetModel || state.parakeetModel,
     cohereModel: state.uploadCohereModel || state.cohereModel,
-    cloudTranscriptionProvider:
-      state.uploadCloudTranscriptionProvider ||
-      (inheritsDictationProvider
-        ? state.cloudTranscriptionProvider
-        : DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER),
+    cloudTranscriptionProvider,
     cloudTranscriptionModel:
       state.uploadCloudTranscriptionModel ||
       (inheritsDictationProvider ? state.cloudTranscriptionModel : ""),
     cloudTranscriptionBaseUrl:
-      state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
+      state.uploadCloudTranscriptionBaseUrl ||
+      (cloudTranscriptionProvider === state.cloudTranscriptionProvider
+        ? state.cloudTranscriptionBaseUrl
+        : "") ||
+      "",
     cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
     transcriptionMode: state.uploadTranscriptionMode,
     remoteTranscriptionUrl: state.uploadRemoteTranscriptionUrl,

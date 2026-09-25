@@ -162,9 +162,8 @@ test("the upload lane refuses providers the workspace policy does not allow", as
     mockModules: { "/lib/auth": "export const withSessionRefresh = (fn) => fn();" },
   });
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
-  const { getSettings, selectResolvedUploadTranscription } = await vite.ssrLoadModule(
-    "/stores/settingsStore.ts"
-  );
+  const { getSettings, selectResolvedUploadTranscription, useSettingsStore } =
+    await vite.ssrLoadModule("/stores/settingsStore.ts");
   const { transcribeFileWithSpeakers } = await vite.ssrLoadModule("/services/fileTranscription.ts");
   const sent = [];
   window.electronAPI.transcribeAudioFileByok = async (args) => {
@@ -187,6 +186,7 @@ test("the upload lane refuses providers the workspace policy does not allow", as
     return upload(
       cfg({
         cloudTranscriptionProvider: resolved.cloudTranscriptionProvider,
+        cloudTranscriptionBaseUrl: resolved.cloudTranscriptionBaseUrl,
         cloudTranscriptionModel: resolved.cloudTranscriptionModel,
         transcriptionMode: resolved.transcriptionMode,
       })
@@ -203,6 +203,13 @@ test("the upload lane refuses providers the workspace policy does not allow", as
     (await upload(cfg({ cloudTranscriptionProvider: "groq" }))).code,
     "POLICY_RESTRICTED"
   );
+  // With Deepgram and Custom allowed, a Deepgram member's uploads fall back to
+  // Custom, which has no endpoint of its own: refused, never sent to the
+  // Deepgram URL dictation uses.
+  useSettingsStore.setState({ cloudTranscriptionProvider: "deepgram" });
+  allow(["providers"], ["deepgram", "custom"]);
+  assert.equal((await uploadAsResolved()).code, "POLICY_RESTRICTED");
+  useSettingsStore.setState({ cloudTranscriptionProvider: "openai" });
   assert.deepEqual(sent, []);
 
   // Everything the policy allows still goes out, as does unmanaged and signed-out use.
