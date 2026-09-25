@@ -32,7 +32,7 @@ export function parseMentionEmail(href: string | null): string | null {
   }
 }
 
-const TASK_OWNER_LINE = /^(\s*[-*]\s*\[[ xX]\]\s+\S.*?)(\s+[—–-]\s+)(\S.*?)\s*$/;
+const TASK_OWNER_LINE = /^(\s*[-*]\s*\[[ xX]\]\s+\S.*)(\s+[—–-]\s+)(\S.*?)\s*$/;
 const OWNER_SPLIT = /\s*(?:,|&|\/|\band\b)\s*/i;
 
 interface NameIndex {
