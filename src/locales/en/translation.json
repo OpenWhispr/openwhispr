@@ -920,6 +920,7 @@
         "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
         "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text.",
         "cleanupTruncated": "The AI model ran out of room before it finished cleaning up your dictation.",
+        "cleanupDuplicated": "AI cleanup repeated the transcript. The original text was kept.",
         "cleanupEmptyReply": "The AI model returned an empty reply instead of the cleaned-up dictation."
       },
       "translationFallback": {
@@ -3310,7 +3311,35 @@
       "conversationWillAppear": "Conversation will appear here...",
       "linkedEvent": "Linked event",
       "noFolder": "No folder",
-      "participants": "Participants"
+      "participants": "Participants",
+      "table": {
+        "actions": "Table actions",
+        "insertRowAbove": "Insert row above",
+        "insertRowBelow": "Insert row below",
+        "insertColumnLeft": "Insert column left",
+        "insertColumnRight": "Insert column right",
+        "deleteRow": "Delete row",
+        "deleteColumn": "Delete column",
+        "deleteTable": "Delete table"
+      },
+      "format": {
+        "toolbar": "Formatting",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Bold",
+        "italic": "Italic",
+        "strike": "Strikethrough",
+        "code": "Code",
+        "textStyle": "Text style",
+        "paragraph": "Normal text",
+        "heading1": "Heading 1",
+        "heading2": "Heading 2",
+        "heading3": "Heading 3",
+        "bulletList": "Bulleted list",
+        "orderedList": "Numbered list",
+        "taskList": "Checklist",
+        "blockquote": "Quote",
+        "table": "Insert table"
+      }
     },
     "participants": {
       "attendee": "attendee",

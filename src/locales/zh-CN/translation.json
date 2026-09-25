@@ -920,6 +920,7 @@
         "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
         "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。",
         "cleanupTruncated": "AI 模型的输出长度达到上限，未能完成听写清理。",
+        "cleanupDuplicated": "AI 清理重复了转录内容。已保留原始文本。",
         "cleanupEmptyReply": "AI 模型返回了空响应，没有生成清理后的文本。"
       },
       "translationFallback": {
@@ -2967,7 +2968,35 @@
       "conversationWillAppear": "对话将显示在这里...",
       "linkedEvent": "关联日程",
       "noFolder": "无文件夹",
-      "participants": "参与者"
+      "participants": "参与者",
+      "table": {
+        "actions": "表格操作",
+        "insertRowAbove": "在上方插入行",
+        "insertRowBelow": "在下方插入行",
+        "insertColumnLeft": "在左侧插入列",
+        "insertColumnRight": "在右侧插入列",
+        "deleteRow": "删除行",
+        "deleteColumn": "删除列",
+        "deleteTable": "删除表格"
+      },
+      "format": {
+        "toolbar": "格式",
+        "withShortcut": "{{action}}（{{shortcut}}）",
+        "bold": "粗体",
+        "italic": "斜体",
+        "strike": "删除线",
+        "code": "代码",
+        "textStyle": "文本样式",
+        "paragraph": "正文",
+        "heading1": "标题 1",
+        "heading2": "标题 2",
+        "heading3": "标题 3",
+        "bulletList": "项目符号列表",
+        "orderedList": "编号列表",
+        "taskList": "清单",
+        "blockquote": "引用",
+        "table": "插入表格"
+      }
     },
     "participants": {
       "attendee": "位参会者",

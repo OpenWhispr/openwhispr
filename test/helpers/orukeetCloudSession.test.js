@@ -137,6 +137,24 @@ for (const [status, code] of [
   });
 }
 
+test("a language exclusion keeps FEATURE_NOT_ENABLED for the batch fallback", async (t) => {
+  const f = await fixture(t, async () =>
+    Response.json(
+      {
+        error: "Orukeet dictation is not enabled for this account",
+        code: "FEATURE_NOT_ENABLED",
+        reason: "language_unsupported",
+      },
+      { status: 403 }
+    )
+  );
+  await assert.rejects(connectManagedOrukeet(f.options), {
+    code: "FEATURE_NOT_ENABLED",
+    status: 403,
+  });
+  assert.equal(f.sockets.length, 0);
+});
+
 test("the weekly word quota surfaces as LIMIT_REACHED with its usage, not the mint cap", async (t) => {
   const f = await fixture(t, async () =>
     Response.json(

@@ -58,9 +58,11 @@ class OrukeetStreaming {
   constructor({
     createSocket = (url, options, protocols) => new WebSocket(url, protocols, options),
     timeoutMs = 30000,
+    retryCapacity = true,
   } = {}) {
     this.createSocket = createSocket;
     this.timeoutMs = timeoutMs;
+    this.retryCapacity = retryCapacity;
     this.ws = null;
     this.isConnected = false;
     this.pendingAudio = [];
@@ -178,7 +180,7 @@ class OrukeetStreaming {
       this.finalResolve?.(this.result);
       this.clearFinal();
     } else if (message.type === "error") {
-      if (message.code === "capacity" && this.finalResolve) {
+      if (message.code === "capacity" && this.finalResolve && this.retryCapacity) {
         clearTimeout(this.retryTimer);
         this.retryTimer = setTimeout(() => {
           if (this.finalResolve) this.sendControl({ type: "commit" });
@@ -255,13 +257,22 @@ class OrukeetStreaming {
 
   fail(error) {
     if (this.failure) return;
+    // The final already completed this recording. Orukeet closes a finished
+    // socket when the account holds another warm one, so a later close or
+    // error only ends the connection.
+    if (this.result) return this.close();
     this.failure = error;
+    // Before `ready` (including while main mints the session token, before
+    // connect() runs), the failed start is the report and falls back on it;
+    // onError is for an established stream, so a refused socket does not also
+    // surface as a streaming error.
+    const connecting = this.connecting || Boolean(this.connectReject);
     this.connectReject?.(error);
     this.connectResolve = this.connectReject = null;
     this.finalReject?.(error);
     this.clearFinal();
     this.close();
-    this.onError?.(error);
+    if (!connecting) this.onError?.(error);
   }
 
   close() {

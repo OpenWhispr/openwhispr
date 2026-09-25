@@ -59,12 +59,17 @@ type FlatItem =
   | { kind: "conversation"; conversation: ConversationResult };
 
 function stripMarkdownPreview(text: string): string {
-  return text
-    .replace(/#{1,6}\s+/g, "")
-    .replace(/[*_~`]+/g, "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/\n+/g, " ")
-    .trim();
+  return (
+    text
+      .replace(/#{1,6}\s+/g, "")
+      .replace(/[*_~`]+/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      // Table delimiter rows, then the pipes between cells.
+      .replace(/^[ \t|:-]+$/gm, "")
+      .replace(/\\?\|/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 export default function CommandSearch({

@@ -102,3 +102,92 @@ test("a BYOK custom Orukeet endpoint is not language gated", async () => {
     "orukeet"
   );
 });
+
+test("a confident unsupported estimate on 3 s or more in auto mode re-transcribes", async () => {
+  const { shouldRetranscribeOrukeetLanguage } = await loadRouting();
+  for (const language of ["auto", "", undefined]) {
+    assert.equal(
+      shouldRetranscribeOrukeetLanguage({
+        language,
+        final: {
+          success: true,
+          text: "x",
+          language: "ja",
+          languageConfidence: 0.9,
+          languageAudioSeconds: 3,
+        },
+      }),
+      true,
+      String(language)
+    );
+  }
+});
+
+test("everything else keeps the Orukeet transcript", async () => {
+  const { shouldRetranscribeOrukeetLanguage } = await loadRouting();
+  const final = {
+    success: true,
+    text: "x",
+    language: "ja",
+    languageConfidence: 0.97,
+    languageAudioSeconds: 6,
+  };
+  const cases = [
+    { language: "en", final }, // explicit setting
+    { language: "ja", final }, // explicit (never reaches Orukeet anyway)
+    { language: "auto", final: { ...final, language: "de" } }, // supported
+    { language: "auto", final: { ...final, languageConfidence: 0.89 } },
+    { language: "auto", final: { ...final, languageAudioSeconds: 2.9 } },
+    { language: "auto", final: { ...final, languageAudioSeconds: undefined } },
+    { language: "auto", final: { ...final, language: null, languageConfidence: null } }, // unknown
+    { language: "auto", final: { success: true, text: "x" } }, // older gateway
+    { language: "auto", final: null }, // finalize failed
+  ];
+  for (const input of cases) {
+    assert.equal(shouldRetranscribeOrukeetLanguage(input), false, JSON.stringify(input));
+  }
+});
+
+test("detected-language fields mirror the final estimate for the backend", async () => {
+  const { orukeetDetectedLanguageFields } = await loadRouting();
+  assert.deepEqual(
+    orukeetDetectedLanguageFields({
+      text: "x",
+      language: "hi",
+      languageConfidence: 0.93,
+      languageAudioSeconds: 3,
+    }),
+    {
+      sttDetectedLanguage: "hi",
+      sttDetectedLanguageConfidence: 0.93,
+      sttDetectedLanguageAudioSeconds: 3,
+      sttDetectedLanguageStatus: "detected",
+    }
+  );
+  assert.deepEqual(
+    orukeetDetectedLanguageFields({ text: "x", language: "en", languageConfidence: 0.5 }),
+    {
+      sttDetectedLanguage: "en",
+      sttDetectedLanguageConfidence: 0.5,
+      sttDetectedLanguageStatus: "detected",
+    }
+  );
+  assert.deepEqual(
+    orukeetDetectedLanguageFields({ text: "x", language: null, languageConfidence: null }),
+    { sttDetectedLanguageStatus: "unknown" }
+  );
+  // Older gateway (no key), failed finalize, and silence send nothing at all.
+  assert.deepEqual(orukeetDetectedLanguageFields({ text: "x" }), {});
+  assert.deepEqual(orukeetDetectedLanguageFields(null), {});
+  assert.deepEqual(orukeetDetectedLanguageFields(undefined), {});
+});
+
+test("isOrukeetLanguage accepts the 25 base codes and regional variants only", async () => {
+  const { isOrukeetLanguage } = await loadRouting();
+  for (const code of ["en", "en-US", "PT-br", "uk", "mt"]) {
+    assert.equal(isOrukeetLanguage(code), true, code);
+  }
+  for (const code of ["ja", "zh-CN", "auto", "", null, undefined, 5]) {
+    assert.equal(isOrukeetLanguage(code), false, String(code));
+  }
+});

@@ -621,6 +621,7 @@ test("a caret-delivered command returns the hidden Assistant to the idle pill", 
         sessionId: "caret-session",
         restoreClipboard: true,
         allowClipboardFallback: false,
+        plainText: true,
       },
     });
   });
@@ -665,6 +666,7 @@ test("a follow-up into an open panel strips caret delivery and stays panel-first
     sessionId: "caret-session",
     restoreClipboard: true,
     allowClipboardFallback: false,
+    plainText: true,
   };
 
   assistant.openRef.current = true;
@@ -688,4 +690,110 @@ test("a follow-up into an open panel strips caret delivery and stays panel-first
     });
   });
   assert.deepEqual(assistant.pendingCommand.delivery, delivery);
+});
+
+test("only a plain-text caret delivery asks the model for plain prose", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    delete globalThis.__assistantPanelSentOptions;
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const sentOptions = [];
+  globalThis.__assistantPanelSentOptions = sentOptions;
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-plain-text-test-",
+    mockModules: {
+      "/chat/useChatPersistence": `
+        export function useChatPersistence() {
+          return {
+            messages: [],
+            setMessages() {},
+            conversationId: null,
+            async createConversation() { return 1; },
+            async loadConversation() {},
+            saveUserMessage() {},
+            saveAssistantMessage() {},
+            handleNewChat() {},
+          };
+        }
+      `,
+      "/chat/useChatStreaming": `
+        export function useChatStreaming() {
+          return { agentState: "idle", activeToolName: null, toolStatus: "", cancelStream() {} };
+        }
+      `,
+      "/chat/useChatMessageSender": `
+        export function useChatMessageSender() {
+          return async (_text, options) => {
+            globalThis.__assistantPanelSentOptions.push(options);
+            return true;
+          };
+        }
+      `,
+      useVoiceDraft: `
+        export function useVoiceDraft() {
+          return { status: "idle", elapsed: 0, readLevel: () => 0, start() {}, stop() {}, cancel() {} };
+        }
+      `,
+      "/hooks/useWindowDrag": `
+        export function useWindowDrag() { return { handleMouseDown() {}, handleMouseUp() {} }; }
+      `,
+      "/stores/settingsStore": `
+        const state = { voiceAgentKey: [] };
+        export function useSettingsStore(selector) { return selector(state); }
+      `,
+      "/utils/hotkeys": `
+        export function formatHotkeyListLabel() { return ""; }
+      `,
+      "/ui/useToast": `
+        export function useToast() { return { toast() {} }; }
+      `,
+    },
+  });
+  const { AssistantPanel } = await vite.ssrLoadModule("/components/dictation/AssistantPanel.tsx");
+  const { createRoot } = require("react-dom/client");
+  const paste = {
+    mode: "paste",
+    sessionId: "s",
+    restoreClipboard: true,
+    allowClipboardFallback: false,
+  };
+  const render = (id, delivery) =>
+    React.createElement(AssistantPanel, {
+      pendingCommand: {
+        id,
+        text: "draft a reply",
+        attachment: null,
+        selectedContext: null,
+        delivery,
+      },
+      onCommandConsumed: noop,
+      onCommandDiscarded: noop,
+      onCommandSettled: noop,
+      initialConversationId: null,
+      onConversationIdChange: noop,
+      voiceState: "idle",
+      thinking: false,
+      open: false,
+      footerPhase: "pill",
+      horizontalDirection: "right",
+      onClose: noop,
+      onBusyChange: noop,
+      onResponseReadyChange: noop,
+      onResponseContent: noop,
+      onConversationReset: noop,
+      onSelectionContextChange: noop,
+    });
+
+  root = createRoot(container);
+  await React.act(async () => root.render(render(1, { ...paste, plainText: true })));
+  await React.act(async () => root.render(render(2, { ...paste, plainText: false })));
+  await React.act(async () => root.render(render(3, { mode: "clipboard" })));
+
+  assert.deepEqual(
+    sentOptions.map((options) => options.plainTextResponse),
+    [true, false, false]
+  );
 });

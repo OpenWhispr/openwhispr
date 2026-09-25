@@ -48,6 +48,7 @@
         "streamingOnlyProvider": "هذا المزود يدعم التفريغ المباشر فقط. اختر مزودًا آخر لرفع الملفات وإعادة المحاولة.",
         "providerKeyMissing": "لم يتم تعيين مفتاح API لمزود التفريغ الخاص بك. أضفه في الإعدادات ← تحويل الكلام إلى نص (Speech to Text).",
         "cleanupTruncated": "نفدت مساحة الإخراج لدى نموذج الذكاء الاصطناعي قبل أن يُكمل تنقيح إملائك.",
+        "cleanupDuplicated": "كرر تنقيح الذكاء الاصطناعي النص. تم الاحتفاظ بالنص الأصلي.",
         "cleanupEmptyReply": "أرجع نموذج الذكاء الاصطناعي ردًا فارغًا بدلًا من الإملاء المنقَّح."
       },
       "translationFallback": {
@@ -1646,7 +1647,35 @@
       "conversationWillAppear": "ستظهر المحادثة هنا...",
       "linkedEvent": "الحدث المرتبط",
       "noFolder": "بدون مجلد",
-      "participants": "المشاركون"
+      "participants": "المشاركون",
+      "table": {
+        "actions": "إجراءات الجدول",
+        "insertRowAbove": "إدراج صف أعلى",
+        "insertRowBelow": "إدراج صف أسفل",
+        "insertColumnLeft": "إدراج عمود إلى اليسار",
+        "insertColumnRight": "إدراج عمود إلى اليمين",
+        "deleteRow": "حذف الصف",
+        "deleteColumn": "حذف العمود",
+        "deleteTable": "حذف الجدول"
+      },
+      "format": {
+        "toolbar": "التنسيق",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "غامق",
+        "italic": "مائل",
+        "strike": "يتوسطه خط",
+        "code": "تعليمات برمجية",
+        "textStyle": "نمط النص",
+        "paragraph": "نص عادي",
+        "heading1": "عنوان 1",
+        "heading2": "عنوان 2",
+        "heading3": "عنوان 3",
+        "bulletList": "قائمة نقطية",
+        "orderedList": "قائمة مرقمة",
+        "taskList": "قائمة مهام",
+        "blockquote": "اقتباس",
+        "table": "إدراج جدول"
+      }
     },
     "participants": {
       "attendee": "حاضر",

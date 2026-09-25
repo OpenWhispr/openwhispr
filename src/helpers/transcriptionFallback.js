@@ -22,13 +22,18 @@ const USER_ACTIONABLE_START_FAILURES = new Set([
   "LIMIT_REACHED",
 ]);
 
+// Orukeet over OpenWhispr Cloud sessions, as opposed to a self-hosted server.
+export function isManagedOrukeetStream({ providerName, cloudTranscriptionMode }) {
+  return providerName === "orukeet" && cloudTranscriptionMode === "openwhispr";
+}
+
 // Every other managed Orukeet start failure goes to batch rather than losing
 // the dictation: the rollout was turned off for this account, its mint window
 // is exhausted, or the session service, the network, the WebSocket or the
 // session response failed. Scoped to the managed Orukeet route so no other
 // provider's start-failure behavior changes.
 export function resolveStreamingStartFallback({ providerName, cloudTranscriptionMode, result }) {
-  if (providerName !== "orukeet" || cloudTranscriptionMode !== "openwhispr") return null;
+  if (!isManagedOrukeetStream({ providerName, cloudTranscriptionMode })) return null;
   if (USER_ACTIONABLE_START_FAILURES.has(result.code) || result.code?.startsWith("POLICY_")) {
     return null;
   }

@@ -1290,6 +1290,7 @@ export default function SettingsPage({
     setWhisperVadSamplesOverlap,
   } = useSettings();
 
+  const meetingProcessDetection = useSettingsStore((state) => state.meetingProcessDetection);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
@@ -1612,8 +1613,14 @@ export default function SettingsPage({
       notificationsEnabled,
       notifyMeetingDetection,
       notifyCalendarReminders,
+      meetingProcessDetection,
     });
-  }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders]);
+  }, [
+    notificationsEnabled,
+    notifyMeetingDetection,
+    notifyCalendarReminders,
+    meetingProcessDetection,
+  ]);
 
   const handleAutoStartChange = async (enabled: boolean) => {
     if (!window.electronAPI?.setAutoStartEnabled) return;

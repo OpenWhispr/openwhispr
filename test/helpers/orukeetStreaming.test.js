@@ -234,3 +234,80 @@ test("oversized capacity backoff cannot overflow the timer into a retry loop", a
   await assert.rejects(adapter.finalize(), /timed out/);
   assert.equal(commits, 1);
 });
+
+async function gateway(t, options = {}) {
+  const server = new WebSocketServer({ port: 0, host: "127.0.0.1", ...options });
+  await once(server, "listening");
+  t.after(async () => {
+    for (const socket of server.clients) socket.terminate();
+    await new Promise((resolve) => server.close(resolve));
+  });
+  return { server, baseUrl: `http://127.0.0.1:${server.address().port}` };
+}
+
+test("a socket refused before ready rejects connect without raising a stream error", async (t) => {
+  // The gateway can refuse the upgrade itself, or accept it and answer with an
+  // error instead of `ready` (the per-account cap does either).
+  const refusedUpgrade = await gateway(t, { verifyClient: (_info, done) => done(false, 429) });
+  const refusedSession = await gateway(t);
+  refusedSession.server.on("connection", (socket) => {
+    socket.send(JSON.stringify({ type: "error", code: "account_limit", message: "Busy" }));
+    socket.close();
+  });
+
+  for (const { baseUrl } of [refusedUpgrade, refusedSession]) {
+    const adapter = new OrukeetStreaming({ timeoutMs: 300 });
+    const errors = [];
+    adapter.onError = (error) => errors.push(error);
+    await assert.rejects(adapter.connect({ baseUrl, apiKey: "test-key" }));
+    assert.deepEqual(errors, [], baseUrl);
+  }
+});
+
+test("a refusal after ready still raises a stream error", async (t) => {
+  const { adapter, options } = await fixture(t, (socket) =>
+    socket.send(JSON.stringify({ type: "error", code: "account_limit", message: "Busy" }))
+  );
+  const raised = new Promise((resolve) => {
+    adapter.onError = resolve;
+  });
+  await adapter.connect(options);
+  adapter.sendAudio(Buffer.from([1, 0]));
+  assert.equal((await raised).message, "Busy");
+});
+
+test("a server closing a completed socket raises no stream error", async (t) => {
+  // Orukeet closes a finished socket right after its final when the account
+  // already holds a warm one.
+  const { adapter, options } = await fixture(t, (socket, event) => {
+    if (event.type === "commit") {
+      socket.send(JSON.stringify({ type: "final", text: "" }));
+      socket.close();
+    }
+  });
+  const errors = [];
+  adapter.onError = (error) => errors.push(error);
+  await adapter.connect(options);
+  const closed = once(adapter.ws, "close");
+  adapter.sendAudio(Buffer.from([1, 0]));
+
+  assert.equal((await adapter.finalize()).text, "");
+  await closed;
+  assert.deepEqual(errors, []);
+});
+
+test("a failure while the session token is minted raises no stream error", async () => {
+  // Main creates the adapter before minting the managed token, so it is
+  // connecting before connect() runs; the failed start reports this failure.
+  const adapter = new OrukeetStreaming({ timeoutMs: 300 });
+  const errors = [];
+  adapter.onError = (error) => errors.push(error);
+  adapter.beginConnecting();
+  adapter.sendAudio(Buffer.alloc(2 * 1024 * 1024 + 2));
+
+  await assert.rejects(
+    adapter.connect({ baseUrl: "http://127.0.0.1:9", apiKey: "test-key" }),
+    /new Orukeet adapter/
+  );
+  assert.deepEqual(errors, []);
+});

@@ -920,6 +920,7 @@
         "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
         "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。",
         "cleanupTruncated": "AI モデルの出力が上限に達し、ディクテーションのクリーンアップが完了しませんでした。",
+        "cleanupDuplicated": "AI クリーンアップが文字起こしを繰り返しました。元のテキストを保持しました。",
         "cleanupEmptyReply": "AI モデルが空の応答を返したため、クリーンアップされたテキストがありません。"
       },
       "translationFallback": {
@@ -2861,7 +2862,35 @@
       "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
       "startRecording": "録音を開始",
       "generateSummary": "AI要約を生成",
-      "startWriting": "書き始める..."
+      "startWriting": "書き始める...",
+      "table": {
+        "actions": "表の操作",
+        "insertRowAbove": "上に行を挿入",
+        "insertRowBelow": "下に行を挿入",
+        "insertColumnLeft": "左に列を挿入",
+        "insertColumnRight": "右に列を挿入",
+        "deleteRow": "行を削除",
+        "deleteColumn": "列を削除",
+        "deleteTable": "表を削除"
+      },
+      "format": {
+        "toolbar": "書式",
+        "withShortcut": "{{action}}（{{shortcut}}）",
+        "bold": "太字",
+        "italic": "斜体",
+        "strike": "取り消し線",
+        "code": "コード",
+        "textStyle": "テキストスタイル",
+        "paragraph": "標準テキスト",
+        "heading1": "見出し 1",
+        "heading2": "見出し 2",
+        "heading3": "見出し 3",
+        "bulletList": "箇条書き",
+        "orderedList": "番号付きリスト",
+        "taskList": "チェックリスト",
+        "blockquote": "引用",
+        "table": "表を挿入"
+      }
     },
     "participants": {
       "attendee": "名の参加者",

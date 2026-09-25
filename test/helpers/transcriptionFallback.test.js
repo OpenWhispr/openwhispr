@@ -1,5 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const {
+  createPolicyResponseError,
+  toPolicyFailure,
+} = require("../../src/helpers/policyResponseError");
 
 const load = () => import("../../src/helpers/transcriptionFallback.js");
 
@@ -56,6 +60,22 @@ test("a disabled Orukeet rollout falls back to batch as feature_disabled", async
     await orukeetStart({ success: false, code: "FEATURE_NOT_ENABLED", status: 403 }),
     "feature_disabled"
   );
+});
+
+test("a language exclusion keeps the feature_disabled batch fallback", async () => {
+  // The start result the session route's 403 body becomes over IPC.
+  const result = toPolicyFailure(
+    createPolicyResponseError(
+      403,
+      {
+        error: "Orukeet dictation is not enabled for this account",
+        code: "FEATURE_NOT_ENABLED",
+        reason: "language_unsupported",
+      },
+      "Orukeet session unavailable (403)"
+    )
+  );
+  assert.equal(await orukeetStart(result), "feature_disabled");
 });
 
 test("an exhausted session mint window falls back to batch as rate_limited", async () => {

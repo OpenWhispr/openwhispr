@@ -826,6 +826,14 @@ export interface ScreenRecordingAccessResult {
 
 export type CloudReasonPurpose = "cleanup" | "assistant" | "translation" | "noteFormatting";
 
+// Orukeet's audio language estimate, reported for the backend's per-user gate.
+export interface SttDetectedLanguageFields {
+  sttDetectedLanguage?: string;
+  sttDetectedLanguageConfidence?: number;
+  sttDetectedLanguageAudioSeconds?: number;
+  sttDetectedLanguageStatus?: "detected" | "unknown";
+}
+
 export interface ScreenContextImage {
   mediaType: string;
   /** Base64 image bytes, no data-URL prefix. */
@@ -1147,6 +1155,8 @@ declare global {
         | {
             status: "editable";
             sessionId: string;
+            /** True when the captured app keeps markdown (spec Appendix A); false means plain text. */
+            acceptsMarkdown: boolean;
           }
         | {
             status: "none" | "unavailable" | "target_changed" | "too_large";
@@ -1489,10 +1499,6 @@ declare global {
         spaceId?: number | null,
         folderId?: number | null
       ) => Promise<NoteItem[]>;
-      semanticReindexAll: () => Promise<{ success: boolean; indexed?: number; error?: string }>;
-      onSemanticReindexProgress: (
-        callback: (data: { done: number; total: number }) => void
-      ) => () => void;
       updateNoteCloudId: (id: number, cloudId: string) => Promise<NoteItem>;
       updateNoteShareState: (
         id: number,
@@ -2407,7 +2413,7 @@ declare global {
           analyticsOccurredAt?: string;
           // Why a managed-streaming user's dictation went batch (rollout metric).
           streamingFallbackReason?: string;
-        }
+        } & SttDetectedLanguageFields
       ) => Promise<
         {
           success: boolean;
@@ -2435,7 +2441,7 @@ declare global {
           language?: string;
           locale?: string;
           streamingFallbackReason?: string;
-        }
+        } & SttDetectedLanguageFields
       ) => Promise<{
         success: boolean;
         text?: string;
@@ -2465,7 +2471,7 @@ declare global {
           analyticsOccurredAt?: string;
           analyticsWordCount?: number;
           analyticsCounterVersion?: number;
-        }
+        } & SttDetectedLanguageFields
       ) => Promise<{
         success: boolean;
         wordsUsed?: number;
@@ -3189,13 +3195,12 @@ declare global {
       ) => () => void;
       onAcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
-      meetingDetectionGetPreferences?: () => Promise<{ success: boolean; preferences?: any }>;
-      meetingDetectionSetPreferences?: (
-        prefs: Record<string, boolean>
-      ) => Promise<{ success: boolean }>;
-      syncNotificationPreferences?: (
-        prefs: Record<string, boolean>
-      ) => Promise<{ success: boolean }>;
+      syncNotificationPreferences?: (prefs: {
+        notificationsEnabled: boolean;
+        notifyMeetingDetection: boolean;
+        notifyCalendarReminders: boolean;
+        meetingProcessDetection: boolean;
+      }) => Promise<{ success: boolean }>;
       setSpeakerDiarizationEnabled?: (
         enabled: boolean
       ) => Promise<{ success: boolean; error?: string }>;

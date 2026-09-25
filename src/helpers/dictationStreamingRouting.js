@@ -13,6 +13,51 @@ const ORUKEET_LANGUAGES = new Set(
   modelRegistryData.parakeetModels[ORUKEET_MODEL].supportedLanguages
 );
 
+// Oruk's audio classifier score (not a calibrated probability): 0.90 caught
+// 92% of unsupported FLEURS clips at 6 s and 62.5% at 3 s while flagging 0.4%
+// / 1.2% of supported ones. A false flag costs one batch round trip; a miss
+// pastes nonsense. See docs/orukeet-streaming-language.md.
+const ORUKEET_LANGUAGE_FALLBACK_MIN_CONFIDENCE = 0.9;
+const ORUKEET_LANGUAGE_FALLBACK_MIN_AUDIO_SECONDS = 3;
+
+export function isOrukeetLanguage(code) {
+  if (typeof code !== "string" || !code) return false;
+  return ORUKEET_LANGUAGES.has(code.split("-")[0].toLowerCase());
+}
+
+// Auto mode only: an explicit language outside the 25 never reaches Orukeet
+// (resolveManagedOrukeetRoute), and an explicit supported one is the user's
+// statement of what they speak. Only the final estimate counts; early
+// `language` events are provisional.
+export function shouldRetranscribeOrukeetLanguage({ language, final }) {
+  if (language && language !== "auto") return false;
+  if (!final || typeof final.language !== "string" || isOrukeetLanguage(final.language)) {
+    return false;
+  }
+  return (
+    Number.isFinite(final.languageConfidence) &&
+    final.languageConfidence >= ORUKEET_LANGUAGE_FALLBACK_MIN_CONFIDENCE &&
+    Number.isFinite(final.languageAudioSeconds) &&
+    final.languageAudioSeconds >= ORUKEET_LANGUAGE_FALLBACK_MIN_AUDIO_SECONDS
+  );
+}
+
+// Reported for every Orukeet dictation so the backend's per-user gate sees
+// what was spoken. No `language` key means an older gateway or no final:
+// nothing is reported, since "unknown" would misstate the detector.
+export function orukeetDetectedLanguageFields(final) {
+  if (!final || !("language" in final)) return {};
+  if (typeof final.language !== "string") return { sttDetectedLanguageStatus: "unknown" };
+  return {
+    sttDetectedLanguage: final.language,
+    sttDetectedLanguageConfidence: final.languageConfidence,
+    ...(Number.isFinite(final.languageAudioSeconds)
+      ? { sttDetectedLanguageAudioSeconds: final.languageAudioSeconds }
+      : {}),
+    sttDetectedLanguageStatus: "detected",
+  };
+}
+
 export const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
 // REALTIME_MODELS is the OpenAI-only shortcut (it forces "openai-realtime"), so
@@ -38,8 +83,7 @@ export function resolveManagedOrukeetRoute({ settings, sttConfig, language }) {
     return null;
   }
   if (!language || language === "auto") return "orukeet";
-  const base = language.split("-")[0].toLowerCase();
-  return ORUKEET_LANGUAGES.has(base) ? "orukeet" : "language_unsupported";
+  return isOrukeetLanguage(language) ? "orukeet" : "language_unsupported";
 }
 
 export function resolveStreamingProviderName({ settings, context, sttConfig, language }) {

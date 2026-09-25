@@ -920,6 +920,7 @@
         "streamingOnlyProvider": "Questo provider supporta solo la trascrizione dal vivo. Scegli un altro provider per i caricamenti di file e i nuovi tentativi.",
         "providerKeyMissing": "Nessuna chiave API impostata per il tuo provider di trascrizione. Aggiungila in Impostazioni → Da voce a testo.",
         "cleanupTruncated": "Il modello IA ha esaurito lo spazio prima di finire la pulizia della dettatura.",
+        "cleanupDuplicated": "La pulizia con IA ha ripetuto la trascrizione. Il testo originale è stato conservato.",
         "cleanupEmptyReply": "Il modello IA ha restituito una risposta vuota invece della dettatura pulita."
       },
       "translationFallback": {
@@ -2967,7 +2968,35 @@
       "conversationWillAppear": "La conversazione apparirà qui...",
       "linkedEvent": "Evento collegato",
       "noFolder": "Nessuna cartella",
-      "participants": "Partecipanti"
+      "participants": "Partecipanti",
+      "table": {
+        "actions": "Azioni tabella",
+        "insertRowAbove": "Inserisci riga sopra",
+        "insertRowBelow": "Inserisci riga sotto",
+        "insertColumnLeft": "Inserisci colonna a sinistra",
+        "insertColumnRight": "Inserisci colonna a destra",
+        "deleteRow": "Elimina riga",
+        "deleteColumn": "Elimina colonna",
+        "deleteTable": "Elimina tabella"
+      },
+      "format": {
+        "toolbar": "Formattazione",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Grassetto",
+        "italic": "Corsivo",
+        "strike": "Barrato",
+        "code": "Codice",
+        "textStyle": "Stile testo",
+        "paragraph": "Testo normale",
+        "heading1": "Titolo 1",
+        "heading2": "Titolo 2",
+        "heading3": "Titolo 3",
+        "bulletList": "Elenco puntato",
+        "orderedList": "Elenco numerato",
+        "taskList": "Elenco di controllo",
+        "blockquote": "Citazione",
+        "table": "Inserisci tabella"
+      }
     },
     "participants": {
       "attendee": "partecipante",

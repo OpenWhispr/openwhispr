@@ -920,6 +920,7 @@
         "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
         "providerKeyMissing": "No hay ninguna clave de API configurada para tu proveedor de transcripción. Añádela en Ajustes → Voz a texto.",
         "cleanupTruncated": "El modelo de IA se quedó sin espacio antes de terminar de limpiar tu dictado.",
+        "cleanupDuplicated": "La limpieza con IA repitió la transcripción. Se conservó el texto original.",
         "cleanupEmptyReply": "El modelo de IA devolvió una respuesta vacía en lugar del dictado limpio."
       },
       "translationFallback": {
@@ -3020,7 +3021,35 @@
       "conversationWillAppear": "La conversación aparecerá aquí...",
       "linkedEvent": "Evento vinculado",
       "noFolder": "Sin carpeta",
-      "participants": "Participantes"
+      "participants": "Participantes",
+      "table": {
+        "actions": "Acciones de tabla",
+        "insertRowAbove": "Insertar fila arriba",
+        "insertRowBelow": "Insertar fila abajo",
+        "insertColumnLeft": "Insertar columna a la izquierda",
+        "insertColumnRight": "Insertar columna a la derecha",
+        "deleteRow": "Eliminar fila",
+        "deleteColumn": "Eliminar columna",
+        "deleteTable": "Eliminar tabla"
+      },
+      "format": {
+        "toolbar": "Formato",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Negrita",
+        "italic": "Cursiva",
+        "strike": "Tachado",
+        "code": "Código",
+        "textStyle": "Estilo de texto",
+        "paragraph": "Texto normal",
+        "heading1": "Encabezado 1",
+        "heading2": "Encabezado 2",
+        "heading3": "Encabezado 3",
+        "bulletList": "Lista con viñetas",
+        "orderedList": "Lista numerada",
+        "taskList": "Lista de verificación",
+        "blockquote": "Cita",
+        "table": "Insertar tabla"
+      }
     },
     "participants": {
       "attendee": "asistente",
