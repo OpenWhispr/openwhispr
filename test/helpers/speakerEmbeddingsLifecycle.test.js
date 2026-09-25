@@ -8,6 +8,12 @@ const WORKER_SOURCE = fs.readFileSync(path.resolve("src/workers/onnxWorker.js"),
 const SPEAKER_SOURCE = fs.readFileSync(path.resolve("src/helpers/speakerEmbeddings.js"), "utf8");
 
 const SAMPLES = new Float32Array(16000 * 2).fill(0.1);
+// Sources run in a vm context: resolve their relative requires from their own folder,
+// not from this test file's.
+const requireFromSrc = (dir) => (name) =>
+  require(name.startsWith(".") ? path.resolve("src", dir, name) : name);
+const requireWorkerDep = requireFromSrc("workers");
+const requireHelperDep = requireFromSrc("helpers");
 
 function createTimers() {
   const timers = [];
@@ -58,7 +64,7 @@ function createHarness() {
           InferenceSession: { create: async () => nativeSession("speaker") },
           Tensor: class {},
         };
-      return require(name);
+      return requireWorkerDep(name);
     },
     process: { env: {}, on() {}, parentPort: { once() {} } },
     setImmediate,
@@ -99,7 +105,7 @@ function createHarness() {
         );
       if (name === "./modelDirUtils") return { getModelsDirForService: () => "/models" };
       if (name === "./onnxWorkerClient") return client;
-      return require(name);
+      return requireHelperDep(name);
     },
   });
   vm.runInContext(SPEAKER_SOURCE, context);
