@@ -687,6 +687,8 @@ describe('NoteEditorScreen generated titles', () => {
   });
 });
 
+jest.mock('@/components/notes/NoteShareSheet', () => ({ NoteShareSheet: () => null }));
+
 it('runs signed-out note formatting through Providers without requiring a Cloud account', async () => {
   mockAuthState.user = null;
   mockConfigState.config.inference = {

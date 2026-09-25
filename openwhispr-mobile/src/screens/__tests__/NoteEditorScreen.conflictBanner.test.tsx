@@ -202,7 +202,14 @@ jest.mock('@/components/ui/SystemIcon', () => ({
 }));
 
 jest.mock('@/components/notes/NoteActionsMenu', () => ({
-  NoteActionsMenu: () => null,
+  NoteActionsMenu: ({ onShare }: { onShare: () => void }) => {
+    const { Pressable, Text } = require('react-native');
+    return (
+      <Pressable onPress={onShare}>
+        <Text>Share note</Text>
+      </Pressable>
+    );
+  },
 }));
 
 jest.mock('@/components/notes/MarkdownRenderer', () => ({
@@ -362,4 +369,69 @@ describe('NoteEditorScreen — conflict banner', () => {
     // after the resolve.
     expect(mockNotesState.getNoteById).toHaveBeenCalledWith(7);
   });
+});
+
+jest.mock('@/components/notes/NoteShareSheet', () => ({
+  NoteShareSheet: ({ onFlushDraft }: { onFlushDraft: () => void }) => {
+    const { Pressable, Text } = require('react-native');
+    return (
+      <Pressable onPress={onFlushDraft}>
+        <Text>Create test link</Text>
+      </Pressable>
+    );
+  },
+}));
+
+describe('NoteEditorScreen — sharing drafts', () => {
+  it('flushes title and body before publishing and does not resave on exit', () => {
+    jest.useFakeTimers();
+    const screen = render(<NoteEditorScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText('Title'), 'Latest title');
+    fireEvent.changeText(screen.getByPlaceholderText('Type or dictate…'), 'Latest body');
+    fireEvent.press(screen.getByText('Share note'));
+    expect(mockUpdateNote).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByText('Create test link'));
+    expect(mockUpdateNote).toHaveBeenCalledWith(7, {
+      title: 'Latest title',
+      content: 'Latest body',
+    });
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    screen.unmount();
+    expect(mockUpdateNote).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  it('does not dirty an unchanged note when opening or publishing', () => {
+    const screen = render(<NoteEditorScreen />);
+    fireEvent.press(screen.getByText('Share note'));
+    fireEvent.press(screen.getByText('Create test link'));
+    screen.unmount();
+    expect(mockUpdateNote).not.toHaveBeenCalled();
+  });
+});
+
+it('flushes a meeting title without replacing its structured transcript with body text', () => {
+  mockNote = note({ noteType: 'meeting', content: 'Stored body' });
+  mockNotesState.notes = [mockNote];
+  mockSegments = [
+    {
+      id: 1,
+      noteId: 7,
+      text: 'Spoken words',
+      startMs: 0,
+      endMs: 1000,
+      speakerId: null,
+      segmentIndex: 0,
+      source: 'local',
+    } as unknown as Segment,
+  ];
+  const screen = render(<NoteEditorScreen />);
+  fireEvent.changeText(screen.getByPlaceholderText('Title'), 'Meeting title');
+  fireEvent.press(screen.getByText('Share note'));
+  fireEvent.press(screen.getByText('Create test link'));
+  expect(mockUpdateNote).toHaveBeenCalledWith(7, { title: 'Meeting title' });
+  screen.unmount();
+  expect(mockUpdateNote).toHaveBeenCalledTimes(1);
 });

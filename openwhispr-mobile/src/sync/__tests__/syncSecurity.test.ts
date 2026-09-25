@@ -294,3 +294,45 @@ it('does not process an old account rejection against new local work', async () 
   ).rejects.toThrow(SyncCancelledError);
   expect(mockRepo.getNoteById(created.id)!.pendingSync).toBe(1);
 });
+
+it('uses the pulled sharing revision as the next content update base', async (): Promise<void> => {
+  const note = mockRepo.createNote('Title', 'Body');
+  const originalRevision = '2026-09-22T10:00:00.000Z';
+  const sharingRevision = '2026-09-22T10:00:01.000Z';
+  mockRepo.markNotePushed(note, 'remote-note', originalRevision);
+  const remote = {
+    id: 'remote-note',
+    client_note_id: note.clientNoteId,
+    title: 'Title',
+    content: 'Body',
+    enhanced_content: null,
+    enhancement_prompt: null,
+    note_type: 'personal',
+    source_file: null,
+    audio_duration_seconds: null,
+    folder_id: null,
+    participants: null,
+    calendar_event_id: null,
+    transcript: null,
+    deleted_at: null,
+    updated_at: sharingRevision,
+  };
+  jest.mocked(fetchNotes).mockResolvedValueOnce({ notes: [remote], hasMore: false });
+  await pullNotes();
+  expect(mockRepo.getNoteById(note.id)?.cloudUpdatedAt).toBe(sharingRevision);
+  mockRepo.updateNote(note.id, { content: 'Edited after sharing' });
+  jest.mocked(updateNote).mockResolvedValueOnce({
+    ...remote,
+    content: 'Edited after sharing',
+    updated_at: '2026-09-22T10:00:02.000Z',
+  });
+  await pushNotes();
+  expect(updateNote).toHaveBeenCalledWith(
+    'remote-note',
+    expect.objectContaining({
+      content: 'Edited after sharing',
+      base_updated_at: sharingRevision,
+    }),
+  );
+  expect(mockRepo.getNoteById(note.id)?.pendingSync).toBe(0);
+});

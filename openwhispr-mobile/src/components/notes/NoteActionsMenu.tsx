@@ -106,7 +106,6 @@ export function NoteActionsMenu({
       title: 'Share',
       image: 'square.and.arrow.up',
       imageColor: iconColor,
-      attributes: { disabled: !hasContent },
     },
     {
       id: PRIVACY_ID,

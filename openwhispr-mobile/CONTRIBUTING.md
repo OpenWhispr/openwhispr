@@ -78,6 +78,8 @@ Use [.env.example](./.env.example) as the canonical variable reference. It group
 
 Variables prefixed with `EXPO_PUBLIC_` are embedded in the application bundle and must never contain secrets. Keep contributor-specific values in `.env.local`, which is ignored by Git.
 
+Note sharing uses `https://notes.openwhispr.com` with the hosted production API. When setting a custom `EXPO_PUBLIC_API_URL`, also set `EXPO_PUBLIC_NOTES_URL` to the matching notes viewer before creating links. The viewer URL must use HTTPS, except HTTP on loopback for local development. Configure the backend's `SHARE_VIEWER_BASE_URL` to the same viewer so invitation emails open in the correct environment.
+
 ## Physical iOS Devices and Forks
 
 The committed configuration contains OpenWhispr's production identifiers. Do not manually replace identifiers throughout the source. For a local physical-device build, set a unique identity in `.env.local`:

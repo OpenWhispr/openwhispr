@@ -1,5 +1,6 @@
 const mockSignInAnonymously = jest.fn();
 const mockCaptureMessage = jest.fn();
+const mockClearNoteShareTokens = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('@/lib/authClient', () => ({
   getStoredSession: jest.fn(),
@@ -25,6 +26,12 @@ jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: { getState: () => ({ reset: jest.fn(), load: jest.fn() }) },
 }));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));
+jest.mock('@/lib/notes/noteShareTokens', () => ({
+  clearNoteShareTokens: (...args: unknown[]) => mockClearNoteShareTokens(...args),
+}));
+jest.mock('@/services/providers/ProviderCredentials', () => ({
+  clearProviderCredentials: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn().mockResolvedValue(null),
   setItemAsync: jest.fn(),
@@ -32,6 +39,7 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 import { useAuthStore } from '@/store/useAuthStore';
+import { deleteAccount, signInWithEmail } from '@/lib/authClient';
 
 const anonymousUser = {
   id: 'anon-user',
@@ -50,6 +58,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockClearNoteShareTokens.mockResolvedValue(undefined);
   useAuthStore.setState({
     user: null,
     sessionCookie: null,
@@ -64,6 +73,28 @@ beforeEach(() => {
     error: null,
     status: null,
   });
+});
+
+it('keeps stored share links through sign out and guest mode', async () => {
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  await useAuthStore.getState().signOut();
+  expect(useAuthStore.getState().user).toBeNull();
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  await useAuthStore.getState().continueAsGuest();
+  expect(useAuthStore.getState().isGuest).toBe(true);
+  expect(mockClearNoteShareTokens).not.toHaveBeenCalled();
+});
+
+it('clears the prior account tokens when signing into a different account', async () => {
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  jest.mocked(signInWithEmail).mockResolvedValueOnce({
+    user: { ...anonymousUser, id: 'other-user' },
+    sessionCookie: 'session=other',
+    error: null,
+  });
+  await useAuthStore.getState().signIn('other@example.com', 'password');
+  expect(mockClearNoteShareTokens).toHaveBeenCalledWith('anon-user');
+  expect(useAuthStore.getState().user?.id).toBe('other-user');
 });
 
 describe('useAuthStore.ensureAnonymousSession', () => {
@@ -176,4 +207,29 @@ it('still enters guest mode if the anonymous request fails while guest mode is w
     isGuest: true,
     isLoading: false,
   });
+});
+
+it('still completes account deletion if local sharing cache cleanup fails', async (): Promise<void> => {
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  jest.mocked(deleteAccount).mockResolvedValueOnce(undefined as never);
+  mockClearNoteShareTokens.mockRejectedValueOnce(new Error('Secure storage unavailable'));
+  await useAuthStore.getState().deleteAccount();
+  expect(useAuthStore.getState().user).toBeNull();
+  expect(useAuthStore.getState().isLoading).toBe(false);
+});
+
+it('keeps stored share links when account deletion fails', async (): Promise<void> => {
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  jest.mocked(deleteAccount).mockRejectedValueOnce(new Error('Network request failed'));
+  await expect(useAuthStore.getState().deleteAccount()).rejects.toThrow(/network/i);
+  expect(mockClearNoteShareTokens).not.toHaveBeenCalled();
+  expect(useAuthStore.getState().user?.id).toBe('anon-user');
+});
+
+it('clears stored share links after the account is deleted', async (): Promise<void> => {
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  jest.mocked(deleteAccount).mockResolvedValueOnce(undefined as never);
+  await useAuthStore.getState().deleteAccount();
+  expect(mockClearNoteShareTokens).toHaveBeenCalledWith('anon-user');
+  expect(useAuthStore.getState().user).toBeNull();
 });

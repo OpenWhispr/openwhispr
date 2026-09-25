@@ -9,7 +9,18 @@ The mobile app lives in the main [`OpenWhispr/openwhispr`](https://github.com/Op
 - **Cloud, Private, or Bring Your Own Key** — choose hosted transcription, on-device inference, or your own provider key on iOS
 - **iOS dictation keyboard** — dictate from any text field system-wide via a custom keyboard extension
 - **Markdown notes** — folders, full-text search, AI-assisted cleanup
+- **Note sharing** — web links, email invitations, organization domains, and viewer/editor access; Markdown and plain-text exports remain available offline
 - **Native iOS feel** — Liquid Glass tab bar and headers on iOS 26+, blur fallback on iOS 18
+
+## Sharing notes
+
+Open a note’s menu and choose **Share**. Creating a link or inviting someone uploads the latest saved draft through normal cloud sync, then uses the existing notes website for recipients. Opening the sheet does not publish a note. Private notes require an explicit cloud-sync opt-in; exports work without an account or cloud sync.
+
+Full link tokens stay in account-scoped secure storage on the device that creates them. Like provider keys, they survive sign-out and are removed when the account is deleted. **Invited only** sharing offers the same sign-in link invitation emails carry, so it works on any device. For link and organization sharing, a link created on another device may require **Replace link**, which invalidates the previous link, including links already sent in invitation emails. Sharing modes your organization's policy blocks are hidden, and sharing a personal note that has never been uploaded requires Pro. **Disable external sharing** permanently invalidates the link and pauses invitations and people added to the note; sharing again creates a new link and restores people added (resend invitations so their emailed links work). Access through a team space or workspace is unaffected, and grant records are kept. If cloud deletion is pending after making a note private, **Disable previous link** can revoke its old external link separately.
+
+Sharing changes do not advance the note's content version on the server, so they never turn later edits into sync conflicts. This requires an `openwhispr-api` release that stops sharing changes from updating `notes.updated_at`; against an older API, editing a note with unsynced changes right after a sharing change can still show a sync conflict. Native device and cross-device acceptance are still required before release.
+
+For a custom API, configure its paired notes viewer as described in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Tech stack
 

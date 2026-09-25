@@ -19,6 +19,7 @@ import {
 import { Sentry } from '@/lib/sentry';
 import { useUsageStore } from '@/store/useUsageStore';
 import { clearAllSessions as clearAgentSessions } from '@/services/agent/AgentComposerService';
+import { clearNoteShareTokens } from '@/lib/notes/noteShareTokens';
 
 const GUEST_SESSION_KEY = 'openwhispr_guest_session';
 
@@ -189,6 +190,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     await anonymousSignInInFlight?.catch(() => undefined);
     try {
       await deleteAccountApi();
+      await clearPreviousNoteShareTokens();
       // Keys survive sign-out by design, but not account deletion. They are erased only
       // once the account is gone, so a failed delete keeps them. A failed erase leaves
       // them for Remove all provider keys rather than undoing a completed deletion.
@@ -213,6 +215,18 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
 type SetState = StoreApi<AuthStore>['setState'];
 
+async function clearPreviousNoteShareTokens(nextUserId?: string): Promise<void> {
+  const previousUserId = useAuthStore.getState().user?.id;
+  if (previousUserId && previousUserId !== nextUserId) {
+    try {
+      await clearNoteShareTokens(previousUserId);
+    } catch {
+      // A local cache failure must not block sign-in or undo a completed account deletion.
+      Sentry.captureMessage('Note sharing cache cleanup failed', 'warning');
+    }
+  }
+}
+
 async function applyAuthenticatedSession(
   set: SetState,
   result: SessionResult,
@@ -220,6 +234,7 @@ async function applyAuthenticatedSession(
 ): Promise<void> {
   await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
   await initAuthenticatedUser(result.user, fallbackName);
+  await clearPreviousNoteShareTokens(result.user?.id);
   useUsageStore.getState().reset();
   set({
     user: result.user,

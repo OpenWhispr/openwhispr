@@ -181,3 +181,28 @@ describe('LocalNotesRepository.clearSyncState', () => {
     expect(repo.getSyncState('notes.last_sync_at')).toBe('2026-08-24T11:00:00.000Z');
   });
 });
+
+describe('rejected note upload tracking', () => {
+  it.each(['markNoteTerminal', 'dropNotePushAttempt'] as const)(
+    'persists %s rejection until a successful acknowledgement',
+    (method) => {
+      const { repo } = createMemoryRepository();
+      const note = repo.createNote('Title', 'Unaccepted body');
+      repo[method](note.id);
+      expect(repo.getSyncState(`note.pushRejected.${note.id}`)).toBe('1');
+      repo.markNotePushed(repo.getNoteById(note.id)!, 'remote', 'server-time', null);
+      expect(repo.getSyncState(`note.pushRejected.${note.id}`)).toBeNull();
+    },
+  );
+
+  it('retains rejection while a newer local edit is still unacknowledged', () => {
+    const { repo } = createMemoryRepository();
+    const note = repo.createNote('Title', 'Body');
+    repo.markNoteTerminal(note.id);
+    repo.updateNote(note.id, { content: 'Newer body' });
+    repo.markNotePushed(note, 'remote', 'server-time');
+    expect(repo.getSyncState(`note.pushRejected.${note.id}`)).toBe('1');
+    repo.hardDeleteNote(note.id);
+    expect(repo.getSyncState(`note.pushRejected.${note.id}`)).toBeNull();
+  });
+});

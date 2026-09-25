@@ -125,7 +125,7 @@ jest.mock('../initialBackfill', () => ({
   runInitialBackfillIfNeeded: (...args: unknown[]) => mockRunInitialBackfillIfNeeded(...args),
 }));
 
-import { requestSync } from '../syncEngine';
+import { requestSync, subscribeSyncCompletion } from '../syncEngine';
 import { pushPrivateNoteDeletes } from '../privateNoteDeletion';
 import { useSyncStore } from '../useSyncStore';
 import { ApiError } from '@/lib/apiClient';
@@ -734,6 +734,123 @@ describe('in-flight cancellation', () => {
     expect(mockPushNotes).not.toHaveBeenCalled();
     expect(mockPushDictionary).not.toHaveBeenCalled();
     expect(mockPushSnippets).not.toHaveBeenCalled();
+  });
+});
+
+it('notifies sync completion after a gated pass and supports unsubscription', async (): Promise<void> => {
+  const finished = jest.fn();
+  const unsubscribe = subscribeSyncCompletion(finished);
+  mockConfigState.config = { cloudBackupEnabled: false };
+  mockSyncSpaces.mockResolvedValue({ capable: false, activeSpaces: [] });
+  requestSync('manual');
+  await flush();
+  expect(finished).toHaveBeenCalledTimes(1);
+  unsubscribe();
+  requestSync('manual');
+  await flush();
+  expect(finished).toHaveBeenCalledTimes(1);
+});
+
+describe('queued runs', () => {
+  // Parks the next run on its notes pull; resolving the returned function lets it finish.
+  function holdNextRun(): () => void {
+    let release: () => void = () => {};
+    mockPullNotes.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    return () => release();
+  }
+
+  // A foreground run that just completed throttles the next foreground trigger.
+  async function throttleForeground(): Promise<void> {
+    requestSync('foreground');
+    await flush();
+    jest.clearAllMocks();
+  }
+
+  it('keeps a queued manual run when a throttled foreground trigger arrives behind it', async (): Promise<void> => {
+    await throttleForeground();
+    const finished = jest.fn();
+    const unsubscribe = subscribeSyncCompletion(finished);
+    try {
+      const release = holdNextRun();
+      requestSync('manual');
+      await flush();
+      requestSync('manual');
+      requestSync('foreground');
+      release();
+      await flush();
+    } finally {
+      unsubscribe();
+    }
+
+    // Both manual runs force a fresh subscription check.
+    expect(mockFetchUsage).toHaveBeenCalledTimes(2);
+    expect(mockPullNotes).toHaveBeenCalledTimes(2);
+    expect(finished.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it('does not report a queued foreground run the throttle will skip', async (): Promise<void> => {
+    await throttleForeground();
+    const finished = jest.fn();
+    const unsubscribe = subscribeSyncCompletion(finished);
+    try {
+      const release = holdNextRun();
+      requestSync('manual');
+      await flush();
+      requestSync('foreground');
+      release();
+      await flush();
+    } finally {
+      unsubscribe();
+    }
+
+    expect(mockPullNotes).toHaveBeenCalledTimes(1);
+    expect(finished.mock.calls).toEqual([[false]]);
+  });
+
+  it('still notifies later listeners and replays the queued run when a listener throws', async (): Promise<void> => {
+    const failure = new Error('listener failed');
+    const later = jest.fn();
+    const unsubscribeThrowing = subscribeSyncCompletion(() => {
+      throw failure;
+    });
+    const unsubscribeLater = subscribeSyncCompletion(later);
+    try {
+      const release = holdNextRun();
+      requestSync('manual');
+      await flush();
+      requestSync('manual');
+      release();
+      await flush();
+    } finally {
+      unsubscribeThrowing();
+      unsubscribeLater();
+    }
+
+    expect(mockPullNotes).toHaveBeenCalledTimes(2);
+    expect(later.mock.calls).toEqual([[true], [false]]);
+    expect(Sentry.captureException).toHaveBeenCalledWith(failure, {
+      tags: { sync: 'completionListener' },
+    });
+  });
+
+  it('settles a queued foreground request the throttle drops', async (): Promise<void> => {
+    await throttleForeground();
+    const release = holdNextRun();
+    requestSync('manual');
+    await flush();
+    let settled = false;
+    const queued = requestSync('foreground').then(() => {
+      settled = true;
+    });
+    release();
+    await queued;
+    expect(settled).toBe(true);
+    expect(mockPullNotes).toHaveBeenCalledTimes(1);
   });
 });
 
