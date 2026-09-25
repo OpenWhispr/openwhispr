@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { isMicPermissionError, showMicPermissionAlert } from '@/lib/permissions';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -38,10 +39,11 @@ import { VoiceprintSuggestionSheet } from '@/components/notes/VoiceprintSuggesti
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
+import { Glass } from '@/components/ui/Glass';
 import { GlassBackButton } from '@/components/ui/GlassBackButton';
 import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
 import { buildNoteShareContent, exportNote } from '@/lib/noteExport';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { makeContentHash, safeHaptics } from '@/lib/utils';
 import { parseNoteTimestamp } from '@/lib/parseNoteTimestamp';
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
@@ -75,6 +77,7 @@ import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import type { Note } from '@/data/types';
 import type { ReasoningRoutingOptions } from '@/types';
 import type { ChatOverNoteMessage } from '@/lib/notes/chatOverNote';
+import { getNoteChatSuggestions } from '@/lib/notes/noteChatSuggestions';
 import {
   formatTranscriptForExport,
   getSpeakerDisplayName,
@@ -169,6 +172,7 @@ export default function NoteEditorScreen() {
   const [isChatProcessing, setIsChatProcessing] = useState(false);
   const [isRetryingTranscript, setIsRetryingTranscript] = useState(false);
   const keyboardHeight = useKeyboardHeight();
+  const insets = useSafeAreaInsets();
 
   const contentRef = useRef(content);
   contentRef.current = content;
@@ -297,10 +301,11 @@ export default function NoteEditorScreen() {
       (suggestion) => suggestion.label.trim().toLowerCase() !== currentName,
     );
   }, [activeSpeakerName, calendarParticipants]);
+  const isTranscriptInProgress = ['recording', 'transcribing', 'diarizing'].includes(
+    transcriptStatus,
+  );
   const shouldShowTranscriptStatus =
-    isAudioTranscript &&
-    !hasTranscriptSegments &&
-    ['recording', 'transcribing', 'diarizing'].includes(transcriptStatus);
+    isAudioTranscript && !hasTranscriptSegments && isTranscriptInProgress;
   const shouldShowTranscriptFailed =
     isAudioTranscript && !hasTranscriptSegments && transcriptStatus === 'failed';
   const shouldRenderPlainEditor =
@@ -748,6 +753,14 @@ export default function NoteEditorScreen() {
     runChatWithCloudConfirmation(chatDraft, true);
   }, [chatDraft, runChatWithCloudConfirmation]);
 
+  const handleChatSuggestion = useCallback(
+    (prompt: string) => {
+      safeHaptics('light');
+      runChatWithCloudConfirmation(prompt, true);
+    },
+    [runChatWithCloudConfirmation],
+  );
+
   const handleRetryChat = useCallback(() => {
     if (!chatLastQuestion.trim()) return;
     runChatWithCloudConfirmation(chatLastQuestion, false);
@@ -857,6 +870,17 @@ export default function NoteEditorScreen() {
 
   const contentEmpty = !actionInputText.trim();
   const isEnhancingHeader = processingState === 'processing';
+  // A finished meeting gets a persistent Ask pill instead of a menu entry. Status alone
+  // can't mean "finished": synced notes keep the local default 'idle' even with a full
+  // transcript. Segment transcripts never show the dictate FAB, so the two can't overlap.
+  const showAskPill =
+    chatEnabled && usesSegmentTranscript && !isTranscriptInProgress && !contentEmpty;
+  // The tab bar is hidden on the note editor, so the pill sits on the home-indicator inset.
+  const askPillBottom = insets.bottom + ASK_PILL_GAP;
+  // Uploads can be lectures or voice memos, so only meetings get meeting-worded shortcuts.
+  const chatSuggestions = getNoteChatSuggestions(
+    usesSegmentTranscript && note?.noteType !== 'upload',
+  );
 
   if (!note && !isNaN(noteId)) {
     return (
@@ -903,7 +927,7 @@ export default function NoteEditorScreen() {
             processing={isEnhancingHeader}
             onRunAction={handleRunAction}
             onManageActions={handleManageActions}
-            onAskNote={chatEnabled ? handleAskNote : undefined}
+            onAskNote={chatEnabled && !showAskPill ? handleAskNote : undefined}
             askNoteDisabled={isChatProcessing}
             onCopyGeneratedNote={note?.enhancedContent ? handleCopyGeneratedNote : undefined}
             onCopyTranscript={usesSegmentTranscript ? handleCopyTranscript : undefined}
@@ -925,7 +949,11 @@ export default function NoteEditorScreen() {
             paddingHorizontal: 20,
             paddingTop: 16,
             paddingBottom:
-              keyboardHeight > 0 ? NOTE_EDITOR_KEYBOARD_BOTTOM_PADDING : NOTE_EDITOR_BOTTOM_PADDING,
+              keyboardHeight > 0
+                ? NOTE_EDITOR_KEYBOARD_BOTTOM_PADDING
+                : showAskPill
+                  ? askPillBottom + ASK_PILL_HEIGHT + ASK_PILL_GAP * 2
+                  : NOTE_EDITOR_BOTTOM_PADDING,
           }}
         >
           <TextInput
@@ -935,7 +963,7 @@ export default function NoteEditorScreen() {
             placeholderTextColor="rgba(0,0,0,0.2)"
             multiline
             className="mb-3 text-3xl font-bold leading-9 text-label"
-            style={{ fontFamily: SpaceGrotesk.bold }}
+            style={{ fontFamily: AppFont.bold }}
           />
 
           {updatedAtDisplay ? (
@@ -1072,7 +1100,7 @@ export default function NoteEditorScreen() {
                 editable={!isEnhancing}
                 textAlignVertical="top"
                 className="min-h-[300px] text-base leading-6 text-label"
-                style={{ fontFamily: SpaceGrotesk.regular, opacity: isEnhancing ? 0.4 : 1 }}
+                style={{ fontFamily: AppFont.regular, opacity: isEnhancing ? 0.4 : 1 }}
               />
             ) : (
               <View className="min-h-[180px]" />
@@ -1129,6 +1157,40 @@ export default function NoteEditorScreen() {
           />
         </Pressable>
       ) : null}
+      {showAskPill ? (
+        <Pressable
+          onPress={() => {
+            safeHaptics('light');
+            handleAskNote();
+          }}
+          testID="note-ask-pill"
+          accessibilityRole="button"
+          accessibilityLabel="Ask anything"
+          accessibilityHint="Opens a chat about this note"
+          style={{
+            position: 'absolute',
+            left: 20,
+            right: 20,
+            bottom: askPillBottom,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.12,
+            shadowRadius: 10,
+          }}
+        >
+          <Glass.Interactive style={{ height: ASK_PILL_HEIGHT, borderRadius: ASK_PILL_HEIGHT / 2 }}>
+            <View className="flex-1 flex-row items-center justify-center gap-2">
+              <SystemIcon
+                name="bubble.left.fill"
+                mdName="MessageCircle"
+                size={17}
+                color="secondaryLabel"
+              />
+              <Text className="text-[17px] font-medium text-label">Ask anything</Text>
+            </View>
+          </Glass.Interactive>
+        </Pressable>
+      ) : null}
       <NoteChatSheet
         visible={chatVisible}
         messages={chatMessages}
@@ -1136,8 +1198,10 @@ export default function NoteEditorScreen() {
         isProcessing={isChatProcessing}
         error={chatError}
         canSend={!contentEmpty}
+        suggestions={chatSuggestions}
         onDraftChange={setChatDraft}
         onSend={handleSendChat}
+        onSuggestion={handleChatSuggestion}
         onRetry={handleRetryChat}
         onClear={handleClearChat}
         onClose={handleCloseChat}
@@ -1179,4 +1243,6 @@ export default function NoteEditorScreen() {
 // inset). Used to lift the floating mic FAB clear of the tab bar.
 const TAB_BAR_OFFSET = Platform.OS === 'ios' ? 110 : 70;
 const FAB_BOTTOM = TAB_BAR_OFFSET + 32;
+const ASK_PILL_HEIGHT = 52;
+const ASK_PILL_GAP = 12;
 const SYSTEM_RED = '#FF3B30';

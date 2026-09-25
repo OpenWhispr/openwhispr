@@ -16,7 +16,7 @@ import {
 } from '@/lib/referralApi';
 import { safeHaptics, isValidEmail } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { handleAccountRequiredError, requiresRealAccount } from '@/lib/accountAccess';
 import { router } from 'expo-router';
 
@@ -96,7 +96,10 @@ function GuestReferralEmptyState() {
             <GradientGlassSurface radius={18} />
             <SystemIcon name="gift.fill" mdName="Gift" size={30} color="#FFFFFF" />
           </View>
-          <Text className="mt-[18px] text-center text-[22px] font-bold tracking-tight text-label">
+          <Text
+            accessibilityRole="header"
+            className="mt-[18px] text-center text-[22px] font-bold tracking-tight text-label"
+          >
             Give a month, get a month
           </Text>
           <Text className="mt-2 text-center text-[14px] leading-snug text-secondaryLabel">
@@ -360,7 +363,7 @@ export default function ReferralScreen() {
                   returnKeyType="send"
                   onSubmitEditing={handleSendInvite}
                   editable={!sendingInvite}
-                  style={{ color: LABEL_COLOR, fontFamily: SpaceGrotesk.regular }}
+                  style={{ color: LABEL_COLOR, fontFamily: AppFont.regular }}
                   className="flex-1 py-3 text-[14px]"
                 />
               </View>

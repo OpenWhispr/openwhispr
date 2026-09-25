@@ -475,7 +475,10 @@ export default function HomeScreen() {
       return (
         <View className="flex-1 bg-systemBackground items-center justify-center px-10">
           <SystemIcon name="mic.slash.fill" mdName="MicOff" size={48} color="tertiaryLabel" />
-          <Text className="mt-5 text-2xl font-semibold text-label text-center">
+          <Text
+            accessibilityRole="header"
+            className="mt-5 text-2xl font-semibold text-label text-center"
+          >
             We didn&apos;t catch that
           </Text>
           <Text className="mt-2 text-base text-secondaryLabel text-center">
@@ -502,7 +505,10 @@ export default function HomeScreen() {
         </View>
 
         <View className="items-center px-8 mt-4">
-          <Text className="text-[32px] font-bold text-label leading-[38px] text-center">
+          <Text
+            accessibilityRole="header"
+            className="text-[32px] font-bold text-label leading-[38px] text-center"
+          >
             {transcribing ? 'Almost done…' : 'Swipe back to your app'}
           </Text>
           <Text className="mt-2 text-[15px] text-secondaryLabel leading-6 text-center">

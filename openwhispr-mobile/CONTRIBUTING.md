@@ -43,6 +43,8 @@ Install the locked Ruby dependencies before the first iOS build:
 bundle install
 ```
 
+The app's brand font, Yowza, is commercially licensed, so its files are not in the repository. `npm install` fetches them from a private release when your GitHub account has access (`npm run download:brand-fonts` fetches them again); without access the app uses Space Grotesk and works the same. The fonts are embedded when the native project is built, so rebuild with `npm run ios` after fetching them.
+
 If you plan to build on a physical iOS device, configure a unique local identity and signing team first. See [Physical iOS Devices and Forks](#physical-ios-devices-and-forks).
 
 ## Development Workflow
