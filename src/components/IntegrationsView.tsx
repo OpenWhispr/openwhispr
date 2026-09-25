@@ -6,7 +6,7 @@ import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
 import { cn } from "./lib/utils";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Badge } from "./ui/badge";
-import { SettingsPanel, SettingsPanelRow, SettingsRow } from "./ui/SettingsSection";
+import { SectionLabel, SettingsPanel, SettingsPanelRow, SettingsRow } from "./ui/SettingsSection";
 import { Toggle } from "./ui/toggle";
 import {
   AlertDialog,
@@ -34,14 +34,6 @@ const API_DOCS_URL = "https://docs.openwhispr.com/api/overview";
 interface IntegrationsViewProps {
   isPaid: boolean;
   onUpgrade: () => void;
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 mb-2 ps-1">
-      {children}
-    </div>
-  );
 }
 
 interface ProviderRowProps {
@@ -225,7 +217,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
         const current = useSettingsStore.getState().mcalAccounts;
         setMcalAccounts([
           ...current.filter((a) => a.email !== result.email),
-          { email: result.email },
+          { email: result.email, tenantId: result.tenantId },
         ]);
       } else if (!result?.error?.includes("access_denied")) {
         setOauthErrorKey("integrations.microsoftCalendar");
@@ -365,7 +357,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
 
       <div>
         <SectionLabel>{t("integrations.sections.connectors")}</SectionLabel>
-        <ConnectorsSection isPaid={isPaid} onUpgrade={onUpgrade} />
+        <ConnectorsSection onUpgrade={onUpgrade} />
       </div>
 
       <div>

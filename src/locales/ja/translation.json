@@ -3847,8 +3847,8 @@
       "description": "アシスタントがメールアプリに下書きを自動入力して開きます。内容を確認し、自分で送信を押してください。",
       "proRequired": "アシスタントにメールの下書きを作成させるには、有料プランへのアップグレードが必要です。",
       "targetLabel": "メールを作成するアプリ",
+      "autoResolved": "自動（{{target}}）",
       "targets": {
-        "auto": "自動",
         "gmail": "Gmail",
         "outlookWork": "Outlook（職場または学校）",
         "outlookPersonal": "Outlook.com",

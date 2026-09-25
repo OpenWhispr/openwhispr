@@ -671,6 +671,12 @@ class DatabaseManager {
         )
       `);
 
+      try {
+        this.db.exec("ALTER TABLE microsoft_calendar_tokens ADD COLUMN tenant_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS microsoft_calendars (
           id TEXT PRIMARY KEY,
@@ -807,6 +813,14 @@ class DatabaseManager {
         )
       `);
 
+      // Where each contact came from (see contactSource), so a disconnect
+      // removes that account's people. Rows older builds stored stay NULL.
+      try {
+        this.db.exec("ALTER TABLE contacts ADD COLUMN source TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS speaker_profiles (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -818,14 +832,6 @@ class DatabaseManager {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
-
-      // Where each contact came from (see contactSource), so a disconnect
-      // removes that account's people. Rows older builds stored stay NULL.
-      try {
-        this.db.exec("ALTER TABLE contacts ADD COLUMN source TEXT");
-      } catch (err) {
-        if (!err.message.includes("duplicate column")) throw err;
-      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS speaker_mappings (
@@ -5125,13 +5131,14 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const stmt = this.db.prepare(
-        `INSERT INTO microsoft_calendar_tokens (microsoft_email, access_token, refresh_token, expires_at, scope)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO microsoft_calendar_tokens (microsoft_email, access_token, refresh_token, expires_at, scope, tenant_id)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(microsoft_email) DO UPDATE SET
            access_token = excluded.access_token,
            refresh_token = excluded.refresh_token,
            expires_at = excluded.expires_at,
            scope = excluded.scope,
+           tenant_id = COALESCE(excluded.tenant_id, tenant_id),
            updated_at = CURRENT_TIMESTAMP`
       );
       stmt.run(
@@ -5139,7 +5146,8 @@ class DatabaseManager {
         tokens.access_token,
         tokens.refresh_token,
         tokens.expires_at,
-        tokens.scope
+        tokens.scope,
+        tokens.tenant_id ?? null
       );
       return { success: true };
     } catch (error) {
@@ -5171,7 +5179,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
         .prepare(
-          "SELECT microsoft_email AS email FROM microsoft_calendar_tokens ORDER BY created_at ASC"
+          "SELECT microsoft_email AS email, tenant_id AS tenantId FROM microsoft_calendar_tokens ORDER BY created_at ASC"
         )
         .all();
     } catch (error) {

@@ -118,6 +118,14 @@ export function SettingsPanelRow({
   );
 }
 
+export function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 mb-2 ps-1">
+      {children}
+    </div>
+  );
+}
+
 export function SectionHeader({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mb-3">

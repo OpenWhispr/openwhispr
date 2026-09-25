@@ -346,18 +346,16 @@ export function useChatStreaming({
           const calendarConnected =
             settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
           const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
-          const connectorsAvailable =
+          const connectors =
             allowConnectors &&
             settings.isSignedIn &&
             hasConnectorPlan(getUsageState(), readIsSubscribed()) &&
-            isConnectorsAllowed(usePolicyStore.getState());
-          const emailDraftTarget = resolveEmailDraftTarget(settings.emailDraftTarget, {
-            gcalConnected: settings.gcalConnected,
-            mcalAccountEmails: settings.mcalAccounts.map((account) => account.email),
-          });
+            isConnectorsAllowed(usePolicyStore.getState())
+              ? { emailDraftTarget: resolveEmailDraftTarget(settings) }
+              : undefined;
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
-          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${connectorsAvailable}-${emailDraftTarget}`;
+          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}`;
           if (toolRegistryRef.current?.key === cacheKey) {
             registry = toolRegistryRef.current.registry;
           } else {
@@ -374,7 +372,7 @@ export function useChatStreaming({
                 getSnippets: () => getSettings().snippets,
                 setSnippets: (snippets) => useSettingsStore.getState().setSnippets(snippets),
               },
-              connectors: connectorsAvailable ? { emailDraftTarget } : undefined,
+              connectors,
             });
             toolRegistryRef.current = { key: cacheKey, registry };
           }

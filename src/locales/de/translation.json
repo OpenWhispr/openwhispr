@@ -4016,8 +4016,8 @@
       "description": "Der Assistent öffnet einen vorausgefüllten Entwurf in deiner E-Mail-App. Du prüfst ihn und klickst selbst auf Senden.",
       "proRequired": "Upgrade auf einen kostenpflichtigen Plan, damit der Assistent E-Mails für dich entwirft.",
       "targetLabel": "E-Mails entwerfen in",
+      "autoResolved": "Automatisch ({{target}})",
       "targets": {
-        "auto": "Automatisch",
         "gmail": "Gmail",
         "outlookWork": "Outlook (geschäftlich oder Schule)",
         "outlookPersonal": "Outlook.com",

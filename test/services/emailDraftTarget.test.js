@@ -2,53 +2,62 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const load = () => import("../../src/utils/emailDraftTarget.ts");
-const loadCompose = () => import("../../src/helpers/connectors/emailCompose.js");
+
+const PERSONAL_TENANT = "9188040d-6c67-4c5b-b112-36a304b66dad";
+const WORK_TENANT = "72f988bf-86f1-41af-91ab-2d7cd011db47";
+
+const resolve = async (emailDraftTarget, gcalConnected, mcalAccounts) => {
+  const { resolveEmailDraftTarget } = await load();
+  return resolveEmailDraftTarget({ emailDraftTarget, gcalConnected, mcalAccounts });
+};
 
 test("an explicit choice always wins", async () => {
-  const { resolveEmailDraftTarget } = await load();
-  assert.equal(
-    resolveEmailDraftTarget("outlookWork", { gcalConnected: true, mcalAccountEmails: [] }),
-    "outlookWork"
-  );
+  assert.equal(await resolve("outlookWork", true, []), "outlookWork");
 });
 
 test("automatic follows the connected calendar", async () => {
-  const { resolveEmailDraftTarget } = await load();
-  assert.equal(resolveEmailDraftTarget("auto", { gcalConnected: true, mcalAccountEmails: ["a@corp.com"] }), "gmail");
-  assert.equal(resolveEmailDraftTarget("auto", { gcalConnected: false, mcalAccountEmails: ["a@corp.com"] }), "outlookWork");
-  assert.equal(
-    resolveEmailDraftTarget("auto", { gcalConnected: false, mcalAccountEmails: ["me@Outlook.com"] }),
-    "outlookPersonal"
-  );
-  assert.equal(resolveEmailDraftTarget("auto", { gcalConnected: false, mcalAccountEmails: [] }), "mailto");
+  assert.equal(await resolve("auto", true, [{ email: "a@corp.com" }]), "gmail");
+  assert.equal(await resolve("auto", false, [{ email: "a@corp.com" }]), "outlookWork");
+  assert.equal(await resolve("auto", false, [{ email: "me@Outlook.com" }]), "outlookPersonal");
+  assert.equal(await resolve("auto", false, []), "mailto");
 });
 
 test("an unknown stored value behaves like automatic", async () => {
-  const { resolveEmailDraftTarget } = await load();
-  assert.equal(resolveEmailDraftTarget("yahoo", { gcalConnected: false, mcalAccountEmails: [] }), "mailto");
-});
-
-test("the renderer target list matches the main-process compose targets", async () => {
-  const [{ EMAIL_DRAFT_TARGETS }, { COMPOSE_TARGETS }] = await Promise.all([load(), loadCompose()]);
-  assert.deepEqual([...EMAIL_DRAFT_TARGETS], COMPOSE_TARGETS);
+  assert.equal(await resolve("yahoo", false, []), "mailto");
+  const { normalizeEmailDraftTarget } = await load();
+  assert.equal(normalizeEmailDraftTarget("yahoo"), "auto");
+  assert.equal(normalizeEmailDraftTarget("gmail"), "gmail");
 });
 
 test("any work account picks outlook work, regardless of order", async () => {
-  const { resolveEmailDraftTarget } = await load();
-  // personal first, work second
   assert.equal(
-    resolveEmailDraftTarget("auto", { gcalConnected: false, mcalAccountEmails: ["me@outlook.com", "a@corp.com"] }),
+    await resolve("auto", false, [{ email: "me@outlook.com" }, { email: "a@corp.com" }]),
     "outlookWork"
   );
-  // all personal
   assert.equal(
-    resolveEmailDraftTarget("auto", { gcalConnected: false, mcalAccountEmails: ["me@outlook.com", "you@Hotmail.com"] }),
+    await resolve("auto", false, [{ email: "me@outlook.com" }, { email: "you@Hotmail.com" }]),
     "outlookPersonal"
+  );
+});
+
+test("the tenant decides personal or work, whatever the address", async () => {
+  // A personal account on a custom domain, and a work tenant on a consumer-looking domain.
+  assert.equal(
+    await resolve("auto", false, [{ email: "me@family.example", tenantId: PERSONAL_TENANT }]),
+    "outlookPersonal"
+  );
+  assert.equal(
+    await resolve("auto", false, [{ email: "a@live.ca", tenantId: WORK_TENANT }]),
+    "outlookWork"
+  );
+  // An account connected before the tenant was stored falls back to the domain.
+  assert.equal(
+    await resolve("auto", false, [{ email: "me@family.example", tenantId: null }]),
+    "outlookWork"
   );
 });
 
 test("personal Microsoft domains are recognised in every country", async () => {
-  const { resolveEmailDraftTarget } = await load();
   for (const email of [
     "me@hotmail.de",
     "me@outlook.fr",
@@ -58,18 +67,10 @@ test("personal Microsoft domains are recognised in every country", async () => {
     "me@windowslive.com",
     "me@passport.com",
   ]) {
-    assert.equal(
-      resolveEmailDraftTarget("auto", { gcalConnected: false, mcalAccountEmails: [email] }),
-      "outlookPersonal",
-      email
-    );
+    assert.equal(await resolve("auto", false, [{ email }]), "outlookPersonal", email);
   }
   // A company domain that merely starts with one of those words is still work.
   for (const email of ["a@live.nation.com", "a@outlookgroup.com", "a@hotmail-support.io"]) {
-    assert.equal(
-      resolveEmailDraftTarget("auto", { gcalConnected: false, mcalAccountEmails: [email] }),
-      "outlookWork",
-      email
-    );
+    assert.equal(await resolve("auto", false, [{ email }]), "outlookWork", email);
   }
 });

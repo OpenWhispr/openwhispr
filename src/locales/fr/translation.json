@@ -4016,8 +4016,8 @@
       "description": "L'assistant ouvre un brouillon pré-rempli dans votre application de messagerie. Vous le vérifiez et appuyez vous-même sur Envoyer.",
       "proRequired": "Passez à un plan payant pour que l'assistant rédige des e-mails pour vous.",
       "targetLabel": "Rédiger les e-mails dans",
+      "autoResolved": "Automatique ({{target}})",
       "targets": {
-        "auto": "Automatique",
         "gmail": "Gmail",
         "outlookWork": "Outlook (professionnel ou scolaire)",
         "outlookPersonal": "Outlook.com",

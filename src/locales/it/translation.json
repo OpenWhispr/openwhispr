@@ -3847,8 +3847,8 @@
       "description": "L'assistente apre una bozza precompilata nella tua app di posta. La rivedi e premi Invia tu stesso.",
       "proRequired": "Passa a un piano a pagamento per far scrivere all'assistente le bozze delle email.",
       "targetLabel": "Crea bozze email in",
+      "autoResolved": "Automatico ({{target}})",
       "targets": {
-        "auto": "Automatico",
         "gmail": "Gmail",
         "outlookWork": "Outlook (lavoro o scuola)",
         "outlookPersonal": "Outlook.com",

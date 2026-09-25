@@ -2,7 +2,12 @@
 // checks addresses) and loaded by the main-process email connector through
 // require(esm).
 
-export const COMPOSE_TARGETS = ["gmail", "outlookWork", "outlookPersonal", "mailto"];
+export const COMPOSE_TARGETS = /** @type {const} */ ([
+  "gmail",
+  "outlookWork",
+  "outlookPersonal",
+  "mailto",
+]);
 
 // Windows caps every URL shell.openExternal opens at 2,081 characters, and
 // the Outlook links and mailto handlers are unmeasured, so they stay at

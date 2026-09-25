@@ -3900,8 +3900,8 @@
       "description": "El asistente abre un borrador prellenado en tu aplicación de correo. Tú lo revisas y pulsas Enviar.",
       "proRequired": "Actualiza a un plan de pago para que el asistente redacte correos por ti.",
       "targetLabel": "Redactar correos en",
+      "autoResolved": "Automático ({{target}})",
       "targets": {
-        "auto": "Automático",
         "gmail": "Gmail",
         "outlookWork": "Outlook (trabajo o escuela)",
         "outlookPersonal": "Outlook.com",

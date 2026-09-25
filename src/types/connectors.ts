@@ -61,13 +61,16 @@ export interface ConnectorStatus {
   accountLabel: string | null;
 }
 
+export type ConnectorActionState =
+  "pending" | "committing" | "sent" | "failed" | "unknown" | "cancelled" | "expired";
+
 export interface ConnectorActionRecord {
   id: string;
   connector: string;
   action: string;
   kind: "approval" | "direct";
   destinationLabel: string | null;
-  state: string;
+  state: ConnectorActionState;
   resultUrl: string | null;
   errorCode: string | null;
   createdAt: string;

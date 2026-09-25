@@ -10,6 +10,21 @@ const MICROSOFT_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.
 const CALENDAR_SCOPE =
   "openid profile email offline_access https://graph.microsoft.com/User.Read https://graph.microsoft.com/Calendars.Read";
 
+function decodeIdToken(idToken) {
+  if (!idToken) return null;
+  try {
+    return JSON.parse(Buffer.from(idToken.split(".")[1], "base64url").toString());
+  } catch {
+    return null;
+  }
+}
+
+// The Entra tenant tells a personal Microsoft account from a work or school
+// one, whatever the address's domain.
+function tenantIdOf(tokenData) {
+  return decodeIdToken(tokenData.id_token)?.tid ?? null;
+}
+
 class MicrosoftCalendarOAuth {
   constructor(databaseManager) {
     this.databaseManager = databaseManager;
@@ -62,7 +77,7 @@ class MicrosoftCalendarOAuth {
         }
 
         this._saveTokens(email, tokenData);
-        return { success: true, email };
+        return { success: true, email, tenantId: tenantIdOf(tokenData) };
       },
     });
   }
@@ -135,21 +150,16 @@ class MicrosoftCalendarOAuth {
       refresh_token: tokenData.refresh_token,
       expires_at: Date.now() + tokenData.expires_in * 1000,
       scope: tokenData.scope || CALENDAR_SCOPE,
+      tenant_id: tenantIdOf(tokenData),
     });
   }
 
   // Work accounts often omit the id_token "email" claim; fall back to
   // preferred_username, then Graph /me.
   async _resolveEmail(tokenData) {
-    if (tokenData.id_token) {
-      try {
-        const payload = JSON.parse(
-          Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
-        );
-        if (payload.email) return payload.email;
-        if (payload.preferred_username?.includes("@")) return payload.preferred_username;
-      } catch {}
-    }
+    const payload = decodeIdToken(tokenData.id_token);
+    if (payload?.email) return payload.email;
+    if (payload?.preferred_username?.includes("@")) return payload.preferred_username;
 
     try {
       const response = await net.fetch("https://graph.microsoft.com/v1.0/me", {

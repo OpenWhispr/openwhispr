@@ -3847,8 +3847,8 @@
       "description": "助手会在您的邮件应用中打开预填好的草稿，由您检查并亲自点击发送。",
       "proRequired": "升级到付费计划，让助手为您起草邮件。",
       "targetLabel": "在此处起草邮件",
+      "autoResolved": "自动（{{target}}）",
       "targets": {
-        "auto": "自动",
         "gmail": "Gmail",
         "outlookWork": "Outlook（工作或学校）",
         "outlookPersonal": "Outlook.com",

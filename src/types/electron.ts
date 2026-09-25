@@ -6,7 +6,11 @@ import type {
   ManagedEnterpriseConfig,
   ManagedEnterpriseRequestContext,
 } from "./enterpriseIdentity";
-import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./calendar";
+import type {
+  CalendarAvailabilityRequest,
+  CalendarAvailabilityResult,
+  MicrosoftCalendarAccount,
+} from "./calendar";
 import type {
   ConnectorActionRecord,
   ConnectorCancelReason,
@@ -3159,11 +3163,16 @@ declare global {
       onGcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
       // Microsoft Calendar
-      mcalStartOAuth?: () => Promise<{ success: boolean; email?: string; error?: string }>;
+      mcalStartOAuth?: () => Promise<{
+        success: boolean;
+        email?: string;
+        tenantId?: string | null;
+        error?: string;
+      }>;
       mcalDisconnect?: (email?: string) => Promise<{ success: boolean; error?: string }>;
       mcalGetConnectionStatus?: () => Promise<{
         connected: boolean;
-        accounts: Array<{ email: string }>;
+        accounts: MicrosoftCalendarAccount[];
       }>;
       mcalSetPrimaryOnly?: (value: boolean) => Promise<{ success: boolean; error?: string }>;
       onMcalConnectionChanged?: (callback: (data: any) => void) => () => void;
