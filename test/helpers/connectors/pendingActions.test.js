@@ -62,10 +62,10 @@ test("cancel is refused once an action is committing", async () => {
 test("finish only settles committing actions and then forgets them", async () => {
   const { store } = await makeStore();
   const actionId = prepareOne(store);
-  assert.equal(store.finish(actionId, "sent"), false);
+  assert.equal(store.finish(actionId), false);
 
   store.beginCommit(actionId, { ...BINDING });
-  assert.equal(store.finish(actionId, "unknown"), true);
+  assert.equal(store.finish(actionId), true);
   assert.equal(store.get(actionId), null);
   assert.deepEqual(store.beginCommit(actionId, BINDING), { ok: false, reason: "not_found" });
 });
@@ -79,6 +79,21 @@ test("a pending action expires after the TTL", async () => {
 
   assert.deepEqual(store.beginCommit(actionId, BINDING), { ok: false, reason: "expired" });
   assert.equal(store.get(actionId), null);
+});
+
+test("sweepExpired drops only expired pending actions", async () => {
+  const { PENDING_TTL_MS } = await load();
+  const { store, advance } = await makeStore();
+  const stale = prepareOne(store);
+  const committing = prepareOne(store);
+  store.beginCommit(committing, BINDING);
+  advance(PENDING_TTL_MS + 1);
+  const fresh = prepareOne(store);
+
+  assert.deepEqual(store.sweepExpired(), [stale]);
+  assert.equal(store.get(stale), null);
+  assert.equal(store.get(committing).state, "committing");
+  assert.equal(store.get(fresh).state, "pending");
 });
 
 test("a changed account, workspace or generation refuses the commit", async () => {

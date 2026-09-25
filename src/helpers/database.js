@@ -501,6 +501,7 @@ class DatabaseManager {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS connector_actions (
           id TEXT PRIMARY KEY,
+          account_id TEXT,
           connector TEXT NOT NULL,
           action TEXT NOT NULL,
           kind TEXT NOT NULL,
@@ -512,6 +513,11 @@ class DatabaseManager {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      try {
+        this.db.exec("ALTER TABLE connector_actions ADD COLUMN account_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
       this.db.exec(
         "CREATE INDEX IF NOT EXISTS idx_connector_actions_connector ON connector_actions(connector, created_at)"
       );
@@ -3332,6 +3338,7 @@ class DatabaseManager {
       }
       this.db.prepare("DELETE FROM analytics_events WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM analytics_clear_requests WHERE account_id = ?").run(accountId);
+      this.db.prepare("DELETE FROM connector_actions WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM space_accounts WHERE account_id = ?").run(accountId);
     };
 
@@ -4771,10 +4778,20 @@ class DatabaseManager {
     this.db
       .prepare(
         `INSERT INTO connector_actions
-           (id, connector, action, kind, destination_label, state, result_url, error_code)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+           (id, account_id, connector, action, kind, destination_label, state, result_url, error_code)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(id, connector, action, kind, destinationLabel, state, resultUrl, errorCode);
+      .run(
+        id,
+        this.activeAccountId,
+        connector,
+        action,
+        kind,
+        destinationLabel,
+        state,
+        resultUrl,
+        errorCode
+      );
   }
 
   // With fromState, only a row still in that state moves, so a caller can tell
@@ -4807,8 +4824,11 @@ class DatabaseManager {
       .run(...params).changes;
   }
 
+  // Receipts name the people a user wrote to, so only the signed-in account
+  // that took the action sees them.
   listRecentConnectorActions(connector, limit = 10) {
     if (!this.db) throw new Error("Database not initialized");
+    if (!this.activeAccountId) return [];
     return this.db
       .prepare(
         `SELECT id, connector, action, kind,
@@ -4816,11 +4836,11 @@ class DatabaseManager {
                 result_url AS resultUrl, error_code AS errorCode,
                 created_at AS createdAt
            FROM connector_actions
-          WHERE connector = ?
+          WHERE connector = ? AND account_id = ?
           ORDER BY created_at DESC, rowid DESC
           LIMIT ?`
       )
-      .all(connector, limit);
+      .all(connector, this.activeAccountId, limit);
   }
 
   // A quit mid-send can't tell whether the provider acted, so committing rows

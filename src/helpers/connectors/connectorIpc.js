@@ -24,10 +24,14 @@ function createConnectorPolicyResolver({
   return async (event) => {
     let request = null;
     const resolution = (async () => {
+      // Read before the (possibly async cookie) header lookup: a sign-in
+      // during it must fail the generation check, not pair old headers with
+      // the new generation.
+      const expectedAuthGeneration = getAuthGeneration();
       const authHeaders = (await getAuthHeader(event)) || {};
       // No account means no org policy can apply (same rule as screen context).
       if (!authHeaders.Authorization && !authHeaders.Cookie) return "allowed";
-      request = { expectedAuthGeneration: getAuthGeneration(), authHeaders };
+      request = { expectedAuthGeneration, authHeaders };
       const snapshot = await getPolicy(request);
       return connectorPolicyState(snapshot);
     })().catch(() => "unavailable");

@@ -12,7 +12,11 @@ function policy(features) {
     llm: { allowedModes: ["local"], allowedByokProviders: [], allowedEnterpriseProviders: [] },
     features: { agentEnabled: true, webSearchEnabled: true, ...features },
     sharing: { externalLinkSharing: "allowed" },
-    dataRetention: { audioRetentionMaxDays: null, localHistoryMode: "user_choice", cloudBackupAllowed: true },
+    dataRetention: {
+      audioRetentionMaxDays: null,
+      localHistoryMode: "user_choice",
+      cloudBackupAllowed: true,
+    },
     minAppVersion: null,
   };
 }
@@ -28,21 +32,49 @@ test("every failed or malformed snapshot fails closed", async () => {
     "POLICY_RETRY_THROTTLED",
     "SOME_FUTURE_CODE",
   ]) {
-    assert.equal(connectorPolicyState({ success: false, status: "error", code }), "unavailable", code);
+    assert.equal(
+      connectorPolicyState({ success: false, status: "error", code }),
+      "unavailable",
+      code
+    );
   }
   assert.equal(connectorPolicyState(null), "unavailable");
   assert.equal(connectorPolicyState(undefined), "unavailable");
   assert.equal(connectorPolicyState({ success: true }), "unavailable");
-  assert.equal(connectorPolicyState({ success: true, managed: "yes", policy: null }), "unavailable");
+  assert.equal(connectorPolicyState({ managed: false, policy: null }), "unavailable");
+  assert.equal(
+    connectorPolicyState({ success: true, managed: "yes", policy: null }),
+    "unavailable"
+  );
   assert.equal(connectorPolicyState({ success: true, managed: true, policy: null }), "unavailable");
-  assert.equal(connectorPolicyState({ success: true, managed: true, policy: { features: null } }), "unavailable");
+  assert.equal(
+    connectorPolicyState({ success: true, managed: true, policy: { features: null } }),
+    "unavailable"
+  );
 });
 
 test("a valid snapshot allows unless a managed policy turns connectors off", async () => {
   const { connectorPolicyState } = await loadState();
-  assert.equal(connectorPolicyState({ success: true, managed: true, policy: policy({ connectorsEnabled: false }) }), "blocked");
-  assert.equal(connectorPolicyState({ success: true, managed: true, policy: policy({ connectorsEnabled: true }) }), "allowed");
-  assert.equal(connectorPolicyState({ success: true, managed: true, policy: policy({}) }), "allowed");
+  assert.equal(
+    connectorPolicyState({
+      success: true,
+      managed: true,
+      policy: policy({ connectorsEnabled: false }),
+    }),
+    "blocked"
+  );
+  assert.equal(
+    connectorPolicyState({
+      success: true,
+      managed: true,
+      policy: policy({ connectorsEnabled: true }),
+    }),
+    "allowed"
+  );
+  assert.equal(
+    connectorPolicyState({ success: true, managed: true, policy: policy({}) }),
+    "allowed"
+  );
   assert.equal(connectorPolicyState({ success: true, managed: false, policy: null }), "allowed");
   assert.equal(
     connectorPolicyState({ success: true, status: "cached", managed: true, policy: policy({}) }),
@@ -52,7 +84,10 @@ test("a valid snapshot allows unless a managed policy turns connectors off", asy
 
 test("turning off the agent turns connectors off too", async () => {
   const { connectorPolicyState } = await loadState();
-  assert.equal(connectorPolicyState({ success: true, managed: true, policy: policy({ agentEnabled: false }) }), "blocked");
+  assert.equal(
+    connectorPolicyState({ success: true, managed: true, policy: policy({ agentEnabled: false }) }),
+    "blocked"
+  );
 });
 
 test("the desktop validator accepts the field when absent or boolean, and rejects other types", async () => {
@@ -64,26 +99,45 @@ test("the desktop validator accepts the field when absent or boolean, and reject
 
 test("the renderer rule mirrors the switch", async () => {
   const { isConnectorsAllowed } = await loadRules();
-  const managed = (features) => ({ status: "managed", appVersion: "1.10.0", policy: policy(features) });
+  const managed = (features) => ({
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: policy(features),
+  });
   assert.equal(isConnectorsAllowed(managed({ connectorsEnabled: false })), false);
   assert.equal(isConnectorsAllowed(managed({})), true);
   assert.equal(isConnectorsAllowed(managed({ agentEnabled: false })), false);
-  assert.equal(isConnectorsAllowed({ status: "unmanaged", appVersion: "1.10.0", policy: null }), true);
+  assert.equal(
+    isConnectorsAllowed({ status: "unmanaged", appVersion: "1.10.0", policy: null }),
+    true
+  );
 });
 
 test("only a resolved managed policy reports connectors as turned off by the org", async () => {
   const { isConnectorsBlockedByOrg } = await loadRules();
-  const managed = (features) => ({ status: "managed", appVersion: "1.10.0", policy: policy(features) });
+  const managed = (features) => ({
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: policy(features),
+  });
   assert.equal(isConnectorsBlockedByOrg(managed({ connectorsEnabled: false })), true);
   assert.equal(isConnectorsBlockedByOrg(managed({ agentEnabled: false })), true);
   assert.equal(isConnectorsBlockedByOrg(managed({})), false);
   // Still loading, or the fetch failed: actions fail closed, but nothing says
   // an organization turned anything off.
   for (const status of ["idle", "loading", "error", "unmanaged"]) {
-    assert.equal(isConnectorsBlockedByOrg({ status, appVersion: "1.10.0", policy: null }), false, status);
+    assert.equal(
+      isConnectorsBlockedByOrg({ status, appVersion: "1.10.0", policy: null }),
+      false,
+      status
+    );
   }
   // An org that only requires a newer build hasn't turned connectors off; the
   // update banner explains why they're unavailable.
-  const outdated = { status: "managed", appVersion: "1.10.0", policy: { ...policy({}), minAppVersion: "1.11.0" } };
+  const outdated = {
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: { ...policy({}), minAppVersion: "1.11.0" },
+  };
   assert.equal(isConnectorsBlockedByOrg(outdated), false);
 });

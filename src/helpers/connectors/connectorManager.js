@@ -14,12 +14,54 @@ function normalizeCommitResult(result) {
   return { state: "unknown" };
 }
 
-// runDirect has no "unknown" state: the renderer's email tool treats
-// anything but "failed" as delivered, so a malformed result must fail
-// closed rather than land in a state the caller doesn't check for.
+// A direct action that threw or answered malformed may already have acted
+// (a compose window opened before a later step failed); calling it "failed"
+// would invite a duplicate retry.
+function uncertainDirectResult(errorCode) {
+  return {
+    state: "unknown",
+    errorCode,
+    message: "That action may have gone through. Ask the user to check before trying again.",
+  };
+}
+
 function normalizeDirectResult(result) {
   if (result && typeof result === "object" && DIRECT_RESULT_STATES.has(result.state)) return result;
-  return { state: "failed", errorCode: "invalid_result", message: "That action didn't complete." };
+  return uncertainDirectResult("invalid_result");
+}
+
+const INVALID_PREPARE_RESULT = {
+  status: "failed",
+  errorCode: "invalid_result",
+  message: "Couldn't prepare that action.",
+};
+
+// Only the fields each status defines reach the renderer, so a connector
+// can't leak anything else (such as message text) through an odd result.
+function normalizePrepareResult(result) {
+  switch (result?.status) {
+    case "ready":
+      return result.preview && typeof result.preview === "object"
+        ? { status: "ready", payload: result.payload, preview: result.preview }
+        : INVALID_PREPARE_RESULT;
+    case "needs_clarification":
+      return {
+        status: "needs_clarification",
+        message: typeof result.message === "string" ? result.message : "",
+        candidates: Array.isArray(result.candidates)
+          ? result.candidates.filter((candidate) => typeof candidate === "string")
+          : [],
+      };
+    case "failed":
+      return {
+        status: "failed",
+        errorCode: typeof result.errorCode === "string" ? result.errorCode : "prepare_failed",
+        message:
+          typeof result.message === "string" ? result.message : INVALID_PREPARE_RESULT.message,
+      };
+    default:
+      return INVALID_PREPARE_RESULT;
+  }
 }
 
 function sanitizeEdits(edits) {
@@ -44,7 +86,7 @@ function createConnectorManager({
     try {
       return write() !== false;
     } catch (error) {
-      logger.error("connector receipt write failed", { step, error: error.message });
+      logger.error("connector receipt write failed", { step, error: error.message }, "connectors");
       return false;
     }
   }
@@ -66,6 +108,31 @@ function createConnectorManager({
     }
   });
 
+  // Expired actions leave memory (and their payloads with them) on the next
+  // call, and their receipts say so rather than a later "app_quit".
+  function expireStale() {
+    for (const actionId of pendingActions.sweepExpired()) {
+      record(() =>
+        actionLog.update(actionId, { state: "expired", errorCode: "expired" }, "pending")
+      );
+    }
+  }
+
+  // A lookup that throws counts as no connection, so the connector's
+  // exception text never reaches the renderer.
+  async function readBinding(connector) {
+    try {
+      return await connector.getBinding();
+    } catch (error) {
+      logger.warn(
+        "connector binding lookup failed",
+        { connectorId: connector.id, error: error.message },
+        "connectors"
+      );
+      return null;
+    }
+  }
+
   function resolveAction(connectorId, action, kind) {
     const connector = byId.get(connectorId);
     if (!connector) return { error: "unknown_connector" };
@@ -75,37 +142,42 @@ function createConnectorManager({
 
   async function status() {
     return Promise.all(
-      [...byId.values()].map(async (connector) => ({
-        id: connector.id,
-        ...(await connector.getStatus()),
-      }))
+      [...byId.values()].map(async (connector) => {
+        try {
+          return { id: connector.id, ...(await connector.getStatus()) };
+        } catch (error) {
+          logger.warn(
+            "connector status failed",
+            { connectorId: connector.id, error: error.message },
+            "connectors"
+          );
+          return { id: connector.id, connected: false, accountLabel: null };
+        }
+      })
     );
   }
 
   async function prepare(connectorId, action, args, policyState) {
+    expireStale();
     const refusal = policyRefusal(policyState);
     if (refusal) return { status: "unavailable", reason: refusal };
     const resolved = resolveAction(connectorId, action, "approval");
     if (resolved.error) return { status: "unavailable", reason: resolved.error };
     const { connector } = resolved;
 
-    const binding = await connector.getBinding();
+    const binding = await readBinding(connector);
     if (!binding) return { status: "unavailable", reason: "not_connected" };
 
     let prepared;
     try {
-      prepared = await connector.prepare(action, args || {});
+      prepared = normalizePrepareResult(await connector.prepare(action, args || {}));
     } catch (error) {
       logger.warn(
         "connector prepare threw",
         { connectorId, action, error: error.message },
         "connectors"
       );
-      return {
-        status: "failed",
-        errorCode: "prepare_failed",
-        message: "Couldn't prepare that action.",
-      };
+      return { ...INVALID_PREPARE_RESULT, errorCode: "prepare_failed" };
     }
     if (prepared.status !== "ready") return prepared;
 
@@ -138,6 +210,7 @@ function createConnectorManager({
   }
 
   async function commit(actionId, edits, policyState) {
+    expireStale();
     const entry = pendingActions.get(actionId);
     if (!entry) return { state: "not_sent", reason: "not_found" };
     // A second click while the first is sending must neither send nor
@@ -154,7 +227,7 @@ function createConnectorManager({
     }
 
     const connector = byId.get(entry.connectorId);
-    const begun = pendingActions.beginCommit(actionId, await connector.getBinding());
+    const begun = pendingActions.beginCommit(actionId, await readBinding(connector));
     if (!begun.ok) {
       if (begun.reason === "expired" || begun.reason === "connection_changed") {
         const state = begun.reason === "expired" ? "expired" : "cancelled";
@@ -168,7 +241,7 @@ function createConnectorManager({
       () => actionLog.update(actionId, { state: "committing" }, "pending") === 1
     );
     if (!recorded) {
-      pendingActions.finish(actionId, "failed");
+      pendingActions.finish(actionId);
       record(() =>
         actionLog.update(
           actionId,
@@ -192,7 +265,7 @@ function createConnectorManager({
     }
     result = normalizeCommitResult(result);
 
-    pendingActions.finish(actionId, result.state);
+    pendingActions.finish(actionId);
     record(() =>
       actionLog.update(actionId, {
         state: result.state,
@@ -209,6 +282,7 @@ function createConnectorManager({
   }
 
   function cancel(actionId, reason) {
+    expireStale();
     const safeReason = CANCEL_REASONS.has(reason) ? reason : "cancelled_by_user";
     const cancelled = pendingActions.cancel(actionId);
     if (cancelled) {
@@ -232,20 +306,17 @@ function createConnectorManager({
 
     let result;
     try {
-      result = await resolved.connector.runDirect(action, args || {}, runtime || {});
+      result = normalizeDirectResult(
+        await resolved.connector.runDirect(action, args || {}, runtime || {})
+      );
     } catch (error) {
       logger.warn(
         "connector direct action threw",
         { connectorId, action, error: error.message },
         "connectors"
       );
-      result = {
-        state: "failed",
-        errorCode: "direct_failed",
-        message: "That action didn't complete.",
-      };
+      result = uncertainDirectResult("direct_failed");
     }
-    result = normalizeDirectResult(result);
     record(() =>
       actionLog.update(id, {
         state: result.state,
@@ -267,6 +338,7 @@ function createConnectorManager({
   }
 
   function recentActions(connectorId, limit) {
+    expireStale();
     const safeLimit = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : 10;
     return actionLog.listRecent(connectorId, safeLimit);
   }

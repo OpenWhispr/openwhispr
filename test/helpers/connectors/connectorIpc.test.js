@@ -10,10 +10,12 @@ function fakeIpcMain() {
 
 function fakeManager() {
   const calls = [];
-  const record = (name) => (...args) => {
-    calls.push({ name, args });
-    return { ok: name };
-  };
+  const record =
+    (name) =>
+    (...args) => {
+      calls.push({ name, args });
+      return { ok: name };
+    };
   return {
     calls,
     status: record("status"),
@@ -179,12 +181,40 @@ test("a slow refresh falls back to the verdict already held for the account", as
 
   assert.equal(await slowRefresh({ success: true, managed: false, policy: null })({}), "allowed");
   assert.equal(
-    await slowRefresh({ success: true, managed: true, policy: { features: { connectorsEnabled: false } } })({}),
+    await slowRefresh({
+      success: true,
+      managed: true,
+      policy: { features: { connectorsEnabled: false } },
+    })({}),
     "blocked"
   );
   // Nothing held yet (the session's first lookup): still fails closed.
   assert.equal(await slowRefresh(null)({}), "unavailable");
-  assert.deepEqual(peeked[0], { expectedAuthGeneration: 7, authHeaders: { Authorization: "Bearer t" } });
+  assert.deepEqual(peeked[0], {
+    expectedAuthGeneration: 7,
+    authHeaders: { Authorization: "Bearer t" },
+  });
+});
+
+test("the auth generation is read before the header lookup", async () => {
+  const { createConnectorPolicyResolver } = await load();
+  let generation = 4;
+  const requests = [];
+  const resolver = createConnectorPolicyResolver({
+    getAuthHeader: async () => {
+      // A sign-in lands while the cookie lookup is in flight.
+      generation = 5;
+      return { Cookie: "session=old" };
+    },
+    getPolicy: async (request) => {
+      requests.push(request);
+      return { success: false, status: "error", code: "AUTH_CONTEXT_CHANGED" };
+    },
+    getAuthGeneration: () => generation,
+  });
+
+  assert.equal(await resolver({}), "unavailable");
+  assert.equal(requests[0].expectedAuthGeneration, 4);
 });
 
 test("the deadline covers the auth-header lookup too", async () => {
@@ -224,7 +254,10 @@ test("contact lookup trims the query and returns nothing the org policy doesn't 
     getPolicyState: async () => policies.shift(),
     findContacts: (query) => {
       queries.push(query);
-      return { contacts: [{ name: "Gabe", email: "gabe@example.com", lastMet: null }], hasMore: false };
+      return {
+        contacts: [{ name: "Gabe", email: "gabe@example.com", lastMet: null }],
+        hasMore: false,
+      };
     },
   });
   const handler = ipcMain.handlers.get("connector-find-contacts");
@@ -232,7 +265,10 @@ test("contact lookup trims the query and returns nothing the org policy doesn't 
     contacts: [{ name: "Gabe", email: "gabe@example.com", lastMet: null }],
     hasMore: false,
   });
-  assert.deepEqual(await handler({}, "Gabe"), { contacts: [], unavailableReason: "policy_blocked" });
+  assert.deepEqual(await handler({}, "Gabe"), {
+    contacts: [],
+    unavailableReason: "policy_blocked",
+  });
   assert.deepEqual(await handler({}, "Gabe"), {
     contacts: [],
     unavailableReason: "policy_unavailable",

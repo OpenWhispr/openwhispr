@@ -37,7 +37,9 @@ function isNativeBindingUnavailable(error) {
 function createDb(t) {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-connector-actions-db-"));
   try {
-    return new DatabaseManager();
+    const db = new DatabaseManager();
+    db.setActiveAccountId("account-a");
+    return db;
   } catch (error) {
     if (isNativeBindingUnavailable(error)) {
       t.skip("better-sqlite3 native binding is not available for this Node runtime");
@@ -52,8 +54,22 @@ test("an action row moves through its states and lists newest first", (t) => {
   if (!db) return;
   const log = createActionLog(db);
 
-  log.insert({ id: "a1", connector: "email", action: "draft", kind: "direct", destinationLabel: "gabe@example.com", state: "sent" });
-  log.insert({ id: "a2", connector: "slack", action: "send_message", kind: "approval", destinationLabel: "#eng", state: "pending" });
+  log.insert({
+    id: "a1",
+    connector: "email",
+    action: "draft",
+    kind: "direct",
+    destinationLabel: "gabe@example.com",
+    state: "sent",
+  });
+  log.insert({
+    id: "a2",
+    connector: "slack",
+    action: "send_message",
+    kind: "approval",
+    destinationLabel: "#eng",
+    state: "pending",
+  });
   log.update("a2", { state: "committing" });
   log.update("a2", { state: "sent", resultUrl: "https://slack.test/p/1" });
 
@@ -70,9 +86,27 @@ test("rows interrupted by a quit are reconciled on the next launch", (t) => {
   const db = createDb(t);
   if (!db) return;
   const log = createActionLog(db);
-  log.insert({ id: "p1", connector: "slack", action: "send_message", kind: "approval", state: "pending" });
-  log.insert({ id: "c1", connector: "slack", action: "send_message", kind: "approval", state: "committing" });
-  log.insert({ id: "s1", connector: "slack", action: "send_message", kind: "approval", state: "sent" });
+  log.insert({
+    id: "p1",
+    connector: "slack",
+    action: "send_message",
+    kind: "approval",
+    state: "pending",
+  });
+  log.insert({
+    id: "c1",
+    connector: "slack",
+    action: "send_message",
+    kind: "approval",
+    state: "committing",
+  });
+  log.insert({
+    id: "s1",
+    connector: "slack",
+    action: "send_message",
+    kind: "approval",
+    state: "sent",
+  });
 
   assert.deepEqual(log.reconcileInterrupted(), { unknown: 1, cancelled: 1 });
 
@@ -88,12 +122,62 @@ test("a guarded update only moves a row out of the expected state", (t) => {
   const db = createDb(t);
   if (!db) return;
   const log = createActionLog(db);
-  log.insert({ id: "g1", connector: "slack", action: "send_message", kind: "approval", state: "pending" });
+  log.insert({
+    id: "g1",
+    connector: "slack",
+    action: "send_message",
+    kind: "approval",
+    state: "pending",
+  });
 
   assert.equal(log.update("g1", { state: "committing" }, "pending"), 1);
   assert.equal(log.update("g1", { state: "committing" }, "pending"), 0);
   assert.equal(log.update("missing", { state: "committing" }, "pending"), 0);
   assert.equal(log.update("g1", { state: "sent" }), 1);
+  db.db.close();
+});
+
+test("receipts belong to the account that took the action", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const log = createActionLog(db);
+  log.insert({
+    id: "a1",
+    connector: "email",
+    action: "draft",
+    kind: "direct",
+    destinationLabel: "gabe@example.com",
+    state: "sent",
+  });
+  db.setActiveAccountId("account-b");
+  log.insert({
+    id: "b1",
+    connector: "email",
+    action: "draft",
+    kind: "direct",
+    destinationLabel: "dana@example.com",
+    state: "sent",
+  });
+
+  assert.deepEqual(
+    log.listRecent("email", 10).map((row) => row.id),
+    ["b1"]
+  );
+  db.setActiveAccountId(null);
+  assert.deepEqual(log.listRecent("email", 10), []);
+
+  db.setActiveAccountId("account-a");
+  assert.deepEqual(
+    log.listRecent("email", 10).map((row) => row.id),
+    ["a1"]
+  );
+  db.deleteAccountData("account-a");
+  assert.deepEqual(log.listRecent("email", 10), []);
+  db.setActiveAccountId("account-b");
+  assert.deepEqual(
+    log.listRecent("email", 10).map((row) => row.id),
+    ["b1"]
+  );
   db.db.close();
 });
 

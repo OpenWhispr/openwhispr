@@ -61,7 +61,12 @@ function fakeConnector(overrides = {}) {
       return {
         status: "ready",
         payload: { channel: "C1", text: args.text },
-        preview: { verbKey: "default", destinationLabel: "#eng", accountLabel: "chad", body: args.text },
+        preview: {
+          verbKey: "default",
+          destinationLabel: "#eng",
+          accountLabel: "chad",
+          body: args.text,
+        },
       };
     },
     async commit(action, payload, edits) {
@@ -83,7 +88,7 @@ function fakeConnector(overrides = {}) {
   };
 }
 
-async function setup(connectorOverrides, logOptions) {
+async function setup(connectorOverrides, logOptions, pendingOptions) {
   const [{ createConnectorManager }, { createPendingActions }] = await Promise.all([
     loadManager(),
     loadPending(),
@@ -92,7 +97,7 @@ async function setup(connectorOverrides, logOptions) {
   const log = fakeLog(logOptions);
   const manager = createConnectorManager({
     connectors: [fake.connector],
-    pendingActions: createPendingActions(),
+    pendingActions: createPendingActions(pendingOptions),
     actionLog: log,
     logger: silentLogger,
   });
@@ -198,7 +203,10 @@ test("a connector commit resolving undefined is recorded as unknown and never or
   assert.deepEqual(await manager.commit(actionId, {}, "allowed"), { state: "unknown" });
   assert.equal(log.rows.get(actionId).state, "unknown");
   // The entry must not be orphaned in "committing": a second commit finds no pending action.
-  assert.deepEqual(await manager.commit(actionId, {}, "allowed"), { state: "not_sent", reason: "not_found" });
+  assert.deepEqual(await manager.commit(actionId, {}, "allowed"), {
+    state: "not_sent",
+    reason: "not_found",
+  });
 });
 
 test("a connector commit resolving an unrecognized state is recorded as unknown", async () => {
@@ -213,33 +221,142 @@ test("a connector commit resolving an unrecognized state is recorded as unknown"
   assert.equal(log.rows.get(actionId).state, "unknown");
 });
 
-test("a runDirect resolving undefined is recorded as failed, matching the thrown-runDirect shape", async () => {
-  const { manager, log } = await setup({
-    async runDirect() {
-      return undefined;
-    },
-  });
+test("a runDirect that throws or resolves malformed is recorded as unknown, never failed", async () => {
+  // Either may come after the side effect, so "failed" would invite a duplicate retry.
+  for (const [runDirect, errorCode] of [
+    [async () => undefined, "invalid_result"],
+    [async () => ({ state: "banana" }), "invalid_result"],
+    [
+      async () => {
+        throw new Error("clipboard unavailable");
+      },
+      "direct_failed",
+    ],
+  ]) {
+    const { manager, log } = await setup({ runDirect });
 
-  const result = await manager.runDirect("fake", "draft", {}, "allowed", {});
+    const result = await manager.runDirect("fake", "draft", {}, "allowed", {});
 
-  assert.deepEqual(result, {
-    state: "failed",
-    errorCode: "invalid_result",
-    message: "That action didn't complete.",
-  });
-  const [row] = [...log.rows.values()];
-  assert.equal(row.state, "failed");
+    assert.equal(result.state, "unknown");
+    assert.equal(result.errorCode, errorCode);
+    assert.match(result.message, /may have gone through/);
+    const [row] = [...log.rows.values()];
+    assert.equal(row.state, "unknown");
+  }
 });
 
 test("clarification and prepare failures create no pending action", async () => {
   const { manager, log } = await setup({
     async prepare() {
-      return { status: "needs_clarification", message: "Which #eng?", candidates: ["#eng-web", "#eng-ios"] };
+      return {
+        status: "needs_clarification",
+        message: "Which #eng?",
+        candidates: ["#eng-web", "#eng-ios"],
+      };
     },
   });
   const result = await manager.prepare("fake", "post", { text: "x" }, "allowed");
   assert.equal(result.status, "needs_clarification");
   assert.equal(log.rows.size, 0);
+});
+
+test("prepare passes on only the fields each connector result defines", async () => {
+  const cases = [
+    [
+      undefined,
+      { status: "failed", errorCode: "invalid_result", message: "Couldn't prepare that action." },
+    ],
+    [
+      { status: "sent", body: "secret text" },
+      { status: "failed", errorCode: "invalid_result", message: "Couldn't prepare that action." },
+    ],
+    [
+      { status: "ready", payload: { text: "x" } },
+      { status: "failed", errorCode: "invalid_result", message: "Couldn't prepare that action." },
+    ],
+    [
+      {
+        status: "needs_clarification",
+        message: "Which #eng?",
+        candidates: ["#eng-web", 7],
+        body: "secret text",
+      },
+      { status: "needs_clarification", message: "Which #eng?", candidates: ["#eng-web"] },
+    ],
+    [
+      {
+        status: "failed",
+        errorCode: "channel_archived",
+        message: "That channel is archived.",
+        body: "secret text",
+      },
+      { status: "failed", errorCode: "channel_archived", message: "That channel is archived." },
+    ],
+  ];
+  for (const [prepared, expected] of cases) {
+    const { manager, log } = await setup({ prepare: async () => prepared });
+    assert.deepEqual(await manager.prepare("fake", "post", { text: "x" }, "allowed"), expected);
+    assert.equal(log.rows.size, 0);
+  }
+
+  const { manager } = await setup({
+    async prepare() {
+      throw new Error("token=abc123 rejected");
+    },
+  });
+  assert.deepEqual(await manager.prepare("fake", "post", { text: "x" }, "allowed"), {
+    status: "failed",
+    errorCode: "prepare_failed",
+    message: "Couldn't prepare that action.",
+  });
+});
+
+test("a connector lookup that throws never hands its error to the renderer", async () => {
+  const leaky = new Error("token=abc123 rejected");
+  const bindingThrows = await setup({
+    async getBinding() {
+      throw leaky;
+    },
+    async getStatus() {
+      throw leaky;
+    },
+  });
+  assert.deepEqual(await bindingThrows.manager.prepare("fake", "post", { text: "x" }, "allowed"), {
+    status: "unavailable",
+    reason: "not_connected",
+  });
+  assert.deepEqual(await bindingThrows.manager.status(), [
+    { id: "fake", connected: false, accountLabel: null },
+  ]);
+
+  const { manager, fake, log } = await setup();
+  const { actionId } = await manager.prepare("fake", "post", { text: "x" }, "allowed");
+  fake.connector.getBinding = async () => {
+    throw leaky;
+  };
+  assert.deepEqual(await manager.commit(actionId, {}, "allowed"), {
+    state: "not_sent",
+    reason: "connection_changed",
+  });
+  assert.equal(fake.calls.commit.length, 0);
+  assert.equal(log.rows.get(actionId).state, "cancelled");
+});
+
+test("expired pending actions are swept and recorded as expired on the next call", async () => {
+  const { PENDING_TTL_MS } = await loadPending();
+  let clock = 1_000;
+  const { manager, log } = await setup({}, {}, { now: () => clock });
+  const { actionId } = await manager.prepare("fake", "post", { text: "x" }, "allowed");
+
+  clock += PENDING_TTL_MS + 1;
+  manager.recentActions("fake");
+
+  assert.equal(log.rows.get(actionId).state, "expired");
+  assert.equal(log.rows.get(actionId).errorCode, "expired");
+  assert.deepEqual(await manager.commit(actionId, {}, "allowed"), {
+    state: "not_sent",
+    reason: "not_found",
+  });
 });
 
 test("cancel withdraws only pending actions and records the reason", async () => {
@@ -316,7 +433,22 @@ test("the send never starts unless committing was durably recorded", async () =>
     reason: "receipt_unavailable",
   });
   assert.equal(fake.calls.commit.length, 0);
-  assert.deepEqual(await manager.commit(actionId, {}, "allowed"), { state: "not_sent", reason: "not_found" });
+  assert.deepEqual(await manager.commit(actionId, {}, "allowed"), {
+    state: "not_sent",
+    reason: "not_found",
+  });
+});
+
+test("the send never starts when the committing write moves no row", async () => {
+  const { manager, fake, log } = await setup();
+  const { actionId } = await manager.prepare("fake", "post", { text: "x" }, "allowed");
+  log.rows.delete(actionId);
+
+  assert.deepEqual(await manager.commit(actionId, {}, "allowed"), {
+    state: "not_sent",
+    reason: "receipt_unavailable",
+  });
+  assert.equal(fake.calls.commit.length, 0);
 });
 
 test("a failed final write still reports the real outcome and leaves the row committing", async () => {

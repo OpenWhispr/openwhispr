@@ -21,6 +21,10 @@ function createPendingActions({
 } = {}) {
   const actions = new Map();
 
+  function isExpired(entry) {
+    return now() - entry.createdAt > ttlMs;
+  }
+
   function create({ connectorId, action, binding, payload, preview }) {
     const actionId = randomId();
     actions.set(actionId, {
@@ -45,7 +49,7 @@ function createPendingActions({
     const entry = actions.get(actionId);
     if (!entry) return { ok: false, reason: "not_found" };
     if (entry.state !== "pending") return { ok: false, reason: "not_pending" };
-    if (now() - entry.createdAt > ttlMs) {
+    if (isExpired(entry)) {
       actions.delete(actionId);
       return { ok: false, reason: "expired" };
     }
@@ -57,7 +61,7 @@ function createPendingActions({
     return { ok: true, entry: { ...entry } };
   }
 
-  function finish(actionId, _state) {
+  function finish(actionId) {
     const entry = actions.get(actionId);
     if (!entry || entry.state !== "committing") return false;
     actions.delete(actionId);
@@ -84,7 +88,19 @@ function createPendingActions({
     return removed;
   }
 
-  return { create, get, beginCommit, finish, cancel, invalidateConnector };
+  // Committing actions are left alone: their real outcome is still coming.
+  function sweepExpired() {
+    const expired = [];
+    for (const [actionId, entry] of actions) {
+      if (entry.state === "pending" && isExpired(entry)) {
+        actions.delete(actionId);
+        expired.push(actionId);
+      }
+    }
+    return expired;
+  }
+
+  return { create, get, beginCommit, finish, cancel, invalidateConnector, sweepExpired };
 }
 
 module.exports = { createPendingActions, bindingsMatch, PENDING_TTL_MS };

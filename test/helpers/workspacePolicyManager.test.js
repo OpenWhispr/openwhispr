@@ -811,6 +811,25 @@ test("peekPolicy returns the verdict held in memory without a refresh", async (t
   assert.equal(context.manager.peekPolicy({ expectedAuthGeneration: 1 }), null);
 });
 
+test("peekPolicy never offers one account's verdict to another", async (t) => {
+  const context = setup(async (_url, init) =>
+    init.headers.Authorization === "Bearer token-a"
+      ? response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } })
+      : response(200, validPolicy())
+  );
+  t.after(context.cleanup);
+
+  await context.manager.getPolicy({ expectedAuthGeneration: 1 });
+  assert.equal(context.manager.peekPolicy({ expectedAuthGeneration: 1 }).managed, false);
+
+  context.tokenState.token = "token-b";
+  context.tokenState.generation = 2;
+  assert.equal(context.manager.peekPolicy({ expectedAuthGeneration: 2 }), null);
+
+  await context.manager.getPolicy({ expectedAuthGeneration: 2 });
+  assert.equal(context.manager.peekPolicy({ expectedAuthGeneration: 2 }).managed, true);
+});
+
 test("peekPolicy never offers an unmanaged verdict once the org policy is unresolvable", async (t) => {
   const responses = [
     response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } }),
