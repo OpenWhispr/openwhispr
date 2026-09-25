@@ -4001,6 +4001,11 @@
         "createLink": "Créer un lien",
         "copyLink": "Copier le lien",
         "copied": "Copié",
+        "replaceLink": {
+          "title": "Remplacer le lien de partage ?",
+          "description": "Cet appareil ne dispose pas du lien actuel : le copier implique d'en créer un nouveau. L'ancien lien cessera de fonctionner, y compris dans les e-mails d'invitation. Renvoyez chaque invitation pour que les personnes invitées puissent toujours ouvrir la note.",
+          "confirm": "Remplacer le lien"
+        },
         "export": "Exporter",
         "owner": "Propriétaire",
         "editor": "Peut modifier",

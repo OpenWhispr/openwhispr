@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy, FileText, Link2, Loader2, MoreHorizontal, Users } from "../icons";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
+import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -12,6 +12,12 @@ import {
 import { cn } from "../lib/utils";
 import ShareVisibilityMenu from "./ShareVisibilityMenu";
 import { notesInputClass } from "./shared";
+import {
+  canManageAccessGrant,
+  currentShareToken,
+  reconcileLocalShareState,
+  resolveShareLink,
+} from "./shareNoteRules";
 import { useAuth } from "../../hooks/useAuth";
 import {
   NoteSharingService,
@@ -46,7 +52,6 @@ import type {
   ShareVisibility,
 } from "../../types/electron";
 
-const SHARE_VIEWER_BASE_URL = "https://notes.openwhispr.com";
 const SHARE_VISIBILITY_OPTIONS: Array<{ id: ShareVisibility }> = [
   { id: "private" },
   { id: "invited" },
@@ -112,13 +117,20 @@ export default function ShareNoteDialog({
   const [copied, setCopied] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [busyGrantId, setBusyGrantId] = useState<string | null>(null);
+  const [confirmingReplaceLink, setConfirmingReplaceLink] = useState(false);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const copyTimeoutRef = useRef<number | null>(null);
-  const localIsSharedRef = useRef(Boolean(note.is_shared));
+  const localShareStateRef = useRef({
+    isShared: Boolean(note.is_shared),
+    shareToken: note.share_token ?? null,
+  });
 
   useEffect(() => {
-    localIsSharedRef.current = Boolean(note.is_shared);
-  }, [note.is_shared]);
+    localShareStateRef.current = {
+      isShared: Boolean(note.is_shared),
+      shareToken: note.share_token ?? null,
+    };
+  }, [note.is_shared, note.share_token]);
 
   const policyState = usePolicySnapshot();
 
@@ -181,7 +193,7 @@ export default function ShareNoteDialog({
         share: refreshed.share,
         invitations: refreshed.invitations,
         access: refreshed.access ?? resolveFallbackAccess?.(entry?.access) ?? entry?.access,
-        rawToken: entry?.rawToken ?? null,
+        rawToken: currentShareToken(entry?.rawToken, refreshed.share.token_prefix),
       }));
       return refreshed;
     },
@@ -216,12 +228,11 @@ export default function ShareNoteDialog({
     refreshShareCache()
       .then((res) => {
         if (cancelled || !res) return;
-        const serverShared = res.share.visibility !== "private";
-        if (serverShared !== localIsSharedRef.current) {
-          void persistNoteShareState(
-            note.id,
-            serverShared ? { is_shared: 1 } : { is_shared: 0, share_token: null }
-          ).catch((err) => console.error("Share flag persist failed:", err));
+        const update = reconcileLocalShareState(localShareStateRef.current, res.share);
+        if (update) {
+          void persistNoteShareState(note.id, update).catch((err) =>
+            console.error("Share flag persist failed:", err)
+          );
         }
       })
       .catch((err) => {
@@ -365,11 +376,9 @@ export default function ShareNoteDialog({
   );
 
   const copyLink = useCallback(
-    async (token: string) => {
+    async (url: string) => {
       try {
-        await navigator.clipboard.writeText(
-          `${SHARE_VIEWER_BASE_URL}/n/${encodeURIComponent(token)}`
-        );
+        await navigator.clipboard.writeText(url);
         setCopied(true);
         if (copyTimeoutRef.current) window.clearTimeout(copyTimeoutRef.current);
         copyTimeoutRef.current = window.setTimeout(() => setCopied(false), 1500);
@@ -381,10 +390,14 @@ export default function ShareNoteDialog({
     [t, toast]
   );
 
-  // Legacy shares can predate local token persistence; rotating is the only
+  // The raw token is returned only on generate or rotate, so a share made on
+  // another device, or by an invite, leaves none here; rotating is the only
   // way to recover a copyable link (the old one stops working by design).
   const rotateAndCopy = useCallback(async () => {
-    if (!cloudId || !canManageAccess || !shareActionAllowed("rotate-link")) return;
+    if (!cloudId || !canManageAccess) return;
+    // Read the cache: a Create link click has just moved it off private.
+    const current = getShareCacheEntry(cloudId)?.share;
+    if (!current || !shareActionAllowed("rotate-link", current.visibility)) return;
     try {
       const res = await NoteSharingService.rotateToken(cloudId);
       updateShareCache(cloudId, (entry) => ({
@@ -395,7 +408,9 @@ export default function ShareNoteDialog({
       void persistNoteShareState(note.id, { is_shared: 1, share_token: res.raw_token }).catch(
         (err) => console.error("Share flag persist failed:", err)
       );
-      await copyLink(res.raw_token);
+      const link = resolveShareLink(res.share, [res.raw_token]);
+      if (link.kind !== "copy") throw new Error("Rotated share has no copyable link");
+      await copyLink(link.url);
     } catch (err) {
       console.error("Share link recovery failed:", err);
       toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
@@ -406,22 +421,36 @@ export default function ShareNoteDialog({
     if (!cloudId || !share || !canUseLink) return;
     setLinkBusy(true);
     try {
+      let current = share;
+      let createdToken: string | null = null;
       if (share.visibility === "private") {
         // Create link: the click is the sharing consent.
         const res = await applyVisibility("link");
         if (!res) return;
-        const token = res.raw_token ?? note.share_token ?? getShareCacheEntry(cloudId)?.rawToken;
-        if (token) await copyLink(token);
-        else await rotateAndCopy();
-        return;
+        current = res.share;
+        createdToken = res.raw_token;
       }
-      const known = note.share_token ?? getShareCacheEntry(cloudId)?.rawToken;
-      if (known) await copyLink(known);
+      const link = resolveShareLink(current, [
+        createdToken,
+        note.share_token,
+        getShareCacheEntry(cloudId)?.rawToken,
+      ]);
+      if (link.kind === "copy") await copyLink(link.url);
+      else if (link.needsConfirmation) setConfirmingReplaceLink(true);
       else await rotateAndCopy();
     } finally {
       setLinkBusy(false);
     }
   }, [cloudId, share, canUseLink, note.share_token, applyVisibility, copyLink, rotateAndCopy]);
+
+  const handleReplaceLink = useCallback(async () => {
+    setLinkBusy(true);
+    try {
+      await rotateAndCopy();
+    } finally {
+      setLinkBusy(false);
+    }
+  }, [rotateAndCopy]);
 
   const copyIntentHandled = useRef(false);
   useEffect(() => {
@@ -845,17 +874,13 @@ export default function ShareNoteDialog({
                 <AccessGrantRow
                   key={grant.id}
                   grant={grant}
-                  canChangePermission={Boolean(
-                    access?.can_manage_access &&
-                    (!grant.inherited || access.can_manage_inherited_access) &&
-                    shareActionAllowed("change-grant")
-                  )}
+                  canChangePermission={
+                    canManageAccessGrant(access, grant) && shareActionAllowed("change-grant")
+                  }
                   showPermissionActions={shareActionAllowed("change-grant")}
-                  canRemove={Boolean(
-                    access?.can_manage_access &&
-                    (!grant.inherited || access.can_manage_inherited_access) &&
-                    shareActionAllowed("remove-grant")
-                  )}
+                  canRemove={
+                    canManageAccessGrant(access, grant) && shareActionAllowed("remove-grant")
+                  }
                   busy={busyGrantId === grant.id}
                   onPermissionChange={(permission) => void handleGrantPermission(grant, permission)}
                   onRemove={() => void handleRemoveGrant(grant)}
@@ -1007,6 +1032,17 @@ export default function ShareNoteDialog({
             </div>
           </div>
         )}
+
+        <ConfirmDialog
+          open={confirmingReplaceLink}
+          onOpenChange={setConfirmingReplaceLink}
+          title={t("noteEditor.share.dialog.replaceLink.title")}
+          description={t("noteEditor.share.dialog.replaceLink.description")}
+          confirmText={t("noteEditor.share.dialog.replaceLink.confirm")}
+          cancelText={t("common.cancel")}
+          variant="destructive"
+          onConfirm={() => void handleReplaceLink()}
+        />
       </DialogContent>
     </Dialog>
   );

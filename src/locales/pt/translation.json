@@ -3872,6 +3872,11 @@
         "createLink": "Criar link",
         "copyLink": "Copiar link",
         "copied": "Copiado",
+        "replaceLink": {
+          "title": "Substituir o link de compartilhamento?",
+          "description": "Este dispositivo não tem o link atual, então copiá-lo significa criar um novo. O link antigo deixará de funcionar, inclusive nos e-mails de convite. Reenvie cada convite para que as pessoas convidadas continuem podendo abrir a nota.",
+          "confirm": "Substituir link"
+        },
         "export": "Exportar",
         "owner": "Proprietário",
         "editor": "Pode editar",

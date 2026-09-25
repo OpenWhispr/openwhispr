@@ -4001,6 +4001,11 @@
         "createLink": "Create link",
         "copyLink": "Copy link",
         "copied": "Copied",
+        "replaceLink": {
+          "title": "Replace the share link?",
+          "description": "This device doesn't have the current link, so copying it means creating a new one. The old link stops working, including the links in invitation emails. Resend each invitation so invitees can still open the note.",
+          "confirm": "Replace link"
+        },
         "export": "Export",
         "owner": "Owner",
         "editor": "Can edit",
