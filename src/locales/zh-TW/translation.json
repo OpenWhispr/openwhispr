@@ -879,7 +879,8 @@
         "agentUnavailable": "助理無法使用",
         "screenContextSkipped": "已略過螢幕內容",
         "dailyLimitReached": "已達每日上限",
-        "providerRateLimited": "服務商速率限制"
+        "providerRateLimited": "服務商速率限制",
+        "outOfCredits": "餘額不足"
       },
       "fallback": {
         "title": "備援模式",
@@ -910,6 +911,7 @@
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
         "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。",
         "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。",
+        "openrouterOutOfCredits": "你的 OpenRouter 帳戶餘額不足。請在 openrouter.ai 儲值後再試一次。",
         "chunkLoss": "網路問題導致錄音大部分遺失。請從歷史記錄中重新轉錄。",
         "agentReasoningFailed": "語音助理無法處理該指令，已改為插入原始逐字稿。",
         "screenContextSkipped": "截圖無法傳送，因此已在沒有螢幕內容的情況下執行你的指令。",

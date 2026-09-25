@@ -12,6 +12,7 @@ import {
   isSecureHttpEndpoint,
   isAzureOpenAIEndpoint,
   buildAzureTranscriptionUrl,
+  matchesHost,
 } from "../utils/urlUtils.ts";
 import {
   isOrukeetEndpoint,
@@ -57,6 +58,22 @@ const STREAMING_ONLY_PROVIDER_MESSAGE_KEY =
 
 const PROVIDER_KEY_MISSING_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.providerKeyMissing";
+
+const OPENROUTER_OUT_OF_CREDITS_MESSAGE_KEY =
+  "hooks.audioRecording.errorDescriptions.openrouterOutOfCredits";
+
+// OpenRouter answers 402 once the account's prepaid credit is spent, and its
+// JSON body would otherwise become the error text. Matched on the host so a
+// Custom endpoint pointed at OpenRouter reads the same as the OpenRouter tab.
+export function batchTranscriptionHttpError(
+  status: number,
+  endpoint: string
+): { code: string; messageKey: string } | null {
+  if (status === 402 && matchesHost(endpoint, "openrouter.ai")) {
+    return { code: "OPENROUTER_OUT_OF_CREDITS", messageKey: OPENROUTER_OUT_OF_CREDITS_MESSAGE_KEY };
+  }
+  return null;
+}
 
 // Deepgram and AssemblyAI have no OpenAI-compatible /audio/transcriptions, so
 // they exist only as realtime providers. A batch/upload/retry request for them

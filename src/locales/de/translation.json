@@ -879,7 +879,8 @@
         "agentUnavailable": "Assistent nicht verfügbar",
         "screenContextSkipped": "Bildschirmkontext übersprungen",
         "dailyLimitReached": "Tägliches Limit erreicht",
-        "providerRateLimited": "Anbieter-Ratenlimit erreicht"
+        "providerRateLimited": "Anbieter-Ratenlimit erreicht",
+        "outOfCredits": "Guthaben aufgebraucht"
       },
       "fallback": {
         "title": "Fallback-Modus",
@@ -910,6 +911,7 @@
         "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
         "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan.",
         "providerRateLimited": "Dein Transkriptionsanbieter hat die Anfrage begrenzt. Warte kurz und versuch es erneut.",
+        "openrouterOutOfCredits": "Ihr OpenRouter-Konto hat kein Guthaben mehr. Laden Sie es auf openrouter.ai auf und versuchen Sie es dann erneut.",
         "chunkLoss": "Ein Netzwerkproblem hat zu viel von der Aufnahme verloren. Transkribieren Sie sie über den Verlauf erneut.",
         "agentReasoningFailed": "Ihr Sprachassistent konnte den Befehl nicht verarbeiten – stattdessen wurde das unbearbeitete Transkript eingefügt.",
         "screenContextSkipped": "Der Screenshot konnte nicht gesendet werden, daher lief Ihr Befehl ohne Bildschirmkontext.",

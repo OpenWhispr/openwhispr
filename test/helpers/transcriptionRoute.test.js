@@ -362,6 +362,25 @@ test("a Custom endpoint pointed at OpenRouter stays on the custom key slot", asy
   assert.deepEqual(route.auth, { scheme: "bearer", keyRef: "custom" });
 });
 
+test("a 402 from OpenRouter reads as out of credits, whichever tab sent it", async () => {
+  const { batchTranscriptionHttpError } = await load();
+  const outOfCredits = {
+    code: "OPENROUTER_OUT_OF_CREDITS",
+    messageKey: "hooks.audioRecording.errorDescriptions.openrouterOutOfCredits",
+  };
+  // The OpenRouter tab and a Custom endpoint typed by hand post to the same host.
+  assert.deepEqual(
+    batchTranscriptionHttpError(402, "https://openrouter.ai/api/v1/audio/transcriptions"),
+    outOfCredits
+  );
+  assert.equal(batchTranscriptionHttpError(401, "https://openrouter.ai/api/v1"), null);
+  assert.equal(
+    batchTranscriptionHttpError(402, "https://api.openai.com/v1/audio/transcriptions"),
+    null,
+    "another provider's 402 is not OpenRouter's credit balance"
+  );
+});
+
 test("managed policy is a fail-closed floor", async () => {
   const blocked = await resolve(
     { transcriptionMode: "providers", cloudTranscriptionProvider: "groq" },

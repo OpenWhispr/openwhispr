@@ -616,3 +616,56 @@ test("upload: a self-hosted Azure endpoint keeps its deployment URL", async () =
     "https://myorg.openai.azure.com/openai/deployments/my-deployment/audio/transcriptions?api-version=2025-03-01-preview"
   );
 });
+
+// OpenRouter's documented reply when an account's prepaid credit is spent. Retry
+// showed it as raw JSON in its toast; both paths must hand back the translated
+// out-of-credits message instead.
+const outOfCreditsResponse = () => {
+  const body = {
+    error: {
+      code: 402,
+      message: "Insufficient credits. Add more using https://openrouter.ai/credits",
+    },
+  };
+  return {
+    ok: false,
+    status: 402,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  };
+};
+
+const OUT_OF_CREDITS = {
+  code: "OPENROUTER_OUT_OF_CREDITS",
+  messageKey: "hooks.audioRecording.errorDescriptions.openrouterOutOfCredits",
+};
+
+test("retry and upload read an OpenRouter 402 as out of credits", async () => {
+  const previousResponse = fetchResponse;
+  fetchResponse = outOfCreditsResponse;
+  try {
+    const retried = await invoke({
+      cloudTranscriptionProvider: "openrouter",
+      cloudTranscriptionModel: "openai/gpt-transcribe",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+    });
+    assert.equal(retried.success, false);
+    assert.equal(retried.code, OUT_OF_CREDITS.code);
+    assert.equal(retried.messageKey, OUT_OF_CREDITS.messageKey);
+
+    const uploaded = await invokeUpload({
+      apiKey: "ork-openrouter",
+      baseUrl: "",
+      model: "openai/gpt-transcribe",
+      provider: "openrouter",
+      language: "",
+      transcriptionMode: "providers",
+    });
+    assert.equal(uploaded.success, false);
+    assert.equal(uploaded.code, OUT_OF_CREDITS.code);
+    assert.equal(uploaded.messageKey, OUT_OF_CREDITS.messageKey);
+  } finally {
+    fetchResponse = previousResponse;
+  }
+});

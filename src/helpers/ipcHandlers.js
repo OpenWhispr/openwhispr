@@ -6314,7 +6314,8 @@ class IPCHandlers {
           preferredLanguage && preferredLanguage !== "auto"
             ? preferredLanguage.split("-")[0]
             : undefined;
-        const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+        const { resolveTranscriptionRoute, batchTranscriptionHttpError } =
+          await import("./transcriptionRoute.ts");
         const { convertBufferToWav, isWavFormat } = require("./ffmpegUtils");
         // Renderer pre-flight owns policy; retry re-routes stored audio through
         // whatever is selected NOW.
@@ -6559,7 +6560,10 @@ class IPCHandlers {
           const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
           if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
+            throw Object.assign(
+              new Error(`${provider} API Error: ${response.status} ${errorText}`),
+              batchTranscriptionHttpError(response.status, endpoint)
+            );
           }
           const data = await response.json();
           if (data?.text) {
@@ -9980,7 +9984,8 @@ class IPCHandlers {
           const sourcePath = resolveAllowedAudioPath(filePath);
           if (!sourcePath) return { success: false, error: "File path not allowed" };
 
-          const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+          const { resolveTranscriptionRoute, batchTranscriptionHttpError } =
+            await import("./transcriptionRoute.ts");
           const route = resolveTranscriptionRoute({
             settings: {
               transcriptionMode,
@@ -10168,8 +10173,11 @@ class IPCHandlers {
             return { success: false, error: "Rate limit exceeded. Please try again later." };
           }
           if (data.statusCode !== 200) {
-            throw new Error(
-              data.data?.error?.message || data.data?.error || `API error: ${data.statusCode}`
+            throw Object.assign(
+              new Error(
+                data.data?.error?.message || data.data?.error || `API error: ${data.statusCode}`
+              ),
+              batchTranscriptionHttpError(data.statusCode, transcriptionUrl)
             );
           }
 

@@ -879,7 +879,8 @@
         "agentUnavailable": "Assistant Unavailable",
         "screenContextSkipped": "Screen Context Skipped",
         "dailyLimitReached": "Daily Limit Reached",
-        "providerRateLimited": "Provider Rate Limited"
+        "providerRateLimited": "Provider Rate Limited",
+        "outOfCredits": "Out of Credits"
       },
       "fallback": {
         "title": "Fallback Mode",
@@ -910,6 +911,7 @@
         "offline": "You're offline. Cloud transcription requires an internet connection.",
         "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
         "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again.",
+        "openrouterOutOfCredits": "Your OpenRouter account is out of credits. Top up at openrouter.ai, then try again.",
         "chunkLoss": "A network problem lost too much of the recording. Re-transcribe it from History.",
         "agentReasoningFailed": "Your voice assistant couldn't process the command — the raw transcript was inserted instead.",
         "screenContextSkipped": "The screenshot couldn't be sent, so your command ran without screen context.",

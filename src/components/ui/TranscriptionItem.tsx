@@ -104,6 +104,11 @@ export default function TranscriptionItem({
     errorCode === "CUSTOM_ENDPOINT_INVALID";
   const isLimitError = errorCode === "LIMIT_REACHED";
   const isOfflineError = errorCode === "OFFLINE";
+  // The saved message is OpenRouter's raw JSON reply; show the readable version.
+  const errorText =
+    errorCode === "OPENROUTER_OUT_OF_CREDITS"
+      ? t("hooks.audioRecording.errorDescriptions.openrouterOutOfCredits")
+      : item.error_message;
 
   const retryLabel = t(
     item.route_kind === "translation"
@@ -224,9 +229,9 @@ export default function TranscriptionItem({
               <p className="text-sm font-medium text-destructive">
                 {t("controlPanel.history.transcriptionFailed")}
               </p>
-              {item.error_message && (
+              {errorText && (
                 <p className="mt-0.5 text-xs leading-relaxed wrap-break-word text-muted-foreground">
-                  {item.error_message}
+                  {errorText}
                 </p>
               )}
               {isConfigError && (

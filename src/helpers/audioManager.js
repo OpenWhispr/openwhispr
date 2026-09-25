@@ -67,6 +67,7 @@ import {
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import {
+  batchTranscriptionHttpError,
   byokFileSizeLimit,
   resolveByokModel,
   resolveTranscriptionRoute,
@@ -3846,7 +3847,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           },
           "transcription"
         );
-        const err = new Error(`API Error: ${response.status} ${errorText}`);
+        const err = Object.assign(
+          new Error(`API Error: ${response.status} ${errorText}`),
+          batchTranscriptionHttpError(response.status, endpoint)
+        );
         if (response.status === 401) err.code = "INVALID_KEY";
         else if (response.status === 429) {
           // The user's own provider rate-limited the request — not an OpenWhispr plan limit

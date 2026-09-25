@@ -879,7 +879,8 @@
         "agentUnavailable": "アシスタントを利用できません",
         "screenContextSkipped": "画面コンテキストをスキップしました",
         "dailyLimitReached": "1 日の上限に達しました",
-        "providerRateLimited": "プロバイダーのレート制限"
+        "providerRateLimited": "プロバイダーのレート制限",
+        "outOfCredits": "クレジット不足"
       },
       "fallback": {
         "title": "フォールバックモード",
@@ -910,6 +911,7 @@
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
         "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
         "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
+        "openrouterOutOfCredits": "OpenRouter アカウントのクレジットがなくなりました。openrouter.ai でチャージしてから、もう一度お試しください。",
         "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
         "agentReasoningFailed": "音声アシスタントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
         "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。",
