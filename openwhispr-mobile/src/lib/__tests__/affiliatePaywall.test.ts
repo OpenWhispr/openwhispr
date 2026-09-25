@@ -258,6 +258,19 @@ it('seeds Account display values while keeping redemption private and avoiding a
   expect((await session.handle(request)).status).toBe('failure');
   expect(Linking.openURL).toHaveBeenCalledTimes(1);
 });
+it('clears cached seed parameters for the next ordinary presentation', () => {
+  const seeded = createAffiliatePaywallSession(() => true, jest.fn(), offer);
+  sessions.push(seeded);
+  seeded.close();
+  const ordinary = start();
+  // Model the SDK merging new parameters into its cached presentation data.
+  expect({ ...seeded.initialParams, ...ordinary.initialParams }).toEqual({
+    creator_offer_ready: false,
+    creator_offer_price: '',
+    creator_offer_renewal: '',
+    creator_offer_token: '',
+  });
+});
 it('does not display an allocation after tracking permission is revoked', async () => {
   jest.mocked(loadAffiliateOffer).mockImplementationOnce(async () => {
     jest.mocked(getTrackingAuthorizationStatus).mockResolvedValue('denied');

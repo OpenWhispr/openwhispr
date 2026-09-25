@@ -65,7 +65,13 @@ export function createAffiliatePaywallSession(
         creator_offer_renewal: formatAffiliateOffer(offer).renewalText,
         creator_offer_token: offerToken,
       }
-    : {};
+    : {
+        // Superwall can retain omitted placement parameters on cached reuse.
+        creator_offer_ready: false,
+        creator_offer_price: '',
+        creator_offer_renewal: '',
+        creator_offer_token: '',
+      };
   let billing = false;
   let leftApp = false;
   let handoffPending = false;

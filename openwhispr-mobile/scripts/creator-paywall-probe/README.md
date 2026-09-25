@@ -15,3 +15,11 @@ Dashboard route: campaign **109201**, placement `creator_code_probe_20260925`, w
 5. Exercise failure, success, Annual hiding, Monthly return, ordinary product action refusal, offer action refusal, X while pending and repeat presentation. Report native results separately from the unit tests. A passing fixture does not prove real offers, Apple eligibility, or payment acceptance.
 
 The discovery helper accepts the marker at any nested path solely to discover the native SDK's request shape. A production parser must validate exact observed keys, types and selected plan; it must never reuse that recursive discovery logic. A fixture response must never reach real attribution, offer allocation or redemption services.
+
+## Final-contract fixtures
+
+The buttons select `valid`, `seed`, `seed-missing`, `retry-missing`, `missing`, `malformed`, `failure`, or `slow`. Every presentation supplies all four seed parameters; ordinary scenarios explicitly send `false` and empty strings because the native SDK retains omitted keys on cached reuse. Seed scenarios use only TEST display strings and a fictional presentation token. `retry-missing` returns a token once and omits it on subsequent applies in the same presentation. `slow` waits 15 seconds so dismissal can precede its completion.
+
+On September 25, the isolated native probe rendered seeded Account display values, hid/restored them on Annual/Monthly, invoked `creatorOfferRedeem` with exact `params.*` display/token keys, and displayed returned callback-token values. A seeded-to-ordinary cached repeat reproduced parameter retention; explicit clearing then restored the collapsed ordinary screen. The unique bundle has no StoreKit product catalog, so `products.secondary.identifier` was omitted in actual callback requests. Product-binding configuration is read back, but native catalog acceptance remains pending.
+
+The final saved revision also passed a same-presentation complete-response → redemption refusal → missing-token retry (old token not reused), a numeric malformed-price response (no payment callback), visible explicit regular-plan recovery, blocked input edits during checking, X before a delayed response, and a clean replacement presentation after that response completed. These are isolated fixture observations, not full customer-app or physical-device acceptance.

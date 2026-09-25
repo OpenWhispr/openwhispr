@@ -7,15 +7,22 @@ import {
   usePlacement,
   useSuperwall,
 } from 'expo-superwall';
-import { createProbeCallback, PROBE_PLACEMENT } from './callback';
+import { createProbeCallback, probeParams, PROBE_PLACEMENT, type ProbeScenario } from './callback';
 
 export const PROBE_BUNDLE_ID = 'com.openwhispr.creatorcode.probe20260925';
 const PAYWALL_IDENTIFIER = 'creator-code-test-draft-2026-09-25-0393-2026-09-25';
 const PAYWALL_NAME = 'Creator Code TEST DRAFT 2026-09-25';
 
-type PresentationProps = { append: (event: string) => void; finish: () => void };
-function ProbePresentation({ append, finish }: PresentationProps) {
-  const probe = useMemo(() => createProbeCallback((shape) => append(shape.join('\n'))), [append]);
+type PresentationProps = {
+  append: (event: string) => void;
+  finish: () => void;
+  scenario: ProbeScenario;
+};
+function ProbePresentation({ append, finish, scenario }: PresentationProps) {
+  const probe = useMemo(
+    () => createProbeCallback((shape) => append(shape.join('\n')), scenario),
+    [append, scenario],
+  );
   const started = useRef(false);
   const presented = useRef(false);
   const dismiss = useSuperwall((state) => state.dismiss);
@@ -50,10 +57,10 @@ function ProbePresentation({ append, finish }: PresentationProps) {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    append(`Placement: ${PROBE_PLACEMENT}`);
+    append(`Placement: ${PROBE_PLACEMENT}; fixture: ${scenario}`);
     registerPlacement({
       placement: PROBE_PLACEMENT,
-      params: { creator_probe: 'fixture_20260925', affiliate_entry: 'cloud' },
+      params: probeParams(scenario),
     })
       .then(() => {
         if (!presented.current) stop();
@@ -69,7 +76,9 @@ function ProbePresentation({ append, finish }: PresentationProps) {
 
 function ProbeScreen({ append, events }: { append: (event: string) => void; events: string[] }) {
   const [ready, setReady] = useState(false);
-  const [presentation, setPresentation] = useState<number | null>(null);
+  const [presentation, setPresentation] = useState<{ id: number; scenario: ProbeScenario } | null>(
+    null,
+  );
   const nextId = useRef(0);
   const configured = useSuperwall((state) => state.isConfigured);
   const setSubscriptionStatus = useSuperwall((state) => state.setSubscriptionStatus);
@@ -92,14 +101,29 @@ function ProbeScreen({ append, events }: { append: (event: string) => void; even
         Fictional input: DEMO_ONLY. Purchases, restore and redemption are disabled. No OpenWhispr
         API, attribution or billing services are loaded.
       </Text>
-      <Button
-        title="Open isolated paywall"
-        disabled={!ready || presentation !== null}
-        onPress={() => setPresentation(nextId.current++)}
-      />
+      {(
+        [
+          'valid',
+          'seed',
+          'seed-missing',
+          'retry-missing',
+          'missing',
+          'malformed',
+          'failure',
+          'slow',
+        ] as const
+      ).map((scenario) => (
+        <Button
+          key={scenario}
+          title={`Open ${scenario} fixture`}
+          disabled={!ready || presentation !== null}
+          onPress={() => setPresentation({ id: nextId.current++, scenario })}
+        />
+      ))}
       {presentation !== null && (
         <ProbePresentation
-          key={presentation}
+          key={presentation.id}
+          scenario={presentation.scenario}
           append={append}
           finish={() => setPresentation((current) => (current === presentation ? null : current))}
         />

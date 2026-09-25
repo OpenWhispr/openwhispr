@@ -8,7 +8,7 @@
 
 **Tech stack:** React Native/Expo, TypeScript, Zustand, `expo-superwall` 1.2.0 / SuperwallKit 4.16.1, existing Dub/RevenueCat clients, Jest; Node 24.
 
-**Spec:** [Current approved handover](../../../titan-affiliate-handoff-20260916/docs/handovers/2026-09-25-affiliate-superwall-test-paywall-next.md), [approved visual](../../../titan-affiliate-handoff-20260916/artefacts/reports/2026-09-25-affiliate-creator-code-designs.html), [completed feasibility research](../../../titan-affiliate-handoff-20260916/artefacts/reports/2026-09-25-affiliate-creator-code-feasibility.md), and [saved draft bindings](../../../titan-affiliate-handoff-20260916/docs/evidence/affiliate-superwall-test-20260925/binding-readback.json).
+**Spec:** [Current approved handover](../../../titan-affiliate-handoff-20260916/docs/handovers/2026-09-25-affiliate-superwall-final-bindings-next.md), [approved visual](../../../titan-affiliate-handoff-20260916/artefacts/reports/2026-09-25-affiliate-creator-code-designs.html), [completed feasibility research](../../../titan-affiliate-handoff-20260916/artefacts/reports/2026-09-25-affiliate-creator-code-feasibility.md), and [saved draft bindings](../../../titan-affiliate-handoff-20260916/docs/evidence/affiliate-superwall-test-20260925/binding-readback.json).
 
 ## Authority and workflow record
 
@@ -20,8 +20,8 @@
 
 ## Current execution status (September 25)
 
-- Step 1: isolated native fixture callback/display/action/reset proof passed on the separate iPhone simulator app. Campaign 109201 is restricted to its unique bundle and placement. Final product identifier, offer token and initial-offer parameter bindings are still pending in the editor; missing/malformed data, keyboard/late-callback and iPad native checks also remain. The relay disconnected while the shared browser moved away; do not claim the final contract is connected.
-- Step 2: source implementation prepared on the owned branch: exact short keys, per-presentation callbacks/private offers, direct Cloud paywall, explicit Account shortcut, one-shot inbound intent, consent/identity/currentness guards and tests. Final source-to-editor connection remains dependent on Step 1’s pending bindings.
+- Step 1: isolated native fixture callback/display/action/reset proof passed on the separate iPhone simulator app. Campaign 109201 is restricted to its unique bundle and placement. Final product/token/seed bindings are configured. Native seed/token display and action routing passed; explicit false/empty seed parameters repaired and passed cached reuse. The separate bundle omits native product identifiers because it has no StoreKit catalog. Final-revision retry/malformed guards, reachable recovery, pending input locking and X/late-callback isolation passed on the separate iPhone probe; full device/keyboard and iPad checks remain; real app/catalog acceptance is not established.
+- Step 2: source implementation prepared on the owned branch: exact short keys, per-presentation callbacks/private offers, direct Cloud paywall, explicit Account shortcut, one-shot inbound intent, consent/identity/currentness guards and tests. Final real-app acceptance remains dependent on Step 1’s native product/catalog and remaining device checks.
 - Step 3: full source checks and independent review are recorded with the final source checkpoint. Connected Apple acceptance, correct real app/catalog/stock, native Account input/iPad coverage, production association and joint desktop/mobile activation remain separately held.
 
 ## Global constraints and acceptance
@@ -61,8 +61,8 @@ return {
 
 - [ ] Record a sanitized native request shape, then bind parsing to those exact keys. Until observed, document a fixture/source contract only; do not describe it as native proof. Unknown names/keys/types return failure rather than invoking services.
 - [ ] Verify returned strings, missing data, explicit failure, repeated presentation, annual hiding, X dismissal, waiting, edited input and late completion. Fixture redemption returns a non-purchasing result; fixture ordinary-purchase actions also remain disabled during this proof.
-- [ ] Prove the actual initial state contract needed for saved-offer/Account entry: safe display data can seed the existing monthly screen while private offer authority remains in the app. If editor/runtime cannot reliably hydrate/reset it, retain the reviewed dedicated offer fallback and state the concrete limitation.
-- [ ] Save exact route/binding evidence and limits. Native proof may depend on a compatible new development binary; source tests can proceed with that dependency recorded, but Step 1 remains partly open until actual execution is observed.
+- [x] Prove the initial display-state contract: native fixture seed/token rendering, custom action and Annual/Monthly behavior passed. Explicit false/empty parameters repaired cached reuse. Private offer authority remains app-owned; native real product/catalog acceptance is still separate.
+- [x] Save exact route/binding evidence and limits. Native proof may depend on a compatible new development binary; source tests can proceed with that dependency recorded, but Step 1 remains partly open until actual execution is observed.
 
 ## Task 2: Add exact short-code mapping and explicit submission semantics
 
@@ -126,7 +126,7 @@ git diff --check
 
 - [x] Commit intended code/tests and give a fresh independent `deep-review` + `code-quality` reviewer the full feature diff, original approved design/handover, this plan, baseline/current head and validation evidence. Cover user journeys, neighboring billing/onboarding regressions, SDK lifecycle, tests and iOS/Android exclusion. Main agent validates and repairs findings; reviewer rechecks affected repairs.
 - [ ] Refresh the existing draft #2334 and remote branch before pushing; preserve concurrent work. Update the draft with final behavior and proof limits, then inspect CI on the pushed head. Engineering owns merge. No extra review-message/comment/send is implied.
-- [ ] Update the resumable handover with Step 1/2/3 completed-versus-pending status and exact next action. Keep desktop readiness and the joint activation decision separate.
+- [x] Update the resumable handover with Step 1/2/3 completed-versus-pending status and exact next action. Keep desktop readiness and the joint activation decision separate.
 
 ## Source validation checkpoint
 
@@ -134,7 +134,7 @@ git diff --check
 
 ## Native and connected acceptance still required
 
-The separate fixture established native input/selected-plan keys, returned price/renewal rendering and cached repeat reset. It does not establish the final added product/token/seed bindings, pending keyboard edits, complete iPhone/iPad layout or native Account system Paste behavior. A compatible new binary is required for the native creator input; an OTA to an old binary is insufficient. Any local runtime proof must retain a distinct development identity and avoid personal-app replacement.
+The separate fixture established native input/selected-plan keys, returned price/renewal rendering and cached repeat reset. Native follow-up established seed/token display/action keys and explicit clearing on cached repeat. The real product identifier remains absent from the isolated bundle; the complete iPhone/iPad layout/keyboard/lifecycle and native Account system Paste remain pending. The separate probe passed missing-token retry, malformed-price refusal, reachable regular recovery, pending input locking and X/late completion isolation. A compatible new binary is required for the native creator input; an OTA to an old binary is insufficient. Any local runtime proof must retain a distinct development identity and avoid personal-app replacement.
 
 Later separately authorized Apple acceptance uses current catalog, stock, correct app identity/storefront and existing staging setup: real discounted terms, redemption return, anonymous purchase → signup recovery, restore/account switching, app-closed renewals, exactly-once server commission/refund processing and iPhone/iPad coverage. Historical expired codes and previous builds are not acceptance of this change. Production onboarding association and live activation remain held even when all source checks pass.
 
