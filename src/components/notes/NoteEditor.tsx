@@ -62,6 +62,7 @@ import {
 } from "../ui/splitButton";
 import type { NoteItem, FolderItem } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
+import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
 import NoteRecordControl, { RecordingWave } from "./NoteRecordControl";
@@ -197,6 +198,8 @@ interface NoteEditorProps {
   onGenerateSummary?: () => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
+  actionProgress?: NoteActionProgress | null;
+  onCancelAction?: () => void;
   diarizationSessionId?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
   sessionDiarizationEnabled?: boolean;
@@ -230,6 +233,8 @@ export default function NoteEditor({
   onGenerateSummary,
   actionProcessingState,
   actionName,
+  actionProgress,
+  onCancelAction,
   diarizationSessionId,
   onLiveSpeakerLock,
   sessionDiarizationEnabled,
@@ -247,7 +252,11 @@ export default function NoteEditor({
   const { t } = useTranslation();
   const locale = useUiLocale();
   const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
-  const [viewMode, setViewMode] = useState<MeetingViewMode>(defaultViewMode);
+  const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
+  // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
+  // rendering, and a tab that no longer renders can never be the current one.
+  const viewMode: MeetingViewMode =
+    selectedViewMode === "enhanced" && !enhancement ? "raw" : selectedViewMode;
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   const [folderSearch, setFolderSearch] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -461,7 +470,10 @@ export default function NoteEditor({
 
     const buttons = container.querySelectorAll<HTMLButtonElement>("[data-segment-button]");
     const activeBtn = Array.from(buttons).find((btn) => btn.dataset.segmentValue === viewMode);
-    if (!activeBtn) return;
+    if (!activeBtn) {
+      setIndicatorStyle((style) => ({ ...style, opacity: 0 }));
+      return;
+    }
 
     const cr = container.getBoundingClientRect();
     const br = activeBtn.getBoundingClientRect();
@@ -488,7 +500,7 @@ export default function NoteEditor({
     let cancelScheduledUpdate: (() => void) | undefined;
 
     if (prevProcessingStateRef.current === "processing" && actionProcessingState === "success") {
-      cancelScheduledUpdate = scheduleUiUpdate(() => setViewMode("enhanced"));
+      cancelScheduledUpdate = scheduleUiUpdate(() => setSelectedViewMode("enhanced"));
     }
     prevProcessingStateRef.current = actionProcessingState;
 
@@ -503,7 +515,7 @@ export default function NoteEditor({
         setDiarizedSegments(null);
         setIsDiarizing(false);
         setSpeakerMappings({});
-        setViewMode(defaultViewMode);
+        setSelectedViewMode(defaultViewMode);
         if (titleRef.current && titleRef.current.textContent !== note.title) {
           titleRef.current.textContent = note.title || "";
         }
@@ -1025,7 +1037,7 @@ export default function NoteEditor({
                 <button
                   data-segment-button
                   data-segment-value="transcript"
-                  onClick={() => setViewMode("transcript")}
+                  onClick={() => setSelectedViewMode("transcript")}
                   className={cn(
                     SEGMENT_BUTTON_CLASS,
                     viewMode === "transcript"
@@ -1039,7 +1051,7 @@ export default function NoteEditor({
                 <button
                   data-segment-button
                   data-segment-value="raw"
-                  onClick={() => setViewMode("raw")}
+                  onClick={() => setSelectedViewMode("raw")}
                   className={cn(
                     SEGMENT_BUTTON_CLASS,
                     viewMode === "raw"
@@ -1054,7 +1066,7 @@ export default function NoteEditor({
                   <button
                     data-segment-button
                     data-segment-value="enhanced"
-                    onClick={() => setViewMode("enhanced")}
+                    onClick={() => setSelectedViewMode("enhanced")}
                     className={cn(
                       SEGMENT_BUTTON_CLASS,
                       viewMode === "enhanced"
@@ -1224,6 +1236,8 @@ export default function NoteEditor({
           <ActionProcessingOverlay
             state={actionProcessingState ?? "idle"}
             actionName={actionName ?? null}
+            progress={actionProgress ?? null}
+            onCancel={onCancelAction}
           />
           <div
             className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none"

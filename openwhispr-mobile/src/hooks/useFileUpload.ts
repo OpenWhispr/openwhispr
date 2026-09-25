@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { AudioTools } from '../../modules/audio-tools/src';
 import {
   isOggOpus,
   isLocalModelMissingError,
 } from '../services/transcription/TranscriptionService';
 import { createTranscriptId, useTranscriptStore } from '../store/useTranscriptStore';
-import { useProcessingModeStore } from '../store/useProcessingModeStore';
+import { snapshotTextInference, snapshotTranscriptionJob } from '../lib/inferenceRouting';
 import { transcribeAndCleanup } from '../lib/transcribeAndCleanup';
 import { getPreferredTranscriptionLanguage } from '../lib/transcriptionLanguage';
 import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors';
@@ -34,6 +35,43 @@ export interface UseFileUploadOptions {
 
 const MAX_FILE_SIZE_MB = Math.round(MAX_FILE_SIZE / (1024 * 1024));
 
+// OpenAI-compatible transcription endpoints pick the decoder from the file
+// extension. A file the provider rejects would become a failed row whose retry
+// (pinned to the same provider) can never succeed, so it is refused up front.
+const PROVIDER_AUDIO_EXTENSIONS = new Set([
+  'flac',
+  'mp3',
+  'mp4',
+  'mpeg',
+  'mpga',
+  'm4a',
+  'ogg',
+  'wav',
+  'webm',
+]);
+
+async function assertProviderAcceptsFile(
+  file: DocumentPicker.DocumentPickerAsset,
+  extension: string | undefined,
+): Promise<void> {
+  if (!extension || !PROVIDER_AUDIO_EXTENSIONS.has(extension)) {
+    throw new Error(
+      'Your provider accepts FLAC, MP3, MP4, M4A, OGG, WAV, or WEBM audio. Choose a file in one of those formats.',
+    );
+  }
+  // The picker does not always report a size; the provider's limit is hard.
+  const size =
+    file.size ??
+    (await FileSystem.getInfoAsync(file.uri)
+      .then((info) => (info.exists ? info.size : undefined))
+      .catch(() => undefined));
+  if (size !== undefined && size > MAX_FILE_SIZE) {
+    throw new Error(
+      `Your provider accepts audio files up to ${MAX_FILE_SIZE_MB} MB. Choose a smaller file.`,
+    );
+  }
+}
+
 // The native module rejects unreadable/unsupported audio with these codes;
 // surface a clear instruction instead of the raw AVFoundation error.
 const toFriendlyUploadError = (error: unknown): Error => {
@@ -49,8 +87,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
   const [currentText, setCurrentText] = useState('');
   const addTranscript = useTranscriptStore((state) => state.addTranscript);
   const addFailedTranscript = useTranscriptStore((state) => state.addFailedTranscript);
-  const activeMode = useProcessingModeStore((state) => state.activeMode);
-  const transcriptionProvider = activeMode === 'private' ? 'local' : 'cloud';
 
   const pickAndTranscribeFile = async () => {
     try {
@@ -78,6 +114,8 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
         return;
       }
 
+      let jobRoute = snapshotTranscriptionJob('upload');
+      const transcriptionProvider = jobRoute.provider;
       const file = result.assets[0];
 
       const extension = file.name?.includes('.')
@@ -100,6 +138,10 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
         throw new Error(
           `File is too large. Please select an audio file under ${MAX_FILE_SIZE_MB}MB.`,
         );
+      }
+
+      if (transcriptionProvider === 'byok') {
+        await assertProviderAcceptsFile(file, extension);
       }
 
       // On-device Opus decoding isn't supported yet; the cloud transcriber
@@ -131,7 +173,13 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
             audioFileName: file.name,
             audioMimeType: file.mimeType,
             provider,
+            inferenceRoute: provider === 'byok' ? jobRoute.inferenceRoute : undefined,
+            cleanupRoute: jobRoute.cleanupRoute,
+            agentRoute: jobRoute.agentRoute,
+            cleanupUnavailable: jobRoute.cleanupUnavailable,
+            agentUnavailable: jobRoute.agentUnavailable,
             requestContext: 'file',
+            jobId: transcriptId,
             errorMessage: toFriendlyTranscriptionErrorMessage(error),
           });
         } catch (failedRowError) {
@@ -155,12 +203,19 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
 
           const processedResult = await transcribeAndCleanup(
             {
+              ...jobRoute,
               audioUri,
               provider,
+              inferenceRoute: provider === 'byok' ? jobRoute.inferenceRoute : undefined,
+              cleanupRoute: jobRoute.cleanupRoute,
+              agentRoute: jobRoute.agentRoute,
+              cleanupUnavailable: jobRoute.cleanupUnavailable,
+              agentUnavailable: jobRoute.agentUnavailable,
               fileName: file.name,
               mimeType: file.mimeType,
               language: getPreferredTranscriptionLanguage(),
               requestContext: 'file',
+              jobId: transcriptId,
               clientTranscriptionId,
             },
             {
@@ -178,7 +233,14 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
             audioMimeType: file.mimeType,
             duration: processedResult.transcription.duration,
             provider: processedResult.transcription.provider,
+            inferenceRoute: processedResult.transcription.inferenceRoute,
+            cleanupRoute: processedResult.transcription.cleanupRoute,
+            agentRoute: processedResult.transcription.agentRoute,
+            cleanupUnavailable: processedResult.transcription.cleanupUnavailable,
+            agentUnavailable: processedResult.transcription.agentUnavailable,
+            cleanupWarning: processedResult.transcription.cleanupWarning,
             requestContext: 'file',
+            jobId: transcriptId,
           });
 
           setCurrentText(finalText);
@@ -191,6 +253,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
       const retryWithCloud = async () => {
         setIsProcessing(true);
         try {
+          jobRoute = { provider: 'cloud', ...snapshotTextInference('cloud') };
           await runTranscription('cloud');
         } catch (retryError) {
           if (isUsageLimitError(retryError) && options.onUsageLimitReached) {

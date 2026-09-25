@@ -7,7 +7,9 @@ import { generateNoteTitle } from '@/utils/generateTitle';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { makeContentHash } from '@/lib/utils';
+import { clearLocalReasoningReadinessCache } from '@/lib/localReasoning';
 import type { Action, Note, Segment, Speaker } from '@/data/types';
+import type { UserConfig } from '@/types';
 
 const mockUpdateNote = jest.fn();
 const mockDeleteNote = jest.fn();
@@ -50,7 +52,7 @@ const mockActionsState = {
   initialize: mockInitializeActions,
 };
 
-const mockAuthState = {
+const mockAuthState: { user: { id: string; email: string; emailVerified: boolean } | null } = {
   user: { id: 'user-1', email: 'user@example.com', emailVerified: true },
 };
 
@@ -58,7 +60,7 @@ const mockProcessingModeState = {
   activeMode: 'cloud',
 };
 
-const mockConfigState = {
+const mockConfigState: { config: Partial<UserConfig>; updateConfig: typeof mockUpdateConfig } = {
   config: { autoGenerateNoteTitle: false, appleLocalIntelligenceEnabled: true },
   updateConfig: mockUpdateConfig,
 };
@@ -67,6 +69,10 @@ const mockDictionaryState = {
   entries: [] as { word: string }[],
   addLearnedWords: mockAddLearnedWords,
 };
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: '7' }),
@@ -145,7 +151,21 @@ jest.mock('@/hooks/useKeyboardHeight', () => ({
 jest.mock('@/services/reasoning/ReasoningService', () => ({
   ReasoningService: {
     processText: jest.fn(),
+    chatOverNote: jest.fn(),
   },
+}));
+
+let mockAppleAvailability = 'available';
+jest.mock('@/lib/appleLLM', () => ({
+  AppleLLM: { getAvailability: jest.fn(async () => ({ status: mockAppleAvailability })) },
+}));
+
+const mockRegisterSuperwallGate = jest.fn(async ({ feature }: { feature?: () => void }) => {
+  feature?.();
+  return true;
+});
+jest.mock('@/hooks/useSuperwallGate', () => ({
+  useSuperwallGate: () => ({ register: mockRegisterSuperwallGate }),
 }));
 
 jest.mock('@/utils/generateTitle', () => ({
@@ -207,9 +227,11 @@ jest.mock('@/components/notes/NoteActionsMenu', () => ({
   NoteActionsMenu: ({
     actions,
     onRunAction,
+    onAskNote,
   }: {
     actions: Action[];
     onRunAction: (action: Action) => void;
+    onAskNote?: () => void;
   }) =>
     (() => {
       const { Pressable: MockPressable, Text: MockText, View: MockView } = require('react-native');
@@ -224,6 +246,7 @@ jest.mock('@/components/notes/NoteActionsMenu', () => ({
               <MockText>{action.name}</MockText>
             </MockPressable>
           ))}
+          {onAskNote ? <MockText>Ask about this note</MockText> : null}
         </MockView>
       );
     })(),
@@ -264,7 +287,39 @@ jest.mock('@/components/notes/VoiceprintSuggestionSheet', () => ({
 }));
 
 jest.mock('@/components/notes/NoteChatSheet', () => ({
-  NoteChatSheet: () => null,
+  NoteChatSheet: ({
+    draft,
+    suggestions,
+    onDraftChange,
+    onSend,
+    onSuggestion,
+  }: {
+    draft: string;
+    suggestions: readonly { label: string; prompt: string }[];
+    onDraftChange: (text: string) => void;
+    onSend: () => void;
+    onSuggestion: (prompt: string) => void;
+  }) =>
+    (() => {
+      const {
+        Pressable: MockPressable,
+        TextInput: MockTextInput,
+        View: MockView,
+      } = require('react-native');
+      return (
+        <MockView>
+          <MockTextInput testID="chat-draft" value={draft} onChangeText={onDraftChange} />
+          <MockPressable testID="chat-send" onPress={onSend} />
+          {suggestions.map((suggestion) => (
+            <MockPressable
+              key={suggestion.label}
+              testID={`chat-suggestion-${suggestion.label}`}
+              onPress={() => onSuggestion(suggestion.prompt)}
+            />
+          ))}
+        </MockView>
+      );
+    })(),
 }));
 
 /*
@@ -376,6 +431,12 @@ const calendarContextInputForCurrentNote = (): string =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  clearLocalReasoningReadinessCache();
+  mockAppleAvailability = 'available';
+  mockAuthState.user = { id: 'user-1', email: 'user@example.com', emailVerified: true };
+  mockConfigState.config.inference = undefined;
+  mockConfigState.config.dictationAgentEnabled = undefined;
+  mockProcessingModeState.activeMode = 'cloud';
   mockActions = [defaultAction()];
   mockActionsState.actions = mockActions;
   mockNote = note();
@@ -497,6 +558,87 @@ describe('NoteEditorScreen generated meeting context', () => {
   });
 });
 
+describe('NoteEditorScreen note chat', () => {
+  const PILL = 'note-ask-pill';
+
+  it('shows the Ask pill instead of the menu entry once a meeting has finished', () => {
+    const { getByTestId, queryByText } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
+    expect(queryByText('Ask about this note')).toBeNull();
+  });
+
+  it('shows the Ask pill for a synced meeting that kept the local idle status', () => {
+    mockNote = note({ transcriptionStatus: 'idle' });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
+  });
+
+  it('keeps the Ask pill once notes have been generated', () => {
+    mockNote = note({
+      enhancedContent: 'Generated calendar-aware notes',
+      enhancementPrompt: 'Transform this meeting into notes.',
+    });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
+  });
+
+  it.each(['recording', 'transcribing', 'diarizing'] as const)(
+    'hides the Ask pill while the meeting is %s',
+    (transcriptionStatus) => {
+      mockNote = note({ transcriptionStatus });
+      mockNotesState.notes = [mockNote];
+      const { queryByTestId } = render(<NoteEditorScreen />);
+      expect(queryByTestId(PILL)).toBeNull();
+    },
+  );
+
+  it('keeps Ask about this note in the menu and note-worded shortcuts for a plain note', () => {
+    mockNote = note({
+      noteType: 'personal',
+      diarizationEnabled: 0,
+      calendarEventId: null,
+      participants: null,
+    });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    const { getByText, getByTestId, queryByTestId } = render(<NoteEditorScreen />);
+    expect(getByText('Ask about this note')).toBeTruthy();
+    expect(queryByTestId(PILL)).toBeNull();
+    expect(getByTestId('chat-suggestion-Summarize')).toBeTruthy();
+    expect(queryByTestId('chat-suggestion-Key decisions')).toBeNull();
+  });
+
+  it('offers note-worded shortcuts for an uploaded recording', () => {
+    mockNote = note({ noteType: 'upload', diarizationEnabled: 0, calendarEventId: null });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId, queryByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
+    expect(getByTestId('chat-suggestion-Summarize')).toBeTruthy();
+    expect(queryByTestId('chat-suggestion-Key decisions')).toBeNull();
+  });
+
+  it('hides every Ask entry point when Chat & Voice Assistant is off', () => {
+    mockConfigState.config.dictationAgentEnabled = false;
+    const { queryByText, queryByTestId } = render(<NoteEditorScreen />);
+    expect(queryByText('Ask about this note')).toBeNull();
+    expect(queryByTestId(PILL)).toBeNull();
+  });
+
+  it('sends a meeting shortcut prompt immediately when its chip is tapped', async () => {
+    (ReasoningService.chatOverNote as jest.Mock).mockResolvedValue({ text: 'Answer', model: 'x' });
+    const { getByTestId } = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(getByTestId('chat-suggestion-List action items'));
+    });
+    await waitFor(() => expect(ReasoningService.chatOverNote).toHaveBeenCalledTimes(1));
+    expect((ReasoningService.chatOverNote as jest.Mock).mock.calls[0][0].question).toBe(
+      'What are the next steps from the meeting above that I need to do?',
+    );
+  });
+});
+
 describe('NoteEditorScreen generated titles', () => {
   const personalNote = (title: string): Note =>
     note({
@@ -546,3 +688,120 @@ describe('NoteEditorScreen generated titles', () => {
 });
 
 jest.mock('@/components/notes/NoteShareSheet', () => ({ NoteShareSheet: () => null }));
+
+it('runs signed-out note formatting through Providers without requiring a Cloud account', async () => {
+  mockAuthState.user = null;
+  mockConfigState.config.inference = {
+    notes: {
+      mode: 'providers',
+      providerId: 'openai',
+      modelId: 'gpt-4o-mini',
+      credentialRef: 'provider.openai',
+    },
+  };
+  const { getByTestId } = render(<NoteEditorScreen />);
+  await act(async () => {
+    fireEvent.press(getByTestId('run-action-1'));
+  });
+  await waitFor(() =>
+    expect(ReasoningService.processText).toHaveBeenCalledWith(
+      expect.objectContaining({ inferenceScope: 'notes' }),
+    ),
+  );
+});
+
+describe('NoteEditorScreen On-Device and provider routes', () => {
+  let alertSpy: jest.SpyInstance;
+  beforeEach(() => {
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+  afterEach(() => alertSpy.mockRestore());
+
+  it('explains instead of offering Cloud when Note Formatting is On-Device', async () => {
+    mockProcessingModeState.activeMode = 'private';
+    mockAppleAvailability = 'deviceNotEligible';
+    mockConfigState.config.inference = { notes: { mode: 'local' } };
+    const { getByTestId } = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(getByTestId('run-action-1'));
+    });
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
+    const [, message, buttons] = alertSpy.mock.calls[0];
+    expect(message).toContain('Note Formatting is set to On-Device');
+    expect((buttons ?? []).map((button: { text: string }) => button.text)).not.toContain(
+      'Use Cloud Once',
+    );
+    expect(ReasoningService.processText).not.toHaveBeenCalled();
+  });
+
+  it('runs an On-Device action on a public note without the Cloud sign-in or paywall', async () => {
+    // An anonymous session is exactly what the Cloud account check and paywall would stop.
+    mockAuthState.user = { ...mockAuthState.user!, isAnonymous: true } as typeof mockAuthState.user;
+    mockConfigState.config.inference = { notes: { mode: 'local' } };
+    const { getByTestId } = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(getByTestId('run-action-1'));
+    });
+    await waitFor(() => expect(ReasoningService.processText).toHaveBeenCalledTimes(1));
+    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  it('names the provider when it offers to send a private note there once', async () => {
+    mockProcessingModeState.activeMode = 'private';
+    mockAppleAvailability = 'deviceNotEligible';
+    mockConfigState.config.inference = {
+      notes: {
+        mode: 'providers',
+        providerId: 'groq',
+        modelId: 'llama',
+        credentialRef: 'provider.groq',
+      },
+    };
+    const { getByTestId } = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(getByTestId('run-action-1'));
+    });
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
+    const [, message, buttons] = alertSpy.mock.calls[0];
+    expect(message).toContain('Groq');
+    expect(message).not.toMatch(/cloud AI/);
+    const labels = (buttons ?? []).map((button: { text: string }) => button.text);
+    expect(labels).toContain('Use Groq Once');
+    expect(labels).not.toContain('Use Cloud Once');
+  });
+
+  it('still offers to enable local AI when the fallback is a provider', async () => {
+    mockProcessingModeState.activeMode = 'private';
+    mockConfigState.config.appleLocalIntelligenceEnabled = false;
+    mockConfigState.config.inference = {
+      notes: {
+        mode: 'providers',
+        providerId: 'groq',
+        modelId: 'llama',
+        credentialRef: 'provider.groq',
+      },
+    };
+    const { getByTestId } = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(getByTestId('run-action-1'));
+    });
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
+    const labels = (alertSpy.mock.calls[0][2] ?? []).map((button: { text: string }) => button.text);
+    expect(labels).toEqual(['Cancel', 'Enable Local AI', 'Use Groq Once']);
+  });
+
+  it('lets a signed-out user chat with a note when chat is On-Device', async () => {
+    mockAuthState.user = null;
+    mockConfigState.config.inference = { agent: { mode: 'local' } };
+    (ReasoningService.chatOverNote as jest.Mock).mockResolvedValue({ text: 'Answer', model: 'x' });
+    const { getByTestId } = render(<NoteEditorScreen />);
+    fireEvent.changeText(getByTestId('chat-draft'), 'Who owns the launch?');
+    await act(async () => {
+      fireEvent.press(getByTestId('chat-send'));
+    });
+    await waitFor(() => expect(ReasoningService.chatOverNote).toHaveBeenCalledTimes(1));
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
+  });
+});

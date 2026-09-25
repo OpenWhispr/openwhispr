@@ -193,6 +193,14 @@ export const useAuthStore = create<AuthStore>((set) => ({
     try {
       await deleteAccountApi();
       await clearPreviousNoteShareTokens();
+      // Keys survive sign-out by design, but not account deletion. They are erased only
+      // once the account is gone, so a failed delete keeps them. A failed erase leaves
+      // them for Remove all provider keys rather than undoing a completed deletion.
+      const { clearProviderCredentials } =
+        require('@/services/providers/ProviderCredentials') as typeof import('@/services/providers/ProviderCredentials');
+      await clearProviderCredentials().catch((error: unknown) => {
+        console.warn('[auth] account deleted but provider keys were not erased:', error);
+      });
       await clearSession();
       await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
       useUsageStore.getState().reset();

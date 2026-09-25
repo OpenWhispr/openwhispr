@@ -50,6 +50,7 @@ export function useActionProcessing({ onSuccess, onError }: UseActionProcessingO
         const cfg = useConfigStore.getState().config;
 
         const result = await ReasoningService.processText({
+          inferenceScope: 'notes',
           text: noteContent,
           systemPrompt,
           temperature: 0.3,

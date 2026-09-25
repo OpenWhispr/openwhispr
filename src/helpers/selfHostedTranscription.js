@@ -16,3 +16,18 @@ export function resolveSelfHostedTranscriptionModel(settings) {
       : "";
   return model.length > 0 ? model : null;
 }
+
+// The explicit model id opts compatible custom endpoints into Orukeet's PCM
+// protocol. Other self-hosted models retain their existing HTTP route.
+export function isOrukeetEndpoint(settings) {
+  return (
+    settings?.cloudTranscriptionProvider === "custom" &&
+    (settings?.remoteTranscriptionModel || settings?.cloudTranscriptionModel) ===
+      "orukeet-v0.1.0" &&
+    Boolean(settings?.remoteTranscriptionUrl || settings?.cloudTranscriptionBaseUrl)
+  );
+}
+
+export function isOrukeetStreaming(settings) {
+  return settings?.cloudTranscriptionMode === "byok" && isOrukeetEndpoint(settings);
+}

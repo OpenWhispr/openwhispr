@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Atalhos com botões do mouse atualmente são compatíveis apenas no macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" já está registrada por outro aplicativo.",
       "osReserved": "\"{{hotkey}}\" pode estar reservada pelo seu ambiente de desktop.",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" não pode ser usada neste ambiente de trabalho, cujos atalhos precisam de uma tecla normal. Adicione uma tecla, como Control+Alt+Space.",
       "holdNeedsReleaseKey": "Segurar para falar precisa de uma tecla cuja soltura o macOS detecte: Globo, uma tecla direita como Option direita ou um atalho com modificador. Tocar funciona com qualquer tecla.",
       "registrationFailed": "Não foi possível registrar \"{{hotkey}}\". Pode estar em uso por outro aplicativo.",
       "updateFailedCheckFormat": "Não foi possível atualizar o atalho para \"{{hotkey}}\". Verifique se o formato é válido.",
@@ -898,6 +899,7 @@
         "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas.",
         "providerKeyMissing": "Nenhuma chave de API definida para seu provedor de transcrição. Adicione-a em Configurações → Fala para texto.",
         "cleanupTruncated": "O modelo de IA ficou sem espaço antes de terminar a limpeza do seu ditado.",
+        "cleanupDuplicated": "A limpeza por IA repetiu a transcrição. O texto original foi mantido.",
         "cleanupEmptyReply": "O modelo de IA devolveu uma resposta vazia em vez do ditado limpo."
       },
       "translationFallback": {
@@ -919,6 +921,18 @@
         "unavailable": "O OpenWhispr não conseguiu ler o texto selecionado com segurança. Verifique as permissões de acessibilidade ou automação.",
         "tooLarge": "A seleção é muito grande. Selecione no máximo 6.000 caracteres.",
         "reasoningFailed": "A IA não conseguiu concluir a edição. O texto original não foi alterado."
+      },
+      "pastePermission": {
+        "title": "Permitir colagem automática",
+        "description": "Ative o OpenWhispr em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade.",
+        "settingsFailed": "Não foi possível abrir os ajustes. Abra Ajustes do Sistema → Privacidade e Segurança → Acessibilidade e ative o OpenWhispr.",
+        "manualPaste": "Copie o texto abaixo e pressione {{shortcut}} para colá-lo.",
+        "openSettings": "Abrir ajustes",
+        "copyToClipboard": "Copiar texto",
+        "copyFailed": "Falha ao copiar"
+      },
+      "pasteFailed": {
+        "title": "Não foi possível colar automaticamente"
       }
     },
     "clipboard": {
@@ -2639,7 +2653,8 @@
     "errors": {
       "contextTooLarge": "Isto é longo demais para o {{model}} ler neste computador. São necessários cerca de {{needed}} tokens de contexto, mas apenas {{max}} cabem na memória. Experimente um modelo na nuvem ou execute a ação sobre uma seleção mais curta.",
       "contextTooLargeGeneric": "Isto é longo demais para o {{model}} ler neste computador. Experimente um modelo na nuvem ou execute a ação sobre uma seleção mais curta.",
-      "localServerUnavailable": "Não foi possível iniciar o {{model}} neste computador. Tente novamente ou mude para um modelo na nuvem."
+      "localServerUnavailable": "Não foi possível iniciar o {{model}} neste computador. Tente novamente ou mude para um modelo na nuvem.",
+      "localModelBusy": "O modelo local ainda está processando outro pedido. Aguarde até terminar e tente novamente."
     }
   },
   "upgradePrompt": {
@@ -2953,7 +2968,35 @@
       "conversationWillAppear": "A conversa aparecerá aqui...",
       "linkedEvent": "Evento vinculado",
       "noFolder": "Sem pasta",
-      "participants": "Participantes"
+      "participants": "Participantes",
+      "table": {
+        "actions": "Ações da tabela",
+        "insertRowAbove": "Inserir linha acima",
+        "insertRowBelow": "Inserir linha abaixo",
+        "insertColumnLeft": "Inserir coluna à esquerda",
+        "insertColumnRight": "Inserir coluna à direita",
+        "deleteRow": "Excluir linha",
+        "deleteColumn": "Excluir coluna",
+        "deleteTable": "Excluir tabela"
+      },
+      "format": {
+        "toolbar": "Formatação",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Negrito",
+        "italic": "Itálico",
+        "strike": "Tachado",
+        "code": "Código",
+        "textStyle": "Estilo de texto",
+        "paragraph": "Texto normal",
+        "heading1": "Título 1",
+        "heading2": "Título 2",
+        "heading3": "Título 3",
+        "bulletList": "Lista com marcadores",
+        "orderedList": "Lista numerada",
+        "taskList": "Lista de verificação",
+        "blockquote": "Citação",
+        "table": "Inserir tabela"
+      }
     },
     "participants": {
       "attendee": "participante",
@@ -3104,6 +3147,8 @@
       "runAction": "Executar {{name}}",
       "selectAction": "Selecionar ação",
       "done": "Concluído",
+      "chunkProgress": "Parte {{step}} de {{total}}",
+      "emptyReply": "O modelo retornou uma resposta vazia. Tente novamente ou escolha outro modelo.",
       "builtin": {
         "generateNotes": {
           "name": "Gerar notas",

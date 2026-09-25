@@ -12,7 +12,7 @@ export function isDictationAgentEnabled(config: UserConfig): boolean {
 }
 
 export function isDictationAgentApplicable(mode: ProcessingMode, config: UserConfig): boolean {
-  return mode === 'cloud' && isDictationAgentEnabled(config);
+  return (mode === 'cloud' || mode === 'providers') && isDictationAgentEnabled(config);
 }
 
 function levenshteinDistance(a: string, b: string): number {
@@ -42,48 +42,38 @@ function maxEditsForLength(len: number): number {
   return 2;
 }
 
-// Port of openwhispr-api/lib/prompts.ts detectAgentName (lines 68–111).
-// Three layers ensure client detection agrees with server Action Mode detection:
-//   1. Exact word-boundary regex (handles name with spaces via regex escaping)
-//   2. Space-normalized pair join (STT splitting compound names, e.g. "Open Whispr")
-//   3. Levenshtein fuzzy match on individual words and adjacent pairs, with edits
-//      scaled by name length so short names require exact matches.
+const VOCATIVE_CUES = new Set(['hey', 'hi', 'hello', 'ok', 'okay', 'yo', 'please']);
+
+// The name only addresses the agent when it starts the dictation, follows a
+// greeting cue ("hey Jarvis"), or opens a new sentence. A mere mention elsewhere
+// ("I showed OpenWhispr to a friend") is dictated content, not a command.
+function isAddressedAt(index: number, words: string[], rawWords: string[]): boolean {
+  if (index === 0) return true;
+  if (VOCATIVE_CUES.has(words[index - 1])) return true;
+  return /[.!?…]["')\]]*$/.test(rawWords[index - 1]);
+}
+
+// Port of openwhispr-api/lib/prompts.ts detectAgentName, so the client and the
+// server agree on Action Mode. STT may split the name across tokens ("open
+// whispr") or mishear it, so joined windows up to the name's own token count
+// (minimum 2) are compared with edits scaled by name length.
 export function detectAgentMention(text: string, name: string): boolean {
   const trimmedName = name.trim();
   if (!trimmedName || trimmedName.length < 2) return false;
 
-  const escaped = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  if (new RegExp(`\\b${escaped}\\b`, 'i').test(text)) return true;
-
   const nameLower = trimmedName.toLowerCase().replace(/\s+/g, '');
-  const words = text
-    .split(/\s+/)
-    .map((w) => w.replace(/[.,!?;:'"()]/g, '').toLowerCase())
-    .filter(Boolean);
-
-  for (let i = 0; i < words.length - 1; i++) {
-    if (words[i] + words[i + 1] === nameLower) return true;
-  }
-
+  const rawWords = text.split(/\s+/).filter(Boolean);
+  const words = rawWords.map((word) => word.replace(/[.,!?;:'"()]/g, '').toLowerCase());
   const maxEdits = maxEditsForLength(nameLower.length);
-  if (maxEdits === 0) return false;
+  const maxSpan = Math.max(2, trimmedName.split(/\s+/).length);
 
-  for (const word of words) {
-    if (
-      Math.abs(word.length - nameLower.length) <= maxEdits &&
-      levenshteinDistance(word, nameLower) <= maxEdits
-    ) {
-      return true;
-    }
-  }
-
-  for (let i = 0; i < words.length - 1; i++) {
-    const combined = words[i] + words[i + 1];
-    if (
-      Math.abs(combined.length - nameLower.length) <= maxEdits &&
-      levenshteinDistance(combined, nameLower) <= maxEdits
-    ) {
-      return true;
+  for (let i = 0; i < words.length; i++) {
+    let joined = '';
+    for (let span = 0; span < maxSpan && i + span < words.length; span++) {
+      joined += words[i + span];
+      if (Math.abs(joined.length - nameLower.length) > maxEdits) continue;
+      if (levenshteinDistance(joined, nameLower) <= maxEdits && isAddressedAt(i, words, rawWords))
+        return true;
     }
   }
 

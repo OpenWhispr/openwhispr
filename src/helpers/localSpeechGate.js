@@ -36,6 +36,24 @@ export const recordLocalSpeechWindow = (state, rms, peak) => {
   return state;
 };
 
+// The streaming worklet's PCM16 chunks, quantized to the batch analyser's
+// getByteTimeDomainData bytes (floor(128·(1 + x))) so a failed-over recording
+// is skipped exactly when batch would skip it. At full resolution a quiet mic
+// reads as silence that batch never sees.
+export const recordPcm16SpeechWindow = (state, buffer) => {
+  const samples = new Int16Array(buffer);
+  if (!samples.length) return state;
+  let sum = 0;
+  let peak = 0;
+  for (const sample of samples) {
+    const byte = Math.floor(128 * (1 + sample / 0x8000));
+    const value = (byte - 128) / 128;
+    sum += value * value;
+    peak = Math.max(peak, Math.abs(value));
+  }
+  return recordLocalSpeechWindow(state, Math.sqrt(sum / samples.length), peak);
+};
+
 export const getLocalSpeechGateDecision = (state) => {
   if (!state?.windowCount) {
     return { skip: false, reason: "unavailable" };

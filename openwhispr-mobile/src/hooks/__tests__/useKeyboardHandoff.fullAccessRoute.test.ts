@@ -1,3 +1,12 @@
+jest.mock('@/lib/keyboardInferenceRoute', () => ({
+  snapshotKeyboardInferenceRoute: jest.fn(),
+  readKeyboardInferenceRoute: jest.fn(() => ({ provider: 'cloud' })),
+  readKeyboardProviderResult: jest.fn(),
+  clearKeyboardProviderRecovery: jest.fn(),
+}));
+jest.mock('@/lib/inferenceRouting', () => ({
+  snapshotTranscriptionJob: () => ({ provider: 'cloud' }),
+}));
 import { Linking } from 'react-native';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
@@ -22,11 +31,14 @@ const mockHandoffStoreState = {
 const mockSubscription = { remove: jest.fn() };
 const mockMarkRecoveryDeepLink = jest.fn();
 const mockAddTranscript = jest.fn();
+const mockAddFailedTranscript = jest.fn();
 const mockCleanupTranscript = jest.fn();
 const mockTranscribeAndCleanup = jest.fn();
+const mockTranscribe = jest.fn();
 const mockRetainTranscriptAudio = jest.fn();
 const mockAnalyzeSpeechActivity = jest.fn();
 let mockRecordingStoppedListener: ((event: RecordingStoppedEvent) => Promise<void>) | undefined;
+let mockBackgroundStartedListener: (() => void) | undefined;
 
 jest.mock('../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: {
@@ -38,6 +50,7 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
     endProcessingTask: jest.fn(),
     startNativeRecording: jest.fn(() => true),
     returnToPreviousApp: jest.fn(),
+    stopNativeRecording: jest.fn(),
   },
   APP_GROUP_KEYS: {
     KEYBOARD_RECORDING_JOB_ID: 'keyboard_recording_job_id',
@@ -57,7 +70,10 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
     return mockSubscription;
   },
   addRecordingErrorListener: () => mockSubscription,
-  addBackgroundRecordingStartedListener: () => mockSubscription,
+  addBackgroundRecordingStartedListener: (listener: () => void) => {
+    mockBackgroundStartedListener = listener;
+    return mockSubscription;
+  },
   addKeyboardStatusChangedListener: () => mockSubscription,
   addAgentActionListener: () => mockSubscription,
 }));
@@ -77,14 +93,33 @@ jest.mock('@/store/useProcessingModeStore', () => ({
 }));
 jest.mock('@/store/useTranscriptStore', () => ({
   useTranscriptStore: {
-    getState: () => ({ addTranscript: mockAddTranscript, load: jest.fn() }),
+    getState: () => ({
+      addTranscript: mockAddTranscript,
+      addFailedTranscript: mockAddFailedTranscript,
+      transcripts: [],
+      load: jest.fn(),
+    }),
+  },
+}));
+const mockAuthState = { isInitialized: true };
+const mockAuthListeners = new Set<(state: typeof mockAuthState) => void>();
+jest.mock('@/store/useAuthStore', () => ({
+  useAuthStore: {
+    getState: () => mockAuthState,
+    subscribe: (listener: (state: typeof mockAuthState) => void) => {
+      mockAuthListeners.add(listener);
+      return () => mockAuthListeners.delete(listener);
+    },
   },
 }));
 jest.mock('@/store/useSnippetsStore', () => ({
   useSnippetsStore: { getState: () => ({ snippets: [] }) },
 }));
 jest.mock('@/services/transcription/TranscriptionService', () => ({
-  TranscriptionService: { prepareLocal: jest.fn(() => Promise.resolve()) },
+  TranscriptionService: {
+    prepareLocal: jest.fn(() => Promise.resolve()),
+    transcribe: (...args: unknown[]) => mockTranscribe(...args),
+  },
   isLocalModelMissingError: () => false,
 }));
 jest.mock('@/services/agent/AgentComposerService', () => ({
@@ -119,7 +154,7 @@ jest.mock('@/lib/transcriptionErrors', () => ({
   toFriendlyTranscriptionErrorMessage: (error: unknown) => String(error),
 }));
 jest.mock('@/lib/transcriptAudio', () => ({
-  deleteManagedTranscriptAudio: jest.fn(),
+  deleteManagedTranscriptAudio: jest.fn(async () => undefined),
   retainTranscriptAudio: (...args: unknown[]) => mockRetainTranscriptAudio(...args),
 }));
 jest.mock('@/lib/permissions', () => ({ isNoSpeechError: () => false }));
@@ -127,6 +162,14 @@ jest.mock('expo-application', () => ({ applicationId: 'com.gizmolabs.openwhispr'
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 
 import { AppGroupStorage } from '../../../modules/app-group-storage/src';
+import {
+  readKeyboardProviderResult,
+  readKeyboardInferenceRoute,
+  clearKeyboardProviderRecovery,
+  snapshotKeyboardInferenceRoute,
+} from '@/lib/keyboardInferenceRoute';
+import { readKeyboardAgentJob, snapshotKeyboardAgentRequest } from '@/lib/keyboardAgentSync';
+import { withActiveProviderJob } from '@/lib/providerJobActivity';
 import { useKeyboardHandoff } from '../useKeyboardHandoff';
 
 const storage = AppGroupStorage as unknown as {
@@ -135,6 +178,8 @@ const storage = AppGroupStorage as unknown as {
   removeItem: jest.Mock;
   setKeyboardStatus: jest.Mock;
   startNativeRecording: jest.Mock;
+  stopNativeRecording: jest.Mock;
+  returnToPreviousApp: jest.Mock;
 };
 
 function mountWithInitialUrl(url: string) {
@@ -153,7 +198,12 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // clearAllMocks keeps mockReturnValue overrides; reset the ones tests override.
+  (readKeyboardProviderResult as jest.Mock).mockReset();
+  (readKeyboardInferenceRoute as jest.Mock).mockImplementation(() => ({ provider: 'cloud' }));
+  (readKeyboardAgentJob as jest.Mock).mockReturnValue(null);
   storage.getItem.mockReturnValue(null);
+  storage.setItem.mockReset().mockReturnValue(true);
   storage.startNativeRecording.mockReturnValue(true);
   mockCleanupTranscript.mockResolvedValue('clean transcript');
   mockTranscribeAndCleanup.mockResolvedValue({
@@ -164,6 +214,8 @@ beforeEach(() => {
   mockRetainTranscriptAudio.mockResolvedValue('file://retained.m4a');
   mockAnalyzeSpeechActivity.mockResolvedValue(null);
   mockRecordingStoppedListener = undefined;
+  mockAuthState.isInitialized = true;
+  mockAuthListeners.clear();
 });
 
 afterEach(() => {
@@ -217,12 +269,14 @@ describe('useKeyboardHandoff — orphaned keyboard transcript', () => {
     mountWithInitialUrl('openwhispr://ignored');
 
     await waitFor(() => expect(mockAddTranscript).toHaveBeenCalled());
-    expect(mockAddTranscript).toHaveBeenCalledWith({
-      text: 'clean transcript',
-      originalText: 'raw transcript',
-      provider: 'cloud',
-      requestContext: 'keyboard',
-    });
+    expect(mockAddTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'clean transcript',
+        originalText: 'raw transcript',
+        provider: 'cloud',
+        requestContext: 'keyboard',
+      }),
+    );
   });
 
   it('does not persist history when cancellation arrives during cleanup', async () => {
@@ -249,6 +303,92 @@ describe('useKeyboardHandoff — orphaned keyboard transcript', () => {
 
     expect(mockAddTranscript).not.toHaveBeenCalled();
   });
+
+  it('keeps a newer job orphan slot when an older orphan cleanup goes stale', async () => {
+    const cleanup = deferred<string>();
+    let newerJobStarted = false;
+    mockCleanupTranscript.mockReturnValueOnce(cleanup.promise);
+    storage.getItem.mockImplementation((key: string) => {
+      const jobId = newerJobStarted ? '200-job' : '100-job';
+      if (key === 'keyboard_orphaned_raw_transcript') return 'raw transcript';
+      if (key === 'keyboard_orphaned_raw_transcript_job_id') return jobId;
+      if (key === 'keyboard_recording_job_id') return jobId;
+      return null;
+    });
+
+    mountWithInitialUrl('openwhispr://ignored');
+    await waitFor(() => expect(mockCleanupTranscript).toHaveBeenCalled());
+
+    newerJobStarted = true;
+    cleanup.resolve('clean transcript');
+    await cleanup.promise;
+    await waitFor(() => expect(clearKeyboardProviderRecovery).toHaveBeenCalledWith('100-job'));
+
+    expect(storage.removeItem).not.toHaveBeenCalledWith('keyboard_orphaned_raw_transcript');
+    expect(storage.removeItem).not.toHaveBeenCalledWith('keyboard_orphaned_raw_transcript_job_id');
+    expect(mockAddTranscript).not.toHaveBeenCalled();
+  });
+
+  it('uses the per-job route snapshot to clean a Cloud orphan', async () => {
+    (readKeyboardInferenceRoute as jest.Mock).mockReturnValue({
+      provider: 'cloud',
+      cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+    });
+    storage.getItem.mockImplementation((key: string) => {
+      if (key === 'keyboard_orphaned_raw_transcript') return 'raw transcript';
+      if (key === 'keyboard_orphaned_raw_transcript_job_id') return '100-job';
+      if (key === 'keyboard_recording_job_id') return '100-job';
+      return null;
+    });
+    mockCleanupTranscript.mockResolvedValue('Cleaned transcript.');
+
+    mountWithInitialUrl('openwhispr://ignored');
+
+    await waitFor(() => expect(mockCleanupTranscript).toHaveBeenCalled());
+    expect(readKeyboardInferenceRoute).toHaveBeenCalledWith('100-job');
+    await waitFor(() =>
+      expect(mockAddTranscript).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'Cleaned transcript.', cleanupWarning: undefined }),
+      ),
+    );
+  });
+
+  it('waits for sign-in state before cleaning a Cloud orphan at launch', async () => {
+    mockAuthState.isInitialized = false;
+    storage.getItem.mockImplementation((key: string) => {
+      if (key === 'keyboard_orphaned_raw_transcript') return 'raw transcript';
+      if (key === 'keyboard_orphaned_raw_transcript_job_id') return '100-job';
+      if (key === 'keyboard_recording_job_id') return '100-job';
+      return null;
+    });
+
+    mountWithInitialUrl('openwhispr://ignored');
+    await waitFor(() => expect(mockHandoffStoreState.setCheckingInitialUrl).toHaveBeenCalled());
+    await act(async () => undefined);
+    expect(mockCleanupTranscript).not.toHaveBeenCalled();
+
+    mockAuthState.isInitialized = true;
+    act(() => mockAuthListeners.forEach((listener) => listener(mockAuthState)));
+    await waitFor(() => expect(mockCleanupTranscript).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockAddTranscript).toHaveBeenCalledTimes(1));
+  });
+
+  it('drops a stale orphan once and clears its recovery keys', async () => {
+    storage.getItem.mockImplementation((key: string) => {
+      if (key === 'keyboard_orphaned_raw_transcript') return 'raw transcript';
+      if (key === 'keyboard_orphaned_raw_transcript_job_id') return '100-job';
+      if (key === 'keyboard_recording_job_id') return '200-job';
+      return null;
+    });
+
+    mountWithInitialUrl('openwhispr://ignored');
+
+    await waitFor(() =>
+      expect(storage.removeItem).toHaveBeenCalledWith('keyboard_orphaned_raw_transcript_job_id'),
+    );
+    expect(mockCleanupTranscript).not.toHaveBeenCalled();
+    expect(clearKeyboardProviderRecovery).toHaveBeenCalledWith('100-job');
+  });
 });
 
 describe('useKeyboardHandoff — cancelled keyboard transcription', () => {
@@ -274,5 +414,359 @@ describe('useKeyboardHandoff — cancelled keyboard transcription', () => {
 
     expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
     expect(mockAddTranscript).not.toHaveBeenCalled();
+  });
+});
+
+describe('provider upload recovery', () => {
+  it('saves native raw text and original provider route before clearing durable recovery', async () => {
+    const route = {
+      provider: 'byok',
+      inferenceRoute: {
+        mode: 'providers',
+        scope: 'dictation',
+        providerId: 'groq',
+        modelId: 'whisper-large-v3-turbo',
+        endpoint: 'https://api.groq.com/openai/v1',
+      },
+      cleanupUnavailable: 'Cleanup unavailable',
+    };
+    (readKeyboardProviderResult as jest.Mock).mockReturnValueOnce({
+      text: 'provider raw words',
+      route,
+    });
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id'
+        ? 'recovered-job'
+        : key === 'keyboard_upload_audio.recovered-job'
+          ? 'file://saved.m4a'
+          : null,
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await waitFor(() => expect(mockAddTranscript).toHaveBeenCalled());
+    expect(mockAddTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'recovered-job',
+        originalText: 'provider raw words',
+        provider: 'byok',
+        inferenceRoute: route.inferenceRoute,
+        audioUrl: 'file://saved.m4a',
+      }),
+    );
+    expect(mockCleanupTranscript).toHaveBeenCalledWith(
+      'provider raw words',
+      expect.objectContaining({ requireProvider: true, cleanupUnavailable: 'Cleanup unavailable' }),
+    );
+    expect(clearKeyboardProviderRecovery).toHaveBeenCalledWith('recovered-job');
+  });
+  it('retains provider result metadata if durable history saving fails', async () => {
+    (readKeyboardProviderResult as jest.Mock).mockReturnValueOnce({
+      text: 'provider raw words',
+      route: { provider: 'byok' },
+    });
+    mockAddTranscript.mockRejectedValueOnce(new Error('storage failed'));
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? 'recovered-job' : null,
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await waitFor(() =>
+      expect(storage.setKeyboardStatus).toHaveBeenCalledWith('error', 'storage failed'),
+    );
+    expect(clearKeyboardProviderRecovery).not.toHaveBeenCalled();
+  });
+  it('saves an interrupted upload as retryable using its original route', async () => {
+    const route = {
+      provider: 'byok',
+      inferenceRoute: { mode: 'providers', scope: 'dictation', providerId: 'groq' },
+    };
+    (readKeyboardInferenceRoute as jest.Mock).mockReturnValueOnce(route);
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id'
+        ? 'interrupted-job'
+        : key === 'keyboard_upload_audio.interrupted-job'
+          ? 'file://original.m4a'
+          : null,
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await waitFor(() => expect(mockAddFailedTranscript).toHaveBeenCalled());
+    expect(mockAddFailedTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'interrupted-job', audioUrl: 'file://original.m4a', ...route }),
+    );
+    expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
+  });
+});
+
+it('discards interrupted provider data when keyboard cancellation rejects transcription', async () => {
+  let cancelled = false;
+  storage.getItem.mockImplementation((key: string) => {
+    if (key === 'keyboard_recording_job_id') return '100-job';
+    if (key === 'keyboard_cancel_requested' && cancelled) return '1';
+    return null;
+  });
+  mockTranscribeAndCleanup.mockImplementationOnce(async () => {
+    cancelled = true;
+    throw new Error('The provider request was cancelled.');
+  });
+  mountWithInitialUrl('openwhispr://ignored');
+  await act(async () => {
+    await mockRecordingStoppedListener?.({
+      fileUri: 'file://recording.m4a',
+      fileName: 'recording.m4a',
+      mimeType: 'audio/m4a',
+      recordingFormat: 'm4a',
+      jobId: '100-job',
+      fileSizeBytes: 100,
+      recordingDurationMs: 1000,
+    });
+  });
+  expect(mockTranscribeAndCleanup).toHaveBeenCalled();
+  expect(mockAddFailedTranscript).not.toHaveBeenCalled();
+  expect(mockAddTranscript).not.toHaveBeenCalled();
+  expect(clearKeyboardProviderRecovery).toHaveBeenCalledWith('100-job');
+});
+
+describe('keyboard agent job', () => {
+  it('keeps a provider instruction out of relaunch recovery and composes on its own route', async () => {
+    const { generateForJob } = jest.requireMock('@/services/agent/AgentComposerService');
+    const agentRoute = {
+      mode: 'providers',
+      scope: 'agent',
+      providerId: 'openai',
+      modelId: 'gpt-4o-mini',
+      endpoint: 'https://api.openai.com/v1',
+    };
+    (readKeyboardInferenceRoute as jest.Mock).mockReturnValue({ provider: 'byok', agentRoute });
+    const agentJob = { jobId: '100-job', sessionId: 's', kind: 'compose' };
+    (readKeyboardAgentJob as jest.Mock).mockImplementation((id: string) =>
+      id === '100-job' ? agentJob : null,
+    );
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    mockTranscribe.mockResolvedValue({ text: 'write an email to Bob', provider: 'byok' });
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.({
+        fileUri: 'file://recording.m4a',
+        fileName: 'recording.m4a',
+        mimeType: 'audio/m4a',
+        recordingFormat: 'm4a',
+        jobId: '100-job',
+        fileSizeBytes: 100,
+        recordingDurationMs: 1000,
+      });
+    });
+    expect(mockTranscribe).toHaveBeenCalledWith(expect.not.objectContaining({ jobId: '100-job' }));
+    expect(generateForJob).toHaveBeenCalledWith(
+      agentJob,
+      'write an email to Bob',
+      expect.objectContaining({ agentRoute }),
+    );
+    expect(mockAddTranscript).not.toHaveBeenCalled();
+  });
+});
+
+const stopEvent = (jobId: string): RecordingStoppedEvent => ({
+  fileUri: 'file://recording.m4a',
+  fileName: 'recording.m4a',
+  mimeType: 'audio/m4a',
+  recordingFormat: 'm4a',
+  jobId,
+  fileSizeBytes: 100,
+  recordingDurationMs: 1000,
+});
+
+describe('provider job lifecycle', () => {
+  it('leaves a provider upload still running in this process to its own job', async () => {
+    let finishRunningJob!: () => void;
+    const runningJob = withActiveProviderJob(
+      'running-job',
+      () => new Promise<void>((resolve) => (finishRunningJob = resolve)),
+    );
+    (readKeyboardInferenceRoute as jest.Mock).mockReturnValue({ provider: 'byok' });
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id'
+        ? 'running-job'
+        : key === 'keyboard_upload_audio.running-job'
+          ? 'file://running.m4a'
+          : null,
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await waitFor(() => expect(mockHandoffStoreState.setCheckingInitialUrl).toHaveBeenCalled());
+    await act(async () => undefined);
+    expect(mockAddFailedTranscript).not.toHaveBeenCalled();
+    expect(clearKeyboardProviderRecovery).not.toHaveBeenCalled();
+    finishRunningJob();
+    await runningJob;
+  });
+
+  it('clears recovery data for a transcript superseded by a newer job', async () => {
+    let activeJobId = '100-job';
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? activeJobId : null,
+    );
+    mockTranscribeAndCleanup.mockImplementationOnce(async () => {
+      activeJobId = '200-job';
+      return {
+        text: 'clean transcript',
+        originalText: 'raw transcript',
+        transcription: { text: 'raw transcript', duration: 1, provider: 'byok' },
+      };
+    });
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+    expect(mockAddTranscript).not.toHaveBeenCalled();
+    expect(clearKeyboardProviderRecovery).toHaveBeenCalledWith('100-job');
+  });
+
+  it('finishes a delivered dictation even when history cannot be saved', async () => {
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    mockTranscribeAndCleanup.mockResolvedValueOnce({
+      text: 'clean transcript',
+      originalText: 'raw transcript',
+      transcription: { text: 'raw transcript', duration: 1, provider: 'byok' },
+    });
+    mockAddTranscript.mockRejectedValueOnce(
+      new Error('Transcript history is unavailable. Try again.'),
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+    expect(storage.setItem).toHaveBeenCalledWith('keyboard_pending_transcript', 'clean transcript');
+    // A kept recovery entry would run cleanup again and insert the text a second time.
+    expect(clearKeyboardProviderRecovery).toHaveBeenCalledWith('100-job');
+    expect(storage.setKeyboardStatus).not.toHaveBeenCalledWith('error', expect.anything());
+    expect(mockAddFailedTranscript).not.toHaveBeenCalled();
+  });
+
+  it('keeps recovery when neither the keyboard nor history received the text', async () => {
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    storage.setItem.mockImplementation((key: string) => key !== 'keyboard_pending_transcript');
+    mockAddTranscript.mockRejectedValueOnce(
+      new Error('Transcript history is unavailable. Try again.'),
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+    expect(clearKeyboardProviderRecovery).not.toHaveBeenCalled();
+  });
+
+  it('returns to the previous app when the recording route cannot be set up', async () => {
+    (snapshotKeyboardInferenceRoute as jest.Mock).mockImplementationOnce(() => {
+      throw new Error('setup incomplete');
+    });
+    mountWithInitialUrl('openwhispr://keyboard-dictation?source=keyboard');
+    await waitFor(() =>
+      expect(storage.setKeyboardStatus).toHaveBeenCalledWith(
+        'setup_required',
+        'Complete provider setup in AI Models.',
+      ),
+    );
+    expect(storage.returnToPreviousApp).toHaveBeenCalled();
+    expect(snapshotKeyboardAgentRequest).toHaveBeenCalled();
+    expect(storage.startNativeRecording).not.toHaveBeenCalled();
+  });
+
+  it('stops a warm-mic recording whose route cannot be set up', async () => {
+    (readKeyboardInferenceRoute as jest.Mock).mockReturnValue(undefined);
+    (snapshotKeyboardInferenceRoute as jest.Mock).mockImplementationOnce(() => {
+      throw new Error('setup incomplete');
+    });
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '300-job' : null,
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await waitFor(() => expect(mockBackgroundStartedListener).toBeDefined());
+    act(() => mockBackgroundStartedListener?.());
+    expect(snapshotKeyboardAgentRequest).toHaveBeenCalledWith('300-job');
+    expect(storage.stopNativeRecording).toHaveBeenCalled();
+  });
+
+  it.each([
+    'CREDENTIAL_MISSING',
+    'INVALID_CREDENTIAL',
+    'PROVIDER_HTTPS_REQUIRED',
+    'PROVIDER_CERTIFICATE_UNTRUSTED',
+    'PROVIDER_INVALID_RECOVERY_ROUTE',
+    'MODEL_REQUIRED',
+  ])('asks for setup in the app instead of a retry for %s', async (code) => {
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    mockTranscribeAndCleanup.mockRejectedValueOnce(
+      Object.assign(new Error('Fix your provider in AI Models.'), { code, retryable: false }),
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+    expect(storage.setKeyboardStatus).toHaveBeenLastCalledWith(
+      'setup_required',
+      expect.any(String),
+    );
+    expect(mockAddFailedTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '100-job' }),
+    );
+  });
+
+  it('keeps Try again for a provider outage', async () => {
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    mockTranscribeAndCleanup.mockRejectedValueOnce(
+      Object.assign(new Error('Provider is temporarily unavailable.'), {
+        code: 'PROVIDER_UNAVAILABLE',
+        retryable: true,
+      }),
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+    expect(storage.setKeyboardStatus).toHaveBeenLastCalledWith('error', expect.any(String));
+  });
+
+  it('asks for setup when a stopped recording has no route', async () => {
+    (readKeyboardInferenceRoute as jest.Mock).mockReturnValue(undefined);
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+    expect(storage.setKeyboardStatus).toHaveBeenLastCalledWith(
+      'setup_required',
+      'This recording could not be routed. Check AI Models, then record again.',
+    );
+  });
+
+  it('refuses an agent command with no agent provider before transcribing it', async () => {
+    const { generateForJob } = jest.requireMock('@/services/agent/AgentComposerService');
+    (readKeyboardInferenceRoute as jest.Mock).mockReturnValue({
+      provider: 'byok',
+      agentUnavailable: 'The voice assistant is unavailable. Your raw transcript is saved.',
+    });
+    const agentJob = { jobId: '100-job', sessionId: 's', kind: 'compose' };
+    (readKeyboardAgentJob as jest.Mock).mockImplementation((id: string) =>
+      id === '100-job' ? agentJob : null,
+    );
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+    expect(mockTranscribe).not.toHaveBeenCalled();
+    expect(generateForJob).not.toHaveBeenCalled();
+    expect(storage.setKeyboardStatus).toHaveBeenCalledWith('agent_error', 'agent_setup_required');
   });
 });

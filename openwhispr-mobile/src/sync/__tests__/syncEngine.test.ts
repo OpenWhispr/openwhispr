@@ -837,4 +837,67 @@ describe('queued runs', () => {
       tags: { sync: 'completionListener' },
     });
   });
+
+  it('settles a queued foreground request the throttle drops', async (): Promise<void> => {
+    await throttleForeground();
+    const release = holdNextRun();
+    requestSync('manual');
+    await flush();
+    let settled = false;
+    const queued = requestSync('foreground').then(() => {
+      settled = true;
+    });
+    release();
+    await queued;
+    expect(settled).toBe(true);
+    expect(mockPullNotes).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Pull-to-refresh holds its spinner on this promise, so it has to settle once the
+// run the request caused is over — including a run that was queued behind another,
+// one that failed, and a request that never started a run at all.
+describe('requestSync completion promise', () => {
+  it('resolves after the run it started has finished', async () => {
+    await requestSync('manual');
+
+    const state = useSyncStore.getState();
+    expect(state.status).toBe('idle');
+    expect(state.lastSyncAt).not.toBeNull();
+  });
+
+  it('resolves a request queued behind an in-flight run only once the queued run finishes', async () => {
+    let releaseFirstRun: () => void = () => {};
+    mockPullNotes.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (releaseFirstRun = resolve)),
+    );
+    const firstRun = requestSync('sign-in');
+    await flush();
+
+    let queuedSettled = false;
+    const queued = requestSync('manual').then(() => {
+      queuedSettled = true;
+    });
+    await flush();
+    expect(queuedSettled).toBe(false);
+
+    releaseFirstRun();
+    await firstRun;
+    await queued;
+    expect(mockPullNotes).toHaveBeenCalledTimes(2);
+  });
+
+  it('resolves without rejecting when the run fails', async () => {
+    mockPullNotes.mockRejectedValueOnce(new ApiError('server down', 500));
+
+    await expect(requestSync('manual')).resolves.toBeUndefined();
+    expect(useSyncStore.getState().status).toBe('error');
+  });
+
+  it('resolves when there is nothing to sync', async () => {
+    mockAuthState.isGuest = true;
+
+    await expect(requestSync('manual')).resolves.toBeUndefined();
+    expect(mockPullNotes).not.toHaveBeenCalled();
+  });
 });

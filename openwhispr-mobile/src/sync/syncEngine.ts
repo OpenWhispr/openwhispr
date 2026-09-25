@@ -47,6 +47,8 @@ const QUEUE_PRIORITY: Record<SyncReason, number> = {
 
 let inFlight = false;
 let pendingTrigger: SyncReason | null = null;
+// Callers waiting on the queued run (see requestSync); settled once it ends.
+let pendingTriggerWaiters: Array<() => void> = [];
 let postWriteTimer: ReturnType<typeof setTimeout> | null = null;
 const syncCompletionListeners = new Set<(hasQueuedRun: boolean) => void>();
 
@@ -227,7 +229,7 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
     if (!pendingTrigger || QUEUE_PRIORITY[reason] > QUEUE_PRIORITY[pendingTrigger]) {
       pendingTrigger = reason;
     }
-    return;
+    return new Promise((resolve) => pendingTriggerWaiters.push(resolve));
   }
 
   const cloudBackupEnabled = useConfigStore.getState().config?.cloudBackupEnabled ?? true;
@@ -491,24 +493,33 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
         Sentry.captureException(err, { tags: { sync: 'completionListener' } });
       }
     });
+    const waiters = pendingTriggerWaiters;
+    pendingTriggerWaiters = [];
+    const settleWaiters = (): void => waiters.forEach((resolve) => resolve());
     if (pendingTrigger) {
       const next = pendingTrigger;
       pendingTrigger = null;
-      runSyncNow(next).catch(() => {});
-    }
+      runSyncNow(next)
+        .catch(() => {})
+        .finally(settleWaiters);
+    } else settleWaiters();
   }
 }
 
-export function requestSync(reason: SyncReason): void {
+// Resolves once the run this request started, or was queued behind, has ended —
+// success, failure or an early return alike — and never rejects. Pull-to-refresh
+// holds its spinner on it. An 'after-write' request only arms the debounce, so
+// it resolves right away.
+export function requestSync(reason: SyncReason): Promise<void> {
   if (reason === 'after-write') {
     if (postWriteTimer) clearTimeout(postWriteTimer);
     postWriteTimer = setTimeout(() => {
       postWriteTimer = null;
       runSyncNow('after-write').catch(() => {});
     }, POST_WRITE_DEBOUNCE_MS);
-    return;
+    return Promise.resolve();
   }
-  runSyncNow(reason).catch(() => {});
+  return runSyncNow(reason).catch(() => {});
 }
 
 let unsubscribeAuth: (() => void) | null = null;

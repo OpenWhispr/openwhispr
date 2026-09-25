@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { isMicPermissionError, showMicPermissionAlert } from '@/lib/permissions';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -30,6 +31,7 @@ import { NoteShareSheet } from '@/components/notes/NoteShareSheet';
 import { NoteActionsMenu } from '@/components/notes/NoteActionsMenu';
 import { ConflictBanner } from '@/components/notes/ConflictBanner';
 import { NoteChatSheet } from '@/components/notes/NoteChatSheet';
+import { isDictationAgentEnabled } from '@/lib/dictationAgent';
 import { SpeakerTranscript } from '@/components/notes/SpeakerTranscript';
 import { SpeakerRenameSheet } from '@/components/notes/SpeakerRenameSheet';
 import { SpeakerMergeSheet } from '@/components/notes/SpeakerMergeSheet';
@@ -37,6 +39,7 @@ import { VoiceprintSuggestionSheet } from '@/components/notes/VoiceprintSuggesti
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
+import { Glass } from '@/components/ui/Glass';
 import { GlassBackButton } from '@/components/ui/GlassBackButton';
 import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
 import { buildNoteShareContent, exportNote } from '@/lib/noteExport';
@@ -54,9 +57,11 @@ import {
 import { promptLocalModelFallback } from '@/lib/privateMode';
 import {
   getLocalReasoningReadiness,
+  getLocalReasoningUnavailableMessage,
   isLocalReasoningRequired,
   shouldUseLocalReasoning,
 } from '@/lib/localReasoning';
+import { providerDisplayName } from '@/lib/mobileProviders';
 import { promptLocalReasoningFallback } from '@/lib/localReasoningFallback';
 import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
 import { randomUUID } from '@/lib/uuid';
@@ -72,6 +77,7 @@ import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import type { Note } from '@/data/types';
 import type { ReasoningRoutingOptions } from '@/types';
 import type { ChatOverNoteMessage } from '@/lib/notes/chatOverNote';
+import { getNoteChatSuggestions } from '@/lib/notes/noteChatSuggestions';
 import {
   formatTranscriptForExport,
   getSpeakerDisplayName,
@@ -132,6 +138,14 @@ export default function NoteEditorScreen() {
   const { register: registerSuperwallGate } = useSuperwallGate();
   const { handleUsageLimitReached, isRecoveringUsageLimit } = useUsageLimitRecovery();
   const autoLearnEnabled = useConfigStore((s) => s.config?.autoLearnCorrections ?? true);
+  const notesMode = useConfigStore((s) => s.config?.inference?.notes?.mode);
+  const notesProviderId = useConfigStore((s) => s.config?.inference?.notes?.providerId);
+  const chatMode = useConfigStore((s) => s.config?.inference?.agent?.mode);
+  // Note chat shares the Chat & Voice Assistant switch with the voice assistant.
+  const chatEnabled = useConfigStore((s) => (s.config ? isDictationAgentEnabled(s.config) : true));
+  const providerNotes = notesMode === 'providers';
+  // Only an unset or OpenWhispr chat route reaches Cloud, so only it needs an account and the paywall.
+  const cloudChat = chatMode !== 'providers' && chatMode !== 'local';
   const dictionaryEntries = useDictionaryStore((s) => s.entries);
   const dictionaryWords = useMemo(() => dictionaryEntries.map((e) => e.word), [dictionaryEntries]);
   const addLearnedWords = useDictionaryStore((s) => s.addLearnedWords);
@@ -159,6 +173,7 @@ export default function NoteEditorScreen() {
   const [isChatProcessing, setIsChatProcessing] = useState(false);
   const [isRetryingTranscript, setIsRetryingTranscript] = useState(false);
   const keyboardHeight = useKeyboardHeight();
+  const insets = useSafeAreaInsets();
 
   const contentRef = useRef(content);
   contentRef.current = content;
@@ -288,10 +303,11 @@ export default function NoteEditorScreen() {
       (suggestion) => suggestion.label.trim().toLowerCase() !== currentName,
     );
   }, [activeSpeakerName, calendarParticipants]);
+  const isTranscriptInProgress = ['recording', 'transcribing', 'diarizing'].includes(
+    transcriptStatus,
+  );
   const shouldShowTranscriptStatus =
-    isAudioTranscript &&
-    !hasTranscriptSegments &&
-    ['recording', 'transcribing', 'diarizing'].includes(transcriptStatus);
+    isAudioTranscript && !hasTranscriptSegments && isTranscriptInProgress;
   const shouldShowTranscriptFailed =
     isAudioTranscript && !hasTranscriptSegments && transcriptStatus === 'failed';
   const shouldRenderPlainEditor =
@@ -539,7 +555,23 @@ export default function NoteEditorScreen() {
   const handleRunAction = useCallback(
     async (action: Parameters<typeof runAction>[0]) => {
       const routing = { isPrivateNote: note?.isPrivate === 1 };
-      const localRequired = isLocalReasoningRequired(routing);
+      // On-Device never leaves this phone: no account, paywall, or fallback to another service.
+      if (notesMode === 'local') {
+        const readiness = await getLocalReasoningReadiness();
+        if (readiness.status === 'ready') {
+          runSelectedAction(action, routing);
+          return;
+        }
+        Alert.alert(
+          'Local AI unavailable',
+          `${getLocalReasoningUnavailableMessage(readiness)} Note Formatting is set to On-Device, so this note stays on your iPhone.`,
+        );
+        return;
+      }
+
+      const localRequired = providerNotes
+        ? requiresCloudConfirmation
+        : isLocalReasoningRequired(routing);
 
       if (localRequired) {
         if (await shouldUseLocalReasoning(routing)) {
@@ -548,18 +580,20 @@ export default function NoteEditorScreen() {
         }
 
         const readiness = await getLocalReasoningReadiness();
+        const runElsewhereOnce = (): void =>
+          runSelectedAction(action, { ...routing, allowCloudFallback: true });
         promptLocalReasoningFallback({
           readiness,
           signedIn: !!user,
           onEnableLocal: () => runSelectedAction(action, routing),
-          onUseCloudOnce: user
-            ? () =>
-                runSelectedAction(action, {
-                  ...routing,
-                  allowCloudFallback: true,
-                })
-            : undefined,
+          onUseCloudOnce: user || providerNotes ? runElsewhereOnce : undefined,
+          destinationName: providerNotes ? providerDisplayName(notesProviderId ?? '') : undefined,
         });
+        return;
+      }
+
+      if (providerNotes) {
+        runSelectedAction(action, routing);
         return;
       }
 
@@ -587,11 +621,20 @@ export default function NoteEditorScreen() {
 
       gateAndRun(routing);
     },
-    [note?.isPrivate, registerSuperwallGate, requiresCloudConfirmation, runSelectedAction, user],
+    [
+      note?.isPrivate,
+      notesMode,
+      notesProviderId,
+      providerNotes,
+      registerSuperwallGate,
+      requiresCloudConfirmation,
+      runSelectedAction,
+      user,
+    ],
   );
 
   const startChatRequest = useCallback(
-    async (question: string, appendUserMessage: boolean) => {
+    async (question: string, appendUserMessage: boolean, allowRemoteContent = false) => {
       const trimmedQuestion = question.trim();
       const context = actionInputRef.current.trim();
       if (!trimmedQuestion || chatAbortRef.current) return;
@@ -629,6 +672,7 @@ export default function NoteEditorScreen() {
           question: trimmedQuestion,
           history,
           signal: controller.signal,
+          routing: { isPrivateNote: note?.isPrivate === 1, allowCloudFallback: allowRemoteContent },
         });
         if (controller.signal.aborted) return;
         setChatMessages((current) => [
@@ -650,38 +694,42 @@ export default function NoteEditorScreen() {
         }
       }
     },
-    [chatMessages],
+    [chatMessages, note?.isPrivate],
   );
 
   const runChatWithCloudConfirmation = useCallback(
     (question: string, appendUserMessage: boolean) => {
-      if (requiresRealAccount(user)) {
+      if (cloudChat && requiresRealAccount(user)) {
         showAccountRequiredAlert('AI chat', { cloudOnly: true });
         return;
       }
 
-      const gateAndRun = () => {
+      const gateAndRun = (allowRemoteContent = false) => {
+        if (!cloudChat) {
+          startChatRequest(question, appendUserMessage, allowRemoteContent).catch(() => {});
+          return;
+        }
         registerSuperwallGate({
           placement: SUPERWALL_PLACEMENTS.noteChatStart,
           params: { source: 'note_chat' },
           requiresAccount: false,
           feature: () => {
-            startChatRequest(question, appendUserMessage).catch(() => {});
+            startChatRequest(question, appendUserMessage, allowRemoteContent).catch(() => {});
           },
         }).catch(() => {});
       };
 
-      if (requiresCloudConfirmation) {
+      if (requiresCloudConfirmation && chatMode !== 'local') {
         confirmCloudOnce(
-          'Chat sends this note context to cloud AI for this request. Your note privacy and sync settings will not change.',
-          gateAndRun,
+          'Chat sends this note context to your selected AI service for this request. Your note privacy and sync settings will not change.',
+          () => gateAndRun(true),
         );
         return;
       }
 
       gateAndRun();
     },
-    [registerSuperwallGate, requiresCloudConfirmation, startChatRequest, user],
+    [chatMode, cloudChat, registerSuperwallGate, requiresCloudConfirmation, startChatRequest, user],
   );
 
   const handleAskNote = useCallback(() => {
@@ -695,6 +743,14 @@ export default function NoteEditorScreen() {
   const handleSendChat = useCallback(() => {
     runChatWithCloudConfirmation(chatDraft, true);
   }, [chatDraft, runChatWithCloudConfirmation]);
+
+  const handleChatSuggestion = useCallback(
+    (prompt: string) => {
+      safeHaptics('light');
+      runChatWithCloudConfirmation(prompt, true);
+    },
+    [runChatWithCloudConfirmation],
+  );
 
   const handleRetryChat = useCallback(() => {
     if (!chatLastQuestion.trim()) return;
@@ -805,6 +861,17 @@ export default function NoteEditorScreen() {
 
   const contentEmpty = !actionInputText.trim();
   const isEnhancingHeader = processingState === 'processing';
+  // A finished meeting gets a persistent Ask pill instead of a menu entry. Status alone
+  // can't mean "finished": synced notes keep the local default 'idle' even with a full
+  // transcript. Segment transcripts never show the dictate FAB, so the two can't overlap.
+  const showAskPill =
+    chatEnabled && usesSegmentTranscript && !isTranscriptInProgress && !contentEmpty;
+  // The tab bar is hidden on the note editor, so the pill sits on the home-indicator inset.
+  const askPillBottom = insets.bottom + ASK_PILL_GAP;
+  // Uploads can be lectures or voice memos, so only meetings get meeting-worded shortcuts.
+  const chatSuggestions = getNoteChatSuggestions(
+    usesSegmentTranscript && note?.noteType !== 'upload',
+  );
 
   if (!note && !isNaN(noteId)) {
     return (
@@ -859,7 +926,7 @@ export default function NoteEditorScreen() {
             processing={isEnhancingHeader}
             onRunAction={handleRunAction}
             onManageActions={handleManageActions}
-            onAskNote={handleAskNote}
+            onAskNote={chatEnabled && !showAskPill ? handleAskNote : undefined}
             askNoteDisabled={isChatProcessing}
             onCopyGeneratedNote={note?.enhancedContent ? handleCopyGeneratedNote : undefined}
             onCopyTranscript={usesSegmentTranscript ? handleCopyTranscript : undefined}
@@ -881,7 +948,11 @@ export default function NoteEditorScreen() {
             paddingHorizontal: 20,
             paddingTop: 16,
             paddingBottom:
-              keyboardHeight > 0 ? NOTE_EDITOR_KEYBOARD_BOTTOM_PADDING : NOTE_EDITOR_BOTTOM_PADDING,
+              keyboardHeight > 0
+                ? NOTE_EDITOR_KEYBOARD_BOTTOM_PADDING
+                : showAskPill
+                  ? askPillBottom + ASK_PILL_HEIGHT + ASK_PILL_GAP * 2
+                  : NOTE_EDITOR_BOTTOM_PADDING,
           }}
         >
           <TextInput
@@ -1085,6 +1156,40 @@ export default function NoteEditorScreen() {
           />
         </Pressable>
       ) : null}
+      {showAskPill ? (
+        <Pressable
+          onPress={() => {
+            safeHaptics('light');
+            handleAskNote();
+          }}
+          testID="note-ask-pill"
+          accessibilityRole="button"
+          accessibilityLabel="Ask anything"
+          accessibilityHint="Opens a chat about this note"
+          style={{
+            position: 'absolute',
+            left: 20,
+            right: 20,
+            bottom: askPillBottom,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.12,
+            shadowRadius: 10,
+          }}
+        >
+          <Glass.Interactive style={{ height: ASK_PILL_HEIGHT, borderRadius: ASK_PILL_HEIGHT / 2 }}>
+            <View className="flex-1 flex-row items-center justify-center gap-2">
+              <SystemIcon
+                name="bubble.left.fill"
+                mdName="MessageCircle"
+                size={17}
+                color="secondaryLabel"
+              />
+              <Text className="text-[17px] font-medium text-label">Ask anything</Text>
+            </View>
+          </Glass.Interactive>
+        </Pressable>
+      ) : null}
       <NoteChatSheet
         visible={chatVisible}
         messages={chatMessages}
@@ -1092,8 +1197,10 @@ export default function NoteEditorScreen() {
         isProcessing={isChatProcessing}
         error={chatError}
         canSend={!contentEmpty}
+        suggestions={chatSuggestions}
         onDraftChange={setChatDraft}
         onSend={handleSendChat}
+        onSuggestion={handleChatSuggestion}
         onRetry={handleRetryChat}
         onClear={handleClearChat}
         onClose={handleCloseChat}
@@ -1135,4 +1242,6 @@ export default function NoteEditorScreen() {
 // inset). Used to lift the floating mic FAB clear of the tab bar.
 const TAB_BAR_OFFSET = Platform.OS === 'ios' ? 110 : 70;
 const FAB_BOTTOM = TAB_BAR_OFFSET + 32;
+const ASK_PILL_HEIGHT = 52;
+const ASK_PILL_GAP = 12;
 const SYSTEM_RED = '#FF3B30';

@@ -231,7 +231,13 @@ const ToastViewport: React.FC<{
         <Toast
           key={toast.id}
           {...toast}
-          onClose={() => onDismiss(toast.id)}
+          onClose={() => {
+            try {
+              toast.onClose?.();
+            } finally {
+              onDismiss(toast.id);
+            }
+          }}
           onPauseTimer={() => onPauseTimer(toast.id)}
           onResumeTimer={(remaining) => onResumeTimer(toast.id, remaining)}
         />
@@ -264,6 +270,8 @@ const Toast: React.FC<
 > = ({
   title,
   description,
+  descriptionHotkey,
+  dismissible,
   secondaryDescription,
   copyCommand,
   technicalDetails,
@@ -306,7 +314,7 @@ const Toast: React.FC<
 
   const handleStructuredAction = (structuredAction: ToastActionConfig) => {
     if (structuredAction.dismissOnClick !== false) onClose?.();
-    void structuredAction.onClick();
+    return structuredAction.onClick();
   };
 
   const handleErrorHeightChange = React.useCallback(async (height: number) => {
@@ -357,6 +365,8 @@ const Toast: React.FC<
         <DictationErrorCard
           title={title}
           description={description}
+          descriptionHotkey={descriptionHotkey}
+          onDismiss={dismissible ? onClose : undefined}
           actions={actions ?? []}
           onAction={handleStructuredAction}
           onPreferredHeightChange={handleErrorHeightChange}

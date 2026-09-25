@@ -1,15 +1,25 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
+import { useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { BRAND_GRADIENT } from '@/config/colors';
-import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 const DEEP_BLUE = BRAND_GRADIENT[2];
 
 export function GetStartedStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+  const { goNext } = useOnboardingStep('get-started');
+  const [error, setError] = useState<string | null>(null);
+
+  const start = (): void => {
+    setError(null);
+    goNext().catch((cause: unknown) =>
+      setError(describeOnboardingError(cause, 'Could not save your progress. Try again.')),
+    );
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-systemBackground" edges={['top', 'bottom']}>
@@ -22,7 +32,12 @@ export function GetStartedStep() {
       </View>
 
       <View className="px-6 pb-4">
-        <Button onPress={goNext} size="lg">
+        {error ? (
+          <Text accessibilityRole="alert" className="mb-3 text-center text-[14px] text-systemRed">
+            {error}
+          </Text>
+        ) : null}
+        <Button onPress={start} size="lg">
           Get Started
         </Button>
       </View>

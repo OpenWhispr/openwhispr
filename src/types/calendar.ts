@@ -68,11 +68,6 @@ export interface CalendarConnectionStatus {
   email: string | null;
 }
 
-export interface MeetingDetectionPreferences {
-  processDetection: boolean;
-  audioDetection: boolean;
-}
-
 export interface CalendarAttendee {
   email: string;
   displayName: string | null;

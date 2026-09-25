@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 const childProcess = require("node:child_process");
+const fs = require("node:fs");
 
 const managerModulePath = require.resolve("../../src/helpers/linuxKeyManager");
 const originalLoad = Module._load;
@@ -132,4 +133,191 @@ test("dropping a key kills its listener process and stops tracking it", () => {
 
   assert.equal(child.killed, true);
   assert.equal(manager.listeners.size, 0);
+});
+
+// checkAvailability mirrors the C listener's NO_PERMISSION rule, so these pin
+// the states it has to tell apart. loadManager's `fs` stub only carries
+// statSync, so these load the manager against the real fs and patch it per test.
+function loadManagerWithRealFs() {
+  delete require.cache[managerModulePath];
+  setPlatform("linux");
+
+  Module._load = function loadWithMocks(request, parent, isMain) {
+    if (request === "./debugLogger") {
+      return { info() {}, warn() {}, debug() {}, error() {} };
+    }
+    return originalLoad(request, parent, isMain);
+  };
+
+  try {
+    return require(managerModulePath);
+  } finally {
+    Module._load = originalLoad;
+  }
+}
+
+const enoent = () => Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+const eacces = () => Object.assign(new Error("EACCES"), { code: "EACCES" });
+
+// sysfs capability bitmaps as the kernel prints them: hex words, most
+// significant first, unpadded. A laptop keyboard's lowest key word has every bit
+// but KEY_RESERVED set, a value a double cannot hold exactly.
+const KEYBOARD_CAPABILITIES = {
+  ev: "120013",
+  key: "402000000 3803078f800d001 feffffdfffefffff fffffffffffffffe",
+};
+const GAMEPAD_CAPABILITIES = { ev: "20000b", key: "7cdb000000000000 0 0 0 0" };
+
+// Patch only the paths under test; everything else keeps the real behaviour so
+// node:test's own fs use is untouched.
+function stubBinaryFound(t, found) {
+  const real = fs.statSync;
+  t.mock.method(fs, "statSync", (target, ...rest) => {
+    if (!String(target).includes("linux-key-listener")) return real.call(fs, target, ...rest);
+    if (!found) throw enoent();
+    return { isFile: () => true };
+  });
+}
+
+function stubInputDir(
+  t,
+  { entries, listError = enoent, readable = [], keyboards = readable, sysfs = true }
+) {
+  const realReaddir = fs.readdirSync;
+  t.mock.method(fs, "readdirSync", (target, ...rest) => {
+    if (String(target) !== "/dev/input") return realReaddir.call(fs, target, ...rest);
+    if (!entries) throw listError();
+    return entries;
+  });
+
+  const realAccess = fs.accessSync;
+  t.mock.method(fs, "accessSync", (target, ...rest) => {
+    if (!String(target).startsWith("/dev/input/")) return realAccess.call(fs, target, ...rest);
+    if (!readable.includes(String(target))) throw eacces();
+  });
+
+  // Every /sys/class/input read is answered here, so a Linux runner's own
+  // devices never leak into the result.
+  const realReadFile = fs.readFileSync;
+  t.mock.method(fs, "readFileSync", (target, ...rest) => {
+    if (!String(target).startsWith("/sys/class/input/")) {
+      return realReadFile.call(fs, target, ...rest);
+    }
+    const match = /^\/sys\/class\/input\/(event\d+)\/device\/capabilities\/(ev|key)$/.exec(
+      String(target)
+    );
+    if (!sysfs || !match) throw enoent();
+    const [, node, bitmap] = match;
+    const isKeyboard = keyboards.includes(`/dev/input/${node}`);
+    return `${(isKeyboard ? KEYBOARD_CAPABILITIES : GAMEPAD_CAPABILITIES)[bitmap]}\n`;
+  });
+}
+
+test("checkAvailability reports a missing listener binary", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, false);
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), {
+    available: false,
+    reason: "binary_missing",
+  });
+});
+
+test("checkAvailability reports denied access when no event node is readable", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, { entries: ["event0", "event1", "mice"] });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), {
+    available: false,
+    reason: "input_access_denied",
+  });
+});
+
+test("checkAvailability is available when a single event node is readable", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, { entries: ["event0", "event1"], readable: ["/dev/input/event1"] });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
+});
+
+// The C listener watches /dev/input for hotplug, so an empty directory is a wait,
+// not a failure.
+test("checkAvailability does not block when /dev/input holds no event nodes", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, { entries: ["mice"] });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
+});
+
+// A /dev/input it cannot list, it cannot watch either: the listener stays silent
+// and never recovers. A Flatpak without input devices has no /dev/input at all.
+test("checkAvailability reports the listener unavailable without /dev/input", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, { entries: null });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), {
+    available: false,
+    reason: "input_devices_unavailable",
+  });
+});
+
+test("checkAvailability denies access when /dev/input itself is unreadable", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, { entries: null, listError: eacces });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), {
+    available: false,
+    reason: "input_access_denied",
+  });
+});
+
+// systemd's uaccess rule (rules.d/70-uaccess.rules.in) grants the session user
+// every joystick node, so a gamepad is readable where keyboards are not. The C
+// listener skips it as a non-keyboard and prints NO_PERMISSION; the probe must
+// reach the same verdict.
+test("checkAvailability denies access when only a gamepad node is readable", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, {
+    entries: ["event0", "event1"],
+    readable: ["/dev/input/event1"],
+    keyboards: [],
+  });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), {
+    available: false,
+    reason: "input_access_denied",
+  });
+});
+
+test("checkAvailability finds a readable keyboard past a readable gamepad", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, {
+    entries: ["event0", "event1", "event2"],
+    readable: ["/dev/input/event0", "/dev/input/event2"],
+    keyboards: ["/dev/input/event2"],
+  });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
+});
+
+// Without /sys (some sandboxes) a readable node might be a keyboard, and a false
+// "denied" would refuse a hotkey the listener can serve.
+test("checkAvailability trusts a readable node when sysfs cannot describe it", (t) => {
+  const LinuxKeyManager = loadManagerWithRealFs();
+  stubBinaryFound(t, true);
+  stubInputDir(t, {
+    entries: ["event0", "event1"],
+    readable: ["/dev/input/event1"],
+    keyboards: [],
+    sysfs: false,
+  });
+
+  assert.deepEqual(new LinuxKeyManager().checkAvailability(), { available: true });
 });

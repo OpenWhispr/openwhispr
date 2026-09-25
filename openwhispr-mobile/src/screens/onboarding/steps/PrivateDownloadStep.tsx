@@ -1,10 +1,10 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ActivityIndicator, Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { getStepProgress, useOnboardingStore } from '@/store/useOnboardingStore';
-import { useConfigStore } from '@/store/useConfigStore';
+import { chooseOnboardingMode } from '@/lib/onboardingMode';
 import { useModelDownloadStore, type LocalModelKey } from '@/store/useModelDownloadStore';
 import { LocalTranscriptionService } from '@/services/transcription/LocalTranscriptionService';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
@@ -12,8 +12,6 @@ import { getLocalModelCatalog, type LocalModelCatalogEntry } from '@/lib/localMo
 import { getPrivateModeUnavailableMessage } from '@/lib/privateMode';
 import { SlowDownloadSheet } from './SlowDownloadSheet';
 
-// Reuse the language step's progress so the conditional step doesn't jump the bar.
-const PROGRESS_ID = 'language';
 // Show the "taking a while?" sheet only if the download is still under halfway
 // after this delay — fast connections finish first and never see it.
 const SLOW_AFTER_MS = 8000;
@@ -24,11 +22,11 @@ function formatModelSize(bytes: number): string {
 }
 
 export function PrivateDownloadStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
-  const updateConfig = useConfigStore((s) => s.updateConfig);
+  const { progress: stepProgress, goBack } = useOnboardingStep('private-download');
   const downloads = useModelDownloadStore((s) => s.downloads);
   const startDownload = useModelDownloadStore((s) => s.startDownload);
   const cancelDownload = useModelDownloadStore((s) => s.cancelDownload);
+  const cancelActiveDownloads = useModelDownloadStore((s) => s.cancelActiveDownloads);
 
   const available = LocalTranscriptionService.isAvailable();
   // The language step just ran, so the selection is settled; pick the model it routes to.
@@ -36,24 +34,31 @@ export function PrivateDownloadStep() {
   const [recommended, setRecommended] = useState<LocalModelCatalogEntry | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
   const startedRef = useRef(false);
+  const mountedRef = useRef(true);
+  const [discoveryAttempt, setDiscoveryAttempt] = useState(0);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!available) return;
     let cancelled = false;
+    setDiscoveryError(null);
     LocalTranscriptionService.getAvailability()
       .then((availability) => {
         if (cancelled) return;
         // Catalog is sorted recommended-first; on platforms without Parakeet the first
         // visible entry is the Whisper fallback.
-        setRecommended(getLocalModelCatalog(languages, availability)[0] ?? null);
+        const model = getLocalModelCatalog(languages, availability)[0];
+        if (!model) throw new Error('No local model is available for these languages.');
+        setRecommended(model);
       })
       .catch(() => {
-        if (!cancelled) setRecommended(null);
+        if (!cancelled)
+          setDiscoveryError('Could not find a local model. Check your connection and try again.');
       });
     return () => {
       cancelled = true;
     };
-  }, [available, languages]);
+  }, [available, languages, discoveryAttempt]);
 
   const modelKey: LocalModelKey | null = recommended?.key ?? null;
   const download = modelKey ? downloads[modelKey] : null;
@@ -62,17 +67,22 @@ export function PrivateDownloadStep() {
   const error = download?.error;
 
   useEffect(() => {
-    if (
-      available &&
-      modelKey &&
-      !recommended?.downloaded &&
-      !startedRef.current &&
-      status === 'idle'
-    ) {
-      startedRef.current = true;
-      startDownload(modelKey);
-    }
-  }, [available, modelKey, recommended?.downloaded, status, startDownload]);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!available || !modelKey || startedRef.current) return;
+    startedRef.current = true;
+    const needsDownload = !recommended?.downloaded && status === 'idle';
+    // Going back to change languages can leave the previous recommendation transferring. It's no
+    // longer needed, and startDownload refuses to run beside it.
+    cancelActiveDownloads(modelKey).then(() => {
+      if (needsDownload && mountedRef.current) startDownload(modelKey);
+    });
+  }, [available, modelKey, recommended?.downloaded, status, startDownload, cancelActiveDownloads]);
 
   useEffect(() => {
     if (!available || !modelKey) return;
@@ -83,23 +93,14 @@ export function PrivateDownloadStep() {
     return () => clearTimeout(timer);
   }, [available, modelKey]);
 
-  const continuePrivate = useCallback(async () => {
-    // The CTA is gated on status === 'completed', which means the model is on disk (and for
-    // Parakeet, prepared). If it ever isn't, the Home toggle's readiness check re-prompts a
-    // download — so we trust the store's completed status here rather than re-checking disk.
-    await updateConfig({ defaultMode: 'private' });
-    await goNext();
-  }, [updateConfig, goNext]);
-
-  const switchToCloud = useCallback(async () => {
-    await updateConfig({ defaultMode: 'cloud' });
-    await goNext();
-  }, [updateConfig, goNext]);
+  const switchToCloud = useCallback(async (): Promise<void> => {
+    await chooseOnboardingMode('cloud', 'private-download');
+  }, []);
 
   const continueCloudKeepDownloading = useCallback(async () => {
-    setSheetVisible(false);
     // Download keeps running in the background (store not reset).
     await switchToCloud();
+    setSheetVisible(false);
   }, [switchToCloud]);
 
   // The auto-start effect only fires once, from idle, so a retry has to start the download itself.
@@ -107,18 +108,19 @@ export function PrivateDownloadStep() {
     if (modelKey) startDownload(modelKey);
   }, [modelKey, startDownload]);
 
-  const switchToCloudStop = useCallback(async () => {
-    // A failed attempt still has its partial download staged; cancelling reclaims it.
+  const switchToCloudStop = useCallback(async (): Promise<void> => {
+    // Validate Cloud and save the choice before discarding the local download.
+    await switchToCloud();
     if (modelKey && (status === 'downloading' || status === 'preparing' || status === 'error')) {
       await cancelDownload(modelKey);
     }
-    await switchToCloud();
   }, [cancelDownload, modelKey, status, switchToCloud]);
 
   if (!available) {
     return (
       <OnboardingShell
-        progress={getStepProgress(PROGRESS_ID)}
+        progress={stepProgress}
+        onBack={goBack}
         title="Private mode needs the full app"
         subtitle={getPrivateModeUnavailableMessage()}
         ctaLabel="Use Cloud instead"
@@ -133,6 +135,21 @@ export function PrivateDownloadStep() {
     );
   }
 
+  if (discoveryError) {
+    return (
+      <OnboardingShell
+        progress={stepProgress}
+        onBack={goBack}
+        title="Local setup needs another try"
+        subtitle={discoveryError}
+        ctaLabel="Retry model selection"
+        onCta={() => setDiscoveryAttempt((attempt) => attempt + 1)}
+        secondaryCtaLabel="Use Cloud instead"
+        onSecondaryCta={switchToCloud}
+      />
+    );
+  }
+
   const done = recommended?.downloaded === true || status === 'completed';
   const preparing = status === 'preparing';
   const percent = done ? 100 : Math.round(progress * 100);
@@ -142,7 +159,8 @@ export function PrivateDownloadStep() {
   return (
     <>
       <OnboardingShell
-        progress={getStepProgress(PROGRESS_ID)}
+        progress={stepProgress}
+        onBack={goBack}
         title="Set up Private mode"
         titleAccent="Private"
         subtitle={`Private runs entirely on your device. It needs a one-time ${
@@ -150,7 +168,7 @@ export function PrivateDownloadStep() {
         } download, matched to your languages.`}
         ctaLabel={done ? 'Continue with Private' : 'Continue · available when ready'}
         ctaDisabled={!done}
-        onCta={continuePrivate}
+        onCta={() => chooseOnboardingMode('private', 'private-download')}
         secondaryCtaLabel={done ? 'Use Cloud instead' : "Don't use Private — switch to Cloud"}
         onSecondaryCta={switchToCloudStop}
       >

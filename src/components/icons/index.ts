@@ -3,7 +3,19 @@ import { createIcon } from "./createIcon";
 import * as Nucleo from "./nucleo";
 
 export type { IconComponent, IconProps } from "./createIcon";
-export { Circle, Square } from "./primitives";
+export {
+  Bold,
+  Circle,
+  Heading,
+  Italic,
+  List,
+  ListChecks,
+  ListOrdered,
+  Quote,
+  Square,
+  Strikethrough,
+  Table,
+} from "./primitives";
 
 export const AlertCircle = createIcon("alert-circle", Nucleo.CircleWarningOutline24);
 export const AlertTriangle = createIcon("alert-triangle", Nucleo.TriangleWarningOutline24);

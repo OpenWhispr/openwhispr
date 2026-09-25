@@ -35,7 +35,7 @@ npm install
 cp .env.example .env.local
 ```
 
-The example uses the hosted OpenWhispr API and leaves optional integrations disabled. Edit `.env.local` only for the features or local identity values you need. Local environment files are ignored by Git.
+The example uses the hosted OpenWhispr API and leaves optional integrations disabled. Edit `.env.local` only for the features or local identity values you need. Local environment files are ignored by Git. Personal provider and on-device development need no OpenWhispr production credentials. Enter provider keys only in the app, never in source, fixtures, or `EXPO_PUBLIC_` variables.
 
 Install the locked Ruby dependencies before the first iOS build:
 
@@ -119,3 +119,24 @@ The mobile test suite uses Jest. Run it locally with `npm test -- --runInBand`; 
 ## Reporting Bugs and Requesting Features
 
 Use the GitHub issue templates. For security issues, follow [SECURITY.md](./SECURITY.md) instead of opening a public issue.
+
+## Provider development
+
+Mobile owns its provider code: the catalog is `src/config/providerCatalog.json`, routing is `src/lib/mobileProviders.ts`, and endpoint rules are `src/lib/providerEndpoints.ts`. The catalog is a trimmed copy of the desktop registry's OpenAI and Groq entries; update it by hand when those models change.
+
+From `openwhispr-mobile`, run:
+
+```bash
+npm test -- --runInBand
+npm run typecheck
+npm run lint
+npm run format
+EXPO_NO_DOTENV=1 SENTRY_DISABLE_AUTO_UPLOAD=true OPENWHISPR_APP_ENV=production npx expo export --platform ios --output-dir /tmp/openwhispr-mobile-export
+python3 modules/background-uploader/tests/run-provider-transport-tests.py
+```
+
+The native transport regression requires macOS, Python 3, and Xcode Command Line Tools. It compiles Foundation-only Swift and uses local HTTP servers with synthetic credentials to check redirect refusal (including same-origin redirects), response redaction, the 300 s idle and 10 min total time limits, background-expiry and untrusted-certificate errors, the native 25 MB audio cap, private-host rules, and secret-free recovery metadata. Mobile CI runs it on a macOS runner. It does not replace compiling the Expo module for iOS or testing background URLSession on a device.
+
+Build a fresh native iOS app after changing any native module or config plugin. Do not use a JavaScript-only update to introduce the provider request transport.
+
+Provider diagnostics are explicit user actions and may incur provider charges. Tests use mocks and synthetic credentials. Before a release, check all four providers (OpenAI, Groq, OpenRouter and a Custom server) with your own provider accounts on a physical device. Never paste keys, tokens, transcript content, or raw provider responses into test artifacts or logs.

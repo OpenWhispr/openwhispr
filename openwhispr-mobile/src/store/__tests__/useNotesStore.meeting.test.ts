@@ -10,7 +10,11 @@ const mockAuthState: { user: { id: string; email: string; emailVerified: boolean
   user: null,
 };
 const mockConfigState: {
-  config: { autoGenerateNoteTitle: boolean; appleLocalIntelligenceEnabled?: boolean };
+  config: {
+    autoGenerateNoteTitle: boolean;
+    appleLocalIntelligenceEnabled?: boolean;
+    inference?: { notes?: { mode: 'local' } };
+  };
 } = {
   config: { autoGenerateNoteTitle: false },
 };
@@ -86,6 +90,9 @@ jest.mock('@/services/reasoning/ReasoningService', () => ({
     processText: jest.fn(),
   },
 }));
+jest.mock('@/lib/notes/localMeetingNotes', () => ({
+  generateLocalMeetingNotes: jest.fn(),
+}));
 jest.mock('@/services/diarization/DiarizationService', () => ({
   processMeeting: mockProcessMeeting,
 }));
@@ -103,6 +110,8 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
 import { useNotesStore } from '../useNotesStore';
 import { notesRepository } from '@/data';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { generateLocalMeetingNotes } from '@/lib/notes/localMeetingNotes';
+import * as localReasoning from '@/lib/localReasoning';
 import type { Speaker } from '@/data/types';
 
 const speaker = (overrides: Partial<Speaker>): Speaker =>
@@ -157,6 +166,7 @@ beforeEach(() => {
   mockAuthState.user = null;
   mockConfigState.config.autoGenerateNoteTitle = false;
   delete mockConfigState.config.appleLocalIntelligenceEnabled;
+  delete mockConfigState.config.inference;
   mockProcessingModeState.activeMode = 'cloud';
   mockProcessMeeting.mockResolvedValue({ speakerEmbeddingsByLabel: { speaker_0: [1, 0] } });
   mockGenerateNoteTitle.mockResolvedValue('Generated meeting title');
@@ -660,6 +670,63 @@ describe('runMeetingPipeline', () => {
         enhancedAtContentHash: expect.any(String),
       }),
     );
+  });
+
+  it('writes On-Device meeting notes through the chunked local path when signed in', async () => {
+    mockAuthState.user = signedInUser;
+    mockConfigState.config.inference = { notes: { mode: 'local' } };
+    (notesRepository.getNoteById as jest.Mock).mockReturnValue({
+      id: 7,
+      title: 'Planning Sync',
+      content: '',
+      noteType: 'meeting',
+      isPrivate: 0,
+      deletedAt: null,
+      enhancedAtContentHash: null,
+    });
+    (notesRepository.getActions as jest.Mock).mockReturnValue([
+      { id: 1, name: 'Generate Notes', prompt: 'Transform this meeting.', isDefault: 1 },
+    ]);
+    (notesRepository.getSegments as jest.Mock).mockReturnValue([segment('Ship the fix.')]);
+    (generateLocalMeetingNotes as jest.Mock).mockResolvedValue('Local notes');
+    jest
+      .spyOn(localReasoning, 'getLocalReasoningReadiness')
+      .mockResolvedValueOnce({ status: 'ready', tokenCounting: false });
+
+    await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2);
+
+    expect(generateLocalMeetingNotes).toHaveBeenCalledWith(7, {
+      actionPrompt: 'Transform this meeting.',
+    });
+    expect(ReasoningService.processText).not.toHaveBeenCalled();
+    expect(notesRepository.updateNote).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ enhancedContent: 'Local notes' }),
+    );
+  });
+
+  it('still offers to enable local AI when On-Device notes cannot run yet', async () => {
+    mockConfigState.config.inference = { notes: { mode: 'local' } };
+    mockConfigState.config.appleLocalIntelligenceEnabled = false;
+    mockProcessingModeState.activeMode = 'private';
+    (notesRepository.getNoteById as jest.Mock).mockReturnValue({
+      id: 7,
+      title: 'Planning Sync',
+      content: '',
+      noteType: 'meeting',
+      isPrivate: 0,
+      deletedAt: null,
+      enhancedAtContentHash: null,
+    });
+    (notesRepository.getActions as jest.Mock).mockReturnValue([
+      { id: 1, name: 'Generate Notes', prompt: 'Transform this meeting.', isDefault: 1 },
+    ]);
+    (notesRepository.getSegments as jest.Mock).mockReturnValue([segment('Ship the fix.')]);
+
+    await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2);
+
+    expect(generateLocalMeetingNotes).not.toHaveBeenCalled();
+    expect(mockPromptLocalReasoningFallback).toHaveBeenCalled();
   });
 
   it('prompts before using cloud fallback when local auto meeting notes are unavailable', async () => {

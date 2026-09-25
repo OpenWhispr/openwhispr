@@ -1,3 +1,5 @@
+jest.mock('@/lib/inferenceRouting', () => ({ getInferenceSelection: jest.fn(() => undefined) }));
+
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { api } from '@/lib/apiClient';
 

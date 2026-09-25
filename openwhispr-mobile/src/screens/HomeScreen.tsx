@@ -1,3 +1,5 @@
+import { getTranscriptionProvider } from '@/lib/inferenceRouting';
+import { dictationModeConfig } from '@/lib/inferenceModes';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Pressable, ScrollView, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/Text';
@@ -34,11 +36,7 @@ import {
   promptLocalModelFallback,
 } from '@/lib/privateMode';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
-import {
-  accountRequiredForCloud,
-  cloudModeRequiresAccount,
-  showAccountRequiredAlert,
-} from '@/lib/accountAccess';
+import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
 import { isMicPermissionError, isNoSpeechError, showMicPermissionAlert } from '@/lib/permissions';
 import { formatRelativeTime, safeHaptics } from '@/lib/utils';
 import { BRAND, iosColor } from '@/config/colors';
@@ -216,15 +214,6 @@ export default function HomeScreen() {
     onUsageLimitReached: handleUsageLimitReached,
   });
 
-  const requireAccountForCloudProcessing = useCallback(
-    (feature: string) => {
-      if (!cloudModeRequiresAccount(activeMode, user)) return false;
-      showAccountRequiredAlert(feature);
-      return true;
-    },
-    [activeMode, user],
-  );
-
   useEffect(() => {
     if (isRecording) {
       setRecordingDuration(0);
@@ -281,7 +270,11 @@ export default function HomeScreen() {
   };
 
   const handleRecordPress = async () => {
-    if (!isRecording && requireAccountForCloudProcessing('recording')) return;
+    const recordingProvider = getTranscriptionProvider('dictation');
+    if (!isRecording && recordingProvider === 'cloud' && accountRequiredForCloud(user)) {
+      showAccountRequiredAlert('recording');
+      return;
+    }
 
     if (!isSupported) {
       Alert.alert(
@@ -300,7 +293,7 @@ export default function HomeScreen() {
           await startRecording();
         };
 
-        if (activeMode === 'cloud' && user) {
+        if (recordingProvider === 'cloud' && user) {
           await registerSuperwallGate({
             placement: SUPERWALL_PLACEMENTS.cloudTranscriptionStart,
             params: usage ? buildUsageGateParams(usage) : undefined,
@@ -320,13 +313,17 @@ export default function HomeScreen() {
   };
 
   const handleFileUpload = async () => {
-    if (requireAccountForCloudProcessing('audio uploads')) return;
+    const uploadProvider = getTranscriptionProvider('upload');
+    if (uploadProvider === 'cloud' && accountRequiredForCloud(user)) {
+      showAccountRequiredAlert('audio uploads');
+      return;
+    }
     const beginUpload = async () => {
       await pickAndTranscribeFile();
     };
 
     try {
-      if (activeMode === 'cloud' && user) {
+      if (uploadProvider === 'cloud' && user) {
         await registerSuperwallGate({
           placement: SUPERWALL_PLACEMENTS.audioUploadStart,
           params: usage ? buildUsageGateParams(usage) : undefined,
@@ -346,14 +343,24 @@ export default function HomeScreen() {
 
   const handleTogglePrivateMode = () => {
     safeHaptics('light');
+    if (isRecording) return;
 
+    if (activeMode === 'providers') {
+      router.push({ pathname: '/(account)/ai-workflow', params: { scope: 'dictation' } });
+      return;
+    }
     if (isPrivateMode) {
+      if (useConfigStore.getState().config?.inference?.dictation?.mode === 'providers') {
+        setActiveMode('providers', true);
+        updateConfig({ defaultMode: 'providers' });
+        return;
+      }
       if (accountRequiredForCloud(user)) {
         showAccountRequiredAlert('cloud transcription');
         return;
       }
       setActiveMode('cloud', true);
-      updateConfig({ defaultMode: 'cloud' });
+      updateConfig(dictationModeConfig(useConfigStore.getState().config, 'cloud'));
       showModeToast({
         name: 'cloud.fill',
         mdName: 'Cloud',
@@ -377,7 +384,7 @@ export default function HomeScreen() {
     }
 
     setActiveMode('private', true);
-    updateConfig({ defaultMode: 'private' });
+    updateConfig(dictationModeConfig(useConfigStore.getState().config, 'private'));
     showModeToast({
       name: 'cloud.slash.fill',
       mdName: 'CloudOff',
@@ -430,7 +437,13 @@ export default function HomeScreen() {
 
   const handleRetryTranscript = async (id: string) => {
     if (retryingTranscriptIds[id]) return;
-    if (requireAccountForCloudProcessing('retrying transcription')) return;
+    if (
+      transcripts.find((transcript) => transcript.id === id)?.provider === 'cloud' &&
+      accountRequiredForCloud(user)
+    ) {
+      showAccountRequiredAlert('retrying transcription');
+      return;
+    }
 
     setRetryingTranscriptIds((current) => ({ ...current, [id]: true }));
     try {
@@ -534,16 +547,30 @@ export default function HomeScreen() {
         <View className="min-h-[44px] flex-row items-center justify-between">
           <Pressable
             onPress={handleTogglePrivateMode}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: !isPrivateMode }}
-            accessibilityLabel="Cloud transcription"
+            disabled={isRecording}
+            {...(activeMode === 'providers'
+              ? {
+                  accessibilityRole: 'button',
+                  accessibilityState: { disabled: isRecording },
+                  accessibilityLabel: 'Transcription: Bring Your Own Key',
+                  accessibilityHint: 'Opens Dictation settings.',
+                }
+              : {
+                  accessibilityRole: 'switch',
+                  accessibilityState: { checked: !isPrivateMode, disabled: isRecording },
+                  accessibilityLabel: 'Cloud transcription',
+                })}
             className="h-9 flex-row items-center rounded-full px-1 active:opacity-80"
             style={{
               backgroundColor: isPrivateMode ? '#E3E0DE' : BRAND,
               boxShadow: '0px 1px 3px rgba(0,0,0,0.18)',
             }}
           >
-            {!isPrivateMode && <Text className="ml-2 mr-1 text-xs font-bold text-white">On</Text>}
+            {!isPrivateMode && (
+              <Text className="ml-2 mr-1 text-xs font-bold text-white">
+                {activeMode === 'providers' ? 'Own key' : 'On'}
+              </Text>
+            )}
             <View className="h-7 w-7 items-center justify-center rounded-full bg-white">
               <CloudIcon size={16} color={isPrivateMode ? '#8E8E93' : BRAND} off={isPrivateMode} />
             </View>
@@ -554,7 +581,7 @@ export default function HomeScreen() {
           <DictationModeControl onModeChange={handleDictationModeChange} />
         </View>
         <KeyboardFullAccessBanner />
-        {!isPrivateMode ? (
+        {activeMode === 'cloud' ? (
           <UsageLimitBanner usage={usage} onPress={handleUsageWarningPress} />
         ) : null}
         {isPrivateMode ? (

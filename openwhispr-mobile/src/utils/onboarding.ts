@@ -1,7 +1,10 @@
 import * as SecureStore from 'expo-secure-store';
 // Type-only, so this does not create a runtime cycle with the store, which
 // imports this module for values.
-import type { OnboardingStepId } from '@/store/useOnboardingStore';
+import type { OnboardingStepId, PaywallNextStep } from '@/store/useOnboardingStore';
+import type { ProcessingMode } from '@/types';
+
+export const ONBOARDING_VERSION = 3;
 
 const ONBOARDING_COMPLETE_KEY = 'onboarding_complete';
 const ONBOARDING_PROGRESS_KEY = 'onboarding_progress';
@@ -11,7 +14,12 @@ const TRACKING_AUTHORIZATION_REQUEST_ATTEMPTED_KEY = 'tracking_authorization_req
 export const FIRST_ONBOARDING_STEP: OnboardingStepId = 'get-started';
 
 export interface OnboardingProgress {
+  version?: number;
   step: string;
+  selectedMode?: ProcessingMode | null;
+  paywallHandled?: boolean;
+  paywallNextStep?: PaywallNextStep;
+  tutorialCompleted?: boolean;
   keyboardInstalled: boolean;
   permissionsGranted: {
     microphone: boolean;

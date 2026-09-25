@@ -9,6 +9,8 @@ const MODEL_SUBDIR = "all-MiniLM-L6-v2";
 class LocalEmbeddings {
   constructor() {
     this.loadPromise = null;
+    this.loadedGeneration = null;
+    this.operationQueue = Promise.resolve();
     this.modelDir = this._resolveModelDir();
   }
 
@@ -50,13 +52,16 @@ class LocalEmbeddings {
   }
 
   _ensureLoaded() {
-    if (this.loadPromise) return this.loadPromise;
+    if (this.loadPromise && this.loadedGeneration === onnxWorkerClient.generation) {
+      return this.loadPromise;
+    }
     if (!this.isAvailable()) {
       return Promise.reject(
         new Error("Embedding model not found. Run: node scripts/download-minilm.js")
       );
     }
     debugLogger.debug("local-embeddings loading model", { modelDir: this.modelDir });
+    this.loadedGeneration = onnxWorkerClient.generation;
     this.loadPromise = onnxWorkerClient
       .request("text.load", { modelDir: this.modelDir })
       .then(() => debugLogger.debug("local-embeddings model loaded"))
@@ -67,18 +72,42 @@ class LocalEmbeddings {
     return this.loadPromise;
   }
 
-  async embedText(text) {
+  _enqueue(operation) {
+    const result = this.operationQueue.then(operation);
+    this.operationQueue = result.catch(() => {});
+    return result;
+  }
+
+  async _embedText(text) {
     await this._ensureLoaded();
     const { embeddingBuffer } = await onnxWorkerClient.request("text.embed", { text });
     return new Float32Array(embeddingBuffer);
   }
 
-  async embedTexts(texts) {
-    const results = [];
-    for (const text of texts) {
-      results.push(await this.embedText(text));
-    }
-    return results;
+  embedText(text) {
+    return this._enqueue(() => this._embedText(text));
+  }
+
+  embedTexts(texts) {
+    return this._enqueue(async () => {
+      const results = [];
+      for (const text of texts) {
+        results.push(await this._embedText(text));
+      }
+      return results;
+    });
+  }
+
+  unload() {
+    return this._enqueue(async () => {
+      try {
+        await onnxWorkerClient.request("text.unload", {});
+      } finally {
+        this.loadPromise = null;
+        this.loadedGeneration = null;
+      }
+      await onnxWorkerClient.releaseIfIdle();
+    });
   }
 
   static noteEmbedText(title, content, enhancedContent) {

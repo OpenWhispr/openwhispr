@@ -29,6 +29,9 @@ jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: je
 jest.mock('@/lib/notes/noteShareTokens', () => ({
   clearNoteShareTokens: (...args: unknown[]) => mockClearNoteShareTokens(...args),
 }));
+jest.mock('@/services/providers/ProviderCredentials', () => ({
+  clearProviderCredentials: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn().mockResolvedValue(null),
   setItemAsync: jest.fn(),

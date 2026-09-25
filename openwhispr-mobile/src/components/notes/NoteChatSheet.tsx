@@ -16,6 +16,7 @@ import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { BRAND } from '@/config/colors';
 import type { ChatOverNoteMessage } from '@/lib/notes/chatOverNote';
+import type { NoteChatSuggestion } from '@/lib/notes/noteChatSuggestions';
 
 const INPUT_KEYBOARD_GAP = 10;
 
@@ -26,8 +27,10 @@ interface NoteChatSheetProps {
   isProcessing: boolean;
   error: string | null;
   canSend: boolean;
+  suggestions: readonly NoteChatSuggestion[];
   onDraftChange: (text: string) => void;
   onSend: () => void;
+  onSuggestion: (prompt: string) => void;
   onRetry: () => void;
   onClear: () => void;
   onClose: () => void;
@@ -40,8 +43,10 @@ export function NoteChatSheet({
   isProcessing,
   error,
   canSend,
+  suggestions,
   onDraftChange,
   onSend,
+  onSuggestion,
   onRetry,
   onClear,
   onClose,
@@ -52,6 +57,10 @@ export function NoteChatSheet({
   const keyboardHeight = useKeyboardHeight(visible);
   const canSubmit = canSend && draft.trim().length > 0 && !isProcessing;
   const hasMessages = messages.length > 0;
+  // Shortcuts only seed the first question: they'd crowd an existing thread, and a tap sends
+  // immediately, so they step aside once the user starts typing rather than discard the draft.
+  const showSuggestions = !hasMessages && !draft.trim() && suggestions.length > 0;
+  const canUseSuggestion = canSend && !isProcessing;
   const sheetHeight = Math.min(windowHeight * 0.82, windowHeight - insets.top - 8);
   const bottomPad =
     keyboardHeight > 0 ? keyboardHeight + INPUT_KEYBOARD_GAP : Math.max(insets.bottom, 14);
@@ -83,7 +92,7 @@ export function NoteChatSheet({
             <View className="flex-1 pr-3">
               <Text className="text-[19px] font-bold text-label">Ask about this note</Text>
               <Text className="mt-1 text-[13px] text-secondaryLabel">
-                Answers use only this note and this chat.
+                Answers use only this note. This chat is temporary and won't be saved.
               </Text>
             </View>
             {hasMessages ? (
@@ -102,23 +111,15 @@ export function NoteChatSheet({
             </GlassIconButton>
           </View>
 
+          {/* With the keyboard up the sheet is short, so an empty thread must not squeeze the chips. */}
           <ScrollView
             ref={scrollRef}
-            className="min-h-[220px] flex-1"
+            className={`flex-1 ${hasMessages ? 'min-h-[220px]' : ''}`}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
           >
-            {!hasMessages ? (
-              <View className="min-h-[200px] justify-center">
-                <Text className="text-[15px] font-medium text-label">
-                  Ask for decisions, action items, quotes, or who said what.
-                </Text>
-                <Text className="mt-2 text-[14px] leading-5 text-secondaryLabel">
-                  The conversation is temporary and will not be saved.
-                </Text>
-              </View>
-            ) : (
+            {hasMessages ? (
               <View className="gap-3 pb-3">
                 {messages.map((message) => {
                   const isUser = message.role === 'user';
@@ -150,7 +151,7 @@ export function NoteChatSheet({
                   </View>
                 ) : null}
               </View>
-            )}
+            ) : null}
           </ScrollView>
 
           {error ? (
@@ -166,6 +167,32 @@ export function NoteChatSheet({
                 <Text className="text-[13px] font-semibold text-link">Retry</Text>
               </Pressable>
             </View>
+          ) : null}
+
+          {/* Bleeds past the sheet's side padding so chips scroll edge to edge. */}
+          {showSuggestions ? (
+            <ScrollView
+              horizontal
+              className="-mx-5 mb-3 shrink-0 grow-0"
+              contentContainerClassName="gap-2 px-5"
+              keyboardShouldPersistTaps="handled"
+              showsHorizontalScrollIndicator={false}
+            >
+              {suggestions.map((suggestion) => (
+                <Pressable
+                  key={suggestion.label}
+                  onPress={() => onSuggestion(suggestion.prompt)}
+                  disabled={!canUseSuggestion}
+                  accessibilityRole="button"
+                  accessibilityLabel={suggestion.label}
+                  accessibilityHint="Sends this question"
+                  className="rounded-full bg-tertiarySystemFill px-4 py-2.5 active:opacity-70 disabled:opacity-50"
+                  style={{ borderCurve: 'continuous' }}
+                >
+                  <Text className="text-[15px] font-medium text-label">{suggestion.label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           ) : null}
 
           <View className="flex-row items-end gap-2 rounded-[22px] bg-secondarySystemBackground px-3 py-2">
