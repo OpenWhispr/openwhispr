@@ -56,11 +56,34 @@ function createConnectorPolicyResolver({
   };
 }
 
-function registerConnectorIpc({ ipcMain, manager, getPolicyState, findContacts }) {
-  // Direct runs still waiting on their policy lookup, by the renderer's run
-  // id. A cancel that lands during that wait (Esc) stops the run before it
-  // acts; once policy resolves, the action runs without another wait.
-  const waitingRuns = new Map();
+function sameAccountScope(left, right) {
+  return Boolean(
+    left &&
+    right &&
+    left.accountId === right.accountId &&
+    left.authGeneration === right.authGeneration
+  );
+}
+
+// getAccountScope() is the signed-in account bound to the current credential
+// and its generation, or null.
+function registerConnectorIpc({ ipcMain, manager, getPolicyState, getAccountScope, findContacts }) {
+  // The verdict and the account that owns the receipt come from one
+  // credential: a sign-in or account switch during the policy wait leaves no
+  // account, so the action is refused rather than filed under the wrong one.
+  async function resolveCallAuth(event) {
+    const scope = getAccountScope();
+    const policyState = await getPolicyState(event);
+    return {
+      policyState,
+      accountId: sameAccountScope(scope, getAccountScope()) ? scope.accountId : null,
+    };
+  }
+
+  // Direct runs by the renderer's run id until they finish. A cancel (Esc)
+  // aborts the run's signal: a run still waiting on policy stops there, and
+  // the connector checks the signal again right before it acts.
+  const activeRuns = new Map();
 
   ipcMain.handle("connector-status", () => manager.status());
 
@@ -68,42 +91,54 @@ function registerConnectorIpc({ ipcMain, manager, getPolicyState, findContacts }
     if (!isNonEmptyString(connectorId) || !isNonEmptyString(action) || !isPlainObject(args)) {
       return { status: "unavailable", reason: "invalid_request" };
     }
-    return manager.prepare(connectorId, action, args, await getPolicyState(event));
+    return manager.prepare(connectorId, action, args, await resolveCallAuth(event));
   });
 
   ipcMain.handle("connector-commit", async (event, actionId, edits) => {
     if (!isNonEmptyString(actionId)) return { state: "not_sent", reason: "invalid_request" };
-    return manager.commit(actionId, isPlainObject(edits) ? edits : {}, await getPolicyState(event));
+    return manager.commit(
+      actionId,
+      isPlainObject(edits) ? edits : {},
+      await resolveCallAuth(event)
+    );
   });
 
+  // A run id equal to a pending approval's id must not swallow that
+  // approval's cancel, so both are cancelled.
   ipcMain.handle("connector-cancel", (_event, actionId, reason) => {
     if (!isNonEmptyString(actionId)) return { cancelled: false };
-    const waitingRun = waitingRuns.get(actionId);
-    if (waitingRun) {
-      waitingRun.cancelled = true;
-      return { cancelled: true };
-    }
-    return manager.cancel(actionId, reason);
+    const run = activeRuns.get(actionId);
+    run?.abort();
+    const { cancelled } = manager.cancel(actionId, reason);
+    return { cancelled: Boolean(run) || cancelled };
   });
 
   ipcMain.handle("connector-run-direct", async (event, connectorId, action, args, runId) => {
     if (!isNonEmptyString(connectorId) || !isNonEmptyString(action) || !isPlainObject(args)) {
       return { state: "unavailable", reason: "invalid_request" };
     }
-    const run = { cancelled: false };
     const tracked = isNonEmptyString(runId);
-    if (tracked) waitingRuns.set(runId, run);
-    const policyState = await getPolicyState(event);
-    if (tracked) waitingRuns.delete(runId);
-    if (run.cancelled) return { state: "not_sent", reason: "cancelled" };
-    return manager.runDirect(connectorId, action, args, policyState, {
-      webContents: event.sender,
-    });
+    // A second run under a live id would make the first one uncancellable.
+    if (tracked && activeRuns.has(runId)) {
+      return { state: "unavailable", reason: "invalid_request" };
+    }
+    const controller = new AbortController();
+    if (tracked) activeRuns.set(runId, controller);
+    try {
+      const auth = await resolveCallAuth(event);
+      if (controller.signal.aborted) return { state: "not_sent", reason: "cancelled" };
+      return await manager.runDirect(connectorId, action, args, auth, {
+        webContents: event.sender,
+        signal: controller.signal,
+      });
+    } finally {
+      if (tracked) activeRuns.delete(runId);
+    }
   });
 
   ipcMain.handle("connector-recent-actions", (_event, connectorId, limit) => {
     if (!isNonEmptyString(connectorId)) return [];
-    return manager.recentActions(connectorId, limit);
+    return manager.recentActions(connectorId, limit, getAccountScope()?.accountId ?? null);
   });
 
   if (findContacts) {

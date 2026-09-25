@@ -25,13 +25,14 @@ function createPendingActions({
     return now() - entry.createdAt > ttlMs;
   }
 
-  function create({ connectorId, action, binding, payload, preview }) {
+  function create({ connectorId, action, binding, accountId, payload, preview }) {
     const actionId = randomId();
     actions.set(actionId, {
       actionId,
       connectorId,
       action,
       binding,
+      accountId,
       payload,
       preview,
       state: "pending",

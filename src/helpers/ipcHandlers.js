@@ -6062,6 +6062,14 @@ class IPCHandlers {
           peekPolicy: (options) => workspacePolicyManager.peekPolicy(options),
           getAuthGeneration: () => tokenStore.getState().generation,
         }),
+        // The account bound to the credential in use, the same binding
+        // get-active-account-scope serves (not the separately synced
+        // database scope, which lags a sign-in or account switch).
+        getAccountScope: () =>
+          accountScopeBinding.resolveActiveAccountScope({
+            ...tokenStore.getState(),
+            binding: accountScopeBinding.read(),
+          }),
         findContacts: (query) =>
           searchContacts(this.databaseManager.getContactLookupSources(), query),
       });

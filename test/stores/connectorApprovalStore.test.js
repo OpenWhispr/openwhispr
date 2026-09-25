@@ -4,7 +4,12 @@ const { installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 const load = () => import("../../src/stores/connectorApprovalStore.ts");
 
-const PREVIEW = { verbKey: "default", destinationLabel: "#eng", accountLabel: "chad", body: "Hello team" };
+const PREVIEW = {
+  verbKey: "default",
+  destinationLabel: "#eng",
+  accountLabel: "chad",
+  body: "Hello team",
+};
 
 function fakeElectron(commitImpl) {
   const calls = { commit: [], cancel: [] };
@@ -71,7 +76,11 @@ test("Send commits the edited draft once and reports the edited text", async (t)
   store.updateApprovalDraft("call-2", { body: "Hello team!" });
   await Promise.all([store.approveAction("call-2"), store.approveAction("call-2")]);
 
-  assert.deepEqual(await outcome, { state: "sent", url: "https://slack.test/p/1", finalText: "Hello team!" });
+  assert.deepEqual(await outcome, {
+    state: "sent",
+    url: "https://slack.test/p/1",
+    finalText: "Hello team!",
+  });
   assert.deepEqual(electron.calls.commit, [{ actionId: "a2", edits: { body: "Hello team!" } }]);
   assert.equal(store.useConnectorApprovalStore.getState().entries["call-2"].state, "sent");
 });
@@ -132,7 +141,11 @@ test("ending the conversation withdraws a pending card", async (t) => {
   installBrowserGlobals(t, { window: { electronAPI: electron.api } });
   const store = await freshStore();
   const ctx = context("call-4");
-  const outcome = store.requestApproval(ctx.value, { actionId: "a4", connectorId: "slack", preview: PREVIEW });
+  const outcome = store.requestApproval(ctx.value, {
+    actionId: "a4",
+    connectorId: "slack",
+    preview: PREVIEW,
+  });
 
   ctx.controller.abort();
 
@@ -151,7 +164,11 @@ test("ending the conversation during Send keeps the real result", async (t) => {
   installBrowserGlobals(t, { window: { electronAPI: electron.api } });
   const store = await freshStore();
   const ctx = context("call-5");
-  const outcome = store.requestApproval(ctx.value, { actionId: "a5", connectorId: "slack", preview: PREVIEW });
+  const outcome = store.requestApproval(ctx.value, {
+    actionId: "a5",
+    connectorId: "slack",
+    preview: PREVIEW,
+  });
 
   const sending = store.approveAction("call-5");
   ctx.controller.abort();
@@ -212,6 +229,22 @@ test("a commit result with the wrong key settles as unknown instead of hanging",
   assert.equal(store.useConnectorApprovalStore.getState().entries["call-10"].state, "unknown");
 });
 
+test("a commit result with an unknown state settles as unknown instead of hanging", async (t) => {
+  const electron = fakeElectron(() => ({ state: "bogus" }));
+  installBrowserGlobals(t, { window: { electronAPI: electron.api } });
+  const store = await freshStore();
+  const outcome = store.requestApproval(context("call-12").value, {
+    actionId: "a12",
+    connectorId: "slack",
+    preview: PREVIEW,
+  });
+
+  await store.approveAction("call-12");
+
+  assert.deepEqual(await outcome, { state: "unknown" });
+  assert.equal(store.useConnectorApprovalStore.getState().entries["call-12"].state, "unknown");
+});
+
 test("a commit result that resolves undefined settles as unknown", async (t) => {
   const electron = fakeElectron(() => undefined);
   installBrowserGlobals(t, { window: { electronAPI: electron.api } });
@@ -246,7 +279,9 @@ test("a duplicate request for the same tool call cancels the new action and leav
   });
 
   assert.deepEqual(await secondOutcome, { state: "not_sent", reason: "duplicate_tool_call" });
-  assert.deepEqual(electron.calls.cancel, [{ actionId: "a12-second", reason: "cancelled_by_user" }]);
+  assert.deepEqual(electron.calls.cancel, [
+    { actionId: "a12-second", reason: "cancelled_by_user" },
+  ]);
 
   const entry = store.useConnectorApprovalStore.getState().entries["call-12"];
   assert.equal(entry.state, "pending");
@@ -255,5 +290,7 @@ test("a duplicate request for the same tool call cancels the new action and leav
   await store.approveAction("call-12");
 
   assert.deepEqual(await firstOutcome, { state: "sent", url: "https://slack.test/p/1" });
-  assert.deepEqual(electron.calls.commit, [{ actionId: "a12-first", edits: { body: "Hello team" } }]);
+  assert.deepEqual(electron.calls.commit, [
+    { actionId: "a12-first", edits: { body: "Hello team" } },
+  ]);
 });

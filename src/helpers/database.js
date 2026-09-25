@@ -4787,8 +4787,12 @@ class DatabaseManager {
     }
   }
 
+  // accountId is the account the action ran under (resolved from its
+  // credential by the connector IPC), not this.activeAccountId, which lags a
+  // sign-in or account switch.
   insertConnectorAction({
     id,
+    accountId,
     connector,
     action,
     kind,
@@ -4804,17 +4808,7 @@ class DatabaseManager {
            (id, account_id, connector, action, kind, destination_label, state, result_url, error_code)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(
-        id,
-        this.activeAccountId,
-        connector,
-        action,
-        kind,
-        destinationLabel,
-        state,
-        resultUrl,
-        errorCode
-      );
+      .run(id, accountId, connector, action, kind, destinationLabel, state, resultUrl, errorCode);
   }
 
   // With fromState, only a row still in that state moves, so a caller can tell
@@ -4847,11 +4841,11 @@ class DatabaseManager {
       .run(...params).changes;
   }
 
-  // Receipts name the people a user wrote to, so only the signed-in account
-  // that took the action sees them.
-  listRecentConnectorActions(connector, limit = 10) {
+  // Receipts name the people a user wrote to, so only the account that took
+  // the action sees them.
+  listRecentConnectorActions(connector, limit, accountId) {
     if (!this.db) throw new Error("Database not initialized");
-    if (!this.activeAccountId) return [];
+    if (!accountId) return [];
     return this.db
       .prepare(
         `SELECT id, connector, action, kind,
@@ -4863,11 +4857,13 @@ class DatabaseManager {
           ORDER BY created_at DESC, rowid DESC
           LIMIT ?`
       )
-      .all(connector, this.activeAccountId, limit);
+      .all(connector, accountId, limit);
   }
 
   // A quit mid-send can't tell whether the provider acted, so committing rows
-  // become unknown; pending rows were never sent.
+  // become unknown; pending rows were never sent. Rows without an account
+  // (only pre-release builds wrote them) are listed to no one and no account
+  // deletion reaches them, so they are deleted.
   reconcileInterruptedConnectorActions() {
     if (!this.db) throw new Error("Database not initialized");
     const unknown = this.db
@@ -4880,7 +4876,10 @@ class DatabaseManager {
         "UPDATE connector_actions SET state = 'cancelled', error_code = 'app_quit', updated_at = CURRENT_TIMESTAMP WHERE state = 'pending'"
       )
       .run().changes;
-    return { unknown, cancelled };
+    const orphaned = this.db
+      .prepare("DELETE FROM connector_actions WHERE account_id IS NULL")
+      .run().changes;
+    return { unknown, cancelled, orphaned };
   }
 
   // What find_contact searches. calendar_events only holds a sync window

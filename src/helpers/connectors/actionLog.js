@@ -3,7 +3,8 @@ function createActionLog(databaseManager) {
     insert: (row) => databaseManager.insertConnectorAction(row),
     update: (id, patch, fromState) =>
       databaseManager.updateConnectorActionState(id, patch, fromState ?? null),
-    listRecent: (connector, limit) => databaseManager.listRecentConnectorActions(connector, limit),
+    listRecent: (connector, limit, accountId) =>
+      databaseManager.listRecentConnectorActions(connector, limit, accountId),
     reconcileInterrupted: () => databaseManager.reconcileInterruptedConnectorActions(),
   };
 }

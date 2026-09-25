@@ -86,6 +86,8 @@ function createEmailConnector({
         );
       }
 
+      // A cancel (Esc) that landed during the checks above still stops it.
+      if (runtime.signal?.aborted) return { state: "not_sent", reason: "cancelled" };
       try {
         await openExternal(request.url);
       } catch {
