@@ -731,10 +731,10 @@ test("XWayland fallback remains reachable after native Wayland failure", async (
   );
 });
 
-test("pasteMacOS restores clipboard after the short macOS delay on successful fast paste", async () => {
+test("pasteMacOS asks the binary to watch the paste land and restores promptly once it has", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({
-    spawn: createSuccessfulSpawn(spawnCalls),
+    spawn: createSpawn(spawnCalls, [0], { stdout: ["PASTE_CONSUMED 312\n"] }),
   });
   const manager = new TestClipboardManager();
   const originalClipboard = { type: "text", data: "previous clipboard" };
@@ -752,13 +752,73 @@ test("pasteMacOS restores clipboard after the short macOS delay on successful fa
   });
   await result.restoreComplete;
 
-  assert.equal(spawnCalls.length, 1);
-  assert.equal(spawnCalls[0].command, "/tmp/openwhispr-fast-paste");
+  assert.deepEqual(spawnCalls, [
+    {
+      command: "/tmp/openwhispr-fast-paste",
+      args: ["--await-paste", "1500", "--paste-length", "13"],
+    },
+  ]);
   assert.equal(restoreCall.original, originalClipboard);
   assert.deepEqual(restoreCall.options, {
-    delayMs: 450,
+    delayMs: 100,
     expectedText: "dictated text",
   });
+});
+
+// A target whose focused field cannot be read through Accessibility (Chromium
+// apps keep their tree dormant), a binary that gave up waiting, and an older
+// cached binary that prints nothing all fall back to the long delay: the only
+// defence left against a target that dequeues ⌘V after the restore (#1740).
+for (const [label, stdout] of [
+  ["unverifiable", "PASTE_UNVERIFIED\n"],
+  ["timed out", "PASTE_TIMEOUT\n"],
+  ["silent (older binary)", ""],
+]) {
+  test(`pasteMacOS waits out a busy target when the paste is ${label}`, async () => {
+    const spawnCalls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSpawn(spawnCalls, [0], { stdout: [stdout] }),
+    });
+    const manager = new TestClipboardManager();
+    let restoreCall;
+
+    manager.resolveFastPasteBinary = () => "/tmp/openwhispr-fast-paste";
+    manager._restoreClipboardAfterDelay = (original, options) => {
+      restoreCall = { original, options };
+      return Promise.resolve();
+    };
+
+    const result = await manager.pasteMacOS(
+      { type: "text", data: "previous clipboard" },
+      { expectedClipboardText: "dictated text" }
+    );
+    await result.restoreComplete;
+
+    assert.deepEqual(restoreCall.options, {
+      delayMs: 1000,
+      expectedText: "dictated text",
+    });
+  });
+}
+
+test("pasteMacOS does not watch the paste when the clipboard is not restored", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.resolveFastPasteBinary = () => "/tmp/openwhispr-fast-paste";
+  let restoreCalls = 0;
+  manager._restoreClipboardAfterDelay = () => {
+    restoreCalls++;
+    return Promise.resolve();
+  };
+
+  const result = await manager.pasteMacOS(null, { expectedClipboardText: "dictated text" });
+  await result.restoreComplete;
+
+  assert.deepEqual(spawnCalls, [{ command: "/tmp/openwhispr-fast-paste", args: [] }]);
+  assert.equal(restoreCalls, 0);
 });
 
 test("pasteMacOS leaves text on the clipboard when the keyboard layout cannot be resolved", async () => {
@@ -777,11 +837,19 @@ test("pasteMacOS leaves text on the clipboard when the keyboard layout cannot be
   };
 
   await assert.rejects(
-    manager.pasteMacOS({ type: "text", data: "previous clipboard" }),
+    manager.pasteMacOS(
+      { type: "text", data: "previous clipboard" },
+      { expectedClipboardText: "dictated text" }
+    ),
     /could not resolve the active keyboard layout/
   );
 
-  assert.deepEqual(spawnCalls, [{ command: "/tmp/openwhispr-fast-paste", args: [] }]);
+  assert.deepEqual(spawnCalls, [
+    {
+      command: "/tmp/openwhispr-fast-paste",
+      args: ["--await-paste", "1500", "--paste-length", "13"],
+    },
+  ]);
   assert.equal(fakeClipboard.text, "dictated text");
   assert.deepEqual(fakeClipboard.writes, []);
   assert.equal(restoreCalls, 0);
@@ -789,7 +857,7 @@ test("pasteMacOS leaves text on the clipboard when the keyboard layout cannot be
   assert.equal(manager.fastPasteChecked, true);
 });
 
-test("pasteMacOSWithOsascript fallback uses the short macOS restore delay", async () => {
+test("pasteMacOSWithOsascript fallback cannot watch the paste, so it waits out a busy target", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({
     spawn: createSuccessfulSpawn(spawnCalls),
@@ -816,7 +884,7 @@ test("pasteMacOSWithOsascript fallback uses the short macOS restore delay", asyn
   ]);
   assert.equal(restoreCall.original, originalClipboard);
   assert.deepEqual(restoreCall.options, {
-    delayMs: 450,
+    delayMs: 1000,
     expectedText: "dictated text",
   });
 });

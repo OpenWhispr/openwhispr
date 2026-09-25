@@ -21,8 +21,14 @@ const PASTE_DELAYS = {
   linux: 50,
 };
 
+const PASTE_WATCH_BUDGET_MS = 1500;
+
 const RESTORE_DELAYS = {
-  darwin: 450,
+  // macOS waits for the fast-paste binary to see the paste land (`--await-paste`
+  // in resources/macos-fast-paste.swift). When it cannot tell, the longer delay
+  // covers a target that reads ⌘V late (#1740).
+  darwin_consumed: 100,
+  darwin: 1000,
   win32_nircmd: 500,
   win32_pwsh: 500,
   linux: 800,
@@ -984,17 +990,36 @@ class ClipboardManager {
     const useFastPaste = !!fastPasteBinary;
     const pasteDelay = options.fromStreaming ? (useFastPaste ? 15 : 50) : PASTE_DELAYS.darwin;
 
+    // Only a restore needs to know when the target read the pasteboard.
+    const watchesPaste = useFastPaste && originalClipboard != null;
+    const fastPasteArgs = watchesPaste
+      ? [
+          "--await-paste",
+          String(PASTE_WATCH_BUDGET_MS),
+          "--paste-length",
+          String(options.expectedClipboardText.length),
+        ]
+      : [];
+    // A watching binary's last poll can run ~0.8 s past its budget; killing it
+    // after ⌘V is posted would make the caller's retry paste a second time.
+    const killAfterMs = watchesPaste ? PASTE_WATCH_BUDGET_MS + 3000 : 3000;
+
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         const pasteProcess = useFastPaste
-          ? spawn(fastPasteBinary)
+          ? spawn(fastPasteBinary, fastPasteArgs)
           : spawn("osascript", [
               "-e",
               'tell application "System Events" to key code 9 using command down',
             ]);
 
+        let output = "";
         let errorOutput = "";
         let hasTimedOut = false;
+
+        pasteProcess.stdout.on("data", (data) => {
+          output += data.toString();
+        });
 
         pasteProcess.stderr.on("data", (data) => {
           errorOutput += data.toString();
@@ -1008,9 +1033,18 @@ class ClipboardManager {
           if (code === 0) {
             this.safeLog(`Text pasted successfully via ${useFastPaste ? "CGEvent" : "osascript"}`);
             if (originalClipboard != null) {
+              const verdict = output.trim();
+              const delayMs = /^PASTE_CONSUMED\b/.test(verdict)
+                ? RESTORE_DELAYS.darwin_consumed
+                : RESTORE_DELAYS.darwin;
+              debugLogger.debug(
+                "Paste verdict",
+                { verdict: verdict || "none", restoreDelayMs: delayMs },
+                "clipboard"
+              );
               resolve({
                 restoreComplete: this._restoreClipboardAfterDelay(originalClipboard, {
-                  delayMs: RESTORE_DELAYS.darwin,
+                  delayMs,
                   expectedText: options.expectedClipboardText,
                 }),
               });
@@ -1067,7 +1101,7 @@ class ClipboardManager {
           const errorMsg =
             "Paste operation timed out. Text is copied to clipboard - please paste manually with Cmd+V.";
           reject(new Error(errorMsg));
-        }, 3000);
+        }, killAfterMs);
       }, pasteDelay);
     });
   }
