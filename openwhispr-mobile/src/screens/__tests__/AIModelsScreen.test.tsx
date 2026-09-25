@@ -8,10 +8,16 @@ let mockActiveMode = 'cloud';
 let mockConfig: Record<string, unknown> | null = null;
 const mockCredentialStatus = jest.fn();
 let mockCredentialListener: (() => void) | null = null;
+const MockText = require('react-native').Text;
 
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('expo-router', () => ({ router: { push: (...args: unknown[]) => mockPush(...args) } }));
+jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 0 }));
+jest.mock('@/components/ui/Toast', () => ({
+  Toast: ({ message, visible, type }: { message: string; visible: boolean; type: string }) =>
+    visible ? <MockText testID={`toast-${type}`}>{message}</MockText> : null,
+}));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: (selector: (state: unknown) => unknown) => selector({ config: mockConfig }),
 }));
@@ -96,8 +102,10 @@ it('removes every saved provider key after confirmation', async () => {
     .spyOn(Alert, 'alert')
     .mockImplementation((_title, _message, buttons) => buttons?.[1]?.onPress?.());
   render(<AIModelsScreen />);
-  fireEvent.press(screen.getByText('Remove all provider keys'));
-  await screen.findByText('All provider keys were removed.');
+  fireEvent.press(screen.getByText('Remove All Provider Keys'));
+  expect(await screen.findByTestId('toast-success')).toHaveTextContent(
+    'All provider keys were removed.',
+  );
   expect(mockClearCredentials).toHaveBeenCalledTimes(1);
 });
 
@@ -105,7 +113,7 @@ it('has no provider keys to remove on Android', async () => {
   Platform.OS = 'android';
   render(<AIModelsScreen />);
   expect(screen.getByText('Dictation & Keyboard')).toBeTruthy();
-  expect(screen.queryByText('Remove all provider keys')).toBeNull();
+  expect(screen.queryByText('Remove All Provider Keys')).toBeNull();
   await screen.findByText(/Status: Ready/);
 });
 

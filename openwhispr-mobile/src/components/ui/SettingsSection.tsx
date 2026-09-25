@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet, TextInput, type TextInputProps } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from './SystemIcon';
-import { BRAND } from '@/config/colors';
+import { BRAND, iosColor } from '@/config/colors';
+import { SpaceGrotesk } from '@/lib/fonts';
 
 type SettingsRowProps = {
   icon: string;
@@ -91,6 +92,39 @@ export function SettingsRow({
         ) : null}
       </View>
     </Pressable>
+  );
+}
+
+type SettingsTextFieldRowProps = TextInputProps & {
+  icon: string;
+  mdIcon?: LucideIconName;
+  label?: string;
+};
+
+// A text field laid out like a SettingsRow, so it sits in the same card with aligned separators.
+export function SettingsTextFieldRow({
+  icon,
+  mdIcon,
+  label,
+  editable = true,
+  style,
+  ...inputProps
+}: SettingsTextFieldRowProps) {
+  return (
+    <View className="min-h-[50px] flex-row items-center gap-4 px-4">
+      <View className="h-6 w-6 items-center justify-center">
+        <SystemIcon name={icon} mdName={mdIcon} size={22} color="label" />
+      </View>
+      {label ? <Text className="w-[84px] text-[17px] text-label">{label}</Text> : null}
+      <TextInput
+        placeholderTextColor={iosColor('tertiaryLabel')}
+        autoCorrect={false}
+        editable={editable}
+        className={`flex-1 py-3 text-[17px] text-label ${editable ? '' : 'opacity-40'}`}
+        style={[{ fontFamily: SpaceGrotesk.regular }, style]}
+        {...inputProps}
+      />
+    </View>
   );
 }
 

@@ -1,14 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Keyboard, Linking, Platform, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Linking, Platform, Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
-import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
+import {
+  SettingsRow,
+  SettingsSection,
+  SettingsTextFieldRow,
+} from '@/components/ui/SettingsSection';
 import { Text } from '@/components/ui/Text';
-import { Toast, type ToastType } from '@/components/ui/Toast';
+import { Toast } from '@/components/ui/Toast';
+import { useToast } from '@/hooks/useToast';
 import { confirmDestructive } from '@/lib/alerts';
 import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
 import { OnDeviceModelSection } from '@/components/settings/OnDeviceModelSection';
@@ -31,6 +34,8 @@ import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
 import {
   ON_DEVICE_MODE_NOTES,
   UNSET_PROVIDER_NOTES,
+  WORKFLOW_LABELS,
+  WORKFLOWS,
   parseWorkflow,
   unsetSelection,
 } from '@/lib/aiWorkflows';
@@ -50,6 +55,7 @@ import {
 import {
   defaultModelId,
   getMobileProvidersForScope,
+  providerDisplayName,
   resolveMobileInferenceRoute,
   type InferenceMode,
   type InferenceSelection,
@@ -57,41 +63,56 @@ import {
 } from '@/lib/mobileProviders';
 
 type Picker = 'provider' | 'model';
-const TOAST_MS = 3000;
-// Errors carry something to act on, so they stay long enough to read.
-const ERROR_TOAST_MS = 6000;
 const PROVIDER_SETUP_URLS: Record<string, string> = {
   openai: 'https://platform.openai.com/api-keys',
   groq: 'https://console.groq.com/keys',
   openrouter: 'https://openrouter.ai/keys',
 };
 
-function CleanupSettings(): React.JSX.Element {
-  const cleanupEnabled = useConfigStore((state) => state.config?.cleanupEnabled ?? true);
+function SectionFooter({ children }: { children: string }): React.JSX.Element {
+  return (
+    <View className="mx-4 -mt-5 mb-7 px-4">
+      <Text className="text-[13px] text-secondaryLabel">{children}</Text>
+    </View>
+  );
+}
+
+function joinNames(names: string[]): string {
+  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
+function CleanupSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
   const toggleCleanup = useConfigToggle('cleanupEnabled');
   const hasCustomPrompt = useCustomPromptsStore(
     (state) => resolveCustomPrompt(state.customPrompts.cleanup) !== undefined,
   );
   return (
-    <SettingsSection title="Settings">
-      <SettingsRow
-        iconStyle="line"
-        icon="sparkles"
-        mdIcon="Sparkles"
-        title="Enable Text Cleanup"
-        description="Use AI to remove filler words, fix grammar, and polish punctuation."
-        rightElement={<SettingsSwitch value={cleanupEnabled} onValueChange={toggleCleanup} />}
-        showChevron={false}
-      />
-      <SettingsRow
-        iconStyle="line"
-        icon="text.quote"
-        mdIcon="TextQuote"
-        title="Cleanup Prompt"
-        subtitle={hasCustomPrompt ? 'Custom' : 'Default'}
-        onPress={() => router.push('/(account)/cleanup-prompt')}
-      />
-    </SettingsSection>
+    <>
+      <SettingsSection>
+        <SettingsRow
+          iconStyle="line"
+          icon="sparkles"
+          mdIcon="Sparkles"
+          title="Enable Text Cleanup"
+          description="Use AI to remove filler words, fix grammar, and polish punctuation."
+          rightElement={<SettingsSwitch value={enabled} onValueChange={toggleCleanup} />}
+          showChevron={false}
+        />
+        {enabled ? (
+          <SettingsRow
+            iconStyle="line"
+            icon="text.quote"
+            mdIcon="TextQuote"
+            title="Cleanup Prompt"
+            subtitle={hasCustomPrompt ? 'Custom' : 'Default'}
+            onPress={() => router.push('/(account)/cleanup-prompt')}
+          />
+        ) : null}
+      </SettingsSection>
+      {enabled ? null : (
+        <SectionFooter>Dictation is inserted as spoken, with no AI cleanup.</SectionFooter>
+      )}
+    </>
   );
 }
 
@@ -158,23 +179,15 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const [apiKey, setApiKey] = useState('');
   const [configured, setConfigured] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [checking, setChecking] = useState<'test' | 'discover' | null>(null);
   const [discoveredModels, setDiscoveredModels] = useState<{ id: string; name: string }[]>([]);
-  const [toast, setToast] = useState<{
-    message: string;
-    type: ToastType;
-    visible: boolean;
-    showId: number;
-  }>({ message: '', type: 'info', visible: false, showId: 0 });
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { toast, showToast } = useToast();
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation();
   const diagnosticController = useRef<AbortController | null>(null);
   useEffect(
     () => (): void => {
       diagnosticController.current?.abort();
-      if (toastTimer.current) clearTimeout(toastTimer.current);
     },
     [],
   );
@@ -193,6 +206,25 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       ? 'Save to switch to Bring Your Own Key.'
       : undefined);
   const speechScope = scope === 'dictation' || scope === 'upload' ? scope : null;
+  const cleanupOff = scope === 'cleanup' && !(config?.cleanupEnabled ?? true);
+  // Keys are stored per provider (per server for Custom), so every workflow on it shares one.
+  const keyOwner =
+    provider?.id === 'custom' ? 'this server' : providerDisplayName(provider?.id ?? '');
+  const sharedWith = WORKFLOWS.filter((other) => {
+    const saved = config?.inference?.[other];
+    return (
+      other !== scope &&
+      saved?.mode === 'providers' &&
+      saved.providerId === provider?.id &&
+      (provider?.id !== 'custom' ||
+        normalizeBaseUrl(saved.endpoint) === normalizeBaseUrl(selection.endpoint))
+    );
+  }).map((other) => WORKFLOW_LABELS[other]);
+  const keyFooter = sharedWith.length
+    ? `Stays on this iPhone. Also used by ${joinNames(sharedWith)}.`
+    : provider?.id === 'custom'
+      ? 'Stays on this iPhone. Every workflow using this server uses the same key.'
+      : `Stays on this iPhone. Every workflow set to ${keyOwner} uses the same key.`;
 
   // A passing check looks like finished setup, so leaving must not drop the key silently.
   const hasUnsavedChanges =
@@ -202,6 +234,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       (selection.providerId !== savedSelection.providerId ||
         modelId !== savedSelection.modelId ||
         (selection.endpoint ?? '') !== (savedSelection.endpoint ?? '')));
+  const canSave = hasUnsavedChanges && !busy;
   usePreventRemove(hasUnsavedChanges, ({ data }) =>
     confirmDestructive(
       'Discard unsaved changes?',
@@ -213,8 +246,6 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
 
   function clearInputs(): void {
     setApiKey('');
-    setError(null);
-    setNotice(null);
   }
 
   useEffect(() => {
@@ -238,14 +269,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     };
   }, [providerId, selection.endpoint, selection.mode]);
 
-  function showToast(message: string, type: ToastType): void {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast((current) => ({ message, type, visible: true, showId: current.showId + 1 }));
-    toastTimer.current = setTimeout(
-      () => setToast((current) => ({ ...current, visible: false })),
-      type === 'error' ? ERROR_TOAST_MS : TOAST_MS,
-    );
-  }
+  const showError = (message: string): void => showToast(message, 'error');
 
   function openPicker(next: Picker): void {
     setPicker(picker === next ? null : next);
@@ -295,7 +319,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   async function prepareSelection(
     requireModel = true,
     saveCredential = true,
-    onInvalid: (message: string) => void = setError,
+    onInvalid: (message: string) => void = showError,
   ): Promise<InferenceSelection | null> {
     let saved: InferenceSelection = { mode: selection.mode };
     if (selection.mode === 'providers') {
@@ -367,9 +391,9 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   }
 
   async function save(): Promise<void> {
+    Keyboard.dismiss();
+    const enteredKey = !!apiKey.trim();
     setBusy(true);
-    setError(null);
-    setNotice(null);
     try {
       const saved = await prepareSelection();
       if (!saved) return;
@@ -377,15 +401,22 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         workflowSaveConfig(useConfigStore.getState().config, scope, saved, activeMode),
       );
       if (useConfigStore.getState().error) {
-        setError('Unable to save your selection. Please try again.');
+        showError('Unable to save your selection. Please try again.');
         return;
       }
       if (scope === 'dictation') setActiveMode('providers', true);
       setSelection(saved);
       clearInputs();
-      setNotice('Selection saved.');
+      showToast(
+        !enteredKey
+          ? 'Saved.'
+          : provider?.id === 'custom'
+            ? 'Saved. Every workflow using this server uses this key.'
+            : `Saved. Every workflow set to ${keyOwner} uses this key.`,
+        'success',
+      );
     } catch {
-      setError('Unable to save provider settings. Check your configuration and try again.');
+      showError('Unable to save provider settings. Check your configuration and try again.');
     } finally {
       setBusy(false);
     }
@@ -395,11 +426,9 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     // Focus moves to the result, so the keyboard has no reason to stay up.
     Keyboard.dismiss();
     setBusy(true);
-    setError(null);
-    setNotice(null);
+    setChecking(action);
     const controller = new AbortController();
     diagnosticController.current = controller;
-    const showError = (message: string): void => showToast(message, 'error');
     try {
       const draft = await prepareSelection(action === 'test', false, showError);
       if (!draft) return;
@@ -461,25 +490,42 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         );
     } finally {
       diagnosticController.current = null;
+      setChecking(null);
       setBusy(false);
     }
   }
 
-  async function removeCredential(): Promise<void> {
+  function removeCredential(): void {
     if (!provider) return;
-    setBusy(true);
-    setError(null);
-    setNotice(null);
+    const custom = provider.id === 'custom';
+    confirmDestructive(
+      custom ? "Remove this server's key?" : `Remove your ${keyOwner} key?`,
+      custom
+        ? 'Every workflow using this server loses its key until you add one again.'
+        : `Every workflow set to ${keyOwner} stops until you add a key again.`,
+      async (): Promise<void> => {
+        setBusy(true);
+        try {
+          const reference = await getProviderCredentialReference(provider.id, selection.endpoint);
+          await removeProviderCredential(reference);
+          setConfigured(false);
+          clearInputs();
+          showToast(custom ? 'Server key removed.' : `${keyOwner} key removed.`, 'success');
+        } catch {
+          showError('Unable to remove this key. Please try again.');
+        } finally {
+          setBusy(false);
+        }
+      },
+      { destructiveLabel: 'Remove' },
+    );
+  }
+
+  async function openKeyPage(url: string): Promise<void> {
     try {
-      const reference = await getProviderCredentialReference(provider.id, selection.endpoint);
-      await removeProviderCredential(reference);
-      setConfigured(false);
-      clearInputs();
-      setNotice('Credential removed for every workflow using it.');
+      await Linking.openURL(url);
     } catch {
-      setError('Unable to remove this credential. Please try again.');
-    } finally {
-      setBusy(false);
+      showError('Unable to open the provider website. Please try again.');
     }
   }
 
@@ -505,180 +551,198 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
       >
-        <InferenceModePicker
-          scope={speechScope ? 'speech' : 'text'}
-          selectedMode={selection.mode}
-          onSelect={chooseMode}
-        />
-        {modeNote ? (
-          <Text className="-mt-4 mb-6 px-8 text-[13px] text-secondaryLabel">{modeNote}</Text>
-        ) : null}
-        {selection.mode === 'local' && speechScope ? (
-          <OnDeviceModelSection
-            scope={speechScope}
-            picked={isLocalModelKey(savedSelection.modelId) ? savedSelection.modelId : undefined}
-          />
-        ) : null}
-        {selection.mode === 'local' && !speechScope ? (
-          <Text className="-mt-4 mb-6 px-8 text-[13px] text-secondaryLabel">
-            Runs on Apple Intelligence on this iPhone.
-          </Text>
-        ) : null}
-        {selection.mode === 'providers' && provider ? (
+        {scope === 'cleanup' ? <CleanupSettings enabled={!cleanupOff} /> : null}
+        {cleanupOff ? null : (
           <>
-            <SettingsSection title="Connection">
-              <SettingsRow
-                icon="network"
-                mdIcon="Network"
-                iconStyle="line"
-                title="Provider"
-                subtitle={provider.name}
-                onPress={busy ? undefined : () => openPicker('provider')}
+            <InferenceModePicker
+              scope={speechScope ? 'speech' : 'text'}
+              selectedMode={selection.mode}
+              onSelect={chooseMode}
+            />
+            {modeNote ? <SectionFooter>{modeNote}</SectionFooter> : null}
+            {selection.mode === 'local' && speechScope ? (
+              <OnDeviceModelSection
+                scope={speechScope}
+                picked={
+                  isLocalModelKey(savedSelection.modelId) ? savedSelection.modelId : undefined
+                }
               />
-              {picker === 'provider' &&
-                providers.map((item) =>
-                  choice(item.name, item.id === provider.id, () => chooseProvider(item.id)),
-                )}
-              {models.length > 0 ? (
-                <SettingsRow
-                  icon="square.stack"
-                  mdIcon="Layers"
-                  iconStyle="line"
-                  title="Model"
-                  subtitle={models.find((model) => model.id === modelId)?.name ?? modelId}
-                  onPress={busy ? undefined : () => openPicker('model')}
-                />
-              ) : null}
-              {picker === 'model' &&
-                models.map((model) =>
-                  choice(model.name, model.id === modelId, () => {
-                    setSelection({ ...selection, modelId: model.id });
-                    setPicker(null);
-                    setNotice(null);
-                  }),
-                )}
-            </SettingsSection>
-            <SettingsSection
-              borderless
-              title={configured ? 'Credential saved on this device' : 'Credentials'}
-            >
-              <View className="gap-3 p-1">
-                {provider.id === 'custom' ? (
-                  <>
-                    <Input
-                      label="Endpoint URL"
-                      accessibilityLabel="Endpoint URL"
+            ) : null}
+            {selection.mode === 'local' && !speechScope ? (
+              <SectionFooter>Runs on Apple Intelligence on this iPhone.</SectionFooter>
+            ) : null}
+            {selection.mode === 'providers' && provider ? (
+              <>
+                <SettingsSection title="Connection">
+                  <SettingsRow
+                    icon="network"
+                    mdIcon="Network"
+                    iconStyle="line"
+                    title="Provider"
+                    subtitle={provider.name}
+                    onPress={busy ? undefined : () => openPicker('provider')}
+                  />
+                  {picker === 'provider' &&
+                    providers.map((item) =>
+                      choice(item.name, item.id === provider.id, () => chooseProvider(item.id)),
+                    )}
+                  {models.length > 0 ? (
+                    <SettingsRow
+                      icon="square.stack"
+                      mdIcon="Layers"
+                      iconStyle="line"
+                      title="Model"
+                      subtitle={models.find((model) => model.id === modelId)?.name ?? modelId}
+                      onPress={busy ? undefined : () => openPicker('model')}
+                    />
+                  ) : null}
+                  {picker === 'model' &&
+                    models.map((model) =>
+                      choice(model.name, model.id === modelId, () => {
+                        setSelection({ ...selection, modelId: model.id });
+                        setPicker(null);
+                      }),
+                    )}
+                  {provider.id === 'custom' ? (
+                    <SettingsTextFieldRow
+                      icon="server.rack"
+                      mdIcon="Server"
+                      label="Server"
+                      accessibilityLabel="Server URL"
                       value={selection.endpoint ?? ''}
                       onChangeText={(endpoint) => {
                         setSelection({ ...selection, endpoint });
                         clearInputs();
                       }}
                       autoCapitalize="none"
-                      autoCorrect={false}
                       keyboardType="url"
                       placeholder="https://your-server.example/v1"
                       editable={!busy}
                     />
-                    <Text className="text-[13px] text-secondaryLabel">
-                      On iPhone, localhost refers to this iPhone. Use your server's LAN address for
-                      a local server.
-                    </Text>
-                  </>
+                  ) : null}
+                  {!provider.models.length ? (
+                    <SettingsTextFieldRow
+                      icon="square.stack"
+                      mdIcon="Layers"
+                      label="Model ID"
+                      accessibilityLabel="Model ID"
+                      value={modelId}
+                      onChangeText={(nextModel) =>
+                        setSelection({ ...selection, modelId: nextModel })
+                      }
+                      autoCapitalize="none"
+                      placeholder="model-name"
+                      editable={!busy}
+                    />
+                  ) : null}
+                </SettingsSection>
+                {provider.id === 'custom' ? (
+                  <SectionFooter>
+                    On iPhone, localhost is this iPhone. Use your server's network address.
+                  </SectionFooter>
                 ) : null}
-                {!provider.models.length ? (
-                  <Input
-                    label="Model ID"
-                    accessibilityLabel="Model ID"
-                    value={modelId}
-                    onChangeText={(nextModel) => setSelection({ ...selection, modelId: nextModel })}
+                <SettingsSection title="API Key">
+                  <SettingsTextFieldRow
+                    icon="key"
+                    mdIcon="KeyRound"
+                    accessibilityLabel="API key"
+                    value={apiKey}
+                    onChangeText={(next) => {
+                      // A paste or password-manager fill arrives as one change; typing adds one character.
+                      if (next.length - apiKey.length > 1) Keyboard.dismiss();
+                      setApiKey(next);
+                    }}
+                    secureTextEntry
                     autoCapitalize="none"
-                    autoCorrect={false}
+                    placeholder={
+                      configured
+                        ? 'Saved · enter a new key to replace it'
+                        : provider.id === 'custom'
+                          ? 'Optional'
+                          : 'Paste your API key'
+                    }
                     editable={!busy}
                   />
-                ) : null}
-                <Input
-                  label={provider.id === 'custom' ? 'API key (optional)' : 'API key'}
-                  accessibilityLabel="API key"
-                  value={apiKey}
-                  onChangeText={(next) => {
-                    // A paste or password-manager fill arrives as one change; typing adds one character.
-                    if (next.length - apiKey.length > 1) Keyboard.dismiss();
-                    setApiKey(next);
-                  }}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder={
-                    configured ? 'Leave blank to keep saved credential' : 'Enter API key'
-                  }
-                  editable={!busy}
-                />
-                {PROVIDER_SETUP_URLS[provider.id] ? (
-                  <Button
-                    variant="ghost"
-                    disabled={busy}
-                    onPress={async (): Promise<void> => {
-                      try {
-                        await Linking.openURL(PROVIDER_SETUP_URLS[provider.id]);
-                      } catch {
-                        setError('Unable to open the provider website. Please try again.');
+                  {PROVIDER_SETUP_URLS[provider.id] ? (
+                    <SettingsRow
+                      iconStyle="line"
+                      icon="arrow.up.right.square"
+                      mdIcon="ExternalLink"
+                      title="Get an API Key"
+                      showChevron={false}
+                      onPress={
+                        busy ? undefined : () => openKeyPage(PROVIDER_SETUP_URLS[provider.id])
                       }
-                    }}
+                    />
+                  ) : null}
+                  {configured ? (
+                    <SettingsRow
+                      iconStyle="line"
+                      icon="trash"
+                      mdIcon="Trash2"
+                      title="Remove Key"
+                      destructive
+                      showChevron={false}
+                      onPress={busy ? undefined : removeCredential}
+                    />
+                  ) : null}
+                </SettingsSection>
+                <SectionFooter>{keyFooter}</SectionFooter>
+                <SettingsSection title="Verify">
+                  <SettingsRow
+                    iconStyle="line"
+                    icon="checkmark.shield"
+                    mdIcon="ShieldCheck"
+                    title="Check Connection"
+                    showChevron={false}
+                    rightElement={checking === 'test' ? <ActivityIndicator /> : undefined}
+                    onPress={busy ? undefined : () => diagnose('test')}
+                  />
+                  {provider.id === 'custom' || provider.id === 'openrouter' ? (
+                    <SettingsRow
+                      iconStyle="line"
+                      icon="magnifyingglass"
+                      mdIcon="Search"
+                      title="Discover Models"
+                      showChevron={false}
+                      rightElement={checking === 'discover' ? <ActivityIndicator /> : undefined}
+                      onPress={busy ? undefined : () => diagnose('discover')}
+                    />
+                  ) : null}
+                </SettingsSection>
+                <SectionFooter>
+                  Checks use the key above without saving it. Text checks send a short test prompt
+                  and may cost a little; transcription checks only confirm access to the model list.
+                </SectionFooter>
+                <View className="mx-4 mb-7">
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canSave, busy }}
+                    onPress={save}
+                    disabled={!canSave}
+                    className={
+                      'items-center rounded-[10px] py-3 ' + (canSave ? 'bg-brand' : 'bg-brand/30')
+                    }
+                    style={({ pressed }) => ({
+                      borderCurve: 'continuous',
+                      opacity: pressed ? 0.85 : 1,
+                      transform: [{ scale: pressed ? 0.98 : 1 }],
+                    })}
                   >
-                    Get provider credentials
-                  </Button>
-                ) : null}
-                {configured ? (
-                  <Button variant="ghost" disabled={busy} onPress={removeCredential}>
-                    Remove credential
-                  </Button>
-                ) : null}
-              </View>
-            </SettingsSection>
-            <SettingsSection borderless title="Verify access">
-              <View className="gap-3 p-1">
-                <Text className="text-[13px] text-secondaryLabel">
-                  Checks use the key entered above without saving it. Text checks send a short test
-                  prompt and may incur provider charges; transcription checks verify catalog access
-                  only.
-                </Text>
-                <Button variant="outline" disabled={busy} onPress={() => diagnose('test')}>
-                  Check connection
-                </Button>
-                {provider.id === 'custom' || provider.id === 'openrouter' ? (
-                  <Button variant="outline" disabled={busy} onPress={() => diagnose('discover')}>
-                    Discover models
-                  </Button>
-                ) : null}
-              </View>
-            </SettingsSection>
-            <View className="mb-7 gap-3 px-4">
-              {error ? (
-                <Text accessibilityRole="alert" className="text-[14px] text-systemRed">
-                  {error}
-                </Text>
-              ) : null}
-              {notice ? (
-                <Text accessibilityLiveRegion="polite" className="text-[14px] text-secondaryLabel">
-                  {notice}
-                </Text>
-              ) : null}
-              <Button loading={busy} onPress={save}>
-                Save selection
-              </Button>
-            </View>
+                    {busy && !checking ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <Text className="text-[15px] font-semibold text-white">Save</Text>
+                    )}
+                  </Pressable>
+                </View>
+              </>
+            ) : null}
+            {scope === 'notes' ? <NoteTitleSettings /> : null}
           </>
-        ) : null}
-        {scope === 'cleanup' ? <CleanupSettings /> : null}
-        {scope === 'notes' ? <NoteTitleSettings /> : null}
+        )}
       </SettingsScreen>
-      <Toast
-        message={toast.message}
-        visible={toast.visible}
-        type={toast.type}
-        showId={toast.showId}
-        topOffset={headerHeight + 8}
-      />
+      <Toast {...toast} topOffset={headerHeight + 8} />
     </View>
   );
 }
