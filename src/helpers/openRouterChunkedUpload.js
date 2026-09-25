@@ -24,9 +24,10 @@ const OPENROUTER_CHUNK_SECONDS = 240;
 // ffmpeg can leave a sliver of a last piece (hundredths of a second when the
 // length is an exact multiple). Providers reject audio that short, so it is
 // dropped rather than sent and reported as lost audio. Judged by the piece's
-// own size (the splitter's 128 kbps MP3 is ~16 KB a second): the input's
-// duration is only an estimate for some files, such as a VBR MP3 without a
-// header or raw AAC, and a short estimate would drop a real last piece.
+// own size, ~0.5 s of PIECE_BITRATE: the input's duration is only an estimate
+// for some files, such as a VBR MP3 without a header or raw AAC, and a short
+// estimate would drop a real last piece.
+const PIECE_BITRATE = "128k";
 const MIN_LAST_PIECE_BYTES = 8_000;
 
 // The account or the model is at fault, so every remaining piece would fail the
@@ -64,6 +65,7 @@ async function transcribeOpenRouterChunks({
     onProgress?.({ stage: "splitting", chunksTotal: 0, chunksCompleted: 0 });
     const { chunkPaths, durationSeconds } = await split(inputPath, chunkDir, {
       segmentDuration: segmentSeconds,
+      audioBitrate: PIECE_BITRATE,
       audioOnly: true,
       signal,
     });

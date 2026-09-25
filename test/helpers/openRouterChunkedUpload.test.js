@@ -65,6 +65,7 @@ test("a 30-minute upload goes out as eight 4-minute pieces, one at a time, in or
   assert.equal(calls[0].inputPath, "/uploads/meeting.m4a");
   assert.equal(calls[0].options.segmentDuration, 240);
   assert.equal(calls[0].options.audioOnly, true, "a video's frames must not ride along");
+  assert.equal(calls[0].options.audioBitrate, "128k", "the sliver check assumes 128 kbps");
   assert.equal(maxInFlight, 1, "pieces never overlap");
   assert.deepEqual(
     sent,

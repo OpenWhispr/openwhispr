@@ -45,9 +45,12 @@ function streamsOf(file) {
 }
 
 // Without -vn ffmpeg maps the video track, encodes every frame to PNG and
-// embeds one in the first piece (13.4 s vs 0.36 s for 2 min of 720p WebM).
+// embeds one in the first piece (13.4 s vs 0.36 s for 2 min of 720p WebM). It
+// also copies the file's tags into every piece: a user's titles, comments or a
+// phone video's location would ride along to the provider, and a large tag
+// makes an end-of-file sliver look like real audio.
 test(
-  "audio-only splitting keeps video frames out of every piece",
+  "audio-only splitting keeps video frames and file tags out of every piece",
   { skip: !ffmpegPath && "no ffmpeg binary available" },
   async (t) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-split-audio-only-"));
@@ -69,6 +72,10 @@ test(
       "-c:a",
       "aac",
       "-shortest",
+      "-metadata",
+      "title=Board meeting",
+      "-metadata",
+      `comment=${"x".repeat(10_000)}`,
       "-f",
       "mp4",
       "-y",
@@ -85,7 +92,9 @@ test(
     assert.ok(chunkPaths.length >= 2, `expected several pieces, got ${chunkPaths.length}`);
     for (const piece of chunkPaths) {
       const name = path.basename(piece);
-      assert.doesNotMatch(streamsOf(piece), /Video:/, `${name} carries a video frame`);
+      const info = streamsOf(piece);
+      assert.doesNotMatch(info, /Video:/, `${name} carries a video frame`);
+      assert.doesNotMatch(info, /Board meeting/, `${name} carries the file's tags`);
     }
   }
 );

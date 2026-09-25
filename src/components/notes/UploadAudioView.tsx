@@ -703,25 +703,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setDiarizationWarning(false);
 
     const useChunkProgress = isOpenWhisprCloud && isLargeFile;
-    // An OpenRouter upload's piece count is known only once the main process has
-    // split it, so it starts on the simulated bar and switches to per-piece
-    // progress when there is more than one piece.
-    const minChunksForProgress = uploadInPieces ? 2 : 1;
-
-    if (useChunkProgress || uploadInPieces) {
-      progressCleanupRef.current =
-        window.electronAPI.onUploadTranscriptionProgress?.((data) => {
-          if (data.chunksTotal >= minChunksForProgress) {
-            if (progressRef.current) clearInterval(progressRef.current);
-            setChunkProgress({
-              chunksTotal: data.chunksTotal,
-              chunksCompleted: data.chunksCompleted,
-            });
-            setProgress((prev) => Math.max(prev, (data.chunksCompleted / data.chunksTotal) * 90));
-          }
-        }) ?? null;
-    }
-    if (!useChunkProgress) {
+    let simulatingProgress = false;
+    const simulateProgress = () => {
+      simulatingProgress = true;
       progressRef.current = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 90) {
@@ -731,6 +715,26 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           return prev + Math.random() * 6;
         });
       }, 500);
+    };
+
+    if (useChunkProgress || uploadInPieces) {
+      progressCleanupRef.current =
+        window.electronAPI.onUploadTranscriptionProgress?.((data) => {
+          // An OpenRouter upload of one piece reports nothing more until it is
+          // done, so it gets the simulated bar; several pieces are tracked as
+          // they land.
+          if (uploadInPieces && data.chunksTotal === 1) {
+            if (!simulatingProgress) simulateProgress();
+          } else if (data.chunksTotal > 0) {
+            setChunkProgress({
+              chunksTotal: data.chunksTotal,
+              chunksCompleted: data.chunksCompleted,
+            });
+            setProgress((data.chunksCompleted / data.chunksTotal) * 90);
+          }
+        }) ?? null;
+    } else {
+      simulateProgress();
     }
 
     try {

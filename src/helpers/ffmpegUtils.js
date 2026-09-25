@@ -359,10 +359,11 @@ function parseFfmpegDuration(stderr) {
 }
 
 function splitAudioFile(inputPath, outputDir, options = {}) {
-  // audioOnly drops any video track. Without it ffmpeg keeps the video stream,
-  // turns every frame into a PNG and embeds one in the first piece, which costs
-  // minutes on a long screen recording. Off by default so the Cloud upload path
-  // keeps its current behaviour.
+  // audioOnly drops any video track and the file's tags. Without it ffmpeg
+  // keeps the video stream, turns every frame into a PNG and embeds one in the
+  // first piece, which costs minutes on a long screen recording, and copies the
+  // tags (titles, comments, a phone video's location) into every piece. Off by
+  // default so the Cloud upload path keeps its current behaviour.
   const { segmentDuration = 600, audioBitrate = "128k", signal, audioOnly = false } = options;
 
   return new Promise((resolve, reject) => {
@@ -382,7 +383,7 @@ function splitAudioFile(inputPath, outputDir, options = {}) {
     const args = [
       "-i",
       inputPath,
-      ...(audioOnly ? ["-vn"] : []),
+      ...(audioOnly ? ["-vn", "-map_metadata", "-1"] : []),
       "-f",
       "segment",
       "-segment_time",
