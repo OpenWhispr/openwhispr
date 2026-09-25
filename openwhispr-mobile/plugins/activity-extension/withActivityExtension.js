@@ -15,31 +15,23 @@ const {
 const EXTENSION_NAME = 'OpenWhisprActivity';
 const EXTENSION_BUNDLE_ID_SUFFIX = 'activity';
 const DEPLOYMENT_TARGET = '16.2';
-// Swift sources compiled into the widget target. RecordingActivityAttributes.swift
-// is copied from the live-activity module so there is a single source of truth.
+// Swift sources compiled into the widget target. Everything except
+// OpenWhisprActivity.swift is copied from the live-activity module so there is a
+// single source of truth.
 const TARGET_SOURCES = [
   'OpenWhisprActivity.swift',
   'RecordingActivityAttributes.swift',
+  'RecordingActivityContentState.swift',
   'ToggleDictationModeIntent.swift',
+  'EndMeetingIntent.swift',
 ];
-const ATTRIBUTES_SOURCE = path.join(
-  __dirname,
-  '..',
-  '..',
-  'modules',
-  'live-activity',
-  'ios',
+const MODULE_IOS_DIR = path.join(__dirname, '..', '..', 'modules', 'live-activity', 'ios');
+const SHARED_MODULE_SOURCES = [
   'RecordingActivityAttributes.swift',
-);
-const INTENT_SOURCE = path.join(
-  __dirname,
-  '..',
-  '..',
-  'modules',
-  'live-activity',
-  'ios',
+  'RecordingActivityContentState.swift',
   'ToggleDictationModeIntent.swift',
-);
+  'EndMeetingIntent.swift',
+];
 
 function resolveActivityEnvironment(cfg) {
   const configured = cfg.extra?.openWhispr ?? resolveOpenWhisprEnvironment();
@@ -78,10 +70,10 @@ function writeExtensionSupportFiles(platformProjectRoot, environment) {
     path.join(pluginSourceDir, 'OpenWhisprActivity.swift'),
     path.join(extensionDir, 'OpenWhisprActivity.swift'),
   );
-  // Single source of truth: copy the attributes file from the module.
-  fs.copyFileSync(ATTRIBUTES_SOURCE, path.join(extensionDir, 'RecordingActivityAttributes.swift'));
-  // Single source of truth: copy the LiveActivityIntent from the module.
-  fs.copyFileSync(INTENT_SOURCE, path.join(extensionDir, 'ToggleDictationModeIntent.swift'));
+  // Single source of truth: the shared state, attributes, and intents live in the module.
+  for (const fileName of SHARED_MODULE_SOURCES) {
+    fs.copyFileSync(path.join(MODULE_IOS_DIR, fileName), path.join(extensionDir, fileName));
+  }
 
   const infoPlist = readPlist(path.join(pluginSourceDir, 'Info.plist'));
   writePlist(path.join(extensionDir, 'Info.plist'), infoPlist);

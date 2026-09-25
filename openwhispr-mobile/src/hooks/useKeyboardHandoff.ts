@@ -1171,6 +1171,11 @@ export function useKeyboardHandoff() {
     // dropped poke is handled by handlePendingHandoffIntent.
     const agentActionSub = addAgentActionListener(() => runAgentAction('poke'));
 
+    // The hardware-keyboard hotkey (plugins/hotkey-dictation) waits for this
+    // before a cold-start recording, so native never records before the
+    // started/stopped listeners above exist.
+    AppGroupStorage.markHotkeyJsReady();
+
     runOrphanCleanup('mount');
     const orphanPoll = setInterval(() => {
       runOrphanCleanup('watchdog');
@@ -1206,6 +1211,7 @@ export function useKeyboardHandoff() {
       bgStartedSub?.remove();
       statusSub?.remove();
       agentActionSub?.remove();
+      AppGroupStorage.removeItem(APP_GROUP_KEYS.HOTKEY_JS_READY_AT_MS);
       urlSub.remove();
       appStateSub.remove();
       clearInterval(orphanPoll);

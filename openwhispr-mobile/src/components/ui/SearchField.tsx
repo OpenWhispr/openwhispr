@@ -1,7 +1,7 @@
 import { ReactNode, forwardRef } from 'react';
 import { View, TextInput, PlatformColor, type TextInputProps } from 'react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 
 const SEARCH_FIELD_RADIUS = 10;
 const SEARCH_FIELD_HEIGHT = 48;
@@ -56,7 +56,7 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(function Sear
         autoFocus={autoFocus}
         clearButtonMode="while-editing"
         className="flex-1 py-0 text-[15px] text-label"
-        style={{ fontFamily: SpaceGrotesk.regular }}
+        style={{ fontFamily: AppFont.regular }}
       />
       {rightSlot}
     </View>

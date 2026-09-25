@@ -25,7 +25,12 @@ export function GetStartedStep() {
     <SafeAreaView className="flex-1 bg-systemBackground" edges={['top', 'bottom']}>
       <View className="flex-1 items-center justify-center gap-5 px-8">
         <OpenWhisprMark size={64} color={DEEP_BLUE} />
-        <Text className="text-[34px] font-bold tracking-tight text-label">OpenWhispr</Text>
+        <Text
+          accessibilityRole="header"
+          className="text-[34px] font-bold tracking-tight text-label"
+        >
+          OpenWhispr
+        </Text>
         <Text className="text-center text-[17px] leading-[23px] text-secondaryLabel">
           Your voice is 3x faster than your keyboard.
         </Text>

@@ -3,25 +3,12 @@ import ActivityKit
 import Foundation
 
 /// Shared contract between the app (requests/updates the activity) and the widget
-/// extension (renders it). The activity is session-scoped: `ContentState.phase`
-/// flips between recording and idle across the session; `startedAt` drives the
-/// self-counting timer for the current recording.
+/// extension (renders it). The state lives in RecordingActivityContentState.swift
+/// (Foundation-only, unit-tested); these aliases keep existing call sites compiling.
 @available(iOS 16.1, *)
 public struct RecordingActivityAttributes: ActivityAttributes {
-  public enum Phase: String, Codable, Hashable {
-    case recording
-    case idle
-  }
-
-  public struct ContentState: Codable, Hashable {
-    public var phase: Phase
-    public var startedAt: Date
-
-    public init(phase: Phase, startedAt: Date) {
-      self.phase = phase
-      self.startedAt = startedAt
-    }
-  }
+  public typealias ContentState = RecordingActivityContentState
+  public typealias Phase = RecordingActivityPhase
 
   public init() {}
 }

@@ -29,6 +29,9 @@ export interface UserConfig {
   // faster on-device model / download the faster model for a qualifying language.
   parakeetAutoLanguageNudgeDismissedAt?: string;
   parakeetUpgradeNudgeDismissedAt?: string;
+  // One-time Home nudge toward the hardware-keyboard dictation shortcut, shown
+  // the first time a hardware keyboard is attached.
+  hardwareKeyboardNudgeDismissedAt?: string;
   keyboardTone?: KeyboardTone;
   // Apple Foundation Models local generation for notes. Default on; users can
   // disable it from AI Models.

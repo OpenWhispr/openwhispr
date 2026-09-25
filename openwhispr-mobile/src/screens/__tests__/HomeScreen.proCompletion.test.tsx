@@ -143,6 +143,9 @@ jest.mock('@/components/features/ParakeetNudgeBanner', () => ({ ParakeetNudgeBan
 jest.mock('@/components/features/KeyboardFullAccessBanner', () => ({
   KeyboardFullAccessBanner: () => null,
 }));
+jest.mock('@/components/features/HardwareKeyboardNudgeBanner', () => ({
+  HardwareKeyboardNudgeBanner: () => null,
+}));
 jest.mock('@/components/ui/SwipeableCard', () => ({
   SwipeableCard: ({ children }: { children: React.ReactNode }) => children,
 }));

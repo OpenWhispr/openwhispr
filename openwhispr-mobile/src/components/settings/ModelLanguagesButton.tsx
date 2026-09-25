@@ -50,7 +50,10 @@ function ModelLanguagesSheet({
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View className="flex-1 bg-systemBackground">
         <View className="flex-row items-center justify-between px-6 pb-4 pt-8">
-          <Text className="text-[22px] font-bold text-label">{`${title} Languages`}</Text>
+          <Text
+            accessibilityRole="header"
+            className="text-[22px] font-bold text-label"
+          >{`${title} Languages`}</Text>
           <GlassIconButton onPress={onClose} accessibilityLabel="Close">
             <SystemIcon name="xmark" mdName="X" size={15} color="secondaryLabel" />
           </GlassIconButton>

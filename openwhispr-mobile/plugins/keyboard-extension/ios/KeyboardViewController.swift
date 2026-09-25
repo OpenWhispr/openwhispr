@@ -566,11 +566,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var shiftButton: KeyButton?
   private var modeButton: KeyButton?
   private var returnButton: KeyButton?
-  private var fieldShortcutButtons: [KeyButton] = []
-  private var fieldShortcutWidthConstraints: [NSLayoutConstraint] = []
-  // Leading gap before each field shortcut. Collapses to 0 when the shortcut is
+  private var fieldShortcutButton: KeyButton?
+  private var fieldShortcutWidthConstraint: NSLayoutConstraint?
+  // Leading gap before the field shortcut. Collapses to 0 when the shortcut is
   // hidden so space and return keep a single keySpacing gap, matching every other key.
-  private var fieldShortcutGapConstraints: [NSLayoutConstraint] = []
+  private var fieldShortcutGapConstraint: NSLayoutConstraint?
   private var dictationLinkHosting: UIHostingController<DictationLinkView>?
   // Detected once at setup (the host is fixed for the extension's lifetime).
   // Avoids calling the heavy private-API host detection on every button refresh.
@@ -1888,9 +1888,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
 
     characterButtons.removeAll()
-    fieldShortcutButtons.removeAll()
-    fieldShortcutWidthConstraints.removeAll(keepingCapacity: true)
-    fieldShortcutGapConstraints.removeAll(keepingCapacity: true)
+    fieldShortcutButton = nil
+    fieldShortcutWidthConstraint = nil
+    fieldShortcutGapConstraint = nil
     shiftButton = nil
     modeButton = nil
     returnButton = nil
@@ -2007,31 +2007,24 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func refreshFieldShortcuts() {
-    guard fieldShortcutButtons.count == 2,
-          fieldShortcutWidthConstraints.count == 2,
-          fieldShortcutGapConstraints.count == 2 else { return }
+    guard let button = fieldShortcutButton,
+          let widthConstraint = fieldShortcutWidthConstraint,
+          let gapConstraint = fieldShortcutGapConstraint else { return }
 
-    let shortcuts: [String]
+    let shortcut: String?
     switch textDocumentProxy.keyboardType {
-    case .emailAddress:
-      shortcuts = ["@", ".com"]
     case .URL:
-      shortcuts = ["/", ".com"]
+      shortcut = "/"
     case .webSearch:
-      shortcuts = [".", ".com"]
+      shortcut = "."
     default:
-      shortcuts = []
+      shortcut = nil
     }
 
-    for (index, button) in fieldShortcutButtons.enumerated() {
-      let value = index < shortcuts.count ? shortcuts[index] : nil
-      button.setTitle(value, for: .normal)
-      button.isHidden = value == nil
-      fieldShortcutWidthConstraints[index].constant = value == nil
-        ? 0
-        : (value == ".com" ? 56 : 44)
-      fieldShortcutGapConstraints[index].constant = value == nil ? 0 : -metrics.keySpacing
-    }
+    button.setTitle(shortcut, for: .normal)
+    button.isHidden = shortcut == nil
+    widthConstraint.constant = shortcut == nil ? 0 : 44
+    gapConstraint.constant = shortcut == nil ? 0 : -metrics.keySpacing
   }
 
   private func playKeyClick() {
@@ -2204,32 +2197,24 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     returnButton.widthAnchor.constraint(equalToConstant: 62).isActive = true
     self.returnButton = returnButton
 
-    let shortcutOne = makeKeyButton(title: "@", role: .utility)
-    shortcutOne.addTarget(self, action: #selector(handleShortcutTapped(_:)), for: .touchUpInside)
-    shortcutOne.translatesAutoresizingMaskIntoConstraints = false
-    let shortcutOneWidth = shortcutOne.widthAnchor.constraint(equalToConstant: 44)
-    shortcutOneWidth.isActive = true
+    let shortcutButton = makeKeyButton(title: nil, role: .utility)
+    shortcutButton.addTarget(self, action: #selector(handleShortcutTapped(_:)), for: .touchUpInside)
+    shortcutButton.translatesAutoresizingMaskIntoConstraints = false
+    shortcutButton.isHidden = true
+    let shortcutWidth = shortcutButton.widthAnchor.constraint(equalToConstant: 0)
+    shortcutWidth.isActive = true
+    fieldShortcutButton = shortcutButton
+    fieldShortcutWidthConstraint = shortcutWidth
 
-    let shortcutTwo = makeKeyButton(title: ".com", role: .utility)
-    shortcutTwo.addTarget(self, action: #selector(handleShortcutTapped(_:)), for: .touchUpInside)
-    shortcutTwo.translatesAutoresizingMaskIntoConstraints = false
-    let shortcutTwoWidth = shortcutTwo.widthAnchor.constraint(equalToConstant: 56)
-    shortcutTwoWidth.isActive = true
-    fieldShortcutButtons = [shortcutOne, shortcutTwo]
-    fieldShortcutWidthConstraints = [shortcutOneWidth, shortcutTwoWidth]
-
-    // Captured so refreshFieldShortcuts can collapse the gap when a shortcut hides.
-    let spaceToShortcutOneGap = spaceButton.trailingAnchor.constraint(
-      equalTo: shortcutOne.leadingAnchor, constant: -metrics.keySpacing)
-    let shortcutOneToTwoGap = shortcutOne.trailingAnchor.constraint(
-      equalTo: shortcutTwo.leadingAnchor, constant: -metrics.keySpacing)
-    fieldShortcutGapConstraints = [spaceToShortcutOneGap, shortcutOneToTwoGap]
+    // Captured so refreshFieldShortcuts can collapse the gap when the shortcut hides.
+    let spaceToShortcutGap = spaceButton.trailingAnchor.constraint(
+      equalTo: shortcutButton.leadingAnchor, constant: 0)
+    fieldShortcutGapConstraint = spaceToShortcutGap
 
     rowContainer.addSubview(nextKeyboardButton)
     rowContainer.addSubview(modeButton)
     rowContainer.addSubview(spaceButton)
-    rowContainer.addSubview(shortcutOne)
-    rowContainer.addSubview(shortcutTwo)
+    rowContainer.addSubview(shortcutButton)
     rowContainer.addSubview(returnButton)
 
     NSLayoutConstraint.activate([
@@ -2246,17 +2231,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       returnButton.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
 
       spaceButton.leadingAnchor.constraint(equalTo: modeButton.trailingAnchor, constant: metrics.keySpacing),
-      spaceToShortcutOneGap,
+      spaceToShortcutGap,
       spaceButton.topAnchor.constraint(equalTo: rowContainer.topAnchor),
       spaceButton.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
 
-      shortcutOneToTwoGap,
-      shortcutOne.topAnchor.constraint(equalTo: rowContainer.topAnchor),
-      shortcutOne.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
-
-      shortcutTwo.trailingAnchor.constraint(equalTo: returnButton.leadingAnchor, constant: -metrics.keySpacing),
-      shortcutTwo.topAnchor.constraint(equalTo: rowContainer.topAnchor),
-      shortcutTwo.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
+      shortcutButton.trailingAnchor.constraint(equalTo: returnButton.leadingAnchor, constant: -metrics.keySpacing),
+      shortcutButton.topAnchor.constraint(equalTo: rowContainer.topAnchor),
+      shortcutButton.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
     ])
 
     return rowContainer

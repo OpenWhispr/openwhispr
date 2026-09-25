@@ -52,6 +52,7 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
     startNativeRecording: jest.fn(() => true),
     returnToPreviousApp: jest.fn(),
     stopNativeRecording: jest.fn(),
+    markHotkeyJsReady: jest.fn(),
   },
   APP_GROUP_KEYS: {
     KEYBOARD_RECORDING_JOB_ID: 'keyboard_recording_job_id',
@@ -65,6 +66,7 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
     KEYBOARD_CANCEL_REQUESTED: 'keyboard_cancel_requested',
     KEYBOARD_COMPRESSED_AUDIO_UNSUPPORTED: 'keyboard_compressed_audio_unsupported',
     KEYBOARD_COMPRESSED_AUDIO_UNSUPPORTED_AT_MS: 'keyboard_compressed_audio_unsupported_at_ms',
+    HOTKEY_JS_READY_AT_MS: 'hotkey_js_ready_at_ms',
   },
   addRecordingStoppedListener: (listener: (event: RecordingStoppedEvent) => Promise<void>) => {
     mockRecordingStoppedListener = listener;
@@ -181,6 +183,7 @@ const storage = AppGroupStorage as unknown as {
   startNativeRecording: jest.Mock;
   stopNativeRecording: jest.Mock;
   returnToPreviousApp: jest.Mock;
+  markHotkeyJsReady: jest.Mock;
 };
 
 function mountWithInitialUrl(url: string) {
@@ -802,5 +805,30 @@ describe('useKeyboardHandoff — return to the host app', () => {
 
     await waitFor(() => expect(storage.startNativeRecording).toHaveBeenCalled());
     expect(storage.returnToPreviousApp).not.toHaveBeenCalled();
+  });
+});
+
+describe('useKeyboardHandoff — hotkey readiness', () => {
+  // The hotkey's cold start waits for this key before it records, so it must
+  // only appear once both recording listeners exist.
+  it('marks JS ready only after the recording listeners are subscribed', () => {
+    mockBackgroundStartedListener = undefined;
+    let listenersAtReady: [boolean, boolean] | undefined;
+    // The native side stamps the process id, so a stamp left by a dead process
+    // never makes a fresh launch look ready.
+    storage.markHotkeyJsReady.mockImplementation(() => {
+      listenersAtReady = [!!mockRecordingStoppedListener, !!mockBackgroundStartedListener];
+    });
+
+    mountWithInitialUrl('');
+
+    expect(storage.markHotkeyJsReady).toHaveBeenCalledTimes(1);
+    expect(listenersAtReady).toEqual([true, true]);
+  });
+
+  it('clears the ready key on unmount', () => {
+    const { unmount } = mountWithInitialUrl('');
+    unmount();
+    expect(storage.removeItem).toHaveBeenCalledWith('hotkey_js_ready_at_ms');
   });
 });

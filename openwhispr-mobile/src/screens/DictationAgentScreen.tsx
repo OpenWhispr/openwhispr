@@ -10,7 +10,7 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { getDictationAgentName, isDictationAgentEnabled } from '@/lib/dictationAgent';
 import { safeHaptics } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 
 const DEFAULT_AGENT_NAME = 'OpenWhispr';
 
@@ -101,7 +101,7 @@ export function DictationAgentScreen(): React.JSX.Element {
               returnKeyType="done"
               editable={isAvailable}
               className={`text-[17px] text-label ${isAvailable ? '' : 'opacity-40'}`}
-              style={{ fontFamily: SpaceGrotesk.regular }}
+              style={{ fontFamily: AppFont.regular }}
             />
           </View>
         </SettingsSection>

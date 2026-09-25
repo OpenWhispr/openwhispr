@@ -1,6 +1,7 @@
 import ExpoModulesCore
 import UIKit
 import AVFoundation
+import GameController
 
 public class AppGroupStorageModule: Module {
   private var appBundleId: String {
@@ -11,6 +12,7 @@ public class AppGroupStorageModule: Module {
   }
   private let stopRequestedKey = "keyboard_stop_requested"
   private let stopRequestedAtMsKey = "keyboard_stop_requested_at_ms"
+  private let hotkeyJsReadyAtMsKey = "hotkey_js_ready_at_ms"
   private let transcriptionStatusKey = "keyboard_transcription_status"
   private let transcriptionErrorKey = "keyboard_transcription_error"
   private let transcriptionStatusUpdatedAtMsKey = "keyboard_transcription_status_updated_at_ms"
@@ -79,6 +81,7 @@ public class AppGroupStorageModule: Module {
   private let warmMicIdleTimeoutSeconds: TimeInterval = 10 * 60  // 10 min, tunable (spec §3)
   private let dictationModeEnabledKey = "dictation_mode_enabled"
   private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
+  private var hardwareKeyboardObserverTokens: [NSObjectProtocol] = []
 
   private var isObservingStopNotification: Bool = false
   private var isObservingStartNotification: Bool = false
@@ -107,7 +110,8 @@ public class AppGroupStorageModule: Module {
       "onRecordingError",
       "onBackgroundRecordingStarted",
       "onKeyboardStatusChanged",
-      "onAgentAction"
+      "onAgentAction",
+      "onHardwareKeyboardChanged"
     )
 
     OnCreate {
@@ -119,6 +123,7 @@ public class AppGroupStorageModule: Module {
       self.addForegroundObserver()
       self.addBackgroundObserver()
       self.addAudioSessionObservers()
+      self.addHardwareKeyboardObservers()
       DispatchQueue.main.async {
         if UIApplication.shared.applicationState == .active {
           self.startForegroundHeartbeat()
@@ -186,6 +191,23 @@ public class AppGroupStorageModule: Module {
       }
     }
 
+    // Called by useKeyboardHandoff once its recording listeners are subscribed.
+    // The hotkey's cold start (plugins/hotkey-dictation) waits for this stamp, and
+    // only trusts one carrying this process's pid: a crash skips the hook's
+    // cleanup, and the next launch's intent can read before OnCreate clears it.
+    Function("markHotkeyJsReady") { () -> Void in
+      guard let defaults = UserDefaults(suiteName: self.appGroupId) else { return }
+      let nowMs = Int(Date().timeIntervalSince1970 * 1000)
+      defaults.set("\(getpid()):\(nowMs)", forKey: self.hotkeyJsReadyAtMsKey)
+      defaults.synchronize()
+    }
+
+    // Drives the one-time "Using a keyboard?" nudge toward the hardware-keyboard
+    // dictation shortcut (plugins/hotkey-dictation).
+    Function("isHardwareKeyboardConnected") { () -> Bool in
+      return GCKeyboard.coalesced != nil
+    }
+
     Function("getActiveInputModes") { () -> [String] in
       // Reads the user's currently installed iOS keyboards. Each returned
       // tag looks like "en-US", "he-IL", "emoji", etc. Used by the
@@ -250,6 +272,7 @@ public class AppGroupStorageModule: Module {
         self.removeForegroundObserver()
         self.removeBackgroundObserver()
         self.removeAudioSessionObservers()
+        self.removeHardwareKeyboardObservers()
         self.stopForegroundHeartbeat()
         self.stopWarmMicIdleTimer()
         self.stopKeepAliveHeartbeat()
@@ -279,6 +302,9 @@ public class AppGroupStorageModule: Module {
     defaults.set("idle", forKey: transcriptionStatusKey)
     defaults.removeObject(forKey: transcriptionErrorKey)
     defaults.removeObject(forKey: transcriptionStatusUpdatedAtMsKey)
+    // Hotkey dictation (plugins/hotkey-dictation): a fresh process has no JS
+    // listeners yet, so a ready stamp from a previous process must not survive.
+    defaults.removeObject(forKey: hotkeyJsReadyAtMsKey)
     // Agent one-shot / per-job keys: cleared on every launch so stale requests
     // from a previous session are never replayed. Config-mirror keys
     // (keyboard_agent_enabled / applicable / name / share_context) are NOT
@@ -1617,6 +1643,24 @@ public class AppGroupStorageModule: Module {
       self?.handleAppDidBecomeActive()
     }
     logMarker("foregroundObserver.added")
+  }
+
+  private func addHardwareKeyboardObservers() {
+    guard hardwareKeyboardObserverTokens.isEmpty else { return }
+    let center = NotificationCenter.default
+    for name in [NSNotification.Name.GCKeyboardDidConnect, .GCKeyboardDidDisconnect] {
+      let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+        self?.sendEvent("onHardwareKeyboardChanged", ["connected": GCKeyboard.coalesced != nil])
+      }
+      hardwareKeyboardObserverTokens.append(token)
+    }
+  }
+
+  private func removeHardwareKeyboardObservers() {
+    for token in hardwareKeyboardObserverTokens {
+      NotificationCenter.default.removeObserver(token)
+    }
+    hardwareKeyboardObserverTokens = []
   }
 
   private func removeForegroundObserver() {

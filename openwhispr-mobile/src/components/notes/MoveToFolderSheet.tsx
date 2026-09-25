@@ -76,7 +76,9 @@ export function MoveToFolderSheet({
     >
       <View className="flex-1 bg-systemBackground">
         <View className="flex-row items-center justify-between px-6 pb-4 pt-8">
-          <Text className="text-[22px] font-bold text-label">{title}</Text>
+          <Text accessibilityRole="header" className="text-[22px] font-bold text-label">
+            {title}
+          </Text>
           <GlassIconButton onPress={onClose} accessibilityLabel="Close">
             <SystemIcon name="xmark" mdName="X" size={15} color="secondaryLabel" />
           </GlassIconButton>
