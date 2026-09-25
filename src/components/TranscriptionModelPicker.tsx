@@ -447,6 +447,8 @@ export default function TranscriptionModelPicker({
   const [gpuDismissed, setGpuDismissed] = useState(false);
   // The pack fell back to CPU on this machine (persisted by main until retried)
   const [gpuFailed, setGpuFailed] = useState(false);
+  // The whisper-server error line main saved with that failure (#1736)
+  const [gpuFailReason, setGpuFailReason] = useState<string | null>(null);
   // A server reload with the new backend is in flight (Vulkan cold starts are slow)
   const [gpuActivating, setGpuActivating] = useState(false);
   // Live truth from the running server; "active" is never inferred from a download
@@ -726,10 +728,12 @@ export default function TranscriptionModelPicker({
           setGpuBackend("cuda");
           setGpuDownloaded(cuda.downloaded);
           setGpuFailed(!!cuda.gpuFailed);
+          setGpuFailReason(cuda.gpuFailReason ?? null);
         } else if (vulkan?.vulkan.available) {
           setGpuBackend("vulkan");
           setGpuDownloaded(vulkan.downloaded);
           setGpuFailed(!!vulkan.gpuFailed);
+          setGpuFailReason(vulkan.gpuFailReason ?? null);
         }
       } catch {}
     };
@@ -774,13 +778,27 @@ export default function TranscriptionModelPicker({
 
   // Main falls back to CPU (and remembers it) when a GPU server crashes
   useEffect(() => {
-    const onFallback = () => {
-      setGpuFailed(true);
-      setGpuActivating(false);
-      setGpuActive(false);
-    };
-    const disposeCuda = window.electronAPI?.onCudaFallbackNotification?.(onFallback);
-    const disposeVulkan = window.electronAPI?.onGpuFallbackNotification?.(onFallback);
+    // Main saves the reason before it notifies. Read it from the backend that
+    // failed, not the installed-pack preference above: with both packs
+    // installed, the card can show CUDA while the server ran Vulkan (#1736).
+    const onFallback =
+      (readStatus: () => Promise<{ gpuFailReason?: string | null } | undefined> | undefined) =>
+      () => {
+        setGpuFailed(true);
+        // Never show the previous failure's reason while the new one loads
+        setGpuFailReason(null);
+        setGpuActivating(false);
+        setGpuActive(false);
+        readStatus()
+          ?.then((status) => setGpuFailReason(status?.gpuFailReason ?? null))
+          .catch(() => {});
+      };
+    const disposeCuda = window.electronAPI?.onCudaFallbackNotification?.(
+      onFallback(() => window.electronAPI?.getCudaWhisperStatus?.())
+    );
+    const disposeVulkan = window.electronAPI?.onGpuFallbackNotification?.(
+      onFallback(() => window.electronAPI?.getVulkanWhisperStatus?.())
+    );
     return () => {
       disposeCuda?.();
       disposeVulkan?.();
@@ -1371,6 +1389,14 @@ export default function TranscriptionModelPicker({
                           <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
                             {t("gpu.activationFailedDescription")}
                           </p>
+                          {gpuFailReason && (
+                            <p
+                              dir="ltr"
+                              className="mt-1 select-text wrap-break-word font-mono text-[11px] leading-snug text-muted-foreground"
+                            >
+                              {gpuFailReason}
+                            </p>
+                          )}
                           <Button
                             onClick={handleGpuRetry}
                             size="sm"
