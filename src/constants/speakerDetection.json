@@ -1,5 +1,8 @@
 {
   "DEFAULT_EXPECTED_SPEAKER_COUNT": 2,
   "MAX_SPEAKER_COUNT": 8,
-  "EMBEDDING_VERSION": 2
+  "EMBEDDING_VERSION": 3,
+  "EMBEDDING_MODEL_FILE": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+  "EMBEDDING_MODEL_URL": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+  "EMBEDDING_DIM": 192
 }

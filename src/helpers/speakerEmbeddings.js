@@ -3,9 +3,12 @@ const path = require("path");
 const debugLogger = require("./debugLogger");
 const { getModelsDirForService } = require("./modelDirUtils");
 const onnxWorkerClient = require("./onnxWorkerClient");
+const {
+  EMBEDDING_DIM,
+  EMBEDDING_MODEL_FILE: MODEL_FILE,
+} = require("../constants/speakerDetection.json");
 
 const SAMPLE_RATE = 16000;
-const EMBEDDING_DIM = 512;
 const MIN_SEGMENT_SECONDS = 1.5;
 const MIN_SEGMENT_SAMPLES = SAMPLE_RATE * MIN_SEGMENT_SECONDS;
 const MAX_EMBEDDING_SECONDS = 8;
@@ -15,7 +18,6 @@ const BYTES_PER_SAMPLE = 2;
 const CENTROID_SEGMENTS_PER_CLUSTER = 3;
 // Enough for the RIFF, fmt and metadata chunks ffmpeg writes before "data".
 const WAV_HEADER_READ_BYTES = 64 * 1024;
-const MODEL_FILE = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 // Live meetings extract during remote speech, so this normally fires once a meeting and its
 // post-meeting diarization are done (a longer silence mid-meeting costs one reload). The
 // unload lets the idle ONNX worker exit.
@@ -257,6 +259,9 @@ class SpeakerEmbeddings {
   }
 
   cosineSimilarity(a, b) {
+    // Vectors from different embedding models (e.g. a profile stored before a model
+    // change) are not comparable; treat them as unrelated instead of reading past the end.
+    if (a.length !== b.length) return 0;
     let dot = 0;
     let normA = 0;
     let normB = 0;
