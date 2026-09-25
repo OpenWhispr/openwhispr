@@ -43,7 +43,15 @@ async function mountDictionary(t) {
         export function useTranslation() { return { t }; }
         export const initReactI18next = { type: "3rdParty", init() {} };
       `,
-      "/hooks/useSettings": `export function useSettings() { return { customDictionary: globalThis.__dictionaryWords, updateCustomDictionary() {}, snippets: [] }; }`,
+      "/hooks/useSettings": `
+        export function useSettings() {
+          return {
+            customDictionary: globalThis.__dictionaryWords,
+            updateCustomDictionary() {},
+            snippets: [],
+          };
+        }
+      `,
       "/SnippetsView": "export default function SnippetsView() { return null; }",
       "/ui/useToast": "export function useToast() { return { toast() {} }; }",
       "/utils/agentName": "export function getAgentName() { return 'Nova'; }",

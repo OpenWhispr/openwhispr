@@ -59,7 +59,10 @@ test("OpenRouter dictation posts to OpenRouter with the OpenRouter key", async (
 
 // OpenRouter's documented reply when an account's prepaid credit is spent.
 const OUT_OF_CREDITS_BODY = JSON.stringify({
-  error: { code: 402, message: "Insufficient credits. Add more using https://openrouter.ai/credits" },
+  error: {
+    code: 402,
+    message: "Insufficient credits. Add more using https://openrouter.ai/credits",
+  },
 });
 
 // The dictation error card showed OpenRouter's raw JSON as its text; it must

@@ -41,11 +41,15 @@ async function renderFailedRow(t, { errorCode, errorMessage }) {
 
 // A dictation OpenRouter refused for lack of credit is saved with its raw reply,
 // which History printed verbatim under "Transcription failed".
-test("a failed row out of OpenRouter credit says so instead of printing the raw reply", async (t) => {
+test("a failed row out of OpenRouter credit says so, not the raw reply", async (t) => {
   const html = await renderFailedRow(t, {
     errorCode: "OPENROUTER_OUT_OF_CREDITS",
-    errorMessage:
-      'API Error: 402 {"error":{"code":402,"message":"Insufficient credits. Add more using https://openrouter.ai/credits"}}',
+    errorMessage: `API Error: 402 ${JSON.stringify({
+      error: {
+        code: 402,
+        message: "Insufficient credits. Add more using https://openrouter.ai/credits",
+      },
+    })}`,
   });
 
   assert.ok(html.includes("hooks.audioRecording.errorDescriptions.openrouterOutOfCredits"));
