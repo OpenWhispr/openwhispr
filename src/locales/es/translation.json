@@ -1414,6 +1414,15 @@
       }
     }
   },
+  "systemAudioSourceSettings": {
+    "title": "Audio del Sistema",
+    "description": "Selecciona qué altavoces escucha la grabación de notas",
+    "label": "Dispositivo de reproducción",
+    "allDevices": "Todos los dispositivos de reproducción",
+    "defaultDevice": "Solo el dispositivo de reproducción predeterminado",
+    "allDevicesHelp": "La grabación de notas capta a las demás personas de la llamada desde todos los altavoces y auriculares. Eso incluye los dispositivos virtuales de los cambiadores de voz y de las apps de enrutamiento de audio, como Voicemod o VB-Cable, que pueden añadir tu propia voz a la transcripción por segunda vez.",
+    "defaultDeviceHelp": "La grabación de notas capta solo el dispositivo por el que Windows reproduce el sonido. Si tu app de reuniones suena por otros altavoces o auriculares, no se captará a las demás personas de la llamada."
+  },
   "pasteToolsInfo": {
     "checking": "Verificando capacidades del sistema...",
     "installCommands": {

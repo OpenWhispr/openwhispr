@@ -816,6 +816,9 @@ export interface SystemAudioAccessResult {
   error?: string;
 }
 
+/** Windows only: which playback devices note recording captures (#1546). */
+export type SystemAudioSource = "all-devices" | "default-device";
+
 export interface ScreenRecordingAccessResult {
   granted: boolean;
   status: "granted" | "denied" | "not-determined" | "restricted" | "unknown" | "unsupported";
@@ -2299,7 +2302,9 @@ declare global {
         platform: string;
         source: "system" | "unavailable";
       }>;
-      checkSystemAudioAccess?: () => Promise<SystemAudioAccessResult>;
+      checkSystemAudioAccess?: (options?: {
+        systemAudioSource?: SystemAudioSource;
+      }) => Promise<SystemAudioAccessResult>;
       requestSystemAudioAccess?: () => Promise<SystemAudioAccessResult>;
       openMicrophoneSettings?: () => Promise<{ success: boolean; error?: string }>;
       openSoundInputSettings?: () => Promise<{ success: boolean; error?: string }>;
@@ -2939,6 +2944,7 @@ declare global {
         provider?: string;
         model?: string;
         language?: string;
+        systemAudioSource?: SystemAudioSource;
         noteId?: number | null;
         sessionId: string;
         autoEndEligible: boolean;

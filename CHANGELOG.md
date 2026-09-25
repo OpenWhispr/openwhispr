@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Meetings
+
+- **Choose which playback devices Note Recording hears on Windows.** Note Recording records the other people in a call from every speaker and headset, including the virtual devices that voice changers and audio routing apps such as Voicemod or VB-Cable create. Those devices can carry your own voice, which then turned up in the transcript a second time, often garbled, in another language, or credited to someone else. Settings → Preferences now has a **System Audio** section: leave **Playback Device** on **All Playback Devices** (the default, unchanged), or pick **Default Playback Device Only** to record just the device Windows plays sound through. That option misses a meeting app playing on a different speaker or headset, so it stays opt-in. (#2319, thanks @CptVinyl for the report and the isolation steps; refs #1546)
+
 ### Fixed
 
 - **Idle OpenWhispr no longer keeps a vector database and an inference process running.** The Qdrant sidecar and the embedding model started on every launch and stayed up for the whole session, and the meeting detectors ran from boot even with meeting notifications turned off. Semantic search now starts on the first assistant search, serves keyword results while it warms up, and releases Qdrant and the embedding session after five minutes without a search. Note edits made while it is asleep are journaled in the notes database and indexed on the next activation, so search results stay complete. The microphone and meeting-app detectors start only once your saved notification preferences are loaded, stop when meeting notifications are off, and a detector stopped mid-scan can no longer come back reporting a meeting app. (#2143)

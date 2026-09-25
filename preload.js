@@ -732,7 +732,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkMicrophoneAccess: () => ipcRenderer.invoke("check-microphone-access"),
   getSystemDefaultMicrophone: (options) =>
     ipcRenderer.invoke("get-system-default-microphone", options),
-  checkSystemAudioAccess: () => ipcRenderer.invoke("check-system-audio-access"),
+  checkSystemAudioAccess: (options) => ipcRenderer.invoke("check-system-audio-access", options),
   requestSystemAudioAccess: () => ipcRenderer.invoke("request-system-audio-access"),
   openMicrophoneSettings: () => ipcRenderer.invoke("open-microphone-settings"),
   openSoundInputSettings: () => ipcRenderer.invoke("open-sound-input-settings"),

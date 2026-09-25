@@ -104,6 +104,10 @@ const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
+const {
+  normalizeSystemAudioSource,
+  SYSTEM_AUDIO_SOURCE_DEFAULT_DEVICE,
+} = require("./systemAudioSource");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
 const createMeetingSystemAudioWatchdog = require("./meetingSystemAudioWatchdog");
 const {
@@ -5822,7 +5826,25 @@ class IPCHandlers {
     // System audio is always capturable on Windows: via the native WASAPI
     // process-loopback helper when available (hears every output device),
     // otherwise via Chromium's default-device loopback in the renderer.
-    const getWindowsSystemAudioAccess = async ({ refreshCapability = false } = {}) => {
+    // A check or plan for "Default playback device only" (#1546) never asks
+    // the helper, which also records virtual outputs, such as a voice
+    // changer's, that can carry the user's own voice. So a meeting on that
+    // choice neither probes nor starts it. Screens that check access without a
+    // source still read its capability, which re-probes once a failed probe's
+    // 30 s cache expires; capture never uses that answer.
+    const getWindowsSystemAudioAccess = async ({
+      refreshCapability = false,
+      systemAudioSource,
+    } = {}) => {
+      if (normalizeSystemAudioSource(systemAudioSource) === SYSTEM_AUDIO_SOURCE_DEFAULT_DEVICE) {
+        return buildSystemAudioAccess({
+          granted: true,
+          status: "granted",
+          mode: "loopback",
+          strategy: "loopback",
+        });
+      }
+
       const capability = await this.windowsLoopbackAudioManager
         ?.getCapability({ force: refreshCapability })
         .catch(() => ({
@@ -5839,9 +5861,9 @@ class IPCHandlers {
       });
     };
 
-    const getSystemAudioAccess = async () => {
+    const getSystemAudioAccess = async (options) => {
       if (process.platform === "win32") {
-        return getWindowsSystemAudioAccess();
+        return getWindowsSystemAudioAccess({ systemAudioSource: options?.systemAudioSource });
       }
 
       if (process.platform === "linux") {
@@ -5861,7 +5883,7 @@ class IPCHandlers {
       });
     };
 
-    ipcMain.handle("check-system-audio-access", () => getSystemAudioAccess());
+    ipcMain.handle("check-system-audio-access", (_event, options) => getSystemAudioAccess(options));
 
     ipcMain.handle("request-system-audio-access", async () => {
       if (process.platform === "win32") {
@@ -7274,7 +7296,10 @@ class IPCHandlers {
 
     const getMeetingSystemAudioMode = () => getMeetingSystemAudioCapabilityMode();
 
-    const getMeetingSystemAudioPlan = async ({ refreshWindowsCapability = false } = {}) => {
+    const getMeetingSystemAudioPlan = async ({
+      refreshWindowsCapability = false,
+      systemAudioSource,
+    } = {}) => {
       const mode = getMeetingSystemAudioMode();
       if (mode === "unsupported") {
         return { mode, strategy: "unsupported" };
@@ -7295,6 +7320,7 @@ class IPCHandlers {
       if (process.platform === "win32") {
         const windowsAccess = await getWindowsSystemAudioAccess({
           refreshCapability: refreshWindowsCapability,
+          systemAudioSource,
         });
         return { mode: windowsAccess.mode, strategy: windowsAccess.strategy };
       }
@@ -7303,6 +7329,14 @@ class IPCHandlers {
       // above), but callers destructure the result, so never return undefined.
       return { mode, strategy: "unsupported" };
     };
+
+    // The plan's mode without its strategy, for callers that only decide
+    // whether a system stream opens. Windows always opens one, so this never
+    // probes its helper, which "default-device" must not touch (#1546).
+    const getMeetingSystemAudioPlanMode = async () =>
+      process.platform === "win32"
+        ? getMeetingSystemAudioMode()
+        : (await getMeetingSystemAudioPlan()).mode;
 
     const hasNativeMeetingSystemAudio = () => getMeetingSystemAudioMode() === "native";
 
@@ -7333,7 +7367,7 @@ class IPCHandlers {
         keyterms: options.keyterms,
         sampleRate: MEETING_STREAM_SAMPLE_RATE,
       };
-      const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
+      const systemAudioMode = await getMeetingSystemAudioPlanMode();
       let pairs;
       if (systemAudioMode !== "unsupported") {
         const secrets = await fetchRealtimeToken(event, options, { streams: 2 });
@@ -8480,7 +8514,7 @@ class IPCHandlers {
         return { success: true };
       }
 
-      const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
+      const systemAudioMode = await getMeetingSystemAudioPlanMode();
       const requestedConnectionKey = getMeetingConnectionKey(options);
 
       if (
@@ -8554,6 +8588,9 @@ class IPCHandlers {
       meetingFatalErrorSent = false;
       this.meetingDetectionEngine?.endRecordingSession();
       this.meetingDetectionEngine?.setUserRecording(true);
+      // The renderer sent the same choice to its access check, so both sides
+      // agree on whether the helper or the renderer captures (#1546).
+      const systemAudioSource = normalizeSystemAudioSource(options.systemAudioSource);
 
       const completeStart = async (result) => {
         await this.meetingDetectionEngine?.beginRecordingSession({
@@ -8572,11 +8609,21 @@ class IPCHandlers {
           armMeetingSystemAudioSilenceTimer(meetingConnectionWin, result.systemAudioStrategy);
           startMeetingSystemAudioWatchdog(meetingConnectionWin, result.systemAudioStrategy);
         }
+        if (process.platform === "win32") {
+          debugLogger.info(
+            "Meeting system audio source",
+            { systemAudioSource, systemAudioStrategy: result.systemAudioStrategy },
+            "meeting"
+          );
+        }
         return { ...result, sessionId: recordingSessionId };
       };
 
       try {
-        const systemAudioPlan = await getMeetingSystemAudioPlan({ refreshWindowsCapability: true });
+        const systemAudioPlan = await getMeetingSystemAudioPlan({
+          refreshWindowsCapability: true,
+          systemAudioSource,
+        });
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
         const requestedConnectionKey = getMeetingConnectionKey(options);
         meetingEchoLeakDetector.reset();

@@ -1454,6 +1454,15 @@
       }
     }
   },
+  "systemAudioSourceSettings": {
+    "title": "Systemaudio",
+    "description": "Wählen Sie die Lautsprecher, die die Notizaufnahme aufzeichnet",
+    "label": "Wiedergabegerät",
+    "allDevices": "Alle Wiedergabegeräte",
+    "defaultDevice": "Nur Standard-Wiedergabegerät",
+    "allDevicesHelp": "Die Notizaufnahme nimmt die anderen Teilnehmer des Gesprächs von allen Lautsprechern und Headsets auf. Dazu gehören auch virtuelle Geräte von Stimmverzerrern und Audio-Routing-Apps wie Voicemod oder VB-Cable, durch die Ihre eigene Stimme ein zweites Mal im Transkript landen kann.",
+    "defaultDeviceHelp": "Die Notizaufnahme nimmt nur das Gerät auf, über das Windows den Ton wiedergibt. Gibt Ihre Meeting-App den Ton über andere Lautsprecher oder ein anderes Headset wieder, werden die anderen Teilnehmer nicht aufgenommen."
+  },
   "pasteToolsInfo": {
     "checking": "Systemfähigkeiten werden geprüft...",
     "installCommands": {

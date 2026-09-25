@@ -93,6 +93,7 @@ import DeveloperSection from "./DeveloperSection";
 import ChatAgentSettings from "./settings/ChatAgentSettings";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
 import DictationTranslationSettings from "./settings/DictationTranslationSettings";
+import SystemAudioSourceSettings from "./settings/SystemAudioSourceSettings";
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
@@ -1295,6 +1296,8 @@ export default function SettingsPage({
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
   const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
+  const systemAudioSource = useSettingsStore((s) => s.systemAudioSource);
+  const setSystemAudioSource = useSettingsStore((s) => s.setSystemAudioSource);
 
   const settingsPolicyState = usePolicySnapshot();
   const agentAllowedByPolicy = isAgentAllowed(settingsPolicyState);
@@ -3445,6 +3448,12 @@ export default function SettingsPage({
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
+
+            <SystemAudioSourceSettings
+              platform={platform}
+              systemAudioSource={systemAudioSource}
+              onSystemAudioSourceChange={setSystemAudioSource}
+            />
 
             {/* Dictionary */}
             <div>

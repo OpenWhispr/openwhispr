@@ -1361,6 +1361,15 @@
       }
     }
   },
+  "systemAudioSourceSettings": {
+    "title": "Audio di Sistema",
+    "description": "Seleziona quali altoparlanti ascolta la registrazione delle note",
+    "label": "Dispositivo di riproduzione",
+    "allDevices": "Tutti i dispositivi di riproduzione",
+    "defaultDevice": "Solo il dispositivo di riproduzione predefinito",
+    "allDevicesHelp": "La registrazione delle note capta le altre persone in chiamata da tutti gli altoparlanti e le cuffie. Sono inclusi i dispositivi virtuali dei modificatori di voce e delle app di instradamento audio, come Voicemod o VB-Cable, che possono aggiungere la tua voce alla trascrizione una seconda volta.",
+    "defaultDeviceHelp": "La registrazione delle note capta solo il dispositivo con cui Windows riproduce l'audio. Se l'app per le riunioni riproduce l'audio su altri altoparlanti o cuffie, le altre persone in chiamata non verranno captate."
+  },
   "pasteToolsInfo": {
     "checking": "Verifica delle funzionalità di sistema...",
     "installCommands": {
