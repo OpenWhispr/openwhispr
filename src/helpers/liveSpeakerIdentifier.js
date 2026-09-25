@@ -45,13 +45,16 @@ const SPEECH_CHUNKS_MAX_SAMPLES = MAX_EMBEDDING_SAMPLES * 4;
 const SPEECH_THRESHOLD = 0.15;
 const SILENCE_THRESHOLD = 0.08;
 const SILENCE_WINDOWS_TO_END = 24;
-// Minimum cosine to treat a live segment as an existing speaker. Aligned with the
-// offline sherpa-onnx cluster-threshold used for this same CAMPPlus model
-// (see DiarizationManager.diarize). The previous 0.65 was tuned to the pre-CMN
-// embeddings, which collapsed into a narrow ~0.92+ cone where nothing separated;
-// with the corrected fbank the distribution is much wider, so a lower, properly
-// calibrated boundary avoids splitting one speaker across volume/prosody swings.
-const MATCH_THRESHOLD = 0.55;
+// Minimum cosine to treat a live segment as an existing speaker (a voice already
+// heard in this meeting, or a stored profile). Calibrated for the zh-en "advanced"
+// CAM++ with Kaldi fbank: on real meetings, 0.60 kept wrong profile matches near
+// 2% while matching ~99% of segments to the right in-meeting voice. The old 0.65
+// was tuned to the previous model, whose embeddings sat in such a narrow cone that
+// most different speakers still cleared it.
+const MATCH_THRESHOLD = 0.6;
+// Merging two in-meeting voices has no runner-up margin to lean on, so it needs a
+// stricter bar: at 0.70 fewer than 1% of voices had a different speaker that close.
+const RECLUSTER_THRESHOLD = 0.7;
 const MATCH_MARGIN = 0.03;
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
 const DEFAULT_VAD_STATE_SHAPE = [2, 1, 64];
@@ -278,7 +281,7 @@ class LiveSpeakerIdentifier {
         if (removed.has(speakers[j][0])) continue;
 
         const similarity = speakerEmbeddings.cosineSimilarity(speakers[i][1], speakers[j][1]);
-        if (similarity < MATCH_THRESHOLD) continue;
+        if (similarity < RECLUSTER_THRESHOLD) continue;
 
         // Confirmed-distinct identities (different profiles, or different
         // user-set names) must never merge on embedding similarity alone.
