@@ -8,7 +8,7 @@
 
 **Tech stack:** React Native/Expo, TypeScript, Zustand, `expo-superwall` 1.2.0 / SuperwallKit 4.16.1, existing Dub/RevenueCat clients, Jest; Node 24.
 
-**Spec:** [Current approved handover](../../../titan-affiliate-handoff-20260916/docs/handovers/2026-09-25-affiliate-superwall-final-bindings-next.md), [approved visual](../../../titan-affiliate-handoff-20260916/artefacts/reports/2026-09-25-affiliate-creator-code-designs.html), [completed feasibility research](../../../titan-affiliate-handoff-20260916/artefacts/reports/2026-09-25-affiliate-creator-code-feasibility.md), and [saved draft bindings](../../../titan-affiliate-handoff-20260916/docs/evidence/affiliate-superwall-test-20260925/binding-readback.json).
+**Spec:** [Current approved handover](../../../titan-affiliate-handoff-20260916/docs/handovers/2026-09-25-affiliate-native-catalog-device-verification-next.md), [approved visual](../../../titan-affiliate-handoff-20260916/artefacts/reports/2026-09-25-affiliate-creator-code-designs.html), [completed feasibility research](../../../titan-affiliate-handoff-20260916/artefacts/reports/2026-09-25-affiliate-creator-code-feasibility.md), and [saved draft bindings](../../../titan-affiliate-handoff-20260916/docs/evidence/affiliate-superwall-test-20260925/binding-readback.json).
 
 ## Authority and workflow record
 
@@ -23,6 +23,12 @@
 - Step 1: isolated native fixture callback/display/action/reset proof passed on the separate iPhone simulator app. Campaign 109201 is restricted to its unique bundle and placement. Final product/token/seed bindings are configured. Native seed/token display and action routing passed; explicit false/empty seed parameters repaired and passed cached reuse. The separate bundle omits native product identifiers because it has no StoreKit catalog. Final-revision retry/malformed guards, reachable recovery, pending input locking and X/late-callback isolation passed on the separate iPhone probe; full device/keyboard and iPad checks remain; real app/catalog acceptance is not established.
 - Step 2: source implementation prepared on the owned branch: exact short keys, per-presentation callbacks/private offers, direct Cloud paywall, explicit Account shortcut, one-shot inbound intent, consent/identity/currentness guards and tests. Final real-app acceptance remains dependent on Step 1’s native product/catalog and remaining device checks.
 - Step 3: full source checks and independent review are recorded with the final source checkpoint. Connected Apple acceptance, correct real app/catalog/stock, native Account input/iPad coverage, production association and joint desktop/mobile activation remain separately held.
+
+## Next fresh session: app/catalog and native device verification
+
+Josh explicitly parked further execution for a new session on September 25. Begin with a read-only inventory of the existing staging app/catalog identity, current source/PR checks, available test binaries and iPhone/iPad targets. Match Superwall, RevenueCat, API environment, bundle identity and monthly/annual products before choosing a compatible full-app development runtime. Reuse completed staging setup and the existing isolated paywall; do not replace a personal app or loosen product/ownership guards.
+
+Then exercise native Account completed system Paste/Go, normal typing, full/inbound links, Cloud/Local, Monthly/Annual, refusal/unavailable/offline/repeat/session changes and layout/keyboard/lifecycle on iPhone and iPad. Use fictional non-claiming data for presentation checks. Real creator saving, code allocation, redemption, purchase/restore and financial/recovery acceptance remain a later separately authorized session. Production routing and the single desktop/mobile activation decision remain held. Record exact proof, defects and dependencies in the current handover and existing evidence.
 
 ## Global constraints and acceptance
 
@@ -49,17 +55,21 @@
 
 **Interfaces:** Installed `usePlacement` accepts `onCustomCallback(callback: CustomCallback): Promise<CustomCallbackResult> | CustomCallbackResult`; callback is `{ name: string, variables?: Record<string, unknown> }`, result is `{ status: 'success' | 'failure', data?: Record<string, unknown> }`. Names are `creatorCodeApply` and `creatorOfferRedeem`. Draft binds input `state:node.o9Et2gOJEgdSPj0nV1CkE.value` and selected index; display namespace is `callbacks.creatorCodeApply.data` with `priceText`, `renewalText`, or failure `message`. Native flat dictionary keys were observed; see the final contract/status below.
 
-- [ ] Refresh draft inactive/unassigned state and intended app/API-key environment; establish a test-only preview route with no production audience or production placement change. Do not route `onboarding_paywall` into the live Cloud sync campaign.
-- [ ] Add fixture callbacks behind an explicit development/test boundary, without importing/calling real claim, Dub tracking, stock allocation or URL-opening functions. Fictional prices must be visibly labeled as test data. Return, for example:
+- [x] Refresh the intended app and establish the isolated test route: app 38286/paywall 271365, campaign 109201, sole probe placement and unique probe bundle filter. Final save/reload readbacks verified it. Do not route `onboarding_paywall` into live Cloud sync.
+- [x] Add fixture callbacks behind an explicit development/test boundary, without importing/calling real claim, Dub tracking, stock allocation or URL-opening functions. Fictional prices must be visibly labeled as test data. Return, for example:
 
 ```ts
 return {
   status: 'success',
-  data: { priceText: 'TEST $7.99', renewalText: 'TEST ONLY — no subscription or offer' },
+  data: {
+    priceText: 'TEST $7.99',
+    renewalText: 'TEST ONLY — no subscription or offer',
+    offerToken: 'FICTIONAL_PRESENTATION_TOKEN',
+  },
 };
 ```
 
-- [ ] Record a sanitized native request shape, then bind parsing to those exact keys. Until observed, document a fixture/source contract only; do not describe it as native proof. Unknown names/keys/types return failure rather than invoking services.
+- [x] Record sanitized native input/plan/token/seed keys and bind parsing to them. Product identifier is configured but absent from the distinct probe bundle, which has no StoreKit catalog; actual product/catalog acceptance remains open. Unknown names/keys/types fail without invoking services.
 - [ ] Verify returned strings, missing data, explicit failure, repeated presentation, annual hiding, X dismissal, waiting, edited input and late completion. Fixture redemption returns a non-purchasing result; fixture ordinary-purchase actions also remain disabled during this proof.
 - [x] Prove the initial display-state contract: native fixture seed/token rendering, custom action and Annual/Monthly behavior passed. Explicit false/empty parameters repaired cached reuse. Private offer authority remains app-owned; native real product/catalog acceptance is still separate.
 - [x] Save exact route/binding evidence and limits. Native proof may depend on a compatible new development binary; source tests can proceed with that dependency recorded, but Step 1 remains partly open until actual execution is observed.
@@ -107,7 +117,7 @@ expect(
 - [x] Test Cloud consent authorization/refusal proceeds directly to the existing Superwall registration; no separate CreatorLinkField/Continue screen and no automatic offer allocation on screen mount. Keep SDK ready/escape behavior, optional anonymous purchase, abort handling and later signup recovery.
 - [x] Remove the pre-paywall creator-entry gate from `PaywallStep`; present shared paywall after existing consent. Preserve trusted inbound candidates without auto-claiming typed values, and preserve the separately existing authorized inbound-link consent flow.
 - [x] Update Account copy to creator code, retain full-link support, native completed Paste and Go, approved row styling, and no Clear/Cancel link. The existing `CreatorLinkInput` module stays the source of completed paste; typing/onChange only edits.
-- [ ] A valid Account submit performs the explicit guarded preparation and opens the monthly offer immediately. Reuse the proven initial inline state contract from Task 1; if unavailable, use the dedicated offer fallback. Never open ordinary full-price purchasing automatically after an unavailable creator offer or dismissal. Ordinary Plans & Billing remains an explicit normal path.
+- [x] Source implements guarded Account submission and immediate monthly offer presentation; source tests and seeded inline fixture contract pass. Actual Account system Paste/Go in the full native app remains pending. Reuse the proven initial inline state contract from Task 1; if unavailable, use the dedicated offer fallback. Never open ordinary full-price purchasing automatically after an unavailable creator offer or dismissal. Ordinary Plans & Billing remains an explicit normal path.
 - [x] Test typing/paste/Go distinctions, repeated paste, focus loss, consent refusal, invalid/offline/unavailable/saved creator, no duplicate registration, Account offer X returns to Account, and Cloud X advances once without a second paywall. Test Annual switching preserves saved attribution and normal purchasing.
 - [x] Run focused journey tests and commit named files when green. Remove obsolete component code only after searching all callers; avoid unrelated onboarding refactors.
 
@@ -125,7 +135,7 @@ git diff --check
 ```
 
 - [x] Commit intended code/tests and give a fresh independent `deep-review` + `code-quality` reviewer the full feature diff, original approved design/handover, this plan, baseline/current head and validation evidence. Cover user journeys, neighboring billing/onboarding regressions, SDK lifecycle, tests and iOS/Android exclusion. Main agent validates and repairs findings; reviewer rechecks affected repairs.
-- [ ] Refresh the existing draft #2334 and remote branch before pushing; preserve concurrent work. Update the draft with final behavior and proof limits, then inspect CI on the pushed head. Engineering owns merge. No extra review-message/comment/send is implied.
+- [x] Refresh the existing draft #2334 and remote branch before pushing; preserve concurrent work. Update the draft with final behavior and proof limits, then inspect CI on the pushed head. Engineering owns merge. No extra review-message/comment/send is implied.
 - [x] Update the resumable handover with Step 1/2/3 completed-versus-pending status and exact next action. Keep desktop readiness and the joint activation decision separate.
 
 ## Source validation checkpoint
