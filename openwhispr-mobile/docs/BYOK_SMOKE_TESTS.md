@@ -17,9 +17,10 @@ Run from `openwhispr-mobile/`: `npm test -- --runInBand`, `npm run typecheck`, `
 
 ## Credentials and access
 
-- Use Bring Your Own Key while signed out and without Pro. Confirm no OpenWhispr hosted inference or allowance consumption.
+- Use Bring Your Own Key while signed out and without Pro, on a device where no managed account was signed in (or after Remove all provider keys). Confirm no OpenWhispr hosted inference or allowance consumption.
 - Replace/remove credentials and retry a job. Removal must reject credential reuse; it must not switch provider or model.
-- Sign-out keeps personal settings/credentials. Deleting the app does not remove Keychain items; "Remove credential" and "Remove all provider keys" do, including keys for a Custom endpoint that was since changed.
+- Sign-out keeps personal settings/credentials. Deleting the account removes the keys, and a deletion that fails (for example offline) keeps them. Deleting the app leaves Keychain items until the next install, whose first launch erases them. "Remove credential" and "Remove all provider keys" remove them at once, including keys for a Custom endpoint that was since changed.
+- Sign out of a managed account and confirm its provider policy still applies while signed out and in a guest session. It lifts only when another account signs in and its policy loads, or after Remove all provider keys; Remove credential alone must not lift it.
 - Reboot an iPhone, unlock once, lock again, and verify background credential access without a biometric prompt.
 - Check valid/invalid keys, rate limits (429), quota (402), missing models (404), timeouts, cancellation, and malformed responses without exposing secrets or provider response bodies in UI/logs.
 - Check organization allowlists, unresolved policy, and account changes. Provider requests must remain blocked when policy denies them.
