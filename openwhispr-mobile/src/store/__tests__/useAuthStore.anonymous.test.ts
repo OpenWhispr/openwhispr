@@ -75,11 +75,14 @@ beforeEach(() => {
   });
 });
 
-it('clears the prior account tokens on sign out', async () => {
+it('keeps stored share links through sign out and guest mode', async () => {
   useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
   await useAuthStore.getState().signOut();
-  expect(mockClearNoteShareTokens).toHaveBeenCalledWith('anon-user');
   expect(useAuthStore.getState().user).toBeNull();
+  useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  await useAuthStore.getState().continueAsGuest();
+  expect(useAuthStore.getState().isGuest).toBe(true);
+  expect(mockClearNoteShareTokens).not.toHaveBeenCalled();
 });
 
 it('clears the prior account tokens when signing into a different account', async () => {
@@ -206,10 +209,11 @@ it('still enters guest mode if the anonymous request fails while guest mode is w
   });
 });
 
-it('still signs out if local sharing cache cleanup fails', async (): Promise<void> => {
+it('still completes account deletion if local sharing cache cleanup fails', async (): Promise<void> => {
   useAuthStore.setState({ user: anonymousUser, sessionCookie: 'session=anon' });
+  jest.mocked(deleteAccount).mockResolvedValueOnce(undefined as never);
   mockClearNoteShareTokens.mockRejectedValueOnce(new Error('Secure storage unavailable'));
-  await useAuthStore.getState().signOut();
+  await useAuthStore.getState().deleteAccount();
   expect(useAuthStore.getState().user).toBeNull();
   expect(useAuthStore.getState().isLoading).toBe(false);
 });

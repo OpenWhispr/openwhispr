@@ -126,7 +126,6 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ isLoading: true });
     try {
       await anonymousSignInInFlight?.catch(() => undefined);
-      await clearPreviousNoteShareTokens();
       await clearSession();
       await SecureStore.setItemAsync(GUEST_SESSION_KEY, 'true');
       useUsageStore.getState().reset();
@@ -179,7 +178,6 @@ export const useAuthStore = create<AuthStore>((set) => ({
   signOut: async () => {
     set({ isLoading: true });
     await anonymousSignInInFlight?.catch(() => undefined);
-    await clearPreviousNoteShareTokens();
     await signOutApi();
     await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
     useUsageStore.getState().reset();
@@ -223,7 +221,7 @@ async function clearPreviousNoteShareTokens(nextUserId?: string): Promise<void> 
     try {
       await clearNoteShareTokens(previousUserId);
     } catch {
-      // A local cache failure must not retain an authenticated session.
+      // A local cache failure must not block sign-in or undo a completed account deletion.
       Sentry.captureMessage('Note sharing cache cleanup failed', 'warning');
     }
   }
