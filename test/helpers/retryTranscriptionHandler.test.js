@@ -70,9 +70,10 @@ const CONVERTED_WAV = Buffer.concat([WAV_BUFFER, Buffer.from("converted")]);
 const wavConversions = [];
 let convertBehavior = async () => CONVERTED_WAV;
 
-// ffmpeg's segmenter, faked: writes `count` one-byte pieces where it is told.
-// A short upload is one piece, so OpenRouter upload tests written before
-// chunking still make exactly one request.
+// ffmpeg's segmenter, faked: writes `count` pieces of about a second of 128 kbps
+// MP3 each where it is told (smaller ones read as a sliver and are dropped). A
+// short upload is one piece, so OpenRouter upload tests written before chunking
+// still make exactly one request.
 const splitCalls = [];
 const piecesOf = (count) => async (_inputPath, outputDir) => {
   const fs = require("node:fs");
@@ -80,7 +81,7 @@ const piecesOf = (count) => async (_inputPath, outputDir) => {
   const chunkPaths = [];
   for (let i = 0; i < count; i++) {
     const piece = path.join(outputDir, `chunk-${String(i).padStart(3, "0")}.mp3`);
-    fs.writeFileSync(piece, Buffer.from([i]));
+    fs.writeFileSync(piece, Buffer.alloc(16_000, i));
     chunkPaths.push(piece);
   }
   return { chunkPaths, durationSeconds: count * 240 };
@@ -666,7 +667,7 @@ const outOfCreditsResponse = () => {
 
 const OUT_OF_CREDITS = {
   code: "OPENROUTER_OUT_OF_CREDITS",
-  messageKey: "hooks.audioRecording.errorDescriptions.openrouterOutOfCredits",
+  messageKey: "hooks.audioRecording.errorDescriptions.openRouterOutOfCredits",
 };
 
 test("retry and upload read an OpenRouter 402 as out of credits", async () => {

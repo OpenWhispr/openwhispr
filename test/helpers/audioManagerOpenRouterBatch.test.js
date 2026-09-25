@@ -135,7 +135,7 @@ test("an OpenRouter 402 shows a translated out-of-credits card, not its JSON", a
     );
     assert.equal(
       getRecordingErrorDescription(report, translate),
-      "t(hooks.audioRecording.errorDescriptions.openrouterOutOfCredits)",
+      "t(hooks.audioRecording.errorDescriptions.openRouterOutOfCredits)",
       name
     );
   }

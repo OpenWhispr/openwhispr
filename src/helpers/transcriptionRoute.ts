@@ -61,7 +61,7 @@ const PROVIDER_KEY_MISSING_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.providerKeyMissing";
 
 const OPENROUTER_OUT_OF_CREDITS_MESSAGE_KEY =
-  "hooks.audioRecording.errorDescriptions.openrouterOutOfCredits";
+  "hooks.audioRecording.errorDescriptions.openRouterOutOfCredits";
 
 // OpenRouter is reached from its own tab or from a Custom endpoint typed by
 // hand. Both post to this host and share its limits, so every OpenRouter rule

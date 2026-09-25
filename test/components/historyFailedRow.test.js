@@ -52,7 +52,7 @@ test("a failed row out of OpenRouter credit says so, not the raw reply", async (
     })}`,
   });
 
-  assert.ok(html.includes("hooks.audioRecording.errorDescriptions.openrouterOutOfCredits"));
+  assert.ok(html.includes("hooks.audioRecording.errorDescriptions.openRouterOutOfCredits"));
   assert.ok(!html.includes("API Error: 402"), "the raw provider reply is not shown");
 });
 
@@ -63,5 +63,5 @@ test("other failed rows keep showing the saved error", async (t) => {
   });
 
   assert.ok(html.includes("API Error: 500 upstream unavailable"));
-  assert.ok(!html.includes("openrouterOutOfCredits"));
+  assert.ok(!html.includes("openRouterOutOfCredits"));
 });

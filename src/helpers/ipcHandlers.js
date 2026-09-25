@@ -625,8 +625,8 @@ class IPCHandlers {
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
     // requestId -> AbortControllers for in-flight audio-upload work (cloud
-    // upload, or local transcription + diarization sharing one id), so a
-    // cancel can abort the exact job.
+    // upload, OpenRouter's piece-by-piece upload, or local transcription +
+    // diarization sharing one id), so a cancel can abort the exact job.
     this._uploadCancelRegistry = createUploadCancelRegistry();
     this._agentStreamRequests = new AgentStreamRequestRegistry();
     this._cloudReasonRequests = new AgentStreamRequestRegistry();

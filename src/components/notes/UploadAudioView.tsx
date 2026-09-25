@@ -702,20 +702,26 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setChunkProgress(null);
     setDiarizationWarning(false);
 
-    const useChunkProgress = (isOpenWhisprCloud && isLargeFile) || uploadInPieces;
+    const useChunkProgress = isOpenWhisprCloud && isLargeFile;
+    // An OpenRouter upload's piece count is known only once the main process has
+    // split it, so it starts on the simulated bar and switches to per-piece
+    // progress when there is more than one piece.
+    const minChunksForProgress = uploadInPieces ? 2 : 1;
 
-    if (useChunkProgress) {
+    if (useChunkProgress || uploadInPieces) {
       progressCleanupRef.current =
         window.electronAPI.onUploadTranscriptionProgress?.((data) => {
-          if (data.chunksTotal > 0) {
+          if (data.chunksTotal >= minChunksForProgress) {
+            if (progressRef.current) clearInterval(progressRef.current);
             setChunkProgress({
               chunksTotal: data.chunksTotal,
               chunksCompleted: data.chunksCompleted,
             });
-            setProgress((data.chunksCompleted / data.chunksTotal) * 90);
+            setProgress((prev) => Math.max(prev, (data.chunksCompleted / data.chunksTotal) * 90));
           }
         }) ?? null;
-    } else {
+    }
+    if (!useChunkProgress) {
       progressRef.current = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 90) {
@@ -729,6 +735,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
     try {
       const diarization = await buildDiarizationSettings();
+      // A Cancel while speaker models download came before the main process had
+      // anything to abort; starting now would send, and bill, the whole upload.
+      if (runId !== runIdRef.current) return;
       const res: FileTranscriptionResult = await transcribeFileWithSpeakers(
         currentFile.path,
         buildTranscriptionConfig(),

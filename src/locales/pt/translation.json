@@ -890,7 +890,7 @@
         "offline": "Você está offline. A transcrição na nuvem exige conexão com a internet.",
         "dailyLimitReached": "Você atingiu o limite de transcrições de hoje. Tente novamente amanhã ou faça upgrade do seu plano.",
         "providerRateLimited": "Seu provedor de transcrição limitou a solicitação. Aguarde um momento e tente novamente.",
-        "openrouterOutOfCredits": "Sua conta do OpenRouter está sem créditos. Recarregue em openrouter.ai e tente novamente.",
+        "openRouterOutOfCredits": "Sua conta do OpenRouter está sem créditos. Recarregue em openrouter.ai e tente novamente.",
         "chunkLoss": "Um problema de rede fez perder grande parte da gravação. Retranscreva-a a partir do histórico.",
         "agentReasoningFailed": "Seu assistente de voz não conseguiu processar o comando; a transcrição bruta foi inserida no lugar.",
         "screenContextSkipped": "Não foi possível enviar a captura, então seu comando foi executado sem contexto de tela.",

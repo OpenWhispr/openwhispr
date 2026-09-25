@@ -107,7 +107,7 @@ export default function TranscriptionItem({
   // The saved message is OpenRouter's raw JSON reply; show the readable version.
   const errorText =
     errorCode === "OPENROUTER_OUT_OF_CREDITS"
-      ? t("hooks.audioRecording.errorDescriptions.openrouterOutOfCredits")
+      ? t("hooks.audioRecording.errorDescriptions.openRouterOutOfCredits")
       : item.error_message;
 
   const retryLabel = t(

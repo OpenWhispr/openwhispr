@@ -911,7 +911,7 @@
         "offline": "Sei offline. La trascrizione cloud richiede una connessione Internet.",
         "dailyLimitReached": "Hai raggiunto il limite di trascrizioni di oggi. Riprova domani o aggiorna il tuo piano.",
         "providerRateLimited": "Il tuo provider di trascrizione ha limitato la richiesta. Attendi un momento e riprova.",
-        "openrouterOutOfCredits": "Il tuo account OpenRouter ha esaurito i crediti. Ricaricalo su openrouter.ai e riprova.",
+        "openRouterOutOfCredits": "Il tuo account OpenRouter ha esaurito i crediti. Ricaricalo su openrouter.ai e riprova.",
         "chunkLoss": "Un problema di rete ha fatto perdere troppa parte della registrazione. Ritrascrivila dalla cronologia.",
         "agentReasoningFailed": "L'assistente vocale non è riuscito a elaborare il comando; è stata inserita la trascrizione grezza.",
         "screenContextSkipped": "Non è stato possibile inviare lo screenshot, quindi il comando è stato eseguito senza contesto dello schermo.",

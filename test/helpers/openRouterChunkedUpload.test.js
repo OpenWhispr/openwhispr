@@ -8,15 +8,23 @@ const {
   transcribeOpenRouterChunks,
 } = require("../../src/helpers/openRouterChunkedUpload");
 
+// A second of the splitter's 128 kbps MP3, and the sliver ffmpeg leaves when a
+// length is an exact multiple of the piece (measured: 1,772 bytes).
+const ONE_SECOND_BYTES = 16_000;
+const SLIVER_BYTES = 1_772;
+
 // Stands in for ffmpeg's segmenter: writes `count` pieces where it is told.
-function fakeSplit(count, { durationSeconds = count * OPENROUTER_CHUNK_SECONDS } = {}) {
+function fakeSplit(
+  count,
+  { durationSeconds = count * OPENROUTER_CHUNK_SECONDS, lastPieceBytes = ONE_SECOND_BYTES } = {}
+) {
   const calls = [];
   const split = async (inputPath, outputDir, options) => {
     calls.push({ inputPath, outputDir, options });
     const chunkPaths = [];
     for (let i = 0; i < count; i++) {
       const piece = path.join(outputDir, `chunk-${String(i).padStart(3, "0")}.mp3`);
-      fs.writeFileSync(piece, `piece ${i}`);
+      fs.writeFileSync(piece, Buffer.alloc(i === count - 1 ? lastPieceBytes : ONE_SECOND_BYTES));
       chunkPaths.push(piece);
     }
     return { chunkPaths, durationSeconds };
@@ -76,7 +84,7 @@ test("an account problem stops the upload at that piece", async () => {
       402,
       {
         code: "OPENROUTER_OUT_OF_CREDITS",
-        messageKey: "hooks.audioRecording.errorDescriptions.openrouterOutOfCredits",
+        messageKey: "hooks.audioRecording.errorDescriptions.openRouterOutOfCredits",
       },
     ],
     [403, {}],
@@ -150,6 +158,35 @@ test("no answer, or a rate limit that outlasts the retries, ends the upload earl
   }
 });
 
+// Everything before the stop was transcribed and billed; when it covers at least
+// half the recording the user keeps it, with the rest marked as missing.
+test("stopping near the end keeps the pieces already transcribed", async () => {
+  const stops = [
+    () => httpError(402, "Insufficient credits"),
+    () => new Error("net::ERR_INTERNET_DISCONNECTED"),
+  ];
+  for (const stop of stops) {
+    const { split } = fakeSplit(8);
+    const sent = [];
+    const result = await transcribeOpenRouterChunks({
+      inputPath: "in",
+      split,
+      ...noWait,
+      transcribeChunk: async (piece) => {
+        sent.push(pieceName(piece));
+        if (pieceName(piece) === "chunk-006") throw stop();
+        return { text: pieceName(piece) };
+      },
+    });
+    assert.equal(new Set(sent).size, 7, "nothing is sent after the stop");
+    assert.equal(
+      result.text,
+      "chunk-000 chunk-001 chunk-002 chunk-003 chunk-004 chunk-005 [missing audio 24:00-32:00]"
+    );
+    assert.deepEqual([result.failedChunks, result.totalChunks], [2, 8]);
+  }
+});
+
 test("a piece the provider rejects becomes a marked gap, not a failed upload", async () => {
   const { split } = fakeSplit(3);
   const attempts = new Map();
@@ -218,8 +255,7 @@ test("losing more than half the audio fails the upload", async () => {
 });
 
 test("a sliver ffmpeg leaves at the end is not sent", async () => {
-  // A length that is an exact multiple of the piece leaves a ~0.05 s tail.
-  const { split } = fakeSplit(3, { durationSeconds: 2 * OPENROUTER_CHUNK_SECONDS + 0.05 });
+  const { split } = fakeSplit(3, { lastPieceBytes: SLIVER_BYTES });
   const sent = [];
   const result = await transcribeOpenRouterChunks({
     inputPath: "in",
@@ -231,18 +267,34 @@ test("a sliver ffmpeg leaves at the end is not sent", async () => {
   });
   assert.deepEqual(sent, ["chunk-000", "chunk-001"]);
   assert.equal(result.warning, undefined);
+});
 
-  // Without a known length nothing is dropped.
-  const all = [];
-  await transcribeOpenRouterChunks({
+// ffmpeg only estimates the length of a VBR MP3 without a header or a raw AAC
+// file: a 257 s recording was reported as 79 s. The real 17 s last piece must
+// still go out, and a lost one must not produce a backwards gap marker.
+test("a last piece the length estimate misses is still sent", async () => {
+  const sent = [];
+  const result = await transcribeOpenRouterChunks({
     inputPath: "in",
-    split: fakeSplit(3, { durationSeconds: null }).split,
+    split: fakeSplit(2, { durationSeconds: 79.05 }).split,
     transcribeChunk: async (piece) => {
-      all.push(piece);
-      return { text: "x" };
+      sent.push(pieceName(piece));
+      return { text: pieceName(piece) };
     },
   });
-  assert.equal(all.length, 3);
+  assert.deepEqual(sent, ["chunk-000", "chunk-001"]);
+  assert.equal(result.text, "chunk-000 chunk-001");
+
+  const lostTail = await transcribeOpenRouterChunks({
+    inputPath: "in",
+    split: fakeSplit(3, { durationSeconds: 79.05 }).split,
+    ...noWait,
+    transcribeChunk: async (piece) => {
+      if (pieceName(piece) === "chunk-002") throw httpError(400);
+      return { text: pieceName(piece) };
+    },
+  });
+  assert.equal(lostTail.text, "chunk-000 chunk-001 [missing audio 8:00-12:00]");
 });
 
 test("cancelling stops at the piece in flight and cleans up", async () => {
@@ -267,4 +319,18 @@ test("cancelling stops at the piece in flight and cleans up", async () => {
   assert.equal(sent.length, 1);
   assert.equal(calls[0].options.signal, controller.signal, "a cancel also stops ffmpeg mid-split");
   assert.equal(fs.existsSync(calls[0].outputDir), false);
+});
+
+// Cancelling mid-split on Windows can leave ffmpeg holding a piece open, so the
+// cleanup can fail; that must not replace the job's own result or error.
+test("a failed cleanup does not replace the result", async (t) => {
+  t.mock.method(fs, "rmSync", () => {
+    throw Object.assign(new Error("EBUSY: resource busy or locked"), { code: "EBUSY" });
+  });
+  const result = await transcribeOpenRouterChunks({
+    inputPath: "in",
+    split: fakeSplit(1).split,
+    transcribeChunk: async () => ({ text: "kept" }),
+  });
+  assert.equal(result.text, "kept");
 });

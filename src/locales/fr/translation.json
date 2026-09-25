@@ -911,7 +911,7 @@
         "offline": "Vous êtes hors ligne. La transcription cloud nécessite une connexion Internet.",
         "dailyLimitReached": "Vous avez atteint votre limite de transcription du jour. Réessayez demain ou améliorez votre forfait.",
         "providerRateLimited": "Votre fournisseur de transcription a limité la requête. Patientez un instant et réessayez.",
-        "openrouterOutOfCredits": "Votre compte OpenRouter n'a plus de crédits. Rechargez-le sur openrouter.ai, puis réessayez.",
+        "openRouterOutOfCredits": "Votre compte OpenRouter n'a plus de crédits. Rechargez-le sur openrouter.ai, puis réessayez.",
         "chunkLoss": "Un problème réseau a fait perdre une trop grande partie de l'enregistrement. Retranscrivez-le depuis l'historique.",
         "agentReasoningFailed": "Votre assistant vocal n'a pas pu traiter la commande ; la transcription brute a été insérée à la place.",
         "screenContextSkipped": "La capture n'a pas pu être envoyée ; votre commande a été exécutée sans contexte d'écran.",

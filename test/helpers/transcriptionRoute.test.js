@@ -366,7 +366,7 @@ test("a 402 from OpenRouter reads as out of credits, whichever tab sent it", asy
   const { batchTranscriptionHttpError } = await load();
   const outOfCredits = {
     code: "OPENROUTER_OUT_OF_CREDITS",
-    messageKey: "hooks.audioRecording.errorDescriptions.openrouterOutOfCredits",
+    messageKey: "hooks.audioRecording.errorDescriptions.openRouterOutOfCredits",
   };
   // The OpenRouter tab and a Custom endpoint typed by hand post to the same host.
   assert.deepEqual(
