@@ -304,16 +304,27 @@ function verifyUnpackedBinaries(context) {
 // Voice conversation dependencies (sherpa-onnx-node + Smart Turn onnxruntime-web)
 // ---------------------------------------------------------------------------
 
+// sherpa-onnx-node loads `sherpa-onnx-${platform}-${os.arch()}` at runtime, so
+// the package must match the target arch, not the build host's: a mac x64
+// build on an arm64 runner only gets darwin-arm64 from `npm ci`.
+function requiredSherpaPackages({ platform, arch }) {
+  const sherpaPlatform = platform === "win32" ? "win" : platform;
+  const archs = arch === "universal" ? ["arm64", "x64"] : [arch];
+  return archs.map((name) => `sherpa-onnx-${sherpaPlatform}-${name}`);
+}
+
 // The voice worker loads sherpa-onnx-node (native, per-platform package) and
 // Smart Turn on onnxruntime-web, whose WASM threads load from real files.
 function prepareVoiceDependencies(context) {
   const modulesDir = path.join(resolveResourcesDir(context), "app.asar.unpacked", "node_modules");
-  const sherpaDirs = fs.existsSync(modulesDir)
-    ? fs.readdirSync(modulesDir).filter((name) => /^sherpa-onnx-(win|darwin|linux)-/.test(name))
-    : [];
-  if (sherpaDirs.length === 0) {
+  const sherpaDirs = requiredSherpaPackages({
+    platform: context.electronPlatformName,
+    arch: Arch[context.arch],
+  });
+  const missing = sherpaDirs.filter((name) => !fs.existsSync(path.join(modulesDir, name)));
+  if (missing.length > 0) {
     throw new Error(
-      `afterPack: no sherpa-onnx platform package in ${modulesDir}; voice conversation would fail to load`
+      `afterPack: missing ${missing.join(", ")} in ${modulesDir}; voice conversation would fail to load for this target (install the target-arch platform package before packaging)`
     );
   }
   const wasmPath = path.join(modulesDir, "onnxruntime-web", "dist", "ort-wasm-simd-threaded.wasm");
@@ -346,3 +357,5 @@ exports.default = async function (context) {
 };
 
 exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
+exports.requiredSherpaPackages = requiredSherpaPackages;
+exports.prepareVoiceDependencies = prepareVoiceDependencies;
