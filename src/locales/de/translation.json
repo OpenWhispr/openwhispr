@@ -2467,7 +2467,7 @@
         "noteRecording": "Notizaufnahme",
         "upload": "Audio-Upload"
       },
-      "selfHostedStreamingNote": "Erfordert einen Server, der Streaming-Transkription unterstützt."
+      "selfHostedChunkedNote": "Audio wird in kurzen Abschnitten an den Endpunkt /audio/transcriptions Ihres Servers gesendet, mit dem gleichen OpenAI-kompatiblen Format wie beim Diktat. Die Transkription in Abschnitten kann bei langen Aufnahmen mit mehreren Sprechern ungenauer sein als Echtzeit."
     },
     "llms": {
       "title": "Sprachmodelle",
@@ -3438,7 +3438,7 @@
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "back": "Zurück",
       "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt.",
-      "unsupportedSelfHosted": "Die Notizaufnahme kann noch keinen selbst gehosteten Endpunkt verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
+      "selfHostedUrlMissing": "Die Notizaufnahme über einen selbst gehosteten Server benötigt eine Server-URL für die Transkription. Trage sie in den Einstellungen ein.",
       "unsupportedProvider": "Die Notizaufnahme kann {{provider}} nicht für die Live-Transkription verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "systemAudioSilent": {

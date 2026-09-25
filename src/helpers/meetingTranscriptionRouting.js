@@ -1,3 +1,5 @@
+import { isSelfHostedTranscription } from "./selfHostedTranscription.js";
+
 // Note recording only offers providers the main process will actually run:
 // meeting prepare/start check ALLOWED_MEETING_PROVIDERS (derived from the
 // streaming client table in meetingStreamingProviders.js) and reject anything
@@ -36,6 +38,8 @@ export function resolveMeetingTranscriptionOptions({
   cohereModel,
   selectedProvider,
   selectedModel,
+  remoteTranscriptionUrl,
+  remoteTranscriptionModel,
   byokProviders,
   managedProviders,
   cortiEnvironment,
@@ -66,12 +70,24 @@ export function resolveMeetingTranscriptionOptions({
     };
   }
 
-  // These two are reachable from a settings copy the user never made by hand —
-  // the 1.6.10 follow-flag migration carried a dictation choice Note Recording
-  // cannot serve — so they are sentinels that MeetingRecordingMount translates,
-  // not English sentences. Anything after the colon is an argument.
+  // Sentinel errors, translated by MeetingRecordingMount rather than shown as
+  // English sentences. Anything after a colon is an argument.
+  //
+  // Self-hosted servers speak batch HTTP, not the realtime socket protocol, so
+  // Note Recording chunks through the same /audio/transcriptions endpoint that
+  // dictation, retry, and upload use. The main process resolves and validates
+  // the endpoint via resolveTranscriptionRoute and fails closed without one, so
+  // this can never fall through to a realtime provider the user did not select.
   if (transcriptionMode === "self-hosted") {
-    throw new Error("unsupportedSelfHosted");
+    if (!isSelfHostedTranscription({ transcriptionMode, remoteTranscriptionUrl })) {
+      throw new Error("selfHostedUrlMissing");
+    }
+    return {
+      provider: "self-hosted",
+      url: remoteTranscriptionUrl.trim(),
+      model: (remoteTranscriptionModel || "").trim() || null,
+      language,
+    };
   }
 
   if (transcriptionMode !== "providers") {

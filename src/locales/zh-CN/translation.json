@@ -2174,7 +2174,7 @@
         "noteRecording": "笔记录音",
         "upload": "上传音频"
       },
-      "selfHostedStreamingNote": "需要支持流式转录的服务器。"
+      "selfHostedChunkedNote": "音频将按短片段发送到服务器的 /audio/transcriptions 端点，与听写使用相同的 OpenAI 兼容接口。在多人长时间录音中，分片转录的准确度可能低于实时转录。"
     },
     "llms": {
       "title": "语言模型",
@@ -3095,7 +3095,7 @@
       "description": "转录与结构化摘要",
       "back": "返回",
       "restrictedByOrg": "会议转录已被您的组织限制。",
-      "unsupportedSelfHosted": "笔记录音暂不支持自托管端点。请打开设置，选择本地或支持流式传输的服务商。",
+      "selfHostedUrlMissing": "自托管笔记录音需要转录服务器的 URL。请在设置中添加。",
       "unsupportedProvider": "笔记录音无法使用 {{provider}} 进行实时转录。请打开设置，选择本地或支持流式传输的服务商。",
       "noProviderSelected": "尚未为笔记录音选择服务商。请打开设置，选择本地或支持流式传输的服务商。",
       "systemAudioSilent": {

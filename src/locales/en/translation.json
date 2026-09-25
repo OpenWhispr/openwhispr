@@ -2467,7 +2467,7 @@
         "noteRecording": "Note Recording",
         "upload": "Audio Upload"
       },
-      "selfHostedStreamingNote": "Requires a server that supports streaming transcription."
+      "selfHostedChunkedNote": "Audio is sent in short chunks to your server's /audio/transcriptions endpoint, the same OpenAI-compatible contract Dictation uses. Chunked transcription can be less accurate than realtime on long multi-speaker recordings."
     },
     "llms": {
       "title": "Language Models",
@@ -3438,7 +3438,7 @@
       "description": "Transcriptions & structured summaries",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
-      "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
+      "selfHostedUrlMissing": "Self-hosted Note Recording needs a transcription server URL. Add one in Settings.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
       "systemAudioSilent": {
