@@ -21,6 +21,14 @@
 
 #ifdef HAVE_ATSPI
 #include <atspi/atspi.h>
+
+/* libatspi gives every application it hasn't seen yet 15s to answer, and every
+ * application is new to this short-lived process. One peer that stops
+ * answering (xdg-desktop-portal-gtk stuck at its fd limit, #1944) then stalls
+ * the whole walk past the caller's kill. Bound every call instead, so the walk
+ * skips that peer, still reaches the focused window, and stays inside the
+ * app's 1.2s selection and 2s target budgets. */
+#define ATSPI_CALL_TIMEOUT_MS 500
 #endif
 
 /* Paste key sequence. SHIFT_INSERT is the universal Linux paste shortcut —
@@ -398,8 +406,14 @@ static int check_parent_terminal(Display *dpy, Window win) {
 }
 
 #ifdef HAVE_ATSPI
+static int init_atspi(void) {
+    int status = atspi_init();
+    atspi_set_timeout(ATSPI_CALL_TIMEOUT_MS, -1);
+    return status;
+}
+
 static int detect_terminal_atspi(void) {
-    atspi_init();
+    if (init_atspi() != 0) return -1;
     AtspiAccessible *desktop = atspi_get_desktop(0);
     if (!desktop) return -1;
 
@@ -490,6 +504,7 @@ static int atspi_active_pid(AtspiAccessible *app) {
 }
 
 static int print_atspi_target(void) {
+    if (init_atspi() != 0) return 1;
     AtspiAccessible *app = NULL;
     AtspiAccessible *win = find_active_atspi_window(&app);
     int pid = app ? atspi_active_pid(app) : 0;
@@ -501,6 +516,7 @@ static int print_atspi_target(void) {
 }
 
 static int print_atspi_selection(void) {
+    if (init_atspi() != 0) return 1;
     AtspiAccessible *app = NULL;
     AtspiAccessible *win = find_active_atspi_window(&app);
     int pid = app ? atspi_active_pid(app) : 0;
