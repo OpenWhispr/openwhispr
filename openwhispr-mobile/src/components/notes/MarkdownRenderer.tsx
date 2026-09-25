@@ -1,6 +1,15 @@
 import { useMemo } from 'react';
-import { View, PlatformColor } from 'react-native';
+import {
+  View,
+  PlatformColor,
+  ScrollView,
+  StyleSheet,
+  type StyleProp,
+  type TextStyle,
+} from 'react-native';
 import { Text } from '@/components/ui/Text';
+import { parseMarkdownBlocks, type MarkdownBlock } from './markdownBlocks';
+import { NOTES_GROUP_RADIUS } from './tokens';
 
 interface MarkdownRendererProps {
   content: string;
@@ -44,12 +53,17 @@ function parseInline(text: string): InlineSegment[] {
 function InlineText({
   segments,
   selectable = false,
+  style,
 }: {
   segments: InlineSegment[];
   selectable?: boolean;
+  style?: StyleProp<TextStyle>;
 }) {
   return (
-    <Text selectable={selectable} style={{ fontSize: 16, lineHeight: 24, color: labelColor }}>
+    <Text
+      selectable={selectable}
+      style={[{ fontSize: 16, lineHeight: 24, color: labelColor }, style]}
+    >
       {segments.map((seg, i) => {
         if (seg.code) {
           return (
@@ -83,39 +97,91 @@ function InlineText({
   );
 }
 
-interface ParsedLine {
-  type: 'h1' | 'h2' | 'h3' | 'bullet' | 'numbered' | 'paragraph' | 'empty';
-  content: string;
-  number?: number;
+// Sized from the longest cell so no measuring pass is needed; wide tables
+// scroll sideways rather than squeezing every column into the screen.
+const CELL_CHAR_WIDTH = 8;
+const CELL_PADDING = 20;
+const MIN_COLUMN_WIDTH = 80;
+const MAX_COLUMN_WIDTH = 220;
+
+type TableBlock = Extract<MarkdownBlock, { type: 'table' }>;
+
+function columnWidths(table: TableBlock): number[] {
+  return table.header.map((label, column) => {
+    const longest = Math.max(label.length, ...table.rows.map((row) => row[column].length));
+    const width = longest * CELL_CHAR_WIDTH + CELL_PADDING;
+    return Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, width));
+  });
 }
 
-function parseLine(line: string): ParsedLine {
-  if (line.trim() === '') return { type: 'empty', content: '' };
-  if (line.startsWith('### ')) return { type: 'h3', content: line.slice(4) };
-  if (line.startsWith('## ')) return { type: 'h2', content: line.slice(3) };
-  if (line.startsWith('# ')) return { type: 'h1', content: line.slice(2) };
+function MarkdownTable({ table, selectable }: { table: TableBlock; selectable: boolean }) {
+  const widths = columnWidths(table);
+  const allRows = [table.header, ...table.rows];
 
-  const bulletMatch = line.match(/^[-*]\s+(.*)/);
-  if (bulletMatch) return { type: 'bullet', content: bulletMatch[1] };
-
-  const numberedMatch = line.match(/^(\d+)\.\s+(.*)/);
-  if (numberedMatch)
-    return { type: 'numbered', content: numberedMatch[2], number: parseInt(numberedMatch[1], 10) };
-
-  return { type: 'paragraph', content: line };
+  return (
+    <ScrollView
+      testID="markdown-table"
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.tableScroller}
+    >
+      <View className="overflow-hidden border-separator" style={styles.table}>
+        {allRows.map((row, rowIndex) => {
+          const isHeader = rowIndex === 0;
+          return (
+            <View
+              key={rowIndex}
+              className={`flex-row border-separator ${isHeader ? 'bg-secondarySystemBackground' : ''}`}
+              style={!isHeader && styles.rowDivider}
+            >
+              {row.map((cell, column) => {
+                const width = widths[column];
+                const textAlign = table.alignments[column] ?? 'auto';
+                return (
+                  <View
+                    key={column}
+                    className="border-separator px-2.5 py-1.5"
+                    style={[{ width }, column > 0 && styles.cellDivider]}
+                  >
+                    <InlineText
+                      segments={parseInline(cell)}
+                      selectable={selectable}
+                      style={[styles.cellText, isHeader && styles.headerCellText, { textAlign }]}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
 }
 
 export function MarkdownRenderer({ content, selectable = false }: MarkdownRendererProps) {
-  const elements = useMemo(() => {
-    const lines = content.split('\n');
-    return lines.map((line) => parseLine(line));
-  }, [content]);
+  const elements = useMemo(() => parseMarkdownBlocks(content), [content]);
 
   return (
     <View style={{ gap: 2 }}>
       {elements.map((el, i) => {
         if (el.type === 'empty') {
           return <View key={i} style={{ height: 12 }} />;
+        }
+
+        if (el.type === 'rule') {
+          return (
+            <View
+              key={i}
+              testID="markdown-rule"
+              className="my-2.5 bg-separator"
+              style={styles.rule}
+            />
+          );
+        }
+
+        if (el.type === 'table') {
+          return <MarkdownTable key={i} table={el} selectable={selectable} />;
         }
 
         if (el.type === 'h1') {
@@ -218,3 +284,19 @@ export function MarkdownRenderer({ content, selectable = false }: MarkdownRender
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  // A horizontal ScrollView defaults to flexGrow: 1 and would stretch to any
+  // free height in its column, like the note chat sheet's.
+  tableScroller: { flexGrow: 0, marginVertical: 6 },
+  table: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: NOTES_GROUP_RADIUS,
+    borderCurve: 'continuous',
+  },
+  rowDivider: { borderTopWidth: StyleSheet.hairlineWidth },
+  cellDivider: { borderLeftWidth: StyleSheet.hairlineWidth },
+  cellText: { fontSize: 15, lineHeight: 20 },
+  headerCellText: { fontWeight: '600' },
+  rule: { height: StyleSheet.hairlineWidth },
+});
