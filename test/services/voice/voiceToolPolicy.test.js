@@ -25,7 +25,11 @@ test("a write tool runs once per turn; a second call returns the first result wi
   assert.deepEqual(first, { id: 1 });
   assert.equal(second.alreadyDone, true);
   assert.deepEqual(second.result, { id: 1 });
-  assert.match(second.note, /already/i);
+  // R14: the blocked call must read as not done, or "make two notes" is answered as both made.
+  assert.match(second.note, /second create_note call .* NOT run/);
+  assert.match(second.note, /only the first one was done/);
+  assert.match(second.note, /ask for the next one separately/);
+  assert.doesNotMatch(second.note, /what was done/);
 });
 
 test("read-only tools are never limited", async () => {
@@ -86,7 +90,7 @@ test("two parallel calls in one step still run the tool once", async () => {
 // ({ success, data, displayText }), not the AI-SDK { error } shape the guard
 // above understands. runToolResultOnce adapts createWriteOnceGuard for that
 // shape so cloud voice turns get the same one-run-per-write-tool guarantee.
-test("cloud ToolResult writes run once per turn; a repeat call reports the already-ran note", async () => {
+test("cloud ToolResult writes run once per turn; a repeat call reports it was not run", async () => {
   const { createWriteOnceGuard, runToolResultOnce } = await load();
   const outcomes = [];
   const guard = createWriteOnceGuard(new Set(["create_note"]), (name, ok) =>
@@ -104,7 +108,7 @@ test("cloud ToolResult writes run once per turn; a repeat call reports the alrea
   assert.equal(runs, 1);
   assert.deepEqual(first, { success: true, data: { id: 1 }, displayText: "Created note" });
   assert.equal(second.success, true);
-  assert.match(String(second.data), /already/i);
+  assert.match(String(second.data), /second create_note call .* NOT run/);
   // The UI-facing displayText reuses the real first result, not the model note.
   assert.equal(second.displayText, "Created note");
   assert.deepEqual(outcomes, [["create_note", true]]);

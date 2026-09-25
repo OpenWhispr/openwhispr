@@ -4,8 +4,10 @@
  */
 export const VOICE_EXCLUDED_TOOLS: readonly string[] = ["update_snippets"];
 
-const ALREADY_DONE_NOTE =
-  "This action already ran in this turn. Don't repeat it; tell the user what was done.";
+// R14: a two-item request ("make two notes") hits the guard on the second item; telling the
+// model "what was done" made it describe the blocked write as done too.
+const notRunNote = (name: string): string =>
+  `A second ${name} call in this turn was NOT run. Tell the user only the first one was done, and to ask for the next one separately.`;
 
 const isToolError = (result: unknown): boolean =>
   typeof result === "object" && result !== null && "error" in result;
@@ -28,8 +30,9 @@ export interface WriteOnceGuard {
 /**
  * Small local models repeated create_note / update_note within one turn, which
  * would write duplicates. Each write tool runs at most once per voice turn; a
- * repeat call gets the first result back instead of running again. If the first
- * run failed, the repeat's note says so instead of claiming success (R8).
+ * repeat call gets the first result back instead of running again, with a note
+ * that it was NOT run (R14). If the first run failed, the note says so instead of
+ * claiming success (R8).
  */
 export function createWriteOnceGuard(
   writeToolNames: ReadonlySet<string>,
@@ -44,7 +47,7 @@ export function createWriteOnceGuard(
         return previous.then((result) =>
           isToolError(result)
             ? { alreadyDone: true, note: alreadyFailedNote(errorTextOf(result)), result }
-            : { alreadyDone: true, note: ALREADY_DONE_NOTE, result }
+            : { alreadyDone: true, note: notRunNote(name), result }
         );
       }
       const pending = execute().then((result) => {
