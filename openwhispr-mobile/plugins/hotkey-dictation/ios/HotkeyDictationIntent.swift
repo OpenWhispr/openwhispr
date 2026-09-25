@@ -18,12 +18,12 @@ struct ToggleHotkeyDictationIntent: AppIntent {
       HotkeyDictationSession.log.error("press.noAppGroup")
       return .result()
     }
-    // No AudioRecordingIntent: its framework check fatally crashes the app when
-    // perform() returns with an active audio session and no Live Activity, and the
-    // dictation-mode warm mic keeps the session active while a background launch
-    // cannot start a Live Activity ("Target is not foreground"). A cold start is
-    // still attempted; if iOS refuses the background mic, it falls back to Explain.
-    let action = await HotkeyPressCoordinator.shared.claim(session: session, canColdStart: true)
+    // Deliberately not an AudioRecordingIntent: App Intents calls fatalError when one
+    // returns with an active audio session and no Live Activity, the dictation-mode
+    // warm mic keeps the session active, and a background launch cannot start a Live
+    // Activity. A cold start is still attempted; if iOS refuses the background mic,
+    // the press ends with the "Open OpenWhispr" banner.
+    let action = await HotkeyPressCoordinator.shared.claim(session: session)
     HotkeyDictationSession.log.info("press action=\(String(describing: action), privacy: .public)")
 
     switch action {
@@ -37,7 +37,7 @@ struct ToggleHotkeyDictationIntent: AppIntent {
     case .ignoreBusy:
       HotkeyFeedback.show(.stillTranscribing)
     case .startWarm:
-      await finishStart(started: await session.startWarm(), session: session)
+      await finishStart(jobId: await session.startWarm(), session: session)
     case .startCold:
       let result = await HotkeyDecision.runColdStart(ColdStartDeps(
         isJsReady: { session.isJsReady },
@@ -45,24 +45,23 @@ struct ToggleHotkeyDictationIntent: AppIntent {
         sleepMs: HotkeyDictationSession.sleepMs,
         nowMs: HotkeyDictationSession.nowMs))
       HotkeyDictationSession.log.info("coldStart result=\(String(describing: result), privacy: .public)")
-      await finishStart(started: result == .started, session: session)
-    case .explain:
-      HotkeyFeedback.show(.openApp)
+      var jobId: String?
+      if case .started(let startedJobId) = result { jobId = startedJobId }
+      await finishStart(jobId: jobId, session: session)
     }
     return .result()
   }
 
   /// Hands a started recording to the watcher before releasing the start slot, so
   /// no press can slip between the two and be misread as idle.
-  private func finishStart(started: Bool, session: HotkeyDictationSession) async {
-    let jobId = session.startedJobId
+  private func finishStart(jobId: String?, session: HotkeyDictationSession) async {
     await MainActor.run {
-      if started, let jobId {
+      if let jobId {
         HotkeyDeliveryWatcher.shared.watch(jobId: jobId, session: session)
       }
       HotkeyPressCoordinator.shared.releaseStart()
     }
-    if started {
+    if jobId != nil {
       HotkeyFeedback.playBegin()
     } else {
       HotkeyFeedback.show(.openApp)
@@ -81,9 +80,8 @@ final class HotkeyPressCoordinator {
 
   private init() {}
 
-  func claim(session: HotkeyDictationSession, canColdStart: Bool) -> PressAction {
+  func claim(session: HotkeyDictationSession) -> PressAction {
     let action = HotkeyDecision.decidePress(session.snapshot(
-      canColdStart: canColdStart,
       deliveryPending: HotkeyDeliveryWatcher.shared.isWatching,
       startInProgress: startInProgress))
     if action == .startWarm || action == .startCold { startInProgress = true }
@@ -92,7 +90,6 @@ final class HotkeyPressCoordinator {
 
   func releaseStart() { startInProgress = false }
 }
-
 
 struct OpenWhisprAppShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {

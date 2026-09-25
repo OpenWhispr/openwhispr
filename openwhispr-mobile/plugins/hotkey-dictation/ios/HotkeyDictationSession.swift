@@ -32,7 +32,7 @@ final class HotkeyDictationSession {
 
   /// `deliveryPending` and `startInProgress` are in-process state (the intent and the
   /// watcher share the app process), so no App Group key can leave them stuck.
-  func snapshot(canColdStart: Bool, deliveryPending: Bool, startInProgress: Bool) -> HotkeySnapshot {
+  func snapshot(deliveryPending: Bool, startInProgress: Bool) -> HotkeySnapshot {
     HotkeySnapshot(
       recordingActive: defaults.string(forKey: HotkeyKeys.recordingActive) == "1",
       sessionReady: defaults.string(forKey: HotkeyKeys.backgroundSessionReady) == "1",
@@ -41,8 +41,7 @@ final class HotkeyDictationSession {
       statusAgeMs: ageMs(HotkeyKeys.transcriptionStatusUpdatedAtMs),
       deliveryPending: deliveryPending,
       startInProgress: startInProgress,
-      jsReady: isJsReady,
-      canColdStart: canColdStart)
+      jsReady: isJsReady)
   }
 
   var isJsReady: Bool {
@@ -51,15 +50,13 @@ final class HotkeyDictationSession {
   }
 
   var isRecording: Bool {
-    HotkeyDecision.isRecording(snapshot(canColdStart: false, deliveryPending: false, startInProgress: false))
+    HotkeyDecision.isRecording(snapshot(deliveryPending: false, startInProgress: false))
   }
 
-  /// The job id of the recording the last successful startWarm() began.
-  private(set) var startedJobId: String?
-
   /// Mirrors KeyboardHandoffProvider.requestStart, then waits for the app's start
-  /// observer to report the recording.
-  func startWarm() async -> Bool {
+  /// observer to report the recording. Returns the recording's job id, or nil when
+  /// it didn't start.
+  func startWarm() async -> String? {
     let startedAt = Self.nowMs()
     let jobId = "\(startedAt)-\(UUID().uuidString)"
     defaults.set("0", forKey: HotkeyKeys.stopRequested)
@@ -81,19 +78,18 @@ final class HotkeyDictationSession {
     let started = await HotkeyDecision.waitUntil(
       timeoutMs: HotkeyDecision.warmStartTimeoutMs, nowMs: Self.nowMs, sleepMs: Self.sleepMs
     ) { self.isRecording }
-    startedJobId = started ? jobId : nil
     Self.log.info(
       "start jobId=\(jobId, privacy: .public) started=\(started, privacy: .public) latencyMs=\(Self.nowMs() - startedAt, privacy: .public)")
-    return started
+    return started ? jobId : nil
   }
 
   /// Mirrors KeyboardHandoffProvider.requestStop.
   func stop() {
-    let nowMs = String(Self.nowMs())
+    let stoppedAt = String(Self.nowMs())
     defaults.set("1", forKey: HotkeyKeys.stopRequested)
-    defaults.set(nowMs, forKey: HotkeyKeys.stopRequestedAtMs)
+    defaults.set(stoppedAt, forKey: HotkeyKeys.stopRequestedAtMs)
     defaults.set("transcribing", forKey: HotkeyKeys.transcriptionStatus)
-    defaults.set(nowMs, forKey: HotkeyKeys.transcriptionStatusUpdatedAtMs)
+    defaults.set(stoppedAt, forKey: HotkeyKeys.transcriptionStatusUpdatedAtMs)
     defaults.synchronize()
     post(HotkeyNotification.stopRecording)
   }

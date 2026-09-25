@@ -45,11 +45,10 @@ struct HotkeySnapshot: Equatable {
   /// This process's JS listeners are subscribed (pid-scoped stamp). Until then the
   /// shared flags may still describe a process that was just killed.
   var jsReady: Bool
-  var canColdStart: Bool
 }
 
 enum PressAction: Equatable {
-  case stop, ignoreStarting, ignoreBusy, startWarm, startCold, explain
+  case stop, ignoreStarting, ignoreBusy, startWarm, startCold
 }
 
 enum DeliveryOutcome: Equatable {
@@ -84,12 +83,13 @@ enum HotkeyBanner: Equatable {
 }
 
 enum ColdStartResult: Equatable {
-  case started, jsNotReady, startFailed
+  case started(jobId: String), jsNotReady, startFailed
 }
 
 struct ColdStartDeps {
   var isJsReady: () -> Bool
-  var startWarm: () async -> Bool
+  /// The started recording's job id, or nil when it didn't start.
+  var startWarm: () async -> String?
   var sleepMs: (Int) async -> Void
   var nowMs: () -> Int
 }
@@ -135,8 +135,7 @@ enum HotkeyDecision {
       if busyStatus && statusFresh { return .ignoreBusy }
       if isWarm(snapshot) { return .startWarm }
     }
-    if snapshot.canColdStart { return .startCold }
-    return .explain
+    return .startCold
   }
 
   /// The ready stamp is "<pid>:<ms>". A stamp left by a process that died without
@@ -153,20 +152,20 @@ enum HotkeyDecision {
     return current ?? nowMs + deliveryTimeoutMs
   }
 
-  /// `recordingActive` is the live recording flag (fresh heartbeat). It wins over
-  /// the shared status, which a previous job's delayed JS cleanup can overwrite
-  /// with "idle" while the next recording is running.
+  /// `recordingActive` is the live recording flag (fresh heartbeat) and the only
+  /// source of `.recording`: the shared status can be overwritten with "idle" by a
+  /// previous job's delayed JS cleanup, or left at "recording" after a failure,
+  /// which would otherwise pause the delivery timeout forever.
   static func deliveryOutcome(
     jobId: String,
     pendingTranscript: String?,
     pendingJobId: String?,
     status: String?,
-    recordingActive: Bool = false
+    recordingActive: Bool
   ) -> DeliveryOutcome {
     if let text = pendingTranscript, !text.isEmpty, pendingJobId == jobId { return .copy(text) }
     if recordingActive { return .recording }
     switch status {
-    case "recording": return .recording
     case "no_speech": return .noSpeech
     // "idle" after a stop means the job ended without leaving a transcript for us.
     case "error", "setup_required", "idle": return .failed
@@ -205,6 +204,7 @@ enum HotkeyDecision {
     let ready = await waitUntil(
       timeoutMs: jsReadyTimeoutMs, nowMs: deps.nowMs, sleepMs: deps.sleepMs, deps.isJsReady)
     guard ready else { return .jsNotReady }
-    return await deps.startWarm() ? .started : .startFailed
+    guard let jobId = await deps.startWarm() else { return .startFailed }
+    return .started(jobId: jobId)
   }
 }

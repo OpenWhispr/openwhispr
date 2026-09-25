@@ -18,10 +18,10 @@ import { LiveActivity } from '../../modules/live-activity/src';
 
 export const SHORTCUTS_CREATE_URL = 'shortcuts://create-shortcut';
 export const SHORTCUTS_APP_URL = 'shortcuts://';
+const SUGGESTED_COMBO = '⌃⌥D';
 
-// The editor deep link can be refused (it rejected from inside the app on the
-// iOS 26 simulator); the Shortcuts app itself is enough, since step 2's text
-// says which action to add. A rejection must never surface as an error screen.
+// iOS can refuse the editor deep link. The Shortcuts app itself is enough, since
+// step 2 says which action to add, and a refusal must never become an error screen.
 async function openShortcuts(): Promise<void> {
   try {
     await Linking.openURL(SHORTCUTS_CREATE_URL);
@@ -29,7 +29,6 @@ async function openShortcuts(): Promise<void> {
     await Linking.openURL(SHORTCUTS_APP_URL).catch(() => undefined);
   }
 }
-const SUGGESTED_COMBO = '⌃⌥D';
 
 /**
  * Setup for dictating from a hardware keyboard (plugins/hotkey-dictation).

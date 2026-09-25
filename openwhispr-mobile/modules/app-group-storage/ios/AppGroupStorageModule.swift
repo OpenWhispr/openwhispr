@@ -12,6 +12,7 @@ public class AppGroupStorageModule: Module {
   }
   private let stopRequestedKey = "keyboard_stop_requested"
   private let stopRequestedAtMsKey = "keyboard_stop_requested_at_ms"
+  private let hotkeyJsReadyAtMsKey = "hotkey_js_ready_at_ms"
   private let transcriptionStatusKey = "keyboard_transcription_status"
   private let transcriptionErrorKey = "keyboard_transcription_error"
   private let transcriptionStatusUpdatedAtMsKey = "keyboard_transcription_status_updated_at_ms"
@@ -239,7 +240,7 @@ public class AppGroupStorageModule: Module {
     Function("markHotkeyJsReady") { () -> Void in
       guard let defaults = UserDefaults(suiteName: self.appGroupId) else { return }
       let nowMs = Int(Date().timeIntervalSince1970 * 1000)
-      defaults.set("\(getpid()):\(nowMs)", forKey: "hotkey_js_ready_at_ms")
+      defaults.set("\(getpid()):\(nowMs)", forKey: self.hotkeyJsReadyAtMsKey)
       defaults.synchronize()
     }
 
@@ -337,7 +338,7 @@ public class AppGroupStorageModule: Module {
     defaults.removeObject(forKey: transcriptionStatusUpdatedAtMsKey)
     // Hotkey dictation (plugins/hotkey-dictation): a fresh process has no JS
     // listeners yet, so a ready stamp from a previous process must not survive.
-    defaults.removeObject(forKey: "hotkey_js_ready_at_ms")
+    defaults.removeObject(forKey: hotkeyJsReadyAtMsKey)
     // Agent one-shot / per-job keys: cleared on every launch so stale requests
     // from a previous session are never replayed. Config-mirror keys
     // (keyboard_agent_enabled / applicable / name / share_context) are NOT

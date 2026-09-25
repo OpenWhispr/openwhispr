@@ -8,13 +8,12 @@ import UserNotifications
 enum HotkeyFeedback {
   private static let bannerId = "hotkey-dictation-status"
   private static let bannerLifetime: TimeInterval = 4
+  /// Main thread only.
+  private static var generations = BannerGenerations()
 
   /// iOS's own begin/end-recording sounds.
   static func playBegin() { AudioServicesPlaySystemSound(1113) }
   static func playEnd() { AudioServicesPlaySystemSound(1114) }
-
-  /// Main thread only.
-  private static var generations = BannerGenerations()
 
   /// Replaces the previous banner, then clears it from Notification Center.
   /// Skipped without notification permission; the chimes still play.
