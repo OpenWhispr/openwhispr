@@ -598,6 +598,21 @@ test("copying an existing share link follows its own visibility", async () => {
   }
 });
 
+test("resending an invitation needs sharing to be on", async () => {
+  const { isShareActionAllowed } = await load();
+  const unmanaged = { status: "unmanaged", policy: null, appVersion: "1.8.1" };
+  const allowed = { status: "managed", policy, appVersion: "1.8.1" };
+
+  for (const snapshot of [unmanaged, allowed]) {
+    for (const visibility of ["link", "domain", "invited"]) {
+      assert.equal(isShareActionAllowed(snapshot, "resend-invitation", visibility), true);
+    }
+    // Disabling sharing suspends invitations, so the email could not open the note.
+    assert.equal(isShareActionAllowed(snapshot, "resend-invitation", "private"), false);
+    assert.equal(isShareActionAllowed(snapshot, "revoke-invitation", "private"), true);
+  }
+});
+
 test("sharing recovery remains available when exposure-increasing actions are blocked", async () => {
   const { isShareActionAllowed } = await load();
   const blockedSnapshots = [
