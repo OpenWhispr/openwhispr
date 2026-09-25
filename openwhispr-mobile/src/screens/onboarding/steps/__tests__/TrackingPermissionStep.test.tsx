@@ -230,3 +230,24 @@ it('offers continuation retry when auto-skipping ATT fails to save progress', as
   await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(2));
   expect(mockRequestTrackingAuthorization).not.toHaveBeenCalled();
 });
+
+it.each(['authorized', 'denied'] as const)(
+  'returns to the early offer after %s without advancing the onboarding route',
+  async (status) => {
+    const onComplete = jest.fn().mockResolvedValue(undefined);
+    mockRequestTrackingAuthorization.mockResolvedValue(status);
+    const screen = render(<TrackingPermissionStep onComplete={onComplete} />);
+    fireEvent.press(await screen.findByText('Continue'));
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+    expect(mockMarkRequestAttempted).toHaveBeenCalledTimes(1);
+    expect(mockRequestTrackingAuthorization).toHaveBeenCalledTimes(1);
+    expect(mockGoNext).not.toHaveBeenCalled();
+  },
+);
+
+it('does not repeat the tracking prompt when the ordinary later step is reached', async () => {
+  mockTrackingAuthorizationRequestAttempted = true;
+  render(<TrackingPermissionStep />);
+  await waitFor(() => expect(mockGoNext).toHaveBeenCalledWith('tracking-permission'));
+  expect(mockRequestTrackingAuthorization).not.toHaveBeenCalled();
+});

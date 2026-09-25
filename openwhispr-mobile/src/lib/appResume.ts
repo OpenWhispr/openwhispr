@@ -2,6 +2,7 @@ import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import { useHandoffStore } from '@/store/useHandoffStore';
 import { isRecoveryDeepLinkFresh, isRecoveryHolding } from '@/store/useKeyboardRecoveryStore';
 import { useUsageStore } from '@/store/useUsageStore';
+import { isAffiliateArrivalFresh } from './affiliateLink';
 
 export interface ResumeDecision {
   /** Reset the stack to Home — the default for a warm resume. */
@@ -44,5 +45,6 @@ export function resolveResumeAction(alreadyOnHome: boolean): ResumeDecision {
   }
 
   // Already on Home → skip the redundant replace that would slide Home over itself.
+  if (isAffiliateArrivalFresh()) return STAY;
   return { resetToHome: !alreadyOnHome, refreshUsage: false };
 }

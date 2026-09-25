@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@better-auth/expo": "1.6.22",
+    "@dub/react-native": "0.0.3",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@hookform/resolvers": "^5.2.2",
     "@react-native-async-storage/async-storage": "^2.2.0",

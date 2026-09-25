@@ -1,3 +1,4 @@
+import { AffiliateOfferModal } from '@/components/onboarding/AffiliateOfferModal';
 import '../global.css';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, useColorScheme } from 'react-native';
@@ -25,6 +26,7 @@ import { OnboardingFlow } from '@/screens/onboarding/OnboardingFlow';
 import { AnimatedSplash } from '@/components/features/AnimatedSplash';
 import { useKeyboardHandoff } from '@/hooks/useKeyboardHandoff';
 import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';
+import { useAffiliateAttribution } from '@/hooks/useAffiliateAttribution';
 import { useAnonymousOnboardingSession } from '@/hooks/useAnonymousOnboardingSession';
 import { useGuestPrivateMode } from '@/hooks/useGuestPrivateMode';
 import { runMigrations } from '@/db/migrate';
@@ -47,6 +49,7 @@ function RootLayout() {
   useKeyboardHandoff();
   useRevenueCatIdentity();
   useAnonymousOnboardingSession();
+  useAffiliateAttribution();
   useGuestPrivateMode();
 
   const [fontsLoaded] = useFonts({
@@ -222,7 +225,10 @@ function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <OpenWhisprSuperwallProvider>
-        <SafeAreaProvider>{renderInner()}</SafeAreaProvider>
+        <SafeAreaProvider>
+          {renderInner()}
+          <AffiliateOfferModal />
+        </SafeAreaProvider>
         <PermissionAlertMount />
         {showSplash && <AnimatedSplash appReady={appReady} onFinish={() => setShowSplash(false)} />}
       </OpenWhisprSuperwallProvider>
