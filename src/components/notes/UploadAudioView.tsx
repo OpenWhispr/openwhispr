@@ -71,7 +71,11 @@ import { getBaseLanguageCode } from "../../utils/languageSupport";
 import { isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
-import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
+import {
+  byokFileSizeLimit,
+  resolveTranscriptionRoute,
+  uploadsInChunks,
+} from "../../helpers/transcriptionRoute";
 import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
 import { isManagedTranscriptionActive } from "../../services/managedTranscription";
@@ -334,6 +338,22 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   // Mode detection
   const isSelfHosted = transcriptionMode === "self-hosted" && !useLocalWhisper;
   const isByok = !useLocalWhisper && !isOpenWhisprCloud;
+  // OpenRouter uploads (its tab, or a Custom endpoint on its host) go out in
+  // 4-minute pieces, so no whole-file cap applies and progress is per piece.
+  const uploadInPieces =
+    isByok &&
+    !managedActive &&
+    uploadsInChunks(
+      resolveTranscriptionRoute({
+        settings: {
+          transcriptionMode,
+          remoteTranscriptionUrl,
+          cloudTranscriptionProvider,
+          cloudTranscriptionModel,
+          cloudTranscriptionBaseUrl,
+        },
+      })
+    );
 
   // Mode-aware file size validation
   // Local: no limits at all
@@ -351,8 +371,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   if (file) {
     if (useLocalWhisper) {
       // Local transcription: no file size restrictions
-    } else if (isSelfHosted || cloudTranscriptionProvider === "custom") {
-      // Self-hosted / custom endpoints (e.g. local whisper.cpp): no file size restrictions
+    } else if (isSelfHosted || cloudTranscriptionProvider === "custom" || uploadInPieces) {
+      // Self-hosted / custom endpoints set their own limits; OpenRouter uploads go
+      // out in pieces far under its per-request cap
     } else if (isByok) {
       byokTooLarge = file.sizeBytes > byokMaxFileSize;
       if (byokTooLarge && !isSignedIn) {
@@ -536,7 +557,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   // Batch counterpart of the single-file size gating above; returns keys under notes.upload.*.
   const getBatchSizeErrorKey = (sizeBytes: number): string | null => {
-    if (useLocalWhisper || isSelfHosted || cloudTranscriptionProvider === "custom") return null;
+    if (
+      useLocalWhisper ||
+      isSelfHosted ||
+      cloudTranscriptionProvider === "custom" ||
+      uploadInPieces
+    ) {
+      return null;
+    }
     if (isByok) return sizeBytes > byokMaxFileSize ? "byokTooLarge" : null;
     if (sizeBytes > CLOUD_PRO_MAX_FILE_SIZE) return "fileTooLarge";
     if (!isProUser && sizeBytes > CLOUD_FREE_MAX_FILE_SIZE) return "paidPlanRequired";
@@ -645,8 +673,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const cancelTranscription = () => {
-    // True backend abort for cloud and local uploads; the run-id bump still
-    // discards any late result from providers that can't be aborted (BYOK).
+    // True backend abort for cloud, local and OpenRouter uploads; the run-id bump
+    // still discards any late result from BYOK providers that can't be aborted.
     if (activeRequestIdRef.current) {
       window.electronAPI.cancelUploadTranscription?.(activeRequestIdRef.current);
       activeRequestIdRef.current = null;
@@ -674,7 +702,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setChunkProgress(null);
     setDiarizationWarning(false);
 
-    const useChunkProgress = isOpenWhisprCloud && isLargeFile;
+    const useChunkProgress = (isOpenWhisprCloud && isLargeFile) || uploadInPieces;
 
     if (useChunkProgress) {
       progressCleanupRef.current =

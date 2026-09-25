@@ -192,6 +192,7 @@ export async function transcribeFile(
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,
     timestamps: opts.timestamps || undefined,
+    requestId: opts.requestId,
     provider: cfg.cloudTranscriptionProvider,
     language: cfg.language,
     environment: cfg.cortiEnvironment,
