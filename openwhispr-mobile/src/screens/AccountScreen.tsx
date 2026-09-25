@@ -264,7 +264,7 @@ export default function AccountScreen() {
         title="Account"
         left={<GlassBackButton fallbackRoute="/(tabs)/(record)" />}
       />
-      <SettingsScreen>
+      <SettingsScreen automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled">
         {(user || isGuest) && (
           <Pressable
             onPress={() => router.push('/(account)/profile')}
