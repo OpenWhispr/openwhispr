@@ -1098,18 +1098,26 @@ async function startApp() {
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
   await windowManager.createMainWindow();
-  // The activation mode was cached before the hotkey was registered, so a saved
-  // Hold could not be checked against its key until now.
+  // initializeHotkey now waits for the saved key and any registration fallbacks.
+  // Validate the effective key, never the constructor's provisional shortcut.
   if (
     windowManager.getActivationMode() === "push" &&
     !windowManager.hotkeyManager.supportsPushToTalk()
   ) {
-    await windowManager.setActivationModeCache("tap");
-    environmentManager.saveActivationMode("tap");
-    for (const browserWindow of BrowserWindow.getAllWindows()) {
-      if (!browserWindow.isDestroyed()) {
-        browserWindow.webContents.send("setting-updated", { key: "activationMode", value: "tap" });
+    const changed = await windowManager.setActivationModeCache("tap");
+    if (changed) {
+      // This is a runtime fallback, not a change to the user's saved preference.
+      // Retry the requested mode on the next launch.
+      for (const browserWindow of BrowserWindow.getAllWindows()) {
+        if (!browserWindow.isDestroyed()) {
+          browserWindow.webContents.send("setting-updated", {
+            key: "activationMode",
+            value: "tap",
+          });
+        }
       }
+    } else {
+      debugLogger.warn("[HotkeyManager] Could not apply startup activation mode fallback");
     }
   }
   if (!startMinimized) {
