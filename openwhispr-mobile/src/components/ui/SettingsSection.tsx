@@ -3,7 +3,7 @@ import { View, Pressable, StyleSheet, TextInput, type TextInputProps } from 'rea
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from './SystemIcon';
 import { BRAND, iosColor } from '@/config/colors';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 
 type SettingsRowProps = {
   icon: string;
@@ -131,7 +131,7 @@ export function SettingsTextFieldRow({
         autoCorrect={false}
         editable={editable}
         className={`flex-1 py-3 text-[17px] text-label ${editable ? '' : 'opacity-40'}`}
-        style={[{ fontFamily: SpaceGrotesk.regular }, style]}
+        style={[{ fontFamily: AppFont.regular }, style]}
         {...inputProps}
       />
       {trailing}

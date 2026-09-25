@@ -1,10 +1,14 @@
 import type { NativeStackNavigationOptions } from '@react-navigation/native-stack';
+import { displayFontFamily } from '@/lib/fonts';
 
 export const glassStackOptions: NativeStackNavigationOptions = {
   headerTransparent: true,
   headerLargeTitle: true,
   headerBlurEffect: 'systemMaterial',
   headerLargeStyle: { backgroundColor: 'transparent' },
+  // Without Yowza the family is undefined and titles stay in the system font.
+  headerTitleStyle: { fontFamily: displayFontFamily },
+  headerLargeTitleStyle: { fontFamily: displayFontFamily },
   headerShadowVisible: false,
   headerLargeTitleShadowVisible: false,
   headerBackButtonDisplayMode: 'minimal',

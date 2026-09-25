@@ -101,7 +101,9 @@ export function FormSheet({
                 <View className="mb-2 self-center h-1.5 w-9 rounded-full bg-quaternaryLabel" />
                 <View className="flex-row items-start justify-between">
                   <View className="flex-1 pr-3">
-                    <Text className="text-[19px] font-bold text-label">{title}</Text>
+                    <Text accessibilityRole="header" className="text-[19px] font-bold text-label">
+                      {title}
+                    </Text>
                     {subtitle ? (
                       <Text className="mt-1 text-[13px] text-secondaryLabel">{subtitle}</Text>
                     ) : null}

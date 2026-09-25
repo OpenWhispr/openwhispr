@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 
 export interface SpeakerRenameSuggestion {
   label: string;
@@ -76,7 +76,7 @@ export function SpeakerRenameSheet({
             placeholder="Speaker name"
             placeholderTextColor={PlatformColor('tertiaryLabel') as unknown as string}
             className="h-12 rounded-lg border border-separator bg-secondarySystemBackground px-3 text-base text-label"
-            style={{ fontFamily: SpaceGrotesk.regular }}
+            style={{ fontFamily: AppFont.regular }}
             testID="speaker-rename-input"
           />
           <View className="flex-row gap-3">

@@ -1,11 +1,12 @@
 import { forwardRef } from 'react';
 import { StyleSheet, Text as RNText, type TextProps, type TextStyle } from 'react-native';
 import { cssInterop } from 'nativewind';
-import { fontFamilyForWeight } from '@/lib/fonts';
+import { displayFontFamily, fontFamilyForWeight } from '@/lib/fonts';
 
 const BaseText = forwardRef<RNText, TextProps>(function BaseText({ style, ...props }, ref) {
   const flat = (StyleSheet.flatten(style) ?? {}) as TextStyle;
-  const fontFamily = flat.fontFamily ?? fontFamilyForWeight(flat.fontWeight);
+  const headingFontFamily = props.accessibilityRole === 'header' ? displayFontFamily : undefined;
+  const fontFamily = flat.fontFamily ?? headingFontFamily ?? fontFamilyForWeight(flat.fontWeight);
 
   return <RNText ref={ref} style={[{ fontFamily }, style]} {...props} />;
 });

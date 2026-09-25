@@ -157,7 +157,7 @@ export const SpeakerCountPrompt = ({
       className="flex-1 bg-systemBackground px-6"
       style={{ paddingTop: headerHeight + 16, paddingBottom: Math.max(insets.bottom + 16, 32) }}
     >
-      <Text className="text-[28px] font-bold leading-tight text-label">
+      <Text accessibilityRole="header" className="text-[28px] font-bold leading-tight text-label">
         {hasEventList ? 'What are you recording?' : 'How many people?'}
       </Text>
       <Text className="mt-2 text-base leading-5 text-secondaryLabel">

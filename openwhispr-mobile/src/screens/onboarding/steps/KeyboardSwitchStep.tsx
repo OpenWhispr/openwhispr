@@ -16,7 +16,7 @@ import Animated, {
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { KeyboardDetectedToast } from '@/components/onboarding/KeyboardDetectedToast';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { useKeyboardHeartbeat } from '@/hooks/useKeyboardHeartbeat';
 import { describeOnboardingError } from '@/lib/onboardingErrors';
 import { KeyboardSwitchHelpSheet } from './KeyboardSwitchHelpSheet';
@@ -217,7 +217,7 @@ function Divider() {
 
 const styles = StyleSheet.create({
   highlightedRowLabel: {
-    fontFamily: SpaceGrotesk.semibold,
+    fontFamily: AppFont.semibold,
     fontSize: 16,
     fontWeight: '600',
   },
