@@ -199,7 +199,8 @@ export default function App() {
       toast({ title: t("voiceConversation.title"), description: message, variant: "destructive" }),
   });
   const interceptVoiceAgentToggle = React.useCallback(() => {
-    if (!voiceConversation.enabled) return false;
+    // A session outlives the setting being turned off; the press must still stop it.
+    if (!voiceConversation.enabled && !voiceConversation.active) return false;
     // Open the (empty) panel on start so the listening state is visible at once.
     if (!voiceConversation.active) void openAssistantPanel();
     voiceConversation.toggle();
