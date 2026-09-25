@@ -94,7 +94,7 @@ public class AppGroupStorageModule: Module {
   private var foregroundHeartbeatTimer: Timer?
   private let containingAppForegroundKey = "containing_app_foreground_at_ms"
 
-  private var returnNavigationInFlight: Bool = false
+  private let returnAttemptGate = ReturnAttemptGate()
   // The host the last return resolved, kept for the "Back to <App>" button:
   // the extension keys are cleared on read and the observed host goes stale.
   private var lastReturnTarget: ReturnTarget?
@@ -1936,17 +1936,17 @@ public class AppGroupStorageModule: Module {
   // MARK: - Return to Previous App
 
   private func returnToHost(invokedAt: Date, completion: @escaping (ReturnOutcome) -> Void) {
-    guard !returnNavigationInFlight else {
-      logMarker("navigateBack.skippedInFlight")
-      completion(ReturnOutcome(status: .skipped, hostName: nil))
-      return
-    }
-    returnNavigationInFlight = true
+    guard let finish = beginReturnAttempt(
+      timeoutOutcome: {
+        // Resolved but never heard back from `open`: offer the button for that host.
+        guard let target = self.lastReturnTarget else {
+          return ReturnOutcome(status: .noTarget, hostName: nil)
+        }
+        return ReturnOutcome(status: .failed, hostName: target.hostName)
+      },
+      completion: completion
+    ) else { return }
     lastReturnTarget = nil
-    let finish: (ReturnOutcome) -> Void = { outcome in
-      self.returnNavigationInFlight = false
-      completion(outcome)
-    }
 
     let defaults = UserDefaults(suiteName: appGroupId)
     defaults?.synchronize()
@@ -1996,16 +1996,33 @@ public class AppGroupStorageModule: Module {
       completion(ReturnOutcome(status: .noTarget, hostName: nil))
       return
     }
-    guard !returnNavigationInFlight else {
-      completion(ReturnOutcome(status: .skipped, hostName: nil))
-      return
-    }
-    returnNavigationInFlight = true
+    guard let finish = beginReturnAttempt(
+      timeoutOutcome: { ReturnOutcome(status: .failed, hostName: target.hostName) },
+      completion: completion
+    ) else { return }
     // A button tap is user-initiated and the app is active: one attempt, no retries.
-    open(target, retriesLeft: 0, delay: 0) { outcome in
-      self.returnNavigationInFlight = false
-      completion(outcome)
+    open(target, retriesLeft: 0, delay: 0, completion: finish)
+  }
+
+  /// Nil (after resolving `skipped`) while another return is in flight.
+  private func beginReturnAttempt(
+    timeoutOutcome: @escaping () -> ReturnOutcome,
+    completion: @escaping (ReturnOutcome) -> Void
+  ) -> ((ReturnOutcome) -> Void)? {
+    let finish = returnAttemptGate.begin(
+      deadline: ReturnTargetResolver.returnDeadline,
+      schedule: { delay, work in DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work) },
+      timeoutOutcome: {
+        self.logMarker("navigateBack.deadline")
+        return timeoutOutcome()
+      },
+      completion: completion
+    )
+    if finish == nil {
+      logMarker("navigateBack.skippedInFlight")
+      completion(ReturnOutcome(status: .skipped, hostName: nil))
     }
+    return finish
   }
 
   private func open(
@@ -2016,6 +2033,7 @@ public class AppGroupStorageModule: Module {
   ) {
     let urlString = target.url.absoluteString
     logMarker("navigateBack.attemptOpen", extra: "url=\(urlString)")
+    let appWasActive = UIApplication.shared.applicationState == .active
     UIApplication.shared.open(target.url, options: [:]) { success in
       self.logMarker(
         success ? "navigateBack.openSuccess" : "navigateBack.openFailed",
@@ -2025,11 +2043,10 @@ public class AppGroupStorageModule: Module {
         completion(ReturnOutcome(status: .opened, hostName: target.hostName))
         return
       }
-      let appIsActive = UIApplication.shared.applicationState == .active
       guard ReturnTargetResolver.shouldRetry(
-        openSucceeded: false, appIsActive: appIsActive, retriesLeft: retriesLeft
+        openSucceeded: false, appWasActive: appWasActive, retriesLeft: retriesLeft
       ) else {
-        self.logMarker("navigateBack.openFinalFailure", extra: "active=\(appIsActive)")
+        self.logMarker("navigateBack.openFinalFailure", extra: "wasActive=\(appWasActive)")
         completion(ReturnOutcome(status: .failed, hostName: target.hostName))
         return
       }

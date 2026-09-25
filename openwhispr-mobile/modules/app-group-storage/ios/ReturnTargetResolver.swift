@@ -99,6 +99,10 @@ enum ReturnTargetResolver {
   /// How long a return waits for the observer. On a cold launch the host arrives
   /// about a second after the keyboard opens the app, usually after JS asks to return.
   static let observerWaitTimeout: TimeInterval = 2
+  /// Longest a return may stay in flight. Covers the observer wait plus the
+  /// cold-launch retries, and ends before JS's 5 s timeout so JS still gets the
+  /// real outcome rather than its own fallback.
+  static let returnDeadline: TimeInterval = 4.5
 
   /// The extension's own detection wins (it still works before iOS 26.4); the
   /// containing app's observer is the fallback.
@@ -140,9 +144,45 @@ enum ReturnTargetResolver {
   }
 
   /// A cold launch can fail `open` while the app is still becoming active, and
-  /// retrying is safe. A failure while active is final: iOS returns false when
-  /// the user cancels its "wants to open" prompt, and a retry would show it again.
-  static func shouldRetry(openSucceeded: Bool, appIsActive: Bool, retriesLeft: Int) -> Bool {
-    !openSucceeded && !appIsActive && retriesLeft > 0
+  /// retrying is safe. An `open` made while the app was already active is final:
+  /// iOS returns false when the user cancels its "wants to open" prompt, and a
+  /// retry would show it again. The state is sampled before the call because the
+  /// app is inactive while that prompt is up, so afterwards the two cases look alike.
+  static func shouldRetry(openSucceeded: Bool, appWasActive: Bool, retriesLeft: Int) -> Bool {
+    !openSucceeded && !appWasActive && retriesLeft > 0
+  }
+}
+
+/// One return in flight at a time, finished exactly once, and never longer than
+/// its deadline: a hung `open` completion must not leave every later handoff
+/// refused as `skipped` (and stuck on "Returning…").
+final class ReturnAttemptGate {
+  private(set) var isInFlight = false
+  private var generation = 0
+
+  /// Starts an attempt and returns its finish function, or nil while another
+  /// attempt is in flight. `schedule` runs the deadline (the main queue in the app).
+  func begin(
+    deadline: TimeInterval,
+    schedule: (TimeInterval, @escaping () -> Void) -> Void,
+    timeoutOutcome: @escaping () -> ReturnOutcome,
+    completion: @escaping (ReturnOutcome) -> Void
+  ) -> ((ReturnOutcome) -> Void)? {
+    guard !isInFlight else { return nil }
+    isInFlight = true
+    generation += 1
+    let attempt = generation
+    var finished = false
+    let finish: (ReturnOutcome) -> Void = { [weak self] outcome in
+      guard !finished else { return }
+      finished = true
+      // A late completion from an attempt that already timed out must not free a newer one.
+      if self?.generation == attempt {
+        self?.isInFlight = false
+      }
+      completion(outcome)
+    }
+    schedule(deadline) { finish(timeoutOutcome()) }
+    return finish
   }
 }

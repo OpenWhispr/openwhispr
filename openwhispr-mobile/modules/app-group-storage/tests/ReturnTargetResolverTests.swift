@@ -15,6 +15,9 @@ struct ReturnTargetResolverTests {
     shouldRetryOnlyWhileLaunching()
     outcomePayloadOmitsMissingHostName()
     everyCatalogEntryOpens()
+    gateAllowsOneAttemptAtATime()
+    gateDeadlineEndsAHungAttempt()
+    lateFinishFromAnOldAttemptLeavesTheNewOneInFlight()
     print("ReturnTargetResolverTests: all passed")
   }
 
@@ -83,10 +86,10 @@ struct ReturnTargetResolverTests {
   }
 
   static func shouldRetryOnlyWhileLaunching() {
-    precondition(ReturnTargetResolver.shouldRetry(openSucceeded: false, appIsActive: false, retriesLeft: 2), "cold-launch failure retries")
-    precondition(!ReturnTargetResolver.shouldRetry(openSucceeded: false, appIsActive: true, retriesLeft: 2), "failure while active (prompt cancelled) is final")
-    precondition(!ReturnTargetResolver.shouldRetry(openSucceeded: false, appIsActive: false, retriesLeft: 0), "no retries left")
-    precondition(!ReturnTargetResolver.shouldRetry(openSucceeded: true, appIsActive: false, retriesLeft: 2), "success never retries")
+    precondition(ReturnTargetResolver.shouldRetry(openSucceeded: false, appWasActive: false, retriesLeft: 2), "an open made while still launching retries")
+    precondition(!ReturnTargetResolver.shouldRetry(openSucceeded: false, appWasActive: true, retriesLeft: 2), "an open made while active is final (prompt cancelled)")
+    precondition(!ReturnTargetResolver.shouldRetry(openSucceeded: false, appWasActive: false, retriesLeft: 0), "no retries left")
+    precondition(!ReturnTargetResolver.shouldRetry(openSucceeded: true, appWasActive: false, retriesLeft: 2), "success never retries")
   }
 
   static func outcomePayloadOmitsMissingHostName() {
@@ -101,5 +104,56 @@ struct ReturnTargetResolverTests {
       precondition(URL(string: app.returnUrl) != nil, "\(bundle) has an unparseable URL")
       precondition(!app.name.isEmpty, "\(bundle) has no name")
     }
+  }
+
+  static func startGate(
+    _ gate: ReturnAttemptGate,
+    scheduled: @escaping (TimeInterval, @escaping () -> Void) -> Void,
+    timeout: ReturnOutcome,
+    completion: @escaping (ReturnOutcome) -> Void
+  ) -> ((ReturnOutcome) -> Void)? {
+    gate.begin(deadline: ReturnTargetResolver.returnDeadline, schedule: scheduled, timeoutOutcome: { timeout }, completion: completion)
+  }
+
+  static func gateAllowsOneAttemptAtATime() {
+    let gate = ReturnAttemptGate()
+    var outcomes: [ReturnOutcomeStatus] = []
+    let finish = startGate(gate, scheduled: { _, _ in }, timeout: ReturnOutcome(status: .noTarget, hostName: nil)) {
+      outcomes.append($0.status)
+    }
+    precondition(finish != nil, "the first attempt starts")
+    let second = startGate(gate, scheduled: { _, _ in }, timeout: ReturnOutcome(status: .noTarget, hostName: nil)) { _ in }
+    precondition(second == nil, "a second attempt is refused while one is in flight")
+    finish?(ReturnOutcome(status: .opened, hostName: "Slack"))
+    finish?(ReturnOutcome(status: .failed, hostName: "Slack"))
+    precondition(outcomes == [.opened], "an attempt finishes exactly once")
+    precondition(!gate.isInFlight, "finishing frees the gate")
+  }
+
+  static func gateDeadlineEndsAHungAttempt() {
+    let gate = ReturnAttemptGate()
+    var deadlines: [(TimeInterval, () -> Void)] = []
+    var outcomes: [ReturnOutcome] = []
+    let finish = startGate(gate, scheduled: { deadlines.append(($0, $1)) }, timeout: ReturnOutcome(status: .failed, hostName: "Slack")) {
+      outcomes.append($0)
+    }
+    precondition(deadlines.count == 1 && deadlines[0].0 == ReturnTargetResolver.returnDeadline, "the deadline is scheduled")
+    precondition(ReturnTargetResolver.returnDeadline < 5, "native gives up before JS's 5 s timeout so JS sees the real outcome")
+    deadlines[0].1()
+    precondition(outcomes.map(\.status) == [.failed] && outcomes.first?.hostName == "Slack", "the deadline resolves failed with the host")
+    precondition(!gate.isInFlight, "the deadline frees the gate for the next handoff")
+    finish?(ReturnOutcome(status: .opened, hostName: "Slack"))
+    precondition(outcomes.count == 1, "a late real outcome is ignored")
+  }
+
+  static func lateFinishFromAnOldAttemptLeavesTheNewOneInFlight() {
+    let gate = ReturnAttemptGate()
+    var deadlines: [() -> Void] = []
+    let first = startGate(gate, scheduled: { deadlines.append($1) }, timeout: ReturnOutcome(status: .noTarget, hostName: nil)) { _ in }
+    deadlines[0]()
+    let second = startGate(gate, scheduled: { _, _ in }, timeout: ReturnOutcome(status: .noTarget, hostName: nil)) { _ in }
+    precondition(second != nil, "a new attempt starts after the old one timed out")
+    first?(ReturnOutcome(status: .opened, hostName: "Slack"))
+    precondition(gate.isInFlight, "the old attempt's late completion must not free the new one")
   }
 }
