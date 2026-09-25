@@ -139,6 +139,64 @@ test("the panel cap leaves the promised note content visible", async () => {
   assert.equal(FLOATING_CHAT_MAX_HEIGHT_CSS, "calc(100% - 7rem)");
 });
 
+test("the in-view chat always opens at two-thirds height and ignores content growth", async () => {
+  const { observeFloatingChatSize } = await load();
+  const panel = { style: { height: "" } };
+  const container = { clientHeight: 600 };
+  const observed = [];
+  let onResize;
+  let disconnected = false;
+
+  const cleanup = observeFloatingChatSize({ panel, container }, (callback) => {
+    onResize = callback;
+    return {
+      observe(element) {
+        observed.push(element);
+      },
+      disconnect() {
+        disconnected = true;
+      },
+    };
+  });
+
+  assert.equal(panel.style.height, "400px");
+  assert.deepEqual(observed, [container], "message and composer resizes cannot grow the panel");
+
+  onResize();
+  assert.equal(panel.style.height, "400px", "content changes scroll inside a fixed panel");
+
+  container.clientHeight = 360;
+  onResize();
+  assert.equal(panel.style.height, "240px", "the panel follows viewport changes");
+
+  cleanup();
+  assert.equal(disconnected, true);
+});
+
+test("the note viewport caps the in-view chat in a short window", async () => {
+  const { observeFloatingChatSize } = await load();
+  const panel = { style: { height: "" } };
+  const container = { clientHeight: 600 };
+  let onResize;
+  const stopSelected = observeFloatingChatSize({ panel, container }, (callback) => {
+    onResize = callback;
+    return { observe() {}, disconnect() {} };
+  });
+  assert.equal(panel.style.height, "400px");
+
+  onResize();
+  assert.equal(panel.style.height, "400px", "long chat history stays inside the panel");
+
+  container.clientHeight = 900;
+  onResize();
+  assert.equal(panel.style.height, "600px", "only viewport changes resize the panel");
+
+  container.clientHeight = 240;
+  onResize();
+  assert.equal(panel.style.height, "128px", "the top clearance caps a short viewport");
+  stopSelected();
+});
+
 function createLayoutHarness(observeFloatingChatLayout, { scroller }) {
   const panel = createElement({ offsetHeight: 200 });
   const container = createElement();

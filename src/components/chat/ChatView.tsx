@@ -1,30 +1,63 @@
-import { useState, useCallback, useEffect, lazy, Suspense } from "react";
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatPersistence } from "./useChatPersistence";
 import { useChatStreaming } from "./useChatStreaming";
 import { useChatMessageSender } from "./useChatMessageSender";
 import { ChatMessages } from "./ChatMessages";
 import { ChatInput } from "./ChatInput";
-import { ChatEmptyIllustration } from "./ChatEmptyIllustration";
 import ConversationList from "./ConversationList";
 import EmptyChatState from "./EmptyChatState";
 import { ConfirmDialog } from "../ui/dialog";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
+import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
+import { Check, FileText, Video } from "../icons";
+import { observeChatComposerInset } from "./composerLayout";
 
 const CommandSearch = lazy(() => import("../CommandSearch"));
 
 const platform = getCachedPlatform();
 
-function NewChatEmptyState() {
+const STARTER_PROMPTS = [
+  { key: "chat.starters.todos", icon: Check },
+  { key: "chat.starters.meeting", icon: Video },
+  { key: "chat.starters.sharedNotes", icon: FileText },
+] as const;
+
+function NewChatEmptyState({
+  onPrompt,
+  showSuggestions,
+  disabled,
+}: {
+  onPrompt: (prompt: string) => void;
+  showSuggestions: boolean;
+  disabled: boolean;
+}) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col items-center justify-center h-full -mt-6 select-none">
-      <ChatEmptyIllustration />
-      <p className="text-xs text-foreground/50 dark:text-foreground/45 text-center max-w-48 mt-4">
-        {t("chat.newChatEmpty")}
-      </p>
+    <div className="flex h-full min-h-80 flex-col items-center justify-center px-4 pb-[calc(min(40vh,16rem)+1.5rem)] text-center">
+      <BrandMarkIcon size={64} className="text-foreground/15 dark:text-muted-foreground/35" />
+      {showSuggestions && (
+        <div className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
+          {STARTER_PROMPTS.map(({ key, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              disabled={disabled}
+              onClick={() => onPrompt(t(key))}
+              className="flex min-h-24 flex-col items-start justify-between rounded-2xl border border-border bg-card p-4 text-start text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <Icon size={16} />
+              </span>
+              <span className="max-w-full truncate" title={t(key)}>
+                {t(key)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -82,7 +115,9 @@ export default function ChatView() {
     persistence,
     streaming,
     createConversation,
-    onBeforeSend: markChatStarted,
+    // After the message lands, not before: marking the chat started while the conversation is
+    // still being created leaves a render with no active chat, which remounts the composer.
+    onMessagePersisted: markChatStarted,
   });
 
   const handleArchive = useCallback(
@@ -129,6 +164,14 @@ export default function ChatView() {
   const hasActiveChat =
     activeConversationId !== null || persistence.messages.length > 0 || isNewChat;
 
+  const composerElementRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useCallback((composer: HTMLDivElement | null) => {
+    composerElementRef.current = composer;
+    const container = composer?.parentElement;
+    if (!composer || !container) return;
+    return observeChatComposerInset(composer, container);
+  }, []);
+
   return (
     <>
       <ConfirmDialog
@@ -149,7 +192,7 @@ export default function ChatView() {
           />
         </Suspense>
       )}
-      <div className="flex h-full">
+      <div className="flex h-full min-h-0">
         <div className="w-56 min-w-50 shrink-0 border-e border-border dark:border-white/10">
           <ConversationList
             activeConversationId={activeConversationId}
@@ -161,23 +204,38 @@ export default function ChatView() {
             refreshKey={refreshKey}
           />
         </div>
-        <div className="flex-1 min-w-80 flex flex-col">
+        <div className="relative flex-1 min-w-80 min-h-0 flex flex-col">
           {hasActiveChat ? (
             <>
               <ChatMessages
                 messages={persistence.messages}
-                emptyState={<NewChatEmptyState />}
-                contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                emptyState={
+                  <NewChatEmptyState
+                    onPrompt={(prompt) => {
+                      // The starter card unmounts once the message lands; move focus to the
+                      // composer first so it isn't dropped.
+                      composerElementRef.current?.querySelector("textarea")?.focus();
+                      void handleTextSubmit(prompt);
+                    }}
+                    showSuggestions={isNewChat}
+                    disabled={streaming.agentState !== "idle"}
+                  />
+                }
+                contentClassName={`${PAGE_CONTENT_WIDTH_CLASS} pb-[var(--chat-composer-inset,5rem)]`}
               />
-              <div className="px-3 pb-3 pt-1">
+              <div ref={composerRef} className="absolute inset-x-0 bottom-0 z-10 px-3 pb-5 pt-1">
                 <ChatInput
-                  className={PAGE_CONTENT_WIDTH_CLASS}
+                  className="mx-auto w-full max-w-2xl"
                   agentState={streaming.agentState}
                   partialTranscript=""
                   onTextSubmit={handleTextSubmit}
                   onCancel={streaming.cancelStream}
                   autoFocus={isNewChat}
                   voiceDraft
+                  focusOnIdle={false}
+                  placeholder={t("embeddedChat.askPlaceholder")}
+                  variant="assistant"
+                  expandOnFocus
                 />
               </div>
             </>

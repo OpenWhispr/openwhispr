@@ -9,6 +9,7 @@ export const FLOATING_CHAT_MIN_VISIBLE_CONTENT_PX = 80;
 export const FLOATING_CHAT_MAX_HEIGHT_CSS = "calc(100% - 7rem)";
 
 const SCROLL_BOTTOM_THRESHOLD_PX = 80;
+const FLOATING_CHAT_TOP_CLEARANCE_PX = 112;
 
 export type { ScrollMetrics };
 
@@ -28,6 +29,28 @@ interface FloatingChatLayoutDependencies {
   createResizeObserver?: (callback: () => void) => ResizeObserverHandle;
   requestFrame?: (callback: () => void) => number;
   cancelFrame?: (frameId: number) => void;
+}
+
+interface FloatingChatSizeOptions {
+  panel: HTMLElement;
+  container: HTMLElement;
+}
+
+export function observeFloatingChatSize(
+  { panel, container }: FloatingChatSizeOptions,
+  createResizeObserver: (callback: () => void) => ResizeObserverHandle = (callback) =>
+    new ResizeObserver(callback)
+): () => void {
+  const updateHeight = (): void => {
+    const availableHeight = Math.max(0, container.clientHeight - FLOATING_CHAT_TOP_CLEARANCE_PX);
+    panel.style.height = `${Math.min((container.clientHeight * 2) / 3, availableHeight)}px`;
+  };
+
+  updateHeight();
+  const observer = createResizeObserver(updateHeight);
+  observer.observe(container);
+
+  return (): void => observer.disconnect();
 }
 
 export function isNearScrollBottom(metrics: ScrollMetrics): boolean {

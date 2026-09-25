@@ -637,8 +637,8 @@
       "couldNotDeleteTitle": "无法删除",
       "couldNotDeleteDescription": "此转录记录可能已被删除。",
       "couldNotDeleteDescriptionGeneric": "出了点问题，请重试。",
-      "empty": "暂无转录记录",
-      "emptyDescription": "在任意应用中按下快捷键开始说话。每条转写都会私密地保存在你的设备上。",
+      "empty": "开口说话，开始记录你的历史",
+      "emptyDescription": "你的听写内容会显示在这里。",
       "sectionTitle": "转写记录",
       "dataRetentionDisabled": "数据保留已关闭。转录和音频不会保存到历史记录。",
       "press": "按下",
@@ -2821,6 +2821,7 @@
       "undo": "撤销",
       "emptySpace": "还没有笔记。这里的笔记对 {{space}} 中的所有人可见。",
       "emptyTeamHint": "与你共享的空间将显示在这里。",
+      "emptyTeamTitle": "暂无共享空间",
       "noteCount_one": "{{count}} 条笔记",
       "noteCount_other": "{{count}} 条笔记",
       "accessRevoked": "你已无法访问 {{space}}",
@@ -2956,8 +2957,8 @@
       "raw": "原始内容",
       "aiSummary": "AI 摘要",
       "saving": "保存中",
-      "transcriptEmptyTitle": "尚未录制任何内容",
-      "transcriptEmptyDescription": "点击录制开始转写。所说的内容会实时显示在这里。",
+      "transcriptEmptyTitle": "暂无转录",
+      "transcriptEmptyDescription": "开始录音后，所说的一切都会显示在这里。",
       "startRecording": "开始录制",
       "generateSummary": "生成 AI 摘要",
       "startWriting": "开始书写...",
@@ -3290,9 +3291,6 @@
         }
       },
       "invite": "邀请",
-      "list": {
-        "empty": "这里还没有笔记"
-      },
       "author": {
         "you": "你"
       }
@@ -3339,19 +3337,14 @@
       "examples": {
         "linkedinTrigger": "我的 LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "改写提示词",
-        "rewriteText": "把这段话改写得更简洁、更专业",
-        "introTrigger": "开场邮件",
-        "introText": "你好，希望本周能找个时间聊聊…",
         "signoffTrigger": "签名",
         "signoffText": "祝好，Alex · alex@example.com"
       },
       "addPlaceholder": "添加触发词——“我的日程链接”“签名”"
     },
-    "emptyTitle": "你的词典是空的",
+    "emptyTitle": "向词典添加词语",
     "emptyDescription": "添加希望{{agentName}}始终识别正确的词：名字、工具、缩写。",
     "addFirstWord": "添加第一个词",
-    "importList": "导入列表",
     "agentDefault": "默认添加"
   },
   "insights": {
@@ -3510,7 +3503,10 @@
     "newChat": "新对话",
     "search": "搜索对话...",
     "archived": "已归档",
-    "noConversations": "开始你的第一个对话",
+    "noConversations": "暂无聊天",
+    "noConversationsDescription": "与助手的聊天会显示在这里。",
+    "noArchived": "暂无已归档的聊天",
+    "loadFailed": "无法加载聊天记录",
     "selectChat": "选择一个对话或开始新的对话",
     "noResults": "没有匹配的对话",
     "today": "今天",
@@ -3526,7 +3522,12 @@
     "searchChats": "搜索聊天",
     "searchTitle": "搜索对话",
     "searchDescription": "搜索所有对话",
-    "newChatEmpty": "询问关于笔记、转录或其他任何内容"
+    "inputPlaceholder": "询问关于笔记的任何问题",
+    "starters": {
+      "todos": "列出我最近的待办事项",
+      "meeting": "帮我准备下一场会议",
+      "sharedNotes": "突出显示我的共享笔记"
+    }
   },
   "support": {
     "documentation": "文档",
@@ -3871,7 +3872,8 @@
     "untitledEvent": "无标题事件",
     "joinAndTranscribe": "加入并转录",
     "takeNotes": "记笔记",
-    "noEventsToday": "今天没有日程",
+    "noEventsToday": "今天可以歇口气",
+    "emptyDayDescription": "享受片刻空闲，或安排一场会议。",
     "noUpcomingEvents": "暂无即将开始的日程",
     "moreCalendarsHint": "想连接更多日历？",
     "connectHere": "在这里连接",
@@ -4049,14 +4051,18 @@
   },
   "embeddedChat": {
     "askPlaceholder": "随便问点什么...",
-    "send": "发送",
     "title": "聊天",
     "emptyState": "就这条笔记提个问题",
     "dock": "固定到侧边栏",
     "undock": "从侧边栏取消固定",
     "close": "关闭聊天",
     "newChat": "新对话",
-    "conversationSelector": "切换对话"
+    "conversationSelector": "切换对话",
+    "history": "历史记录",
+    "quickActions": "快捷操作",
+    "generateSummary": "生成摘要",
+    "makeTodos": "创建待办事项",
+    "createOutline": "创建大纲"
   },
   "transcriptionPreview": {
     "label": "预览",

@@ -10,6 +10,9 @@ import {
   useFolders,
   useFolderCounts,
   useSpaceRootCounts,
+  useIsTreeLoading,
+  folderContainerKey,
+  ensureContainerLoaded,
 } from "../../../stores/noteStore";
 import { useContainerChat } from "../../../hooks/useContainerChat";
 import { cn } from "../../lib/utils";
@@ -45,7 +48,11 @@ export function ContainerOverview({
   const notesByContainer = useNotesByContainer();
   const folderCounts = useFolderCounts();
   const spaceRootCounts = useSpaceRootCounts();
+  const isTreeLoading = useIsTreeLoading();
   const [spaceNotes, setSpaceNotes] = useState<NoteItem[] | null>(null);
+  const [spaceNotesError, setSpaceNotesError] = useState(false);
+  const [folderNotesError, setFolderNotesError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
   // Folder overviews mirror the store's active container; space overviews list
@@ -57,17 +64,43 @@ export function ContainerOverview({
     window.electronAPI
       .getSpaceNotes(space.id, SPACE_NOTES_LIMIT)
       .then((rows) => {
-        if (!stale) setSpaceNotes(rows ?? []);
+        if (!stale) {
+          setSpaceNotes(rows ?? []);
+          setSpaceNotesError(false);
+        }
       })
       .catch(() => {
-        if (!stale) setSpaceNotes([]);
+        if (!stale) setSpaceNotesError(true);
       });
     return () => {
       stale = true;
     };
-  }, [folder, space.id, notesByContainer]);
+  }, [folder, space.id, notesByContainer, reloadKey]);
+
+  useEffect(() => {
+    if (!folder) return;
+    const key = folderContainerKey(folder.id);
+    if (notesByContainer[key] !== undefined) return;
+    let stale = false;
+    void ensureContainerLoaded(key)
+      .then(() => {
+        if (!stale) setFolderNotesError(false);
+      })
+      .catch(() => {
+        if (!stale) setFolderNotesError(true);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [folder, notesByContainer]);
 
   const notes = folder ? containerNotes : (spaceNotes ?? []);
+  const folderKey = folder ? folderContainerKey(folder.id) : null;
+  const folderNotesLoaded = folderKey !== null && notesByContainer[folderKey] !== undefined;
+  const isLoaded = !isTreeLoading && (folder ? folderNotesLoaded : spaceNotes !== null);
+  const loadFailed = folder
+    ? folderNotesError && !folderNotesLoaded
+    : spaceNotesError && spaceNotes === null;
 
   const chat = useContainerChat({ space, folder, notes });
 
@@ -100,6 +133,45 @@ export function ContainerOverview({
   if (space.kind === "team" && space.member_count != null) {
     metaParts.push(t("notes.overview.meta.members", { count: space.member_count }));
   }
+
+  if (loadFailed || !isLoaded) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-sm text-muted-foreground">
+        <p>{t(loadFailed ? "common.error" : "common.loading")}</p>
+        {loadFailed && (
+          <button
+            onClick={() => {
+              if (folderKey) {
+                setFolderNotesError(false);
+                void ensureContainerLoaded(folderKey).catch(() => setFolderNotesError(true));
+              } else {
+                setSpaceNotes(null);
+                setSpaceNotesError(false);
+                setReloadKey((value) => value + 1);
+              }
+            }}
+            className="text-primary hover:underline focus-visible:underline"
+          >
+            {t("common.retry")}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const askSection = (
+    <OverviewAskSection
+      messages={chat.messages}
+      agentState={chat.agentState}
+      onTextSubmit={chat.sendMessage}
+      onCancel={chat.cancelStream}
+      conversations={chat.conversations}
+      activeConversationId={chat.activeConversationId}
+      onSwitchConversation={chat.switchConversation}
+      onNewChat={chat.startNewChat}
+      onOpenNote={onOpenNote}
+    />
+  );
 
   return (
     <div className="flex-1 overflow-y-auto min-h-0">
@@ -140,21 +212,13 @@ export function ContainerOverview({
           </div>
         </div>
 
-        <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
-
-        <OverviewAskSection
-          messages={chat.messages}
-          agentState={chat.agentState}
-          onTextSubmit={chat.sendMessage}
-          onCancel={chat.cancelStream}
-          conversations={chat.conversations}
-          activeConversationId={chat.activeConversationId}
-          onSwitchConversation={chat.switchConversation}
-          onNewChat={chat.startNewChat}
-          onOpenNote={onOpenNote}
-        />
-
-        <div className="border-t border-border/70 dark:border-white/10">
+        {notes.length > 0 && (
+          <>
+            <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
+            {askSection}
+          </>
+        )}
+        <div className={notes.length > 0 ? "border-t border-border/70 dark:border-white/10" : ""}>
           <OverviewNoteList
             notes={notes}
             space={space}
@@ -163,6 +227,7 @@ export function ContainerOverview({
             onAddExisting={onAddExisting}
           />
         </div>
+        {notes.length === 0 && askSection}
       </div>
 
       {canInvite && workspace && space.cloud_space_id && (

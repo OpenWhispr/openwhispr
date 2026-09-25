@@ -4,9 +4,11 @@ import { cn } from "./lib/utils";
 import { useUiLocale } from "../hooks/useUiLocale";
 import { Button } from "./ui/button";
 import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
-import { Loader2, Sparkles, X, Mic, Trash2, Archive } from "./icons";
+import { Loader2, Sparkles, X, Trash2, Archive } from "./icons";
 import TranscriptionItem from "./ui/TranscriptionItem";
-import EmptyStateCard from "./ui/EmptyStateCard";
+import ThemedEmptyIllustration from "./ui/ThemedEmptyIllustration";
+import historyEmptyLight from "../assets/empty-states/home-history-light.svg";
+import historyEmptyDark from "../assets/empty-states/home-history-dark.svg";
 import type { TranscriptionItem as TranscriptionItemType } from "../types/electron";
 import { formatHotkeyLabel, parseHotkeyList } from "../utils/hotkeys";
 import { formatDateGroup } from "../utils/dateFormatting";
@@ -15,8 +17,6 @@ import UpcomingMeetings from "./UpcomingMeetings";
 import { useSettingsStore } from "../stores/settingsStore";
 import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
-
-const EMPTY_PREVIEW_WIDTHS = ["w-full", "w-4/5", "w-3/5"];
 
 interface HistoryViewProps {
   history: TranscriptionItemType[];
@@ -155,24 +155,21 @@ export default function HistoryView({
               <p className="pt-2 pb-2.5 text-sm text-muted-foreground">
                 {t("controlPanel.history.sectionTitle")}
               </p>
-              <EmptyStateCard
-                icon={Mic}
-                title={t("controlPanel.history.empty")}
-                description={t("controlPanel.history.emptyDescription")}
-              >
-                {/* Ghost rows preview the list this card becomes. */}
-                <div aria-hidden="true" className="mb-1 w-56 space-y-2">
-                  {EMPTY_PREVIEW_WIDTHS.map((width) => (
-                    <span
-                      key={width}
-                      className={cn(
-                        "block h-2 rounded-full bg-foreground/6 dark:bg-white/8",
-                        width
-                      )}
-                    />
-                  ))}
-                </div>
-                <span className="inline-flex h-[30px] items-center gap-1.5 rounded-full bg-surface-3 px-3 text-xs font-medium text-foreground/70 dark:bg-surface-3">
+              <div className="flex min-h-72 flex-col items-center px-4 pt-6 text-center">
+                <ThemedEmptyIllustration
+                  light={historyEmptyLight}
+                  dark={historyEmptyDark}
+                  width={560}
+                  height={102}
+                  className="[mask-image:linear-gradient(to_right,transparent,black_20%,black_80%,transparent)]"
+                />
+                <h2 className="mt-6 text-lg font-semibold text-foreground">
+                  {t("controlPanel.history.empty")}
+                </h2>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                  {t("controlPanel.history.emptyDescription")}
+                </p>
+                <span className="mt-2 inline-flex flex-wrap items-center justify-center gap-1.5 text-sm text-muted-foreground">
                   {t("controlPanel.history.press")}
                   <span dir="ltr" className="inline-flex items-center gap-1">
                     {parseHotkeyList(hotkey).map((hk, index) => (
@@ -186,7 +183,7 @@ export default function HistoryView({
                   </span>
                   {t("controlPanel.history.toStart")}
                 </span>
-              </EmptyStateCard>
+              </div>
             </>
           ) : (
             <div className="group">

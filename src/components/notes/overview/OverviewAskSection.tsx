@@ -1,7 +1,9 @@
+import { useCallback, useRef } from "react";
 import { Sparkles } from "../../icons";
 import { useTranslation } from "react-i18next";
 import { ChatMessages } from "../../chat/ChatMessages";
 import { ChatInput } from "../../chat/ChatInput";
+import { observeChatComposerInset } from "../../chat/composerLayout";
 import type { Message, AgentState } from "../../chat/types";
 import type { ContainerConversationItem } from "../../../hooks/useContainerChat";
 import { ConversationPicker } from "../ConversationPicker";
@@ -37,9 +39,16 @@ export function OverviewAskSection({
 }: OverviewAskSectionProps) {
   const { t } = useTranslation();
   const hasMessages = messages.length > 0;
+  const composerElementRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useCallback((composer: HTMLDivElement | null) => {
+    composerElementRef.current = composer;
+    const container = composer?.parentElement?.parentElement;
+    if (!composer || !container) return;
+    return observeChatComposerInset(composer, container);
+  }, []);
 
   const conversationPicker = (conversations.length > 0 || hasMessages) && (
-    <div className="flex items-center px-3 pt-2">
+    <div className="flex items-center pb-2">
       <ConversationPicker
         conversations={conversations}
         activeConversationId={activeConversationId}
@@ -50,35 +59,52 @@ export function OverviewAskSection({
   );
 
   return (
-    <div className="rounded-xl bg-surface-1/50 dark:bg-white/2 border border-border/70 dark:border-white/10">
+    <div className="relative isolate mx-auto w-full max-w-2xl">
       {conversationPicker}
       {hasMessages && (
-        <div className="max-h-[min(26rem,50vh)] flex flex-col">
-          <ChatMessages messages={messages} onOpenNote={onOpenNote} />
+        <div className="flex h-[min(26rem,50vh)] min-h-0 flex-col">
+          <ChatMessages
+            messages={messages}
+            onOpenNote={onOpenNote}
+            contentClassName="pb-[var(--chat-composer-inset,5rem)]"
+          />
         </div>
       )}
-      <ChatInput
-        agentState={agentState}
-        partialTranscript=""
-        onTextSubmit={onTextSubmit}
-        onCancel={onCancel}
-        placeholder={t("notes.overview.ask.placeholder")}
-      />
-      {!hasMessages && (
-        <div className="flex items-center flex-wrap gap-1.5 px-3 pb-3">
-          {PROMPT_CHIP_KEYS.map((key) => (
-            <button
-              key={key}
-              onClick={() => onTextSubmit(t(key))}
-              disabled={agentState !== "idle"}
-              className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md border border-border/70 dark:border-white/10 text-[11px] text-foreground/55 hover:text-foreground/80 hover:border-border/70 hover:bg-foreground/3 dark:hover:bg-white/3 disabled:opacity-50 disabled:pointer-events-none transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-            >
-              <Sparkles size={10} className="text-foreground/45 shrink-0" />
-              {t(key)}
-            </button>
-          ))}
+      <div className={hasMessages ? "relative h-14" : "relative h-24"}>
+        <div ref={composerRef} className="absolute inset-x-0 bottom-0 z-10 py-1">
+          {!hasMessages && (
+            <div className="scrollbar-hidden flex items-center gap-1.5 overflow-x-auto pb-2">
+              {PROMPT_CHIP_KEYS.map((key) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    // The chips unmount once the message lands; keep focus in the composer.
+                    composerElementRef.current?.querySelector("textarea")?.focus();
+                    onTextSubmit(t(key));
+                  }}
+                  disabled={agentState !== "idle"}
+                  className="inline-flex shrink-0 items-center gap-1.5 px-2.5 h-7 whitespace-nowrap rounded-full border border-border/70 bg-card shadow-sm dark:border-white/10 text-[11px] text-foreground/55 hover:text-foreground/80 hover:border-border/70 hover:bg-surface-3 disabled:text-foreground/30 disabled:pointer-events-none transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                >
+                  <Sparkles size={10} className="text-foreground/45 shrink-0" />
+                  {t(key)}
+                </button>
+              ))}
+            </div>
+          )}
+          <ChatInput
+            className="w-full"
+            agentState={agentState}
+            partialTranscript=""
+            onTextSubmit={onTextSubmit}
+            onCancel={onCancel}
+            focusOnIdle={false}
+            expandOnFocus
+            expandOnFocusSize="compact"
+            variant="assistant"
+            placeholder={t("notes.overview.ask.placeholder")}
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 }

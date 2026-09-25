@@ -637,8 +637,8 @@
       "couldNotDeleteTitle": "Couldn't delete",
       "couldNotDeleteDescription": "This transcription may have already been removed.",
       "couldNotDeleteDescriptionGeneric": "Something went wrong. Please try again.",
-      "empty": "No transcriptions yet",
-      "emptyDescription": "Press your hotkey in any app and start talking. Every transcription is saved privately here on your device.",
+      "empty": "Raise your voice for history",
+      "emptyDescription": "Your dictations will appear here.",
       "sectionTitle": "Transcriptions",
       "dataRetentionDisabled": "Data retention is off. Transcriptions and audio are not saved to history.",
       "press": "Press",
@@ -1189,7 +1189,8 @@
     "untitledEvent": "Untitled Event",
     "joinAndTranscribe": "Join & transcribe",
     "takeNotes": "Take notes",
-    "noEventsToday": "No events today",
+    "noEventsToday": "Caught a break",
+    "emptyDayDescription": "Enjoy the break or schedule a meeting.",
     "noUpcomingEvents": "No upcoming events",
     "moreCalendarsHint": "Want additional calendars?",
     "connectHere": "Connect them here",
@@ -3003,7 +3004,10 @@
     "newChat": "New chat",
     "search": "Search conversations...",
     "archived": "Archived",
-    "noConversations": "Start your first conversation",
+    "noConversations": "No chats yet",
+    "noConversationsDescription": "Your chats with Assistant will appear here.",
+    "noArchived": "No archived chats",
+    "loadFailed": "Couldn't load chats",
     "selectChat": "Select a conversation or start a new one",
     "noResults": "No matching conversations",
     "today": "Today",
@@ -3019,7 +3023,12 @@
     "searchChats": "Search chats",
     "searchTitle": "Search conversations",
     "searchDescription": "Search across all your conversations",
-    "newChatEmpty": "Ask about your notes, transcripts, or anything else"
+    "inputPlaceholder": "Ask anything about your note",
+    "starters": {
+      "todos": "List my recent to-dos",
+      "meeting": "Prepare me for my next meeting",
+      "sharedNotes": "Highlight my shared notes"
+    }
   },
   "referral": {
     "title": "Refer and earn rewards",
@@ -3164,6 +3173,7 @@
       "undo": "Undo",
       "emptySpace": "No notes yet. Notes here are visible to everyone in {{space}}.",
       "emptyTeamHint": "Spaces shared with you will appear here.",
+      "emptyTeamTitle": "No shared spaces",
       "noteCount_one": "{{count}} note",
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "You no longer have access to {{space}}",
@@ -3299,8 +3309,8 @@
       "raw": "Raw",
       "aiSummary": "AI Summary",
       "saving": "Saving",
-      "transcriptEmptyTitle": "Nothing recorded yet",
-      "transcriptEmptyDescription": "Hit record to start transcribing. Everything said shows up here as it happens.",
+      "transcriptEmptyTitle": "No transcript yet",
+      "transcriptEmptyDescription": "Start a recording and everything said will appear here.",
       "startRecording": "Start recording",
       "generateSummary": "Generate AI Summary",
       "startWriting": "Start writing...",
@@ -3633,9 +3643,6 @@
         }
       },
       "invite": "Invite",
-      "list": {
-        "empty": "No notes here yet"
-      },
       "author": {
         "you": "You"
       }
@@ -3675,26 +3682,21 @@
       "replacementPlaceholder": "Text to insert when you say the trigger…",
       "create": "Create snippet",
       "duplicate": "A snippet with this trigger already exists",
-      "emptyTitle": "The stuff you shouldn't have to say",
+      "emptyTitle": "Stuff you shouldn't have to say",
       "emptyTitleAccent": "twice",
       "emptyDescription": "Speak a trigger word and OpenWhispr replaces it with whatever you saved — URLs, intros, sign-offs, prompts.",
       "new": "New snippet",
       "examples": {
         "linkedinTrigger": "My LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "Rewrite prompt",
-        "rewriteText": "Rewrite this to be more concise and professional",
-        "introTrigger": "Intro email",
-        "introText": "Hey, would love to find some time to chat later this week…",
         "signoffTrigger": "Sign off",
         "signoffText": "Best, Alex · alex@example.com"
       },
       "addPlaceholder": "Add a trigger phrase — \"investor ask\", \"cal link\""
     },
-    "emptyTitle": "Your dictionary is empty",
+    "emptyTitle": "Add words to your dictionary",
     "emptyDescription": "Add words for {{agentName}} to always get right: names, tools, acronyms.",
     "addFirstWord": "Add your first word",
-    "importList": "Import a list",
     "agentDefault": "Added by default"
   },
   "support": {
@@ -4125,14 +4127,18 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Ask anything...",
-    "send": "Send",
     "title": "Chat",
     "emptyState": "Ask a question about this note",
     "dock": "Dock to sidebar",
     "undock": "Undock from sidebar",
     "close": "Close chat",
     "newChat": "New chat",
-    "conversationSelector": "Switch conversation"
+    "conversationSelector": "Switch conversation",
+    "history": "History",
+    "quickActions": "Quick actions",
+    "generateSummary": "Generate summary",
+    "makeTodos": "Make to-dos",
+    "createOutline": "Create outline"
   },
   "transcriptionPreview": {
     "label": "Preview",

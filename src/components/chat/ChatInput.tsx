@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { Mic, Square, X } from "../icons";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
+import { ArrowRight, Mic, Square, X } from "../icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { SendIcon } from "../ui/SendIcon";
@@ -22,6 +22,16 @@ interface ChatInputProps {
   className?: string;
   /** Offer a mic when the input is empty; recordings transcribe into the input. */
   voiceDraft?: boolean;
+  variant?: "default" | "assistant" | "note" | "sidebar";
+  outlined?: boolean;
+  draftText?: string;
+  onDraftChange?: (text: string) => void;
+  onFocus?: () => void;
+  onEscape?: () => void;
+  trailingContent?: React.ReactNode;
+  focusOnIdle?: boolean;
+  expandOnFocus?: boolean;
+  expandOnFocusSize?: "standard" | "compact";
 }
 
 function RecordingIndicator() {
@@ -61,16 +71,35 @@ export function ChatInput({
   placeholder,
   className,
   voiceDraft = false,
+  variant = "default",
+  outlined = false,
+  draftText,
+  onDraftChange,
+  onFocus,
+  onEscape,
+  trailingContent,
+  focusOnIdle = true,
+  expandOnFocus = false,
+  expandOnFocusSize = "standard",
 }: ChatInputProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [inputText, setInputText] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [localDraft, setLocalDraft] = useState("");
+  const inputText = draftText ?? localDraft;
+  const setInputText = onDraftChange ?? setLocalDraft;
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const allowDeferredFocusRef = useRef(variant !== "note" || focusOnIdle);
+  allowDeferredFocusRef.current = variant !== "note" || focusOnIdle;
+  const focusAfterFrame = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (allowDeferredFocusRef.current) inputRef.current?.focus();
+    });
+  }, []);
 
   const voice = useVoiceDraft({
     onTranscript: (text) => {
-      setInputText((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
-      requestAnimationFrame(() => inputRef.current?.focus());
+      setInputText(inputText.trim() ? `${inputText.trim()} ${text}` : text);
+      focusAfterFrame();
     },
     onError: (message) => {
       toast({
@@ -82,24 +111,7 @@ export function ChatInput({
   });
   const isVoiceRecording = voice.status === "recording";
   const isVoiceTranscribing = voice.status === "transcribing";
-
-  const handleSubmit = useCallback(() => {
-    const text = inputText.trim();
-    if (!text || !onTextSubmit) return;
-    onTextSubmit(text);
-    setInputText("");
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, [inputText, onTextSubmit]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleSubmit();
-      }
-    },
-    [handleSubmit]
-  );
+  const isCompactNote = variant === "note" && !outlined;
 
   const isIdle = agentState === "idle";
   const isListening = agentState === "listening";
@@ -107,22 +119,89 @@ export function ChatInput({
   const isBusy =
     agentState === "thinking" || agentState === "streaming" || agentState === "tool-executing";
 
-  useEffect(() => {
-    if (isIdle) {
-      requestAnimationFrame(() => inputRef.current?.focus());
+  const handleSubmit = useCallback(() => {
+    const text = inputText.trim();
+    if (!text || !onTextSubmit || isBusy) return;
+    onTextSubmit(text);
+    setInputText("");
+    focusAfterFrame();
+  }, [inputText, onTextSubmit, setInputText, isBusy, focusAfterFrame]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Escape" && onEscape) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.blur();
+        onEscape();
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+        e.preventDefault();
+        handleSubmit();
+      }
+    },
+    [handleSubmit, onEscape]
+  );
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    if (expandOnFocus || variant === "sidebar" || isCompactNote) {
+      input.style.height = "100%";
+    } else {
+      input.style.height = "auto";
+      input.style.height = `${input.scrollHeight}px`;
     }
-  }, [isIdle]);
+  }, [inputText, isVoiceRecording, isVoiceTranscribing, expandOnFocus, variant, isCompactNote]);
+
+  useEffect(() => {
+    if (!isIdle || !focusOnIdle) return;
+    const frameId = requestAnimationFrame(() => {
+      if (allowDeferredFocusRef.current) inputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [isIdle, focusOnIdle]);
 
   return (
     <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
       <div
         className={cn(
-          "flex items-center gap-2 min-h-11 ps-4 pe-1.5 rounded-full",
-          GLASS_SURFACE,
-          "border border-black/10 dark:border-white/14",
-          "transition-all duration-200",
+          "flex items-center gap-2 min-h-11",
+          variant === "sidebar"
+            ? "h-14 items-end rounded-3xl bg-background ps-4 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-2"
+            : "rounded-3xl ps-4 pe-1.5 py-1.5",
+          isCompactNote && "h-12 overflow-hidden",
+          variant === "assistant"
+            ? "min-h-12 bg-card shadow-sm dark:bg-surface-2"
+            : variant === "note"
+              ? outlined
+                ? "min-h-12 bg-background"
+                : "min-h-12 bg-transparent"
+              : variant === "default" && GLASS_SURFACE,
+          variant === "sidebar"
+            ? "border border-border/80 dark:border-white/14"
+            : variant === "note"
+              ? outlined
+                ? "border border-border/70 dark:border-white/14"
+                : "border-0"
+              : "border border-black/10 dark:border-white/14",
+          variant === "sidebar"
+            ? "transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none"
+            : expandOnFocus
+              ? cn(
+                  "h-12 items-end transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none",
+                  expandOnFocusSize === "compact"
+                    ? "focus-within:h-[min(36vh,14rem)]"
+                    : "focus-within:h-[min(40vh,16rem)]"
+                )
+              : "transition-[border-color,box-shadow] duration-200",
           isIdle &&
-            "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8"
+            (variant === "assistant"
+              ? "focus-within:border-foreground/15 focus-within:ring-2 focus-within:ring-foreground/5"
+              : variant === "note"
+                ? ""
+                : "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8")
         )}
       >
         {isListening && (
@@ -198,24 +277,35 @@ export function ChatInput({
         )}
 
         {(isIdle || isBusy) && !isVoiceRecording && !isVoiceTranscribing && (
-          <div className="flex items-center gap-2 w-full">
-            <input
+          <div
+            className={cn(
+              "flex gap-2 w-full",
+              isCompactNote ? "items-center" : "items-end",
+              (expandOnFocus || variant === "sidebar" || isCompactNote) && "h-full"
+            )}
+          >
+            <textarea
               dir="auto"
               ref={inputRef}
-              type="text"
+              rows={1}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={isBusy}
+              onFocus={onFocus}
+              // Read-only, not disabled: disabling would drop focus for the length of every reply.
+              readOnly={isBusy}
               autoFocus={autoFocus}
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
                 "input-inline flex-1 outline-none bg-transparent caret-primary",
-                "text-[13px] text-foreground placeholder:text-muted-foreground/70",
-                "min-w-0 p-0",
+                variant === "default" ? "text-[13px]" : "text-sm",
+                "text-foreground placeholder:text-muted-foreground/70",
+                "min-w-0 min-h-8 max-h-32 resize-none overflow-y-auto border-0 px-0 py-1.5 leading-5",
+                (expandOnFocus || variant === "sidebar" || isCompactNote) && "min-h-0 max-h-none",
                 isBusy && "text-muted-foreground/70 cursor-not-allowed"
               )}
             />
+            {isIdle && !inputText.trim() && trailingContent}
             {isBusy && onCancel ? (
               <button
                 type="button"
@@ -243,10 +333,18 @@ export function ChatInput({
                   "transition-all duration-100",
                   inputText.trim()
                     ? "hover:brightness-110 active:scale-95"
-                    : "opacity-30 saturate-0 cursor-default"
+                    : variant === "assistant" || variant === "note" || variant === "sidebar"
+                      ? "cursor-default"
+                      : "opacity-30 saturate-0 cursor-default"
                 )}
               >
-                <SendIcon size={28} className="block rtl:scale-x-[-1]" />
+                {variant === "assistant" || variant === "note" || variant === "sidebar" ? (
+                  <span className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <ArrowRight size={18} className="-rotate-90" />
+                  </span>
+                ) : (
+                  <SendIcon size={28} className="block rtl:scale-x-[-1]" />
+                )}
               </button>
             ) : isIdle ? (
               <button

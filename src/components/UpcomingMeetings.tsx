@@ -5,6 +5,9 @@ import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import PersonAvatar from "./ui/PersonAvatar";
 import EmptyStateCard from "./ui/EmptyStateCard";
+import ThemedEmptyIllustration from "./ui/ThemedEmptyIllustration";
+import calendarEmptyLight from "../assets/empty-states/home-calendar-light.svg";
+import calendarEmptyDark from "../assets/empty-states/home-calendar-dark.svg";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { cn } from "./lib/utils";
 import type { CalendarAttendee, CalendarEvent } from "../types/calendar";
@@ -262,9 +265,20 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
       </div>
       <div className="rounded-b-[15px] bg-background px-2 dark:bg-surface-2/60">
         {group.items.length === 0 ? (
-          <p className="px-1 py-3 text-xs text-muted-foreground/70">
-            {t("upcoming.noEventsToday")}
-          </p>
+          <div className="flex flex-col items-center px-1 py-5 text-center">
+            <ThemedEmptyIllustration
+              light={calendarEmptyLight}
+              dark={calendarEmptyDark}
+              width={316}
+              height={120}
+            />
+            <p className="mt-3 text-sm font-semibold text-foreground">
+              {t("upcoming.noEventsToday")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("upcoming.emptyDayDescription")}
+            </p>
+          </div>
         ) : (
           <div className="divide-y divide-border/60">
             {group.items.map((event) => (
@@ -343,19 +357,24 @@ export default function UpcomingMeetings({
             </Button>
           </EmptyStateCard>
         ) : (
-          <EmptyStateCard
-            className="px-4 py-8"
-            icon={Calendar}
-            title={t("upcoming.noUpcomingEvents")}
-            description={t("upcoming.moreCalendarsHint")}
-          >
+          <div className="flex flex-col items-center rounded-2xl border border-border/70 bg-card/50 px-4 py-6 text-center dark:border-white/10 dark:bg-surface-2/60">
+            <ThemedEmptyIllustration
+              light={calendarEmptyLight}
+              dark={calendarEmptyDark}
+              width={316}
+              height={120}
+            />
+            <p className="mt-3 text-sm font-semibold text-foreground">
+              {t("upcoming.noUpcomingEvents")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("upcoming.moreCalendarsHint")}</p>
             <button
               onClick={onConnectCalendar}
-              className="cursor-pointer text-xs text-primary underline-offset-2 outline-none hover:underline focus-visible:underline"
+              className="mt-3 cursor-pointer text-xs text-primary underline-offset-2 outline-none hover:underline focus-visible:underline"
             >
               {t("upcoming.connectHere")}
             </button>
-          </EmptyStateCard>
+          </div>
         ))}
 
       {/* Day cards */}

@@ -524,8 +524,8 @@
       "couldNotDeleteTitle": "تعذر الحذف",
       "couldNotDeleteDescription": "ربما تمت إزالة هذا النص المفرَّغ بالفعل.",
       "couldNotDeleteDescriptionGeneric": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
-      "empty": "لا توجد أي نصوص مفرَّغة حتى الآن",
-      "emptyDescription": "اضغط مفتاح الاختصار في أي تطبيق وابدأ الحديث. يُحفظ كل نص هنا بخصوصية على جهازك.",
+      "empty": "ارفع صوتك لتبدأ سجلك",
+      "emptyDescription": "ستظهر إملاءاتك هنا.",
       "sectionTitle": "النصوص المكتوبة",
       "dataRetentionDisabled": "الاحتفاظ بالبيانات قيد الإيقاف. لا يتم حفظ النصوص المفرَّغة والصوت في السجل.",
       "press": "اضغط",
@@ -913,19 +913,14 @@
       "examples": {
         "linkedinTrigger": "حسابي على LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "مطالبة إعادة الكتابة",
-        "rewriteText": "أعد كتابة هذا ليكون أكثر إيجازًا واحترافية",
-        "introTrigger": "بريد المقدمة",
-        "introText": "مرحبًا، أود أن نجد بعض الوقت للدردشة في وقت لاحق من هذا الأسبوع…",
         "signoffTrigger": "ختام الرسالة",
         "signoffText": "أطيب التحيات، Alex · alex@example.com"
       },
       "addPlaceholder": "أضف عبارة مفتاحية — \"طلب مستثمر\"، \"رابط التقويم\""
     },
-    "emptyTitle": "قاموسك فارغ",
+    "emptyTitle": "أضف كلمات إلى قاموسك",
     "emptyDescription": "أضف الكلمات التي يجب أن يكتبها {{agentName}} بشكل صحيح دائمًا: الأسماء، الأدوات، الاختصارات.",
     "addFirstWord": "أضف كلمتك الأولى",
-    "importList": "استيراد قائمة",
     "agentDefault": "تمت الإضافة افتراضيًا",
     "promptLimitNotice": "عدد أحرف قاموسك: {{chars}}. لا تقرأ نماذج Groq وWhisper سوى بضع مئات من الأحرف الأخيرة منه، لذا تعمل القوائم الأقصر بشكل أفضل معها. أما النماذج الأخرى فتحصل على القائمة كاملة."
   },
@@ -1410,7 +1405,8 @@
     "untitledEvent": "حدث بدون عنوان",
     "joinAndTranscribe": "انضمام وتفريغ صوتي",
     "takeNotes": "تدوين ملاحظات",
-    "noEventsToday": "لا توجد أحداث اليوم",
+    "noEventsToday": "لديك استراحة اليوم",
+    "emptyDayDescription": "استمتع بالاستراحة أو جدوِل اجتماعًا.",
     "noUpcomingEvents": "لا توجد أحداث قادمة",
     "moreCalendarsHint": "هل تريد تقاويم إضافية؟",
     "connectHere": "قم بربطها هنا",
@@ -1492,6 +1488,7 @@
       "undo": "تراجع",
       "emptySpace": "لا توجد ملاحظات بعد. الملاحظات هنا مرئية للجميع في {{space}}.",
       "emptyTeamHint": "ستظهر المساحات المشتركة معك هنا.",
+      "emptyTeamTitle": "لا توجد مساحات مشتركة",
       "noteCount_zero": "{{count}} ملاحظات",
       "noteCount_one": "{{count}} ملاحظة",
       "noteCount_two": "{{count}} ملاحظتان",
@@ -1635,8 +1632,8 @@
       "raw": "خام",
       "aiSummary": "ملخص بالذكاء الاصطناعي",
       "saving": "جاري الحفظ",
-      "transcriptEmptyTitle": "لم يتم تسجيل أي شيء بعد",
-      "transcriptEmptyDescription": "اضغط على تسجيل لبدء النسخ. كل ما يُقال يظهر هنا لحظيًا.",
+      "transcriptEmptyTitle": "لا يوجد نص مفرَّغ بعد",
+      "transcriptEmptyDescription": "ابدأ التسجيل وسيظهر هنا كل ما يُقال.",
       "startRecording": "بدء التسجيل",
       "generateSummary": "إنشاء ملخص بالذكاء الاصطناعي",
       "startWriting": "ابدأ الكتابة...",
@@ -1983,9 +1980,6 @@
         }
       },
       "invite": "دعوة",
-      "list": {
-        "empty": "لا توجد ملاحظات هنا بعد"
-      },
       "author": {
         "you": "أنت"
       }
@@ -4111,7 +4105,10 @@
     "newChat": "محادثة جديدة",
     "search": "البحث في المحادثات...",
     "archived": "مؤرشفة",
-    "noConversations": "ابدأ محادثتك الأولى",
+    "noConversations": "لا توجد محادثات بعد",
+    "noConversationsDescription": "ستظهر محادثاتك مع المساعد هنا.",
+    "noArchived": "لا توجد محادثات مؤرشفة",
+    "loadFailed": "تعذر تحميل المحادثات",
     "selectChat": "حدد محادثة أو ابدأ محادثة جديدة",
     "noResults": "لا توجد محادثات مطابقة",
     "today": "اليوم",
@@ -4127,7 +4124,12 @@
     "searchChats": "البحث في المحادثات",
     "searchTitle": "البحث في المحادثات",
     "searchDescription": "البحث في جميع محادثاتك",
-    "newChatEmpty": "اسأل عن ملاحظاتك أو نصوصك المفرَّغة أو أي شيء آخر"
+    "inputPlaceholder": "اسأل أي شيء عن ملاحظتك",
+    "starters": {
+      "todos": "اعرض مهامي الأخيرة",
+      "meeting": "حضّرني لاجتماعي القادم",
+      "sharedNotes": "أبرِز ملاحظاتي المشتركة"
+    }
   },
   "support": {
     "documentation": "الوثائق",
@@ -4247,14 +4249,18 @@
   },
   "embeddedChat": {
     "askPlaceholder": "اسأل عن أي شيء...",
-    "send": "إرسال",
     "title": "الدردشة",
     "emptyState": "اسأل سؤالًا حول هذه الملاحظة",
     "dock": "إرساء في الشريط الجانبي",
     "undock": "إلغاء الإرساء من الشريط الجانبي",
     "close": "إغلاق الدردشة",
     "newChat": "محادثة جديدة",
-    "conversationSelector": "تبديل المحادثة"
+    "conversationSelector": "تبديل المحادثة",
+    "history": "السجل",
+    "quickActions": "إجراءات سريعة",
+    "generateSummary": "إنشاء ملخص",
+    "makeTodos": "إنشاء قائمة مهام",
+    "createOutline": "إنشاء مخطط"
   },
   "transcriptionPreview": {
     "label": "معاينة",

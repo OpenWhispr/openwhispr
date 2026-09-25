@@ -637,8 +637,8 @@
       "couldNotDeleteTitle": "無法刪除",
       "couldNotDeleteDescription": "這筆轉錄記錄可能已被移除。",
       "couldNotDeleteDescriptionGeneric": "發生錯誤，請再試一次。",
-      "empty": "目前沒有轉錄記錄",
-      "emptyDescription": "在任何應用程式中按下快捷鍵開始說話。每則轉錄都會私密地儲存在你的裝置上。",
+      "empty": "開口說話，開始記錄你的歷史",
+      "emptyDescription": "你的聽寫內容會顯示在這裡。",
       "sectionTitle": "轉錄記錄",
       "dataRetentionDisabled": "資料保留已關閉。轉錄和音訊不會儲存至歷史記錄。",
       "press": "按下",
@@ -2821,6 +2821,7 @@
       "undo": "復原",
       "emptySpace": "還沒有筆記。這裡的筆記對 {{space}} 中的所有人可見。",
       "emptyTeamHint": "與你共享的空間將顯示在這裡。",
+      "emptyTeamTitle": "尚無共享空間",
       "noteCount_one": "{{count}} 則筆記",
       "noteCount_other": "{{count}} 則筆記",
       "accessRevoked": "你已無法存取 {{space}}",
@@ -2956,8 +2957,8 @@
       "raw": "原始",
       "aiSummary": "AI 摘要",
       "saving": "儲存中",
-      "transcriptEmptyTitle": "尚未錄製任何內容",
-      "transcriptEmptyDescription": "點擊錄製開始轉錄。所說的內容會即時顯示在這裡。",
+      "transcriptEmptyTitle": "尚無轉錄",
+      "transcriptEmptyDescription": "開始錄音後，所說的一切都會顯示在這裡。",
       "startRecording": "開始錄製",
       "generateSummary": "產生 AI 摘要",
       "startWriting": "開始撰寫...",
@@ -3290,9 +3291,6 @@
         }
       },
       "invite": "邀請",
-      "list": {
-        "empty": "這裡還沒有筆記"
-      },
       "author": {
         "you": "你"
       }
@@ -3339,19 +3337,14 @@
       "examples": {
         "linkedinTrigger": "我的 LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "改寫提示詞",
-        "rewriteText": "把這段話改寫得更簡潔、更專業",
-        "introTrigger": "開場郵件",
-        "introText": "你好，希望本週能找個時間聊聊…",
         "signoffTrigger": "簽名",
         "signoffText": "祝好，Alex · alex@example.com"
       },
       "addPlaceholder": "新增觸發詞——「我的行事曆連結」「簽名」"
     },
-    "emptyTitle": "你的字典是空的",
+    "emptyTitle": "將詞語加入字典",
     "emptyDescription": "新增希望{{agentName}}始終辨識正確的詞：名字、工具、縮寫。",
     "addFirstWord": "新增第一個詞",
-    "importList": "匯入清單",
     "agentDefault": "預設加入"
   },
   "insights": {
@@ -3510,7 +3503,10 @@
     "newChat": "新對話",
     "search": "搜尋對話...",
     "archived": "已封存",
-    "noConversations": "開始你的第一個對話",
+    "noConversations": "尚無聊天",
+    "noConversationsDescription": "與助理的聊天會顯示在這裡。",
+    "noArchived": "尚無已封存的聊天",
+    "loadFailed": "無法載入聊天紀錄",
     "selectChat": "選擇一個對話或開始新的對話",
     "noResults": "沒有符合的對話",
     "today": "今天",
@@ -3526,7 +3522,12 @@
     "searchChats": "搜尋聊天",
     "searchTitle": "搜尋對話",
     "searchDescription": "搜尋所有對話",
-    "newChatEmpty": "詢問關於筆記、轉錄或其他任何內容"
+    "inputPlaceholder": "詢問關於筆記的任何問題",
+    "starters": {
+      "todos": "列出我最近的待辦事項",
+      "meeting": "幫我準備下一場會議",
+      "sharedNotes": "突顯我的共享筆記"
+    }
   },
   "support": {
     "documentation": "文件",
@@ -3871,7 +3872,8 @@
     "untitledEvent": "無標題事件",
     "joinAndTranscribe": "加入並轉錄",
     "takeNotes": "記筆記",
-    "noEventsToday": "今天沒有行程",
+    "noEventsToday": "今天可以喘口氣",
+    "emptyDayDescription": "享受片刻空閒，或安排一場會議。",
     "noUpcomingEvents": "暫無即將開始的行程",
     "moreCalendarsHint": "想連接更多日曆？",
     "connectHere": "在這裡連接",
@@ -4049,14 +4051,18 @@
   },
   "embeddedChat": {
     "askPlaceholder": "隨便問點什麼...",
-    "send": "傳送",
     "title": "聊天",
     "emptyState": "就這條筆記提個問題",
     "dock": "固定到側邊欄",
     "undock": "從側邊欄取消固定",
     "close": "關閉聊天",
     "newChat": "新對話",
-    "conversationSelector": "切換對話"
+    "conversationSelector": "切換對話",
+    "history": "歷史記錄",
+    "quickActions": "快速操作",
+    "generateSummary": "產生摘要",
+    "makeTodos": "建立待辦事項",
+    "createOutline": "建立大綱"
   },
   "transcriptionPreview": {
     "label": "預覽",

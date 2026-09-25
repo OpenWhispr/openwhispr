@@ -637,8 +637,8 @@
       "couldNotDeleteTitle": "Impossibile eliminare",
       "couldNotDeleteDescription": "Questa trascrizione potrebbe essere già stata rimossa.",
       "couldNotDeleteDescriptionGeneric": "Qualcosa è andato storto. Riprova.",
-      "empty": "Nessuna trascrizione",
-      "emptyDescription": "Premi la scorciatoia in qualsiasi app e inizia a parlare. Ogni trascrizione viene salvata qui, in privato, sul tuo dispositivo.",
+      "empty": "Alza la voce per creare la tua cronologia",
+      "emptyDescription": "Le tue dettature appariranno qui.",
       "sectionTitle": "Trascrizioni",
       "dataRetentionDisabled": "La conservazione dei dati è disattivata. Trascrizioni e audio non vengono salvati nella cronologia.",
       "press": "Premi",
@@ -2821,6 +2821,7 @@
       "undo": "Annulla",
       "emptySpace": "Ancora nessuna nota. Le note qui sono visibili a tutti in {{space}}.",
       "emptyTeamHint": "Gli spazi condivisi con te appariranno qui.",
+      "emptyTeamTitle": "Nessuno spazio condiviso",
       "noteCount_one": "{{count}} nota",
       "noteCount_other": "{{count}} note",
       "accessRevoked": "Non hai più accesso a {{space}}",
@@ -2956,8 +2957,8 @@
       "raw": "Originale",
       "aiSummary": "Riepilogo AI",
       "saving": "Salvataggio",
-      "transcriptEmptyTitle": "Nessuna registrazione",
-      "transcriptEmptyDescription": "Premi registra per iniziare a trascrivere. Tutto ciò che viene detto compare qui in tempo reale.",
+      "transcriptEmptyTitle": "Ancora nessuna trascrizione",
+      "transcriptEmptyDescription": "Avvia una registrazione e tutto ciò che viene detto apparirà qui.",
       "startRecording": "Avvia registrazione",
       "generateSummary": "Genera riepilogo AI",
       "startWriting": "Inizia a scrivere...",
@@ -3290,9 +3291,6 @@
         }
       },
       "invite": "Invita",
-      "list": {
-        "empty": "Ancora nessuna nota qui"
-      },
       "author": {
         "you": "Tu"
       }
@@ -3339,19 +3337,14 @@
       "examples": {
         "linkedinTrigger": "Il mio LinkedIn",
         "linkedinText": "linkedin.com/in/tu",
-        "rewriteTrigger": "Prompt di riscrittura",
-        "rewriteText": "Riscrivi questo testo in modo più conciso e professionale",
-        "introTrigger": "Email di presentazione",
-        "introText": "Ciao, mi piacerebbe trovare un momento per parlare questa settimana…",
         "signoffTrigger": "Firma",
         "signoffText": "Saluti, Alex · alex@example.com"
       },
       "addPlaceholder": "Aggiungi una frase trigger: \"mio calendario\", \"il mio LinkedIn\""
     },
-    "emptyTitle": "Il tuo dizionario è vuoto",
+    "emptyTitle": "Aggiungi parole al tuo dizionario",
     "emptyDescription": "Aggiungi le parole che {{agentName}} deve sempre riconoscere: nomi, strumenti, acronimi.",
     "addFirstWord": "Aggiungi la tua prima parola",
-    "importList": "Importa un elenco",
     "agentDefault": "Aggiunto di default"
   },
   "insights": {
@@ -3510,7 +3503,10 @@
     "newChat": "Nuova chat",
     "search": "Cerca conversazioni...",
     "archived": "Archiviate",
-    "noConversations": "Inizia la tua prima conversazione",
+    "noConversations": "Ancora nessuna chat",
+    "noConversationsDescription": "Le tue chat con l'Assistente appariranno qui.",
+    "noArchived": "Nessuna chat archiviata",
+    "loadFailed": "Impossibile caricare le chat",
     "selectChat": "Seleziona una conversazione o avviane una nuova",
     "noResults": "Nessuna conversazione corrispondente",
     "today": "Oggi",
@@ -3526,7 +3522,12 @@
     "searchChats": "Cerca chat",
     "searchTitle": "Cerca conversazioni",
     "searchDescription": "Cerca in tutte le conversazioni",
-    "newChatEmpty": "Chiedi delle tue note, trascrizioni o qualsiasi altra cosa"
+    "inputPlaceholder": "Chiedi qualcosa sulla tua nota",
+    "starters": {
+      "todos": "Elenca le mie attività recenti",
+      "meeting": "Preparami per la prossima riunione",
+      "sharedNotes": "Evidenzia le mie note condivise"
+    }
   },
   "support": {
     "documentation": "Documentazione",
@@ -3871,7 +3872,8 @@
     "untitledEvent": "Evento senza titolo",
     "joinAndTranscribe": "Partecipa e trascrivi",
     "takeNotes": "Prendi note",
-    "noEventsToday": "Nessun evento oggi",
+    "noEventsToday": "Un attimo di tregua",
+    "emptyDayDescription": "Goditi la pausa o programma una riunione.",
     "noUpcomingEvents": "Nessun evento in programma",
     "moreCalendarsHint": "Vuoi altri calendari?",
     "connectHere": "Collegali qui",
@@ -4049,14 +4051,18 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Chiedi qualcosa...",
-    "send": "Invia",
     "title": "Chat",
     "emptyState": "Fai una domanda su questa nota",
     "dock": "Ancora nella barra laterale",
     "undock": "Sgancia dalla barra laterale",
     "close": "Chiudi chat",
     "newChat": "Nuova chat",
-    "conversationSelector": "Cambia conversazione"
+    "conversationSelector": "Cambia conversazione",
+    "history": "Cronologia",
+    "quickActions": "Azioni rapide",
+    "generateSummary": "Genera riepilogo",
+    "makeTodos": "Crea attività",
+    "createOutline": "Crea scaletta"
   },
   "transcriptionPreview": {
     "label": "Anteprima",
