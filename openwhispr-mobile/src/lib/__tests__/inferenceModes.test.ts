@@ -178,3 +178,17 @@ describe('getInferenceModes', () => {
     expect(getInferenceModes('speech').map((mode) => mode.mode)).toEqual(['openwhispr', 'local']);
   });
 });
+
+it('switches dictation back to On-Device with the model the user picked', () => {
+  const config = {
+    defaultMode: 'cloud' as const,
+    inference: { dictation: { mode: 'openwhispr' as const } },
+    rememberedInference: {
+      dictation: { local: { mode: 'local' as const, modelId: 'parakeet-v3' } },
+    },
+  };
+  expect(dictationModeConfig(config, 'private').inference?.dictation).toEqual({
+    mode: 'local',
+    modelId: 'parakeet-v3',
+  });
+});

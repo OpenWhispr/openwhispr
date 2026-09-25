@@ -346,7 +346,7 @@ export default function HomeScreen() {
     if (isRecording) return;
 
     if (activeMode === 'providers') {
-      router.push('/(account)/speech-to-text');
+      router.push({ pathname: '/(account)/ai-workflow', params: { scope: 'dictation' } });
       return;
     }
     if (isPrivateMode) {
@@ -553,7 +553,7 @@ export default function HomeScreen() {
                   accessibilityRole: 'button',
                   accessibilityState: { disabled: isRecording },
                   accessibilityLabel: 'Transcription: Bring Your Own Key',
-                  accessibilityHint: 'Opens Speech to Text settings.',
+                  accessibilityHint: 'Opens Dictation settings.',
                 }
               : {
                   accessibilityRole: 'switch',
