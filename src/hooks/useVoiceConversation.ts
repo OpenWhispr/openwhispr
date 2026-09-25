@@ -111,6 +111,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const turnRef = useRef<TurnMetrics | null>(null);
   const cancelRef = useRef<(() => void) | null>(null);
+  const startGenerationRef = useRef(0);
   const onUserTurnRef = useRef(onUserTurn);
   onUserTurnRef.current = onUserTurn;
   const onErrorRef = useRef(onError);
@@ -284,6 +285,8 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
   }, [api]);
 
   const stop = useCallback(async () => {
+    // A start() still awaiting sees the new generation and backs out.
+    startGenerationRef.current += 1;
     if (!activeRef.current && !micRef.current) return;
     bargeIn();
     activeRef.current = false;
@@ -301,6 +304,17 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
   const start = useCallback(async (harness = false) => {
     if (activeRef.current || !api) return;
     activeRef.current = true;
+    // stop() (hotkey, Esc, unmount) can land during any await below; it has already
+    // reset state, so a stale start only undoes what it opened itself.
+    const generation = ++startGenerationRef.current;
+    const isStale = () => startGenerationRef.current !== generation;
+    let sessionStarted = false;
+    let mic: MicStream | null = null;
+    const abandon = async () => {
+      await mic?.stop().catch(() => {});
+      // Main keeps one session; a newer start() that is already active owns it now.
+      if (sessionStarted && !activeRef.current) await api.stop().catch(() => {});
+    };
     harnessRef.current = harness;
     setHarnessActive(harness);
     setState("starting");
@@ -319,6 +333,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         language: harness ? "en" : settings.preferredLanguage,
         brain,
       });
+      if (isStale()) return;
       // `readiness.ready === false`, not `!readiness.ready`: negation narrowing doesn't
       // discriminate this union in TS, so `readiness.reason` stays unresolved otherwise.
       if (readiness.ready === false) {
@@ -337,6 +352,12 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         brainModel: brainOverride || voiceModel.model,
         harness,
       });
+      sessionStarted = true;
+      if (isStale()) {
+        await abandon();
+        return;
+      }
+      // stop() closes this player if it lands while the mic is opening.
       playerRef.current = createPcmPlayer({
         // Pocket synthesizes at 24 kHz.
         sampleRate: info.sampleRate || 24000,
@@ -350,7 +371,7 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
       // The harness plays synthesized speech into the VAD instead of the mic.
       let frames = 0;
       let peak = 0;
-      micRef.current = harness ? null : await startMicStream({
+      mic = harness ? null : await startMicStream({
         deviceId: settings.selectedMicDeviceId || null,
         onFrame: (frame) => {
           frames += 1;
@@ -363,6 +384,11 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
           api.sendMic(frame);
         },
       });
+      if (isStale()) {
+        await abandon();
+        return;
+      }
+      micRef.current = mic;
       setState("listening");
       logger.info("Voice conversation started", info, "voice-conversation");
 
@@ -394,6 +420,12 @@ export function useVoiceConversation({ onUserTurn, onError }: VoiceConversationO
         }
       }, SESSION_TICK_MS);
     } catch (error) {
+      // Cancelled mid-start: not an error for the user, and stop() here could end
+      // a newer session.
+      if (isStale()) {
+        await abandon();
+        return;
+      }
       const failure = error as DOMException & { constraint?: string };
       const message =
         failure?.message || [failure?.name, failure?.constraint].filter(Boolean).join(": ") || String(error);
