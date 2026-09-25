@@ -98,6 +98,7 @@ class WindowManager {
     this._dictationInputKind = DICTATION_INPUT_KIND.DICTATION;
     this._assistantPanelOpen = false;
     this._assistantPanelBusy = false;
+    this._voiceConversationActive = false;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
 
@@ -228,6 +229,19 @@ class WindowManager {
 
   setAssistantPanelBusy(busy) {
     this._assistantPanelBusy = Boolean(busy);
+  }
+
+  // A hands-free voice session holds the mic like a dictation recording: meeting
+  // detection stays quiet, and dictation waits for it (_shouldBlockDictationInput).
+  setVoiceConversationActive(active) {
+    this._voiceConversationActive = Boolean(active);
+    this._syncMeetingDetectionUserRecording();
+  }
+
+  _syncMeetingDetectionUserRecording() {
+    this.meetingDetectionEngine?.setUserRecording(
+      this._isDictatingToggle || this._voiceConversationActive
+    );
   }
 
   setMainWindowInteractivity(shouldCapture) {
@@ -888,7 +902,11 @@ class WindowManager {
       assistantPanelBusy: this._assistantPanelBusy,
       inputKind,
       companionAvailable: this._isAgentDictationPillAvailable(),
+      // A dictation already recording stays stoppable if a voice session began after it.
+      voiceConversationActive: this._voiceConversationActive && !this._isDictatingToggle,
     });
+    // A voice session blocks dictation on purpose; there is no companion to re-kick.
+    if (this._voiceConversationActive) return blocked;
     // A dictation press that lost to a missing companion re-kicks its load
     // (a companion mid-load is left alone), so the surface can come back and
     // the next press can land.
@@ -921,6 +939,12 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      if (this._voiceConversationActive) {
+        // The press stops the voice session: there is no dictation to show, no mic
+        // to warm up and no paste target to capture.
+        this.mainWindow.webContents.send(channel);
+        return;
+      }
       const isStarting = !this._isDictatingToggle;
       // Capture the paste target and any selection on every toggle press,
       // before the overlay steals focus — the paste can't refocus the target
@@ -961,7 +985,7 @@ class WindowManager {
     this._dictationLifecycleState = nextState;
     this._dictationInputKind = nextInputKind;
     this._isDictatingToggle = isDictationRecording(nextState);
-    this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
+    this._syncMeetingDetectionUserRecording();
     this._sendAgentDictationPillState();
     this.onDictationStateChanged?.();
   }

@@ -17,20 +17,31 @@ const { createDownloadSignal } = require("./downloadUtils");
 // Local voice conversation: the renderer streams echo-cancelled 16 kHz mic frames in;
 // the worker's VAD + Smart Turn cut turns, Parakeet transcribes them here, and Pocket
 // TTS audio streams back out. Gated in the renderer by the voiceConversationEnabled setting.
-function registerVoiceConversationIpc({ parakeetManager, getMeetingDetectionEngine }) {
+function registerVoiceConversationIpc({ parakeetManager, onSessionActiveChange }) {
   let sender = null;
   let session = null;
+  let detachSessionRenderer = null;
 
-  // A hands-free session holds the mic open; treat it like a dictation recording
-  // so meeting detection doesn't prompt "meeting detected" about our own session.
-  const setRecording = (active) => {
-    try {
-      getMeetingDetectionEngine?.()?.setUserRecording(active);
-    } catch (error) {
-      debugLogger.warn("voice conversation could not update meeting detection", {
-        error: error?.message,
-      });
-    }
+  // One way out of a session, whoever ends it: the renderer's stop, a worker crash,
+  // or the renderer reloading or crashing. The last never reaches stop, and a session
+  // left set would block dictation (onSessionActiveChange) until the app restarts.
+  const endSession = () => {
+    detachSessionRenderer?.();
+    detachSessionRenderer = null;
+    if (!session) return;
+    session = null;
+    onSessionActiveChange?.(false);
+  };
+
+  const beginSession = (nextSession, webContents) => {
+    detachSessionRenderer?.();
+    session = nextSession;
+    onSessionActiveChange?.(true);
+    const rendererEvents = ["did-navigate", "render-process-gone", "destroyed"];
+    for (const name of rendererEvents) webContents.once(name, endSession);
+    detachSessionRenderer = () => {
+      for (const name of rendererEvents) webContents.removeListener(name, endSession);
+    };
   };
   let configuredKey = null;
   let configuredSampleRate = null;
@@ -76,7 +87,10 @@ function registerVoiceConversationIpc({ parakeetManager, getMeetingDetectionEngi
 
   voiceWorker.on("exit", ({ code }) => {
     configuredKey = null;
-    if (session) send({ type: "error", stage: "worker", message: `voice worker exited (${code})` });
+    if (!session) return;
+    // Mic frames would otherwise go nowhere while the renderer keeps listening.
+    endSession();
+    send({ type: "error", stage: "worker", message: `voice worker exited (${code})` });
   });
 
   // End-to-end harness: the renderer reports each finished turn; the runner
@@ -85,9 +99,8 @@ function registerVoiceConversationIpc({ parakeetManager, getMeetingDetectionEngi
   ipcMain.handle("voice-conversation:harness-enabled", () => harnessEnabled);
   // Local model id that answers voice turns instead of the Voice Assistant setting,
   // so harness comparisons neither depend on nor change the user's settings.
-  ipcMain.handle(
-    "voice-conversation:brain-override",
-    () => (process.env.OPENWHISPR_VOICE_HARNESS_BRAIN || "").trim() || null
+  ipcMain.handle("voice-conversation:brain-override", () =>
+    harnessEnabled ? (process.env.OPENWHISPR_VOICE_HARNESS_BRAIN || "").trim() || null : null
   );
   ipcMain.on("voice-conversation:turn-report", (_event, report) =>
     conversationEvents.emit("turn-report", report)
@@ -113,28 +126,37 @@ function registerVoiceConversationIpc({ parakeetManager, getMeetingDetectionEngi
     if (!voiceModels.getVoiceModelStatus().ready) throw new Error("voice-models-missing");
     const config = buildVoiceWorkerConfig({ modelPaths: voiceModels.getVoiceModelPaths() });
     const configKey = JSON.stringify([config.vad.sileroVad.model, config.smartTurn]);
-    let loadMs = 0;
-    let sampleRate = configuredSampleRate;
-    if (configuredKey !== configKey || !voiceWorker.running) {
-      const result = await voiceWorker.request("configure", config);
-      configuredKey = configKey;
-      configuredSmartTurn = result.smartTurn;
-      loadMs = result.loadMs;
-      sampleRate = result.sampleRate;
-      configuredSampleRate = result.sampleRate;
-    } else {
-      voiceWorker.notify("vad-reset", {});
-    }
-    setRecording(true);
-    session = {
+    // The session begins before the worker loads, so dictation is already held off
+    // while it does; a stop during the load ends it and wins.
+    const starting = {
       parakeetModel: resolveVoiceParakeetModel(options.parakeetModel, (name) =>
         parakeetManager.isModelDownloaded(name)
       ),
       language: options.language,
-      sampleRate,
+      sampleRate: configuredSampleRate,
       brainModel: options.brainModel,
       harness: !!options.harness,
     };
+    beginSession(starting, event.sender);
+    let loadMs = 0;
+    if (configuredKey !== configKey || !voiceWorker.running) {
+      let result;
+      try {
+        result = await voiceWorker.request("configure", config);
+      } catch (error) {
+        if (session === starting) endSession();
+        throw error;
+      }
+      configuredKey = configKey;
+      configuredSmartTurn = result.smartTurn;
+      loadMs = result.loadMs;
+      starting.sampleRate = result.sampleRate;
+      configuredSampleRate = result.sampleRate;
+    } else {
+      voiceWorker.notify("vad-reset", {});
+    }
+    const { sampleRate } = starting;
+    if (session !== starting) return { sampleRate, loadMs, smartTurn: configuredSmartTurn };
     conversationEvents.emit("session-started", session);
     // Warm Parakeet now: a cold server start (~3 s) would otherwise land on the first turn.
     parakeetManager.startServer(session.parakeetModel, session.language).catch((error) => {
@@ -227,8 +249,7 @@ function registerVoiceConversationIpc({ parakeetManager, getMeetingDetectionEngi
   );
 
   ipcMain.handle("voice-conversation:stop", () => {
-    if (session) setRecording(false);
-    session = null;
+    endSession();
     voiceWorker.notify("vad-reset", {});
     return { stopped: true };
   });

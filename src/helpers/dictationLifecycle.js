@@ -48,7 +48,12 @@ function shouldBlockDictationWhilePanelOpen({
   assistantPanelBusy = false,
   inputKind = "dictation",
   companionAvailable = true,
+  voiceConversationActive = false,
 }) {
+  // A hands-free voice session owns the mic, so dictation and translation wait
+  // for it to end. The Voice Assistant hotkey always gets through, even while an
+  // answer is being generated, because pressing it is how the session stops.
+  if (voiceConversationActive) return inputKind !== "assistant";
   // Plain dictation renders on the opposite-edge companion pill, which only
   // exists while the panel is open. A busy assistant that has not opened its
   // panel yet (the pre-open thinking flourish) leaves no surface that could
