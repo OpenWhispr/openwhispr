@@ -46,6 +46,7 @@ import { TranscriptModal } from '@/components/features/TranscriptModal';
 import { RecordingOverlay } from '@/components/features/RecordingOverlay';
 import { ParakeetNudgeBanner } from '@/components/features/ParakeetNudgeBanner';
 import { KeyboardFullAccessBanner } from '@/components/features/KeyboardFullAccessBanner';
+import { HardwareKeyboardNudgeBanner } from '@/components/features/HardwareKeyboardNudgeBanner';
 import { SwipeableCard } from '@/components/ui/SwipeableCard';
 import { Glass } from '@/components/ui/Glass';
 import { CloudIcon } from '@/components/ui/CloudIcon';
@@ -587,6 +588,7 @@ export default function HomeScreen() {
           <DictationModeControl onModeChange={handleDictationModeChange} />
         </View>
         <KeyboardFullAccessBanner />
+        <HardwareKeyboardNudgeBanner />
         {activeMode === 'cloud' ? (
           <UsageLimitBanner usage={usage} onPress={handleUsageWarningPress} />
         ) : null}
