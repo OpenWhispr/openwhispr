@@ -20,6 +20,7 @@ import {
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription.js";
 import {
+  acceptsUnlistedTranscriptionModel,
   isTranscriptionSelectionAllowed,
   type PolicyDecisionSnapshot,
 } from "../stores/policyRules.ts";
@@ -232,7 +233,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       // Every OpenRouter id is vendor-prefixed, so the slash is what tells a
       // real selection apart from one left behind by another provider. Models
       // outside our curated list pass through deliberately.
-      (provider === "openrouter" && trimmed.includes("/")) ||
+      acceptsUnlistedTranscriptionModel(provider, trimmed) ||
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
       (provider === "gemini" && trimmed.startsWith("gemini-")) ||

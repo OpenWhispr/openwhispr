@@ -41,10 +41,16 @@ function find(node, predicate) {
   return find(node.props?.children, predicate);
 }
 
-// Custom endpoints pointed at OpenRouter predate the OpenRouter tab. Leaving the
-// endpoint field must not move them onto it: that swaps their model, reads a
-// different key slot and drops the WAV re-encode only Custom applies.
-test("leaving a Custom endpoint set to OpenRouter keeps the Custom setup", async (t) => {
+const key = (context, name) =>
+  context === "upload" ? `upload${name[0].toUpperCase()}${name.slice(1)}` : name;
+const setter = (context, name) => {
+  const field = key(context, name);
+  return `set${field[0].toUpperCase()}${field.slice(1)}`;
+};
+
+// Mounts the picker for one scope, wired to the real settings store the way
+// the Settings page wires it; returns its element tree and an unmount.
+async function loadPicker(t) {
   installBrowserGlobals(t, { window: { location: { search: "" }, electronAPI: electronApi() } });
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-picker-custom-openrouter-",
@@ -58,62 +64,99 @@ test("leaving a Custom endpoint set to OpenRouter keeps the Custom setup", async
   const { default: Picker } = await vite.ssrLoadModule("/components/TranscriptionModelPicker.tsx");
   const { ToastContext } = await vite.ssrLoadModule("/components/ui/useToast.ts");
 
-  for (const context of ["dictation", "upload"]) {
-    const key = (name) =>
-      context === "upload" ? `upload${name[0].toUpperCase()}${name.slice(1)}` : name;
-    const setter = (name) => `set${key(name)[0].toUpperCase()}${key(name).slice(1)}`;
-    useSettingsStore.setState({
-      useLocalWhisper: false,
-      cloudTranscriptionMode: "byok",
-      [key("cloudTranscriptionProvider")]: "custom",
-      [key("cloudTranscriptionModel")]: "microsoft/mai-transcribe-2",
-      [key("cloudTranscriptionBaseUrl")]: OPENROUTER_URL,
-    });
-
+  const mount = async (context) => {
     let tree;
     function Harness() {
       const s = useSettingsStore();
       tree = Picker({
         transcriptionContext: context,
-        selectedCloudProvider: s[key("cloudTranscriptionProvider")],
-        onCloudProviderSelect: s[setter("cloudTranscriptionProvider")],
-        selectedCloudModel: s[key("cloudTranscriptionModel")],
-        onCloudModelSelect: s[setter("cloudTranscriptionModel")],
+        selectedCloudProvider: s[key(context, "cloudTranscriptionProvider")],
+        onCloudProviderSelect: s[setter(context, "cloudTranscriptionProvider")],
+        selectedCloudModel: s[key(context, "cloudTranscriptionModel")],
+        onCloudModelSelect: s[setter(context, "cloudTranscriptionModel")],
         selectedLocalModel: "",
         onLocalModelSelect: noop,
         useLocalWhisper: false,
         onModeChange: noop,
         mode: "cloud",
-        cloudTranscriptionBaseUrl: s[key("cloudTranscriptionBaseUrl")],
-        setCloudTranscriptionBaseUrl: s[setter("cloudTranscriptionBaseUrl")],
+        cloudTranscriptionBaseUrl: s[key(context, "cloudTranscriptionBaseUrl")],
+        setCloudTranscriptionBaseUrl: s[setter(context, "cloudTranscriptionBaseUrl")],
         variant: "settings",
       });
       return null;
     }
-
     const root = createRoot(container);
+    await React.act(async () => {
+      root.render(
+        React.createElement(
+          ToastContext.Provider,
+          { value: { toast: noop } },
+          React.createElement(Harness)
+        )
+      );
+    });
+    return { tree: () => tree, unmount: () => React.act(async () => root.unmount()) };
+  };
+  return { useSettingsStore, mount };
+}
+
+// Custom endpoints pointed at OpenRouter predate the OpenRouter tab. Leaving the
+// endpoint field must not move them onto it: that swaps their model, reads a
+// different key slot and drops the WAV re-encode only Custom applies.
+test("leaving a Custom endpoint set to OpenRouter keeps the Custom setup", async (t) => {
+  const { useSettingsStore, mount } = await loadPicker(t);
+  for (const context of ["dictation", "upload"]) {
+    useSettingsStore.setState({
+      useLocalWhisper: false,
+      cloudTranscriptionMode: "byok",
+      [key(context, "cloudTranscriptionProvider")]: "custom",
+      [key(context, "cloudTranscriptionModel")]: "microsoft/mai-transcribe-2",
+      [key(context, "cloudTranscriptionBaseUrl")]: OPENROUTER_URL,
+    });
+
+    const picker = await mount(context);
     try {
-      await React.act(async () => {
-        root.render(
-          React.createElement(
-            ToastContext.Provider,
-            { value: { toast: noop } },
-            React.createElement(Harness)
-          )
-        );
-      });
       const urlInput = find(
-        tree,
+        picker.tree(),
         (props) => typeof props.onBlur === "function" && props.value === OPENROUTER_URL
       );
       assert.ok(urlInput, `${context}: the Custom endpoint field renders`);
       await React.act(async () => urlInput.props.onBlur());
 
       const state = useSettingsStore.getState();
-      assert.equal(state[key("cloudTranscriptionProvider")], "custom", context);
-      assert.equal(state[key("cloudTranscriptionModel")], "microsoft/mai-transcribe-2", context);
+      assert.equal(state[key(context, "cloudTranscriptionProvider")], "custom", context);
+      assert.equal(
+        state[key(context, "cloudTranscriptionModel")],
+        "microsoft/mai-transcribe-2",
+        context
+      );
     } finally {
-      await React.act(async () => root.unmount());
+      await picker.unmount();
     }
+  }
+});
+
+// OpenRouter's catalog moves faster than our releases, so the store and the
+// request resolver keep a vendor-prefixed id the shortlist does not list.
+// Opening Settings reset it anyway: the picker checked the registry alone and
+// saved its correction.
+test("opening Settings keeps an OpenRouter model outside the shortlist", async (t) => {
+  const { useSettingsStore, mount } = await loadPicker(t);
+  for (const context of ["dictation", "upload"]) {
+    useSettingsStore.setState({
+      useLocalWhisper: false,
+      cloudTranscriptionMode: "byok",
+      [key(context, "cloudTranscriptionProvider")]: "openrouter",
+      [key(context, "cloudTranscriptionModel")]: "qwen/qwen3-asr-flash-2026-02-10",
+    });
+
+    const picker = await mount(context);
+    await picker.unmount();
+
+    assert.equal(
+      useSettingsStore.getState()[key(context, "cloudTranscriptionModel")],
+      "qwen/qwen3-asr-flash-2026-02-10",
+      context
+    );
   }
 });

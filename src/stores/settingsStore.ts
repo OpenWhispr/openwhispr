@@ -39,6 +39,7 @@ import { recordTinfoilModelSwitch } from "./tinfoilModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
+  acceptsUnlistedTranscriptionModel,
   getTranscriptionSelection,
   isScreenContextAllowed,
   resolveEffectivePolicySelection,
@@ -138,10 +139,9 @@ function transcriptionModelBelongsToProvider(
   context: TranscriptionPolicyContext
 ): boolean {
   if (providerId === "custom") return Boolean(modelId);
-  // OpenRouter's STT catalog moves faster than our shortlist, so a stored
-  // vendor-prefixed id outlives the registry entry rather than being reset on
-  // the next tab switch. Same rule resolveByokModel applies at request time.
-  if (providerId === "openrouter") return modelId.includes("/");
+  // A stored vendor-prefixed OpenRouter id outlives its registry entry rather
+  // than being reset on the next tab switch.
+  if (acceptsUnlistedTranscriptionModel(providerId, modelId)) return true;
   return transcriptionProviderModels(providerId, context).some((model) => model.id === modelId);
 }
 
