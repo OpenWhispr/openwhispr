@@ -69,6 +69,17 @@ export function isOpenRouterEndpoint(endpoint: string | null | undefined): boole
   return matchesHost(endpoint, "openrouter.ai");
 }
 
+// Audio Uploads to OpenRouter go out in 4-minute pieces (openRouterChunkedUpload.js):
+// its upstream providers stop after ~60 s of work per request. Self-hosted
+// servers set their own limits and never match.
+export function uploadsInChunks(route: TranscriptionRoute): boolean {
+  return (
+    route.transport === "http-batch" &&
+    route.provider !== "self-hosted" &&
+    isOpenRouterEndpoint(route.endpoint)
+  );
+}
+
 // OpenRouter answers 402 once the account's prepaid credit is spent, and its
 // JSON body would otherwise become the error text.
 export function batchTranscriptionHttpError(

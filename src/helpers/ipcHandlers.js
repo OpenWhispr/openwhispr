@@ -184,6 +184,9 @@ const AUTO_LEARN_DEBOUNCE_MS = 1500;
 // the message reports the cap that actually applied.
 const byokSizeCapError = (sizeCapBytes) =>
   `File too large. Maximum size for bring-your-own-key is ${Math.floor(sizeCapBytes / (1024 * 1024))} MB.`;
+// Shared by the single-request upload and OpenRouter's piece-by-piece upload.
+const BYOK_INVALID_KEY_ERROR = "Invalid API key. Check your key in Settings.";
+const BYOK_RATE_LIMITED_ERROR = "Rate limit exceeded. Please try again later.";
 
 const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
 // The enterprise "Test Connection" probe only needs one word back, but the
@@ -215,6 +218,7 @@ const {
   createUploadSlots,
   withoutChunkAnalytics,
 } = require("./cloudChunkPolicy");
+const { transcribeOpenRouterChunks } = require("./openRouterChunkedUpload");
 
 // Chunk retries need their own connection pool: recovering a wedged chunk pool
 // must not abort an unrelated inline upload that has no collateral retry path.
@@ -9948,8 +9952,9 @@ class IPCHandlers {
       }
     });
 
-    // Unknown ids are a no-op: BYOK providers don't register a controller,
-    // and the renderer fires this for every cancel.
+    // Unknown ids are a no-op: of the BYOK providers only OpenRouter's
+    // piece-by-piece upload registers a controller, and the renderer fires this
+    // for every cancel.
     ipcMain.handle("cancel-upload-transcription", async (_event, requestId) => {
       return { success: this._uploadCancelRegistry.cancel(requestId) > 0 };
     });
@@ -9973,6 +9978,7 @@ class IPCHandlers {
           remoteTranscriptionUrl,
           remoteTranscriptionModel,
           managed,
+          requestId,
         }
       ) => {
         const fs = require("fs");
@@ -9984,7 +9990,7 @@ class IPCHandlers {
           const sourcePath = resolveAllowedAudioPath(filePath);
           if (!sourcePath) return { success: false, error: "File path not allowed" };
 
-          const { resolveTranscriptionRoute, batchTranscriptionHttpError } =
+          const { resolveTranscriptionRoute, batchTranscriptionHttpError, uploadsInChunks } =
             await import("./transcriptionRoute.ts");
           const route = resolveTranscriptionRoute({
             settings: {
@@ -10010,6 +10016,71 @@ class IPCHandlers {
               code: route.code,
               messageKey: route.messageKey,
             };
+          }
+
+          // OpenRouter's upstream providers stop after ~60 s of work per request,
+          // so its uploads go out in 4-minute pieces, cut straight from the source
+          // with any video dropped. The whole-file cap below never applies.
+          if (uploadsInChunks(route)) {
+            if (!apiKey && route.provider !== "custom") {
+              throw new Error("No API key configured. Add your key in Settings.");
+            }
+            const { signal, release } = this._uploadCancelRegistry.register(requestId);
+            const url = new URL(route.endpoint);
+            const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined;
+            try {
+              const { text, warning, failedChunks, totalChunks } = await transcribeOpenRouterChunks(
+                {
+                  inputPath: sourcePath,
+                  split: require("./ffmpegUtils").splitAudioFile,
+                  transcribeChunk: async (chunkPath, attemptSignal) => {
+                    const { body, boundary } = buildMultipartBody(
+                      fs.readFileSync(chunkPath),
+                      path.basename(chunkPath),
+                      "audio/mpeg",
+                      { model: route.model }
+                    );
+                    const data = await postMultipart(url, body, boundary, headers, {
+                      signal: attemptSignal,
+                    });
+                    if (data.statusCode === 200) return { text: data.data?.text ?? "" };
+                    debugLogger.warn("OpenRouter upload piece failed", {
+                      piece: path.basename(chunkPath),
+                      status: data.statusCode,
+                    });
+                    throw Object.assign(
+                      new Error(
+                        data.statusCode === 401
+                          ? BYOK_INVALID_KEY_ERROR
+                          : data.statusCode === 429
+                            ? BYOK_RATE_LIMITED_ERROR
+                            : data.data?.error?.message ||
+                              data.data?.error ||
+                              `API error: ${data.statusCode}`
+                      ),
+                      { statusCode: data.statusCode },
+                      batchTranscriptionHttpError(data.statusCode, route.endpoint)
+                    );
+                  },
+                  onProgress: (payload) =>
+                    event.sender.send("upload-transcription-progress", payload),
+                  signal,
+                }
+              );
+              return {
+                success: true,
+                text,
+                ...(warning ? { warning, failedChunks, totalChunks } : {}),
+              };
+            } catch (error) {
+              if (signal?.aborted) {
+                debugLogger.debug("OpenRouter upload cancelled", { requestId });
+                return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+              }
+              throw error;
+            } finally {
+              release();
+            }
           }
 
           const upload = await prepareProviderUpload(sourcePath);
@@ -10167,10 +10238,10 @@ class IPCHandlers {
           const data = await postMultipart(url, body, boundary, headers);
 
           if (data.statusCode === 401) {
-            return { success: false, error: "Invalid API key. Check your key in Settings." };
+            return { success: false, error: BYOK_INVALID_KEY_ERROR };
           }
           if (data.statusCode === 429) {
-            return { success: false, error: "Rate limit exceeded. Please try again later." };
+            return { success: false, error: BYOK_RATE_LIMITED_ERROR };
           }
           if (data.statusCode !== 200) {
             throw Object.assign(

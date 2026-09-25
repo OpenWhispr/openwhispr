@@ -70,6 +70,23 @@ const CONVERTED_WAV = Buffer.concat([WAV_BUFFER, Buffer.from("converted")]);
 const wavConversions = [];
 let convertBehavior = async () => CONVERTED_WAV;
 
+// ffmpeg's segmenter, faked: writes `count` one-byte pieces where it is told.
+// A short upload is one piece, so OpenRouter upload tests written before
+// chunking still make exactly one request.
+const splitCalls = [];
+const piecesOf = (count) => async (_inputPath, outputDir) => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const chunkPaths = [];
+  for (let i = 0; i < count; i++) {
+    const piece = path.join(outputDir, `chunk-${String(i).padStart(3, "0")}.mp3`);
+    fs.writeFileSync(piece, Buffer.from([i]));
+    chunkPaths.push(piece);
+  }
+  return { chunkPaths, durationSeconds: count * 240 };
+};
+let splitBehavior = piecesOf(1);
+
 const cortiCalls = [];
 const tinfoilCalls = [];
 let cortiBehavior = async () => ({ text: "corti text" });
@@ -107,6 +124,10 @@ Module._load = function loadWithMocks(request, parent, isMain) {
           wavConversions.push(buffer);
           return convertBehavior(buffer, options);
         },
+        splitAudioFile: (inputPath, outputDir, options) => {
+          splitCalls.push({ inputPath, outputDir, options });
+          return splitBehavior(inputPath, outputDir, options);
+        },
       };
     }
   }
@@ -133,6 +154,10 @@ function buildFakeThis() {
   ]);
   const target = {
     sessionId: "test-session",
+    // The real registry: the upload handler registers OpenRouter uploads in it,
+    // and the fallback proxy would hand back a fake "signal" that looks aborted.
+    _uploadCancelRegistry: require("../../src/helpers/uploadCancelRegistry")
+      .createUploadCancelRegistry(),
     audioStorageManager: {
       // 7 is a stored WebM recording, 8 one already in WAV.
       getAudioBuffer: (id) => (id === 7 ? Buffer.from([1, 2, 3]) : id === 8 ? WAV_BUFFER : null),
@@ -429,11 +454,15 @@ const pathNode = require("node:path");
 
 const uploadTempFile = pathNode.join(osNode.tmpdir(), "openwhispr-upload-handler-test.webm");
 
-const invokeUpload = (payload) => {
+const progressEvents = [];
+const invokeUpload = (payload, bytes = Buffer.from([1, 2, 3, 4])) => {
   const uploadHandler = handlers.get("transcribe-audio-file-byok");
   assert.ok(uploadHandler, "transcribe-audio-file-byok must be registered");
-  fsNode.writeFileSync(uploadTempFile, Buffer.from([1, 2, 3, 4]));
-  return uploadHandler({ sender: {} }, { filePath: uploadTempFile, ...payload });
+  fsNode.writeFileSync(uploadTempFile, bytes);
+  return uploadHandler(
+    { sender: { send: (channel, data) => progressEvents.push({ channel, data }) } },
+    { filePath: uploadTempFile, ...payload }
+  );
 };
 
 test("upload: mistral sends x-api-key with a provider-validated model and no language on auto", async () => {
@@ -668,4 +697,116 @@ test("retry and upload read an OpenRouter 402 as out of credits", async () => {
   } finally {
     fetchResponse = previousResponse;
   }
+});
+
+const okReply = (text) => ({
+  ok: true,
+  status: 200,
+  json: async () => ({ text }),
+  text: async () => JSON.stringify({ text }),
+});
+const OPENROUTER_UPLOAD = {
+  apiKey: "ork-openrouter",
+  baseUrl: "",
+  model: "google/chirp-3",
+  provider: "openrouter",
+  language: "",
+  transcriptionMode: "providers",
+};
+// 26 MB: over the 25 MB a single OpenRouter request may carry.
+const OVER_ONE_REQUEST = Buffer.alloc(26 * 1024 * 1024);
+
+async function until(predicate) {
+  for (let i = 0; i < 200 && !predicate(); i++) await new Promise((r) => setImmediate(r));
+  assert.ok(predicate(), "condition never became true");
+}
+
+async function withReplies(reply, pieces, run) {
+  const previous = { fetchResponse, splitBehavior };
+  fetches.length = 0;
+  splitCalls.length = 0;
+  progressEvents.length = 0;
+  fetchResponse = reply;
+  splitBehavior = piecesOf(pieces);
+  try {
+    return await run();
+  } finally {
+    ({ fetchResponse, splitBehavior } = previous);
+  }
+}
+
+test("upload: a 30-minute OpenRouter file goes out in 4-minute pieces, comes back whole", async () => {
+  let n = 0;
+  await withReplies(() => okReply(`part ${++n}`), 8, async () => {
+    const result = await invokeUpload(OPENROUTER_UPLOAD, OVER_ONE_REQUEST);
+    assert.equal(result.success, true, result.error);
+    assert.equal(result.text, "part 1 part 2 part 3 part 4 part 5 part 6 part 7 part 8");
+    assert.equal(splitCalls[0].options.segmentDuration, 240);
+    assert.equal(fetches.length, 8);
+    fetches.forEach((f, i) => {
+      assert.equal(f.url, "https://openrouter.ai/api/v1/audio/transcriptions");
+      assert.equal(f.init.headers.Authorization, "Bearer ork-openrouter");
+      const body = f.init.body.toString("latin1");
+      assert.match(body, new RegExp(`filename="chunk-00${i}\\.mp3"`));
+      assert.match(body, /name="model"\r\n\r\ngoogle\/chirp-3\r\n/);
+      assert.doesNotMatch(body, /name="(language|prompt)"/);
+    });
+    assert.deepEqual(progressEvents.at(-1), {
+      channel: "upload-transcription-progress",
+      data: { stage: "transcribing", chunksTotal: 8, chunksCompleted: 8 },
+    });
+  });
+});
+
+test("upload: a Custom endpoint on OpenRouter is sent in pieces with its own key and model", async () => {
+  await withReplies(() => okReply("piece"), 2, async () => {
+    const result = await invokeUpload(
+      {
+        apiKey: "ck-custom",
+        baseUrl: "https://openrouter.ai/api/v1",
+        model: "microsoft/mai-transcribe-2",
+        provider: "custom",
+        language: "",
+        transcriptionMode: "providers",
+      },
+      OVER_ONE_REQUEST
+    );
+    assert.equal(result.success, true, result.error);
+    assert.equal(fetches.length, 2);
+    assert.equal(fetches[0].init.headers.Authorization, "Bearer ck-custom");
+    assert.match(
+      fetches[0].init.body.toString("latin1"),
+      /name="model"\r\n\r\nmicrosoft\/mai-transcribe-2\r\n/
+    );
+  });
+});
+
+test("upload: running out of OpenRouter credits mid-upload sends no further pieces", async () => {
+  let n = 0;
+  const reply = () => (++n === 2 ? outOfCreditsResponse() : okReply(`part ${n}`));
+  await withReplies(reply, 5, async () => {
+    const result = await invokeUpload(OPENROUTER_UPLOAD);
+    assert.equal(result.success, false);
+    assert.equal(result.code, OUT_OF_CREDITS.code);
+    assert.equal(result.messageKey, OUT_OF_CREDITS.messageKey);
+    assert.equal(fetches.length, 2);
+  });
+});
+
+test("upload: cancelling an OpenRouter upload stops at the piece in flight", async () => {
+  const hang = (_url, init) =>
+    new Promise((_resolve, reject) => {
+      init.signal.addEventListener("abort", () =>
+        reject(Object.assign(new Error("Aborted"), { name: "AbortError" }))
+      );
+    });
+  await withReplies(hang, 8, async () => {
+    const pending = invokeUpload({ ...OPENROUTER_UPLOAD, requestId: "upload-cancel-1" });
+    await until(() => fetches.length === 1);
+    const cancel = await handlers.get("cancel-upload-transcription")({}, "upload-cancel-1");
+    assert.equal(cancel.success, true, "the upload registered for cancel");
+    const result = await pending;
+    assert.equal(result.code, "UPLOAD_CANCELLED");
+    assert.equal(fetches.length, 1);
+  });
 });

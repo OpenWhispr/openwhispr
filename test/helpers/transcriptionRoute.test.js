@@ -389,6 +389,32 @@ test("OpenRouter is recognised by its host, not by a lookalike", async () => {
   assert.equal(isOpenRouterEndpoint(""), false);
 });
 
+test("OpenRouter uploads go out in pieces, from its tab or a Custom endpoint", async () => {
+  const { uploadsInChunks } = await load();
+  const tab = await resolve({
+    cloudTranscriptionProvider: "openrouter",
+    cloudTranscriptionModel: "google/chirp-3",
+  });
+  const custom = await resolve({
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionBaseUrl: "https://openrouter.ai/api/v1",
+  });
+  assert.equal(uploadsInChunks(tab), true, "OpenRouter tab");
+  assert.equal(uploadsInChunks(custom), true, "Custom endpoint on OpenRouter");
+  for (const settings of [
+    { cloudTranscriptionProvider: "openai" },
+    { cloudTranscriptionProvider: "groq" },
+    {
+      cloudTranscriptionProvider: "custom",
+      cloudTranscriptionBaseUrl: "https://gateway.example.com/v1",
+    },
+    { transcriptionMode: "self-hosted", remoteTranscriptionUrl: "https://openrouter.ai/api/v1" },
+    { cloudTranscriptionProvider: "deepgram" },
+  ]) {
+    assert.equal(uploadsInChunks(await resolve(settings)), false, JSON.stringify(settings));
+  }
+});
+
 test("managed policy is a fail-closed floor", async () => {
   const blocked = await resolve(
     { transcriptionMode: "providers", cloudTranscriptionProvider: "groq" },
