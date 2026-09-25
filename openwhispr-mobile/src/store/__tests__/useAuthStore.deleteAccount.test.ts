@@ -55,26 +55,30 @@ beforeEach(() => {
   });
 });
 
-it('erases provider keys before deleting the account', async () => {
+it('erases provider keys once the account is deleted', async () => {
   await useAuthStore.getState().deleteAccount();
   expect(mockClearProviderCredentials).toHaveBeenCalledTimes(1);
-  expect(mockClearProviderCredentials.mock.invocationCallOrder[0]).toBeLessThan(
-    mockDeleteAccountApi.mock.invocationCallOrder[0],
+  expect(mockDeleteAccountApi.mock.invocationCallOrder[0]).toBeLessThan(
+    mockClearProviderCredentials.mock.invocationCallOrder[0],
   );
   expect(useAuthStore.getState().user).toBeNull();
 });
 
-it('does not delete the account while provider keys remain on the device', async () => {
-  mockClearProviderCredentials.mockRejectedValue(new Error('Unable to clear provider credentials'));
-  await expect(useAuthStore.getState().deleteAccount()).rejects.toThrow(
-    'Unable to clear provider credentials',
-  );
-  expect(mockDeleteAccountApi).not.toHaveBeenCalled();
+it('keeps provider keys when the account could not be deleted', async () => {
+  mockDeleteAccountApi.mockRejectedValue(new Error('Network request failed'));
+  await expect(useAuthStore.getState().deleteAccount()).rejects.toThrow('Network request failed');
+  expect(mockClearProviderCredentials).not.toHaveBeenCalled();
   expect(useAuthStore.getState()).toMatchObject({
     user: member,
     isLoading: false,
-    error: 'Unable to clear provider credentials',
+    error: 'Network request failed',
   });
+});
+
+it('finishes a completed deletion even if the keys cannot be erased', async () => {
+  mockClearProviderCredentials.mockRejectedValue(new Error('Unable to clear provider credentials'));
+  await useAuthStore.getState().deleteAccount();
+  expect(useAuthStore.getState()).toMatchObject({ user: null, isLoading: false, error: null });
 });
 
 it('keeps provider keys when the user only signs out', async () => {

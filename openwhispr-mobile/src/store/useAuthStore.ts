@@ -188,12 +188,15 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ isLoading: true, error: null });
     await anonymousSignInInFlight?.catch(() => undefined);
     try {
-      // Keys survive sign-out by design, but not account deletion. Erasing them
-      // first means a failure leaves the account intact for a retry.
+      await deleteAccountApi();
+      // Keys survive sign-out by design, but not account deletion. They are erased only
+      // once the account is gone, so a failed delete keeps them. A failed erase leaves
+      // them for Remove all provider keys rather than undoing a completed deletion.
       const { clearProviderCredentials } =
         require('@/services/providers/ProviderCredentials') as typeof import('@/services/providers/ProviderCredentials');
-      await clearProviderCredentials();
-      await deleteAccountApi();
+      await clearProviderCredentials().catch((error: unknown) => {
+        console.warn('[auth] account deleted but provider keys were not erased:', error);
+      });
       await clearSession();
       await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
       useUsageStore.getState().reset();
