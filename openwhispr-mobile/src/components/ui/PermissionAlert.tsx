@@ -75,7 +75,12 @@ export function PermissionAlertMount() {
             </Pressable>
           </View>
           <View className="items-center px-5 pt-1 pb-5">
-            <Text className="text-center text-[17px] font-semibold text-label">{title}</Text>
+            <Text
+              accessibilityRole="header"
+              className="text-center text-[17px] font-semibold text-label"
+            >
+              {title}
+            </Text>
             <Text className="mt-1.5 text-center text-[13px] leading-[18px] text-secondaryLabel">
               {message}
             </Text>

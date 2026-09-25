@@ -12,6 +12,7 @@
     "prebuild:production": "OPENWHISPR_APP_ENV=production expo prebuild",
     "web": "expo start --web",
     "build:ios-return-map": "node scripts/build-ios-return-map.mjs",
+    "download:brand-fonts": "node ../scripts/download-brand-fonts.js --output-dir assets/fonts/yowza",
     "format": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "format:write": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "lint": "eslint \"**/*.{js,jsx,ts,tsx}\"",
@@ -22,7 +23,7 @@
     "pretest": "npm rebuild better-sqlite3",
     "test": "jest",
     "test:watch": "jest --watch",
-    "postinstall": "patch-package",
+    "postinstall": "patch-package && npm run download:brand-fonts",
     "eas-build-pre-install": "bundle install"
   },
   "engines": {

@@ -366,7 +366,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   if (phase === 'unsupported') {
     return (
       <View className="flex-1 gap-4 bg-systemBackground px-6" style={{ paddingTop: headerHeight }}>
-        <Text className="text-2xl font-bold text-label">Not available on this device</Text>
+        <Text accessibilityRole="header" className="text-2xl font-bold text-label">
+          Not available on this device
+        </Text>
         <Text className="text-base text-secondaryLabel">
           Meeting diarization runs on the Apple Neural Engine and needs iOS 17+ in a development or
           production build (not Expo Go or other platforms).
@@ -380,7 +382,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   if (phase === 'needs-model') {
     return (
       <View className="flex-1 gap-4 bg-systemBackground px-6" style={{ paddingTop: headerHeight }}>
-        <Text className="text-2xl font-bold text-label">Download diarization model</Text>
+        <Text accessibilityRole="header" className="text-2xl font-bold text-label">
+          Download diarization model
+        </Text>
         <Text className="text-base text-secondaryLabel">
           A one-time ~100 MB download. Runs fully on-device after that.
         </Text>

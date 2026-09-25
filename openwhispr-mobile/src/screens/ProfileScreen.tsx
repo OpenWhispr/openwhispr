@@ -59,7 +59,10 @@ export default function ProfileScreen() {
           <Text className="text-[28px] font-semibold text-white tracking-tight">{initials}</Text>
         </View>
         <View className="mt-3 flex-row items-center gap-2">
-          <Text className="shrink text-[22px] font-semibold text-label tracking-tight">
+          <Text
+            accessibilityRole="header"
+            className="shrink text-[22px] font-semibold text-label tracking-tight"
+          >
             {displayName}
           </Text>
           {user ? <PlanBadge usage={usage} /> : null}

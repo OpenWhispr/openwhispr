@@ -122,6 +122,7 @@ export function MarkdownRenderer({ content, selectable = false }: MarkdownRender
           return (
             <Text
               key={i}
+              accessibilityRole="header"
               selectable={selectable}
               style={{
                 fontSize: 22,
@@ -140,6 +141,7 @@ export function MarkdownRenderer({ content, selectable = false }: MarkdownRender
           return (
             <Text
               key={i}
+              accessibilityRole="header"
               selectable={selectable}
               style={{
                 fontSize: 18,
@@ -158,6 +160,7 @@ export function MarkdownRenderer({ content, selectable = false }: MarkdownRender
           return (
             <Text
               key={i}
+              accessibilityRole="header"
               selectable={selectable}
               style={{
                 fontSize: 16,

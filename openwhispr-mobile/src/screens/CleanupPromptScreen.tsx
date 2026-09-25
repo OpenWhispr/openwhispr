@@ -16,7 +16,7 @@ import {
 } from '@/config/prompts/registry';
 import { confirmDestructive } from '@/lib/alerts';
 import { safeHaptics } from '@/lib/utils';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 
 // The prompt is re-sent with every cleanup request; ~5x the shipped default
 // is where latency becomes noticeable. A caution, not a cap: the server has
@@ -103,7 +103,7 @@ export default function CleanupPromptScreen() {
               autoCorrect={false}
               spellCheck={false}
               className="min-h-[240px] text-[15px] leading-[22px] text-label"
-              style={{ fontFamily: SpaceGrotesk.regular }}
+              style={{ fontFamily: AppFont.regular }}
             />
           </View>
         </SettingsSection>

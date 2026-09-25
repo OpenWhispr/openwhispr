@@ -90,7 +90,9 @@ export function NoteChatSheet({
           <View className="mb-2 self-center h-1.5 w-9 rounded-full bg-quaternaryLabel" />
           <View className="mb-3 flex-row items-center justify-between">
             <View className="flex-1 pr-3">
-              <Text className="text-[19px] font-bold text-label">Ask about this note</Text>
+              <Text accessibilityRole="header" className="text-[19px] font-bold text-label">
+                Ask about this note
+              </Text>
               <Text className="mt-1 text-[13px] text-secondaryLabel">
                 Answers use only this note. This chat is temporary and won't be saved.
               </Text>

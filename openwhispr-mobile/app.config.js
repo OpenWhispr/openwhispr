@@ -1,5 +1,16 @@
+const fs = require('fs');
+const path = require('path');
 const baseConfig = require('./app.base.json');
 const { resolveOpenWhisprEnvironment } = require('./config/openwhispr-environments');
+
+// Yowza is licensed, so the files are git-ignored and fetched by
+// `npm run download:brand-fonts`. They are embedded in the native binary (never
+// the JS bundle, so OTA updates don't carry them) and src/lib/fonts.ts falls
+// back to Space Grotesk when a build has none.
+const BRAND_FONTS = [
+  'assets/fonts/yowza/yowza-std-regular.otf',
+  'assets/fonts/yowza/yowza-soft-std-medium.otf',
+];
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
@@ -81,6 +92,15 @@ function createEasExtensionConfig(existingExtra, environment) {
   };
 }
 
+function withBrandFonts(plugins) {
+  if (!BRAND_FONTS.every((font) => fs.existsSync(path.join(__dirname, font)))) return plugins;
+  // expo-font is a run-once plugin, so the fonts replace its bare entry; a
+  // second entry would be skipped.
+  return plugins.map((plugin) =>
+    plugin === 'expo-font' ? ['expo-font', { fonts: BRAND_FONTS }] : plugin,
+  );
+}
+
 function createGoogleCalendarConfig(environment) {
   const devClientId = firstNonEmpty(process.env.EXPO_PUBLIC_GOOGLE_CALENDAR_IOS_CLIENT_ID_DEV);
   const prodClientId = firstNonEmpty(process.env.EXPO_PUBLIC_GOOGLE_CALENDAR_IOS_CLIENT_ID);
@@ -125,6 +145,7 @@ module.exports = () => {
       ...expo.android,
       package: environment.androidPackage,
     },
+    plugins: withBrandFonts(expo.plugins),
     extra: {
       ...expo.extra,
       openWhispr: {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PlatformColor, TextInput } from 'react-native';
 import { FormSheet } from '@/components/ui/FormSheet';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
 import { NOTES_BUTTON_RADIUS } from './tokens';
 
@@ -56,7 +56,7 @@ export function NewFolderSheet({ visible, onClose, onCreate }: NewFolderSheetPro
           backgroundColor: PlatformColor('tertiarySystemFill') as unknown as string,
           borderRadius: NOTES_BUTTON_RADIUS,
           borderCurve: 'continuous',
-          fontFamily: SpaceGrotesk.regular,
+          fontFamily: AppFont.regular,
         }}
       />
     </FormSheet>

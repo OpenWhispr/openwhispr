@@ -43,7 +43,7 @@ import { Glass } from '@/components/ui/Glass';
 import { GlassBackButton } from '@/components/ui/GlassBackButton';
 import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
 import { buildNoteShareContent, exportNote } from '@/lib/noteExport';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { makeContentHash, safeHaptics } from '@/lib/utils';
 import { parseNoteTimestamp } from '@/lib/parseNoteTimestamp';
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
@@ -963,7 +963,7 @@ export default function NoteEditorScreen() {
             placeholderTextColor="rgba(0,0,0,0.2)"
             multiline
             className="mb-3 text-3xl font-bold leading-9 text-label"
-            style={{ fontFamily: SpaceGrotesk.bold }}
+            style={{ fontFamily: AppFont.bold }}
           />
 
           {updatedAtDisplay ? (
@@ -1100,7 +1100,7 @@ export default function NoteEditorScreen() {
                 editable={!isEnhancing}
                 textAlignVertical="top"
                 className="min-h-[300px] text-base leading-6 text-label"
-                style={{ fontFamily: SpaceGrotesk.regular, opacity: isEnhancing ? 0.4 : 1 }}
+                style={{ fontFamily: AppFont.regular, opacity: isEnhancing ? 0.4 : 1 }}
               />
             ) : (
               <View className="min-h-[180px]" />
