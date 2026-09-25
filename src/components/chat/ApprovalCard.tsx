@@ -77,7 +77,14 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
 
       {entry.state === "pending" && (
         <div className="mt-2 flex gap-2">
-          <Button size="sm" onClick={() => void approveAction(entry.toolCallId)}>
+          <Button
+            size="sm"
+            onClick={() => {
+              // A frozen textarea would look editable while the draft sends.
+              setEditing(false);
+              void approveAction(entry.toolCallId);
+            }}
+          >
             {t("connectors.approval.send")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setEditing((value) => !value)}>

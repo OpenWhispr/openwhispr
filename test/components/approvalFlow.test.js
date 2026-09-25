@@ -22,12 +22,16 @@ function click(element) {
 
 // No i18next instance is initialized, so buttons render their keys.
 function button(root, label) {
-  const found = findElement(root, (element) => element.tagName === "BUTTON" && element.textContent === label);
+  const found = findElement(
+    root,
+    (element) => element.tagName === "BUTTON" && element.textContent === label
+  );
   assert.ok(found, `button ${label} is rendered`);
   return found;
 }
 
-test("Edit, change, Done editing, Send: the reviewed text is what gets sent", async (t) => {
+// Mounts a card for a real runApprovalAction turn; returns what the test drives.
+async function mountApprovalTurn(t) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -39,7 +43,12 @@ test("Edit, change, Done editing, Send: the reviewed text is what gets sent", as
         connectorPrepare: async () => ({
           status: "ready",
           actionId: "a1",
-          preview: { verbKey: "default", destinationLabel: "#eng", accountLabel: "chad", body: "Original text" },
+          preview: {
+            verbKey: "default",
+            destinationLabel: "#eng",
+            accountLabel: "chad",
+            body: "Original text",
+          },
         }),
         connectorCommit: async (actionId, edits) => {
           commits.push({ actionId, edits });
@@ -63,7 +72,9 @@ test("Edit, change, Done editing, Send: the reviewed text is what gets sent", as
     },
   });
   const store = await vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
-  const { runApprovalAction } = await vite.ssrLoadModule("/services/tools/connectors/runApprovalAction.ts");
+  const { runApprovalAction } = await vite.ssrLoadModule(
+    "/services/tools/connectors/runApprovalAction.ts"
+  );
   const { ApprovalCard } = await vite.ssrLoadModule("/components/chat/ApprovalCard.tsx");
   store.useConnectorApprovalStore.setState({ entries: {} });
 
@@ -79,7 +90,12 @@ test("Edit, change, Done editing, Send: the reviewed text is what gets sent", as
   let toolResult;
   await React.act(async () => {
     toolResult = runApprovalAction(
-      { toolCallId: "call-1", signal: controller.signal, onApprovalRequested() {}, onHoldDelivery() {} },
+      {
+        toolCallId: "call-1",
+        signal: controller.signal,
+        onApprovalRequested() {},
+        onHoldDelivery() {},
+      },
       "slack",
       "send_message",
       { destination: "#eng", text: "Original text" }
@@ -87,7 +103,11 @@ test("Edit, change, Done editing, Send: the reviewed text is what gets sent", as
     await new Promise((resolve) => setImmediate(resolve));
   });
   assert.match(container.textContent, /Original text/);
+  return { container, store, commits, toolResult };
+}
 
+test("Edit, change, Done editing, Send: the reviewed text is what gets sent", async (t) => {
+  const { container, store, commits, toolResult } = await mountApprovalTurn(t);
   await React.act(async () => click(button(container, "connectors.approval.edit")));
   // Editing must not lose the direction-detection the static view gets:
   // an RTL draft opened for editing should still render right-to-left.
@@ -105,4 +125,21 @@ test("Edit, change, Done editing, Send: the reviewed text is what gets sent", as
   assert.equal(result.data.status, "sent");
   assert.equal(result.data.finalText, "Edited text");
   assert.match(container.textContent, /connectors\.approval\.sent/);
+});
+
+test("Send while editing commits the edit and leaves edit mode", async (t) => {
+  const { container, store, commits, toolResult } = await mountApprovalTurn(t);
+
+  await React.act(async () => click(button(container, "connectors.approval.edit")));
+  await React.act(async () => store.updateApprovalDraft("call-1", { body: "Edited text" }));
+  await React.act(async () => click(button(container, "connectors.approval.send")));
+  await toolResult;
+
+  assert.deepEqual(commits, [{ actionId: "a1", edits: { body: "Edited text" } }]);
+  // A boolean: a failing assert would otherwise try to print the fake DOM node.
+  assert.ok(
+    !findElement(container, (element) => element.tagName === "TEXTAREA"),
+    "the card left edit mode"
+  );
+  assert.match(container.textContent, /Edited text/);
 });

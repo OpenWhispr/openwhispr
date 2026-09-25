@@ -122,6 +122,13 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
   );
 }
 
+// Subscribes to its own approval entry only, so editing one card doesn't
+// re-render every message in the thread.
+function ToolCallItem({ toolCall }: { toolCall: ToolCallInfo }) {
+  const approval = useConnectorApprovalStore((state) => state.entries[toolCall.id]);
+  return approval ? <ApprovalCard entry={approval} /> : <ToolCallStep toolCall={toolCall} />;
+}
+
 function NoteCard({
   noteId,
   title,
@@ -172,7 +179,6 @@ export function ChatMessage({
   onOpenNote,
 }: ChatMessageProps) {
   const { t } = useTranslation();
-  const approvals = useConnectorApprovalStore((state) => state.entries);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -228,13 +234,9 @@ export function ChatMessage({
               (hasContent || noteCards.length > 0) && "mb-2 pb-1.5 border-b border-border/70"
             )}
           >
-            {toolCalls.map((tc) =>
-              approvals[tc.id] ? (
-                <ApprovalCard key={tc.id} entry={approvals[tc.id]} />
-              ) : (
-                <ToolCallStep key={tc.id} toolCall={tc} />
-              )
-            )}
+            {toolCalls.map((tc) => (
+              <ToolCallItem key={tc.id} toolCall={tc} />
+            ))}
           </div>
         )}
 

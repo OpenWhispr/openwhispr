@@ -93,7 +93,10 @@ interface UseChatStreamingOptions {
   noteContext?: string;
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
-  /** Offer connector tools (email drafts, contact lookup) when the plan and policy allow them. */
+  /**
+   * Offer connector tools (email drafts, contact lookup) when the plan and
+   * policy allow them. Off unless a surface opts in: they act outside the app.
+   */
   allowConnectors?: boolean;
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
   /** Fires exactly once when displayable assistant content or tool activity becomes available. */
@@ -151,7 +154,7 @@ export function useChatStreaming({
   inferenceScope = "chatIntelligence",
   noteContext: externalNoteContext,
   searchScope,
-  allowConnectors = true,
+  allowConnectors = false,
   onStreamComplete,
   onResponseContent,
 }: UseChatStreamingOptions): ChatStreaming {
@@ -259,14 +262,9 @@ export function useChatStreaming({
       toolScopeRef.current = toolScope;
       clearToolActivity();
 
-      // Every exit from this send — normal completion, an early policy
-      // return, or a thrown error — must release this scope's tool
-      // contexts. A pending approval card (connectorApprovalStore's
-      // requestApproval) listens on this signal and would otherwise wait
-      // out its 10-minute TTL. Harmless after a normal completion: a turn
-      // cannot finish streaming while a tool is still awaiting its card. A
-      // newer send may have already replaced toolScopeRef.current with its
-      // own scope, so only clear it here if it still points at this one.
+      // Every exit, thrown errors included, releases tools still waiting on
+      // this turn (an approval card would otherwise sit out its TTL). A newer
+      // send may already own toolScopeRef.
       try {
         await runSend();
       } finally {
