@@ -3841,13 +3841,13 @@
       "notSent": "Non inviato."
     },
     "policyOff": "La tua organizzazione ha disattivato i connettori.",
-    "viewPlans": "Visualizza i piani",
     "email": {
       "title": "Bozze email",
       "description": "L'assistente apre una bozza precompilata nella tua app di posta. La rivedi e premi Invia tu stesso.",
       "proRequired": "Passa a un piano a pagamento per far scrivere all'assistente le bozze delle email.",
+      "unavailable": "Le bozze email non sono disponibili al momento.",
       "targetLabel": "Crea bozze email in",
-      "autoResolved": "Automatico ({{target}})",
+      "autoResolved": "Automatico · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (lavoro o scuola)",

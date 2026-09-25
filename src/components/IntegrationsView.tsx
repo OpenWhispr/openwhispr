@@ -20,7 +20,7 @@ import {
 import { useSettingsStore } from "../stores/settingsStore";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
-import type { CalendarAccount } from "../types/calendar";
+import type { CalendarAccount, MicrosoftCalendarAccount } from "../types/calendar";
 import ApiKeysSection from "./ApiKeysSection";
 import CliIntegrationCard from "./CliIntegrationCard";
 import McpIntegrationCard from "./McpIntegrationCard";
@@ -329,7 +329,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
 
   useEffect(() => {
     const unsub = window.electronAPI?.onMcalConnectionChanged?.(
-      (data: { accounts?: Array<{ email: string }> }) => {
+      (data: { accounts?: MicrosoftCalendarAccount[] }) => {
         if (data.accounts) setMcalAccounts(data.accounts);
       }
     );

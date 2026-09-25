@@ -6,7 +6,7 @@ import { SectionLabel, SettingsPanel, SettingsPanelRow } from "./ui/SettingsSect
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useSettingsStore } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
-import { isConnectorsBlockedByOrg } from "../stores/policyRules";
+import { isConnectorsAllowed, isConnectorsBlockedByOrg } from "../stores/policyRules";
 import { getUsageState, subscribeUsage } from "../lib/usageStore";
 import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag";
 import type { ConnectorActionRecord } from "../types/connectors";
@@ -32,6 +32,9 @@ interface ConnectorsSectionProps {
 export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactElement {
   const { t, i18n } = useTranslation();
   const blockedByOrg = usePolicyStore(isConnectorsBlockedByOrg);
+  // False while the policy loads, after a failed fetch, or when the org requires
+  // a newer app: chat has no connector tools then, so the card mustn't offer them.
+  const connectorsAllowed = usePolicyStore(isConnectorsAllowed);
   const isSignedIn = useSettingsStore((state) => state.isSignedIn);
   const emailDraftTarget = useSettingsStore((state) => state.emailDraftTarget);
   const setEmailDraftTarget = useSettingsStore((state) => state.setEmailDraftTarget);
@@ -41,13 +44,23 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
   const usage = useSyncExternalStore(subscribeUsage, getUsageState);
   const isSubscribedFlag = useSyncExternalStore(subscribeIsSubscribed, readIsSubscribed);
   const isPaid = isSignedIn && hasConnectorPlan(usage, isSubscribedFlag);
-  const accountId = usage.accountId;
+  const showActions = isPaid && connectorsAllowed;
   const [recent, setRecent] = useState<ConnectorActionRecord[]>([]);
+  const [accountScopeChanges, setAccountScopeChanges] = useState(0);
 
-  // Receipts are per account, so a different signed-in account refetches.
+  // Main lists the receipts of its active account scope, which settles after
+  // the renderer's own sign-in state; refetch once it has moved.
+  useEffect(
+    () =>
+      window.electronAPI?.onActiveAccountScopeChanged?.(() =>
+        setAccountScopeChanges((count) => count + 1)
+      ),
+    []
+  );
+
   useEffect(() => {
     setRecent([]);
-    if (!isPaid || blockedByOrg) return undefined;
+    if (!showActions) return undefined;
     let active = true;
     void window.electronAPI
       ?.connectorRecentActions?.("email", 10)
@@ -60,7 +73,7 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
     return () => {
       active = false;
     };
-  }, [isPaid, blockedByOrg, accountId]);
+  }, [showActions, accountScopeChanges]);
 
   const automaticTarget = resolveEmailDraftTarget({
     emailDraftTarget: "auto",
@@ -76,10 +89,11 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
 
   const description = blockedByOrg
     ? t("connectors.policyOff")
-    : isPaid
-      ? t("connectors.email.description")
-      : t("connectors.email.proRequired");
-  const showActions = isPaid && !blockedByOrg;
+    : !isPaid
+      ? t("connectors.email.proRequired")
+      : connectorsAllowed
+        ? t("connectors.email.description")
+        : t("connectors.email.unavailable");
 
   return (
     <SettingsPanel>
@@ -98,7 +112,7 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
               onValueChange={(value) => setEmailDraftTarget(value as EmailDraftTargetSetting)}
             >
               <SelectTrigger
-                className="w-48 shrink-0"
+                className="h-7 w-48 shrink-0 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3"
                 aria-label={t("connectors.email.targetLabel")}
               >
                 <SelectValue />
@@ -114,7 +128,7 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
           )}
           {!isPaid && !blockedByOrg && (
             <Button size="sm" className="shrink-0" onClick={onUpgrade}>
-              {t("connectors.viewPlans")}
+              {t("integrations.api.viewPlans")}
             </Button>
           )}
         </div>

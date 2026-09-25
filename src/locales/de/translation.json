@@ -4010,13 +4010,13 @@
       "notSent": "Nicht gesendet."
     },
     "policyOff": "Konnektoren wurden von deiner Organisation deaktiviert.",
-    "viewPlans": "Pläne ansehen",
     "email": {
       "title": "E-Mail-Entwürfe",
       "description": "Der Assistent öffnet einen vorausgefüllten Entwurf in deiner E-Mail-App. Du prüfst ihn und klickst selbst auf Senden.",
       "proRequired": "Upgrade auf einen kostenpflichtigen Plan, damit der Assistent E-Mails für dich entwirft.",
+      "unavailable": "E-Mail-Entwürfe sind gerade nicht verfügbar.",
       "targetLabel": "E-Mails entwerfen in",
-      "autoResolved": "Automatisch ({{target}})",
+      "autoResolved": "Automatisch · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (geschäftlich oder Schule)",

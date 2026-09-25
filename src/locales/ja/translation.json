@@ -3841,13 +3841,13 @@
       "notSent": "送信されていません。"
     },
     "policyOff": "組織によってコネクタが無効にされています。",
-    "viewPlans": "プランを表示",
     "email": {
       "title": "メール下書き",
       "description": "アシスタントがメールアプリに下書きを自動入力して開きます。内容を確認し、自分で送信を押してください。",
       "proRequired": "アシスタントにメールの下書きを作成させるには、有料プランへのアップグレードが必要です。",
+      "unavailable": "現在メール下書きを利用できません。",
       "targetLabel": "メールを作成するアプリ",
-      "autoResolved": "自動（{{target}}）",
+      "autoResolved": "自動 · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook（職場または学校）",

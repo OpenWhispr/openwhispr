@@ -3746,6 +3746,8 @@ export async function initializeSettings(): Promise<void> {
       } else {
         value = parsed;
       }
+    } else if (key === "emailDraftTarget") {
+      value = normalizeEmailDraftTarget(newValue);
     } else {
       value = newValue;
     }
