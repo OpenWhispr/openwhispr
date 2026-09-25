@@ -2,6 +2,14 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status:** Implemented on `feat/ipad-hardware-keyboard-dictation`. Code review and simulator testing changed the design in places this plan still shows in its original form:
+> - no `AudioRecordingIntent` and no Live Activity step;
+> - no `hotkey_job_id` key: delivery and start-in-progress state are in-process;
+> - the JS-ready stamp is pid-scoped (`markHotkeyJsReady`);
+> - shared flags are trusted only once JS is ready.
+>
+> The spec is current; this document records the original tasks.
+
 **Goal:** Let an iPad user with a hardware keyboard dictate into any app: press a Full Keyboard Access key combo → speak → press again → ⌘V.
 
 **Architecture:**
