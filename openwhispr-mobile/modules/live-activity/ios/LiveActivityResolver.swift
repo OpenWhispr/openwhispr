@@ -48,11 +48,11 @@ public enum LiveActivityResolver {
     return nil
   }
 
-  /// Without push updates the stale date can never move later, and ActivityKit ends
-  /// every activity at 8 hours, so a meeting is stale only at that cap.
+  /// Without push updates the stale date can never move later, so a meeting is
+  /// stale only at ActivityKit's cap.
   public static func staleDate(for state: RecordingActivityContentState, now: Date) -> Date {
     state.mode == .meeting
-      ? state.startedAt.addingTimeInterval(8 * 60 * 60)
+      ? state.startedAt.addingTimeInterval(RecordingActivityContentState.maxActivityDuration)
       : now.addingTimeInterval(60 * 60)
   }
 }

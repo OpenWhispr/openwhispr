@@ -16,6 +16,9 @@ public enum RecordingActivityPhase: String, Codable, Hashable {
 /// Foundation-only so the resolver tests can compile it with plain `swiftc` on macOS;
 /// `RecordingActivityAttributes` (ActivityKit) aliases it as its `ContentState`.
 public struct RecordingActivityContentState: Codable, Hashable {
+  /// ActivityKit ends every Live Activity 8 hours after it starts.
+  public static let maxActivityDuration: TimeInterval = 8 * 60 * 60
+
   public var mode: RecordingActivityMode
   public var phase: RecordingActivityPhase
   public var startedAt: Date
@@ -34,10 +37,6 @@ public struct RecordingActivityContentState: Codable, Hashable {
     self.startedAt = startedAt
     self.title = title
     self.recordedSeconds = recordedSeconds
-  }
-
-  private enum CodingKeys: String, CodingKey {
-    case mode, phase, startedAt, title, recordedSeconds
   }
 
   // An activity started by a build that predates meetings carries only

@@ -97,10 +97,10 @@ jobs:
           OPENWHISPR_APP_ENV: production
 
   native-transport:
-    name: Mobile native provider transport
+    name: Mobile native Swift tests
     needs: changes
     if: needs.changes.outputs.mobile == 'true'
-    # Compiles the Foundation-only Swift transport, which needs Xcode's toolchain.
+    # Compiles the Foundation-only Swift sources and their tests, which need Xcode's toolchain.
     runs-on: macos-latest
     timeout-minutes: 15
     steps:

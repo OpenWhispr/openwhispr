@@ -26,7 +26,13 @@ function note(overrides: Partial<Note> & { id: number }): Note {
   } as Note;
 }
 
-function makeDeps(notes: Note[], initialStorage: Record<string, string> = {}) {
+interface Harness {
+  deps: MeetingRecoveryDeps;
+  store: Map<string, string>;
+  calls: string[];
+}
+
+function makeDeps(notes: Note[], initialStorage: Record<string, string> = {}): Harness {
   const store = new Map(Object.entries(initialStorage));
   const calls: string[] = [];
   const deps: MeetingRecoveryDeps = {
@@ -54,7 +60,7 @@ function makeDeps(notes: Note[], initialStorage: Record<string, string> = {}) {
   return { deps, store, calls };
 }
 
-const marker = (id: number) => `${MEETING_RESUME_MARKER_PREFIX}${id}`;
+const marker = (id: number): string => `${MEETING_RESUME_MARKER_PREFIX}${id}`;
 
 describe('recoverOrphanedMeetings', () => {
   it.each(['transcribing', 'diarizing'])(
@@ -166,7 +172,13 @@ describe('recoverOrphanedMeetings', () => {
   });
 });
 
-function fakeAppState(currentState: AppStateStatus) {
+interface FakeAppState {
+  appState: { currentState: AppStateStatus; addEventListener: jest.Mock };
+  remove: jest.Mock;
+  emit: (state: AppStateStatus) => void;
+}
+
+function fakeAppState(currentState: AppStateStatus): FakeAppState {
   let listener: ((state: AppStateStatus) => void) | null = null;
   const remove = jest.fn(() => {
     listener = null;

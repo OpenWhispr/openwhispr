@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react-native';
+import { renderHook, type RenderHookResult } from '@testing-library/react-native';
 import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMeetingLiveActivity';
 
 const mockStartMeeting = jest.fn();
@@ -26,7 +26,12 @@ type Props = {
   onEndRequested: () => void;
 };
 
-function setup(initial: Partial<Props> = {}) {
+type Setup = RenderHookResult<void, Props> & {
+  onEndRequested: jest.Mock;
+  update: (next: Partial<Props>) => void;
+};
+
+function setup(initial: Partial<Props> = {}): Setup {
   const onEndRequested = jest.fn();
   const props: Props = {
     phase: 'idle',

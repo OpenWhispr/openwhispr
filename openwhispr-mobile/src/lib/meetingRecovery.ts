@@ -129,13 +129,12 @@ let hasStarted = false;
 export function startMeetingRecoveryOnce(): void {
   if (hasStarted) return;
   hasStarted = true;
-  const store = useNotesStore.getState();
   recoverOrphanedMeetings({
     listNotes: () =>
       notesRepository
         .getAllNotes()
         .filter((note) => createdBeforeRuntime(note, RUNTIME_STARTED_AT_MS)),
-    markFailed: (noteId) => store.transitionStatus(noteId, 'failed'),
+    markFailed: (noteId) => useNotesStore.getState().transitionStatus(noteId, 'failed'),
     waitUntilActive: () => waitForAppActive(AppState),
     resume: (noteId) => useNotesStore.getState().retryMeetingTranscription(noteId),
     storage: localStorage,
