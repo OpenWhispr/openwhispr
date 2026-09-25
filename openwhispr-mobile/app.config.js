@@ -9,8 +9,6 @@ const { resolveOpenWhisprEnvironment } = require('./config/openwhispr-environmen
 // back to Space Grotesk when a build has none.
 const BRAND_FONTS = [
   'assets/fonts/yowza/yowza-std-regular.otf',
-  'assets/fonts/yowza/yowza-std-medium.otf',
-  'assets/fonts/yowza/yowza-std-bold.otf',
   'assets/fonts/yowza/yowza-soft-std-medium.otf',
 ];
 

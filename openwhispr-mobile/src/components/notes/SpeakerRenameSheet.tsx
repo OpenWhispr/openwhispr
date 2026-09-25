@@ -48,7 +48,9 @@ export function SpeakerRenameSheet({
           className="gap-4 rounded-t-[24px] bg-systemBackground px-5 pb-8 pt-5"
           testID="speaker-rename-sheet"
         >
-          <Text className="text-lg font-semibold text-label">Rename speaker</Text>
+          <Text accessibilityRole="header" className="text-lg font-semibold text-label">
+            Rename speaker
+          </Text>
           {suggestions.length > 0 ? (
             <View className="flex-row flex-wrap gap-2" testID="speaker-rename-suggestions">
               {suggestions.map((suggestion, index) => (

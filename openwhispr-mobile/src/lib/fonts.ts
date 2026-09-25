@@ -19,22 +19,20 @@ function embeddedFace(postScriptName: string): string {
   return Platform.OS === 'ios' ? postScriptName : postScriptName.toLowerCase();
 }
 
-// Medium covers 600: the family has no Semibold, and letting semibold fall to
-// Bold made labels read heavy on desktop.
+// Every emphasis weight is set in Yowza Soft Medium: Yowza's own Medium and
+// Bold read too heavy at mobile sizes, so mobile departs from desktop here.
+const YOWZA_SOFT_MEDIUM = embeddedFace('Yowza-Soft-Std-Medium');
 const YOWZA: FontFaces = {
   regular: embeddedFace('Yowza-Std-Regular'),
-  medium: embeddedFace('Yowza-Std-Medium'),
-  semibold: embeddedFace('Yowza-Std-Medium'),
-  bold: embeddedFace('Yowza-Std-Bold'),
+  medium: YOWZA_SOFT_MEDIUM,
+  semibold: YOWZA_SOFT_MEDIUM,
+  bold: YOWZA_SOFT_MEDIUM,
 };
-const YOWZA_SOFT_MEDIUM = embeddedFace('Yowza-Soft-Std-Medium');
 
 // Ask the running binary, not the JS bundle: an OTA update or a dev bundle can
 // run on a native build made with or without the fonts.
 const embeddedFonts = new Set(getLoadedFonts());
-const hasYowza = [...Object.values(YOWZA), YOWZA_SOFT_MEDIUM].every((face) =>
-  embeddedFonts.has(face),
-);
+const hasYowza = Object.values(YOWZA).every((face) => embeddedFonts.has(face));
 
 export const AppFont: FontFaces = hasYowza ? YOWZA : SPACE_GROTESK;
 

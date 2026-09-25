@@ -51,7 +51,9 @@ export function SpeakerMergeSheet({
           className="gap-4 rounded-t-[24px] bg-systemBackground px-5 pb-8 pt-5"
           testID="speaker-merge-sheet"
         >
-          <Text className="text-lg font-semibold text-label">Merge speaker</Text>
+          <Text accessibilityRole="header" className="text-lg font-semibold text-label">
+            Merge speaker
+          </Text>
           {targets.length === 0 ? (
             <Text className="text-[15px] text-secondaryLabel">
               No other speakers to merge into.

@@ -35,6 +35,37 @@ describe('Text', () => {
     expect(fontFamilyOf(root)).toBe('Display');
   });
 
+  // e.g. the accent-coloured word in an onboarding title.
+  it('keeps spans nested in a heading in the display face', () => {
+    const { getByText } = render(
+      <Text accessibilityRole="header">
+        Security-first <Text style={{ color: 'blue' }}>speech</Text>
+      </Text>,
+    );
+
+    expect(StyleSheet.flatten(getByText('speech').props.style).fontFamily).toBe('Display');
+  });
+
+  it("keeps a span without its own weight in its parent's face", () => {
+    const { getByText } = render(
+      <Text style={{ fontWeight: '600' }}>
+        Tap <Text style={{ color: 'blue' }}>here</Text>
+      </Text>,
+    );
+
+    expect(StyleSheet.flatten(getByText('here').props.style).fontFamily).toBe('Body-600');
+  });
+
+  it('lets a nested span with its own weight pick its face', () => {
+    const { getByText } = render(
+      <Text>
+        Tap <Text style={{ fontWeight: '700' }}>here</Text>
+      </Text>,
+    );
+
+    expect(StyleSheet.flatten(getByText('here').props.style).fontFamily).toBe('Body-700');
+  });
+
   it('keeps the weight-based face for headings when there is no display face', () => {
     mockFonts.displayFontFamily = undefined;
     const { root } = render(

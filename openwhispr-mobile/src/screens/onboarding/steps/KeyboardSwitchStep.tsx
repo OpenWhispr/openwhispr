@@ -109,17 +109,26 @@ export function KeyboardSwitchStep() {
 function KeyboardSwitchTitle() {
   return (
     <View>
-      <Text className="text-[28px] font-medium leading-[34px] text-label">
+      <Text
+        accessibilityRole="header"
+        className="text-[28px] font-medium leading-[34px] text-label"
+      >
         Switch to OpenWhispr.
       </Text>
       <View className="flex-row flex-wrap items-center">
-        <Text className="text-[28px] font-medium leading-[34px] text-label">
+        <Text
+          accessibilityRole="header"
+          className="text-[28px] font-medium leading-[34px] text-label"
+        >
           Press and hold the{' '}
         </Text>
         <View className="h-8 w-8 items-center justify-center rounded-full bg-secondarySystemGroupedBackground">
           <SystemIcon name="globe" mdName="Globe" size={16} color="label" />
         </View>
-        <Text className="text-[28px] font-medium leading-[34px] text-label">
+        <Text
+          accessibilityRole="header"
+          className="text-[28px] font-medium leading-[34px] text-label"
+        >
           {' '}
           icon in the bottom-left corner of your keyboard, then select{' '}
           <Text className="text-primary">OpenWhispr</Text>
