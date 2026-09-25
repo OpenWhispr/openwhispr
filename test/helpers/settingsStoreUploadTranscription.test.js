@@ -165,7 +165,6 @@ test("audio upload has its own self-hosted server", async (t) => {
   });
 });
 
-
 function findElement(node, predicate) {
   if (Array.isArray(node)) {
     for (const child of node) {
@@ -254,10 +253,10 @@ test("the Upload tab never offers bring-your-own-key through live-only providers
   });
 });
 
-// An endpoint belongs to its provider. Upload inherits dictation's only with
-// dictation's provider, so a Custom upload without an endpoint of its own fails
-// closed instead of posting audio and the Custom key to another service.
-test("upload inherits dictation's endpoint only with dictation's provider", async (t) => {
+// Upload inherits dictation's endpoint, except a built-in provider's URL when
+// dictation is on another provider: a Custom upload without an endpoint of its
+// own then fails closed instead of posting the Custom key to that provider.
+test("an upload never borrows another built-in provider's endpoint", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-upload-endpoint-inheritance-test-",
@@ -266,23 +265,37 @@ test("upload inherits dictation's endpoint only with dictation's provider", asyn
     "/stores/settingsStore.ts"
   );
   const base = useSettingsStore.getState();
+  const resolvedUrl = (overrides) =>
+    selectResolvedUploadTranscription({
+      ...base,
+      uploadCloudTranscriptionProvider: "custom",
+      uploadCloudTranscriptionBaseUrl: "",
+      ...overrides,
+    }).cloudTranscriptionBaseUrl;
 
-  const customWithoutEndpoint = selectResolvedUploadTranscription({
-    ...base,
-    cloudTranscriptionProvider: "deepgram",
-    cloudTranscriptionBaseUrl: "https://api.deepgram.com/v1",
-    uploadCloudTranscriptionProvider: "custom",
-    uploadCloudTranscriptionBaseUrl: "",
-  });
-  assert.equal(customWithoutEndpoint.cloudTranscriptionBaseUrl, "");
-
-  const inherited = selectResolvedUploadTranscription({
-    ...base,
-    cloudTranscriptionProvider: "custom",
-    cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
-    uploadCloudTranscriptionProvider: "",
-    uploadCloudTranscriptionBaseUrl: "",
-  });
-  assert.equal(inherited.cloudTranscriptionProvider, "custom");
-  assert.equal(inherited.cloudTranscriptionBaseUrl, "https://stt.example.com/v1");
+  assert.equal(
+    resolvedUrl({
+      cloudTranscriptionProvider: "deepgram",
+      cloudTranscriptionBaseUrl: "https://api.deepgram.com/v1",
+    }),
+    "",
+    "a built-in provider's URL stays with that provider"
+  );
+  // The Custom tab's own endpoint survives a later switch of dictation to another
+  // provider, as when onboarding set up Custom for every scope.
+  assert.equal(
+    resolvedUrl({
+      cloudTranscriptionProvider: "openai",
+      cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
+    }),
+    "https://stt.example.com/v1"
+  );
+  assert.equal(
+    resolvedUrl({
+      cloudTranscriptionProvider: "custom",
+      cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
+      uploadCloudTranscriptionProvider: "",
+    }),
+    "https://stt.example.com/v1"
+  );
 });

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { API_ENDPOINTS } from "../config/constants";
+import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
@@ -76,9 +76,8 @@ export const TRANSCRIPTION_POLICY_PROVIDER_IDS = [
 ] as const;
 
 // Audio Upload transcribes finished files, which live-only providers cannot do.
-export const UPLOAD_TRANSCRIPTION_POLICY_PROVIDER_IDS = TRANSCRIPTION_POLICY_PROVIDER_IDS.filter(
-  (provider) => !STREAMING_ONLY_PROVIDERS.has(provider)
-);
+export const UPLOAD_TRANSCRIPTION_POLICY_PROVIDER_IDS: readonly string[] =
+  TRANSCRIPTION_POLICY_PROVIDER_IDS.filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider));
 
 export const LLM_POLICY_PROVIDER_IDS = [
   ...modelRegistryData.cloudProviders.map((provider) => provider.id),
@@ -150,6 +149,10 @@ function transcriptionModelBelongsToProvider(
   if (providerId === "custom") return Boolean(modelId);
   return transcriptionProviderModels(providerId, context).some((model) => model.id === modelId);
 }
+
+const REGISTRY_TRANSCRIPTION_BASE_URLS = new Set(
+  modelRegistryData.transcriptionProviders.map((provider) => normalizeBaseUrl(provider.baseUrl))
+);
 
 function canonicalTranscriptionBaseUrl(providerId: string): string | null {
   return (
@@ -2804,9 +2807,10 @@ export interface ResolvedUploadTranscription {
 // A realtime-only dictation provider is the exception: it has no batch route, so
 // inheriting it would fail every upload closed. Uploads take the default provider
 // instead, and the dictation model stays behind with the provider it belongs to.
-// The dictation endpoint likewise follows only dictation's own provider, so a
-// Custom upload without an endpoint fails closed instead of posting to another
-// provider's URL. The self-hosted server is the exception the other way: it
+// Dictation's endpoint is inherited too, except a built-in provider's URL when
+// dictation is on a different provider: a Custom upload without an endpoint of its
+// own then fails closed instead of posting the Custom key to that provider (the
+// policy overlay writes those URLs). The self-hosted server is the exception the other way: it
 // never inherits, so uploads go only to the server the Upload tab shows (#2049).
 // migrateUploadSelfHosted() seeds it once for profiles from before the tab had its own.
 export const selectResolvedUploadTranscription = (
@@ -2830,10 +2834,10 @@ export const selectResolvedUploadTranscription = (
       (inheritsDictationProvider ? state.cloudTranscriptionModel : ""),
     cloudTranscriptionBaseUrl:
       state.uploadCloudTranscriptionBaseUrl ||
-      (cloudTranscriptionProvider === state.cloudTranscriptionProvider
+      (cloudTranscriptionProvider === state.cloudTranscriptionProvider ||
+      !REGISTRY_TRANSCRIPTION_BASE_URLS.has(normalizeBaseUrl(state.cloudTranscriptionBaseUrl))
         ? state.cloudTranscriptionBaseUrl
-        : "") ||
-      "",
+        : ""),
     cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
     transcriptionMode: state.uploadTranscriptionMode,
     remoteTranscriptionUrl: state.uploadRemoteTranscriptionUrl,
