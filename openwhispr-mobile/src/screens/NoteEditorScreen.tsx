@@ -54,9 +54,11 @@ import {
 import { promptLocalModelFallback } from '@/lib/privateMode';
 import {
   getLocalReasoningReadiness,
+  getLocalReasoningUnavailableMessage,
   isLocalReasoningRequired,
   shouldUseLocalReasoning,
 } from '@/lib/localReasoning';
+import { providerDisplayName } from '@/lib/mobileProviders';
 import { promptLocalReasoningFallback } from '@/lib/localReasoningFallback';
 import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
 import { randomUUID } from '@/lib/uuid';
@@ -132,6 +134,12 @@ export default function NoteEditorScreen() {
   const { register: registerSuperwallGate } = useSuperwallGate();
   const { handleUsageLimitReached, isRecoveringUsageLimit } = useUsageLimitRecovery();
   const autoLearnEnabled = useConfigStore((s) => s.config?.autoLearnCorrections ?? true);
+  const notesMode = useConfigStore((s) => s.config?.inference?.notes?.mode);
+  const notesProviderId = useConfigStore((s) => s.config?.inference?.notes?.providerId);
+  const chatMode = useConfigStore((s) => s.config?.inference?.agent?.mode);
+  const providerNotes = notesMode === 'providers';
+  // Only an unset or OpenWhispr chat route reaches Cloud, so only it needs an account and the paywall.
+  const cloudChat = chatMode !== 'providers' && chatMode !== 'local';
   const dictionaryEntries = useDictionaryStore((s) => s.entries);
   const dictionaryWords = useMemo(() => dictionaryEntries.map((e) => e.word), [dictionaryEntries]);
   const addLearnedWords = useDictionaryStore((s) => s.addLearnedWords);
@@ -548,7 +556,23 @@ export default function NoteEditorScreen() {
   const handleRunAction = useCallback(
     async (action: Parameters<typeof runAction>[0]) => {
       const routing = { isPrivateNote: note?.isPrivate === 1 };
-      const localRequired = isLocalReasoningRequired(routing);
+      // On-Device never leaves this phone: no account, paywall, or fallback to another service.
+      if (notesMode === 'local') {
+        const readiness = await getLocalReasoningReadiness();
+        if (readiness.status === 'ready') {
+          runSelectedAction(action, routing);
+          return;
+        }
+        Alert.alert(
+          'Local AI unavailable',
+          `${getLocalReasoningUnavailableMessage(readiness)} Note Formatting is set to On-Device, so this note stays on your iPhone.`,
+        );
+        return;
+      }
+
+      const localRequired = providerNotes
+        ? requiresCloudConfirmation
+        : isLocalReasoningRequired(routing);
 
       if (localRequired) {
         if (await shouldUseLocalReasoning(routing)) {
@@ -557,18 +581,20 @@ export default function NoteEditorScreen() {
         }
 
         const readiness = await getLocalReasoningReadiness();
+        const runElsewhereOnce = (): void =>
+          runSelectedAction(action, { ...routing, allowCloudFallback: true });
         promptLocalReasoningFallback({
           readiness,
           signedIn: !!user,
           onEnableLocal: () => runSelectedAction(action, routing),
-          onUseCloudOnce: user
-            ? () =>
-                runSelectedAction(action, {
-                  ...routing,
-                  allowCloudFallback: true,
-                })
-            : undefined,
+          onUseCloudOnce: user || providerNotes ? runElsewhereOnce : undefined,
+          destinationName: providerNotes ? providerDisplayName(notesProviderId ?? '') : undefined,
         });
+        return;
+      }
+
+      if (providerNotes) {
+        runSelectedAction(action, routing);
         return;
       }
 
@@ -596,11 +622,20 @@ export default function NoteEditorScreen() {
 
       gateAndRun(routing);
     },
-    [note?.isPrivate, registerSuperwallGate, requiresCloudConfirmation, runSelectedAction, user],
+    [
+      note?.isPrivate,
+      notesMode,
+      notesProviderId,
+      providerNotes,
+      registerSuperwallGate,
+      requiresCloudConfirmation,
+      runSelectedAction,
+      user,
+    ],
   );
 
   const startChatRequest = useCallback(
-    async (question: string, appendUserMessage: boolean) => {
+    async (question: string, appendUserMessage: boolean, allowRemoteContent = false) => {
       const trimmedQuestion = question.trim();
       const context = actionInputRef.current.trim();
       if (!trimmedQuestion || chatAbortRef.current) return;
@@ -638,6 +673,7 @@ export default function NoteEditorScreen() {
           question: trimmedQuestion,
           history,
           signal: controller.signal,
+          routing: { isPrivateNote: note?.isPrivate === 1, allowCloudFallback: allowRemoteContent },
         });
         if (controller.signal.aborted) return;
         setChatMessages((current) => [
@@ -659,38 +695,42 @@ export default function NoteEditorScreen() {
         }
       }
     },
-    [chatMessages],
+    [chatMessages, note?.isPrivate],
   );
 
   const runChatWithCloudConfirmation = useCallback(
     (question: string, appendUserMessage: boolean) => {
-      if (requiresRealAccount(user)) {
+      if (cloudChat && requiresRealAccount(user)) {
         showAccountRequiredAlert('AI chat', { cloudOnly: true });
         return;
       }
 
-      const gateAndRun = () => {
+      const gateAndRun = (allowRemoteContent = false) => {
+        if (!cloudChat) {
+          startChatRequest(question, appendUserMessage, allowRemoteContent).catch(() => {});
+          return;
+        }
         registerSuperwallGate({
           placement: SUPERWALL_PLACEMENTS.noteChatStart,
           params: { source: 'note_chat' },
           requiresAccount: false,
           feature: () => {
-            startChatRequest(question, appendUserMessage).catch(() => {});
+            startChatRequest(question, appendUserMessage, allowRemoteContent).catch(() => {});
           },
         }).catch(() => {});
       };
 
-      if (requiresCloudConfirmation) {
+      if (requiresCloudConfirmation && chatMode !== 'local') {
         confirmCloudOnce(
-          'Chat sends this note context to cloud AI for this request. Your note privacy and sync settings will not change.',
-          gateAndRun,
+          'Chat sends this note context to your selected AI service for this request. Your note privacy and sync settings will not change.',
+          () => gateAndRun(true),
         );
         return;
       }
 
       gateAndRun();
     },
-    [registerSuperwallGate, requiresCloudConfirmation, startChatRequest, user],
+    [chatMode, cloudChat, registerSuperwallGate, requiresCloudConfirmation, startChatRequest, user],
   );
 
   const handleAskNote = useCallback(() => {

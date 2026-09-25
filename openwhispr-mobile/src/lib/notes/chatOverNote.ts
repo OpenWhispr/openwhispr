@@ -1,3 +1,5 @@
+import type { ReasoningRequest, ReasoningRoutingOptions } from '@/types';
+
 export type ChatOverNoteRole = 'user' | 'assistant';
 
 export interface ChatOverNoteMessage {
@@ -8,6 +10,8 @@ export interface ChatOverNoteMessage {
 }
 
 export interface ChatOverNoteRequest {
+  inferenceRoute?: ReasoningRequest['inferenceRoute'];
+  routing?: ReasoningRoutingOptions;
   context: string;
   question: string;
   history: ChatOverNoteMessage[];

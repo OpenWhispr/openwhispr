@@ -72,6 +72,7 @@
         }
       ],
       "expo-apple-authentication",
+      "./plugins/provider-networking/withProviderNetworking",
       "./plugins/ios-cxx-standard/withIosCxxStandard",
       "./plugins/pod-deployment-target/withPodDeploymentTarget",
       "./plugins/storekit/withStoreKitConfiguration",

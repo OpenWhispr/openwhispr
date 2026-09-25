@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
@@ -59,6 +60,18 @@ export default function AIModelsScreen() {
 
   return (
     <SettingsScreen>
+      {Platform.OS === 'ios' ? (
+        <SettingsSection>
+          <SettingsRow
+            iconStyle="line"
+            icon="key"
+            mdIcon="KeyRound"
+            title="Bring Your Own Key"
+            description="Use your own API keys for transcription and text AI."
+            onPress={() => router.push('/(account)/providers')}
+          />
+        </SettingsSection>
+      ) : null}
       <SettingsSection title="Transcription">
         <SettingsRow
           iconStyle="line"

@@ -1,3 +1,8 @@
+jest.mock('@/lib/inferenceRouting', () => ({
+  getInferenceSelection: jest.fn(() => undefined),
+  resolveMobileProviderRoute: jest.fn(),
+}));
+
 // jest.mock is hoisted above imports, so the mock factory cannot close over
 // variables declared in module scope. Use jest.fn() inside the factory and
 // retrieve the mock via require() after imports.

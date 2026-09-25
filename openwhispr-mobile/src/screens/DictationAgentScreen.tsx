@@ -19,7 +19,15 @@ export function DictationAgentScreen(): React.JSX.Element {
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
 
-  const isCloudMode = activeMode === 'cloud';
+  const agentSelected = !!config?.inference?.agent;
+  // Bring Your Own Key skips the assistant until it has a selection of its own.
+  const unavailableNotice =
+    activeMode === 'private'
+      ? 'Voice Assistant needs Cloud or Bring Your Own Key mode. Your settings are saved and apply once one is active.'
+      : activeMode === 'providers' && !agentSelected
+        ? 'Bring Your Own Key skips the voice assistant until Chat & Voice Assistant has a selection. Your settings are saved and apply once it does.'
+        : null;
+  const isAvailable = !unavailableNotice;
   const enabled = config ? isDictationAgentEnabled(config) : true;
   const shareContext = config?.dictationAgentShareContext ?? false;
   const currentName = config ? getDictationAgentName(config) : DEFAULT_AGENT_NAME;
@@ -46,20 +54,17 @@ export function DictationAgentScreen(): React.JSX.Element {
           <Text className="text-[13px] text-secondaryLabel">
             When you say your assistant’s name while dictating, OpenWhispr rewrites what you said
             into polished, ready-to-use text instead of inserting it word for word. Requires Cloud
-            mode.
+            or Bring Your Own Key mode.
           </Text>
         </View>
 
-        {!isCloudMode ? (
+        {unavailableNotice ? (
           <View className="mx-4 mb-3">
             <View
               className="rounded-[14px] border border-separator bg-secondarySystemGroupedBackground px-4 py-3"
               style={{ borderCurve: 'continuous' }}
             >
-              <Text className="text-[13px] text-secondaryLabel">
-                Voice Assistant requires Cloud mode. Your settings are saved and will apply once
-                Cloud mode is active.
-              </Text>
+              <Text className="text-[13px] text-secondaryLabel">{unavailableNotice}</Text>
             </View>
           </View>
         ) : null}
@@ -75,7 +80,7 @@ export function DictationAgentScreen(): React.JSX.Element {
               <SettingsSwitch
                 value={enabled}
                 onValueChange={handleToggleEnabled}
-                disabled={!isCloudMode}
+                disabled={!isAvailable}
               />
             }
             showChevron={false}
@@ -94,16 +99,17 @@ export function DictationAgentScreen(): React.JSX.Element {
               autoCapitalize="words"
               autoCorrect={false}
               returnKeyType="done"
-              editable={isCloudMode}
-              className={`text-[17px] text-label ${isCloudMode ? '' : 'opacity-40'}`}
+              editable={isAvailable}
+              className={`text-[17px] text-label ${isAvailable ? '' : 'opacity-40'}`}
               style={{ fontFamily: SpaceGrotesk.regular }}
             />
           </View>
         </SettingsSection>
         <View className="mx-4 -mt-5 mb-7 px-4">
           <Text className="text-[13px] text-secondaryLabel">
-            Say this name anywhere while dictating to trigger the voice assistant. The name is
-            automatically added to your transcription hints so the speech model recognises it.
+            Start with this name, or say &quot;Hey&quot; and the name, to trigger the voice
+            assistant. A mention mid-sentence is transcribed as usual. The name is automatically
+            added to your transcription hints so the speech model recognises it.
           </Text>
         </View>
 
@@ -118,7 +124,7 @@ export function DictationAgentScreen(): React.JSX.Element {
               <SettingsSwitch
                 value={shareContext}
                 onValueChange={handleToggleShareContext}
-                disabled={!isCloudMode}
+                disabled={!isAvailable}
               />
             }
             showChevron={false}

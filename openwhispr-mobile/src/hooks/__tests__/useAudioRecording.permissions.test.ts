@@ -22,6 +22,10 @@ jest.mock('@/store/useProcessingModeStore', () => ({
     selector({ activeMode: 'cloud' }),
 }));
 
+jest.mock('@/lib/inferenceRouting', () => ({
+  snapshotTranscriptionJob: () => ({ provider: 'cloud' }),
+}));
+
 jest.mock('@/lib/transcribeAndCleanup', () => ({ transcribeAndCleanup: jest.fn() }));
 jest.mock('@/services/transcription/TranscriptionService', () => ({
   isLocalModelMissingError: jest.fn(() => false),

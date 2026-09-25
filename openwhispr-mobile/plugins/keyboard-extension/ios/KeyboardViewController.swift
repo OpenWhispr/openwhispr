@@ -3671,6 +3671,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     case "session_expired": title = "Start over"
     // An anonymous onboarding session; only creating an account clears it.
     case "account_required": title = "Create an account"
+    // No agent provider is chosen for the Providers mode; retrying can't help.
+    case "agent_setup_required": title = "Set up in app"
     default: title = "Try again"
     }
     if isAgentActionInFlight, !agentReviewVersions.isEmpty {

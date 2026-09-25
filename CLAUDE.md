@@ -419,7 +419,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 
 ### 8. Model Registry Architecture
 
-All AI model definitions are centralized in `src/models/modelRegistryData.json` as the single source of truth:
+All desktop AI model definitions are centralized in `src/models/modelRegistryData.json` as the single source of truth. The mobile app keeps its own hand-updated copies (see below):
 
 ```json
 {
@@ -430,7 +430,8 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 
 **Key files:**
 
-- `src/models/modelRegistryData.json` - Single source of truth for all models
+- `src/models/modelRegistryData.json` - Single source of truth for all desktop models
+- `openwhispr-mobile/src/config/providerCatalog.json` - Mobile's trimmed copy of the OpenAI and Groq entries. It, mobile's endpoint rules and its agent prompt (`openwhispr-mobile/src/config/prompts/defaultPrompts.json`) are copies, not shared code, so update them by hand when desktop's change (the catalog is covered in `openwhispr-mobile/CONTRIBUTING.md`)
 - `src/models/ModelRegistry.ts` - TypeScript wrapper with helper methods; also derives
   `REASONING_PROVIDERS` (`buildReasoningProviders()`), consumed by the model pickers
 - `src/models/providerDefaultModel.ts` - `pickProviderDefaultModel()`; with no

@@ -3,6 +3,7 @@ import { Pressable } from 'react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { safeHaptics } from '@/lib/utils';
 import { customHeaderStackOptions, glassStackOptions } from '@/config/navigation';
+import { WORKFLOW_LABELS, parseWorkflow } from '@/lib/byokWorkflows';
 
 // iOS 26 wraps custom header buttons in their own liquid-glass capsule, so this
 // back button is a bare chevron — the native bar supplies the glass. Adding our
@@ -42,6 +43,17 @@ export default function AccountLayout() {
       <Stack.Screen name="index" options={customHeaderStackOptions} />
       <Stack.Screen name="profile" options={{ title: 'Profile', headerLargeTitle: false }} />
       <Stack.Screen name="ai-models" options={{ title: 'AI Models', headerLargeTitle: false }} />
+      <Stack.Screen
+        name="providers"
+        options={{ title: 'Bring Your Own Key', headerLargeTitle: false }}
+      />
+      <Stack.Screen
+        name="provider-workflow"
+        options={({ route }) => {
+          const scope = parseWorkflow((route.params as { scope?: string })?.scope);
+          return { title: scope ? WORKFLOW_LABELS[scope] : '', headerLargeTitle: false };
+        }}
+      />
       <Stack.Screen
         name="dictation-agent"
         options={{ title: 'Voice Assistant', headerLargeTitle: false }}

@@ -6,7 +6,7 @@ The mobile app lives in the main [`OpenWhispr/openwhispr`](https://github.com/Op
 
 ## Highlights
 
-- **Cloud or Private mode** — flip between fast cloud transcription and fully on-device Whisper inference
+- **Cloud, Private, or Bring Your Own Key** — choose hosted transcription, on-device inference, or your own provider key on iOS
 - **iOS dictation keyboard** — dictate from any text field system-wide via a custom keyboard extension
 - **Markdown notes** — folders, full-text search, AI-assisted cleanup
 - **Native iOS feel** — Liquid Glass tab bar and headers on iOS 26+, blur fallback on iOS 18
@@ -47,6 +47,20 @@ The npm script above uses POSIX environment-variable syntax. On Windows, add
 PowerShell or Command Prompt.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for platform prerequisites, configuration details, and the signing steps required to build on a physical iOS device.
+
+## Personal provider setup (iOS)
+
+Open **AI Models → Bring Your Own Key** and tap a workflow. Each workflow (dictation/keyboard, uploads, cleanup, note formatting/titles, and chat/voice assistant) has its own mode; choose **Bring Your Own Key**, then a provider and model. The list shows what each workflow currently runs. This release supports OpenAI, Groq, OpenRouter (text), and any OpenAI-compatible Custom server. Other providers are not offered on mobile yet.
+
+Enter a provider API key and save. No OpenWhispr account or Pro subscription is required for personal provider use; your provider bills requests separately. Hosted inference and sync retain their existing account requirements. Provider credentials live in device-local secure storage, are not synced, and survive sign-out. Deleting your OpenWhispr account removes them. Remove credential deletes one key; Remove all provider keys deletes every saved key, including keys for Custom endpoints you no longer use. Deleting the app leaves them in the Keychain until the app is installed again; the first launch after a reinstall erases them. After a member of a managed organization signs out, that organization's provider policy keeps applying until another account (not a guest session) signs in and its policy loads, or until Remove all provider keys is used. Removing keys one at a time does not lift it.
+
+**Check connection** uses the entered key without saving it and reports what it verified. Text checks make a small, potentially billable inference request. Transcription checks verify the model catalog; they do not prove transcription access. Custom and OpenRouter configurations also offer model discovery and manual model IDs. Discovery never silently switches your selected model.
+
+For an OpenAI-compatible server, choose **Custom** and enter its base URL and model ID. Credentials are optional. Public servers require HTTPS; private-network HTTP is validated in both the app and the native transport. On an iPhone, `localhost` means that iPhone, not your computer. Use the server's LAN address and allow Local Network access when prompted. If access fails, check **Settings → Privacy & Security → Local Network**, the server binding, firewall, and address. Platform ATS restrictions may still require HTTPS for LAN IP or Tailscale hosts.
+
+Bring Your Own Key runs remote inference. Privacy settings and organization policy still apply. Changing settings does not change a job's captured route, and failed cleanup preserves the original transcript. The iOS-first rollout does not enable provider setup on Android.
+
+A developer build that only uses your own keys needs no OpenWhispr production credentials; the `.env.local` copied during setup works as is. Native modules require a development build rather than Expo Go. Configure your own signing identifiers as described in [CONTRIBUTING.md](./CONTRIBUTING.md). Provider keys belong in the app's secure credential fields, never in `EXPO_PUBLIC_` variables.
 
 ## Project layout
 
