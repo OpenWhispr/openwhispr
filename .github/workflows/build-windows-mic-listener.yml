@@ -72,7 +72,7 @@ jobs:
           path: windows-mic-listener-win32-x64.zip
 
       - name: Create or update release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: windows-mic-listener-v${{ inputs.version || steps.version.outputs.version }}
           name: Windows Mic Listener v${{ inputs.version || steps.version.outputs.version }}
