@@ -1,4 +1,30 @@
 {
+  "s1Mini": {
+    "options": "Optionen",
+    "description": "S1-mini von Superwhisper unterstützt ausschließlich die Bereinigung englischer Diktate. Wähle unten die Optionen. Der Denkmodus ist immer aus.",
+    "styling": "Stil",
+    "structure": "Struktur",
+    "context": "Kontext",
+    "values": {
+      "casual": "Locker",
+      "semi-casual": "Eher locker",
+      "semi-formal": "Eher förmlich",
+      "formal": "Förmlich",
+      "prose": "Absätze",
+      "lists": "Listen erlauben",
+      "general": "Allgemein",
+      "email": "E-Mail"
+    },
+    "help": {
+      "styling": "Großschreibung, Zeichensetzung und Kurzformen.",
+      "structure": "Absätze beibehalten oder Aufzählungen erlauben.",
+      "context": "Allgemeiner Text oder E-Mail-Anreden und Grußformeln."
+    },
+    "licenseSummary": "Apache 2.0 + Namensnennung erforderlich",
+    "license": "Lizenz",
+    "notice": "Hinweise",
+    "modelDescription": "Nur Englisch · Diktatbereinigung (Q4_K_M)"
+  },
   "settings": {
     "language": {
       "sectionTitle": "Sprache",

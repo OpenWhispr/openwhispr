@@ -1,4 +1,5 @@
 import ReasoningService from "../services/ReasoningService";
+import { isS1MiniModel } from "../config/s1Mini";
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
@@ -3165,8 +3166,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           processingTime: new Date().toISOString(),
         });
 
-        // A blank reply must not wipe the dictation — keep the transcript (#1616).
-        return hasTextContent(result) ? result : normalizedText;
+        // Preserve blank-response fallbacks (#1616); S1-mini may intentionally remove all filler.
+        return hasTextContent(result) || (route.kind === "cleanup" && isS1MiniModel(targetModel))
+          ? result
+          : normalizedText;
       } catch (error) {
         if (error.selectionEditFatal) throw error;
         if (wasCancelled()) return normalizedText;
@@ -3490,7 +3493,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               agentName,
               route.config
             );
-            if (hasTextContent(reasoned)) processedText = reasoned;
+            if (hasTextContent(reasoned) || isS1MiniModel(effectiveModel)) processedText = reasoned;
           }
         } else if (route.kind === "translation") {
           const chainResult = await this.runTranslationChain({
@@ -5466,7 +5469,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               agentName,
               route.config
             );
-            if (hasTextContent(reasoned)) finalText = reasoned;
+            if (hasTextContent(reasoned) || isS1MiniModel(effectiveModel)) finalText = reasoned;
             logger.info(
               "Streaming BYOK reasoning complete",
               { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },

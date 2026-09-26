@@ -1356,6 +1356,26 @@
           "descriptionKey": "models.descriptions.local.liquidai_lfm2_5_230m_q8_0"
         }
       ]
+    },
+    {
+      "id": "superwhisper",
+      "name": "Superwhisper",
+      "baseUrl": "https://huggingface.co",
+      "models": [
+        {
+          "id": "s1-mini-q4_k_m",
+          "name": "S1-mini by Superwhisper",
+          "size": "462 MiB",
+          "sizeBytes": 484219808,
+          "description": "English dictation cleanup (Q4_K_M)",
+          "descriptionKey": "s1Mini.modelDescription",
+          "recommended": true,
+          "fileName": "s1-mini-q4_k_m.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 40960,
+          "hfRepo": "superwhisper/s1-mini-GGUF"
+        }
+      ]
     }
   ],
   "openwhisprCloudModels": {
