@@ -8,6 +8,30 @@ const PROMPT_RUN_LENGTH = 4;
 // Cleanup drops fillers and false starts, so words the speaker said can sit up
 // to this many transcript words apart.
 const SPOKEN_GAP = 3;
+// "Okay, here's the cleaned transcript:" — a whole line announcing the cleanup.
+const ANNOUNCEMENT_LINE =
+  /^[\s*]*(?:(?:okay|ok|sure|alright)[,.!]?\s+)?(?:(?:here(?:'s|’s|\s+is)|this\s+is)\s+(?:(?:the|a|your)\s+)?(?:(?:cleaned|clean|corrected)(?:[-\s]up)?\s+)?|(?:(?:the|a|your)\s+)?(?:cleaned|clean|corrected)(?:[-\s]up)?\s+)(?:transcript|version|text|output)\b[^\n:]{0,60}:[\s*]*$/iu;
+// "Cleaned transcript: …", "Transcript:" or "Output: …" opening a line.
+const LABEL_PREFIX =
+  /^[\s*]*(cleaned(?:[-\s]up)?\s+(?:transcript|text|version)|transcript(?:\s+cleaned)?|output)[\s*]*:/iu;
+// Words that only frame a label: rewording them ("here is" → "here's") proves nothing.
+const LABEL_FRAMING = new Set([
+  "okay",
+  "ok",
+  "sure",
+  "alright",
+  "here",
+  "heres",
+  "is",
+  "this",
+  "the",
+  "a",
+  "your",
+]);
+const TRANSCRIPT_TAG = /<\/?transcript\b[^>]*>/iu;
+// The whole reply inside one pair of double quotes.
+const QUOTE_WRAPPED = /^["“][^"“”]*["”]$/u;
+const QUOTED_SPEECH = /["“”]|\b(?:quote|unquote|quotation)\b/iu;
 const DUPLICATED = {
   message: "AI cleanup repeated the transcript. The original text was kept.",
   messageKey: "hooks.audioRecording.errorDescriptions.cleanupDuplicated",
@@ -25,7 +49,13 @@ export interface CleanupPrompt {
   dictionary: readonly string[];
 }
 
-export type CleanupOutputProblem = "duplicated_transcript" | "prompt_copy";
+export type CleanupOutputProblem =
+  | "duplicated_transcript"
+  | "prompt_copy"
+  | "label"
+  | "transcript_tags"
+  | "markdown_residue"
+  | "quote_wrap";
 
 function comparisonTokens(text: string): string[] {
   // Keep contractions as one word when punctuation is discarded.
@@ -118,6 +148,27 @@ function copiesPrompt(
   return false;
 }
 
+// Text around the transcript that the speaker never said.
+function wrapperProblem(
+  rawText: string,
+  rawTokens: readonly string[],
+  output: string
+): CleanupOutputProblem | null {
+  for (const line of output.split(/\r?\n/u)) {
+    const label = ANNOUNCEMENT_LINE.test(line) ? line : LABEL_PREFIX.exec(line)?.[1];
+    if (label === undefined) continue;
+    const words = comparisonTokens(label).filter((token) => !LABEL_FRAMING.has(token));
+    if (!saidBySpeaker(words, rawTokens)) return "label";
+  }
+  if (TRANSCRIPT_TAG.test(output) && !TRANSCRIPT_TAG.test(rawText)) return "transcript_tags";
+  const trimmed = output.trim();
+  // A dangling "**"; bold that opens and closes is left alone.
+  const unbalancedBold = trimmed.endsWith("**") && trimmed.split("**").length % 2 === 0;
+  if (unbalancedBold && !rawText.includes("**")) return "markdown_residue";
+  if (QUOTE_WRAPPED.test(trimmed) && !QUOTED_SPEECH.test(rawText)) return "quote_wrap";
+  return null;
+}
+
 export function findCleanupOutputProblem(
   rawText: string,
   output: string,
@@ -126,7 +177,7 @@ export function findCleanupOutputProblem(
   const rawTokens = comparisonTokens(rawText);
   if (repeatsTranscript(rawTokens, output)) return "duplicated_transcript";
   if (prompt && copiesPrompt(rawTokens, output, prompt)) return "prompt_copy";
-  return null;
+  return wrapperProblem(rawText, rawTokens, output);
 }
 
 export function assertValidCleanupOutput(

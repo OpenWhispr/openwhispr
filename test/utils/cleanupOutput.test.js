@@ -84,7 +84,6 @@ test("cleanup leaves legitimate and ambiguous output alone, with or without the 
     [RAW, `${CLEAN} Can you send me the report by Monday?`],
     [RAW, `Introduction. ${CLEAN} ${CLEAN}`],
     [RAW, `${CLEAN} ${CLEAN} Additional details.`],
-    [RAW, `**Cleaned transcript:**\n${CLEAN}`],
     [RAW, `**${CLEAN}**`],
     [RAW, ""],
     [RAW, "  \n "],
@@ -205,4 +204,77 @@ test("cleanup keeps dictation that shares words with its instructions", async ()
     ),
     "prompt_copy"
   );
+});
+
+test("cleanup rejects labels, tags, dangling bold and quotes the speaker never said", async () => {
+  const { assertValidCleanupOutput, findCleanupOutputProblem } = await import(
+    "../../src/utils/cleanupOutput.ts"
+  );
+  for (const [raw, output, problem] of [
+    [
+      "Okay, that first test seems to work fine. I'm going to do a shorter dictation.",
+      'Okay, here\'s the cleaned transcript:\n\n"Okay, that first test seems to work fine. I\'m going to do a shorter dictation."',
+      "label",
+    ],
+    [
+      "Okay, this seems to be working fine.",
+      'Okay, here is the cleaned transcript:\n\n"Okay, this seems to be working fine."',
+      "label",
+    ],
+    ["Okay, great.", 'Okay, cleaned transcript:\n\n"Okay, great."', "label"],
+    ["Sure.", "Sure, here's the cleaned version:\nSure.", "label"],
+    [RAW, `**Cleaned transcript:**\n${CLEAN}`, "label"],
+    ["Okay.", "Output: Okay.", "label"],
+    ["Okay.", "Transcript:\nOkay.", "label"],
+    [
+      "Let's start with the local model for now.",
+      "Let's start with the local model for now.**",
+      "markdown_residue",
+    ],
+    ["Hello.", "<transcript>\nHello.\n</transcript>", "transcript_tags"],
+    ["let's meet at three", '"let\'s meet at three"', "quote_wrap"],
+  ]) {
+    // No prompt is needed: Cloud cleanup gets these checks too.
+    for (const prompt of [undefined, PROMPT]) {
+      assert.equal(findCleanupOutputProblem(raw, output, prompt), problem, output);
+      assert.throws(
+        () => assertValidCleanupOutput(raw, output, prompt),
+        { code: "CLEANUP_OUTPUT_INVALID", messageKey: ADDED },
+        output
+      );
+    }
+  }
+});
+
+test("cleanup keeps labels, numbers and quotes the speaker dictated", async () => {
+  const { findCleanupOutputProblem } = await import("../../src/utils/cleanupOutput.ts");
+  for (const [raw, output] of [
+    // Bold that opens and closes is formatting, not a stray marker.
+    [RAW, `**${CLEAN}**`],
+    [
+      "okay here's the cleaned transcript colon we shipped the fix",
+      "Okay, here's the cleaned transcript: we shipped the fix.",
+    ],
+    [
+      "here is the cleaned transcript from yesterday's call colon",
+      "Here is the cleaned transcript from yesterday's call:",
+    ],
+    // Reworded framing ("here is" → "here's") and converted numbers still count as said.
+    ["here is the output colon", "Here's the output:"],
+    ["here's the version two plan colon", "Here's the version 2 plan:"],
+    // Headings that merely end in a colon are not cleanup labels.
+    ["version one point two notes colon", "Version 1.2 notes:"],
+    ["text me the details colon", "Text me the details:"],
+    // Speech-to-text writes the word "colon"; the label words were still said.
+    ["transcript colon the call went well", "Transcript: The call went well."],
+    ["output colon five hundred units a day", "Output: 500 units a day."],
+    ["he said quote okay unquote", 'He said, "Okay."'],
+    ["quote to be or not to be end quote", '"To be or not to be."'],
+    // Dialogue opens and closes with quotes without being one wrapped reply.
+    ["hello she said and then goodbye he said", '"Hello," she said. "Goodbye," he said.'],
+  ]) {
+    for (const prompt of [undefined, PROMPT]) {
+      assert.equal(findCleanupOutputProblem(raw, output, prompt), null, output);
+    }
+  }
 });
