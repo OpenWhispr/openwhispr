@@ -1455,6 +1455,7 @@
   },
   "settingsModal": {
     "managedByOrg": "一部の設定は組織によって管理されています。",
+    "managedAccount": "管理対象アカウント",
     "groups": {
       "account": "アカウント",
       "app": "アプリ",

@@ -1455,6 +1455,7 @@
   },
   "settingsModal": {
     "managedByOrg": "部分設定由您的組織管理。",
+    "managedAccount": "受管理的帳戶",
     "groups": {
       "account": "帳戶",
       "app": "應用程式",
