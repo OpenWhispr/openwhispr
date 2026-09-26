@@ -190,6 +190,10 @@ test("cleanup keeps dictation that shares words with its instructions", async ()
     ["what is the capital of spain", "What's the capital of Spain?"],
     ["can you um uh like you know send me the report", "Can you send me the report?"],
     ["whats the capital of franz", "What's the capital of France?"],
+    // Two such edits in one phrase: short words added, a contraction plus a correction.
+    ["can you send me report friday", "Can you send me the report by Friday?"],
+    ["send report friday", "Send the report by Friday."],
+    ["what is the capitol of france", "What's the capital of France?"],
     // Dictionary spellings, including a term longer than the four-word run.
     [
       "i spoke with annaliese about the zefir demo",
@@ -318,6 +322,11 @@ test("cleanup keeps labels, numbers and quotes the speaker dictated", async () =
     // Speech-to-text writes the word "colon"; the label words were still said.
     ["transcript colon the call went well", "Transcript: The call went well."],
     ["output colon five hundred units a day", "Output: 500 units a day."],
+    // Markup the speaker dictated, spoken delimiters included.
+    [
+      "use less than transcript greater than as the opening tag",
+      "Use <transcript> as the opening tag.",
+    ],
     // Quotation marks are formatting in any language, however they were dictated.
     ["he said quote okay unquote", 'He said, "Okay."'],
     ["« Bonjour. »", '"Bonjour."'],

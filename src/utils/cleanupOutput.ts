@@ -65,8 +65,13 @@ function comparisonTokens(text: string): string[] {
 }
 
 const isNumber = (token: string) => /^\p{N}+$/u.test(token);
-// Digits and single characters recur in any date or number ("1 月 15 日", "5 30 pm").
-const isSubstantive = (token: string) => !isNumber(token) && [...token].length > 1;
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+// Digits and short words recur in any sentence, date or number ("the", "by",
+// "1 月 15 日"), so they are no evidence of copying. CJK words are one or two characters.
+const isSubstantive = (token: string) =>
+  !isNumber(token) && [...token].length > (CJK.test(token) ? 1 : 3);
+// Apostrophes are already gone, so "what's" reads "whats": a contraction of a word said.
+const CONTRACTION_ENDINGS = ["s", "re", "ve", "ll", "d", "m", "nt", "t"];
 
 function wordRuns(tokens: readonly string[]): string[] {
   const runs: string[] = [];
@@ -114,7 +119,14 @@ function copiesPrompt(spoken: ReadonlySet<string>, output: string, prompt: Clean
   for (let i = 0; i + PROMPT_RUN_LENGTH <= outputTokens.length; i++) {
     const run = outputTokens.slice(i, i + PROMPT_RUN_LENGTH);
     if (!fromPrompt.has(run.join(" "))) continue;
-    const unspoken = run.filter((token) => isSubstantive(token) && !allowed.has(token));
+    const unspoken = run.filter(
+      (token) =>
+        isSubstantive(token) &&
+        !allowed.has(token) &&
+        !CONTRACTION_ENDINGS.some(
+          (ending) => token.endsWith(ending) && allowed.has(token.slice(0, -ending.length))
+        )
+    );
     if (unspoken.length >= UNSPOKEN_WORDS) return true;
   }
   return false;
@@ -141,7 +153,7 @@ function wrapperProblem(
   for (const line of output.split(/\r?\n/u)) {
     if (labelWords(line)?.some((word) => !spoken.has(word))) return "label";
   }
-  if (TRANSCRIPT_TAG.test(output) && !TRANSCRIPT_TAG.test(rawText)) return "transcript_tags";
+  if (TRANSCRIPT_TAG.test(output) && !spoken.has("transcript")) return "transcript_tags";
   const trimmed = output.trim();
   // A dangling "**"; bold that opens and closes is left alone.
   const unbalancedBold = trimmed.endsWith("**") && trimmed.split("**").length % 2 === 0;
