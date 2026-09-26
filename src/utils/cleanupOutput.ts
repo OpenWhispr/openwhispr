@@ -163,13 +163,17 @@ function labelWords(line: string): string[] | undefined {
   return label === undefined ? undefined : comparisonTokens(label);
 }
 
-// A label line is the speaker's own only if they said its label words, give or take
-// a corrected letter or two; the rest of the line may be reworded like any cleanup.
+// A label line is the speaker's own only if they said its label words, singular or
+// plural; the rest of the line may be reworded like any cleanup. A looser match would
+// take "next" or "test" for "text".
 function addsLabel(spoken: ReadonlySet<string>, output: string): boolean {
   return output
     .split(/\r?\n/u)
     .some((line) =>
-      labelWords(line)?.some((word) => !spoken.has(word) && !nearlySaid(word, spoken))
+      labelWords(line)?.some(
+        (word) =>
+          !spoken.has(word) && !spoken.has(`${word}s`) && !spoken.has(word.replace(/s$/u, ""))
+      )
     );
 }
 

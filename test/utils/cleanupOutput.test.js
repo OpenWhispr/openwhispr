@@ -279,6 +279,13 @@ test("cleanup rejects labels the speaker never said", async () => {
       "label",
     ],
     ["I sent you the text.", "Here's the cleaned text:\nI sent you the text.", "label"],
+    // A word a letter away from the label ("next", "test") is not the label.
+    ["What's next on the agenda?", "Here's the text:\nWhat's next on the agenda?", "label"],
+    [
+      "Run the test again before lunch.",
+      "Here's the text:\nRun the test again before lunch.",
+      "label",
+    ],
   ]) {
     // No prompt is needed: Cloud cleanup gets these checks too.
     for (const prompt of [undefined, PROMPT]) {
