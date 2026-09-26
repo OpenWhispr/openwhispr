@@ -98,7 +98,7 @@ import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
-import { Progress } from "./ui/progress";
+import WeeklyUsageMeter from "./WeeklyUsageMeter";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
 import type {
@@ -2450,51 +2450,18 @@ export default function SettingsPage({
                               <Badge variant="warning">
                                 {t("settingsPage.account.badges.limitReached")}
                               </Badge>
-                            ) : (
-                              <Badge variant="outline">
-                                {t("settingsPage.account.badges.free")}
-                              </Badge>
-                            )}
+                            ) : null}
                           </SettingsRow>
+                          {!usage.isSubscribed && !usage.isTrial && (
+                            <WeeklyUsageMeter
+                              wordsUsed={usage.wordsUsed}
+                              limit={usage.limit}
+                              isOverLimit={usage.isOverLimit}
+                              nextWordsAvailableAt={usage.nextWordsAvailableAt}
+                              onRefresh={usage.refetch}
+                            />
+                          )}
                         </SettingsPanelRow>
-
-                        {!usage.isSubscribed && !usage.isTrial && (
-                          <SettingsPanelRow>
-                            <div className="space-y-1.5">
-                              <Progress
-                                value={
-                                  usage.limit > 0
-                                    ? Math.min(100, (usage.wordsUsed / usage.limit) * 100)
-                                    : 0
-                                }
-                                className={cn(
-                                  "h-1.5",
-                                  usage.isOverLimit
-                                    ? "[&>div]:bg-destructive"
-                                    : usage.isApproachingLimit
-                                      ? "[&>div]:bg-warning"
-                                      : "[&>div]:bg-primary"
-                                )}
-                              />
-                              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span className="tabular-nums">
-                                  {usage.wordsUsed.toLocaleString(i18n.language)} /{" "}
-                                  {usage.limit.toLocaleString(i18n.language)}
-                                </span>
-                                {usage.isApproachingLimit && (
-                                  <span className="text-warning">
-                                    {t("settingsPage.account.wordsRemaining", {
-                                      remaining: usage.wordsRemaining.toLocaleString(i18n.language),
-                                    })}
-                                  </span>
-                                )}
-                                {!usage.isApproachingLimit && !usage.isOverLimit && (
-                                  <span>{t("settingsPage.account.rollingWeeklyLimit")}</span>
-                                )}
-                              </div>
-                            </div>
-                          </SettingsPanelRow>
-                        )}
 
                         <SettingsPanelRow>
                           {usage.isPastDue ? (

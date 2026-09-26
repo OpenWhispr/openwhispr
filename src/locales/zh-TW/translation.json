@@ -1526,7 +1526,6 @@
     },
     "account": {
       "badges": {
-        "free": "免費",
         "limitReached": "已達上限",
         "pastDue": "款項逾期",
         "pro": "Pro",
@@ -1572,7 +1571,6 @@
         "business": "Business",
         "trial": "試用"
       },
-      "rollingWeeklyLimit": "滾動式每週額度",
       "signOut": {
         "failedDescription": "登出時發生錯誤。請再試一次。",
         "failedTitle": "無法登出",
@@ -1691,7 +1689,6 @@
         "button": "建立免費帳號"
       },
       "user": "使用者",
-      "wordsRemaining": "剩餘 {{remaining}} 字",
       "deleteAccount": {
         "label": "刪除帳戶",
         "labelDescription": "永久刪除您的帳戶和個人雲端資料。其他本地使用者和工作區擁有的內容將被保留。",
@@ -1746,6 +1743,14 @@
       "planUnavailable": {
         "title": "無法取得方案",
         "description": "目前無法載入你的方案，你的使用權限不受影響。"
+      },
+      "usageReturn": {
+        "day_one": "{{count}} 天後恢復可用字數",
+        "day_other": "{{count}} 天後恢復可用字數",
+        "hour_one": "{{count}} 小時後恢復可用字數",
+        "hour_other": "{{count}} 小時後恢復可用字數",
+        "minute_one": "{{count}} 分鐘後恢復可用字數",
+        "minute_other": "{{count}} 分鐘後恢復可用字數"
       }
     },
     "agentConfig": {

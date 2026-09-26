@@ -1819,7 +1819,6 @@
     },
     "account": {
       "badges": {
-        "free": "Gratuit",
         "limitReached": "Limite atteinte",
         "pastDue": "Paiement en retard",
         "pro": "Pro",
@@ -1961,7 +1960,6 @@
           "confirm": "Confirmer"
         }
       },
-      "rollingWeeklyLimit": "Limite hebdomadaire glissante",
       "signOut": {
         "failedDescription": "Un problème est survenu lors de la déconnexion. Veuillez réessayer.",
         "failedTitle": "Impossible de se déconnecter",
@@ -1984,7 +1982,6 @@
         "button": "Créer un compte gratuit"
       },
       "user": "Utilisateur",
-      "wordsRemaining": "{{remaining}} restants",
       "deleteAccount": {
         "label": "Supprimer le compte",
         "labelDescription": "Supprimer définitivement votre compte et vos données cloud personnelles. Les autres utilisateurs locaux et le contenu des espaces de travail sont conservés.",
@@ -2039,6 +2036,14 @@
       "planUnavailable": {
         "title": "Forfait indisponible",
         "description": "Nous n'avons pas pu charger votre forfait pour le moment. Votre accès reste inchangé."
+      },
+      "usageReturn": {
+        "day_one": "Les mots seront à nouveau disponibles dans {{count}} jour",
+        "day_other": "Les mots seront à nouveau disponibles dans {{count}} jours",
+        "hour_one": "Les mots seront à nouveau disponibles dans {{count}} heure",
+        "hour_other": "Les mots seront à nouveau disponibles dans {{count}} heures",
+        "minute_one": "Les mots seront à nouveau disponibles dans {{count}} minute",
+        "minute_other": "Les mots seront à nouveau disponibles dans {{count}} minutes"
       }
     },
     "agentConfig": {

@@ -1505,7 +1505,6 @@
     },
     "account": {
       "badges": {
-        "free": "Gratuito",
         "limitReached": "Limite atingido",
         "pastDue": "Em atraso",
         "pro": "Pro",
@@ -1551,7 +1550,6 @@
         "business": "Business",
         "trial": "Teste"
       },
-      "rollingWeeklyLimit": "Limite semanal contínuo",
       "signOut": {
         "failedDescription": "Algo deu errado ao sair. Tente novamente.",
         "failedTitle": "Não foi possível sair",
@@ -1670,7 +1668,6 @@
         "button": "Criar conta gratuita"
       },
       "user": "Usuário",
-      "wordsRemaining": "{{remaining}} restantes",
       "deleteAccount": {
         "label": "Excluir conta",
         "labelDescription": "Excluir permanentemente sua conta e dados pessoais na nuvem. Outros usuários locais e conteúdos dos espaços de trabalho são preservados.",
@@ -1725,6 +1722,14 @@
       "planUnavailable": {
         "title": "Plano indisponível",
         "description": "Não conseguimos carregar seu plano agora. Seu acesso permanece o mesmo."
+      },
+      "usageReturn": {
+        "day_one": "As palavras voltam a ficar disponíveis em {{count}} dia",
+        "day_other": "As palavras voltam a ficar disponíveis em {{count}} dias",
+        "hour_one": "As palavras voltam a ficar disponíveis em {{count}} hora",
+        "hour_other": "As palavras voltam a ficar disponíveis em {{count}} horas",
+        "minute_one": "As palavras voltam a ficar disponíveis em {{count}} minuto",
+        "minute_other": "As palavras voltam a ficar disponíveis em {{count}} minutos"
       }
     },
     "agentConfig": {

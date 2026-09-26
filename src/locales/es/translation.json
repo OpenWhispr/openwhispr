@@ -1579,7 +1579,6 @@
     },
     "account": {
       "badges": {
-        "free": "Gratis",
         "limitReached": "Límite alcanzado",
         "pastDue": "Pago vencido",
         "pro": "Pro",
@@ -1721,7 +1720,6 @@
           "confirm": "Confirmar"
         }
       },
-      "rollingWeeklyLimit": "Límite semanal móvil",
       "signOut": {
         "failedDescription": "Algo salió mal al cerrar sesión. Inténtalo de nuevo.",
         "failedTitle": "No se pudo cerrar sesión",
@@ -1744,7 +1742,6 @@
         "title": "Prueba Pro gratis por 7 días"
       },
       "user": "Usuario",
-      "wordsRemaining": "{{remaining}} restantes",
       "deleteAccount": {
         "label": "Eliminar cuenta",
         "labelDescription": "Eliminar permanentemente tu cuenta y datos personales en la nube. Se conservan los demás usuarios locales y el contenido de los espacios de trabajo.",
@@ -1799,6 +1796,14 @@
       "planUnavailable": {
         "title": "Plan no disponible",
         "description": "No pudimos cargar tu plan ahora mismo. Tu acceso no ha cambiado."
+      },
+      "usageReturn": {
+        "day_one": "Las palabras vuelven a estar disponibles en {{count}} día",
+        "day_other": "Las palabras vuelven a estar disponibles en {{count}} días",
+        "hour_one": "Las palabras vuelven a estar disponibles en {{count}} hora",
+        "hour_other": "Las palabras vuelven a estar disponibles en {{count}} horas",
+        "minute_one": "Las palabras vuelven a estar disponibles en {{count}} minuto",
+        "minute_other": "Las palabras vuelven a estar disponibles en {{count}} minutos"
       }
     },
     "agentConfig": {

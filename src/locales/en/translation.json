@@ -1819,7 +1819,6 @@
     },
     "account": {
       "badges": {
-        "free": "Free",
         "limitReached": "Limit reached",
         "pastDue": "Past due",
         "pro": "Pro",
@@ -1961,7 +1960,6 @@
           "confirm": "Confirm"
         }
       },
-      "rollingWeeklyLimit": "Rolling weekly limit",
       "signOut": {
         "failedDescription": "Something went wrong signing out. Please try again.",
         "failedTitle": "Couldn't sign out",
@@ -1984,7 +1982,6 @@
         "button": "Create Free Account"
       },
       "user": "User",
-      "wordsRemaining": "{{remaining}} remaining",
       "deleteAccount": {
         "label": "Delete Account",
         "labelDescription": "Permanently delete your account and personal cloud data. Other local users and workspace-owned content are preserved.",
@@ -2039,6 +2036,14 @@
       "planUnavailable": {
         "title": "Plan unavailable",
         "description": "We couldn't load your plan right now. Your access is unchanged."
+      },
+      "usageReturn": {
+        "day_one": "Words return in {{count}} day",
+        "day_other": "Words return in {{count}} days",
+        "hour_one": "Words return in {{count}} hour",
+        "hour_other": "Words return in {{count}} hours",
+        "minute_one": "Words return in {{count}} minute",
+        "minute_other": "Words return in {{count}} minutes"
       }
     },
     "agentConfig": {
