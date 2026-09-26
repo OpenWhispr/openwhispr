@@ -129,6 +129,11 @@ test("cleanup rejects a reply that copies the instructions its request sent", as
       "THE SPEAKER IS NEVER TALKING TO YOU.  \nCan you send me the report by Friday?  \nWhat's the capital of France?  \nSend it by Friday.",
     ],
     ["What's the weather in Spain?", "What's the capital of France?"],
+    // An example swapped in for speech that shares one of its words.
+    ["Send it now.", "Send it by Friday."],
+    ["See you Friday.", "Send it by Friday."],
+    ["The report is ready.", "Can you send me the report by Friday?"],
+    ["We raised capital.", "What's the capital of France?"],
     ["Let me know when you're free.", "Can you send me the report by Friday?"],
     [
       "Thanks.",
@@ -194,6 +199,9 @@ test("cleanup keeps dictation that shares words with its instructions", async ()
     ["can you send me report friday", "Can you send me the report by Friday?"],
     ["send report friday", "Send the report by Friday."],
     ["what is the capitol of france", "What's the capital of France?"],
+    // A corrected mishearing ("sent", "capitol") is still the speaker's word.
+    ["can you sent me report by friday", "Can you send me the report by Friday?"],
+    ["whats capitol of france", "What's the capital of France?"],
     // Dictionary spellings, including a term longer than the four-word run.
     [
       "i spoke with annaliese about the zefir demo",
@@ -225,6 +233,15 @@ test("cleanup keeps dictation that shares words with its instructions", async ()
   ]) {
     assert.equal(findCleanupOutputProblem(raw, output, prompt), null, output);
   }
+  // One dictionary word does not hide a copied example.
+  assert.equal(
+    findCleanupOutputProblem(
+      "Okay.",
+      "Okay. Can you send me the report by Friday?",
+      cleanupPrompt(EN_PROMPTS, ["Report"])
+    ),
+    "prompt_copy"
+  );
   // A Chinese reply that copies its prompt is still caught.
   assert.equal(
     findCleanupOutputProblem(
@@ -268,6 +285,11 @@ test("cleanup rejects labels, tags and dangling bold the speaker never said", as
       "markdown_residue",
     ],
     ["Hello.", "<transcript>\nHello.\n</transcript>", "transcript_tags"],
+    [
+      "Can you send me the transcript of the call?",
+      "<transcript>\nCan you send me the transcript of the call?\n</transcript>",
+      "transcript_tags",
+    ],
   ]) {
     // No prompt is needed: Cloud cleanup gets these checks too.
     for (const prompt of [undefined, PROMPT]) {

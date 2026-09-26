@@ -32,6 +32,8 @@ const LABEL_FRAMING = new Set([
 // The noun an announcement's label ends on: "…the cleaned transcript:".
 const ANNOUNCED = new Set(["transcript", "version", "text", "output"]);
 const TRANSCRIPT_TAG = /<\/?transcript\b[^<>]*>/iu;
+// Words a speaker uses to dictate markup: "less than transcript greater than".
+const MARKUP_CUES = /\b(?:tags?|brackets?|angle|less|greater)\b/iu;
 const DUPLICATED = {
   message: "AI cleanup repeated the transcript. The original text was kept.",
   messageKey: "hooks.audioRecording.errorDescriptions.cleanupDuplicated",
@@ -66,12 +68,37 @@ function comparisonTokens(text: string): string[] {
 
 const isNumber = (token: string) => /^\p{N}+$/u.test(token);
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
-// Digits and short words recur in any sentence, date or number ("the", "by",
-// "1 月 15 日"), so they are no evidence of copying. CJK words are one or two characters.
-const isSubstantive = (token: string) =>
+// Digits and single characters recur in any date or number ("1 月 15 日", "5 30 pm").
+const isSubstantive = (token: string) => !isNumber(token) && [...token].length > 1;
+// Cleanup adds short words ("the", "by"); a copied phrase also brings a longer one.
+// CJK words are one or two characters.
+const isContentWord = (token: string) =>
   !isNumber(token) && [...token].length > (CJK.test(token) ? 1 : 3);
-// Apostrophes are already gone, so "what's" reads "whats": a contraction of a word said.
-const CONTRACTION_ENDINGS = ["s", "re", "ve", "ll", "d", "m", "nt", "t"];
+
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const substitution = previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1);
+      current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, substitution);
+    }
+    previous = current;
+  }
+  return previous[b.length];
+}
+
+// A word a letter or two from one the speaker said is a corrected mishearing or a
+// contraction ("sent" → "send", "capitol" → "capital", "what" → "what's").
+function nearlySaid(token: string, spoken: ReadonlySet<string>): boolean {
+  const limit = token.length > 5 ? 2 : 1;
+  for (const word of spoken) {
+    if (Math.abs(word.length - token.length) <= limit && editDistance(token, word) <= limit) {
+      return true;
+    }
+  }
+  return false;
+}
 
 function wordRuns(tokens: readonly string[]): string[] {
   const runs: string[] = [];
@@ -119,15 +146,13 @@ function copiesPrompt(spoken: ReadonlySet<string>, output: string, prompt: Clean
   for (let i = 0; i + PROMPT_RUN_LENGTH <= outputTokens.length; i++) {
     const run = outputTokens.slice(i, i + PROMPT_RUN_LENGTH);
     if (!fromPrompt.has(run.join(" "))) continue;
-    const unspoken = run.filter(
-      (token) =>
-        isSubstantive(token) &&
-        !allowed.has(token) &&
-        !CONTRACTION_ENDINGS.some(
-          (ending) => token.endsWith(ending) && allowed.has(token.slice(0, -ending.length))
-        )
-    );
-    if (unspoken.length >= UNSPOKEN_WORDS) return true;
+    const unspoken = run.filter((token) => isSubstantive(token) && !allowed.has(token));
+    if (
+      unspoken.length >= UNSPOKEN_WORDS &&
+      unspoken.some((token) => isContentWord(token) && !nearlySaid(token, spoken))
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -153,7 +178,9 @@ function wrapperProblem(
   for (const line of output.split(/\r?\n/u)) {
     if (labelWords(line)?.some((word) => !spoken.has(word))) return "label";
   }
-  if (TRANSCRIPT_TAG.test(output) && !spoken.has("transcript")) return "transcript_tags";
+  const dictatedTag =
+    TRANSCRIPT_TAG.test(rawText) || (spoken.has("transcript") && MARKUP_CUES.test(rawText));
+  if (TRANSCRIPT_TAG.test(output) && !dictatedTag) return "transcript_tags";
   const trimmed = output.trim();
   // A dangling "**"; bold that opens and closes is left alone.
   const unbalancedBold = trimmed.endsWith("**") && trimmed.split("**").length % 2 === 0;
@@ -189,9 +216,10 @@ export async function inOneChineseScript(
     );
     return [raw, reply, prompt && { text, dictionary }];
   } catch (error) {
-    // A converter that fails to load must not cost the user their cleanup.
+    // Unmatched scripts would make the copy check reject good cleanups, so skip that
+    // check; a converter that fails to load must not cost the user their cleanup.
     logger.logReasoning("CLEANUP_SCRIPT_UNAVAILABLE", { error: (error as Error).message });
-    return [rawText, output, prompt];
+    return [rawText, output, undefined];
   }
 }
 
