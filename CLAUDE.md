@@ -851,7 +851,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 
 5. **Windows Push-to-Talk Binary**:
    - Prebuilt binary downloaded automatically on Windows during build
-   - If download fails, push-to-talk falls back to tap mode
+   - If neither compiling nor the download produces it, `afterPack.js` fails the Windows build
    - To compile locally: install Visual Studio Build Tools or MinGW-w64
    - CI workflow (`.github/workflows/build-windows-key-listener.yml`) auto-builds on push to main
 
