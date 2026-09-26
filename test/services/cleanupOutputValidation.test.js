@@ -160,32 +160,57 @@ test("cleanup validates completed provider output using the request's prompt set
     });
   });
 
-  await t.test(
-    "OpenWhispr Cloud writes its own prompt, so only wrapper checks apply",
-    async () => {
-      setCustomPrompt("");
-      const raw = "What's the capital of Spain?";
-      const example = "Can you send me the report by Friday?";
-      window.electronAPI.processLocalReasoning = async () => ({ success: true, text: example });
-      await assert.rejects(service.processText(raw, "test-model", null, { provider: "local" }), {
+  await t.test("OpenWhispr Cloud writes its own prompt, so only wrapper checks apply", async () => {
+    setCustomPrompt("");
+    const raw = "What's the capital of Spain?";
+    const example = "Can you send me the report by Friday?";
+    window.electronAPI.processLocalReasoning = async () => ({ success: true, text: example });
+    await assert.rejects(service.processText(raw, "test-model", null, { provider: "local" }), {
+      code: "CLEANUP_OUTPUT_INVALID",
+      messageKey: ADDED,
+    });
+    window.electronAPI.cloudReason = async () => ({ success: true, text: example });
+    assert.equal(
+      await service.processText(raw, "test-model", null, { provider: "openwhispr" }),
+      example
+    );
+    window.electronAPI.cloudReason = async () => ({
+      success: true,
+      text: `Okay, here's the cleaned transcript:\n\n"${raw}"`,
+    });
+    await assert.rejects(service.processText(raw, "test-model", null, { provider: "openwhispr" }), {
+      code: "CLEANUP_OUTPUT_INVALID",
+      messageKey: ADDED,
+    });
+  });
+
+  await t.test("Chinese cleanup that changes script is compared in one script", async () => {
+    setCustomPrompt("");
+    const { uiLanguage, preferredLanguage } = useSettingsStore.getState();
+    // Speech-to-text returned Simplified; cleanup writes the Traditional the user chose.
+    useSettingsStore.setState({ uiLanguage: "zh-TW", preferredLanguage: "zh-TW" });
+    try {
+      const cleaned = "我覺得這個很重要，我們明天再討論。";
+      window.electronAPI.processLocalReasoning = async () => ({ success: true, text: cleaned });
+      assert.equal(
+        await service.processText("我觉得这个很重要我们明天再讨论", "test-model", null, {
+          provider: "local",
+        }),
+        cleaned
+      );
+      // A reply that copies the Traditional instructions is still caught.
+      window.electronAPI.processLocalReasoning = async (_text, _model, _agent, options) => ({
+        success: true,
+        text: options.systemPrompt.split("。")[0],
+      });
+      await assert.rejects(service.processText("好的", "test-model", null, { provider: "local" }), {
         code: "CLEANUP_OUTPUT_INVALID",
         messageKey: ADDED,
       });
-      window.electronAPI.cloudReason = async () => ({ success: true, text: example });
-      assert.equal(
-        await service.processText(raw, "test-model", null, { provider: "openwhispr" }),
-        example
-      );
-      window.electronAPI.cloudReason = async () => ({
-        success: true,
-        text: `Okay, here's the cleaned transcript:\n\n"${raw}"`,
-      });
-      await assert.rejects(
-        service.processText(raw, "test-model", null, { provider: "openwhispr" }),
-        { code: "CLEANUP_OUTPUT_INVALID", messageKey: ADDED }
-      );
+    } finally {
+      useSettingsStore.setState({ uiLanguage, preferredLanguage });
     }
-  );
+  });
 
   await t.test("history retry keeps the raw row and reports rejected cleanup", async () => {
     setCustomPrompt("");

@@ -111,9 +111,8 @@ test("cleanup leaves legitimate and ambiguous output alone, with or without the 
 });
 
 test("cleanup rejects a reply that copies the instructions its request sent", async () => {
-  const { assertValidCleanupOutput, findCleanupOutputProblem } = await import(
-    "../../src/utils/cleanupOutput.ts"
-  );
+  const { assertValidCleanupOutput, findCleanupOutputProblem } =
+    await import("../../src/utils/cleanupOutput.ts");
   for (const [raw, output] of [
     // Replies an on-device model pasted instead of the dictation.
     ["Okay.", 'Okay, cleaned transcript:\n\n"Okay. Can you send me the report by Friday?"'],
@@ -189,13 +188,20 @@ test("cleanup keeps dictation that shares words with its instructions", async ()
     ["can you um uh like you know send me the report", "Can you send me the report?"],
     ["whats the capital of franz", "What's the capital of France?"],
     // Dictionary spellings, including a term longer than the four-word run.
-    ["i spoke with annaliese about the zefir demo", "I spoke with Anneliese about the Zephyr demo."],
+    [
+      "i spoke with annaliese about the zefir demo",
+      "I spoke with Anneliese about the Zephyr demo.",
+    ],
     [
       "send the quoka labs series bee deck to anneliese",
       "Send the Quokka Labs Series B Deck to Anneliese.",
     ],
     // Spoken numbers written as digits never count against the speaker.
-    ["punkt eins gib nur den bericht ab", "1. Gib nur den Bericht ab.", cleanupPrompt(DE_PROMPTS, [])],
+    [
+      "punkt eins gib nur den bericht ab",
+      "1. Gib nur den Bericht ab.",
+      cleanupPrompt(DE_PROMPTS, []),
+    ],
     // Digits and single characters are not words: 1月15日 recurs in any date.
     ["我们一月十五日开会", "我们1月15日开会。", cleanupPrompt(ZH_CN_PROMPTS, [])],
   ]) {
@@ -213,13 +219,12 @@ test("cleanup keeps dictation that shares words with its instructions", async ()
 });
 
 test("cleanup rejects labels, tags and dangling bold the speaker never said", async () => {
-  const { assertValidCleanupOutput, findCleanupOutputProblem } = await import(
-    "../../src/utils/cleanupOutput.ts"
-  );
+  const { assertValidCleanupOutput, findCleanupOutputProblem } =
+    await import("../../src/utils/cleanupOutput.ts");
   for (const [raw, output, problem] of [
     [
       "Okay, that first test seems to work fine. I'm going to do a shorter dictation.",
-      'Okay, here\'s the cleaned transcript:\n\n"Okay, that first test seems to work fine. I\'m going to do a shorter dictation."',
+      "Okay, here's the cleaned transcript:\n\n\"Okay, that first test seems to work fine. I'm going to do a shorter dictation.\"",
       "label",
     ],
     [
@@ -267,6 +272,21 @@ test("cleanup keeps labels, numbers and quotes the speaker dictated", async () =
     // Reworded framing ("here is" → "here's") and converted numbers still count as said.
     ["here is the output colon", "Here's the output:"],
     ["here's the version two plan colon", "Here's the version 2 plan:"],
+    // Everyday lines that announce text keep their cleanup edits: a contraction,
+    // dropped fillers, a corrected word.
+    [
+      "here is the text that is going on the flyer colon",
+      "Here's the text that's going on the flyer:",
+    ],
+    [
+      "this is the version we um uh sort of like agreed on colon",
+      "This is the version we agreed on:",
+    ],
+    ["here is the text for the websight colon", "Here's the text for the website:"],
+    [
+      "hi sarah here is the version i do not want to change colon",
+      "Hi Sarah,\nHere's the version I don't want to change:",
+    ],
     // Headings that merely end in a colon are not cleanup labels.
     ["version one point two notes colon", "Version 1.2 notes:"],
     ["text me the details colon", "Text me the details:"],
