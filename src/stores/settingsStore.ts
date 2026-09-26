@@ -281,6 +281,7 @@ const BOOLEAN_SETTINGS = new Set([
   "telemetryEnabled",
   "audioCuesEnabled",
   "pauseMediaOnDictation",
+  "escapeCancelsDictation",
   "floatingIconAutoHide",
   "startMinimized",
   "meetingProcessDetection",
@@ -1199,6 +1200,7 @@ export interface SettingsState
   setSaveDiscardedTranscriptions: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
   setPauseMediaOnDictation: (value: boolean) => void;
+  setEscapeCancelsDictation: (value: boolean) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
   setGcalAccounts: (accounts: CalendarAccount[]) => void;
@@ -1595,6 +1597,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     : "full-width") as "side-panel" | "full-width",
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     "tap" | "push",
+  escapeCancelsDictation: readBoolean("escapeCancelsDictation", true),
 
   microphoneSelectionMode: (() => {
     const mode = readString("microphoneSelectionMode", "system");
@@ -2333,6 +2336,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ activationMode: mode });
     if (isBrowser) {
       window.electronAPI?.notifyActivationModeChanged?.(mode);
+    }
+  },
+  setEscapeCancelsDictation: (enabled: boolean) => {
+    if (isBrowser) localStorage.setItem("escapeCancelsDictation", String(enabled));
+    set({ escapeCancelsDictation: enabled });
+    if (isBrowser && !enabled) {
+      void window.electronAPI?.unregisterCancelHotkey?.();
     }
   },
 
