@@ -4182,5 +4182,15 @@
     },
     "start": "Take notes",
     "join": "Join & transcribe"
+  },
+  "affiliate": {
+    "haveLink": "Have a creator link?",
+    "label": "Creator link (optional)",
+    "placeholder": "Paste your creator’s link",
+    "saved": "Creator link saved.",
+    "checking": "Checking your link…",
+    "unavailable": "We couldn’t check your link. Try again, or clear the field to continue.",
+    "privacy": "Creator links are unavailable with your current tracking settings. Clear the field to continue.",
+    "review": "Your referral is saved for review."
   }
 }

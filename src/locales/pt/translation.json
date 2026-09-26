@@ -4182,5 +4182,15 @@
     },
     "start": "Fazer anotações",
     "join": "Entrar e transcrever"
+  },
+  "affiliate": {
+    "haveLink": "Tem um link de criador?",
+    "label": "Link do criador (opcional)",
+    "placeholder": "Cole o link do seu criador",
+    "saved": "Link do criador salvo.",
+    "checking": "Verificando seu link…",
+    "unavailable": "Não foi possível verificar seu link. Tente novamente ou limpe o campo para continuar.",
+    "privacy": "Os links de criadores não estão disponíveis com suas configurações de rastreamento atuais. Limpe o campo para continuar.",
+    "review": "Seu link foi salvo para análise."
   }
 }

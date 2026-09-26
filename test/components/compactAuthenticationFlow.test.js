@@ -14,6 +14,7 @@ test("returning-user authentication renders the complete compact onboarding surf
     cachePrefix: "openwhispr-compact-reauthentication-",
     noExternal: ["react-i18next"],
     mockModules: {
+      "/stores/affiliateStore": `export function useAffiliateStore() { return { enabled: false }; }`,
       "react-i18next": `
         export function useTranslation() {
           return { t(key) { return key; } };
@@ -74,6 +75,7 @@ test("verification success completes auth and backing out signs out before retur
     cachePrefix: "openwhispr-compact-authentication-state-",
     noExternal: ["react"],
     mockModules: {
+      "/stores/affiliateStore": `export function useAffiliateStore() { return { enabled: false }; }`,
       react: `
         export function useState(initialValue) {
           const state = globalThis.__compactAuthTestState;
@@ -145,6 +147,7 @@ test("a restored verification screen offers its recovery actions immediately", a
     cachePrefix: "openwhispr-email-verification-resumed-",
     noExternal: ["react-i18next"],
     mockModules: {
+      "/stores/affiliateStore": `export function useAffiliateStore() { return { enabled: false }; }`,
       "react-i18next": `
         export function useTranslation() {
           return { t(key) { return key; } };
@@ -192,6 +195,7 @@ test("only an address restored from a saved session opens verification as resume
     cachePrefix: "openwhispr-compact-authentication-resume-",
     noExternal: ["react"],
     mockModules: {
+      "/stores/affiliateStore": `export function useAffiliateStore() { return { enabled: false }; }`,
       react: `
         export function useState(initialValue) {
           const harness = globalThis.__compactAuthResumeState;

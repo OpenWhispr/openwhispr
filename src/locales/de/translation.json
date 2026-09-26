@@ -4182,5 +4182,15 @@
     },
     "start": "Notizen aufnehmen",
     "join": "Beitreten & transkribieren"
+  },
+  "affiliate": {
+    "haveLink": "Hast du einen Creator-Link?",
+    "label": "Creator-Link (optional)",
+    "placeholder": "Link deines Creators einfügen",
+    "saved": "Creator-Link gespeichert.",
+    "checking": "Link wird geprüft…",
+    "unavailable": "Dein Link konnte nicht geprüft werden. Versuche es erneut oder leere das Feld, um fortzufahren.",
+    "privacy": "Creator-Links sind mit deinen aktuellen Tracking-Einstellungen nicht verfügbar. Leere das Feld, um fortzufahren.",
+    "review": "Dein Link ist zur Prüfung gespeichert."
   }
 }

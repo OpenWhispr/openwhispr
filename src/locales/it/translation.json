@@ -4182,5 +4182,15 @@
     },
     "start": "Prendi appunti",
     "join": "Partecipa e trascrivi"
+  },
+  "affiliate": {
+    "haveLink": "Hai un link di un creator?",
+    "label": "Link del creator (facoltativo)",
+    "placeholder": "Incolla il link del tuo creator",
+    "saved": "Link del creator salvato.",
+    "checking": "Verifica del link…",
+    "unavailable": "Non è stato possibile verificare il link. Riprova o svuota il campo per continuare.",
+    "privacy": "I link dei creator non sono disponibili con le impostazioni di tracciamento attuali. Svuota il campo per continuare.",
+    "review": "Il tuo link è stato salvato per la verifica."
   }
 }

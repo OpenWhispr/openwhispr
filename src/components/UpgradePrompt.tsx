@@ -1,3 +1,4 @@
+import CreatorLinkField from "./CreatorLinkField";
 import { Dialog, DialogContent } from "./ui/dialog";
 import { ChevronRight } from "./icons";
 import { useTranslation } from "react-i18next";
@@ -48,6 +49,7 @@ export default function UpgradePrompt({
           </p>
         </div>
 
+        {!isPastDue && <CreatorLinkField />}
         <div className="space-y-2 pt-2">
           {isPastDue ? (
             <OptionCard

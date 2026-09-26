@@ -1,3 +1,4 @@
+import CreatorLinkField from "./CreatorLinkField";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -2561,6 +2562,7 @@ export default function SettingsPage({
 
                 <div className="space-y-5">
                   <SectionHeader title={t("settingsPage.account.pricing.title")} />
+                  {!usage?.isPersonallySubscribed && <CreatorLinkField />}
                   <div className={`grid gap-1.5 ${isCompact ? "grid-cols-2" : "grid-cols-4"}`}>
                     <div
                       className={cn(
