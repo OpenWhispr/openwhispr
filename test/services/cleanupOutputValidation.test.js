@@ -165,7 +165,7 @@ test("cleanup validates completed provider output using the request's prompt set
     async () => {
       setCustomPrompt("");
       const raw = "What's the capital of Spain?";
-      const example = "What's the capital of France?";
+      const example = "Can you send me the report by Friday?";
       window.electronAPI.processLocalReasoning = async () => ({ success: true, text: example });
       await assert.rejects(service.processText(raw, "test-model", null, { provider: "local" }), {
         code: "CLEANUP_OUTPUT_INVALID",

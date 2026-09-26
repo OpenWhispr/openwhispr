@@ -5,6 +5,9 @@ const cleanupLabel =
   /^(?:Cleaned transcript:|\*\*Cleaned transcript:\*\*|\*\*Cleaned transcript\*\*:)$/i;
 // Four words in a row is a phrase lifted from the prompt, not a coincidence.
 const PROMPT_RUN_LENGTH = 4;
+// A lifted phrase holds at least this many words the speaker never said. Cleanup's
+// own edits (an added "the", a contraction, one corrected word) add fewer.
+const UNSPOKEN_WORDS = 2;
 // Cleanup drops fillers and false starts, so words the speaker said can sit up
 // to this many transcript words apart.
 const SPOKEN_GAP = 3;
@@ -29,9 +32,6 @@ const LABEL_FRAMING = new Set([
   "your",
 ]);
 const TRANSCRIPT_TAG = /<\/?transcript\b[^>]*>/iu;
-// The whole reply inside one pair of double quotes.
-const QUOTE_WRAPPED = /^["“][^"“”]*["”]$/u;
-const QUOTED_SPEECH = /["“”]|\b(?:quote|unquote|quotation)\b/iu;
 const DUPLICATED = {
   message: "AI cleanup repeated the transcript. The original text was kept.",
   messageKey: "hooks.audioRecording.errorDescriptions.cleanupDuplicated",
@@ -50,12 +50,7 @@ export interface CleanupPrompt {
 }
 
 export type CleanupOutputProblem =
-  | "duplicated_transcript"
-  | "prompt_copy"
-  | "label"
-  | "transcript_tags"
-  | "markdown_residue"
-  | "quote_wrap";
+  "duplicated_transcript" | "prompt_copy" | "label" | "transcript_tags" | "markdown_residue";
 
 function comparisonTokens(text: string): string[] {
   // Keep contractions as one word when punctuation is discarded.
@@ -137,13 +132,14 @@ function copiesPrompt(
   const insideDictionaryEntry = new Set(
     prompt.dictionary.flatMap((entry) => wordRuns(comparisonTokens(entry)))
   );
+  const spoken = new Set(rawTokens);
   const outputTokens = comparisonTokens(output);
   for (let i = 0; i + PROMPT_RUN_LENGTH <= outputTokens.length; i++) {
     const run = outputTokens.slice(i, i + PROMPT_RUN_LENGTH);
     const key = run.join(" ");
     if (!fromPrompt.has(key) || insideDictionaryEntry.has(key)) continue;
-    if (run.filter(isSubstantive).length < 2) continue;
-    if (!saidBySpeaker(run, rawTokens)) return true;
+    const unspoken = run.filter((token) => isSubstantive(token) && !spoken.has(token));
+    if (unspoken.length >= UNSPOKEN_WORDS) return true;
   }
   return false;
 }
@@ -165,7 +161,6 @@ function wrapperProblem(
   // A dangling "**"; bold that opens and closes is left alone.
   const unbalancedBold = trimmed.endsWith("**") && trimmed.split("**").length % 2 === 0;
   if (unbalancedBold && !rawText.includes("**")) return "markdown_residue";
-  if (QUOTE_WRAPPED.test(trimmed) && !QUOTED_SPEECH.test(rawText)) return "quote_wrap";
   return null;
 }
 
