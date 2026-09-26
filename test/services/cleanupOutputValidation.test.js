@@ -9,6 +9,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 const RAW = "um so can you uh send me the report by friday";
 const CLEAN = "Can you send me the report by Friday?";
 const DUPLICATE = `**Cleaned transcript:**\n${CLEAN}\n\n${CLEAN}`;
+const ADDED = "hooks.audioRecording.errorDescriptions.cleanupAddedText";
 
 test("cleanup validates completed provider output using the request's prompt settings", async (t) => {
   const { window } = installBrowserGlobals(t);
@@ -102,6 +103,87 @@ test("cleanup validates completed provider output using the request's prompt set
       ]) {
         await assert.rejects(process(config), { code: "CLEANUP_OUTPUT_INVALID" }, config.provider);
       }
+    }
+  );
+
+  await t.test(
+    "local cleanup that copies the instructions it was sent keeps the raw text",
+    async () => {
+      setCustomPrompt("");
+      const { wrapCleanupTranscript } = await vite.ssrLoadModule("/config/prompts/index.ts");
+      const { default: logger } = await vite.ssrLoadModule("/utils/logger.ts");
+      const rejections = [];
+      const logReasoning = logger.logReasoning;
+      logger.logReasoning = (stage, details) => {
+        if (stage === "CLEANUP_OUTPUT_REJECTED") rejections.push(details);
+        return logReasoning(stage, details);
+      };
+      try {
+        for (const reply of [
+          // The opening sentence of the system prompt this request carried.
+          (options) => options.systemPrompt.split(".")[0],
+          // The instruction that follows the transcript in the user message.
+          () => wrapCleanupTranscript("").split("\n").pop(),
+        ]) {
+          window.electronAPI.processLocalReasoning = async (_text, _model, _agent, options) => ({
+            success: true,
+            text: reply(options),
+          });
+          await assert.rejects(
+            service.processText("Fix grammar.", "test-model", null, { provider: "local" }),
+            { code: "CLEANUP_OUTPUT_INVALID", messageKey: ADDED }
+          );
+        }
+      } finally {
+        logger.logReasoning = logReasoning;
+      }
+      // The log names the rule, never what was said or pasted.
+      assert.equal(rejections.length, 2);
+      for (const details of rejections) {
+        assert.deepEqual(Object.keys(details).sort(), ["inputLength", "outputLength", "reason"]);
+        assert.equal(details.reason, "prompt_copy");
+      }
+    }
+  );
+
+  await t.test("the prompt is read before inference, like eligibility", async () => {
+    setCustomPrompt("");
+    useSettingsStore.setState({ customDictionary: ["Zephyr Quokka", "Marmalade Festival"] });
+    window.electronAPI.processLocalReasoning = async () => {
+      // A dictionary edit while the model runs must not change what is checked.
+      useSettingsStore.setState({ customDictionary: [] });
+      return { success: true, text: "Okay. Zephyr Quokka, Marmalade Festival." };
+    };
+    await assert.rejects(service.processText("Okay.", "test-model", null, { provider: "local" }), {
+      code: "CLEANUP_OUTPUT_INVALID",
+      messageKey: ADDED,
+    });
+  });
+
+  await t.test(
+    "OpenWhispr Cloud writes its own prompt, so only wrapper checks apply",
+    async () => {
+      setCustomPrompt("");
+      const raw = "What's the capital of Spain?";
+      const example = "What's the capital of France?";
+      window.electronAPI.processLocalReasoning = async () => ({ success: true, text: example });
+      await assert.rejects(service.processText(raw, "test-model", null, { provider: "local" }), {
+        code: "CLEANUP_OUTPUT_INVALID",
+        messageKey: ADDED,
+      });
+      window.electronAPI.cloudReason = async () => ({ success: true, text: example });
+      assert.equal(
+        await service.processText(raw, "test-model", null, { provider: "openwhispr" }),
+        example
+      );
+      window.electronAPI.cloudReason = async () => ({
+        success: true,
+        text: `Okay, here's the cleaned transcript:\n\n"${raw}"`,
+      });
+      await assert.rejects(
+        service.processText(raw, "test-model", null, { provider: "openwhispr" }),
+        { code: "CLEANUP_OUTPUT_INVALID", messageKey: ADDED }
+      );
     }
   );
 
