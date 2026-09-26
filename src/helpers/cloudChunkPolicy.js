@@ -1,6 +1,7 @@
 const { createAbortError } = require("./abortError");
 const { formatTimestamp } = require("./speakerMerge");
 const { i18nMain } = require("./i18nMain");
+const { mapVerboseSegments } = require("./uploadTimestamps");
 
 // Retry/backoff/concurrency policy for the chunked cloud upload path (#1326).
 // Kept free of electron imports so the rules stay unit-testable.
@@ -148,6 +149,27 @@ function assembleChunkTranscript(results, segmentDurationSeconds, totalDurationS
   return pieces.join(" ").replace(/\s+/g, " ").trim();
 }
 
+// Places each chunk's timed segments on the full-file clock. A missing or
+// silent chunk contributes nothing; plain-text chunks stay plain text.
+function assembleChunkSegments(results, segmentDurationSeconds) {
+  const segments = [];
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    if (result == null || result === SILENT_CHUNK) continue;
+    const mapped = mapVerboseSegments(result);
+    if (!mapped) continue;
+    const offset = i * segmentDurationSeconds;
+    for (const seg of mapped) {
+      segments.push({
+        ...seg,
+        start: seg.start + offset,
+        end: seg.end + offset,
+      });
+    }
+  }
+  return segments.length ? segments : null;
+}
+
 function chunkRetryDelayMs(attempt, random = Math.random) {
   const base = Math.min(
     CLOUD_CHUNK_BACKOFF_BASE_MS * CLOUD_CHUNK_BACKOFF_FACTOR ** (attempt - 1),
@@ -246,6 +268,7 @@ module.exports = {
   isTeardownCollateral,
   summarizeChunkResults,
   assembleChunkTranscript,
+  assembleChunkSegments,
   chunkRetryDelayMs,
   abortableSleep,
   createTeardownGate,

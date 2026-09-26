@@ -166,6 +166,7 @@ export async function transcribeFile(
       // override its auto language detection.
       ...(provider === "cohere" && cfg.language ? { language: cfg.language } : {}),
       requestId: opts.requestId,
+      ...(opts.timestamps ? { timestamps: true } : {}),
     });
   }
 

@@ -865,7 +865,7 @@ class WhisperServerManager extends EventEmitter {
     });
 
     // signal is optional; only cancellable uploads pass one.
-    const { language, initialPrompt, signal, skipDecoderThresholds } = options;
+    const { language, initialPrompt, signal, skipDecoderThresholds, timestamps } = options;
     if (signal?.aborted) throw createAbortError("whisper-server transcription cancelled");
 
     // whisper.cpp wants 16 kHz mono PCM16; a renderer PCM tap delivers exactly that.
@@ -919,7 +919,7 @@ class WhisperServerManager extends EventEmitter {
     parts.push(
       `--${boundary}\r\n` +
         `Content-Disposition: form-data; name="response_format"\r\n\r\n` +
-        `json\r\n`
+        `${timestamps ? "verbose_json" : "json"}\r\n`
     );
     parts.push(`--${boundary}--\r\n`);
 

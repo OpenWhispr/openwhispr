@@ -2860,6 +2860,8 @@
       "saving": "保存中",
       "transcriptEmptyTitle": "まだ録音がありません",
       "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
+      "transcriptUntimedTitle": "時刻付きの文字起こしがありません",
+      "transcriptUntimedDescription": "このアップロードはプレーンテキストとして文字起こしされたため、字幕は書き出せません。区間の時刻を返すプロバイダでは、ここから SRT を書き出せます。",
       "startRecording": "録音を開始",
       "generateSummary": "AI要約を生成",
       "startWriting": "書き始める...",

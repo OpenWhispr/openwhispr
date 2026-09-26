@@ -3301,6 +3301,8 @@
       "saving": "Saving",
       "transcriptEmptyTitle": "Nothing recorded yet",
       "transcriptEmptyDescription": "Hit record to start transcribing. Everything said shows up here as it happens.",
+      "transcriptUntimedTitle": "No timed transcript",
+      "transcriptUntimedDescription": "This upload was transcribed as plain text, so subtitles aren't available. A provider that returns segment times makes SRT export available here.",
       "startRecording": "Start recording",
       "generateSummary": "Generate AI Summary",
       "startWriting": "Start writing...",

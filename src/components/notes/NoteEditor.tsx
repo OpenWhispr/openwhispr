@@ -400,6 +400,8 @@ export default function NoteEditor({
   }, []);
 
   const hasMeetingTranscript = !!note.transcript;
+  const uploadHasUntimedText =
+    note.note_type === "upload" && !!note.content?.trim() && !hasMeetingTranscript;
 
   const filteredFolders = useMemo(
     () =>
@@ -826,7 +828,7 @@ export default function NoteEditor({
   }, []);
 
   const exportOptions = useMemo<NoteExportOption[]>(() => {
-    if (viewMode === "transcript" && onExportTranscript) {
+    if (viewMode === "transcript" && onExportTranscript && hasMeetingTranscript) {
       return (["txt", "srt", "md", "json"] as const).map((format) => ({
         id: format,
         label: t(TRANSCRIPT_EXPORT_LABEL_KEYS[format]),
@@ -839,7 +841,7 @@ export default function NoteEditor({
       label: t(NOTE_EXPORT_LABEL_KEYS[format]),
       onSelect: () => onExportNote(format),
     }));
-  }, [viewMode, onExportTranscript, onExportNote, t]);
+  }, [viewMode, onExportTranscript, onExportNote, hasMeetingTranscript, t]);
 
   return (
     <div className="flex h-full min-h-0">
@@ -1204,11 +1206,19 @@ export default function NoteEditor({
             ) : viewMode === "transcript" ? (
               <EmptyStateCard
                 icon={Mic}
-                title={t("notes.editor.transcriptEmptyTitle")}
-                description={t("notes.editor.transcriptEmptyDescription")}
+                title={t(
+                  uploadHasUntimedText
+                    ? "notes.editor.transcriptUntimedTitle"
+                    : "notes.editor.transcriptEmptyTitle"
+                )}
+                description={t(
+                  uploadHasUntimedText
+                    ? "notes.editor.transcriptUntimedDescription"
+                    : "notes.editor.transcriptEmptyDescription"
+                )}
                 className={cn(PAGE_CONTENT_WIDTH_CLASS, "mt-2")}
               >
-                {canEditNote && recordingAllowed && (
+                {canEditNote && recordingAllowed && !uploadHasUntimedText && (
                   <Button size="sm" onClick={onStartRecording} disabled={isProcessing}>
                     <Mic size={13} />
                     {t("notes.editor.startRecording")}

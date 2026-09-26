@@ -16,6 +16,7 @@ const {
   isTeardownCollateral,
   summarizeChunkResults,
   assembleChunkTranscript,
+  assembleChunkSegments,
   chunkRetryDelayMs,
   abortableSleep,
   createTeardownGate,
@@ -347,4 +348,23 @@ test("double-release does not mint extra capacity", async () => {
   assert.equal(secondAdmitted, false, "double-release created a phantom slot");
   r1();
   (await second)();
+});
+
+test("chunk segments are shifted onto the full-file clock", () => {
+  assert.deepEqual(
+    assembleChunkSegments(
+      [
+        { segments: [{ text: "opening", start: 1.5, end: 4 }] },
+        SILENT_CHUNK,
+        { text: "plain text only" },
+        { segments: [{ text: "later", start: 0, end: 2.25 }] },
+      ],
+      240
+    ),
+    [
+      { text: "opening", start: 1.5, end: 4 },
+      { text: "later", start: 720, end: 722.25 },
+    ]
+  );
+  assert.equal(assembleChunkSegments([{ text: "no times" }, null], 240), null);
 });
