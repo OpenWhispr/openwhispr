@@ -66,6 +66,10 @@ A follow-up to 1.10.0 built from everything that landed since. Notes open straig
 - **Quick actions in the tray and the pill.** The tray menu now leads with **Start listening** / **Stop listening**, **Ask assistant** and **Start meeting recording**, and the dictation pill's right-click menu gains **Start meeting recording** while idle. Each action runs where it belongs: listening goes to the existing dictation start and stop, a meeting goes through the same entry the meeting hotkey uses and brings a live recording forward instead of opening an empty note over it, and only **Ask assistant** asks the renderer, since only it can open the panel. If organisation policy forbids the assistant, or policy is still loading, the pill surfaces and says why. (#2163)
 - **Windows: a dictation started from the tray pastes where you were working.** Starting from the tray captured OpenWhispr's own menu-owner window as the paste target, so the fast-paste helper pulled the foreground onto OpenWhispr, dropped the keystroke and restored the clipboard over your text. A target that is ours but is not one of our real windows is now dropped; the note editor remains a valid target. (#2163)
 
+### Dictionary
+
+- **Import your Dragon vocabulary.** Dictionary → Import → Import from Dragon takes the list Dragon writes from Vocabulary → Export custom word and phrase list (TXT, or the Windows XML) and adds every custom word to your dictionary after a preview of what's new. Words with a spoken form are imported by their written form; words already present are skipped rather than duplicated, and the file's formatting properties are left behind. (#2190)
+
 ### Transcription
 
 - **Local transcription now uses sherpa-onnx 1.13.8.** Cohere Transcribe now returns an empty result for silent audio instead of hallucinating a sentence; the bundled ONNX Runtime also moves to 1.28.2. (#1951, thanks @emanuelet)

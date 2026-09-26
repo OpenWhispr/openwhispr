@@ -3378,6 +3378,34 @@
     "emptyDescription": "Добавьте слова, которые {{agentName}} всегда должен распознавать: имена, инструменты, аббревиатуры.",
     "addFirstWord": "Добавьте первое слово",
     "importList": "Импортировать список",
+    "importMenu": "Импортировать",
+    "importFromDragon": "Импортировать из Dragon",
+    "dragonImport": {
+      "title": "Импортировать из Dragon",
+      "found_one": "Найдено {{count}} слово в {{fileName}}.",
+      "found_few": "Найдено {{count}} слова в {{fileName}}.",
+      "found_many": "Найдено {{count}} слов в {{fileName}}.",
+      "found_other": "Найдено {{count}} слова в {{fileName}}.",
+      "alreadyPresent": "Уже есть в вашем словаре, поэтому пропущено: {{count}}.",
+      "nothingNew": "Все слова из этого файла уже есть в вашем словаре.",
+      "unreadable": "Строк, которые не удалось прочитать, поэтому пропущено: {{count}}.",
+      "propertiesIgnored": "Свойства форматирования из Dragon не импортируются.",
+      "confirm_one": "Импортировать {{count}} слово",
+      "confirm_few": "Импортировать {{count}} слова",
+      "confirm_many": "Импортировать {{count}} слов",
+      "confirm_other": "Импортировать {{count}} слова",
+      "done_one": "Импортировано {{count}} слово из Dragon",
+      "done_few": "Импортировано {{count}} слова из Dragon",
+      "done_many": "Импортировано {{count}} слов из Dragon",
+      "done_other": "Импортировано {{count}} слова из Dragon",
+      "failedTitle": "Не удалось импортировать",
+      "error": {
+        "emptyFile": "В этом файле не найдено слов.",
+        "unsupportedXml": "Это не похоже на экспорт из Dragon для Windows. В Dragon выберите Vocabulary → Export custom word and phrase list и сохраните как TXT.",
+        "fileTooLarge": "Этот файл слишком большой для списка слов Dragon.",
+        "generic": "Не удалось прочитать этот файл."
+      }
+    },
     "agentDefault": "Добавлено по умолчанию"
   },
   "insights": {

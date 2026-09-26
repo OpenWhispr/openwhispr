@@ -1602,6 +1602,17 @@ declare global {
         skipped?: number;
         errors?: Array<{ clientNoteId: string; error: string }>;
       }>;
+      dragonImportPickAndParse?: () => Promise<{
+        canceled: boolean;
+        success?: boolean;
+        error?: string;
+        fileName?: string;
+        format?: "txt" | "xml";
+        words?: string[];
+        totalEntries?: number;
+        unreadableLines?: number;
+        propertiesIgnored?: boolean;
+      }>;
       showNoteFile?: (noteId: number) => Promise<{ success: boolean }>;
       showFolderInExplorer?: (folderName: string) => Promise<{ success: boolean }>;
 

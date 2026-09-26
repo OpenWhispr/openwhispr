@@ -3405,6 +3405,28 @@
     "emptyDescription": "Añade palabras que {{agentName}} siempre debe reconocer: nombres, herramientas, siglas.",
     "addFirstWord": "Añade tu primera palabra",
     "importList": "Importar una lista",
+    "importMenu": "Importar",
+    "importFromDragon": "Importar desde Dragon",
+    "dragonImport": {
+      "title": "Importar desde Dragon",
+      "found_one": "Se encontró {{count}} palabra en {{fileName}}.",
+      "found_other": "Se encontraron {{count}} palabras en {{fileName}}.",
+      "alreadyPresent": "Ya estaban en tu diccionario, así que se omitieron: {{count}}.",
+      "nothingNew": "Todas las palabras de este archivo ya están en tu diccionario.",
+      "unreadable": "Líneas que no se pudieron leer, así que se omitieron: {{count}}.",
+      "propertiesIgnored": "Las propiedades de formato de Dragon no se importan.",
+      "confirm_one": "Importar {{count}} palabra",
+      "confirm_other": "Importar {{count}} palabras",
+      "done_one": "Se importó {{count}} palabra desde Dragon",
+      "done_other": "Se importaron {{count}} palabras desde Dragon",
+      "failedTitle": "Error al importar",
+      "error": {
+        "emptyFile": "No se encontraron palabras en ese archivo.",
+        "unsupportedXml": "Esto no parece una exportación de Dragon para Windows. En Dragon, elige Vocabulary → Export custom word and phrase list y guárdalo como TXT.",
+        "fileTooLarge": "Ese archivo es demasiado grande para ser una lista de palabras de Dragon.",
+        "generic": "No se pudo leer ese archivo."
+      }
+    },
     "agentDefault": "Añadido por defecto"
   },
   "insights": {
