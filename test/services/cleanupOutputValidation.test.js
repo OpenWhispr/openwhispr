@@ -148,11 +148,15 @@ test("cleanup validates completed provider output using the request's prompt set
 
   await t.test("the prompt is read before inference, like eligibility", async () => {
     setCustomPrompt("");
-    useSettingsStore.setState({ customDictionary: ["Zephyr Quokka", "Marmalade Festival"] });
+    useSettingsStore.setState({ customDictionary: ["Zephyr Quokka"] });
     window.electronAPI.processLocalReasoning = async () => {
       // A dictionary edit while the model runs must not change what is checked.
       useSettingsStore.setState({ customDictionary: [] });
-      return { success: true, text: "Okay. Zephyr Quokka, Marmalade Festival." };
+      // The dictionary instruction is only in a prompt that lists words.
+      return {
+        success: true,
+        text: "Okay. Custom Dictionary (use these exact spellings when they appear in the text):",
+      };
     };
     await assert.rejects(service.processText("Okay.", "test-model", null, { provider: "local" }), {
       code: "CLEANUP_OUTPUT_INVALID",
@@ -207,8 +211,26 @@ test("cleanup validates completed provider output using the request's prompt set
         code: "CLEANUP_OUTPUT_INVALID",
         messageKey: ADDED,
       });
+      // Every text is converted or none is, even a line without script-specific characters.
+      window.electronAPI.processLocalReasoning = async () => ({
+        success: true,
+        text: "修正明顯的語音辨識錯誤",
+      });
+      await assert.rejects(service.processText("好的", "test-model", null, { provider: "local" }), {
+        code: "CLEANUP_OUTPUT_INVALID",
+        messageKey: ADDED,
+      });
+      const company = "我們聯繫了中華電信股份有限公司。";
+      useSettingsStore.setState({ customDictionary: ["中華電信股份有限公司"] });
+      window.electronAPI.processLocalReasoning = async () => ({ success: true, text: company });
+      assert.equal(
+        await service.processText("我們聯繫了中化店心股份有限公司", "test-model", null, {
+          provider: "local",
+        }),
+        company
+      );
     } finally {
-      useSettingsStore.setState({ uiLanguage, preferredLanguage });
+      useSettingsStore.setState({ uiLanguage, preferredLanguage, customDictionary: [] });
     }
   });
 

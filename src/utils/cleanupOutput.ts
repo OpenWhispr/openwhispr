@@ -6,12 +6,9 @@ const cleanupLabel =
   /^(?:Cleaned transcript:|\*\*Cleaned transcript:\*\*|\*\*Cleaned transcript\*\*:)$/i;
 // Four words in a row is a phrase lifted from the prompt, not a coincidence.
 const PROMPT_RUN_LENGTH = 4;
-// A lifted phrase or an announcement holds at least this many words the speaker never
-// said. Cleanup's own edits (an added "the", a contraction, one corrected word) add fewer.
+// A lifted phrase holds at least this many words the speaker never said. Cleanup's
+// own edits (an added "the", a contraction, one corrected word) add fewer.
 const UNSPOKEN_WORDS = 2;
-// Cleanup drops fillers and false starts, so words the speaker said can sit up
-// to this many transcript words apart.
-const SPOKEN_GAP = 3;
 // "Okay, here's the cleaned transcript:" — a whole line announcing the cleanup.
 const ANNOUNCEMENT_LINE =
   /^[\s*]*(?:(?:okay|ok|sure|alright)[,.!]?\s+)?(?:(?:here(?:'s|’s|\s+is)|this\s+is)\s+(?:(?:the|a|your)\s+)?(?:(?:cleaned|clean|corrected)(?:[-\s]up)?\s+)?|(?:(?:the|a|your)\s+)?(?:cleaned|clean|corrected)(?:[-\s]up)?\s+)(?:transcript|version|text|output)\b[^\n:]{0,60}:[\s*]*$/iu;
@@ -32,6 +29,8 @@ const LABEL_FRAMING = new Set([
   "a",
   "your",
 ]);
+// The noun an announcement's label ends on: "…the cleaned transcript:".
+const ANNOUNCED = new Set(["transcript", "version", "text", "output"]);
 const TRANSCRIPT_TAG = /<\/?transcript\b[^<>]*>/iu;
 const DUPLICATED = {
   message: "AI cleanup repeated the transcript. The original text was kept.",
@@ -68,8 +67,6 @@ function comparisonTokens(text: string): string[] {
 const isNumber = (token: string) => /^\p{N}+$/u.test(token);
 // Digits and single characters recur in any date or number ("1 月 15 日", "5 30 pm").
 const isSubstantive = (token: string) => !isNumber(token) && [...token].length > 1;
-const countUnspoken = (tokens: readonly string[], spoken: ReadonlySet<string>) =>
-  tokens.filter((token) => isSubstantive(token) && !spoken.has(token)).length;
 
 function wordRuns(tokens: readonly string[]): string[] {
   const runs: string[] = [];
@@ -77,24 +74,6 @@ function wordRuns(tokens: readonly string[]): string[] {
     runs.push(tokens.slice(i, i + PROMPT_RUN_LENGTH).join(" "));
   }
   return runs;
-}
-
-// The speaker said these words in this order, allowing for removed fillers.
-// Digits never count against them: cleanup writes spoken numbers as digits.
-function saidBySpeaker(tokens: readonly string[], rawTokens: readonly string[]): boolean {
-  const words = tokens.filter((token) => !isNumber(token));
-  if (words.length === 0) return true;
-  const span = tokens.length + SPOKEN_GAP;
-  for (let start = 0; start < rawTokens.length; start++) {
-    if (rawTokens[start] !== words[0]) continue;
-    const end = Math.min(rawTokens.length, start + span);
-    let matched = 1;
-    for (let next = start + 1; matched < words.length && next < end; next++) {
-      if (rawTokens[next] === words[matched]) matched++;
-    }
-    if (matched === words.length) return true;
-  }
-  return false;
 }
 
 function repeatsTranscript(rawTokens: readonly string[], output: string): boolean {
@@ -126,35 +105,41 @@ function repeatsTranscript(rawTokens: readonly string[], output: string): boolea
 
 function copiesPrompt(spoken: ReadonlySet<string>, output: string, prompt: CleanupPrompt): boolean {
   const fromPrompt = new Set(wordRuns(comparisonTokens(prompt.text)));
-  // A dictionary term longer than a run is the speaker's to say, even after
-  // cleanup corrected its spelling.
-  const insideDictionaryEntry = new Set(
-    prompt.dictionary.flatMap((entry) => wordRuns(comparisonTokens(entry)))
-  );
+  // Cleanup is told to use the dictionary's spellings, so its words are never unspoken.
+  const allowed = new Set([
+    ...spoken,
+    ...prompt.dictionary.flatMap((entry) => comparisonTokens(entry)),
+  ]);
   const outputTokens = comparisonTokens(output);
   for (let i = 0; i + PROMPT_RUN_LENGTH <= outputTokens.length; i++) {
     const run = outputTokens.slice(i, i + PROMPT_RUN_LENGTH);
-    const key = run.join(" ");
-    if (!fromPrompt.has(key) || insideDictionaryEntry.has(key)) continue;
-    if (countUnspoken(run, spoken) >= UNSPOKEN_WORDS) return true;
+    if (!fromPrompt.has(run.join(" "))) continue;
+    const unspoken = run.filter((token) => isSubstantive(token) && !allowed.has(token));
+    if (unspoken.length >= UNSPOKEN_WORDS) return true;
   }
   return false;
+}
+
+// The words a label line puts before the transcript: "cleaned transcript", "output"…
+function labelWords(line: string): string[] | undefined {
+  if (ANNOUNCEMENT_LINE.test(line)) {
+    const words = comparisonTokens(line).filter((token) => !LABEL_FRAMING.has(token));
+    return words.slice(0, words.findIndex((token) => ANNOUNCED.has(token)) + 1);
+  }
+  const label = LABEL_PREFIX.exec(line)?.[1];
+  return label === undefined ? undefined : comparisonTokens(label);
 }
 
 // Text around the transcript that the speaker never said.
 function wrapperProblem(
   rawText: string,
-  rawTokens: readonly string[],
   spoken: ReadonlySet<string>,
   output: string
 ): CleanupOutputProblem | null {
+  // A label is the speaker's own only if they said its words; the rest of its line
+  // may be reworded like any cleanup.
   for (const line of output.split(/\r?\n/u)) {
-    if (ANNOUNCEMENT_LINE.test(line)) {
-      const words = comparisonTokens(line).filter((token) => !LABEL_FRAMING.has(token));
-      if (countUnspoken(words, spoken) >= UNSPOKEN_WORDS) return "label";
-    }
-    const label = LABEL_PREFIX.exec(line)?.[1];
-    if (label !== undefined && !saidBySpeaker(comparisonTokens(label), rawTokens)) return "label";
+    if (labelWords(line)?.some((word) => !spoken.has(word))) return "label";
   }
   if (TRANSCRIPT_TAG.test(output) && !TRANSCRIPT_TAG.test(rawText)) return "transcript_tags";
   const trimmed = output.trim();
@@ -173,7 +158,7 @@ export function findCleanupOutputProblem(
   if (repeatsTranscript(rawTokens, output)) return "duplicated_transcript";
   const spoken = new Set(rawTokens);
   if (prompt && copiesPrompt(spoken, output, prompt)) return "prompt_copy";
-  return wrapperProblem(rawText, rawTokens, spoken, output);
+  return wrapperProblem(rawText, spoken, output);
 }
 
 // Speech-to-text and cleanup can write Chinese in different scripts (简/繁), which
@@ -183,14 +168,19 @@ export async function inOneChineseScript(
   output: string,
   prompt?: CleanupPrompt
 ): Promise<[string, string, CleanupPrompt | undefined]> {
-  const simplify = async (text: string) =>
-    isChineseText(text) ? applyChineseScript(text, "simplified") : text;
-  const [raw, reply] = await Promise.all([simplify(rawText), simplify(output)]);
-  if (!prompt) return [raw, reply, undefined];
-  const [text, ...dictionary] = await Promise.all(
-    [prompt.text, ...prompt.dictionary].map(simplify)
-  );
-  return [raw, reply, { text, dictionary }];
+  const texts = [rawText, output, ...(prompt ? [prompt.text, ...prompt.dictionary] : [])];
+  // One decision for every text: a line with no script-specific character is still Chinese.
+  if (!texts.some((text) => isChineseText(text))) return [rawText, output, prompt];
+  try {
+    const [raw, reply, text, ...dictionary] = await Promise.all(
+      texts.map((text) => applyChineseScript(text, "simplified"))
+    );
+    return [raw, reply, prompt && { text, dictionary }];
+  } catch (error) {
+    // A converter that fails to load must not cost the user their cleanup.
+    logger.logReasoning("CLEANUP_SCRIPT_UNAVAILABLE", { error: (error as Error).message });
+    return [rawText, output, prompt];
+  }
 }
 
 export function assertValidCleanupOutput(
