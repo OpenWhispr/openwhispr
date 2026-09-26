@@ -1,12 +1,21 @@
-export type ProcessingMode = 'cloud' | 'private';
-export type TranscriptionProvider = 'local' | 'cloud';
+import type {
+  InferenceScope,
+  InferenceSelection,
+  InferenceRoute,
+  MobileInferenceScope,
+} from '@/lib/mobileProviders';
+
+export type ProcessingMode = 'cloud' | 'private' | 'providers';
+export type TranscriptionProvider = 'local' | 'cloud' | 'byok';
 export type KeyboardTone = 'default' | 'formal' | 'casual' | 'very_casual' | 'excited';
-// Currently only the two wired modes are exposed. When SOON modes (providers,
-// self-hosted, enterprise) get wired in, widen this union and add matching
-// entries to `BASE` + `SCOPE_MODES` in lib/inferenceModes.ts.
-export type InferenceMode = 'openwhispr' | 'local';
+export type InferenceMode = 'openwhispr' | 'local' | 'providers';
 
 export interface UserConfig {
+  inference?: Partial<Record<InferenceScope, InferenceSelection>>;
+  rememberedInference?: Partial<Record<InferenceScope, Record<string, InferenceSelection>>>;
+  // Workflows held on the previous mode when dictation moved to Bring Your Own Key,
+  // as opposed to ones the user chose; only these are released when dictation leaves it.
+  pinnedInference?: MobileInferenceScope[];
   defaultMode: ProcessingMode;
   cleanupEnabled?: boolean;
   autoGenerateNoteTitle?: boolean;
@@ -20,6 +29,9 @@ export interface UserConfig {
   // faster on-device model / download the faster model for a qualifying language.
   parakeetAutoLanguageNudgeDismissedAt?: string;
   parakeetUpgradeNudgeDismissedAt?: string;
+  // One-time Home nudge toward the hardware-keyboard dictation shortcut, shown
+  // the first time a hardware keyboard is attached.
+  hardwareKeyboardNudgeDismissedAt?: string;
   keyboardTone?: KeyboardTone;
   // Apple Foundation Models local generation for notes. Default on; users can
   // disable it from AI Models.
@@ -31,14 +43,23 @@ export interface UserConfig {
 }
 
 export function inferenceToProcessingMode(mode: InferenceMode): ProcessingMode {
-  return mode === 'local' ? 'private' : 'cloud';
+  return mode === 'local' ? 'private' : mode === 'providers' ? 'providers' : 'cloud';
 }
 
 export function processingToInferenceMode(mode: ProcessingMode): InferenceMode {
-  return mode === 'private' ? 'local' : 'openwhispr';
+  return mode === 'private' ? 'local' : mode === 'providers' ? 'providers' : 'openwhispr';
 }
 
-export interface Transcript {
+export interface TextInferenceSnapshot {
+  cleanupRoute?: InferenceRoute;
+  agentRoute?: InferenceRoute;
+  cleanupUnavailable?: string;
+  agentUnavailable?: string;
+}
+
+export interface Transcript extends TextInferenceSnapshot {
+  cleanupWarning?: string;
+  inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   id: string;
   text: string;
   originalText?: string;
@@ -59,6 +80,8 @@ export interface Transcript {
 }
 
 export interface ReasoningRequest {
+  inferenceScope?: InferenceScope;
+  inferenceRoute?: InferenceRoute;
   text: string;
   model?: string;
   systemPrompt?: string;
@@ -135,7 +158,8 @@ export interface StructuredMeetingNotes {
   followUps: string[];
 }
 
-export interface TranscriptionRequest {
+export interface TranscriptionRequest extends TextInferenceSnapshot {
+  inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   audioUri: string;
   provider: TranscriptionProvider;
   language?: string;
@@ -150,7 +174,9 @@ export interface TranscriptionRequest {
   timeoutSeconds?: number;
 }
 
-export interface TranscriptionResponse {
+export interface TranscriptionResponse extends TextInferenceSnapshot {
+  cleanupWarning?: string;
+  inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   text: string;
   originalText?: string;
   duration: number;

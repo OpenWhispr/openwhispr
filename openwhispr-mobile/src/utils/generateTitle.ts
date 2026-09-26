@@ -31,6 +31,7 @@ export async function generateNoteTitle(
     const { ReasoningService } =
       require('@/services/reasoning/ReasoningService') as typeof import('@/services/reasoning/ReasoningService');
     const result = await ReasoningService.processText({
+      inferenceScope: 'notes',
       text: text.slice(0, MAX_INPUT_CHARS),
       systemPrompt: TITLE_SYSTEM_PROMPT,
       temperature: 0.3,

@@ -105,6 +105,15 @@ export function isLocalHistoryPolicyResolved(state: PolicyDecisionSnapshot): boo
   return state.status === "managed" || state.status === "unmanaged";
 }
 
+/**
+ * Whether this window has applied whatever policy it will get. `idle` and
+ * `loading` may still be a signed-in window before its fetch lands, while
+ * `error` applies no policy and is as final as `managed` or `unmanaged`.
+ */
+export function isPolicySettled(state: PolicyDecisionSnapshot): boolean {
+  return state.status !== "idle" && state.status !== "loading";
+}
+
 /** The org-forced local history value, or null when the user may choose. */
 export function lockedLocalHistoryValue(state: PolicyDecisionSnapshot): boolean | null {
   const mode = managedPolicy(state)?.dataRetention.localHistoryMode;

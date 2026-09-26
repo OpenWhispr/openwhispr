@@ -1274,13 +1274,14 @@ class DatabaseManager {
       }
 
       // Space vector purges owed to Qdrant while the sidecar was down/booting;
-      // drained once the vector index is ready.
+      // drained on the next semantic search activation.
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS pending_vector_purges (
           space_id   INTEGER PRIMARY KEY,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      this._initVectorChangeJournal();
 
       return true;
     } catch (error) {
@@ -3947,6 +3948,76 @@ class DatabaseManager {
       debugLogger.error("Error purging space", { error: error.message }, "spaces");
       throw error;
     }
+  }
+
+  _initVectorChangeJournal() {
+    this.db.transaction(() => {
+      const journalExists = this.db
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pending_vector_changes'"
+        )
+        .get();
+      // AUTOINCREMENT keeps acknowledgements unique even after the queue is
+      // emptied or a deleted note id is reused while indexing is in flight.
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS pending_vector_changes (
+          revision INTEGER PRIMARY KEY AUTOINCREMENT,
+          note_id INTEGER NOT NULL UNIQUE
+        );
+        CREATE TRIGGER IF NOT EXISTS notes_vector_insert AFTER INSERT ON notes BEGIN
+          INSERT INTO pending_vector_changes (note_id) VALUES (NEW.id)
+          ON CONFLICT(note_id) DO UPDATE SET revision = excluded.revision;
+        END;
+        CREATE TRIGGER IF NOT EXISTS notes_vector_update
+        AFTER UPDATE OF title, content, enhanced_content, space_id, folder_id, deleted_at ON notes
+        WHEN OLD.title IS NOT NEW.title OR OLD.content IS NOT NEW.content
+          OR OLD.enhanced_content IS NOT NEW.enhanced_content
+          OR OLD.space_id IS NOT NEW.space_id OR OLD.folder_id IS NOT NEW.folder_id
+          OR OLD.deleted_at IS NOT NEW.deleted_at
+        BEGIN
+          INSERT INTO pending_vector_changes (note_id) VALUES (NEW.id)
+          ON CONFLICT(note_id) DO UPDATE SET revision = excluded.revision;
+        END;
+        CREATE TRIGGER IF NOT EXISTS notes_vector_delete AFTER DELETE ON notes BEGIN
+          INSERT INTO pending_vector_changes (note_id) VALUES (OLD.id)
+          ON CONFLICT(note_id) DO UPDATE SET revision = excluded.revision;
+        END;
+      `);
+      if (!journalExists) this.enqueueAllVectorChanges();
+    })();
+  }
+
+  getPendingVectorChanges(limit = 50, afterRevision = 0) {
+    if (!this.db) throw new Error("Database not initialized");
+    return this.db
+      .prepare(
+        "SELECT note_id, revision FROM pending_vector_changes WHERE revision > ? ORDER BY revision LIMIT ?"
+      )
+      .all(afterRevision, limit);
+  }
+
+  clearPendingVectorChange(noteId, revision) {
+    if (!this.db) throw new Error("Database not initialized");
+    const result = this.db
+      .prepare("DELETE FROM pending_vector_changes WHERE note_id = ? AND revision = ?")
+      .run(noteId, revision);
+    return { success: true, changes: result.changes };
+  }
+
+  enqueueAllVectorChanges() {
+    if (!this.db) throw new Error("Database not initialized");
+    this.db.exec(`
+      INSERT INTO pending_vector_changes (note_id) SELECT id FROM notes WHERE TRUE
+      ON CONFLICT(note_id) DO UPDATE SET revision = excluded.revision
+    `);
+    return { success: true };
+  }
+
+  getNoteForVectorIndex(noteId) {
+    if (!this.db) throw new Error("Database not initialized");
+    // The durable index spans accounts; renderer/search reads still use the
+    // scoped getNote API before exposing any indexed result.
+    return this.db.prepare("SELECT * FROM notes WHERE id = ?").get(noteId) || null;
   }
 
   addPendingVectorPurge(spaceId) {

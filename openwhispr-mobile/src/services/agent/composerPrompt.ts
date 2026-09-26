@@ -2,7 +2,7 @@ import type { KeyboardTone } from '@/types';
 
 // Tone sentences ported verbatim from openwhispr-api/lib/prompts.ts (TONE_INSTRUCTIONS).
 // Any change here must stay in sync with the server-side source.
-const TONE_INSTRUCTIONS: Partial<Record<KeyboardTone, string>> = {
+export const TONE_INSTRUCTIONS: Partial<Record<KeyboardTone, string>> = {
   formal:
     'Apply this tone: render the text in a formal, professional tone; use complete sentences, no slang or contractions, and keep it courteous and precise. Restyle only; do not add or remove information.',
   casual:

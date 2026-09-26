@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Maustasten-Hotkeys werden derzeit nur auf macOS unterstützt.",
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
+      "rightModifierNeedsListener": "„{{hotkey}}“ kann auf diesem Desktop nicht verwendet werden, da seine Tastenkürzel eine normale Taste benötigen. Fügen Sie eine Taste hinzu, z. B. Control+Alt+Space.",
       "holdNeedsReleaseKey": "Halten zum Sprechen braucht eine Taste, deren Loslassen macOS erkennt: Globe, eine rechte Taste wie Rechte Option oder ein Kürzel mit Modifikator. Tippen funktioniert mit jeder Taste.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
       "updateFailedCheckFormat": "Hotkey konnte nicht auf \"{{hotkey}}\" aktualisiert werden. Prüfen Sie, ob das Format gültig ist.",
@@ -919,6 +920,7 @@
         "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
         "providerKeyMissing": "Für Ihren Transkriptionsanbieter ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprache zu Text hinzu.",
         "cleanupTruncated": "Dem KI-Modell ging der Platz aus, bevor es dein Diktat fertig bereinigt hatte.",
+        "cleanupDuplicated": "Die KI-Bereinigung hat das Transkript wiederholt. Der Originaltext wurde beibehalten.",
         "cleanupEmptyReply": "Das KI-Modell lieferte eine leere Antwort statt des bereinigten Diktats."
       },
       "translationFallback": {
@@ -940,6 +942,18 @@
         "unavailable": "OpenWhispr konnte den ausgewählten Text nicht sicher lesen. Prüfe die Bedienungshilfen oder Eingabeautomatisierung.",
         "tooLarge": "Die Auswahl ist zu groß. Wähle höchstens 6.000 Zeichen aus.",
         "reasoningFailed": "Die KI konnte die Auswahlbearbeitung nicht abschließen. Dein ursprünglicher Text wurde nicht geändert."
+      },
+      "pastePermission": {
+        "title": "Automatisches Einfügen erlauben",
+        "description": "Aktiviere OpenWhispr unter Systemeinstellungen → Datenschutz & Sicherheit → Bedienungshilfen.",
+        "settingsFailed": "Die Einstellungen konnten nicht geöffnet werden. Öffne Systemeinstellungen → Datenschutz & Sicherheit → Bedienungshilfen und aktiviere OpenWhispr.",
+        "manualPaste": "Kopiere deinen Text unten und drücke dann {{shortcut}}, um ihn einzufügen.",
+        "openSettings": "Einstellungen öffnen",
+        "copyToClipboard": "Text kopieren",
+        "copyFailed": "Kopieren fehlgeschlagen"
+      },
+      "pasteFailed": {
+        "title": "Automatisches Einfügen fehlgeschlagen"
       }
     },
     "clipboard": {
@@ -2753,7 +2767,8 @@
     "errors": {
       "contextTooLarge": "Das ist zu lang, als dass {{model}} es auf diesem Computer lesen könnte. Es werden etwa {{needed}} Token Kontext benötigt, aber nur {{max}} passen in den Speicher. Versuchen Sie ein Cloud-Modell oder führen Sie die Aktion für eine kürzere Auswahl aus.",
       "contextTooLargeGeneric": "Das ist zu lang, als dass {{model}} es auf diesem Computer lesen könnte. Versuchen Sie ein Cloud-Modell oder führen Sie die Aktion für eine kürzere Auswahl aus.",
-      "localServerUnavailable": "{{model}} konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut oder wechseln Sie zu einem Cloud-Modell."
+      "localServerUnavailable": "{{model}} konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut oder wechseln Sie zu einem Cloud-Modell.",
+      "localModelBusy": "Das lokale Modell bearbeitet noch eine andere Anfrage. Warten Sie, bis sie abgeschlossen ist, und versuchen Sie es dann erneut."
     }
   },
   "insights": {
@@ -3296,7 +3311,35 @@
       "conversationWillAppear": "Gespräch wird hier angezeigt...",
       "linkedEvent": "Verknüpftes Ereignis",
       "noFolder": "Kein Ordner",
-      "participants": "Teilnehmer"
+      "participants": "Teilnehmer",
+      "table": {
+        "actions": "Tabellenaktionen",
+        "insertRowAbove": "Zeile oberhalb einfügen",
+        "insertRowBelow": "Zeile unterhalb einfügen",
+        "insertColumnLeft": "Spalte links einfügen",
+        "insertColumnRight": "Spalte rechts einfügen",
+        "deleteRow": "Zeile löschen",
+        "deleteColumn": "Spalte löschen",
+        "deleteTable": "Tabelle löschen"
+      },
+      "format": {
+        "toolbar": "Formatierung",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Fett",
+        "italic": "Kursiv",
+        "strike": "Durchgestrichen",
+        "code": "Code",
+        "textStyle": "Textstil",
+        "paragraph": "Normaler Text",
+        "heading1": "Überschrift 1",
+        "heading2": "Überschrift 2",
+        "heading3": "Überschrift 3",
+        "bulletList": "Aufzählung",
+        "orderedList": "Nummerierte Liste",
+        "taskList": "Checkliste",
+        "blockquote": "Zitat",
+        "table": "Tabelle einfügen"
+      }
     },
     "participants": {
       "attendee": "Teilnehmer",
@@ -3446,6 +3489,8 @@
     },
     "actions": {
       "done": "Fertig",
+      "chunkProgress": "Teil {{step}} von {{total}}",
+      "emptyReply": "Das Modell hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
       "manage": "Aktionen verwalten...",
       "manageTitle": "Benutzerdefinierte Aktionen",
       "addAction": "Neue Aktion",

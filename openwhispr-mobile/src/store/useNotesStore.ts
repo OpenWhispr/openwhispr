@@ -146,7 +146,11 @@ const assertDiarizerModelReadyForEnrollment = async (
 };
 
 const canUseCloudForMeetingNote = (note: Note | null | undefined): note is Note => {
-  if (!useAuthStore.getState().user) return false;
+  if (
+    !useAuthStore.getState().user &&
+    useConfigStore.getState().config?.inference?.notes?.mode !== 'providers'
+  )
+    return false;
   if (useProcessingModeStore.getState().activeMode === 'private') return false;
   return !!note && !note.deletedAt && note.noteType === 'meeting' && note.isPrivate !== 1;
 };
@@ -182,7 +186,13 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
 
   const routing = { isPrivateNote: note.isPrivate === 1 };
   const canUseCloud = canUseCloudForMeetingNote(note);
-  const canUseLocal = await shouldUseLocalReasoning(routing);
+  const notesMode = useConfigStore.getState().config?.inference?.notes?.mode;
+  // On-Device notes take the chunked local path: a whole meeting rarely fits
+  // the on-device context in one request.
+  const canUseLocal =
+    notesMode === 'local'
+      ? (await getLocalReasoningReadiness()).status === 'ready'
+      : (notesMode !== 'providers' || !canUseCloud) && (await shouldUseLocalReasoning(routing));
   const systemPrompt = buildActionSystemPrompt({
     actionPrompt: action.prompt,
     inputKind: 'meeting-transcript',
@@ -200,6 +210,7 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
 
   const generateCloudOnce = async () => {
     const result = await ReasoningService.processText({
+      inferenceScope: 'notes',
       text: generationInput,
       systemPrompt,
       temperature: 0.3,
@@ -247,6 +258,7 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
     ? await generateLocalMeetingNotes(noteId, { actionPrompt: action.prompt })
     : (
         await ReasoningService.processText({
+          inferenceScope: 'notes',
           text: generationInput,
           systemPrompt,
           temperature: 0.3,

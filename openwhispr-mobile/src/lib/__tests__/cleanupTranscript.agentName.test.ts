@@ -203,3 +203,37 @@ describe('cleanupTranscript timeout bump', () => {
     expect(req.timeoutMs).toBe(CLEANUP_TIMEOUT_MS);
   });
 });
+
+it('runs a spoken agent command with the independent agent snapshot and policy scope', async () => {
+  mockConfig = { cleanupEnabled: true, defaultMode: 'providers', dictationAgentName: 'Aria' };
+  const agentRoute = {
+    mode: 'providers' as const,
+    scope: 'agent' as const,
+    providerId: 'openai',
+    modelId: 'gpt-4.1-mini',
+    endpoint: 'https://api.openai.com/v1',
+    credentialRef: 'provider.openai',
+  };
+  await cleanupTranscript('Aria write a note', {
+    context: 'keyboard',
+    agentRoute,
+    requireProvider: true,
+  });
+  expect(mockProcessText).toHaveBeenCalledWith(
+    expect.objectContaining({ inferenceScope: 'agent', inferenceRoute: agentRoute }),
+  );
+});
+
+it('preserves raw text with a warning when the snapshotted agent is unavailable', async () => {
+  mockConfig = { cleanupEnabled: true, defaultMode: 'cloud', dictationAgentName: 'Aria' };
+  const onSkipped = jest.fn();
+  await expect(
+    cleanupTranscript('Aria write a note', {
+      context: 'keyboard',
+      agentUnavailable: 'Agent setup missing.',
+      onSkipped,
+    }),
+  ).resolves.toBe('Aria write a note');
+  expect(mockProcessText).not.toHaveBeenCalled();
+  expect(onSkipped).toHaveBeenCalledWith('Agent setup missing.');
+});

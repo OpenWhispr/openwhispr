@@ -151,6 +151,8 @@ function getOAuthProtocol() {
 
 const OAUTH_PROTOCOL = getOAuthProtocol();
 
+const { registerLinuxUrlSchemeHandler } = require("./src/helpers/linuxUrlSchemeHandler");
+
 function shouldRegisterProtocolWithAppArg() {
   return Boolean(process.defaultApp) || isElectronBinaryExec();
 }
@@ -186,9 +188,10 @@ function restoreHtmlHandlerIfChanged(original) {
 
 // True source of truth for whether openwhispr:// resolves on Linux — the same
 // MIME database xdg-open consults. Returns true for deb/rpm/flatpak/AUR installs
-// (scheme registered via the packaged .desktop MimeType) and false for AppImage/
-// tar.gz runs where it genuinely isn't registered, so we never enable a dead-end
-// OAuth flow. Used to recover from setAsDefaultProtocolClient's KDE false negative.
+// (scheme registered via the packaged .desktop MimeType; registerLinuxUrlSchemeHandler
+// first takes it back from an AppImage/tar.gz entry) and false for AppImage/tar.gz
+// runs whose own registration failed, so we never enable a dead-end OAuth flow.
+// Used to recover from setAsDefaultProtocolClient's KDE false negative.
 function isOAuthSchemeRegistered() {
   if (process.platform !== "linux") return false;
   try {
@@ -204,17 +207,22 @@ function isOAuthSchemeRegistered() {
   }
 }
 
-// Register custom protocol for OAuth callbacks.
 // In development, always include the app path argument so macOS/Windows/Linux
 // can launch the project app instead of opening bare Electron.
+function getProtocolAppArgs() {
+  if (!shouldRegisterProtocolWithAppArg()) return [];
+  return [process.argv[1] ? path.resolve(process.argv[1]) : path.resolve(".")];
+}
+
+// Register custom protocol for OAuth callbacks.
 function registerOpenWhisprProtocol() {
   const protocol = OAUTH_PROTOCOL;
   const htmlHandler = process.platform === "linux" ? getDefaultHtmlHandler() : null;
+  const appArgs = getProtocolAppArgs();
 
   let result;
-  if (shouldRegisterProtocolWithAppArg()) {
-    const appArg = process.argv[1] ? path.resolve(process.argv[1]) : path.resolve(".");
-    result = app.setAsDefaultProtocolClient(protocol, process.execPath, [appArg]);
+  if (appArgs.length > 0) {
+    result = app.setAsDefaultProtocolClient(protocol, process.execPath, appArgs);
   } else {
     result = app.setAsDefaultProtocolClient(protocol);
   }
@@ -226,11 +234,18 @@ function registerOpenWhisprProtocol() {
   return result;
 }
 
-// setAsDefaultProtocolClient returns a false negative on KDE/Wayland, so on Linux
-// fall back to probing the system MIME database for an actual handler. This keeps
-// OAuth enabled where the callback can resolve (deb/rpm/flatpak/AUR) and correctly
-// gated where it can't (AppImage/tar.gz with no scheme registration).
-const protocolRegistered = registerOpenWhisprProtocol() || isOAuthSchemeRegistered();
+// On Linux, setAsDefaultProtocolClient can only name open-whispr.desktop, which
+// AppImage and tar.gz installs don't have, so those (and development) register
+// their own handler entry first and skip it. Otherwise it runs as before, and
+// since it returns a false negative on KDE/Wayland, fall back to probing the
+// system MIME database for an actual handler. This keeps OAuth enabled where the
+// callback can resolve and correctly gated where it can't.
+const linuxSchemeHandler =
+  process.platform === "linux"
+    ? registerLinuxUrlSchemeHandler(OAUTH_PROTOCOL, getProtocolAppArgs())
+    : null;
+const protocolRegistered =
+  linuxSchemeHandler?.registered || registerOpenWhisprProtocol() || isOAuthSchemeRegistered();
 if (!protocolRegistered) {
   console.warn(`[Auth] Failed to register ${OAUTH_PROTOCOL}:// protocol handler`);
 }
@@ -336,7 +351,7 @@ let audioTapManager = null;
 let linuxPortalAudioManager = null;
 let windowsLoopbackAudioManager = null;
 let meetingAecManager = null;
-let qdrantManager = null;
+let semanticSearch = null;
 let ipcHandlers = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
@@ -425,6 +440,14 @@ function initializeCoreManagers() {
 
   debugLogger = require("./src/helpers/debugLogger");
   debugLogger.ensureFileLogging();
+  // Registration runs before app ready, when the logger cannot write its file yet.
+  if (linuxSchemeHandler?.reason) {
+    debugLogger.warn("Could not register the Linux URL scheme handler entry", {
+      protocol: OAUTH_PROTOCOL,
+      reason: linuxSchemeHandler.reason,
+      protocolRegistered,
+    });
+  }
 
   environmentManager = new EnvironmentManager();
   const uiLanguage = environmentManager.getUiLanguage(app.getLocale());
@@ -531,6 +554,9 @@ function initializeCoreManagers() {
   windowManager.selectionManager = selectionManager;
   windowManager.windowsKeyManager = windowsKeyManager;
   windowManager.linuxKeyManager = linuxKeyManager;
+  if (process.platform === "linux") {
+    windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
+  }
 
   // IPC handlers must be registered before window content loads
   ipcHandlers = new IPCHandlers({
@@ -556,7 +582,7 @@ function initializeCoreManagers() {
     linuxPortalAudioManager,
     windowsLoopbackAudioManager,
     meetingAecManager,
-    getQdrantManager: () => qdrantManager,
+    getSemanticSearch: () => semanticSearch,
     getTrayManager: () => trayManager,
     oauthProtocolRegistered: protocolRegistered,
     oauthProtocol: OAUTH_PROTOCOL,
@@ -1289,43 +1315,18 @@ async function startApp() {
   }
 
   const QdrantManager = require("./src/helpers/qdrantManager");
-  qdrantManager = new QdrantManager();
-  // Must not throw: this also runs inside the unhealthy-restart path, whose
-  // catch would stop the replacement sidecar.
-  const wireVectorIndex = (port) => {
-    try {
-      const vectorIndex = require("./src/helpers/vectorIndex");
-      vectorIndex.init(port);
-      vectorIndex
-        .ensureCollection()
-        .then(() => ipcHandlers?.drainPendingVectorPurges())
-        .catch((err) => {
-          debugLogger.debug("Qdrant collection setup error (non-fatal)", { error: err.message });
-        });
-    } catch (err) {
-      debugLogger.debug("Qdrant rewire error (non-fatal)", { error: err.message });
-    }
-  };
-  // A successful unhealthy-restart can bring the sidecar back on a new port.
-  qdrantManager.on("restarted", wireVectorIndex);
-  sidecarRegistry.register("qdrant", () => qdrantManager.stop());
-  if (qdrantManager.isAvailable()) {
-    qdrantManager
-      .start()
-      .then(() => {
-        if (qdrantManager.isReady()) wireVectorIndex(qdrantManager.getPort());
-      })
-      .catch((err) => {
-        debugLogger.debug("Qdrant startup error (non-fatal)", { error: err.message });
-      });
-  }
-
+  const SemanticSearchLifecycle = require("./src/helpers/semanticSearchLifecycle");
   const localEmbeddings = require("./src/helpers/localEmbeddings");
-  if (!localEmbeddings.isAvailable()) {
-    localEmbeddings.downloadModel().catch((err) => {
-      debugLogger.debug("Embedding model download error (non-fatal)", { error: err.message });
-    });
-  }
+  const qdrantManager = new QdrantManager();
+  semanticSearch = new SemanticSearchLifecycle({
+    qdrant: qdrantManager,
+    vectorIndex: require("./src/helpers/vectorIndex"),
+    embeddings: localEmbeddings,
+    noteEmbedText: localEmbeddings.LocalEmbeddings.noteEmbedText,
+    database: databaseManager,
+    logger: debugLogger,
+  });
+  sidecarRegistry.register("qdrant", () => semanticSearch.stop());
 
   if (process.platform === "win32") {
     const nircmdStatus = clipboardManager.getNircmdStatus();
@@ -1782,8 +1783,15 @@ async function startApp() {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"
         );
-        if (isLiveWindow(windowManager.mainWindow)) {
-          windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
+        // GNOME, KDE and Hyprland run this listener only as a spare release
+        // source in Hold; their own shortcut still presses and releases.
+        if (!hotkeyManager.reliesOnLinuxKeyListener()) return;
+        // Settings owns the recovery (toast, Hold disabled, back to Tap) and it
+        // renders in the control panel, not the pill this event used to reach.
+        for (const browserWindow of BrowserWindow.getAllWindows()) {
+          if (!browserWindow.isDestroyed()) {
+            browserWindow.webContents.send("linux-ptt-permission-denied");
+          }
         }
       });
     }

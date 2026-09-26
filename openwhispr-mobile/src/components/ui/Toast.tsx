@@ -1,22 +1,33 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Animated, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Image } from 'expo-image';
 import { BRAND, iosColor } from '@/config/colors';
 
+export type ToastType = 'success' | 'error' | 'info';
+
 interface ToastProps {
   message: string;
   visible: boolean;
-  type?: 'success' | 'error' | 'info';
-  bottomOffset?: number;
+  type?: ToastType;
+  topOffset?: number;
+  // Changes on every show, so a repeated identical message still re-announces and replays.
+  showId?: number;
 }
 
-export function Toast({ message, visible, type = 'info', bottomOffset = 24 }: ToastProps) {
+export function Toast({ message, visible, type = 'info', topOffset = 24, showId }: ToastProps) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(20)).current;
+  const translateY = useRef(new Animated.Value(-20)).current;
+
+  // The toast ignores touches, so VoiceOver would never reach it on its own.
+  useEffect(() => {
+    if (visible && message) AccessibilityInfo.announceForAccessibility(message);
+  }, [visible, message, showId]);
 
   useEffect(() => {
     if (visible) {
+      opacity.setValue(0);
+      translateY.setValue(-20);
       Animated.parallel([
         Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
         Animated.timing(translateY, { toValue: 0, duration: 200, useNativeDriver: true }),
@@ -24,10 +35,10 @@ export function Toast({ message, visible, type = 'info', bottomOffset = 24 }: To
     } else {
       Animated.parallel([
         Animated.timing(opacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: 10, duration: 150, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: -10, duration: 150, useNativeDriver: true }),
       ]).start();
     }
-  }, [visible, opacity, translateY]);
+  }, [visible, showId, opacity, translateY]);
 
   const icon =
     type === 'success'
@@ -41,7 +52,7 @@ export function Toast({ message, visible, type = 'info', bottomOffset = 24 }: To
 
   return (
     <Animated.View
-      style={[styles.container, { bottom: bottomOffset, opacity, transform: [{ translateY }] }]}
+      style={[styles.container, { top: topOffset, opacity, transform: [{ translateY }] }]}
       pointerEvents="none"
     >
       <Image source={icon} style={{ width: 16, height: 16 }} tintColor={iconColor} />
@@ -54,6 +65,7 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     alignSelf: 'center',
+    maxWidth: '92%',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -68,6 +80,7 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   text: {
+    flexShrink: 1,
     fontSize: 14,
     fontWeight: '500',
     color: iosColor('label'),

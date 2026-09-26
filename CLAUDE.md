@@ -33,7 +33,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
    - Main Process: Electron main, IPC handlers, database operations
    - Renderer Process: React app with context isolation
    - Preload Script: Secure bridge between processes
-   - ONNX Utility Process: hosts all `onnxruntime-node` inference (text embeddings, speaker embeddings, fbank). Lazy-spawned on first use via `src/helpers/onnxWorkerClient.js` → `src/workers/onnxWorker.js`. Native crashes (e.g., ORT `bad_alloc`) confine to the worker; main process rejects in-flight requests and respawns with backoff. Stopped in `will-quit`.
+   - ONNX Utility Process: hosts all `onnxruntime-node` inference (text embeddings, speaker embeddings, fbank). Lazy-spawned on first use via `src/helpers/onnxWorkerClient.js` → `src/workers/onnxWorker.js`. Native crashes (e.g., ORT `bad_alloc`) confine to the worker; main process rejects in-flight requests and respawns with backoff. A request that times out kills the worker so it respawns the same way; the embedding clients reload their sessions on the new worker. Exits once idle with no session loaded (`releaseIfIdle`, after semantic search releases its model). Stopped in `will-quit`.
 
 3. **Audio Pipeline**:
    - MediaRecorder API → Blob → ArrayBuffer → IPC → File → whisper.cpp
@@ -127,9 +127,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Gates notifications during recording (tap-to-talk and push-to-talk)
   - Post-recording cooldown (2.5s) before showing queued notifications
   - Priority-based coalescing (process > audio) — one notification, not three
+  - Both detectors start off and only run once the renderer has synced its saved notification preferences (`sync-notification-preferences`); they stop when meeting prompts are disabled and restart when re-enabled. The derivation lives in `meetingDetectionPreferencePolicy.js` (pure, unit-tested in `test/helpers/meetingDetectionPreferencePolicy.test.js`); `ipcHandlers.js` is a thin adapter over it
 - **meetingProcessDetector.js**: Detects running meeting apps
   - macOS: Event-driven via `systemPreferences.subscribeWorkspaceNotification` (zero CPU)
   - Windows/Linux: Shared `processListCache` polling (30s interval)
+  - Scans are start-generation guarded: a process-list read that completes after `stop()` or a newer `start()` is discarded, since the detector is now stopped and started at runtime (notification toggles, auto-end sessions)
 - **audioActivityDetector.js**: Detects microphone usage for unscheduled meetings
   - macOS: Event-driven via `macos-mic-listener` binary (CoreAudio process objects; aggregate device activity prompts only while a known meeting app is running)
   - Windows: Event-driven via `windows-mic-listener.exe` (WASAPI sessions, self-PID exclusion)
@@ -158,8 +160,9 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **parakeet.js**: NVIDIA Parakeet model management via sherpa-onnx
 - **parakeetServer.js**: sherpa-onnx CLI wrapper for transcription
 - **qdrantManager.js**: Qdrant vector DB sidecar process lifecycle (spawn, health check, shutdown)
+- **semanticSearchLifecycle.js**: Single owner of the semantic search resources — starts Qdrant and the embedding model on demand, drains the SQLite change journal, and releases both after 5 minutes idle
 - **localEmbeddings.js**: Local text embedding via ONNX Runtime + all-MiniLM-L6-v2 (384-dim vectors)
-- **vectorIndex.js**: Qdrant collection management — upsert, delete, search, batch reindex
+- **vectorIndex.js**: Qdrant collection management — upsert, delete, search
 - **windowConfig.js**: Centralized window configuration
 - **windowManager.js**: Window creation and lifecycle management
 - **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app. `POST /v1/transcribe` takes a file **path** (never audio) and runs the user's downloaded local model through `IPCHandlers.transcribeLocalFile`, approving the path with `approveAudioPath` first; `GET /v1/transcribe/models` lists local models with download state and the app's default (`localTranscriptionModels.js`, read from the `.env` pre-warm values).
@@ -174,6 +177,10 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **SettingsPage.tsx**: Comprehensive settings interface
 - **WhisperModelPicker.tsx**: Model selection and download UI
 - **ui/**: Reusable UI components (buttons, cards, inputs, etc.)
+- **ui/RichTextEditor.tsx**: Tiptap note editor. Note bodies (`content`, `enhanced_content`) are stored as Markdown via tiptap-markdown (`html: false`)
+  - `RichTextEditorExtensions.ts` holds the extension list (`RichTextEditor` adds the mention extension in front of it); order matters: at equal priority, later extensions' keymaps and clipboard props run first
+  - `RichTextEditorTable.ts` keeps every table to what a GFM pipe table can store: header first row, one single-line paragraph per cell, no merged cells, no alignment or column widths. Pasted cells are flattened while parsing, a normalizer fixes what commands and pastes leave behind, and the table serializer escapes `|` in cells. Tests: `test/components/richTextEditor.test.js` (happy-dom)
+  - Floating menus: `RichTextEditorFormatMenu.tsx` shows one formatting toolbar (marks, text style, lists, quote, insert table) above selected text (Tiptap `BubbleMenu`) and beside the caret on an empty top-level line (`FloatingMenu`); `RichTextEditorTableMenu.tsx` is the table's `⋯` menu. They share `RichTextEditorMenus.ts`: a menu hides when focus leaves it, so dropdowns portal into the menu element itself, never into the editor's scroller (EditorContent moves the scroller's children when a note closes); `useHideOnFocusLeave` hides a menu when focus leaves from inside it or after a click on it, which Tiptap misses. The menus detach their element without unmounting it, so buttons use a native `title` rather than `<Tooltip>`, and a dropdown inside a menu is controlled and closed from the menu's `onHide` — otherwise it stays open over a scroll-locked page when the menu hides. Keep menu props stable, or each render dispatches an `updateOptions` transaction
 
 ### React Hooks (src/hooks/)
 
@@ -238,20 +245,22 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 
 ### Local Semantic Search (Qdrant + MiniLM)
 
-Always-on offline semantic search that finds notes by meaning, not just keywords. Used by the AI agent's `search_notes` tool. Qdrant starts automatically on app launch; embedding model auto-downloads on first run if missing.
+Offline semantic search that finds notes by meaning, not just keywords. Used by the AI agent's `search_notes` tool. Its resources are lazy (#2143): Qdrant and the embedding model start on the first semantic search (or the first vector write while the index is active), the embedding model downloads on that first activation if missing, and everything is released after 5 minutes idle. While asleep, keyword FTS5 serves searches and note changes are journaled in SQLite.
 
 **Architecture**:
 
 - **Qdrant sidecar**: Rust binary spawned as child process (`qdrantManager.js`), port 6333–6350
 - **Embedding model**: `all-MiniLM-L6-v2` via ONNX Runtime (`localEmbeddings.js`), 384-dim vectors
 - **Vector index**: Qdrant collection management (`vectorIndex.js`), cosine distance
+- **Lifecycle owner**: `semanticSearchLifecycle.js` — the only caller that starts or stops Qdrant, the embedding model and the collection
 - **Hybrid search**: FTS5 + Qdrant in parallel → Reciprocal Rank Fusion (K=60) with 0.3 cosine score threshold
 
 **Pipeline**:
 
-1. App launches → Qdrant binary starts → collection created. Embedding model auto-downloads if missing (~22MB)
-2. Note create/update/delete → SQLite write → background vector upsert/delete via `_asyncVectorUpsert()`/`_asyncVectorDelete()`
+1. App launches → nothing starts. The first `db-semantic-search-notes` call activates the lifecycle: embedding model downloaded if missing (~22MB) → Qdrant binary starts → collection ensured → the journal is drained. A cold search does not wait: it answers with FTS5 results while activation runs in the background. An existing collection serves searches while the journal drains; a newly created one waits until that activation's drain finishes. A journal row whose upsert keeps failing is parked after three failed attempts, so one bad note never blocks the rest of the index
+2. Note create/update/delete → SQLite write → triggers journal the note id in `pending_vector_changes` → `IPCHandlers.notifyVectorChanges()` wakes an already-active index to drain the journal; an idle index drains it on its next activation
 3. Agent searches → `db-semantic-search-notes` IPC → parallel FTS5 + vector search → RRF merge → ranked results
+4. 5 minutes without a search or write → Qdrant is stopped and the embedding session released; FTS5 keeps serving
 
 **Search fallback chain** (in `searchNotesTool.ts`): cloud search → local semantic → FTS5 keyword
 
@@ -259,11 +268,12 @@ Always-on offline semantic search that finds notes by meaning, not just keywords
 
 - Qdrant data: `~/.cache/openwhispr/qdrant-data/` (`qdrant-data-dev/` in development)
 - Qdrant binary: `resources/bin/qdrant-{platform}-{arch}` (bundled — downloaded during `prebuild` / `predev:main`)
-- Embedding model: `~/.cache/openwhispr/embedding-models/all-MiniLM-L6-v2/` (auto-downloaded on first launch)
+- Embedding model: `~/.cache/openwhispr/embedding-models/all-MiniLM-L6-v2/` (downloaded on the first semantic search)
+- Change journal: `pending_vector_changes` table in the notes SQLite database, maintained by triggers
 
 **Dependencies**: `@qdrant/js-client-rest`, `onnxruntime-node`
 
-**Dev setup**: The Qdrant binary downloads automatically via `predev`/`prestart`. The embedding model auto-downloads on first app launch. To manually download: `npm run download:qdrant` and `npm run download:embedding-model`.
+**Dev setup**: The Qdrant binary downloads automatically via `predev`/`prestart`. The embedding model downloads on the first semantic search. To manually download: `npm run download:qdrant` and `npm run download:embedding-model`.
 
 ### Build Scripts (scripts/)
 
@@ -409,7 +419,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 
 ### 8. Model Registry Architecture
 
-All AI model definitions are centralized in `src/models/modelRegistryData.json` as the single source of truth:
+All desktop AI model definitions are centralized in `src/models/modelRegistryData.json` as the single source of truth. The mobile app keeps its own hand-updated copies (see below):
 
 ```json
 {
@@ -420,7 +430,8 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 
 **Key files:**
 
-- `src/models/modelRegistryData.json` - Single source of truth for all models
+- `src/models/modelRegistryData.json` - Single source of truth for all desktop models
+- `openwhispr-mobile/src/config/providerCatalog.json` - Mobile's trimmed copy of the OpenAI and Groq entries. It, mobile's endpoint rules and its agent prompt (`openwhispr-mobile/src/config/prompts/defaultPrompts.json`) are copies, not shared code, so update them by hand when desktop's change (the catalog is covered in `openwhispr-mobile/CONTRIBUTING.md`)
 - `src/models/ModelRegistry.ts` - TypeScript wrapper with helper methods; also derives
   `REASONING_PROVIDERS` (`buildReasoningProviders()`), consumed by the model pickers
 - `src/models/providerDefaultModel.ts` - `pickProviderDefaultModel()`; with no
@@ -652,7 +663,7 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 
 - All prompts render in one always-on-top overlay window (`MeetingNotificationCard`), content-protected so it never appears in screen shares
 - Prompt copy is derived in the renderer from `{ variant, event, joinUrl }` (`meetingNotification.*` i18n keys); variants: `detected` (mic evidence), `starting` (calendar event not yet started), `underway` (event in progress)
-- Per-source notification prefs: `notifyCalendarReminders` gates calendar prompts, `notifyMeetingDetection` gates mic/process prompts
+- Per-source notification prefs: `notifyCalendarReminders` gates calendar prompts, `notifyMeetingDetection` gates mic/process prompts and, with `notificationsEnabled`, whether the mic and process detectors run at all (`meetingProcessDetection` additionally gates the process detector); nothing runs until the renderer has synced the saved snapshot
 - During recording (tap-to-talk or push-to-talk): ALL notifications suppressed
 - After recording: 2.5s cooldown before showing queued notifications
 - Multiple signals coalesced: one overlay at a time; a newer prompt replaces the current one
@@ -756,7 +767,7 @@ const { t } = useTranslation();
 
 Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`). Vector provider/brand marks live in `src/assets/icons/`.
 
-UI icons come from `src/components/icons/` (vendored Nucleo core outline components behind lucide-style names, e.g. `import { Check, Loader2 } from "../icons"`). To add one, map a name to a Nucleo label in `src/components/icons/nucleo-map.json` and run `node scripts/sync-nucleo-icons.js`; never import from `lucide-react` or a machine-local Nucleo path.
+UI icons come from `src/components/icons/` (vendored Nucleo core outline components behind lucide-style names, e.g. `import { Check, Loader2 } from "../icons"`). To add one, map a name to a Nucleo label in `src/components/icons/nucleo-map.json` and run `node scripts/sync-nucleo-icons.js`; never import from `lucide-react` or a machine-local Nucleo path. Icons outside that set — the status marks and the note toolbar's formatting glyphs — are drawn by hand in `src/components/icons/primitives.tsx`, which the generated `index.ts` re-exports.
 
 **Typography**: `--font-family-sans` is Yowza (brand, Latin only) falling back to the bundled Noto Sans; `--font-family-display` is Yowza Soft for headings. The font files are licensed and never committed — `src/brandFonts.ts` registers whatever `scripts/download-brand-fonts.js` fetched at build time, and a build without them silently uses Noto Sans.
 
@@ -803,7 +814,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 - [ ] Test meeting notification suppression during recording
 - [ ] Test post-recording cooldown (notifications shouldn't flash immediately)
 - [ ] Create a note about "quarterly revenue projections", search via agent for "financial forecast" — should match semantically
-- [ ] Verify Qdrant starts on app launch (check debug logs for "qdrant started successfully")
+- [ ] Verify Qdrant stays down at launch and starts on the first agent search (check debug logs for "qdrant started successfully"), then stops after 5 idle minutes
 - [ ] Kill Qdrant process manually — verify FTS5 keyword search still works as fallback
 
 ### Common Issues and Solutions
@@ -853,7 +864,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 
 7. **Local Semantic Search Not Working**:
    - Qdrant binary should be in `resources/bin/qdrant-{platform}-{arch}` (auto-downloaded during `predev`/`prebuild`)
-   - Embedding model should be in `~/.cache/openwhispr/embedding-models/all-MiniLM-L6-v2/model.onnx` (auto-downloaded on first app launch)
+   - Embedding model should be in `~/.cache/openwhispr/embedding-models/all-MiniLM-L6-v2/model.onnx` (downloaded on the first semantic search)
    - Run `npm run download:qdrant` and `npm run download:embedding-model` manually if missing
    - Check debug logs for "qdrant" entries (port, health check, errors)
    - If Qdrant fails to start, search still works via FTS5 keyword fallback

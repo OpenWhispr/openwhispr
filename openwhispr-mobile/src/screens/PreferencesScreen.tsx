@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
@@ -76,8 +77,8 @@ export default function PreferencesScreen() {
           iconStyle="line"
           icon="person.wave.2"
           mdIcon="UserRoundCog"
-          title="Dictation Agent"
-          description="Trigger AI actions by saying your agent name"
+          title="Voice Assistant"
+          description="Trigger AI actions by saying your assistant’s name"
           subtitle={agentName}
           onPress={() => router.push('/(account)/dictation-agent')}
         />
@@ -98,6 +99,16 @@ export default function PreferencesScreen() {
           }
           showChevron={false}
         />
+        {Platform.OS === 'ios' ? (
+          <SettingsRow
+            iconStyle="line"
+            icon="command"
+            mdIcon="Command"
+            title="Hardware keyboard shortcut"
+            description="Dictate into any app from a Magic Keyboard or other hardware keyboard"
+            onPress={() => router.push('/(account)/hardware-keyboard')}
+          />
+        ) : null}
       </SettingsSection>
     </SettingsScreen>
   );

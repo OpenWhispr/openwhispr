@@ -1,4 +1,5 @@
 import type { ParakeetVersion } from '../../../modules/parakeet-asr/src';
+import type { LocalModelKey } from '@/lib/localModelCatalog';
 
 /**
  * Pure routing policy for on-device transcription: which local engine handles the user's
@@ -84,6 +85,26 @@ export function preferredEngineForLanguages(
   return { engine: 'whisper' };
 }
 
+/** Whether a model can transcribe every selected language. Auto-detect needs Whisper. */
+export function localModelCoversLanguages(
+  model: LocalModelKey,
+  languages: readonly string[],
+): boolean {
+  if (model === 'whisper-base') return true;
+  const normalized = normalizeLanguages(languages);
+  if (normalized.length === 0) return false;
+  if (model === 'parakeet-v2') return normalized.every((code) => code === 'en');
+  return normalized.every((code) => PARAKEET_V3_LANGUAGES.has(code));
+}
+
+function isInstalled(model: LocalModelKey, availability: LocalEngineAvailability): boolean {
+  if (model === 'whisper-base') return availability.whisperDownloaded;
+  if (!availability.parakeetSupported) return false;
+  return model === 'parakeet-v2'
+    ? availability.parakeetV2Downloaded
+    : availability.parakeetV3Downloaded;
+}
+
 /**
  * Resolve the preferred engine against what's actually installed. Fallback order: preferred
  * Parakeet → Whisper if downloaded → 'none' (caller surfaces a download prompt). Whisper-bound
@@ -92,7 +113,15 @@ export function preferredEngineForLanguages(
 export function selectLocalEngine(
   languages: readonly string[],
   availability: LocalEngineAvailability,
+  // The model the user picked for this workflow. A missing or unsuitable pick falls back to the
+  // automatic choice, so a deleted model or a language change never breaks transcription.
+  picked?: LocalModelKey,
 ): LocalEngineChoice {
+  if (picked && isInstalled(picked, availability) && localModelCoversLanguages(picked, languages)) {
+    return picked === 'whisper-base'
+      ? { engine: 'whisper' }
+      : { engine: 'parakeet', version: picked === 'parakeet-v2' ? 'v2' : 'v3' };
+  }
   const preferred = preferredEngineForLanguages(languages);
 
   if (preferred.engine === 'parakeet' && availability.parakeetSupported) {

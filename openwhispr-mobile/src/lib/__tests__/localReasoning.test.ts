@@ -26,6 +26,7 @@ jest.mock('@/store/useConfigStore', () => ({
 import {
   clearLocalReasoningReadinessCache,
   getLocalReasoningReadiness,
+  getLocalReasoningUnavailableMessage,
   shouldUseLocalReasoning,
 } from '../localReasoning';
 import { AppleLLM } from '@/lib/appleLLM';
@@ -91,4 +92,13 @@ describe('local reasoning readiness policy', () => {
     mockProcessingState.activeMode = 'private';
     await expect(shouldUseLocalReasoning()).resolves.toBe(false);
   });
+});
+
+it('explains Apple Intelligence being off without assuming the request is a note', () => {
+  const message = getLocalReasoningUnavailableMessage({
+    status: 'appleIntelligenceOff',
+    tokenCounting: false,
+  });
+  expect(message).toContain('Apple Intelligence is turned off');
+  expect(message).not.toMatch(/note/i);
 });

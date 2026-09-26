@@ -1,0 +1,113 @@
+import type { BackgroundUploader as BackgroundUploaderType } from '../../../modules/background-uploader/src';
+
+// The native transport's timeout is idle-based; whisper decodes of a 25 MB file
+// and long chat completions can stay silent for minutes. Swift clamps it to 300
+// and separately stops any request after 10 minutes in total.
+const PROVIDER_REQUEST_TIMEOUT_SECONDS = 300;
+
+let requestSequence = 0;
+
+// Hermes has no DOMException global, so cancellations use a plain Error that
+// callers recognise by name, as they would a fetch AbortError.
+export function abortError(message = 'Provider request cancelled.'): Error {
+  const error = new Error(message);
+  error.name = 'AbortError';
+  return error;
+}
+
+function backgroundUploader(): typeof BackgroundUploaderType {
+  const { BackgroundUploader } =
+    require('../../../modules/background-uploader/src') as typeof import('../../../modules/background-uploader/src');
+  return BackgroundUploader;
+}
+
+function requestId(): string {
+  requestSequence += 1;
+  return `provider-${Date.now()}-${requestSequence}`;
+}
+
+function headersToRecord(headers: HeadersInit | undefined): Record<string, string> {
+  return Object.fromEntries(new Headers(headers).entries());
+}
+
+function nativeResponse(result: {
+  status: number;
+  body: string;
+  url: string;
+  headers: Record<string, string>;
+}): Response {
+  const response = new Response(result.body, {
+    status: result.status,
+    headers: result.headers,
+  });
+  Object.defineProperty(response, 'url', { value: result.url });
+  return response;
+}
+
+export async function requestProviderNative(url: string, init: RequestInit): Promise<Response> {
+  if (init.body !== undefined && typeof init.body !== 'string') {
+    throw new Error('This provider request requires a supported native body type');
+  }
+  const id = requestId();
+  const uploader = backgroundUploader();
+  const abort = (): void => uploader.cancelProviderRequest(id);
+  if (init.signal?.aborted) {
+    throw abortError();
+  }
+  init.signal?.addEventListener('abort', abort, { once: true });
+  try {
+    const result = await uploader.requestProvider({
+      requestId: id,
+      url,
+      method: init.method === 'GET' ? 'GET' : 'POST',
+      headers: headersToRecord(init.headers),
+      ...(typeof init.body === 'string' ? { body: init.body } : {}),
+      timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
+    });
+    if (init.signal?.aborted) throw abortError();
+    return nativeResponse(result);
+  } finally {
+    init.signal?.removeEventListener('abort', abort);
+  }
+}
+
+export async function requestProviderFileNative(input: {
+  url: string;
+  fileUri: string;
+  fileFieldName: string;
+  fileMimeType: string;
+  fileName: string;
+  parameters: Record<string, string>;
+  headers: Record<string, string>;
+  routeSnapshot?: string;
+  recoveryAudioUri?: string;
+  signal?: AbortSignal;
+}): Promise<Response> {
+  const id = requestId();
+  const uploader = backgroundUploader();
+  const abort = (): void => uploader.cancelProviderRequest(id);
+  if (input.signal?.aborted) {
+    throw abortError();
+  }
+  input.signal?.addEventListener('abort', abort, { once: true });
+  try {
+    const result = await uploader.requestProvider({
+      requestId: id,
+      url: input.url,
+      method: 'POST',
+      headers: input.headers,
+      fileUri: input.fileUri,
+      fileFieldName: input.fileFieldName,
+      fileMimeType: input.fileMimeType,
+      fileName: input.fileName,
+      parameters: input.parameters,
+      routeSnapshot: input.routeSnapshot,
+      recoveryAudioUri: input.recoveryAudioUri,
+      timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
+    });
+    if (input.signal?.aborted) throw abortError();
+    return nativeResponse(result);
+  } finally {
+    input.signal?.removeEventListener('abort', abort);
+  }
+}

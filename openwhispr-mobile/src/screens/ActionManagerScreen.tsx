@@ -3,7 +3,7 @@ import { View, TextInput, ScrollView, Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useActionsStore } from '@/store/useActionsStore';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
 import { confirmDestructive } from '@/lib/alerts';
 import { iosColor } from '@/config/colors';
@@ -63,7 +63,7 @@ export default function ActionManagerScreen() {
           placeholder="Action name"
           placeholderTextColor={PLACEHOLDER_COLOR}
           className="border-b border-separator/40 py-2 text-base text-label"
-          style={{ fontFamily: SpaceGrotesk.regular }}
+          style={{ fontFamily: AppFont.regular }}
         />
         <TextInput
           value={prompt}
@@ -73,7 +73,7 @@ export default function ActionManagerScreen() {
           multiline
           textAlignVertical="top"
           className="min-h-[80px] py-2 text-[15px] text-label"
-          style={{ fontFamily: SpaceGrotesk.regular }}
+          style={{ fontFamily: AppFont.regular }}
         />
         <Pressable
           onPress={handleSave}

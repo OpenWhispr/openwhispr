@@ -1,3 +1,10 @@
+import { isProviderJobActive } from '@/lib/providerJobActivity';
+import {
+  snapshotKeyboardInferenceRoute,
+  readKeyboardInferenceRoute,
+  readKeyboardProviderResult,
+  clearKeyboardProviderRecovery,
+} from '@/lib/keyboardInferenceRoute';
 import { useEffect, useRef } from 'react';
 import { AppState, Linking } from 'react-native';
 import * as Application from 'expo-application';
@@ -6,6 +13,7 @@ import { useHandoffStore } from '@/store/useHandoffStore';
 import { useKeyboardRecoveryStore } from '@/store/useKeyboardRecoveryStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import {
   TranscriptionService,
   isLocalModelMissingError,
@@ -118,6 +126,46 @@ function resolveKeyboardRecordingFormat(activeMode: string): KeyboardRecordingFo
   }
 
   return 'wav';
+}
+
+// Failures only a change in AI Models can fix. The keyboard shows "Set up in
+// app" for these; "Try again" would fail the same way.
+const PROVIDER_SETUP_ERROR_CODES = new Set([
+  'CREDENTIAL_MISSING',
+  'CREDENTIAL_MISMATCH',
+  'CREDENTIAL_REQUIRED',
+  'INVALID_CREDENTIAL',
+  'ENDPOINT_INVALID',
+  'PROVIDER_HTTPS_REQUIRED',
+  'PROVIDER_CERTIFICATE_UNTRUSTED',
+  'PROVIDER_INVALID_RECOVERY_ROUTE',
+  'PROVIDER_UNSUPPORTED',
+  'MODEL_NOT_FOUND',
+  'MODEL_REQUIRED',
+  'MODEL_UNSUPPORTED',
+  'POLICY_BLOCKED',
+  'SELECTION_REQUIRED',
+]);
+
+function isProviderSetupError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return typeof code === 'string' && PROVIDER_SETUP_ERROR_CODES.has(code);
+}
+
+// Launch recovery runs before the session is restored; cleaning then would read
+// a signed-in user as signed out and skip OpenWhispr cleanup.
+function waitForAuthInitialized(): Promise<void> {
+  return new Promise((resolve) => {
+    if (useAuthStore.getState().isInitialized) {
+      resolve();
+      return;
+    }
+    const unsubscribe = useAuthStore.subscribe((state) => {
+      if (!state.isInitialized) return;
+      unsubscribe();
+      resolve();
+    });
+  });
 }
 
 export function useKeyboardHandoff() {
@@ -278,13 +326,69 @@ export function useKeyboardHandoff() {
     };
 
     const processOrphanedRawTranscript = async (trigger: string) => {
-      if (orphanCleanupInFlightRef.current) return;
-
+      if (orphanCleanupInFlightRef.current || activeRef.current) return;
+      if (!useAuthStore.getState().isInitialized) {
+        orphanCleanupInFlightRef.current = true;
+        try {
+          await waitForAuthInitialized();
+        } finally {
+          orphanCleanupInFlightRef.current = false;
+        }
+        // A dictation that started meanwhile owns the slots; the watchdog retries.
+        if (activeRef.current) return;
+      }
+      const providerJobId = readActiveJobId();
+      // A provider request still running in this process delivers its own result.
+      if (providerJobId && isProviderJobActive(providerJobId)) return;
+      let providerResult: ReturnType<typeof readKeyboardProviderResult>;
+      if (providerJobId) {
+        try {
+          providerResult = readKeyboardProviderResult(providerJobId);
+        } catch {
+          clearKeyboardProviderRecovery(providerJobId);
+          setKeyboardStatus(
+            'error',
+            'The original provider result is unavailable. Retry the recording.',
+          );
+          return;
+        }
+      }
       const raw = AppGroupStorage.getItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT);
-      const rawText = raw?.trim();
-      if (!rawText) return;
+      const rawText = providerResult?.text.trim() || raw?.trim();
+      if (!rawText) {
+        const audioUrl =
+          providerJobId && AppGroupStorage.getItem(`keyboard_upload_audio.${providerJobId}`);
+        if (
+          providerJobId &&
+          audioUrl &&
+          !useTranscriptStore.getState().transcripts.some((entry) => entry.id === providerJobId)
+        ) {
+          const route = readKeyboardInferenceRoute(providerJobId);
+          if (route) {
+            orphanCleanupInFlightRef.current = true;
+            try {
+              await useTranscriptStore.getState().addFailedTranscript({
+                id: providerJobId,
+                audioUrl,
+                ...route,
+                requestContext: 'keyboard',
+                jobId: providerJobId,
+                keyboardTone: readKeyboardToneSnapshot(providerJobId),
+                errorMessage:
+                  'The provider upload was interrupted. Retry uses the original provider.',
+              });
+              clearKeyboardProviderRecovery(providerJobId);
+              setKeyboardStatus('error', 'Provider upload interrupted. Retry from history.');
+            } finally {
+              orphanCleanupInFlightRef.current = false;
+            }
+          }
+        }
+        return;
+      }
 
       const rawJobId =
+        (providerResult ? providerJobId : undefined) ||
         AppGroupStorage.getItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID) ||
         readActiveJobId() ||
         createKeyboardJobId();
@@ -295,6 +399,7 @@ export function useKeyboardHandoff() {
             `[keyboard-handoff] ignoring stale orphan raw transcript trigger=${trigger} jobId=${rawJobId} active=${activeJobId}`,
           );
         }
+        clearKeyboardProviderRecovery(rawJobId);
         AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT);
         AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID);
         return;
@@ -306,20 +411,44 @@ export function useKeyboardHandoff() {
       setKeyboardStatus('cleaning');
       markTiming('orphan_raw_observed');
 
+      let recoverySaved = false;
       try {
         markTiming('cleanup_start');
         // Orphan recovery bypasses transcribeAndCleanup, so apply the same
         // keyboard-dictation handling here: tone + snippet-trigger hints into
         // cleanup, then expand triggers in the final text (originalText stays raw).
-        const cleaned = await cleanupTranscript(rawText, {
-          tone: readKeyboardToneSnapshot(rawJobId),
-          includeSnippetTriggers: true,
-          context: 'keyboard',
-        });
+        let recoveredRoute: ReturnType<typeof readKeyboardInferenceRoute>;
+        let cleanupWarning: string | undefined;
+        try {
+          recoveredRoute = providerResult?.route ?? readKeyboardInferenceRoute(rawJobId);
+        } catch {
+          recoveredRoute = undefined;
+        }
+        if (!recoveredRoute)
+          cleanupWarning =
+            'The original cleanup route is unavailable. Your raw transcript is saved.';
+        const cleaned =
+          !recoveredRoute || recoveredRoute.provider === 'local'
+            ? rawText
+            : await cleanupTranscript(rawText, {
+                inferenceRoute: recoveredRoute.cleanupRoute,
+                agentRoute: recoveredRoute.agentRoute,
+                cleanupUnavailable: recoveredRoute.cleanupUnavailable,
+                agentUnavailable: recoveredRoute.agentUnavailable,
+                requireProvider: recoveredRoute.provider === 'byok',
+                onSkipped: (reason): void => {
+                  cleanupWarning = reason;
+                },
+                tone: readKeyboardToneSnapshot(rawJobId),
+                includeSnippetTriggers: true,
+                context: 'keyboard',
+              });
         const finalText = expandSnippets(cleaned, useSnippetsStore.getState().entries);
         markTiming('cleanup_done');
 
         if (isCancelRequested()) {
+          recoverySaved = true;
+          clearKeyboardProviderRecovery(rawJobId);
           AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_CANCEL_REQUESTED);
           setKeyboardStatus('idle');
           return;
@@ -329,10 +458,14 @@ export function useKeyboardHandoff() {
           if (__DEV__) {
             console.warn(`[keyboard-handoff] dropping stale orphan cleanup jobId=${rawJobId}`);
           }
+          recoverySaved = true;
+          clearKeyboardProviderRecovery(rawJobId);
           return;
         }
 
         if (!finalText.trim()) {
+          recoverySaved = true;
+          clearKeyboardProviderRecovery(rawJobId);
           setKeyboardStatus('no_speech');
           return;
         }
@@ -344,26 +477,46 @@ export function useKeyboardHandoff() {
         const pendingUndelivered = !!AppGroupStorage.getItem(
           APP_GROUP_KEYS.KEYBOARD_PENDING_TRANSCRIPT,
         );
-        if (pendingUndelivered) {
+        // History retains the destination even when the keyboard already consumed the text.
+        await useTranscriptStore.getState().addTranscript({
+          id: rawJobId,
+          audioUrl: AppGroupStorage.getItem(`keyboard_upload_audio.${rawJobId}`) ?? undefined,
+          jobId: rawJobId,
+          text: finalText,
+          originalText: rawText,
+          provider: recoveredRoute?.provider ?? 'cloud',
+          inferenceRoute: recoveredRoute?.inferenceRoute,
+          cleanupRoute: recoveredRoute?.cleanupRoute,
+          agentRoute: recoveredRoute?.agentRoute,
+          cleanupUnavailable: recoveredRoute?.cleanupUnavailable,
+          agentUnavailable: recoveredRoute?.agentUnavailable,
+          cleanupWarning,
+          requestContext: 'keyboard',
+        });
+        recoverySaved = true;
+        if (
+          providerResult ||
+          (pendingUndelivered &&
+            AppGroupStorage.getItem(APP_GROUP_KEYS.KEYBOARD_PENDING_TRANSCRIPT))
+        ) {
           writePendingTranscript(finalText, rawJobId);
           await Clipboard.setStringAsync(finalText);
         }
-
-        // Persist to history regardless of delivery path (background uploads
-        // are always cloud).
-        await useTranscriptStore.getState().addTranscript({
-          text: finalText,
-          originalText: rawText,
-          provider: 'cloud',
-          requestContext: 'keyboard',
-        });
+        clearKeyboardProviderRecovery(rawJobId);
       } catch (error) {
         if (isCurrentJob(rawJobId)) {
           setKeyboardStatus('error', error instanceof Error ? error.message : 'cleanup_error');
         }
       } finally {
-        AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT);
-        AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID);
+        const orphanSlotJobId = AppGroupStorage.getItem(
+          APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID,
+        );
+        // The orphan slot is shared: a newer job may have written it while this
+        // one was cleaning, so only clear it while it still belongs to this job.
+        if (recoverySaved && (!orphanSlotJobId || orphanSlotJobId === rawJobId)) {
+          AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT);
+          AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID);
+        }
         orphanCleanupInFlightRef.current = false;
         cleanup({ resetStatus: false });
       }
@@ -449,6 +602,16 @@ export function useKeyboardHandoff() {
       // Snapshot any pending keyboard_agent_request into a per-job record.
       // Returns null (no-op) for normal dictation; idempotent per jobId.
       snapshotKeyboardAgentRequest(jobId);
+      try {
+        snapshotKeyboardInferenceRoute(jobId);
+      } catch {
+        setKeyboardStatus('setup_required', 'Complete provider setup in AI Models.');
+        cleanup({ resetStatus: false });
+        if (!selfHosted) {
+          AppGroupStorage.returnToPreviousApp();
+        }
+        return;
+      }
       markTiming('handoff_begin');
       AppGroupStorage.setItem(APP_GROUP_KEYS.KEYBOARD_RECORDING_FORMAT, recordingFormat);
       writeTimingMetric('recording_format_requested', recordingFormat);
@@ -587,9 +750,20 @@ export function useKeyboardHandoff() {
           return;
         }
         useHandoffStore.getState().setTranscribing(true);
-        const { activeMode } = useProcessingModeStore.getState();
         const { addFailedTranscript, addTranscript } = useTranscriptStore.getState();
-        const provider = activeMode === 'private' ? 'local' : 'cloud';
+        let jobRoute: ReturnType<typeof readKeyboardInferenceRoute>;
+        try {
+          jobRoute = readKeyboardInferenceRoute(jobId);
+          if (!jobRoute) throw new Error('The recording route is unavailable.');
+        } catch {
+          setKeyboardStatus(
+            'setup_required',
+            'This recording could not be routed. Check AI Models, then record again.',
+          );
+          cleanup({ resetStatus: false });
+          return;
+        }
+        const provider = jobRoute.provider;
         const transcriptId = jobId;
         const keyboardTone = readKeyboardToneSnapshot(jobId);
         let retainedAudioUrl: string | null = null;
@@ -603,7 +777,8 @@ export function useKeyboardHandoff() {
             cleanup();
           }, NO_SPEECH_DISPLAY_MS);
         };
-        const deleteRetainedAudio = () => {
+        const discardJob = () => {
+          clearKeyboardProviderRecovery(jobId);
           if (!retainedAudioUrl) return;
           deleteManagedTranscriptAudio(retainedAudioUrl).catch((error) => {
             if (__DEV__) {
@@ -621,20 +796,30 @@ export function useKeyboardHandoff() {
         // with the normal path, endProcessingTask (via cleanup) is deferred to
         // the terminal path, so the keyboard never polls a stale agent_generating.
         const runAgentJob = async (job: KeyboardAgentJob): Promise<void> => {
+          if (job.kind === 'compose' && !jobRoute.agentRoute) {
+            if (readKeyboardAgentJob(jobId)) clearKeyboardAgentJob();
+            setKeyboardStatus('agent_error', 'agent_setup_required');
+            cleanup({ resetStatus: false });
+            return;
+          }
           try {
             markTiming('agent_transcribe_start');
             const transcription = await TranscriptionService.transcribe({
+              ...jobRoute,
               audioUri: fileUri,
               provider,
               language: getPreferredTranscriptionLanguage(),
               fileName,
               mimeType,
-              jobId,
+              // A provider jobId saves the result for relaunch recovery, which
+              // would bring the spoken instruction back as a dictation.
+              ...(provider === 'byok' ? {} : { jobId }),
               requestContext: 'keyboard',
               keyboardTone,
             });
             writeTranscriptionMetrics(transcription);
             markTiming('agent_transcribe_done');
+            clearKeyboardProviderRecovery(jobId);
 
             // Cancelled while transcribing: discard and return to idle.
             // consumeCancelDuringProcessing() already ran cleanup().
@@ -672,10 +857,12 @@ export function useKeyboardHandoff() {
             await generateForJob(job, instruction, {
               setKeyboardStatus: (status, detail) =>
                 setKeyboardStatus(status as KeyboardStatus, detail),
+              agentRoute: jobRoute.agentRoute,
             });
             if (readKeyboardAgentJob(jobId)) clearKeyboardAgentJob();
             cleanup({ resetStatus: false });
           } catch (error) {
+            clearKeyboardProviderRecovery(jobId);
             if (isNoSpeechError(error)) {
               if (readKeyboardAgentJob(jobId)) clearKeyboardAgentJob();
               flagNoSpeech();
@@ -699,6 +886,11 @@ export function useKeyboardHandoff() {
               audioMimeType: mimeType,
               duration: recordingDurationMs ? recordingDurationMs / 1000 : undefined,
               provider,
+              inferenceRoute: jobRoute.inferenceRoute,
+              cleanupRoute: jobRoute.cleanupRoute,
+              agentRoute: jobRoute.agentRoute,
+              cleanupUnavailable: jobRoute.cleanupUnavailable,
+              agentUnavailable: jobRoute.agentUnavailable,
               requestContext: 'keyboard',
               keyboardTone,
               jobId,
@@ -758,6 +950,7 @@ export function useKeyboardHandoff() {
           let cleanupStartedAt = Date.now();
           const processed = await transcribeAndCleanup(
             {
+              ...jobRoute,
               audioUri: retainedAudioUrl,
               provider,
               language: getPreferredTranscriptionLanguage(),
@@ -835,12 +1028,12 @@ export function useKeyboardHandoff() {
 
           // Cancelled during transcription/cleanup: drop the result, stay idle.
           if (consumeCancelDuringProcessing()) {
-            deleteRetainedAudio();
+            discardJob();
             return;
           }
 
           if (!processed.originalText.trim()) {
-            deleteRetainedAudio();
+            discardJob();
             flagNoSpeech();
             return;
           }
@@ -848,7 +1041,7 @@ export function useKeyboardHandoff() {
           const finalText = processed.text;
           const trimmed = finalText.trim();
           if (!trimmed) {
-            deleteRetainedAudio();
+            discardJob();
             flagNoSpeech();
             return;
           }
@@ -856,12 +1049,14 @@ export function useKeyboardHandoff() {
             if (__DEV__) {
               console.warn(`[keyboard-handoff] dropping stale final transcript jobId=${jobId}`);
             }
-            deleteRetainedAudio();
+            discardJob();
             return;
           }
-          writePendingTranscript(finalText, jobId);
+          const delivered = writePendingTranscript(finalText, jobId);
           await Clipboard.setStringAsync(finalText);
 
+          // Once the keyboard has the text, a failed history save must not keep the
+          // recovery entry: its retry would repeat paid cleanup and insert the text again.
           await addTranscript({
             id: transcriptId,
             text: finalText,
@@ -871,14 +1066,31 @@ export function useKeyboardHandoff() {
             audioMimeType: mimeType,
             duration: processed.transcription.duration,
             provider: processed.transcription.provider,
+            inferenceRoute: processed.transcription.inferenceRoute,
+            cleanupRoute: processed.transcription.cleanupRoute,
+            agentRoute: processed.transcription.agentRoute,
+            cleanupUnavailable: processed.transcription.cleanupUnavailable,
+            agentUnavailable: processed.transcription.agentUnavailable,
+            cleanupWarning: processed.transcription.cleanupWarning,
             requestContext: 'keyboard',
             keyboardTone,
             jobId,
+          }).catch((error: unknown) => {
+            if (!delivered) throw error;
+            console.warn(
+              '[keyboard-handoff] transcript delivered but not saved to history:',
+              error,
+            );
           });
+          clearKeyboardProviderRecovery(jobId);
           cleanup({ resetStatus: false });
         } catch (error) {
+          if (consumeCancelDuringProcessing()) {
+            discardJob();
+            return;
+          }
           if (isNoSpeechError(error)) {
-            deleteRetainedAudio();
+            discardJob();
             flagNoSpeech();
             return;
           }
@@ -887,6 +1099,12 @@ export function useKeyboardHandoff() {
           if (provider === 'local' && isLocalModelMissingError(error)) {
             await addFailedKeyboardTranscript(error);
             setKeyboardStatus('setup_required');
+            cleanup({ resetStatus: false });
+            return;
+          }
+          if (isProviderSetupError(error)) {
+            await addFailedKeyboardTranscript(error);
+            setKeyboardStatus('setup_required', toFriendlyTranscriptionErrorMessage(error));
             cleanup({ resetStatus: false });
             return;
           }
@@ -918,6 +1136,14 @@ export function useKeyboardHandoff() {
         // Mirror the tone snapshot: capture a pending agent request for this
         // job. No-op (null) when none is pending; idempotent per jobId.
         snapshotKeyboardAgentRequest(bgJobId);
+        try {
+          if (!readKeyboardInferenceRoute(bgJobId)) snapshotKeyboardInferenceRoute(bgJobId);
+        } catch {
+          cleanup({ resetStatus: false });
+          // The stop handler reports the missing route to the keyboard.
+          AppGroupStorage.stopNativeRecording();
+          return;
+        }
       }
       markTiming('background_recording_started');
       setKeyboardStatus('recording');
@@ -944,6 +1170,11 @@ export function useKeyboardHandoff() {
     // dropped poke is handled by handlePendingHandoffIntent.
     const agentActionSub = addAgentActionListener(() => runAgentAction('poke'));
 
+    // The hardware-keyboard hotkey (plugins/hotkey-dictation) waits for this
+    // before a cold-start recording, so native never records before the
+    // started/stopped listeners above exist.
+    AppGroupStorage.markHotkeyJsReady();
+
     runOrphanCleanup('mount');
     const orphanPoll = setInterval(() => {
       runOrphanCleanup('watchdog');
@@ -951,7 +1182,10 @@ export function useKeyboardHandoff() {
 
     const urlSub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
     const appStateSub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') handlePendingHandoffIntent('app_state_active');
+      if (state === 'active') {
+        runOrphanCleanup('app_state_active');
+        handlePendingHandoffIntent('app_state_active');
+      }
     });
 
     Linking.getInitialURL()
@@ -976,6 +1210,7 @@ export function useKeyboardHandoff() {
       bgStartedSub?.remove();
       statusSub?.remove();
       agentActionSub?.remove();
+      AppGroupStorage.removeItem(APP_GROUP_KEYS.HOTKEY_JS_READY_AT_MS);
       urlSub.remove();
       appStateSub.remove();
       clearInterval(orphanPoll);

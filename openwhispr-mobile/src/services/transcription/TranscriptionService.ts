@@ -12,6 +12,7 @@ import { LocalTranscriptionService } from './LocalTranscriptionService';
 import { useAuthStore } from '../../store/useAuthStore';
 import { getClientVersionHeader } from '../../lib/apiClient';
 import { buildDictationHints, isDictationContext } from '../../lib/dictationHints';
+import { dictionaryPromptLimit, trimDictionaryPrompt } from '../../lib/transcriptionPromptCap';
 import { BackgroundUploader } from '../../../modules/background-uploader/src';
 import { AudioTools } from '../../../modules/audio-tools/src';
 import { AppGroupStorage, APP_GROUP_KEYS } from '../../../modules/app-group-storage/src';
@@ -851,9 +852,12 @@ export class TranscriptionService {
     // prompt, so on-device/private transcription recognizes them too. (Parakeet has
     // no prompt input; the facade drops it on that branch.)
     const hintWords = buildDictationHints(isDictationContext(requestContext));
+    const { getPickedLocalModel } =
+      require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
     const response = await LocalTranscriptionService.transcribe(audioUri, {
       language,
       prompt: hintWords.length > 0 ? hintWords.join(', ') : undefined,
+      model: getPickedLocalModel(requestContext === 'file' ? 'upload' : 'dictation'),
     });
     if (__DEV__) {
       console.log(
@@ -958,6 +962,51 @@ export class TranscriptionService {
       );
 
     switch (provider) {
+      case 'byok': {
+        const { resolveMobileProviderRoute } =
+          require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+        const { transcribeWithProvider } =
+          require('@/services/providers/ProviderExecution') as typeof import('@/services/providers/ProviderExecution');
+        const scope = request.requestContext === 'file' ? 'upload' : 'dictation';
+        const route = await resolveMobileProviderRoute(scope, request.inferenceRoute);
+        const recoveryJobId = request.jobId ?? request.clientTranscriptionId;
+        const routeSnapshot = recoveryJobId
+          ? JSON.stringify({
+              version: 1,
+              jobId: recoveryJobId,
+              requestContext: request.requestContext,
+              route: {
+                provider: 'byok',
+                inferenceRoute: route,
+                cleanupRoute: request.cleanupRoute,
+                agentRoute: request.agentRoute,
+                cleanupUnavailable: request.cleanupUnavailable,
+                agentUnavailable: request.agentUnavailable,
+              },
+            })
+          : undefined;
+        const promptHints = buildDictationHints(isDictationContext(request.requestContext));
+        const prompt = trimDictionaryPrompt(promptHints.join(', '), dictionaryPromptLimit(route));
+        const result = await transcribeWithProvider({
+          route,
+          audioUri,
+          fileName: request.fileName,
+          mimeType: request.mimeType,
+          language,
+          prompt: prompt || undefined,
+          routeSnapshot,
+        }).catch((error: unknown) => {
+          // Silence leaves nothing to recover, and every caller discards the audio.
+          if (recoveryJobId && (error as { code?: unknown })?.code === 'NO_SPEECH') {
+            const { clearKeyboardProviderRecovery } =
+              require('@/lib/keyboardInferenceRoute') as typeof import('@/lib/keyboardInferenceRoute');
+            clearKeyboardProviderRecovery(recoveryJobId);
+          }
+          throw error;
+        });
+        return { ...result, provider: 'byok', inferenceRoute: route, endpoint: route.providerId };
+      }
+
       case 'local':
         // Private mode must never silently leave the device. If the on-device
         // model is unavailable we surface the error so the caller can ask the
@@ -998,7 +1047,9 @@ export class TranscriptionService {
     if (!LocalTranscriptionService.isAvailable()) {
       return;
     }
-    await LocalTranscriptionService.prepareForLanguage(language);
+    const { getPickedLocalModel } =
+      require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+    await LocalTranscriptionService.prepareForLanguage(language, getPickedLocalModel('dictation'));
   }
 }
 

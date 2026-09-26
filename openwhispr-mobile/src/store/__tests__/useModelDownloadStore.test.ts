@@ -161,6 +161,36 @@ describe('useModelDownloadStore', () => {
     await first;
   });
 
+  it('cancels every active download except the one being kept', async () => {
+    const set = (key: 'parakeet-v2' | 'parakeet-v3' | 'whisper-base', status: string): void =>
+      useModelDownloadStore.setState((state) => ({
+        downloads: { ...state.downloads, [key]: { status, progress: 0.3 } as never },
+      }));
+    set('parakeet-v2', 'downloading');
+    set('parakeet-v3', 'downloading');
+    set('whisper-base', 'completed');
+
+    await useModelDownloadStore.getState().cancelActiveDownloads('parakeet-v3');
+
+    const { downloads } = useModelDownloadStore.getState();
+    expect(mockParakeet.cancelModelDownload).toHaveBeenCalledWith('v2');
+    expect(mockParakeet.cancelModelDownload).not.toHaveBeenCalledWith('v3');
+    expect(downloads['parakeet-v2'].status).toBe('idle');
+    expect(downloads['parakeet-v3'].status).toBe('downloading');
+    expect(downloads['whisper-base'].status).toBe('completed');
+  });
+
+  it('treats a model still preparing as active', async () => {
+    useModelDownloadStore.setState((state) => ({
+      downloads: { ...state.downloads, 'whisper-base': { status: 'preparing', progress: 1 } },
+    }));
+
+    await useModelDownloadStore.getState().cancelActiveDownloads('parakeet-v3');
+
+    expect(mockWhisper.cancelModelDownload).toHaveBeenCalledWith('base');
+    expect(useModelDownloadStore.getState().downloads['whisper-base'].status).toBe('idle');
+  });
+
   it('surfaces download failures as per-key errors', async () => {
     mockParakeet.downloadModel.mockRejectedValue(new Error('network down'));
     await useModelDownloadStore.getState().startDownload('parakeet-v3');
