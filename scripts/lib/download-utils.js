@@ -46,6 +46,7 @@ function fetchJson(url, redirectCount = 0) {
             return;
           }
           const redirectUrl = location.startsWith("/") ? new URL(location, url).href : location;
+          res.resume();
           fetchJson(redirectUrl, redirectCount + 1)
             .then(resolve)
             .catch(reject);
@@ -172,6 +173,10 @@ function downloadFile(url, dest, retryCount = 0) {
           const redirectUrl = location.startsWith("/")
             ? new URL(location, currentUrl).href
             : location;
+          // Drain the hop we are abandoning. An unread response holds its socket
+          // open (the process never exits) and keeps this request's 30s timeout
+          // armed, which later fires cleanup() on the redirected download.
+          response.resume();
           request(redirectUrl, redirectCount + 1);
           return;
         }

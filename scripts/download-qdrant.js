@@ -122,6 +122,15 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
 }
 
 async function main() {
+  const args = parseArgs();
+
+  if (args.isCurrent && !BINARIES[args.platformArch]) {
+    console.log(
+      `[qdrant] No upstream build for ${args.platformArch}, skipping (semantic search falls back to keyword search)`
+    );
+    return;
+  }
+
   if (VERSION_OVERRIDE) {
     console.log(`\n[qdrant] Using pinned version: ${VERSION_OVERRIDE}`);
   } else {
@@ -140,15 +149,7 @@ async function main() {
 
   fs.mkdirSync(BIN_DIR, { recursive: true });
 
-  const args = parseArgs();
-
   if (args.isCurrent) {
-    if (!BINARIES[args.platformArch]) {
-      console.error(`Unsupported platform/arch: ${args.platformArch}`);
-      process.exitCode = 1;
-      return;
-    }
-
     console.log(`Downloading for target platform (${args.platformArch}):`);
     const ok = await downloadBinary(
       args.platformArch,

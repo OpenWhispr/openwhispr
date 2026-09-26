@@ -80,8 +80,9 @@ async function main() {
 
   if (args.isCurrent) {
     if (!BINARIES[args.platformArch]) {
-      console.error(`Unsupported platform/arch: ${args.platformArch}`);
-      process.exitCode = 1;
+      console.log(
+        `[yt-dlp] No upstream build for ${args.platformArch}, skipping (YouTube import unavailable)`
+      );
       return;
     }
 
