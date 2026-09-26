@@ -18,8 +18,9 @@ const MACOS_TRAY_GUID = "eb809902-04b5-5b08-b12a-f81d6f27e185";
 const MACOS_TRAY_POSITION_KEY = `NSStatusItem Preferred Position ${MACOS_TRAY_GUID}`;
 
 class TrayManager {
-  constructor() {
+  constructor(iconStyle = "default") {
     this.tray = null;
+    this.iconStyle = iconStyle === "monochrome" ? "monochrome" : "default";
     this.mainWindow = null;
     this.controlPanelWindow = null;
     this.windowManager = null;
@@ -177,13 +178,29 @@ class TrayManager {
     }
   }
 
+  async setIconStyle(iconStyle) {
+    const normalizedStyle = iconStyle === "monochrome" ? "monochrome" : "default";
+    if (normalizedStyle === this.iconStyle) return;
+
+    this.iconStyle = normalizedStyle;
+    if (!this.tray) return;
+
+    const trayIcon = await this.loadTrayIcon();
+    if (!trayIcon || trayIcon.isEmpty()) {
+      debugLogger.error("Failed to update tray icon", { iconStyle: normalizedStyle }, "tray");
+      return;
+    }
+
+    this.tray.setImage(trayIcon);
+  }
+
   async loadTrayIcon() {
     const platform = process.platform;
     const isDevelopment = process.env.NODE_ENV === "development";
 
     const candidatePaths = [];
 
-    if (platform === "darwin") {
+    if (platform === "darwin" || this.iconStyle === "monochrome") {
       if (isDevelopment) {
         candidatePaths.push(path.join(__dirname, "..", "assets", "iconTemplate@3x.png"));
       } else {

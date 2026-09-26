@@ -1885,6 +1885,10 @@
         "light": "Chiaro",
         "theme": "Tema",
         "themeDescription": "Scegli chiaro, scuro o in base al sistema",
+        "trayIconDefault": "Predefinita",
+        "trayIconMonochrome": "Monocromatica",
+        "trayIconStyle": "Icona dell’area di notifica",
+        "trayIconStyleDescription": "Scegli come appare l’icona nel pannello del desktop",
         "title": "Aspetto"
       },
       "floatingIcon": {

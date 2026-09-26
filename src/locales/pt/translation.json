@@ -1864,6 +1864,10 @@
         "light": "Claro",
         "theme": "Tema",
         "themeDescription": "Escolha claro, escuro ou acompanhe o sistema",
+        "trayIconDefault": "Padrão",
+        "trayIconMonochrome": "Monocromático",
+        "trayIconStyle": "Ícone da área de notificação",
+        "trayIconStyleDescription": "Escolha como o ícone aparece no painel da área de trabalho",
         "title": "Aparência"
       },
       "floatingIcon": {

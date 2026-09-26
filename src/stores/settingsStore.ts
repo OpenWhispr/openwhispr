@@ -1190,6 +1190,7 @@ export interface SettingsState
   setMicWarmHoldSeconds: (seconds: number) => void;
 
   setTheme: (value: "light" | "dark" | "auto") => void;
+  setTrayIconStyle: (value: "default" | "monochrome") => void;
   setCloudBackupEnabled: (value: boolean) => void;
   setInsightsSyncEnabled: (value: boolean) => void;
   setTelemetryEnabled: (value: boolean) => void;
@@ -1612,6 +1613,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (v === "light" || v === "dark" || v === "auto") return v;
     return "auto" as const;
   })(),
+  trayIconStyle: (readString("trayIconStyle", "default") === "monochrome"
+    ? "monochrome"
+    : "default") as "default" | "monochrome",
   cloudBackupEnabled: readBoolean("cloudBackupEnabled", false),
   insightsSyncEnabled: readBoolean("insightsSyncEnabled", false),
   telemetryEnabled: readBoolean("telemetryEnabled", false),
@@ -2365,6 +2369,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setTheme: (value: "light" | "dark" | "auto") => {
     if (isBrowser) localStorage.setItem("theme", value);
     set({ theme: value });
+  },
+
+  setTrayIconStyle: (value: "default" | "monochrome") => {
+    const normalized = value === "monochrome" ? "monochrome" : "default";
+    if (get().trayIconStyle === normalized) return;
+    if (isBrowser) localStorage.setItem("trayIconStyle", normalized);
+    set({ trayIconStyle: normalized });
+    if (isBrowser) window.electronAPI?.notifyTrayIconStyleChanged?.(normalized);
   },
 
   setCloudBackupEnabled: createBooleanSetter("cloudBackupEnabled"),

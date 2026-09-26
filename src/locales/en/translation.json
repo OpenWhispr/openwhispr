@@ -2178,6 +2178,10 @@
         "light": "Light",
         "theme": "Theme",
         "themeDescription": "Choose light, dark, or match your system",
+        "trayIconDefault": "Default",
+        "trayIconMonochrome": "Monochrome",
+        "trayIconStyle": "Tray icon",
+        "trayIconStyleDescription": "Choose how the icon appears in your desktop panel",
         "title": "Appearance"
       },
       "floatingIcon": {
