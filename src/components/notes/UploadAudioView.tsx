@@ -71,7 +71,11 @@ import { getBaseLanguageCode } from "../../utils/languageSupport";
 import { isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
-import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
+import {
+  byokFileSizeLimit,
+  resolveTranscriptionRoute,
+  uploadsInChunks,
+} from "../../helpers/transcriptionRoute";
 import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
 import { isManagedTranscriptionActive } from "../../services/managedTranscription";
@@ -278,6 +282,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
+    openrouterApiKey,
     customTranscriptionApiKey,
   } = apiKeys;
   const policyState = usePolicySnapshot();
@@ -333,6 +338,22 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   // Mode detection
   const isSelfHosted = transcriptionMode === "self-hosted" && !useLocalWhisper;
   const isByok = !useLocalWhisper && !isOpenWhisprCloud;
+  // OpenRouter uploads (its tab, or a Custom endpoint on its host) go out in
+  // 4-minute pieces, so no whole-file cap applies and progress is per piece.
+  const uploadInPieces =
+    isByok &&
+    !managedActive &&
+    uploadsInChunks(
+      resolveTranscriptionRoute({
+        settings: {
+          transcriptionMode,
+          remoteTranscriptionUrl,
+          cloudTranscriptionProvider,
+          cloudTranscriptionModel,
+          cloudTranscriptionBaseUrl,
+        },
+      })
+    );
 
   // Mode-aware file size validation
   // Local: no limits at all
@@ -350,8 +371,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   if (file) {
     if (useLocalWhisper) {
       // Local transcription: no file size restrictions
-    } else if (isSelfHosted || cloudTranscriptionProvider === "custom") {
-      // Self-hosted / custom endpoints (e.g. local whisper.cpp): no file size restrictions
+    } else if (isSelfHosted || cloudTranscriptionProvider === "custom" || uploadInPieces) {
+      // Self-hosted / custom endpoints set their own limits; OpenRouter uploads go
+      // out in pieces far under its per-request cap
     } else if (isByok) {
       byokTooLarge = file.sizeBytes > byokMaxFileSize;
       if (byokTooLarge && !isSignedIn) {
@@ -445,6 +467,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 tinfoilApiKey,
                 deepgramApiKey,
                 assemblyaiApiKey,
+                openrouterApiKey,
                 customTranscriptionApiKey,
               })
             );
@@ -486,6 +509,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
+    openrouterApiKey,
     customTranscriptionApiKey,
     cortiClientId,
     cortiClientSecret,
@@ -533,7 +557,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   // Batch counterpart of the single-file size gating above; returns keys under notes.upload.*.
   const getBatchSizeErrorKey = (sizeBytes: number): string | null => {
-    if (useLocalWhisper || isSelfHosted || cloudTranscriptionProvider === "custom") return null;
+    if (
+      useLocalWhisper ||
+      isSelfHosted ||
+      cloudTranscriptionProvider === "custom" ||
+      uploadInPieces
+    ) {
+      return null;
+    }
     if (isByok) return sizeBytes > byokMaxFileSize ? "byokTooLarge" : null;
     if (sizeBytes > CLOUD_PRO_MAX_FILE_SIZE) return "fileTooLarge";
     if (!isProUser && sizeBytes > CLOUD_FREE_MAX_FILE_SIZE) return "paidPlanRequired";
@@ -642,8 +673,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const cancelTranscription = () => {
-    // True backend abort for cloud and local uploads; the run-id bump still
-    // discards any late result from providers that can't be aborted (BYOK).
+    // True backend abort for cloud, local and OpenRouter uploads; the run-id bump
+    // still discards any late result from BYOK providers that can't be aborted.
     if (activeRequestIdRef.current) {
       window.electronAPI.cancelUploadTranscription?.(activeRequestIdRef.current);
       activeRequestIdRef.current = null;
@@ -672,19 +703,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setDiarizationWarning(false);
 
     const useChunkProgress = isOpenWhisprCloud && isLargeFile;
-
-    if (useChunkProgress) {
-      progressCleanupRef.current =
-        window.electronAPI.onUploadTranscriptionProgress?.((data) => {
-          if (data.chunksTotal > 0) {
-            setChunkProgress({
-              chunksTotal: data.chunksTotal,
-              chunksCompleted: data.chunksCompleted,
-            });
-            setProgress((data.chunksCompleted / data.chunksTotal) * 90);
-          }
-        }) ?? null;
-    } else {
+    let simulatingProgress = false;
+    const simulateProgress = () => {
+      simulatingProgress = true;
       progressRef.current = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 90) {
@@ -694,10 +715,33 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           return prev + Math.random() * 6;
         });
       }, 500);
+    };
+
+    if (useChunkProgress || uploadInPieces) {
+      progressCleanupRef.current =
+        window.electronAPI.onUploadTranscriptionProgress?.((data) => {
+          // An OpenRouter upload of one piece reports nothing more until it is
+          // done, so it gets the simulated bar; several pieces are tracked as
+          // they land.
+          if (uploadInPieces && data.chunksTotal === 1) {
+            if (!simulatingProgress) simulateProgress();
+          } else if (data.chunksTotal > 0) {
+            setChunkProgress({
+              chunksTotal: data.chunksTotal,
+              chunksCompleted: data.chunksCompleted,
+            });
+            setProgress((data.chunksCompleted / data.chunksTotal) * 90);
+          }
+        }) ?? null;
+    } else {
+      simulateProgress();
     }
 
     try {
       const diarization = await buildDiarizationSettings();
+      // A Cancel while speaker models download came before the main process had
+      // anything to abort; starting now would send, and bill, the whole upload.
+      if (runId !== runIdRef.current) return;
       const res: FileTranscriptionResult = await transcribeFileWithSpeakers(
         currentFile.path,
         buildTranscriptionConfig(),

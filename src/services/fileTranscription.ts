@@ -67,6 +67,7 @@ export interface TranscriptionApiKeys {
   tinfoilApiKey: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
+  openrouterApiKey: string;
   customTranscriptionApiKey?: string;
 }
 
@@ -88,6 +89,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.deepgramApiKey;
     case "assemblyai":
       return keys.assemblyaiApiKey;
+    case "openrouter":
+      return keys.openrouterApiKey;
     case "custom":
       return keys.customTranscriptionApiKey || "";
     default:
@@ -189,6 +192,7 @@ export async function transcribeFile(
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,
     timestamps: opts.timestamps || undefined,
+    requestId: opts.requestId,
     provider: cfg.cloudTranscriptionProvider,
     language: cfg.language,
     environment: cfg.cortiEnvironment,

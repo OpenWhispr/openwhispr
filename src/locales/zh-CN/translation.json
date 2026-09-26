@@ -879,7 +879,8 @@
         "agentUnavailable": "助手不可用",
         "screenContextSkipped": "已跳过屏幕上下文",
         "dailyLimitReached": "已达到每日上限",
-        "providerRateLimited": "服务商速率限制"
+        "providerRateLimited": "服务商速率限制",
+        "outOfCredits": "余额不足"
       },
       "fallback": {
         "title": "回退模式",
@@ -910,6 +911,7 @@
         "offline": "你目前离线。云端转录需要互联网连接。",
         "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。",
         "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。",
+        "openRouterOutOfCredits": "你的 OpenRouter 账户余额不足。请在 openrouter.ai 充值后重试。",
         "chunkLoss": "网络问题导致录音大部分丢失。请从历史记录中重新转录。",
         "agentReasoningFailed": "语音助手无法处理该命令，已改为插入原始转录文本。",
         "screenContextSkipped": "截图无法发送，因此已在没有屏幕上下文的情况下执行你的命令。",
@@ -2572,7 +2574,11 @@
         "deepgram_nova_3": "Deepgram 最精准的实时模型",
         "assemblyai_universal_streaming_english": "不会变动的实时转录（英语）",
         "assemblyai_universal_streaming_multilingual": "不会变动的实时转录（多语言）",
-        "assemblyai_universal_3_5_pro": "最高精度实时转录，支持 18 种语言"
+        "assemblyai_universal_3_5_pro": "最高精度实时转录，支持 18 种语言",
+        "openrouter_openai_gpt_transcribe": "OpenAI 当前的转录模型",
+        "openrouter_deepgram_nova_3": "Deepgram 的快速多语言转录",
+        "openrouter_google_chirp_3": "支持 100 多种语言的 Google 语音转文字",
+        "openrouter_mistralai_voxtral_mini_transcribe": "低成本多语言转录"
       },
       "cloud": {
         "openai_gpt_5_2": "强大的推理模型",
@@ -3313,6 +3319,7 @@
     "import": "导入",
     "yourDictionary": "你的词典",
     "promptLimitNotice": "词典当前共 {{chars}} 个字符。Groq 和 Whisper 模型只会读取其中最后几百个字符，因此列表越短效果越好；其他模型会收到完整列表。",
+    "openRouterIgnoredNotice": "OpenRouter 不会将你的词典传给其语音模型，因此在听写选用 OpenRouter 期间，这些词不会影响转录结果。",
     "exportDictionary": "导出词典",
     "exportFailed": "导出失败",
     "editWord": "编辑 {{word}}",

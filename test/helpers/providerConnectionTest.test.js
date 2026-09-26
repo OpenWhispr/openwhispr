@@ -66,6 +66,51 @@ test("a 200 is the whole signal for providers with no OpenAI-shaped model list",
   }
 });
 
+test("a transcription test checks the OpenRouter key, not its public catalog", () => {
+  // OpenRouter's catalogs list every model for any caller, so only its key
+  // endpoint can tell a valid key from a mistyped one.
+  assert.equal(
+    resolveProviderRequest({ provider: "openrouter", scope: "transcription", apiKey: "secret" })
+      .endpoint,
+    "https://openrouter.ai/api/v1/key"
+  );
+
+  // The reasoning scope keeps the plain catalog.
+  for (const scope of ["reasoning", undefined]) {
+    assert.equal(
+      resolveProviderRequest({ provider: "openrouter", scope, apiKey: "secret" }).endpoint,
+      "https://openrouter.ai/api/v1/models",
+      String(scope)
+    );
+  }
+
+  // The override is OpenRouter-only; no other provider splits its catalog.
+  assert.equal(
+    resolveProviderRequest({ provider: "groq", scope: "transcription", apiKey: "secret" }).endpoint,
+    "https://api.groq.com/openai/v1/models"
+  );
+});
+
+test("the OpenRouter transcription test passes a valid key and rejects a bad one", async () => {
+  // Mirrors OpenRouter: the catalog answers 200 whatever the key, while the key
+  // endpoint answers 401 to a key it doesn't recognise.
+  const openRouter = (keyStatus) => async (url) =>
+    url === "https://openrouter.ai/api/v1/key"
+      ? { ok: keyStatus === 200, status: keyStatus, json: async () => ({ data: {} }) }
+      : { ok: true, status: 200, json: async () => ({ data: [{ id: "openai/gpt-transcribe" }] }) };
+  const config = { provider: "openrouter", scope: "transcription", model: "openai/gpt-transcribe" };
+
+  assert.deepEqual(await testProviderConnection({ ...config, apiKey: "valid" }, openRouter(200)), {
+    success: true,
+  });
+  assert.deepEqual(await testProviderConnection({ ...config, apiKey: "typo" }, openRouter(401)), {
+    success: false,
+    errorCode: "credentialsRejected",
+    error: "The provider rejected these credentials.",
+    status: 401,
+  });
+});
+
 test("normalizes custom compatible endpoints", () => {
   assert.equal(
     resolveProviderRequest({ provider: "custom", baseUrl: "localhost:11434/v1", apiKey: "" })

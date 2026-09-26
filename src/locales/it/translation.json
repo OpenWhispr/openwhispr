@@ -879,7 +879,8 @@
         "agentUnavailable": "Assistente non disponibile",
         "screenContextSkipped": "Contesto dello schermo ignorato",
         "dailyLimitReached": "Limite giornaliero raggiunto",
-        "providerRateLimited": "Limite di velocità del provider"
+        "providerRateLimited": "Limite di velocità del provider",
+        "outOfCredits": "Crediti esauriti"
       },
       "fallback": {
         "title": "Modalità fallback",
@@ -910,6 +911,7 @@
         "offline": "Sei offline. La trascrizione cloud richiede una connessione Internet.",
         "dailyLimitReached": "Hai raggiunto il limite di trascrizioni di oggi. Riprova domani o aggiorna il tuo piano.",
         "providerRateLimited": "Il tuo provider di trascrizione ha limitato la richiesta. Attendi un momento e riprova.",
+        "openRouterOutOfCredits": "Il tuo account OpenRouter ha esaurito i crediti. Ricaricalo su openrouter.ai e riprova.",
         "chunkLoss": "Un problema di rete ha fatto perdere troppa parte della registrazione. Ritrascrivila dalla cronologia.",
         "agentReasoningFailed": "L'assistente vocale non è riuscito a elaborare il comando; è stata inserita la trascrizione grezza.",
         "screenContextSkipped": "Non è stato possibile inviare lo screenshot, quindi il comando è stato eseguito senza contesto dello schermo.",
@@ -2572,7 +2574,11 @@
         "deepgram_nova_3": "Il modello in tempo reale più accurato di Deepgram",
         "assemblyai_universal_streaming_english": "Trascrizioni in tempo reale immutabili, inglese",
         "assemblyai_universal_streaming_multilingual": "Trascrizioni in tempo reale immutabili, multilingue",
-        "assemblyai_universal_3_5_pro": "Massima precisione in tempo reale, 18 lingue"
+        "assemblyai_universal_3_5_pro": "Massima precisione in tempo reale, 18 lingue",
+        "openrouter_openai_gpt_transcribe": "Modello di trascrizione attuale di OpenAI",
+        "openrouter_deepgram_nova_3": "Trascrizione multilingue veloce di Deepgram",
+        "openrouter_google_chirp_3": "Riconoscimento vocale Google in oltre 100 lingue",
+        "openrouter_mistralai_voxtral_mini_transcribe": "Trascrizione multilingue economica"
       },
       "cloud": {
         "openai_gpt_5_2": "Modello di ragionamento potente",
@@ -3314,6 +3320,7 @@
     "import": "Importa",
     "yourDictionary": "Il tuo dizionario",
     "promptLimitNotice": "Il tuo dizionario contiene {{chars}} caratteri. I modelli Groq e Whisper ne leggono solo le ultime centinaia di caratteri, quindi lì conviene un elenco più corto. Gli altri modelli ricevono l'elenco completo.",
+    "openRouterIgnoredNotice": "OpenRouter non passa il tuo dizionario ai suoi modelli vocali, quindi queste parole non guideranno la trascrizione finché è selezionato per la dettatura.",
     "exportDictionary": "Esporta dizionario",
     "exportFailed": "Esportazione non riuscita",
     "editWord": "Modifica {{word}}",

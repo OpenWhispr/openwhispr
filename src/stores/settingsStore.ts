@@ -39,6 +39,7 @@ import { recordTinfoilModelSwitch } from "./tinfoilModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
+  acceptsUnlistedTranscriptionModel,
   getTranscriptionSelection,
   isScreenContextAllowed,
   resolveEffectivePolicySelection,
@@ -138,6 +139,9 @@ function transcriptionModelBelongsToProvider(
   context: TranscriptionPolicyContext
 ): boolean {
   if (providerId === "custom") return Boolean(modelId);
+  // A stored vendor-prefixed OpenRouter id outlives its registry entry rather
+  // than being reset on the next tab switch.
+  if (acceptsUnlistedTranscriptionModel(providerId, modelId)) return true;
   return transcriptionProviderModels(providerId, context).some((model) => model.id === modelId);
 }
 

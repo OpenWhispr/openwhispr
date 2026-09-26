@@ -1,3 +1,4 @@
+import { isOpenRouterEndpoint } from "../helpers/transcriptionRoute.ts";
 import { usesTranscriptionKeywords } from "./dictionaryKeywords.js";
 
 // Per-provider budgets for the custom-dictionary STT prompt on the direct-API
@@ -44,6 +45,15 @@ export function dictionaryPromptLimit({ provider = "", endpoint = "", model = ""
   if (model.toLowerCase().startsWith("gpt-4o")) return TRANSCRIBE_PROMPT_CHARS;
   if (usesTranscriptionKeywords(model)) return TRANSCRIPTION_OVERFLOW_PROMPT_CHARS;
   return WHISPER_PROMPT_CHARS;
+}
+
+// OpenRouter's multipart /audio/transcriptions accepts `prompt` and drops it,
+// and vocabulary hints reach its models only through provider.options on its
+// JSON body, which dictation does not use. So no dictionary reaches the model
+// there: dictation leaves it out of the request, nothing can echo it back, and
+// the Dictionary view says so.
+export function dictionaryReachesTranscriptionModel(endpoint) {
+  return !isOpenRouterEndpoint(endpoint);
 }
 
 // Cuts at the last comma inside the budget so no entry is sent half-spelled.

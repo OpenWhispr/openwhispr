@@ -879,7 +879,8 @@
         "agentUnavailable": "アシスタントを利用できません",
         "screenContextSkipped": "画面コンテキストをスキップしました",
         "dailyLimitReached": "1 日の上限に達しました",
-        "providerRateLimited": "プロバイダーのレート制限"
+        "providerRateLimited": "プロバイダーのレート制限",
+        "outOfCredits": "クレジット不足"
       },
       "fallback": {
         "title": "フォールバックモード",
@@ -910,6 +911,7 @@
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
         "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
         "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
+        "openRouterOutOfCredits": "OpenRouter アカウントのクレジットがなくなりました。openrouter.ai でチャージしてから、もう一度お試しください。",
         "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
         "agentReasoningFailed": "音声アシスタントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
         "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。",
@@ -2572,7 +2574,11 @@
         "deepgram_nova_3": "Deepgram で最も高精度なリアルタイムモデル",
         "assemblyai_universal_streaming_english": "変化しないリアルタイム文字起こし（英語）",
         "assemblyai_universal_streaming_multilingual": "変化しないリアルタイム文字起こし（多言語）",
-        "assemblyai_universal_3_5_pro": "最高精度のリアルタイム、18言語"
+        "assemblyai_universal_3_5_pro": "最高精度のリアルタイム、18言語",
+        "openrouter_openai_gpt_transcribe": "OpenAI の最新の文字起こしモデル",
+        "openrouter_deepgram_nova_3": "Deepgram の高速な多言語文字起こし",
+        "openrouter_google_chirp_3": "100 以上の言語に対応する Google の音声文字起こし",
+        "openrouter_mistralai_voxtral_mini_transcribe": "低コストの多言語文字起こし"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
@@ -3241,6 +3247,7 @@
     "import": "インポート",
     "yourDictionary": "あなたの辞書",
     "promptLimitNotice": "辞書は現在{{chars}}文字です。GroqとWhisperのモデルはその末尾の数百文字しか読み取らないため、リストは短いほうが効果的です。その他のモデルには全リストが送信されます。",
+    "openRouterIgnoredNotice": "OpenRouterは辞書を音声モデルに渡さないため、ディクテーションでOpenRouterを選択している間は、これらの単語は文字起こしに反映されません。",
     "exportDictionary": "辞書をエクスポート",
     "exportFailed": "エクスポートに失敗しました",
     "editWord": "{{word}} を編集",

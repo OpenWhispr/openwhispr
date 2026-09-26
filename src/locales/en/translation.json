@@ -879,7 +879,8 @@
         "agentUnavailable": "Assistant Unavailable",
         "screenContextSkipped": "Screen Context Skipped",
         "dailyLimitReached": "Daily Limit Reached",
-        "providerRateLimited": "Provider Rate Limited"
+        "providerRateLimited": "Provider Rate Limited",
+        "outOfCredits": "Out of Credits"
       },
       "fallback": {
         "title": "Fallback Mode",
@@ -910,6 +911,7 @@
         "offline": "You're offline. Cloud transcription requires an internet connection.",
         "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
         "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again.",
+        "openRouterOutOfCredits": "Your OpenRouter account is out of credits. Top up at openrouter.ai, then try again.",
         "chunkLoss": "A network problem lost too much of the recording. Re-transcribe it from History.",
         "agentReasoningFailed": "Your voice assistant couldn't process the command — the raw transcript was inserted instead.",
         "screenContextSkipped": "The screenshot couldn't be sent, so your command ran without screen context.",
@@ -2669,7 +2671,11 @@
         "deepgram_nova_3": "Deepgram's most accurate realtime model",
         "assemblyai_universal_streaming_english": "Immutable realtime transcripts, English",
         "assemblyai_universal_streaming_multilingual": "Immutable realtime transcripts, multilingual",
-        "assemblyai_universal_3_5_pro": "Highest accuracy realtime, 18 languages"
+        "assemblyai_universal_3_5_pro": "Highest accuracy realtime, 18 languages",
+        "openrouter_openai_gpt_transcribe": "OpenAI's current transcription model",
+        "openrouter_deepgram_nova_3": "Deepgram's fast multilingual transcription",
+        "openrouter_google_chirp_3": "Google's speech-to-text in 100+ languages",
+        "openrouter_mistralai_voxtral_mini_transcribe": "Low-cost multilingual transcription"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
@@ -3657,6 +3663,7 @@
     "import": "Import",
     "yourDictionary": "Your dictionary",
     "promptLimitNotice": "Your dictionary is {{chars}} characters. Groq and Whisper models read only the last few hundred characters of it, so a shorter list works better there. Other models get the full list.",
+    "openRouterIgnoredNotice": "OpenRouter doesn't pass your dictionary to its speech models, so these words won't guide transcription while it's selected for dictation.",
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
     "editWord": "Edit {{word}}",
