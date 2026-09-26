@@ -921,6 +921,7 @@
         "providerKeyMissing": "Nessuna chiave API impostata per il tuo provider di trascrizione. Aggiungila in Impostazioni → Da voce a testo.",
         "cleanupTruncated": "Il modello IA ha esaurito lo spazio prima di finire la pulizia della dettatura.",
         "cleanupDuplicated": "La pulizia con IA ha ripetuto la trascrizione. Il testo originale è stato conservato.",
+        "cleanupAddedText": "La pulizia con IA ha aggiunto testo che non hai detto. Il testo originale è stato conservato.",
         "cleanupEmptyReply": "Il modello IA ha restituito una risposta vuota invece della dettatura pulita."
       },
       "translationFallback": {

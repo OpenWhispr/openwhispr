@@ -9,6 +9,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 const RAW = "um so can you uh send me the report by friday";
 const CLEAN = "Can you send me the report by Friday?";
 const DUPLICATE = `**Cleaned transcript:**\n${CLEAN}\n\n${CLEAN}`;
+const ADDED = "hooks.audioRecording.errorDescriptions.cleanupAddedText";
 
 test("cleanup validates completed provider output using the request's prompt settings", async (t) => {
   const { window } = installBrowserGlobals(t);
@@ -104,6 +105,134 @@ test("cleanup validates completed provider output using the request's prompt set
       }
     }
   );
+
+  await t.test(
+    "local cleanup that copies the instructions it was sent keeps the raw text",
+    async () => {
+      setCustomPrompt("");
+      const { wrapCleanupTranscript } = await vite.ssrLoadModule("/config/prompts/index.ts");
+      const { default: logger } = await vite.ssrLoadModule("/utils/logger.ts");
+      const rejections = [];
+      const logReasoning = logger.logReasoning;
+      logger.logReasoning = (stage, details) => {
+        if (stage === "CLEANUP_OUTPUT_REJECTED") rejections.push(details);
+        return logReasoning(stage, details);
+      };
+      try {
+        for (const reply of [
+          // The opening sentence of the system prompt this request carried.
+          (options) => options.systemPrompt.split(".")[0],
+          // The instruction that follows the transcript in the user message.
+          () => wrapCleanupTranscript("").split("\n").pop(),
+        ]) {
+          window.electronAPI.processLocalReasoning = async (_text, _model, _agent, options) => ({
+            success: true,
+            text: reply(options),
+          });
+          await assert.rejects(
+            service.processText("Fix grammar.", "test-model", null, { provider: "local" }),
+            { code: "CLEANUP_OUTPUT_INVALID", messageKey: ADDED }
+          );
+        }
+      } finally {
+        logger.logReasoning = logReasoning;
+      }
+      // The log names the rule, never what was said or pasted.
+      assert.equal(rejections.length, 2);
+      for (const details of rejections) {
+        assert.deepEqual(Object.keys(details).sort(), ["inputLength", "outputLength", "reason"]);
+        assert.equal(details.reason, "prompt_copy");
+      }
+    }
+  );
+
+  await t.test("the prompt is read before inference, like eligibility", async () => {
+    setCustomPrompt("");
+    useSettingsStore.setState({ customDictionary: ["Zephyr Quokka"] });
+    window.electronAPI.processLocalReasoning = async () => {
+      // A dictionary edit while the model runs must not change what is checked.
+      useSettingsStore.setState({ customDictionary: [] });
+      // The dictionary instruction is only in a prompt that lists words.
+      return {
+        success: true,
+        text: "Okay. Custom Dictionary (use these exact spellings when they appear in the text):",
+      };
+    };
+    await assert.rejects(service.processText("Okay.", "test-model", null, { provider: "local" }), {
+      code: "CLEANUP_OUTPUT_INVALID",
+      messageKey: ADDED,
+    });
+  });
+
+  await t.test("OpenWhispr Cloud writes its own prompt, so only label checks apply", async () => {
+    setCustomPrompt("");
+    const raw = "What's the capital of Spain?";
+    const example = "Can you send me the report by Friday?";
+    window.electronAPI.processLocalReasoning = async () => ({ success: true, text: example });
+    await assert.rejects(service.processText(raw, "test-model", null, { provider: "local" }), {
+      code: "CLEANUP_OUTPUT_INVALID",
+      messageKey: ADDED,
+    });
+    window.electronAPI.cloudReason = async () => ({ success: true, text: example });
+    assert.equal(
+      await service.processText(raw, "test-model", null, { provider: "openwhispr" }),
+      example
+    );
+    window.electronAPI.cloudReason = async () => ({
+      success: true,
+      text: `Okay, here's the cleaned transcript:\n\n"${raw}"`,
+    });
+    await assert.rejects(service.processText(raw, "test-model", null, { provider: "openwhispr" }), {
+      code: "CLEANUP_OUTPUT_INVALID",
+      messageKey: ADDED,
+    });
+  });
+
+  await t.test("Chinese cleanup that changes script is compared in one script", async () => {
+    setCustomPrompt("");
+    const { uiLanguage, preferredLanguage } = useSettingsStore.getState();
+    // Speech-to-text returned Simplified; cleanup writes the Traditional the user chose.
+    useSettingsStore.setState({ uiLanguage: "zh-TW", preferredLanguage: "zh-TW" });
+    try {
+      const cleaned = "我覺得這個很重要，我們明天再討論。";
+      window.electronAPI.processLocalReasoning = async () => ({ success: true, text: cleaned });
+      assert.equal(
+        await service.processText("我觉得这个很重要我们明天再讨论", "test-model", null, {
+          provider: "local",
+        }),
+        cleaned
+      );
+      // A reply that copies the Traditional instructions is still caught.
+      window.electronAPI.processLocalReasoning = async (_text, _model, _agent, options) => ({
+        success: true,
+        text: options.systemPrompt.split("。")[0],
+      });
+      await assert.rejects(service.processText("好的", "test-model", null, { provider: "local" }), {
+        code: "CLEANUP_OUTPUT_INVALID",
+        messageKey: ADDED,
+      });
+      // Every text is converted or none is, even a line without script-specific characters.
+      window.electronAPI.processLocalReasoning = async () => ({
+        success: true,
+        text: "修正明顯的語音辨識錯誤",
+      });
+      await assert.rejects(service.processText("好的", "test-model", null, { provider: "local" }), {
+        code: "CLEANUP_OUTPUT_INVALID",
+        messageKey: ADDED,
+      });
+      const company = "我們聯繫了中華電信股份有限公司。";
+      useSettingsStore.setState({ customDictionary: ["中華電信股份有限公司"] });
+      window.electronAPI.processLocalReasoning = async () => ({ success: true, text: company });
+      assert.equal(
+        await service.processText("我們聯繫了中化店心股份有限公司", "test-model", null, {
+          provider: "local",
+        }),
+        company
+      );
+    } finally {
+      useSettingsStore.setState({ uiLanguage, preferredLanguage, customDictionary: [] });
+    }
+  });
 
   await t.test("history retry keeps the raw row and reports rejected cleanup", async () => {
     setCustomPrompt("");

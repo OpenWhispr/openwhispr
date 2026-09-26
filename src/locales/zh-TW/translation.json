@@ -921,6 +921,7 @@
         "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。",
         "cleanupTruncated": "AI 模型的輸出長度達到上限，未能完成聽寫清理。",
         "cleanupDuplicated": "AI 清理重複了轉錄內容。已保留原始文字。",
+        "cleanupAddedText": "AI 清理加入了你沒有說過的內容。已保留原始文字。",
         "cleanupEmptyReply": "AI 模型傳回空白回應，沒有產生清理後的文字。"
       },
       "translationFallback": {

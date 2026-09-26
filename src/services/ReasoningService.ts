@@ -11,7 +11,11 @@ import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy, httpError } from "../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../config/constants";
 import logger from "../utils/logger";
-import { assertValidCleanupOutput } from "../utils/cleanupOutput";
+import {
+  assertValidCleanupOutput,
+  inOneChineseScript,
+  type CleanupPrompt,
+} from "../utils/cleanupOutput";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
@@ -501,6 +505,17 @@ class ReasoningService extends BaseReasoningService {
       throw new Error("No reasoning model selected");
     }
 
+    // Read with eligibility, before inference: the dictionary or language can change
+    // while a slow local model runs. OpenWhispr Cloud writes its prompt on the server,
+    // so only prompts this app sends can be checked for copied instructions.
+    const cleanupPrompt: CleanupPrompt | undefined =
+      validateCleanup && providerId !== "openwhispr"
+        ? {
+            text: `${this.getSystemPrompt(agentName)}\n${wrapCleanupTranscript("")}`,
+            dictionary: this.getCustomDictionary(),
+          }
+        : undefined;
+
     logger.logReasoning("PROVIDER_SELECTION", {
       provider: providerId,
       model: trimmedModel,
@@ -524,7 +539,10 @@ class ReasoningService extends BaseReasoningService {
         ctx: this.providerContext,
       });
 
-      if (validateCleanup) assertValidCleanupOutput(text, result);
+      if (validateCleanup) {
+        const [rawText, output, prompt] = await inOneChineseScript(text, result, cleanupPrompt);
+        assertValidCleanupOutput(rawText, output, prompt);
+      }
 
       logger.logReasoning("PROVIDER_SUCCESS", {
         provider: providerId,

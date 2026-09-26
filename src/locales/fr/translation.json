@@ -921,6 +921,7 @@
         "providerKeyMissing": "Aucune clé API n'est définie pour votre fournisseur de transcription. Ajoutez-la dans Réglages → Parole en texte.",
         "cleanupTruncated": "Le modèle d'IA a manqué de place avant de terminer le nettoyage de votre dictée.",
         "cleanupDuplicated": "Le nettoyage par IA a répété la transcription. Le texte original a été conservé.",
+        "cleanupAddedText": "Le nettoyage par IA a ajouté du texte que vous n'avez pas dit. Le texte original a été conservé.",
         "cleanupEmptyReply": "Le modèle d'IA a renvoyé une réponse vide au lieu de la dictée nettoyée."
       },
       "translationFallback": {
