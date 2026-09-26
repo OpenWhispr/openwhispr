@@ -1015,7 +1015,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("dictation-key-active", listener);
     return () => ipcRenderer.removeListener("dictation-key-active", listener);
   },
-  onWindowsPushToTalkUnavailable: registerListener("windows-ptt-unavailable"),
   onLinuxPttPermissionDenied: registerListener(
     "linux-ptt-permission-denied",
     (callback) => () => callback()
