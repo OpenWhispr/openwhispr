@@ -7455,7 +7455,7 @@ class IPCHandlers {
     let meetingLocalProvider = null;
     let meetingLocalModel = null;
     let meetingLocalLanguage = null;
-    let meetingLocalTranscribing = false;
+    let meetingLocalPass = null;
     let meetingPendingMicChunks = [];
     let meetingPendingMicFinals = [];
     let meetingPendingMicFinalTimer = null;
@@ -7994,15 +7994,17 @@ class IPCHandlers {
       }
     };
 
-    const transcribeAllLocalBuffers = async () => {
-      if (meetingLocalTranscribing) return;
-      meetingLocalTranscribing = true;
-      try {
-        await transcribeLocalMeetingChunk("system");
-        await transcribeLocalMeetingChunk("mic");
-      } finally {
-        meetingLocalTranscribing = false;
-      }
+    // One pass at a time: a call while a pass is decoding joins that pass.
+    const transcribeAllLocalBuffers = () => {
+      meetingLocalPass ??= (async () => {
+        try {
+          await transcribeLocalMeetingChunk("system");
+          await transcribeLocalMeetingChunk("mic");
+        } finally {
+          meetingLocalPass = null;
+        }
+      })();
+      return meetingLocalPass;
     };
 
     const dropMeetingMicDiarizationCapture = () => {
@@ -8053,7 +8055,6 @@ class IPCHandlers {
       meetingLocalProvider = null;
       meetingLocalModel = null;
       meetingLocalLanguage = null;
-      meetingLocalTranscribing = false;
       meetingPendingMicChunks = [];
       resetPendingMicFinals();
       meetingAecEnabled = false;
@@ -8984,6 +8985,10 @@ class IPCHandlers {
             meetingLocalTimer = null;
           }
           try {
+            // A timer pass still decoding belongs to this recording, and the reset
+            // below would hand its text to the next one. Let it land here, then
+            // transcribe the audio that arrived after it started.
+            await meetingLocalPass;
             await transcribeAllLocalBuffers();
           } catch (err) {
             debugLogger.error("Local meeting final transcription failed", { error: err.message });
