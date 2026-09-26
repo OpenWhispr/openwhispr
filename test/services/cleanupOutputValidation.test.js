@@ -164,7 +164,7 @@ test("cleanup validates completed provider output using the request's prompt set
     });
   });
 
-  await t.test("OpenWhispr Cloud writes its own prompt, so only wrapper checks apply", async () => {
+  await t.test("OpenWhispr Cloud writes its own prompt, so only label checks apply", async () => {
     setCustomPrompt("");
     const raw = "What's the capital of Spain?";
     const example = "Can you send me the report by Friday?";

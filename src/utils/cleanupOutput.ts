@@ -31,9 +31,6 @@ const LABEL_FRAMING = new Set([
 ]);
 // The noun an announcement's label ends on: "…the cleaned transcript:".
 const ANNOUNCED = new Set(["transcript", "version", "text", "output"]);
-const TRANSCRIPT_TAG = /<\/?transcript\b[^<>]*>/iu;
-// Words a speaker uses to dictate markup: "less than transcript greater than".
-const MARKUP_CUES = /\b(?:tags?|brackets?|angle|less|greater)\b/iu;
 const DUPLICATED = {
   message: "AI cleanup repeated the transcript. The original text was kept.",
   messageKey: "hooks.audioRecording.errorDescriptions.cleanupDuplicated",
@@ -51,8 +48,7 @@ export interface CleanupPrompt {
   dictionary: readonly string[];
 }
 
-export type CleanupOutputProblem =
-  "duplicated_transcript" | "prompt_copy" | "label" | "transcript_tags" | "markdown_residue";
+export type CleanupOutputProblem = "duplicated_transcript" | "prompt_copy" | "label";
 
 function comparisonTokens(text: string): string[] {
   // Keep contractions as one word when punctuation is discarded.
@@ -167,25 +163,14 @@ function labelWords(line: string): string[] | undefined {
   return label === undefined ? undefined : comparisonTokens(label);
 }
 
-// Text around the transcript that the speaker never said.
-function wrapperProblem(
-  rawText: string,
-  spoken: ReadonlySet<string>,
-  output: string
-): CleanupOutputProblem | null {
-  // A label is the speaker's own only if they said its words; the rest of its line
-  // may be reworded like any cleanup.
-  for (const line of output.split(/\r?\n/u)) {
-    if (labelWords(line)?.some((word) => !spoken.has(word))) return "label";
-  }
-  const dictatedTag =
-    TRANSCRIPT_TAG.test(rawText) || (spoken.has("transcript") && MARKUP_CUES.test(rawText));
-  if (TRANSCRIPT_TAG.test(output) && !dictatedTag) return "transcript_tags";
-  const trimmed = output.trim();
-  // A dangling "**"; bold that opens and closes is left alone.
-  const unbalancedBold = trimmed.endsWith("**") && trimmed.split("**").length % 2 === 0;
-  if (unbalancedBold && !rawText.includes("**")) return "markdown_residue";
-  return null;
+// A label line is the speaker's own only if they said its label words, give or take
+// a corrected letter or two; the rest of the line may be reworded like any cleanup.
+function addsLabel(spoken: ReadonlySet<string>, output: string): boolean {
+  return output
+    .split(/\r?\n/u)
+    .some((line) =>
+      labelWords(line)?.some((word) => !spoken.has(word) && !nearlySaid(word, spoken))
+    );
 }
 
 export function findCleanupOutputProblem(
@@ -197,7 +182,7 @@ export function findCleanupOutputProblem(
   if (repeatsTranscript(rawTokens, output)) return "duplicated_transcript";
   const spoken = new Set(rawTokens);
   if (prompt && copiesPrompt(spoken, output, prompt)) return "prompt_copy";
-  return wrapperProblem(rawText, spoken, output);
+  return addsLabel(spoken, output) ? "label" : null;
 }
 
 // Speech-to-text and cleanup can write Chinese in different scripts (简/繁), which

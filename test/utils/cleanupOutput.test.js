@@ -253,7 +253,7 @@ test("cleanup keeps dictation that shares words with its instructions", async ()
   );
 });
 
-test("cleanup rejects labels, tags and dangling bold the speaker never said", async () => {
+test("cleanup rejects labels the speaker never said", async () => {
   const { assertValidCleanupOutput, findCleanupOutputProblem } =
     await import("../../src/utils/cleanupOutput.ts");
   for (const [raw, output, problem] of [
@@ -279,17 +279,6 @@ test("cleanup rejects labels, tags and dangling bold the speaker never said", as
       "label",
     ],
     ["I sent you the text.", "Here's the cleaned text:\nI sent you the text.", "label"],
-    [
-      "Let's start with the local model for now.",
-      "Let's start with the local model for now.**",
-      "markdown_residue",
-    ],
-    ["Hello.", "<transcript>\nHello.\n</transcript>", "transcript_tags"],
-    [
-      "Can you send me the transcript of the call?",
-      "<transcript>\nCan you send me the transcript of the call?\n</transcript>",
-      "transcript_tags",
-    ],
   ]) {
     // No prompt is needed: Cloud cleanup gets these checks too.
     for (const prompt of [undefined, PROMPT]) {
@@ -303,11 +292,9 @@ test("cleanup rejects labels, tags and dangling bold the speaker never said", as
   }
 });
 
-test("cleanup keeps labels, numbers and quotes the speaker dictated", async () => {
+test("cleanup keeps labels, numbers, markup and quotes the speaker dictated", async () => {
   const { findCleanupOutputProblem } = await import("../../src/utils/cleanupOutput.ts");
   for (const [raw, output] of [
-    // Bold that opens and closes is formatting, not a stray marker.
-    [RAW, `**${CLEAN}**`],
     [
       "okay here's the cleaned transcript colon we shipped the fix",
       "Okay, here's the cleaned transcript: we shipped the fix.",
@@ -318,6 +305,7 @@ test("cleanup keeps labels, numbers and quotes the speaker dictated", async () =
     ],
     // Reworded framing ("here is" → "here's") and converted numbers still count as said.
     ["here is the output colon", "Here's the output:"],
+    ["here is the transcripts from the meeting colon", "Here's the transcript from the meeting:"],
     ["here's the version two plan colon", "Here's the version 2 plan:"],
     // Everyday lines that announce text keep their cleanup edits: a contraction,
     // dropped fillers, a corrected word.
@@ -344,11 +332,16 @@ test("cleanup keeps labels, numbers and quotes the speaker dictated", async () =
     // Speech-to-text writes the word "colon"; the label words were still said.
     ["transcript colon the call went well", "Transcript: The call went well."],
     ["output colon five hundred units a day", "Output: 500 units a day."],
-    // Markup the speaker dictated, spoken delimiters included.
+    // Markup the speaker dictated, in any language.
     [
       "use less than transcript greater than as the opening tag",
       "Use <transcript> as the opening tag.",
     ],
+    [
+      "utilise inférieur à transcript supérieur à comme balise ouvrante",
+      "Utilise <transcript> comme balise ouvrante.",
+    ],
+    ["the markdown marker for bold is double asterisk", "The Markdown marker for bold is **"],
     // Quotation marks are formatting in any language, however they were dictated.
     ["he said quote okay unquote", 'He said, "Okay."'],
     ["« Bonjour. »", '"Bonjour."'],
