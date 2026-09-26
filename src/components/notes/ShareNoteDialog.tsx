@@ -50,7 +50,6 @@ import type {
   NoteAccessState,
   NoteItem,
   NoteShareInvitation,
-  ShareSettings,
   ShareVisibility,
 } from "../../types/electron";
 
@@ -401,8 +400,8 @@ export default function ShareNoteDialog({
   // another device, or by an invite, leaves none here; rotating is the only
   // way to recover a copyable link (the old one stops working by design).
   const rotateAndCopy = useCallback(
-    async (current: ShareSettings) => {
-      if (!cloudId || !canManageAccess || !shareActionAllowed("rotate-link", current.visibility)) {
+    async (visibility: ShareVisibility) => {
+      if (!cloudId || !canManageAccess || !shareActionAllowed("rotate-link", visibility)) {
         toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
         return;
       }
@@ -439,7 +438,7 @@ export default function ShareNoteDialog({
       const link = resolveShareLink(entry.share, [note.share_token, entry.rawToken]);
       if (link.kind === "copy") await copyLink(link.url);
       else if (link.needsConfirmation && !replaceConfirmed) setConfirmingReplaceLink(true);
-      else await rotateAndCopy(entry.share);
+      else await rotateAndCopy(entry.share.visibility);
     },
     [cloudId, note.share_token, copyLink, rotateAndCopy, t, toast]
   );

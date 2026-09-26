@@ -4,7 +4,7 @@ const SHARE_VIEWER_BASE_URL = "https://notes.openwhispr.com";
 
 type ShareLinkSettings = Pick<ShareSettings, "visibility" | "token_prefix">;
 
-export type ShareLinkResolution =
+type ShareLinkResolution =
   | { kind: "copy"; url: string }
   // Rotating mints a new prefix, which kills every emailed /invite/<prefix>
   // link, so it needs consent whenever a prefix already exists.
