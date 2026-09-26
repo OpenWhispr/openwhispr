@@ -322,3 +322,80 @@ test("an enterprise-only transcription policy resolves for dictation and upload"
   // Raw preferences are untouched.
   assert.equal(useSettingsStore.getState().transcriptionMode, "providers");
 });
+
+// Audio Upload only transcribes finished files, so a managed policy must never
+// point it at a live-only provider (Deepgram, AssemblyAI), while Dictation keeps
+// every allowed provider and Note Recording only ones it can stream with. The
+// loop runs over the registry, so a provider added later (OpenRouter) is held
+// to the same rules without a new case.
+test("managed fallbacks keep each transcription context on providers it can run", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _providerSettingsMigrated: "1",
+      uploadTranscriptionMigrated: "true",
+      meetingFollowsTranscription: "false",
+      transcriptionMode: "providers",
+      useLocalWhisper: "false",
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "openai",
+      meetingTranscriptionMode: "providers",
+      uploadTranscriptionMode: "providers",
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-policy-effective-context-providers-test-",
+  });
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { getSettings, useSettingsStore, TRANSCRIPTION_POLICY_PROVIDER_IDS } =
+    await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { STREAMING_ONLY_PROVIDERS } = await vite.ssrLoadModule("/helpers/transcriptionRoute.ts");
+  const { MEETING_STREAMING_PROVIDER_IDS } = await vite.ssrLoadModule(
+    "/helpers/meetingTranscriptionRouting.js"
+  );
+  const allowOnly = (allowedByokProviders) =>
+    usePolicyStore.setState({
+      status: "managed",
+      managed: true,
+      policy: {
+        ...managedPolicy,
+        transcription: {
+          allowedModes: ["openwhispr", "providers", "local"],
+          allowedByokProviders,
+        },
+      },
+      appVersion: "1.10.2",
+    });
+
+  for (const provider of TRANSCRIPTION_POLICY_PROVIDER_IDS) {
+    allowOnly([provider]);
+    const effective = getSettings();
+    assert.equal(effective.transcriptionMode, "providers", `${provider}: dictation mode`);
+    assert.equal(effective.cloudTranscriptionProvider, provider, `${provider}: dictation`);
+    if (STREAMING_ONLY_PROVIDERS.has(provider)) {
+      assert.equal(
+        effective.uploadTranscriptionMode,
+        "openwhispr",
+        `${provider}: upload falls back`
+      );
+      assert.equal(effective.meetingTranscriptionMode, "providers", `${provider}: meeting mode`);
+      assert.equal(effective.meetingCloudTranscriptionProvider, provider, `${provider}: meeting`);
+    } else {
+      assert.equal(effective.uploadTranscriptionMode, "providers", `${provider}: upload mode`);
+      assert.equal(effective.uploadCloudTranscriptionProvider, provider, `${provider}: upload`);
+    }
+    if (effective.meetingTranscriptionMode === "providers") {
+      assert.ok(
+        MEETING_STREAMING_PROVIDER_IDS.includes(effective.meetingCloudTranscriptionProvider),
+        `${provider}: meeting never lands on a provider it cannot stream with`
+      );
+    }
+  }
+
+  // A batch-capable provider in the list keeps uploads on it, even when the
+  // member saved a live-only upload provider before the picker hid them.
+  allowOnly(["openai", "deepgram"]);
+  assert.equal(getSettings().uploadCloudTranscriptionProvider, "openai");
+  useSettingsStore.setState({ uploadCloudTranscriptionProvider: "deepgram" });
+  assert.equal(getSettings().uploadTranscriptionMode, "providers");
+  assert.equal(getSettings().uploadCloudTranscriptionProvider, "openai");
+});

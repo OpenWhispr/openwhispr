@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, ShieldCheck } from "../icons";
 import {
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
-  TRANSCRIPTION_POLICY_PROVIDER_IDS,
+  UPLOAD_TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
 } from "../../stores/settingsStore";
 import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
@@ -91,7 +91,7 @@ export function UploadTranscriptionPanel() {
     "transcription",
     uploadTranscriptionMode,
     {
-      byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS,
+      byokProviders: UPLOAD_TRANSCRIPTION_POLICY_PROVIDER_IDS,
       enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
     }
   );

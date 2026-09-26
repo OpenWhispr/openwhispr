@@ -75,6 +75,10 @@ export const TRANSCRIPTION_POLICY_PROVIDER_IDS = [
   "custom",
 ] as const;
 
+// Audio Upload transcribes finished files, which live-only providers cannot do.
+export const UPLOAD_TRANSCRIPTION_POLICY_PROVIDER_IDS: readonly string[] =
+  TRANSCRIPTION_POLICY_PROVIDER_IDS.filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider));
+
 export const LLM_POLICY_PROVIDER_IDS = [
   ...modelRegistryData.cloudProviders.map((provider) => provider.id),
   "openrouter",
@@ -91,6 +95,11 @@ const TRANSCRIPTION_POLICY_CATALOG = {
   modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"] as const,
   byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS,
   enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
+};
+
+const UPLOAD_TRANSCRIPTION_POLICY_CATALOG = {
+  ...TRANSCRIPTION_POLICY_CATALOG,
+  byokProviders: UPLOAD_TRANSCRIPTION_POLICY_PROVIDER_IDS,
 };
 
 const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
@@ -2789,34 +2798,48 @@ export interface ResolvedUploadTranscription {
   remoteTranscriptionModel: string;
 }
 
+const resolveUploadCloudProvider = (state: SettingsState): string =>
+  state.uploadCloudTranscriptionProvider ||
+  (STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider)
+    ? DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER
+    : state.cloudTranscriptionProvider);
+
 // Audio upload is batch (not streaming), so unset values fall back to the base
 // dictation settings — matching the behavior before upload had its own context.
 // A realtime-only dictation provider is the exception: it has no batch route, so
 // inheriting it would fail every upload closed. Uploads take the default provider
 // instead, and the dictation model stays behind with the provider it belongs to.
-// The self-hosted server is the exception the other way: it never inherits, so
-// uploads go only to the server the Upload tab shows (#2049).
+// The inherited endpoint comes from `saved`, the member's own settings, never
+// from the policy view in `state`, whose endpoints the overlay binds to built-in
+// providers. It is reused for the upload provider the member chose, or for the
+// provider dictation still uses under the policy; any other policy fallback to
+// Custom stays unconfigured. Callers without a policy pass the same settings twice.
+// The self-hosted server is the exception the other way: it
+// never inherits, so uploads go only to the server the Upload tab shows (#2049).
 // migrateUploadSelfHosted() seeds it once for profiles from before the tab had its own.
 export const selectResolvedUploadTranscription = (
-  state: SettingsState
+  state: SettingsState,
+  saved: SettingsState
 ): ResolvedUploadTranscription => {
   const inheritsDictationProvider = !STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider);
+  const cloudTranscriptionProvider = resolveUploadCloudProvider(state);
+  const usesSavedEndpoint =
+    cloudTranscriptionProvider === resolveUploadCloudProvider(saved) ||
+    (cloudTranscriptionProvider === saved.cloudTranscriptionProvider &&
+      state.cloudTranscriptionProvider === saved.cloudTranscriptionProvider);
   return {
     useLocalWhisper: state.uploadUseLocalWhisper,
     whisperModel: state.uploadWhisperModel || state.whisperModel,
     localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
     parakeetModel: state.uploadParakeetModel || state.parakeetModel,
     cohereModel: state.uploadCohereModel || state.cohereModel,
-    cloudTranscriptionProvider:
-      state.uploadCloudTranscriptionProvider ||
-      (inheritsDictationProvider
-        ? state.cloudTranscriptionProvider
-        : DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER),
+    cloudTranscriptionProvider,
     cloudTranscriptionModel:
       state.uploadCloudTranscriptionModel ||
       (inheritsDictationProvider ? state.cloudTranscriptionModel : ""),
     cloudTranscriptionBaseUrl:
-      state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
+      state.uploadCloudTranscriptionBaseUrl ||
+      (usesSavedEndpoint ? saved.cloudTranscriptionBaseUrl : ""),
     cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
     transcriptionMode: state.uploadTranscriptionMode,
     remoteTranscriptionUrl: state.uploadRemoteTranscriptionUrl,
@@ -3054,7 +3077,9 @@ export function selectPolicyEffectiveSettings(
       rawSelection,
       keys.context === "meeting"
         ? MEETING_TRANSCRIPTION_POLICY_CATALOG
-        : TRANSCRIPTION_POLICY_CATALOG
+        : keys.context === "upload"
+          ? UPLOAD_TRANSCRIPTION_POLICY_CATALOG
+          : TRANSCRIPTION_POLICY_CATALOG
     );
     if (!selection) continue;
 
