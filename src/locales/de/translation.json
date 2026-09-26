@@ -578,6 +578,20 @@
         "title": "Ein Download wurde nicht abgeschlossen",
         "description": "Prüfen Sie Ihre Verbindung und den freien Speicherplatz und versuchen Sie es erneut. Wenn der Fehler weiterhin auftritt, wenden Sie sich an Ihren Administrator."
       }
+    },
+    "permissionGuide": {
+      "label": "Berechtigungsassistent",
+      "return": "Zurück zur Einrichtung",
+      "missingApp": "Oder wähle die App über +",
+      "failed": "Zugriff konnte nicht geprüft werden.",
+      "microphone": "Aktiviere OpenWhispr unter Mikrofon.",
+      "accessibility": "Ziehe OpenWhispr in Bedienungshilfen und aktiviere es.",
+      "systemAudio": "Aktiviere OpenWhispr unter „Nur Systemaudioaufnahme“.",
+      "screenContext": "Ziehe OpenWhispr in „Bildschirm- & Systemaudioaufnahme“ und aktiviere es.",
+      "settings": "Einstellungen",
+      "check": "Erneut prüfen",
+      "restart": "App neu starten",
+      "restartRequired": "Starte OpenWhispr für den Bildschirmzugriff neu."
     }
   },
   "streaming": {

@@ -578,6 +578,20 @@
         "title": "Una descarga no se completó",
         "description": "Comprueba tu conexión y el espacio libre en disco, y vuelve a intentarlo. Si sigue fallando, contacta a tu administrador."
       }
+    },
+    "permissionGuide": {
+      "label": "Guía de permisos",
+      "return": "Volver a la configuración",
+      "missingApp": "O selecciona la app con +",
+      "failed": "No se pudo comprobar el acceso.",
+      "microphone": "Activa OpenWhispr en Micrófono.",
+      "accessibility": "Arrastra OpenWhispr a Accesibilidad y actívalo.",
+      "systemAudio": "Activa OpenWhispr en Solo grabación de audio del sistema.",
+      "screenContext": "Arrastra OpenWhispr a Grabación de pantalla y audio del sistema y actívalo.",
+      "settings": "Abrir Ajustes",
+      "check": "Comprobar de nuevo",
+      "restart": "Reiniciar app",
+      "restartRequired": "Reinicia OpenWhispr para aplicar el acceso a la pantalla."
     }
   },
   "streaming": {

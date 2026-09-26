@@ -11,6 +11,7 @@ import accessibilityIcon from "@/assets/onboarding-permission-accessibility.webp
 import systemAudioIcon from "@/assets/onboarding-permission-system-audio.webp";
 import type { UsePermissionsReturn } from "../../hooks/usePermissions";
 import type { SystemAudioAccessResult } from "../../types/electron";
+import type { PermissionGuideId } from "../../types/permissionGuide";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import { getPlatform } from "../../utils/platform";
 import { areRequiredPermissionsMet } from "../../utils/permissions";
@@ -20,6 +21,11 @@ import PasteToolsInfo from "../ui/PasteToolsInfo";
 import { CompactOnboardingFrame } from "./OnboardingShell";
 
 interface CompactPermissionsStepProps {
+  guide?: {
+    start: (permission: PermissionGuideId) => Promise<void>;
+    ready: boolean;
+    error: boolean;
+  };
   permissions: UsePermissionsReturn;
   systemAudio: Pick<SystemAudioAccessResult, "granted" | "mode" | "supportsOnboardingGrant"> & {
     request: () => Promise<boolean>;
@@ -118,6 +124,7 @@ function PermissionRow({
 }
 
 export default function CompactPermissionsStep({
+  guide,
   permissions,
   systemAudio,
   screenContext,
@@ -146,7 +153,8 @@ export default function CompactPermissionsStep({
   const request = async (id: PermissionRowId, action: () => Promise<unknown>) => {
     setBusyPermission(id);
     try {
-      await action();
+      if (platform === "darwin" && guide?.ready && !guide.error) await guide.start(id);
+      else await action();
     } finally {
       setBusyPermission(null);
     }

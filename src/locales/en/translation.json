@@ -578,6 +578,20 @@
         "title": "A download didn't finish",
         "description": "Check your connection and free disk space, then retry. If it keeps failing, contact your administrator."
       }
+    },
+    "permissionGuide": {
+      "label": "Permission guide",
+      "return": "Return to onboarding",
+      "missingApp": "Or use + to select the app",
+      "failed": "Could not check access.",
+      "microphone": "Turn on OpenWhispr in Microphone.",
+      "accessibility": "Drag OpenWhispr into Accessibility, then turn it on.",
+      "systemAudio": "Turn on OpenWhispr under System Audio Recording Only.",
+      "screenContext": "Drag OpenWhispr into Screen & System Audio Recording, then turn it on.",
+      "settings": "Open Settings",
+      "check": "Check again",
+      "restart": "Restart OpenWhispr",
+      "restartRequired": "Restart OpenWhispr to apply screen access."
     }
   },
   "streaming": {

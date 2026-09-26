@@ -578,6 +578,20 @@
         "title": "ダウンロードが完了しませんでした",
         "description": "接続とディスクの空き容量を確認して、再試行してください。それでも失敗する場合は、管理者にお問い合わせください。"
       }
+    },
+    "permissionGuide": {
+      "label": "権限ガイド",
+      "return": "初期設定に戻る",
+      "missingApp": "または＋でアプリを選択",
+      "failed": "アクセスを確認できませんでした。",
+      "microphone": "「マイク」でOpenWhisprをオンにしてください。",
+      "accessibility": "OpenWhisprを「アクセシビリティ」にドラッグしてオンにしてください。",
+      "systemAudio": "「システムオーディオの録音のみ」でOpenWhisprをオンにしてください。",
+      "screenContext": "OpenWhisprを「画面収録とシステムオーディオ録音」にドラッグしてオンにしてください。",
+      "settings": "設定を開く",
+      "check": "再確認",
+      "restart": "アプリを再起動",
+      "restartRequired": "画面アクセスを適用するにはOpenWhisprを再起動してください。"
     }
   },
   "streaming": {

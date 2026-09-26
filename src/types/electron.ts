@@ -1,4 +1,5 @@
 import type { ModelDefinition } from "../models/ModelRegistry";
+import type { PermissionGuideState, PermissionGuideAction } from "./permissionGuide";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { OrgPolicy } from "./policy";
@@ -1113,6 +1114,16 @@ declare global {
       // Basic window operations
       setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
       setOnboardingActive?: (active: boolean) => Promise<boolean>;
+      openPermissionGuide?: (state: PermissionGuideState) => Promise<boolean>;
+      closePermissionGuide?: () => Promise<boolean>;
+      getPermissionGuideState?: () => Promise<PermissionGuideState | null>;
+      permissionGuideAction?: (action: PermissionGuideAction) => void;
+      startPermissionGuideDrag?: (
+        target: Pick<PermissionGuideState, "sessionId" | "permission">
+      ) => void;
+      onPermissionGuideState?: (callback: (state: PermissionGuideState) => void) => () => void;
+      onPermissionGuideAction?: (callback: (action: PermissionGuideAction) => void) => () => void;
+      verifySystemAudioAccess?: () => Promise<SystemAudioAccessResult>;
       beginOnboardingDemo?: (session: { id: string; kind: OnboardingDemoKind }) => Promise<boolean>;
       endOnboardingDemo?: (id: string) => Promise<boolean>;
       stopOnboardingDemo?: (id: string) => Promise<boolean>;

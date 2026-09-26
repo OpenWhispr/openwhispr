@@ -228,7 +228,9 @@
      is cleared here rather than filled. The compact frame owns the complete
      480x576 surface, including its rounded corners. */
   body:has(.onboarding-canvas.compact),
-  body:has(.onboarding-canvas.compact) #root {
+  body:has(.onboarding-canvas.compact) #root,
+  body:has(.permission-settings-overlay),
+  body:has(.permission-settings-overlay) #root {
     background: transparent;
   }
 

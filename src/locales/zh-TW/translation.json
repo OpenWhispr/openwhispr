@@ -578,6 +578,20 @@
         "title": "有一項下載未完成",
         "description": "請檢查網路連線與磁碟剩餘空間，然後重試。如果仍然失敗，請聯絡您的管理員。"
       }
+    },
+    "permissionGuide": {
+      "label": "權限引導",
+      "return": "返回初始設定",
+      "missingApp": "或透過 + 選取 App",
+      "failed": "無法檢查存取權限。",
+      "microphone": "在「麥克風」中開啟 OpenWhispr。",
+      "accessibility": "將 OpenWhispr 拖入「輔助使用」，然後開啟開關。",
+      "systemAudio": "在「僅系統音訊錄製」中開啟 OpenWhispr。",
+      "screenContext": "將 OpenWhispr 拖入「螢幕與系統音訊錄製」，然後開啟開關。",
+      "settings": "開啟設定",
+      "check": "重新檢查",
+      "restart": "重新啟動",
+      "restartRequired": "重新啟動 OpenWhispr 以套用螢幕存取權限。"
     }
   },
   "streaming": {

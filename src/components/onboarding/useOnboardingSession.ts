@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
+import type { PermissionGuideProgress } from "../../types/permissionGuide";
 import {
   LEGACY_ONBOARDING_STEP_KEY,
   ONBOARDING_SESSION_KEY,
@@ -34,25 +35,48 @@ function readInitialSession(): OnboardingSession {
 }
 
 export function useOnboardingSession() {
-  const [session, setSession] = useState<OnboardingSession>(readInitialSession);
+  const [session, setSessionState] = useState<OnboardingSession>(readInitialSession);
+  const sessionRef = useRef(session);
+  const setSession = useCallback((update: SetStateAction<OnboardingSession>): void => {
+    const next = typeof update === "function" ? update(sessionRef.current) : update;
+    // Native permission dialogs can restart the app before React's effects run.
+    localStorage.setItem(ONBOARDING_SESSION_KEY, JSON.stringify(next));
+    sessionRef.current = next;
+    setSessionState(next);
+  }, []);
+  const setPermissionGuide = useCallback(
+    (permissionGuide: PermissionGuideProgress | null): void => {
+      // Dismissing the guide withdraws the Screen Context opt-in; enabling
+      // another permission while it is still pending does not.
+      setSession((current) => ({
+        ...current,
+        permissionGuide,
+        screenContextRequested: permissionGuide ? current.screenContextRequested : false,
+      }));
+    },
+    [setSession]
+  );
 
   useEffect(() => {
-    localStorage.setItem(ONBOARDING_SESSION_KEY, JSON.stringify(session));
+    localStorage.setItem(ONBOARDING_SESSION_KEY, JSON.stringify(sessionRef.current));
     // AppRouter uses presence of this legacy key to distinguish an OAuth
     // callback from a returning user. Keep it until finalization is atomic.
     localStorage.setItem(LEGACY_ONBOARDING_STEP_KEY, session.currentStepId);
   }, [session]);
 
-  const goTo = useCallback((stepId: OnboardingStepId) => {
-    setSession((current) => {
-      if (current.currentStepId === stepId) return current;
-      return {
-        ...current,
-        currentStepId: stepId,
-        history: [...current.history, current.currentStepId],
-      };
-    });
-  }, []);
+  const goTo = useCallback(
+    (stepId: OnboardingStepId) => {
+      setSession((current) => {
+        if (current.currentStepId === stepId) return current;
+        return {
+          ...current,
+          currentStepId: stepId,
+          history: [...current.history, current.currentStepId],
+        };
+      });
+    },
+    [setSession]
+  );
 
   const goBack = useCallback(() => {
     setSession((current) => {
@@ -60,23 +84,35 @@ export function useOnboardingSession() {
       const previous = history.pop();
       return previous ? { ...current, currentStepId: previous, history } : current;
     });
-  }, []);
+  }, [setSession]);
 
-  const setAuthPath = useCallback((authPath: OnboardingAuthPath) => {
-    setSession((current) => ({ ...current, authPath }));
-  }, []);
+  const setAuthPath = useCallback(
+    (authPath: OnboardingAuthPath) => {
+      setSession((current) => ({ ...current, authPath }));
+    },
+    [setSession]
+  );
 
-  const setSetupMode = useCallback((setupMode: OnboardingSetupMode) => {
-    setSession((current) => ({ ...current, setupMode }));
-  }, []);
+  const setSetupMode = useCallback(
+    (setupMode: OnboardingSetupMode) => {
+      setSession((current) => ({ ...current, setupMode }));
+    },
+    [setSession]
+  );
 
-  const setSelfHostedRequested = useCallback((selfHostedRequested: boolean) => {
-    setSession((current) => ({ ...current, selfHostedRequested }));
-  }, []);
+  const setSelfHostedRequested = useCallback(
+    (selfHostedRequested: boolean) => {
+      setSession((current) => ({ ...current, selfHostedRequested }));
+    },
+    [setSession]
+  );
 
-  const setScreenContextRequested = useCallback((screenContextRequested: boolean) => {
-    setSession((current) => ({ ...current, screenContextRequested }));
-  }, []);
+  const setScreenContextRequested = useCallback(
+    (screenContextRequested: boolean) => {
+      setSession((current) => ({ ...current, screenContextRequested }));
+    },
+    [setSession]
+  );
 
   const clearSession = useCallback(() => {
     localStorage.removeItem(ONBOARDING_SESSION_KEY);
@@ -92,6 +128,7 @@ export function useOnboardingSession() {
     setSetupMode,
     setSelfHostedRequested,
     setScreenContextRequested,
+    setPermissionGuide,
     clearSession,
   };
 }

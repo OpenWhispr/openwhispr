@@ -65,6 +65,19 @@ const registerListener = (channel, handlerFactory) => {
 contextBridge.exposeInMainWorld("electronAPI", {
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
+  openPermissionGuide: (state) => ipcRenderer.invoke("permission-guide-open", state),
+  closePermissionGuide: () => ipcRenderer.invoke("permission-guide-close"),
+  getPermissionGuideState: () => ipcRenderer.invoke("permission-guide-state"),
+  permissionGuideAction: (action) => ipcRenderer.send("permission-guide-action", action),
+  startPermissionGuideDrag: (target) => ipcRenderer.send("permission-guide-drag", target),
+  onPermissionGuideState: registerListener(
+    "permission-guide-state-changed",
+    (callback) => (_event, state) => callback(state)
+  ),
+  onPermissionGuideAction: registerListener(
+    "permission-guide-action",
+    (callback) => (_event, action) => callback(action)
+  ),
   markMacAccessibilityFeaturesReady: (expectedAccountScope) =>
     expectedAccountScope
       ? ipcRenderer.send("mac-accessibility-features-ready", expectedAccountScope)
@@ -733,6 +746,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSystemDefaultMicrophone: (options) =>
     ipcRenderer.invoke("get-system-default-microphone", options),
   checkSystemAudioAccess: () => ipcRenderer.invoke("check-system-audio-access"),
+  verifySystemAudioAccess: () => ipcRenderer.invoke("permission-guide-verify-system-audio"),
   requestSystemAudioAccess: () => ipcRenderer.invoke("request-system-audio-access"),
   openMicrophoneSettings: () => ipcRenderer.invoke("open-microphone-settings"),
   openSoundInputSettings: () => ipcRenderer.invoke("open-sound-input-settings"),

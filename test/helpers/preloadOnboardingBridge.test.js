@@ -41,6 +41,35 @@ function loadPreloadApi() {
   return { api: exposedApi, invocations, listeners, sends };
 }
 
+test("permission guide bridge uses narrow channels and strips IPC events", async () => {
+  const { api, invocations, listeners, sends } = loadPreloadApi();
+  const state = { sessionId: "guide-1", permission: "accessibility" };
+  await api.openPermissionGuide(state);
+  await api.getPermissionGuideState();
+  await api.closePermissionGuide();
+  const action = { ...state, action: "check" };
+  api.permissionGuideAction(action);
+  api.startPermissionGuideDrag(state);
+  assert.deepEqual(invocations, [
+    ["permission-guide-open", state],
+    ["permission-guide-state"],
+    ["permission-guide-close"],
+  ]);
+  assert.deepEqual(sends, [
+    ["permission-guide-action", action],
+    ["permission-guide-drag", state],
+  ]);
+  let received;
+  const stop = api.onPermissionGuideState((payload) => {
+    received = payload;
+  });
+  listeners.get("permission-guide-state-changed")({ sender: "native" }, state);
+  assert.equal(received, state);
+  stop();
+  assert.equal(api.updatePermissionGuide, undefined);
+  assert.equal(listeners.has("permission-guide-state-changed"), false);
+});
+
 test("onboarding demo bridge invokes only its allowlisted channels", async () => {
   const { api, invocations } = loadPreloadApi();
   const session = { id: "demo-7", kind: "dictation" };

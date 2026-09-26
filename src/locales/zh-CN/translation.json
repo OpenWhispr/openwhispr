@@ -578,6 +578,20 @@
         "title": "有一项下载未完成",
         "description": "请检查网络连接和磁盘剩余空间，然后重试。如果仍然失败，请联系您的管理员。"
       }
+    },
+    "permissionGuide": {
+      "label": "权限引导",
+      "return": "返回初始设置",
+      "missingApp": "或通过 + 选择应用",
+      "failed": "无法检查访问权限。",
+      "microphone": "在“麦克风”中打开 OpenWhispr。",
+      "accessibility": "将 OpenWhispr 拖入“辅助功能”，然后打开开关。",
+      "systemAudio": "在“仅系统音频录制”中打开 OpenWhispr。",
+      "screenContext": "将 OpenWhispr 拖入“屏幕与系统音频录制”，然后打开开关。",
+      "settings": "打开设置",
+      "check": "重新检查",
+      "restart": "重启 OpenWhispr",
+      "restartRequired": "重新启动 OpenWhispr 以应用屏幕访问权限。"
     }
   },
   "streaming": {

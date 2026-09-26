@@ -578,6 +578,20 @@
         "title": "Un téléchargement ne s'est pas terminé",
         "description": "Vérifiez votre connexion et l'espace disque disponible, puis réessayez. Si le problème persiste, contactez votre administrateur."
       }
+    },
+    "permissionGuide": {
+      "label": "Guide des autorisations",
+      "return": "Revenir à la configuration",
+      "missingApp": "Ou sélectionnez l’app avec +",
+      "failed": "Impossible de vérifier l’accès.",
+      "microphone": "Activez OpenWhispr dans Microphone.",
+      "accessibility": "Glissez OpenWhispr dans Accessibilité, puis activez-le.",
+      "systemAudio": "Activez OpenWhispr sous Enregistrement audio du système uniquement.",
+      "screenContext": "Glissez OpenWhispr dans Enregistrement de l’écran et de l’audio système, puis activez-le.",
+      "settings": "Réglages",
+      "check": "Vérifier",
+      "restart": "Relancer l’app",
+      "restartRequired": "Redémarrez OpenWhispr pour appliquer l’accès à l’écran."
     }
   },
   "streaming": {

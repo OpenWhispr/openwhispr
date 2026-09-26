@@ -2359,6 +2359,20 @@
         "title": "لم يكتمل التنزيل",
         "description": "تحقق من اتصالك والمساحة الخالية على القرص، ثم أعد المحاولة. إذا استمر الفشل، فاتصل بالمسؤول."
       }
+    },
+    "permissionGuide": {
+      "label": "دليل الأذونات",
+      "return": "العودة إلى الإعداد",
+      "missingApp": "أو اختر التطبيق عبر +",
+      "failed": "تعذر التحقق من الوصول.",
+      "microphone": "فعّل OpenWhispr ضمن الميكروفون.",
+      "accessibility": "اسحب OpenWhispr إلى تسهيلات الاستخدام، ثم فعّله.",
+      "systemAudio": "فعّل OpenWhispr ضمن تسجيل صوت النظام فقط.",
+      "screenContext": "اسحب OpenWhispr إلى تسجيل الشاشة وصوت النظام، ثم فعّله.",
+      "settings": "فتح الإعدادات",
+      "check": "التحقق مجددًا",
+      "restart": "إعادة التشغيل",
+      "restartRequired": "أعد تشغيل OpenWhispr لتطبيق الوصول إلى الشاشة."
     }
   },
   "settingsPage": {

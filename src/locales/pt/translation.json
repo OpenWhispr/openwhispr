@@ -557,6 +557,20 @@
         "title": "Um download não foi concluído",
         "description": "Verifique sua conexão e o espaço livre em disco e tente novamente. Se continuar falhando, entre em contato com seu administrador."
       }
+    },
+    "permissionGuide": {
+      "label": "Guia de permissões",
+      "return": "Voltar à configuração",
+      "missingApp": "Ou selecione o app com +",
+      "failed": "Não foi possível verificar o acesso.",
+      "microphone": "Ative o OpenWhispr em Microfone.",
+      "accessibility": "Arraste o OpenWhispr para Acessibilidade e ative-o.",
+      "systemAudio": "Ative o OpenWhispr em Apenas gravação de áudio do sistema.",
+      "screenContext": "Arraste o OpenWhispr para Gravação de tela e áudio do sistema e ative-o.",
+      "settings": "Abrir Ajustes",
+      "check": "Verificar novamente",
+      "restart": "Reiniciar app",
+      "restartRequired": "Reinicie o OpenWhispr para aplicar o acesso à tela."
     }
   },
   "streaming": {
