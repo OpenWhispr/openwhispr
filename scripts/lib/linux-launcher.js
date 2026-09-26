@@ -33,6 +33,25 @@ if [ -f "$FLAGS_FILE" ]; then
   done < "$FLAGS_FILE"
 fi
 
+# A compositor that hands XWayland the panel's raw pixel resolution instead of
+# upscaling its surfaces leaves Chromium with no scale to read, so the UI
+# renders at 1x on a fractionally scaled display. Only Hyprland is probed:
+# forcing a scale on a compositor that already upscales (Mutter, KWin) would
+# apply it twice. Runs after the user flags so an explicit one wins.
+if [ "$XDG_SESSION_TYPE" = "wayland" ] && [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] &&
+  ! printf '%s\\n' "\${FLAGS[@]}" | grep -q '^--force-device-scale-factor=' &&
+  command -v hyprctl >/dev/null 2>&1 &&
+  hyprctl getoption xwayland:force_zero_scaling 2>/dev/null | grep -qE '^(bool|int): (1|true)$'; then
+  SCALE="$(hyprctl monitors 2>/dev/null | awk '
+    /^Monitor/ { current = "" }
+    /^[[:space:]]*scale:/ { current = $2; if (first == "") first = $2 }
+    /^[[:space:]]*focused: yes/ { if (current != "") focused = current }
+    END { print (focused != "" ? focused : first) }')"
+  if [ -n "$SCALE" ] && awk -v s="$SCALE" 'BEGIN { exit !(s > 1.01) }'; then
+    FLAGS+=("--force-device-scale-factor=$SCALE")
+  fi
+fi
+
 exec -a "$0" "$HERE/${binaryName}-app" "\${FLAGS[@]}" "$@"
 `;
 }
