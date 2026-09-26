@@ -10,6 +10,8 @@ export type ShareLinkResolution =
   // link, so it needs consent whenever a prefix already exists.
   | { kind: "rotate"; needsConfirmation: boolean };
 
+export type LocalShareState = { isShared: boolean; shareToken: string | null };
+
 type LocalShareStateUpdate = { is_shared: number; share_token?: null };
 
 /** A raw token only opens the note while it belongs to the current prefix. */
@@ -20,7 +22,7 @@ export function currentShareToken(
   return token && prefix && token.startsWith(prefix) ? token : null;
 }
 
-/** Callers resolve private notes to a link first; there is nothing to copy. */
+/** A private note has no link: callers handle it before asking. */
 export function resolveShareLink(
   share: ShareLinkSettings,
   knownTokens: ReadonlyArray<string | null | undefined>
@@ -43,10 +45,11 @@ export function resolveShareLink(
 /**
  * The DB write that brings a note's local share flag in line with the server,
  * or null when it already agrees. Every write re-pushes a shared note, so a
- * stale stored token (never copied: see resolveShareLink) only rides along.
+ * stale stored token never triggers one on its own; it is cleared only when
+ * the flag is written anyway (resolveShareLink never copies it).
  */
 export function reconcileLocalShareState(
-  local: { isShared: boolean; shareToken: string | null },
+  local: LocalShareState,
   share: ShareLinkSettings
 ): LocalShareStateUpdate | null {
   const serverShared = share.visibility !== "private";

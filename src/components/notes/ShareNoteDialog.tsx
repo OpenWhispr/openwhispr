@@ -17,6 +17,7 @@ import {
   currentShareToken,
   reconcileLocalShareState,
   resolveShareLink,
+  type LocalShareState,
 } from "./shareNoteRules";
 import { useAuth } from "../../hooks/useAuth";
 import {
@@ -49,6 +50,7 @@ import type {
   NoteAccessState,
   NoteItem,
   NoteShareInvitation,
+  ShareSettings,
   ShareVisibility,
 } from "../../types/electron";
 
@@ -122,7 +124,7 @@ export default function ShareNoteDialog({
   const [refreshedCloudId, setRefreshedCloudId] = useState<string | null>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const copyTimeoutRef = useRef<number | null>(null);
-  const localShareStateRef = useRef({
+  const localShareStateRef = useRef<LocalShareState>({
     isShared: Boolean(note.is_shared),
     shareToken: note.share_token ?? null,
   });
@@ -398,29 +400,32 @@ export default function ShareNoteDialog({
   // The raw token is returned only on generate or rotate, so a share made on
   // another device, or by an invite, leaves none here; rotating is the only
   // way to recover a copyable link (the old one stops working by design).
-  const rotateAndCopy = useCallback(async () => {
-    if (!cloudId || !canManageAccess) return;
-    // Read the cache: a Create link click has just moved it off private.
-    const current = getShareCacheEntry(cloudId)?.share;
-    if (!current || !shareActionAllowed("rotate-link", current.visibility)) return;
-    try {
-      const res = await NoteSharingService.rotateToken(cloudId);
-      updateShareCache(cloudId, (entry) => ({
-        share: res.share,
-        invitations: entry?.invitations ?? [],
-        rawToken: res.raw_token,
-      }));
-      void persistNoteShareState(note.id, { is_shared: 1, share_token: res.raw_token }).catch(
-        (err) => console.error("Share flag persist failed:", err)
-      );
-      const link = resolveShareLink(res.share, [res.raw_token]);
-      if (link.kind !== "copy") throw new Error("Rotated share has no copyable link");
-      await copyLink(link.url);
-    } catch (err) {
-      console.error("Share link recovery failed:", err);
-      toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
-    }
-  }, [cloudId, canManageAccess, note.id, copyLink, t, toast, shareActionAllowed]);
+  const rotateAndCopy = useCallback(
+    async (current: ShareSettings) => {
+      if (!cloudId || !canManageAccess || !shareActionAllowed("rotate-link", current.visibility)) {
+        toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
+        return;
+      }
+      try {
+        const res = await NoteSharingService.rotateToken(cloudId);
+        updateShareCache(cloudId, (entry) => ({
+          share: res.share,
+          invitations: entry?.invitations ?? [],
+          rawToken: res.raw_token,
+        }));
+        void persistNoteShareState(note.id, { is_shared: 1, share_token: res.raw_token }).catch(
+          (err) => console.error("Share flag persist failed:", err)
+        );
+        const link = resolveShareLink(res.share, [res.raw_token]);
+        if (link.kind !== "copy") throw new Error("Rotated share has no copyable link");
+        await copyLink(link.url);
+      } catch (err) {
+        console.error("Share link recovery failed:", err);
+        toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
+      }
+    },
+    [cloudId, canManageAccess, note.id, copyLink, t, toast, shareActionAllowed]
+  );
 
   // Reads the cache rather than render state: a Create link click, or a
   // refresh that lands while the replace confirm is open, may have changed it.
@@ -434,7 +439,7 @@ export default function ShareNoteDialog({
       const link = resolveShareLink(entry.share, [note.share_token, entry.rawToken]);
       if (link.kind === "copy") await copyLink(link.url);
       else if (link.needsConfirmation && !replaceConfirmed) setConfirmingReplaceLink(true);
-      else await rotateAndCopy();
+      else await rotateAndCopy(entry.share);
     },
     [cloudId, note.share_token, copyLink, rotateAndCopy, t, toast]
   );
@@ -452,13 +457,16 @@ export default function ShareNoteDialog({
   }, [cloudId, share, canUseLink, applyVisibility, copyCurrentLink]);
 
   const handleReplaceLink = useCallback(async () => {
+    // The confirm stays clickable through its exit animation, and a second
+    // rotation can leave this device holding a dead token.
+    if (linkBusy) return;
     setLinkBusy(true);
     try {
       await copyCurrentLink(true);
     } finally {
       setLinkBusy(false);
     }
-  }, [copyCurrentLink]);
+  }, [linkBusy, copyCurrentLink]);
 
   const copyIntentHandled = useRef(false);
   useEffect(() => {

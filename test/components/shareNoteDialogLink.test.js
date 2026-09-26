@@ -6,7 +6,7 @@ const { renderToStaticMarkup } = require("react-dom/server");
 const {
   createRendererServer,
   installBrowserGlobals,
-  installHookDom,
+  installHostDom,
 } = require("../lib/rendererTestHarness");
 
 // Server rendering runs no effects and drops state updates, so most tests
@@ -47,6 +47,9 @@ function accessGrant(id, overrides = {}) {
 }
 
 const MOCK_MODULES = {
+  "react-i18next": `
+    export const useTranslation = () => ({ t: (key) => key });
+  `,
   "/hooks/useAuth": `
     export const useAuth = () => ({ user: { name: "Owner", email: "owner@acme.com" } });
   `,
@@ -54,9 +57,13 @@ const MOCK_MODULES = {
   "/stores/policyRules": `
     export const filterShareVisibilityOptions = (options) => options;
     export const hasUsableExternalShareVisibility = () => true;
-    // The slice of the real rule these tests lean on: a private note has no link.
+    // The slice of the real rule these tests lean on: a private note has no
+    // link, and a test can withdraw link sharing by policy.
     export const isShareActionAllowed = (_state, action, visibility) =>
-      !((action === "copy-link" || action === "rotate-link") && visibility === "private");
+      !(
+        (action === "copy-link" || action === "rotate-link") &&
+        (visibility === "private" || globalThis.__shareTest.linkDenied)
+      );
   `,
   "/services/SyncService.js": `export const syncService = { ensureNoteSynced: async () => null };`,
   "/services/NoteSharingService.js": `
@@ -153,32 +160,6 @@ function textOf(node) {
   return textOf(node.props?.children);
 }
 
-// Just enough of a DOM for react-dom to mount host elements: no layout, no events.
-function installRenderDom(t) {
-  const container = installHookDom(t);
-  const document = globalThis.document;
-  const node = (nodeType, nodeName, namespaceURI = container.namespaceURI) => ({
-    nodeType,
-    nodeName,
-    tagName: nodeName,
-    namespaceURI,
-    ownerDocument: document,
-    style: { setProperty() {}, removeProperty() {} },
-    appendChild: (child) => child,
-    insertBefore: (child) => child,
-    removeChild: (child) => child,
-    setAttribute() {},
-    removeAttribute() {},
-    addEventListener() {},
-    removeEventListener() {},
-    focus() {},
-  });
-  document.createElement = (tag) => node(1, tag.toUpperCase());
-  document.createElementNS = (namespaceURI, tag) => node(1, tag, namespaceURI);
-  document.createTextNode = (text) => ({ ...node(3, "#text"), nodeValue: text });
-  return container;
-}
-
 async function setupDialog(t, { entry, server, updateResult = null, rotateResult = null }) {
   const clipboardWrites = [];
   installBrowserGlobals(t, {
@@ -208,6 +189,7 @@ async function setupDialog(t, { entry, server, updateResult = null, rotateResult
 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-share-note-dialog-test-",
+    noExternal: ["react-i18next"],
     mockModules: MOCK_MODULES,
   });
   const { default: ShareNoteDialog } = await vite.ssrLoadModule(
@@ -230,25 +212,35 @@ async function renderDialog(t, { note, ...options }) {
   const { state, clipboardWrites, callsTo, ShareNoteDialog } = await setupDialog(t, options);
   renderToStaticMarkup(createElement(ShareNoteDialog, dialogProps(note)));
 
-  const linkButton = state.buttons.find((props) =>
+  return { state, linkButton: latestLinkButton(state), clipboardWrites, callsTo };
+}
+
+function latestLinkButton(state) {
+  const linkButton = state.buttons.findLast((props) =>
     /noteEditor\.share\.dialog\.(copyLink|createLink)/.test(textOf(props.children))
   );
   assert.ok(linkButton, "expected the link button to render");
-  return { state, linkButton, clipboardWrites, callsTo };
+  return linkButton;
 }
 
-// Mounts the dialog as the Share button's link segment does: copy on open.
-async function mountCopyOnOpen(t, { note, ...options }) {
+// Mounts the dialog so its effects run. `setOpen` re-renders it open or closed,
+// as NoteEditor does; `copyLinkOnOpen` is the Share button's link segment.
+async function mountDialog(t, { note, copyLinkOnOpen = false, ...options }) {
   let root = null;
   // Registered first: after-hooks run in order, and unmounting needs the globals.
   t.after(() => act(() => root?.unmount()));
   const dialog = await setupDialog(t, options);
-  root = createRoot(installRenderDom(t));
-  await act(async () => {
-    root.render(createElement(dialog.ShareNoteDialog, dialogProps(note, { copyLinkOnOpen: true })));
-  });
-  await act(settle);
-  return dialog;
+  root = createRoot(installHostDom(t));
+  const setOpen = async (open) => {
+    await act(async () => {
+      root.render(
+        createElement(dialog.ShareNoteDialog, dialogProps(note, { open, copyLinkOnOpen }))
+      );
+    });
+    await act(settle);
+  };
+  await setOpen(true);
+  return { ...dialog, setOpen };
 }
 
 test("an invite-only note copies the invitation link and never rotates", async (t) => {
@@ -407,10 +399,31 @@ test("confirming the replacement after the note went private says the copy faile
   );
 });
 
+test("confirming the replacement after policy withdrew link sharing does not rotate", async (t) => {
+  const { state, linkButton, clipboardWrites, callsTo } = await renderDialog(t, {
+    entry: { share: shareSettings("link", PREFIX), invitations: [], rawToken: null },
+    rotateResult: { share: shareSettings("link", NEW_PREFIX), raw_token: NEW_TOKEN },
+  });
+  linkButton.onClick();
+  await settle();
+
+  state.linkDenied = true;
+  state.confirmDialogs[0].onConfirm();
+  await settle();
+
+  assert.equal(callsTo("rotateToken").length, 0);
+  assert.deepEqual(clipboardWrites, []);
+  assert.deepEqual(
+    state.toasts.map((toast) => toast.title),
+    ["noteEditor.share.dialog.error.copyFailed"]
+  );
+});
+
 test("copy on open waits for the refreshed share instead of the cached one", async (t) => {
   // Cached when the note opened: a link share whose token was since rotated
   // away on another device, and the note has since become invite-only.
-  const { clipboardWrites, callsTo } = await mountCopyOnOpen(t, {
+  const { state, clipboardWrites, callsTo } = await mountDialog(t, {
+    copyLinkOnOpen: true,
     note: { share_token: ROTATED_AWAY_TOKEN },
     entry: {
       share: shareSettings("link", ROTATED_AWAY_TOKEN.slice(0, 16)),
@@ -423,6 +436,70 @@ test("copy on open waits for the refreshed share instead of the cached one", asy
   assert.equal(callsTo("getShareSettings").length, 1);
   assert.deepEqual(clipboardWrites, [`https://notes.openwhispr.com/invite/${PREFIX}`]);
   assert.equal(callsTo("rotateToken").length, 0);
+  assert.equal(state.cache.get(CLOUD_ID).rawToken, null, "the stale token leaves the cache");
+});
+
+test("reopening from the link segment waits for a new refresh too", async (t) => {
+  const { state, clipboardWrites, setOpen } = await mountDialog(t, {
+    copyLinkOnOpen: true,
+    entry: { share: shareSettings("link", PREFIX), invitations: [], rawToken: TOKEN },
+  });
+  assert.deepEqual(clipboardWrites, [`https://notes.openwhispr.com/n/${TOKEN}`]);
+
+  await setOpen(false);
+  // Meanwhile the note becomes invite-only on another device.
+  state.server = { share: shareSettings("invited", NEW_PREFIX), invitations: [] };
+  await setOpen(true);
+
+  assert.deepEqual(clipboardWrites, [
+    `https://notes.openwhispr.com/n/${TOKEN}`,
+    `https://notes.openwhispr.com/invite/${NEW_PREFIX}`,
+  ]);
+});
+
+test("the replace confirm opens from the link button and closes with the dialog", async (t) => {
+  const { state, callsTo, setOpen } = await mountDialog(t, {
+    entry: { share: shareSettings("link", PREFIX), invitations: [], rawToken: null },
+  });
+  const confirmOpen = () =>
+    state.confirmDialogs.findLast(
+      (props) => props.title === "noteEditor.share.dialog.replaceLink.title"
+    ).open;
+  assert.equal(confirmOpen(), false);
+
+  await act(async () => latestLinkButton(state).onClick());
+  await act(settle);
+  assert.equal(confirmOpen(), true);
+  assert.equal(callsTo("rotateToken").length, 0);
+
+  await setOpen(false);
+  await setOpen(true);
+  assert.equal(confirmOpen(), false);
+});
+
+test("a second confirm click while the replacement runs does not rotate again", async (t) => {
+  const { state, clipboardWrites, callsTo } = await mountDialog(t, {
+    entry: { share: shareSettings("link", PREFIX), invitations: [], rawToken: null },
+  });
+  let finishRotate;
+  state.rotateResult = new Promise((resolve) => {
+    finishRotate = () =>
+      resolve({ share: shareSettings("link", NEW_PREFIX), raw_token: NEW_TOKEN });
+  });
+  const latestConfirm = () =>
+    state.confirmDialogs.findLast(
+      (props) => props.title === "noteEditor.share.dialog.replaceLink.title"
+    );
+  await act(async () => latestLinkButton(state).onClick());
+  await act(settle);
+
+  await act(async () => latestConfirm().onConfirm());
+  await act(async () => latestConfirm().onConfirm());
+  await act(async () => finishRotate());
+  await act(settle);
+
+  assert.equal(callsTo("rotateToken").length, 1);
+  assert.deepEqual(clipboardWrites, [`https://notes.openwhispr.com/n/${NEW_TOKEN}`]);
 });
 
 test("synthetic scope rows offer no permission or remove controls", async (t) => {
