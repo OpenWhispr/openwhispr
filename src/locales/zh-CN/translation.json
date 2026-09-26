@@ -921,6 +921,7 @@
         "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。",
         "cleanupTruncated": "AI 模型的输出长度达到上限，未能完成听写清理。",
         "cleanupDuplicated": "AI 清理重复了转录内容。已保留原始文本。",
+        "cleanupAddedText": "AI 清理添加了你没有说过的内容。已保留原始文本。",
         "cleanupEmptyReply": "AI 模型返回了空响应，没有生成清理后的文本。"
       },
       "translationFallback": {
