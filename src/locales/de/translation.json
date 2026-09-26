@@ -4046,6 +4046,11 @@
         "createLink": "Link erstellen",
         "copyLink": "Link kopieren",
         "copied": "Kopiert",
+        "replaceLink": {
+          "title": "Freigabelink ersetzen?",
+          "description": "Dieses Gerät hat den aktuellen Link nicht, daher wird zum Kopieren ein neuer erstellt. Der alte Link funktioniert dann nicht mehr, auch nicht in Einladungs-E-Mails. Sende jede Einladung erneut, damit Eingeladene die Notiz weiterhin öffnen können.",
+          "confirm": "Link ersetzen"
+        },
         "export": "Exportieren",
         "owner": "Eigentümer",
         "editor": "Kann bearbeiten",

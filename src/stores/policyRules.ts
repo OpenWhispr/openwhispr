@@ -456,6 +456,8 @@ export function isShareActionAllowed(
   }
   if (action === "create-link") return isShareVisibilityAllowed(state, "link");
   if (action === "set-domain") return isShareVisibilityAllowed(state, "domain");
+  // A private note suspends its invitations and has no link for the email to carry.
+  if (action === "resend-invitation" && currentVisibility === "private") return false;
   return isShareVisibilityAllowed(state, "invited");
 }
 

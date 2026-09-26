@@ -3970,6 +3970,11 @@
         "createLink": "Crear enlace",
         "copyLink": "Copiar enlace",
         "copied": "Copiado",
+        "replaceLink": {
+          "title": "¿Reemplazar el enlace para compartir?",
+          "description": "Este dispositivo no tiene el enlace actual, así que copiarlo implica crear uno nuevo. El enlace anterior dejará de funcionar, incluidos los de los correos de invitación. Reenvía cada invitación para que las personas invitadas puedan seguir abriendo la nota.",
+          "confirm": "Reemplazar enlace"
+        },
         "export": "Exportar",
         "owner": "Propietario",
         "editor": "Puede editar",
