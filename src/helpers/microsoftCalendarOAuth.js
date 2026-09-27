@@ -28,6 +28,13 @@ class MicrosoftCalendarOAuth {
     }
     return runOAuthLoopbackFlow({
       errorParam: "mcal_error",
+      // Microsoft Entra's redirect URI registration UI only accepts the
+      // "localhost" hostname for the http scheme; registering the
+      // 127.0.0.1 IP literal requires editing the app manifest directly,
+      // which this app's registration doesn't do. Sending 127.0.0.1 (the
+      // default) mismatches that registration and fails with AADSTS50011,
+      // which surfaces here only as a silent 120s "OAuth flow timed out".
+      redirectHost: "localhost",
       buildAuthUrl: (redirectUri, state, codeChallenge) => {
         const params = new URLSearchParams({
           client_id: this.getClientId(),
