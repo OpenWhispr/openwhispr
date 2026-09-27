@@ -44,6 +44,14 @@
       "assemblyai": false
     },
     {
+      "code": "eu",
+      "label": "Basque",
+      "flag": "\uD83C\uDF10",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
       "code": "be",
       "label": "Belarusian",
       "flag": "\uD83C\uDDE7\uD83C\uDDFE",

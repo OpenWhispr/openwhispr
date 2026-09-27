@@ -14,6 +14,7 @@ export const LANGUAGES: Language[] = [
   { code: 'ar', label: 'Arabic', flag: '🇸🇦' },
   { code: 'hy', label: 'Armenian', flag: '🇦🇲' },
   { code: 'az', label: 'Azerbaijani', flag: '🇦🇿' },
+  { code: 'eu', label: 'Basque', flag: '🌐' },
   { code: 'be', label: 'Belarusian', flag: '🇧🇾' },
   { code: 'bs', label: 'Bosnian', flag: '🇧🇦' },
   { code: 'bg', label: 'Bulgarian', flag: '🇧🇬' },
