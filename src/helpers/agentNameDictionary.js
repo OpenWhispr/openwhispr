@@ -1,4 +1,5 @@
-function findStoredWord(words, word) {
+export function findStoredWord(words, word) {
+  if (typeof word !== "string") return undefined;
   const needle = word.toLowerCase();
   return words.find((w) => typeof w === "string" && w.trim().toLowerCase() === needle);
 }
@@ -17,7 +18,12 @@ function findStoredWord(words, word) {
  * @returns {{ add: string[], remove: string[] }}
  */
 export function agentNameDictionaryChanges(dictionary, newName, oldName) {
-  const words = Array.isArray(dictionary) ? dictionary : [];
+  const words =
+    dictionary != null &&
+    typeof dictionary !== "string" &&
+    typeof dictionary[Symbol.iterator] === "function"
+      ? [...dictionary]
+      : [];
   const trimmedNew = typeof newName === "string" ? newName.trim() : "";
   const trimmedOld = typeof oldName === "string" ? oldName.trim() : "";
   const storedNew = trimmedNew ? findStoredWord(words, trimmedNew) : undefined;
