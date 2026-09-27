@@ -46,7 +46,7 @@
     {
       "code": "eu",
       "label": "Basque",
-      "flag": "\uD83C\uDF10",
+      "flag": "\uD83C\uDDEA\uD83C\uDDF8",
       "whisper": true,
       "parakeet": false,
       "assemblyai": false
