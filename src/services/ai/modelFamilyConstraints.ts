@@ -9,7 +9,7 @@
  * like thinkingSuppressionDialects.
  */
 export interface ModelFamilyConstraints {
-  family: "gpt-oss" | "qwen" | "magistral";
+  family: "gpt-oss" | "gpt-5" | "qwen" | "magistral";
   reasoningEffort?: {
     /** Value that best approximates "thinking off" for reasoning_effort. */
     suppressValue: string;
@@ -27,6 +27,18 @@ export interface ModelFamilyConstraints {
 }
 
 const FAMILIES: Array<ModelFamilyConstraints & { match: RegExp }> = [
+  {
+    family: "gpt-5",
+    // Boundary keeps provider-prefixed ids (openai/gpt-5-mini) in and ids that
+    // merely contain the substring out; gpt-oss has its own entry below.
+    match: /(^|\/)gpt-5/,
+    // gpt-5* are reasoning models whose default effort spends seconds of
+    // hidden reasoning per request — on a dictation cleanup that is nearly
+    // all of the user-visible paste latency. "minimal" keeps the transform
+    // fast; a backend that rejects the value degrades gracefully via the
+    // param-strip ladder in chatRequestBody.
+    reasoningEffort: { suppressValue: "minimal", cleanupValue: "minimal" },
+  },
   {
     family: "gpt-oss",
     match: /gpt-oss/,

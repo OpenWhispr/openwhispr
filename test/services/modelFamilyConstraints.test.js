@@ -23,3 +23,22 @@ test("gpt-oss has no reasoning off switch: suppress and cleanup both floor at lo
   const effort = getModelFamilyConstraints("gpt-oss-120b")?.reasoningEffort;
   assert.deepEqual(effort, { suppressValue: "low", cleanupValue: "low" });
 });
+
+test("gpt-5 family pins minimal effort for cleanup and suppression", async () => {
+  const { getModelFamilyConstraints } = await load();
+  for (const id of ["gpt-5-nano", "gpt-5-mini", "gpt-5.2", "openai/gpt-5-mini", "GPT-5-Nano"]) {
+    const constraints = getModelFamilyConstraints(id);
+    assert.equal(constraints?.family, "gpt-5", id);
+    assert.deepEqual(constraints?.reasoningEffort, {
+      suppressValue: "minimal",
+      cleanupValue: "minimal",
+    });
+  }
+});
+
+test("gpt-5 boundary excludes lookalike ids and leaves gpt-oss on its own entry", async () => {
+  const { getModelFamilyConstraints } = await load();
+  assert.equal(getModelFamilyConstraints("gpt-oss-120b")?.family, "gpt-oss");
+  assert.equal(getModelFamilyConstraints("somegpt-5x"), null);
+  assert.equal(getModelFamilyConstraints("gpt-4.1-mini"), null);
+});

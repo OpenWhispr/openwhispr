@@ -40,8 +40,8 @@ const MATRIX = [
   // --- OpenAI / custom / OpenRouter (registry-driven shape) ---
   ["openai legacy model keeps max_tokens and temperature", "openai", "gpt-4o", null, CLEANUP,
     { max_tokens: MAX_TOKENS, temperature: 0 }],
-  ["openai gpt-5 family uses max_completion_tokens and omits temperature", "openai", "gpt-5-mini", null, CLEANUP,
-    { max_completion_tokens: MAX_TOKENS }],
+  ["openai gpt-5 family uses max_completion_tokens, omits temperature, pins minimal cleanup effort", "openai", "gpt-5-mini", null, CLEANUP,
+    { max_completion_tokens: MAX_TOKENS, reasoning_effort: "minimal" }],
   ["openrouter vendor-prefixed id speaks plain chat completions", "openrouter", "openai/gpt-4o", null, AGENT,
     { max_tokens: MAX_TOKENS, temperature: 0.3 }],
   ["openrouter forwards sampling upstream: temperature-rejecting Claude omits it (#1417)", "openrouter", "anthropic/claude-sonnet-5", null, AGENT,
