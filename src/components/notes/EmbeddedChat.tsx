@@ -223,6 +223,8 @@ export default function EmbeddedChat({
               <button
                 key={key}
                 type="button"
+                // Keep focus in the composer so it doesn't collapse and slide the pills away.
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onTextSubmit(t(key))}
                 disabled={agentState !== "idle"}
                 className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background px-2.5 text-xs text-foreground/65 transition-colors hover:text-foreground disabled:opacity-40 dark:border-white/10 dark:bg-surface-2"
@@ -243,7 +245,7 @@ export default function EmbeddedChat({
             onCancel={onCancel}
             voiceDraft
             focusOnIdle={false}
-            placeholder={t("chat.inputPlaceholder")}
+            placeholder={t("embeddedChat.askPlaceholder")}
           />
         </div>
       </div>

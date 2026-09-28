@@ -128,7 +128,7 @@ export default function NoteBottomBar({
             onEscape={onInputEscape}
             focusOnIdle={chatOpen}
             voiceDraft={chatOpen}
-            placeholder={t("chat.inputPlaceholder")}
+            placeholder={t("embeddedChat.askPlaceholder")}
             trailingContent={
               !chatOpen && actionPicker ? <div className="shrink-0">{actionPicker}</div> : null
             }

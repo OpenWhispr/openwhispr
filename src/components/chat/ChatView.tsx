@@ -124,8 +124,7 @@ export default function ChatView() {
     persistence,
     streaming,
     createConversation,
-    // After the message lands, not before: marking the chat started while the conversation is
-    // still being created leaves a render with no active chat, which remounts the composer.
+    // After the message lands, not before, so a send that fails keeps the starter prompts.
     onMessagePersisted: markChatStarted,
     onSendingChange: setSubmissionInFlight,
   });
@@ -245,7 +244,7 @@ export default function ChatView() {
               onCancel={streaming.cancelStream}
               voiceDraft
               focusOnIdle={false}
-              placeholder={t("embeddedChat.askPlaceholder")}
+              placeholder={t("chat.inputPlaceholder")}
               variant="assistant"
               expandOnFocus
             />

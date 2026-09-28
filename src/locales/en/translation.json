@@ -3026,7 +3026,7 @@
     "searchChats": "Search chats",
     "searchTitle": "Search conversations",
     "searchDescription": "Search across all your conversations",
-    "inputPlaceholder": "Ask anything about your note",
+    "inputPlaceholder": "Ask anything...",
     "starters": {
       "todos": "List my recent to-dos",
       "meeting": "Prepare me for my next meeting",
@@ -4279,7 +4279,7 @@
     "continue": "Continue"
   },
   "embeddedChat": {
-    "askPlaceholder": "Ask anything...",
+    "askPlaceholder": "Ask anything about your note",
     "title": "Chat",
     "emptyState": "Ask a question about this note",
     "dock": "Dock to sidebar",

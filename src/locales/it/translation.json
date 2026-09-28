@@ -3523,7 +3523,7 @@
     "searchChats": "Cerca chat",
     "searchTitle": "Cerca conversazioni",
     "searchDescription": "Cerca in tutte le conversazioni",
-    "inputPlaceholder": "Chiedi qualcosa sulla tua nota",
+    "inputPlaceholder": "Chiedi qualcosa...",
     "starters": {
       "todos": "Elenca le mie attività recenti",
       "meeting": "Preparami per la prossima riunione",
@@ -4203,7 +4203,7 @@
     }
   },
   "embeddedChat": {
-    "askPlaceholder": "Chiedi qualcosa...",
+    "askPlaceholder": "Chiedi qualcosa sulla tua nota",
     "title": "Chat",
     "emptyState": "Fai una domanda su questa nota",
     "dock": "Ancora nella barra laterale",

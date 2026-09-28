@@ -3523,7 +3523,7 @@
     "searchChats": "チャットを検索",
     "searchTitle": "会話を検索",
     "searchDescription": "すべての会話を検索",
-    "inputPlaceholder": "ノートについて何でも質問",
+    "inputPlaceholder": "何でも聞いてください...",
     "starters": {
       "todos": "最近のTo Doを一覧にして",
       "meeting": "次の会議に備えさせて",
@@ -4203,7 +4203,7 @@
     }
   },
   "embeddedChat": {
-    "askPlaceholder": "何でも聞いてください...",
+    "askPlaceholder": "ノートについて何でも質問",
     "title": "チャット",
     "emptyState": "このノートについて質問してください",
     "dock": "サイドバーに固定",

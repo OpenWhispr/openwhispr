@@ -3026,7 +3026,7 @@
     "searchChats": "Chats suchen",
     "searchTitle": "Unterhaltungen suchen",
     "searchDescription": "In allen Unterhaltungen suchen",
-    "inputPlaceholder": "Frag etwas zu deiner Notiz",
+    "inputPlaceholder": "Frag etwas...",
     "starters": {
       "todos": "Liste meine letzten Aufgaben auf",
       "meeting": "Bereite mich auf mein nächstes Meeting vor",
@@ -4279,7 +4279,7 @@
     "continue": "Weiter"
   },
   "embeddedChat": {
-    "askPlaceholder": "Frag etwas...",
+    "askPlaceholder": "Frag etwas zu deiner Notiz",
     "title": "Chat",
     "emptyState": "Stelle eine Frage zu dieser Notiz",
     "dock": "In Seitenleiste andocken",

@@ -3523,7 +3523,7 @@
     "searchChats": "搜索聊天",
     "searchTitle": "搜索对话",
     "searchDescription": "搜索所有对话",
-    "inputPlaceholder": "询问关于笔记的任何问题",
+    "inputPlaceholder": "随便问点什么...",
     "starters": {
       "todos": "列出我最近的待办事项",
       "meeting": "帮我准备下一场会议",
@@ -4203,7 +4203,7 @@
     }
   },
   "embeddedChat": {
-    "askPlaceholder": "随便问点什么...",
+    "askPlaceholder": "询问关于笔记的任何问题",
     "title": "聊天",
     "emptyState": "就这条笔记提个问题",
     "dock": "固定到侧边栏",

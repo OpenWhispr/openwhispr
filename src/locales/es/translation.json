@@ -3576,7 +3576,7 @@
     "searchChats": "Buscar chats",
     "searchTitle": "Buscar conversaciones",
     "searchDescription": "Buscar en todas tus conversaciones",
-    "inputPlaceholder": "Pregunta sobre tu nota",
+    "inputPlaceholder": "Pregunta algo...",
     "starters": {
       "todos": "Enumera mis tareas recientes",
       "meeting": "Prepárame para mi próxima reunión",
@@ -4203,7 +4203,7 @@
     "continue": "Continuar"
   },
   "embeddedChat": {
-    "askPlaceholder": "Pregunta algo...",
+    "askPlaceholder": "Pregunta sobre tu nota",
     "title": "Chat",
     "emptyState": "Haz una pregunta sobre esta nota",
     "dock": "Anclar a la barra lateral",

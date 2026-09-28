@@ -3523,7 +3523,7 @@
     "searchChats": "搜尋聊天",
     "searchTitle": "搜尋對話",
     "searchDescription": "搜尋所有對話",
-    "inputPlaceholder": "詢問關於筆記的任何問題",
+    "inputPlaceholder": "隨便問點什麼...",
     "starters": {
       "todos": "列出我最近的待辦事項",
       "meeting": "幫我準備下一場會議",
@@ -4203,7 +4203,7 @@
     }
   },
   "embeddedChat": {
-    "askPlaceholder": "隨便問點什麼...",
+    "askPlaceholder": "詢問關於筆記的任何問題",
     "title": "聊天",
     "emptyState": "就這條筆記提個問題",
     "dock": "固定到側邊欄",

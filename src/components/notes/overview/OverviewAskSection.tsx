@@ -77,6 +77,8 @@ export function OverviewAskSection({
               {PROMPT_CHIP_KEYS.map((key) => (
                 <button
                   key={key}
+                  // Keep focus in the composer so it doesn't collapse and slide the chips away.
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     // The chips unmount once the message lands; keep focus in the composer.
                     composerElementRef.current?.querySelector("textarea")?.focus();

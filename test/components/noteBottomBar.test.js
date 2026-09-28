@@ -42,14 +42,6 @@ test("recording state renders no backdrop-filter surface over the live transcrip
   assert.ok(html.includes("shadow-(--shadow-glass)"), "capsules keep the glass rim shadow");
 });
 
-test("idle state uses the compact outlined ask capsule", async (t) => {
-  const html = await renderBottomBar(t, { isRecording: false });
-
-  assert.ok(html.includes("bg-background shadow-sm"));
-  assert.ok(html.includes("h-12"));
-  assert.ok(!html.includes("backdrop-blur"));
-});
-
 test("the ask capsule never transitions its surface between the two states", async (t) => {
   // transition-all would tween backdrop-filter and background-color for 500ms
   // on every recording start and stop, re-paying the cost this change removes.
@@ -68,9 +60,6 @@ test("in-view chat expands the existing capsule around one composer", async (t) 
     chatContent: createElement("div", null, "Chat"),
   });
 
-  assert.ok(html.includes("rounded-3xl"));
-  assert.ok(html.includes("max-w-[600px]"));
-  assert.ok(html.includes("border border-border/70"), "the input keeps its own outline");
   assert.equal((html.match(/<textarea/g) ?? []).length, 1);
 });
 

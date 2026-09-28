@@ -3026,7 +3026,7 @@
     "searchChats": "Rechercher",
     "searchTitle": "Rechercher des conversations",
     "searchDescription": "Rechercher dans toutes vos conversations",
-    "inputPlaceholder": "Posez une question sur votre note",
+    "inputPlaceholder": "Posez une question...",
     "starters": {
       "todos": "Liste mes tâches récentes",
       "meeting": "Prépare-moi pour ma prochaine réunion",
@@ -4279,7 +4279,7 @@
     "continue": "Continuer"
   },
   "embeddedChat": {
-    "askPlaceholder": "Posez une question...",
+    "askPlaceholder": "Posez une question sur votre note",
     "title": "Chat",
     "emptyState": "Posez une question sur cette note",
     "dock": "Ancrer dans la barre latérale",
