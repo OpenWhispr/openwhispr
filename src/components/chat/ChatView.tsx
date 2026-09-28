@@ -71,6 +71,7 @@ export default function ChatView() {
   const [isNewChat, setIsNewChat] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
+  const [submissionInFlight, setSubmissionInFlight] = useState(false);
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
 
   const persistence = useChatPersistence({
@@ -84,26 +85,32 @@ export default function ChatView() {
   const streaming = useChatStreaming({
     messages: persistence.messages,
     setMessages: persistence.setMessages,
+    allowConnectors: true,
     onStreamComplete: (_id, content, toolCalls) => {
       persistence.saveAssistantMessage(content, toolCalls);
     },
   });
+  // useChatStreaming returns a fresh object every render; cancelStream is
+  // stable, so the callbacks below depend on it rather than on `streaming`.
+  const { cancelStream } = streaming;
 
   const handleSelectConversation = useCallback(
     async (id: number) => {
       if (id === activeConversationId) return;
+      cancelStream();
       setActiveConversationId(id);
       setIsNewChat(false);
       await persistence.loadConversation(id);
     },
-    [activeConversationId, persistence]
+    [activeConversationId, cancelStream, persistence]
   );
 
   const handleNewChat = useCallback(() => {
+    cancelStream();
     setActiveConversationId(null);
     setIsNewChat(true);
     persistence.handleNewChat();
-  }, [persistence]);
+  }, [cancelStream, persistence]);
 
   const createConversation = useCallback(
     async (text: string) => {
@@ -121,6 +128,7 @@ export default function ChatView() {
     // After the message lands, not before: marking the chat started while the conversation is
     // still being created leaves a render with no active chat, which remounts the composer.
     onMessagePersisted: markChatStarted,
+    onSendingChange: setSubmissionInFlight,
   });
 
   const handleArchive = useCallback(
@@ -229,7 +237,15 @@ export default function ChatView() {
               <div ref={composerRef} className="absolute inset-x-0 bottom-0 z-10 px-3 pb-5 pt-1">
                 <ChatInput
                   className="mx-auto w-full max-w-2xl"
-                  agentState={streaming.agentState}
+                  // New chat and switching cancel the stream at once, but the
+                  // cancelled send can hold the submission lock until an
+                  // in-flight tool returns; a message sent before then would
+                  // be dropped, so the input stays busy until it lets go.
+                  agentState={
+                    submissionInFlight && streaming.agentState === "idle"
+                      ? "thinking"
+                      : streaming.agentState
+                  }
                   partialTranscript=""
                   onTextSubmit={handleTextSubmit}
                   onCancel={streaming.cancelStream}

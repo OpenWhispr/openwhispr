@@ -43,6 +43,9 @@ yarn-error.*
 credentials/
 credentials.json
 
+# Licensed Yowza brand font, fetched by `npm run download:brand-fonts`
+/assets/fonts/yowza/*.otf
+
 .claude
 .agents
 

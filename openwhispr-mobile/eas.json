@@ -23,6 +23,9 @@
     "production": {
       "autoIncrement": true,
       "channel": "production",
+      "env": {
+        "BRAND_FONTS_REQUIRED": "1"
+      },
       "ios": {
         "image": "latest",
         "resourceClass": "medium"

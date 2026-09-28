@@ -4,7 +4,7 @@
  * an active override must force the serial path, like a non-default tone does.
  */
 import { TranscriptionService } from '@/services/transcription/TranscriptionService';
-import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
+import { isRetryableTranscriptionError, transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { cleanupTranscript } from '@/lib/cleanupTranscript';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
@@ -109,5 +109,23 @@ describe('transcribeAndCleanup with a custom cleanup prompt', () => {
     expect(mockFused).not.toHaveBeenCalled();
     expect(mockCleanup).not.toHaveBeenCalled();
     expect(result.text).toBe('local words');
+  });
+});
+
+describe('transcription retry classification', () => {
+  it.each([
+    ['invalid credential', { status: 401, retryable: false }],
+    ['invalid model', { status: 404, retryable: false }],
+    ['blocked redirect', { retryable: false }],
+    ['cancelled request', Object.assign(new Error('cancelled'), { name: 'AbortError' })],
+  ])('does not retry %s provider failures', (_label, error) => {
+    expect(isRetryableTranscriptionError(error)).toBe(false);
+  });
+
+  it.each([
+    ['provider unavailable', { status: 503, retryable: true }],
+    ['network failure', { retryable: true }],
+  ])('retries %s failures', (_label, error) => {
+    expect(isRetryableTranscriptionError(error)).toBe(true);
   });
 });

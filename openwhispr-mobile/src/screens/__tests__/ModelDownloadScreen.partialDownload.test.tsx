@@ -143,3 +143,14 @@ describe('ModelDownloadScreen — partial Parakeet download', () => {
     expect(screen.queryByText(/saved from an earlier attempt/)).toBeNull();
   });
 });
+
+describe('ModelDownloadScreen — model languages', () => {
+  it('offers the language list beside each multi-language model', async () => {
+    await renderAsync(<ModelDownloadScreen />);
+
+    expect(screen.getByText('Parakeet v3')).toBeTruthy();
+    expect(screen.getByLabelText('Parakeet v3 languages')).toBeTruthy();
+    expect(screen.getByLabelText('Whisper base languages')).toBeTruthy();
+    expect(screen.queryByLabelText('Parakeet v2 languages')).toBeNull();
+  });
+});

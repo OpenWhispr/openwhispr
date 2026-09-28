@@ -1,6 +1,7 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useSegments } from 'expo-router';
 import { useHandoffStore } from '@/store/useHandoffStore';
+import { AppFont } from '@/lib/fonts';
 
 // Static routes inside the (notes) stack — anything else under (notes) is the
 // dynamic [id] editor route.
@@ -22,7 +23,11 @@ export default function TabsLayout() {
   const handoffActive = useHandoffStore((s) => s.isActive);
 
   return (
-    <NativeTabs minimizeBehavior="onScrollDown" hidden={isNoteEditor || handoffActive}>
+    <NativeTabs
+      minimizeBehavior="onScrollDown"
+      hidden={isNoteEditor || handoffActive}
+      labelStyle={{ fontFamily: AppFont.medium }}
+    >
       <NativeTabs.Trigger name="(record)">
         <NativeTabs.Trigger.Label>Record</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="mic.fill" />

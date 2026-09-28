@@ -37,4 +37,6 @@ test("explicit device cleanup covers models, credentials, caches, and browser se
     source.includes('"account-scope-binding.json"'),
     "device cleanup removes the account scope binding"
   );
+
+  assert.ok(source.includes('"connectors"'), "device cleanup removes encrypted connector logins");
 });

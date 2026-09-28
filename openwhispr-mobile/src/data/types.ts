@@ -99,6 +99,8 @@ export interface RemoteNote {
   /** Desktop-shape transcript JSON; decomposed into segments/speakers on apply. */
   transcript: string | null;
   deleted_at: string | null;
+  /** Optional: not every server payload that reaches an apply path carries it. */
+  created_at?: string;
   updated_at: string;
   // Scope fields declared for a later task; not yet populated by pull/apply.
   space_id?: string | null;
@@ -292,12 +294,16 @@ export interface NotesRepository {
    * as `null` when serverUpdatedAt is itself a local-clock fallback (the server
    * response omitted its own updated_at) — cloudUpdatedAt must only ever hold a
    * genuine server ack, never a value guaranteed to mismatch on the next push.
+   *
+   * serverCreatedAt, when the response carries it, repairs a createdAt stamped
+   * with the pull time by builds that didn't sync created_at.
    */
   markNotePushed(
     pushed: Note,
     remoteId: string,
     serverUpdatedAt: string,
     cloudUpdatedAt?: string | null,
+    serverCreatedAt?: string,
   ): void;
   /** Clears pendingSync with no other changes — used when a push was permanently rejected (e.g. HTTP 400) and retrying would never succeed. */
   markNoteTerminal(localId: number): void;
@@ -309,6 +315,8 @@ export interface NotesRepository {
    * that pull could otherwise be followed by a stale-base 409.
    */
   dropNotePushAttempt(localId: number): void;
+  /** True while the note's latest push was refused (terminal or dropped) and no later push, pull or delete has settled it. */
+  isNotePushRejected(localId: number): boolean;
   /**
    * Records a push-time 409 note_version_conflict: stores the server's current
    * copy in conflict_server_note and leaves pendingSync untouched (local edits

@@ -15,6 +15,7 @@ const MODEL_FILE = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 class SpeakerEmbeddings {
   constructor() {
     this.loadPromise = null;
+    this.loadedGeneration = null;
   }
 
   getModelPath() {
@@ -33,7 +34,9 @@ class SpeakerEmbeddings {
   }
 
   _ensureLoaded() {
-    if (this.loadPromise) return this.loadPromise;
+    if (this.loadPromise && this.loadedGeneration === onnxWorkerClient.generation) {
+      return this.loadPromise;
+    }
     if (!this.isAvailable()) {
       return Promise.reject(
         new Error(`Speaker embedding model not found at ${this.getModelPath()}`)
@@ -41,6 +44,7 @@ class SpeakerEmbeddings {
     }
     const modelPath = this.getModelPath();
     debugLogger.debug("speaker-embeddings loading model", { modelPath });
+    this.loadedGeneration = onnxWorkerClient.generation;
     this.loadPromise = onnxWorkerClient
       .request("speaker.load", { modelPath })
       .then(() => debugLogger.debug("speaker-embeddings model loaded"))

@@ -9,7 +9,7 @@ import { useNotesStore } from '@/store/useNotesStore';
 import { confirmDestructive } from '@/lib/alerts';
 import { safeHaptics } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 
 const formatDate = (value: string | null): string => {
   if (!value) return 'On this device';
@@ -53,7 +53,7 @@ function FieldRow({
         returnKeyType="done"
         testID={testID}
         className="flex-1 py-3 text-[17px] text-label"
-        style={{ fontFamily: SpaceGrotesk.regular }}
+        style={{ fontFamily: AppFont.regular }}
       />
     </View>
   );
@@ -153,7 +153,9 @@ export default function VoiceProfileDetailScreen() {
         <View className="items-center gap-2.5 pb-1 pt-2">
           <SpeakerAvatar name={profile.displayName} isOwner={isOwner} size={76} />
           <View className="flex-row items-center gap-2">
-            <Text className="text-[22px] font-bold text-label">{profile.displayName}</Text>
+            <Text accessibilityRole="header" className="text-[22px] font-bold text-label">
+              {profile.displayName}
+            </Text>
             {isOwner ? (
               <View className="rounded-md bg-tertiarySystemFill px-2 py-0.5">
                 <Text className="text-[12px] font-semibold text-secondaryLabel">Owner</Text>

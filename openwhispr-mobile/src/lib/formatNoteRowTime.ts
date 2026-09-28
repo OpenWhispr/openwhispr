@@ -7,6 +7,11 @@ function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
 
+/** "14:05", the clock time the notes list shows. */
+export function formatClockTime(d: Date): string {
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
 export function formatNoteRowTime(
   updatedAt: string | number | Date | null | undefined,
   bucket: DateBucketKey,
@@ -15,7 +20,7 @@ export function formatNoteRowTime(
   if (isNaN(d.getTime())) return '';
 
   if (bucket === 'today') {
-    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    return formatClockTime(d);
   }
   if (bucket === 'yesterday') {
     return 'Yesterday';

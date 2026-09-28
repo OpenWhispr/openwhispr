@@ -224,12 +224,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId),
   semanticSearchNotes: (query, limit, spaceId, folderId) =>
     ipcRenderer.invoke("db-semantic-search-notes", query, limit, spaceId, folderId),
-  semanticReindexAll: () => ipcRenderer.invoke("db-semantic-reindex-all"),
-  onSemanticReindexProgress: (callback) => {
-    const listener = (_event, data) => callback?.(data);
-    ipcRenderer.on("semantic-reindex-progress", listener);
-    return () => ipcRenderer.removeListener("semantic-reindex-progress", listener);
-  },
   updateNoteCloudId: (id, cloudId) => ipcRenderer.invoke("db-update-note-cloud-id", id, cloudId),
   updateNoteShareState: (id, state) => ipcRenderer.invoke("db-update-note-share-state", id, state),
 
@@ -708,7 +702,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // llama-server
   llamaServerStart: (modelId) => ipcRenderer.invoke("llama-server-start", modelId),
-  llamaServerStop: () => ipcRenderer.invoke("llama-server-stop"),
   llamaServerStatus: () => ipcRenderer.invoke("llama-server-status"),
   llamaGpuReset: () => ipcRenderer.invoke("llama-gpu-reset"),
 
@@ -955,6 +948,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   dictationRealtimeWarmup: (options) => ipcRenderer.invoke("dictation-realtime-warmup", options),
   dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
   dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
+  dictationRealtimeFinalize: () => ipcRenderer.invoke("dictation-realtime-finalize"),
   dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
   onDictationRealtimePartial: registerListener(
     "dictation-realtime-partial",
@@ -962,6 +956,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onDictationRealtimeFinal: registerListener(
     "dictation-realtime-final",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onDictationRealtimeLanguage: registerListener(
+    "dictation-realtime-language",
     (callback) => (_event, data) => callback(data)
   ),
   onDictationRealtimeError: registerListener(
@@ -1265,6 +1263,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
   gcalSyncEvents: () => ipcRenderer.invoke("gcal-sync-events"),
   gcalGetUpcomingEvents: (windowMinutes) =>
     ipcRenderer.invoke("gcal-get-upcoming-events", windowMinutes),
+  connectorStatus: () => ipcRenderer.invoke("connector-status"),
+  connectorPrepare: (connectorId, action, args) =>
+    ipcRenderer.invoke("connector-prepare", connectorId, action, args),
+  connectorCommit: (actionId, edits) => ipcRenderer.invoke("connector-commit", actionId, edits),
+  connectorCancel: (actionId, reason) => ipcRenderer.invoke("connector-cancel", actionId, reason),
+  connectorRunDirect: (connectorId, action, args, runId) =>
+    ipcRenderer.invoke("connector-run-direct", connectorId, action, args, runId),
+  connectorRecentActions: (connectorId, limit) =>
+    ipcRenderer.invoke("connector-recent-actions", connectorId, limit),
+  connectorFindContacts: (query) => ipcRenderer.invoke("connector-find-contacts", query),
+  connectorConnect: (connectorId) => ipcRenderer.invoke("connector-connect", connectorId),
+  connectorDisconnect: (connectorId) => ipcRenderer.invoke("connector-disconnect", connectorId),
+  onConnectorStatusChanged: (callback) => {
+    const listener = (_event, statuses) => callback(statuses);
+    ipcRenderer.on("connector-status-changed", listener);
+    return () => ipcRenderer.removeListener("connector-status-changed", listener);
+  },
   calendarGetAvailability: (request) => ipcRenderer.invoke("calendar-get-availability", request),
   gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),
 
@@ -1316,9 +1331,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Meeting detection
-  meetingDetectionGetPreferences: () => ipcRenderer.invoke("meeting-detection-get-preferences"),
-  meetingDetectionSetPreferences: (prefs) =>
-    ipcRenderer.invoke("meeting-detection-set-preferences", prefs),
   syncNotificationPreferences: (prefs) =>
     ipcRenderer.invoke("sync-notification-preferences", prefs),
   setSpeakerDiarizationEnabled: (enabled) =>

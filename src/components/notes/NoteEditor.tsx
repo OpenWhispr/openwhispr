@@ -18,6 +18,7 @@ import {
   Users,
 } from "../icons";
 import ShareNoteDialog, { type NoteExportOption } from "./ShareNoteDialog";
+import { reconcileLocalShareState } from "./shareNoteRules";
 import {
   canOrganizeNote,
   noteCapabilities,
@@ -254,7 +255,11 @@ export default function NoteEditor({
   const { t } = useTranslation();
   const locale = useUiLocale();
   const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
-  const [viewMode, setViewMode] = useState<MeetingViewMode>(defaultViewMode);
+  const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
+  // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
+  // rendering, and a tab that no longer renders can never be the current one.
+  const viewMode: MeetingViewMode =
+    selectedViewMode === "enhanced" && !enhancement ? "raw" : selectedViewMode;
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   const [chatDraft, setChatDraft] = useState("");
   const handleChatModeChange = useCallback((mode: EmbeddedChatMode) => {
@@ -326,12 +331,14 @@ export default function NoteEditor({
           access: res.access ?? entry?.access,
           rawToken: entry?.rawToken ?? null,
         }));
-        const serverShared = res.share.visibility !== "private";
-        if (serverShared !== Boolean(note.is_shared)) {
-          void persistNoteShareState(
-            note.id,
-            serverShared ? { is_shared: 1 } : { is_shared: 0, share_token: null }
-          ).catch((err) => console.error("Share flag persist failed:", err));
+        const update = reconcileLocalShareState(
+          { isShared: Boolean(note.is_shared), shareToken: note.share_token ?? null },
+          res.share
+        );
+        if (update) {
+          void persistNoteShareState(note.id, update).catch((err) =>
+            console.error("Share flag persist failed:", err)
+          );
         }
       })
       .catch((err) => {
@@ -342,7 +349,15 @@ export default function NoteEditor({
     return () => {
       cancelled = true;
     };
-  }, [aclRetryVersion, isSignedIn, note.cloud_id, note.id, note.is_shared, shareCache]);
+  }, [
+    aclRetryVersion,
+    isSignedIn,
+    note.cloud_id,
+    note.id,
+    note.is_shared,
+    note.share_token,
+    shareCache,
+  ]);
   useEffect(() => {
     if (
       !isSignedIn ||
@@ -479,7 +494,10 @@ export default function NoteEditor({
 
     const buttons = container.querySelectorAll<HTMLButtonElement>("[data-segment-button]");
     const activeBtn = Array.from(buttons).find((btn) => btn.dataset.segmentValue === viewMode);
-    if (!activeBtn) return;
+    if (!activeBtn) {
+      setIndicatorStyle((style) => ({ ...style, opacity: 0 }));
+      return;
+    }
 
     const cr = container.getBoundingClientRect();
     const br = activeBtn.getBoundingClientRect();
@@ -506,7 +524,7 @@ export default function NoteEditor({
     let cancelScheduledUpdate: (() => void) | undefined;
 
     if (prevProcessingStateRef.current === "processing" && actionProcessingState === "success") {
-      cancelScheduledUpdate = scheduleUiUpdate(() => setViewMode("enhanced"));
+      cancelScheduledUpdate = scheduleUiUpdate(() => setSelectedViewMode("enhanced"));
     }
     prevProcessingStateRef.current = actionProcessingState;
 
@@ -522,7 +540,7 @@ export default function NoteEditor({
         setDiarizedSegments(null);
         setIsDiarizing(false);
         setSpeakerMappings({});
-        setViewMode(defaultViewMode);
+        setSelectedViewMode(defaultViewMode);
         if (titleRef.current && titleRef.current.textContent !== note.title) {
           titleRef.current.textContent = note.title || "";
         }
@@ -1044,7 +1062,7 @@ export default function NoteEditor({
                 <button
                   data-segment-button
                   data-segment-value="transcript"
-                  onClick={() => setViewMode("transcript")}
+                  onClick={() => setSelectedViewMode("transcript")}
                   className={cn(
                     SEGMENT_BUTTON_CLASS,
                     viewMode === "transcript"
@@ -1058,7 +1076,7 @@ export default function NoteEditor({
                 <button
                   data-segment-button
                   data-segment-value="raw"
-                  onClick={() => setViewMode("raw")}
+                  onClick={() => setSelectedViewMode("raw")}
                   className={cn(
                     SEGMENT_BUTTON_CLASS,
                     viewMode === "raw"
@@ -1073,7 +1091,7 @@ export default function NoteEditor({
                   <button
                     data-segment-button
                     data-segment-value="enhanced"
-                    onClick={() => setViewMode("enhanced")}
+                    onClick={() => setSelectedViewMode("enhanced")}
                     className={cn(
                       SEGMENT_BUTTON_CLASS,
                       viewMode === "enhanced"

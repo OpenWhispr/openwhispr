@@ -12,7 +12,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useOnboardingPracticeMode } from '@/hooks/useOnboardingPracticeMode';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { BRAND } from '@/config/colors';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-storage/src';
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   messageInput: {
     minHeight: 120,
     color: PlatformColor('label') as unknown as string,
-    fontFamily: SpaceGrotesk.regular,
+    fontFamily: AppFont.regular,
     fontSize: 16,
     fontWeight: '400',
     lineHeight: 22,

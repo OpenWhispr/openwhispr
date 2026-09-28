@@ -15,13 +15,12 @@ import { NewFolderSheet } from '@/components/notes/NewFolderSheet';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { Fab, FAB_BOTTOM_PADDING, type FabAction } from '@/components/ui/Fab';
 import { groupNotesByDate } from '@/lib/groupNotesByDate';
-import { canMoveBetweenSpaces } from '@/lib/spacePermissions';
 import { safeHaptics } from '@/lib/utils';
 import { confirmDestructive } from '@/lib/alerts';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
 import { VoiceProfilePromptCard } from '@/components/notes/VoiceProfilePromptCard';
-import { useSyncStore } from '@/sync/useSyncStore';
-import { requestSync } from '@/sync/syncEngine';
+import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
+import { useMoveNote } from '@/hooks/useMoveNote';
 import { useConfigStore } from '@/store/useConfigStore';
 
 export default function NotesListScreen() {
@@ -45,8 +44,6 @@ export default function NotesListScreen() {
     searchQuery,
     createNote,
     deleteNote,
-    moveNoteToFolder,
-    moveNoteToSpace,
     createFolder,
     renameFolder,
     deleteFolderSafe,
@@ -56,7 +53,6 @@ export default function NotesListScreen() {
   const config = useConfigStore((s) => s.config);
   const updateConfig = useConfigStore((s) => s.updateConfig);
 
-  const [movingNoteId, setMovingNoteId] = useState<number | null>(null);
   const [newFolderVisible, setNewFolderVisible] = useState(false);
 
   useEffect(() => {
@@ -97,20 +93,11 @@ export default function NotesListScreen() {
     [spaceId, folderId, spaceFolders],
   );
   const moveTargetFolders = contentSpaceId != null ? spaceFolders : folders;
-
-  // Where this note is allowed to go, by desktop's rule: personal content may
-  // move to any team space, while team content stays inside its own workspace —
-  // never back to the private space, and never across workspaces.
-  const moveTargetSpaces = useMemo(() => {
-    const from =
-      contentSpaceId != null
-        ? spaces.find((s) => s.id === contentSpaceId)
-        : spaces.find((s) => s.kind === 'private');
-    if (!from) return [];
-    return spaces.filter(
-      (space) => space.kind === 'team' && space.id !== from.id && canMoveBetweenSpaces(from, space),
-    );
-  }, [spaces, contentSpaceId]);
+  const move = useMoveNote({
+    scopeSpaceId: contentSpaceId,
+    targetFolders: moveTargetFolders,
+    excludeFolderId: activeFolderId,
+  });
 
   const buckets = useMemo(() => groupNotesByDate(notes), [notes]);
   const totalCount = useMemo(() => {
@@ -124,10 +111,7 @@ export default function NotesListScreen() {
   // still be able to report "no results".
   const showSpaceFolders = spaceId != null && spaceFolders.length > 0 && !searchQuery;
 
-  const syncStatus = useSyncStore((s) => s.status);
-  const onRefresh = useCallback(() => {
-    requestSync('manual');
-  }, []);
+  const { refreshing, onRefresh } = useManualSyncRefresh();
 
   const handleNotePress = useCallback(
     (id: number) => {
@@ -146,46 +130,6 @@ export default function NotesListScreen() {
       });
     },
     [deleteNote],
-  );
-
-  const openMoveSheet = useCallback((noteId: number) => {
-    safeHaptics('medium');
-    setMovingNoteId(noteId);
-  }, []);
-
-  const closeMoveSheet = useCallback(() => setMovingNoteId(null), []);
-
-  const handlePickFolder = useCallback(
-    (targetFolderId: number) => {
-      if (movingNoteId != null) {
-        moveNoteToFolder(movingNoteId, targetFolderId);
-        safeHaptics('success');
-      }
-      setMovingNoteId(null);
-    },
-    [movingNoteId, moveNoteToFolder],
-  );
-
-  const handleCreateAndPick = useCallback(
-    (name: string) => {
-      const folder = createFolder(name, contentSpaceId ?? undefined);
-      if (movingNoteId != null) {
-        moveNoteToFolder(movingNoteId, folder.id);
-      }
-      setMovingNoteId(null);
-    },
-    [movingNoteId, createFolder, moveNoteToFolder, contentSpaceId],
-  );
-
-  const handlePickSpace = useCallback(
-    (targetSpaceId: number) => {
-      if (movingNoteId != null) {
-        moveNoteToSpace(movingNoteId, targetSpaceId);
-        safeHaptics('success');
-      }
-      setMovingNoteId(null);
-    },
-    [movingNoteId, moveNoteToSpace],
   );
 
   const handleCompose = useCallback(() => {
@@ -313,9 +257,7 @@ export default function NotesListScreen() {
         }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        refreshControl={
-          <RefreshControl refreshing={syncStatus === 'running'} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Text className="mb-2 text-[15px] text-tertiaryLabel">{`${totalCount} ${totalCount === 1 ? 'Note' : 'Notes'}`}</Text>
         <SyncStatusLabel />
@@ -436,9 +378,9 @@ export default function NotesListScreen() {
                     note={note}
                     bucket={bucket.key}
                     onPress={() => handleNotePress(note.id)}
-                    onLongPress={() => openMoveSheet(note.id)}
+                    onLongPress={() => move.open(note.id)}
                     onDelete={() => handleDeleteNote(note.id)}
-                    onMove={() => openMoveSheet(note.id)}
+                    onMove={() => move.open(note.id)}
                   />
                 ))}
               </GroupedList>
@@ -461,18 +403,7 @@ export default function NotesListScreen() {
         onCreate={handleCreateFolderInSpace}
       />
 
-      <MoveToFolderSheet
-        visible={movingNoteId != null}
-        folders={moveTargetFolders}
-        folderCounts={folderCounts}
-        excludeFolderId={activeFolderId}
-        onClose={closeMoveSheet}
-        onPickFolder={handlePickFolder}
-        onCreateAndPick={handleCreateAndPick}
-        spaces={moveTargetSpaces}
-        activeSpaceId={contentSpaceId}
-        onPickSpace={handlePickSpace}
-      />
+      <MoveToFolderSheet {...move.sheetProps} />
     </View>
   );
 }

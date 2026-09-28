@@ -36,6 +36,7 @@ import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
 import { startKeyboardFullAccessProbe } from '@/lib/keyboardFullAccessProbe';
 import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSuperwallProvider';
+import { eraseProviderCredentialsFromPreviousInstall } from '@/services/providers/ProviderCredentials';
 
 initSentry();
 initAppsFlyer();
@@ -84,6 +85,8 @@ function RootLayout() {
     loadConfig();
     hydrateOnboarding();
     startRetiredPromptSweep();
+    // A failure leaves the install unmarked, so the next key access retries the erase.
+    eraseProviderCredentialsFromPreviousInstall().catch(() => undefined);
   }, [initialize, loadConfig, hydrateOnboarding]);
 
   useEffect(() => {

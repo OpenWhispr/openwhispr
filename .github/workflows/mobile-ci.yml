@@ -96,9 +96,27 @@ jobs:
         env:
           OPENWHISPR_APP_ENV: production
 
+  native-transport:
+    name: Mobile native Swift tests
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    # Compiles the Foundation-only Swift sources and their tests, which need Xcode's toolchain.
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Run native provider transport tests
+        run: python3 openwhispr-mobile/modules/background-uploader/tests/run-provider-transport-tests.py
+      - name: Run hotkey dictation logic tests
+        run: python3 openwhispr-mobile/plugins/hotkey-dictation/tests/run-hotkey-logic-tests.py
+      - name: Run Live Activity resolver tests
+        run: sh openwhispr-mobile/modules/live-activity/tests/run-resolver-tests.sh
+
   mobile-status:
     name: Mobile CI
-    needs: [changes, lockfile, checks]
+    needs: [changes, lockfile, checks, native-transport]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -110,9 +128,11 @@ jobs:
           MOBILE: ${{ needs.changes.outputs.mobile }}
           LOCKFILE_RESULT: ${{ needs.lockfile.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
+          NATIVE_TRANSPORT_RESULT: ${{ needs.native-transport.result }}
         run: |
           test "$CHANGES_RESULT" = success
           if [ "$MOBILE" = true ]; then
             test "$LOCKFILE_RESULT" = success
             test "$CHECKS_RESULT" = success
+            test "$NATIVE_TRANSPORT_RESULT" = success
           fi

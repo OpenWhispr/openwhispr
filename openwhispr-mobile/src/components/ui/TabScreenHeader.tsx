@@ -23,7 +23,11 @@ export function TabScreenHeader({ title, left, right }: Props) {
       <View className="min-h-[44px] flex-row items-center justify-between">
         <View>{left}</View>
         <View pointerEvents="none" testID="screen-header-title" style={styles.titleWrap}>
-          <Text numberOfLines={1} className="text-[17px] font-semibold text-label">
+          <Text
+            accessibilityRole="header"
+            numberOfLines={1}
+            className="text-[17px] font-semibold text-label"
+          >
             {title}
           </Text>
         </View>

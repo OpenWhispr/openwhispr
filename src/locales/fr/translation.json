@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Les raccourcis avec les boutons de la souris ne sont actuellement pris en charge que sur macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" est déjà enregistré par une autre application.",
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
+      "rightModifierNeedsListener": "« {{hotkey}} » ne peut pas être utilisé sur ce bureau, dont les raccourcis exigent une touche normale. Ajoutez une touche, par exemple Control+Alt+Space.",
       "holdNeedsReleaseKey": "Maintenir pour parler nécessite une touche dont macOS détecte le relâchement : Globe, une touche droite comme Option droite, ou un raccourci avec modificateur. Appuyer fonctionne avec n’importe quelle touche.",
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
       "updateFailedCheckFormat": "Impossible de mettre à jour le raccourci vers \"{{hotkey}}\". Vérifiez que le format est valide.",
@@ -921,6 +922,7 @@
         "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives.",
         "providerKeyMissing": "Aucune clé API n'est définie pour votre fournisseur de transcription. Ajoutez-la dans Réglages → Parole en texte.",
         "cleanupTruncated": "Le modèle d'IA a manqué de place avant de terminer le nettoyage de votre dictée.",
+        "cleanupDuplicated": "Le nettoyage par IA a répété la transcription. Le texte original a été conservé.",
         "cleanupEmptyReply": "Le modèle d'IA a renvoyé une réponse vide au lieu de la dictée nettoyée."
       },
       "translationFallback": {
@@ -942,6 +944,18 @@
         "unavailable": "OpenWhispr n’a pas pu lire la sélection en toute sécurité. Vérifiez les autorisations d’accessibilité ou d’automatisation.",
         "tooLarge": "La sélection est trop grande. Sélectionnez au maximum 6 000 caractères.",
         "reasoningFailed": "L’IA n’a pas pu terminer la modification. Le texte d’origine n’a pas été modifié."
+      },
+      "pastePermission": {
+        "title": "Autoriser le collage automatique",
+        "description": "Activez OpenWhispr dans Réglages Système → Confidentialité et sécurité → Accessibilité.",
+        "settingsFailed": "Impossible d’ouvrir les réglages. Ouvrez Réglages Système → Confidentialité et sécurité → Accessibilité et activez OpenWhispr.",
+        "manualPaste": "Copiez votre texte ci-dessous, puis appuyez sur {{shortcut}} pour le coller.",
+        "openSettings": "Ouvrir les réglages",
+        "copyToClipboard": "Copier le texte",
+        "copyFailed": "Échec de la copie"
+      },
+      "pasteFailed": {
+        "title": "Collage automatique impossible"
       }
     },
     "clipboard": {
@@ -3309,7 +3323,35 @@
       "conversationWillAppear": "La conversation apparaîtra ici...",
       "linkedEvent": "Événement lié",
       "noFolder": "Aucun dossier",
-      "participants": "Participants"
+      "participants": "Participants",
+      "table": {
+        "actions": "Actions du tableau",
+        "insertRowAbove": "Insérer une ligne au-dessus",
+        "insertRowBelow": "Insérer une ligne en dessous",
+        "insertColumnLeft": "Insérer une colonne à gauche",
+        "insertColumnRight": "Insérer une colonne à droite",
+        "deleteRow": "Supprimer la ligne",
+        "deleteColumn": "Supprimer la colonne",
+        "deleteTable": "Supprimer le tableau"
+      },
+      "format": {
+        "toolbar": "Mise en forme",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Gras",
+        "italic": "Italique",
+        "strike": "Barré",
+        "code": "Code",
+        "textStyle": "Style de texte",
+        "paragraph": "Texte normal",
+        "heading1": "Titre 1",
+        "heading2": "Titre 2",
+        "heading3": "Titre 3",
+        "bulletList": "Liste à puces",
+        "orderedList": "Liste numérotée",
+        "taskList": "Liste de tâches",
+        "blockquote": "Citation",
+        "table": "Insérer un tableau"
+      }
     },
     "participants": {
       "attendee": "participant",
@@ -3810,6 +3852,9 @@
     },
     "tools": {
       "search_notesName": "Rechercher des notes",
+      "email_draftName": "Brouillon d'e-mail",
+      "find_contactName": "Rechercher un contact",
+      "slack_send_messageName": "Message Slack",
       "get_noteName": "Obtenir une note",
       "create_noteName": "Créer une note",
       "update_noteName": "Mettre à jour une note",
@@ -3822,6 +3867,9 @@
       "update_dictionaryName": "Mettre à jour le dictionnaire",
       "update_snippetsName": "Mettre à jour les snippets",
       "search_notesStatus": "Recherche de notes...",
+      "email_draftStatus": "Ouverture d'un brouillon d'e-mail...",
+      "find_contactStatus": "Recherche de contacts...",
+      "slack_send_messageStatus": "Préparation d'un message Slack...",
       "web_searchStatus": "Recherche sur le web...",
       "copy_to_clipboardStatus": "Copie dans le presse-papiers...",
       "get_calendar_eventsStatus": "Vérification du calendrier...",
@@ -3913,6 +3961,7 @@
       "connectFailedDescription": "Une erreur s'est produite lors de la connexion à Calendar.app. Redémarrez OpenWhispr et réessayez."
     },
     "sections": {
+      "connectors": "Connecteurs",
       "calendar": "Calendrier",
       "api": "API",
       "mcp": "MCP",
@@ -3973,6 +4022,144 @@
       "description": "OpenWhispr capture l'audio directement depuis votre système — il ne rejoint jamais vos réunions en tant que participant. Connectez simplement votre calendrier et prenez vos notes normalement."
     }
   },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Envoyer à {{destination}}",
+        "slackPost": "Publier dans {{destination}}"
+      },
+      "identity": "En tant que {{account}}",
+      "identityWithWorkspace": "En tant que {{account}} dans {{workspace}}",
+      "send": "Envoyer",
+      "edit": "Modifier",
+      "doneEditing": "Modification terminée",
+      "cancel": "Annuler",
+      "titleLabel": "Titre",
+      "bodyLabel": "Message",
+      "sending": "Envoi en cours…",
+      "sent": "Envoyé à {{destination}}.",
+      "open": "Ouvrir",
+      "failed": "Échec de l'envoi : {{message}}",
+      "unknown": "Impossible de confirmer l'envoi. Vérifiez {{destination}}.",
+      "cancelled": "Annulé. Rien n'a été envoyé.",
+      "notSent": "Non envoyé.",
+      "policyRetry": "Impossible de vérifier les paramètres de votre organisation, rien n'a donc été envoyé. Cliquez sur Envoyer pour réessayer.",
+      "errors": {
+        "not_in_channel": "Vous n'êtes pas membre de {{destination}}.",
+        "channel_not_found": "{{destination}} n'a pas pu être retrouvé dans Slack.",
+        "is_archived": "{{destination}} est archivé.",
+        "reconnect_needed": "Slack doit être reconnecté dans les Paramètres.",
+        "connection_changed": "La connexion Slack a changé avant l'envoi, donc rien n'a été envoyé.",
+        "rate_limited": "Slack est occupé. Réessayez sous peu.",
+        "missing_scope": "OpenWhispr n'a pas la permission de publier là-bas. Reconnectez Slack dans les Paramètres.",
+        "msg_too_long": "Le message est trop long pour Slack (12 000 caractères maximum, une fois formaté).",
+        "no_text": "Le message est vide.",
+        "network": "Slack est injoignable. Rien n'a été envoyé.",
+        "credential_save_failed": "La connexion Slack n'a pas pu être enregistrée sur cet ordinateur. Rien n'a été envoyé. Réessayez.",
+        "dm_failed": "Le message direct à {{destination}} n'a pas pu être ouvert. Rien n'a été envoyé.",
+        "restricted": "{{destination}} est en lecture seule ou restreint pour vous.",
+        "generic": "Un problème est survenu. Rien n'a été envoyé."
+      }
+    },
+    "policyOff": "Votre organisation a désactivé les connecteurs.",
+    "email": {
+      "title": "Brouillons d'e-mails",
+      "description": "L'assistant ouvre un brouillon pré-rempli dans votre application de messagerie. Vous le vérifiez et appuyez vous-même sur Envoyer.",
+      "proRequired": "Passez à un plan payant pour que l'assistant rédige des e-mails pour vous.",
+      "unavailable": "Les brouillons d'e-mails ne sont pas disponibles pour le moment.",
+      "targetLabel": "Rédiger les e-mails dans",
+      "autoResolved": "Automatique · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (professionnel ou scolaire)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Application de messagerie par défaut"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "L'assistant peut publier des messages dans des canaux et à des personnes en votre nom. Vous approuvez chaque message avant son envoi.",
+      "connect": "Connecter",
+      "reconnect": "Reconnecter",
+      "disconnect": "Déconnecter",
+      "connecting": "Terminez la connexion dans votre navigateur…",
+      "connectedAs": "Connecté en tant que {{account}} dans {{workspace}}",
+      "needsReconnect": "Slack doit être reconnecté.",
+      "proRequired": "Passez à un plan payant pour que l'assistant envoie des messages Slack pour vous.",
+      "errors": {
+        "connect_failed": "Impossible de connecter Slack. Réessayez.",
+        "disconnect_failed": "Impossible de déconnecter Slack. Réessayez.",
+        "oauth_denied": "Slack n'a pas été connecté car l'accès n'a pas été autorisé.",
+        "oauth_timeout": "La connexion a pris trop de temps. Réessayez.",
+        "oauth_state_mismatch": "Ce lien de connexion était périmé. Réessayez.",
+        "ports_busy": "Une autre application utilise les ports dont OpenWhispr a besoin pour se connecter. Fermez-la et réessayez.",
+        "token_exchange_failed": "Slack n'a pas terminé la connexion. Réessayez.",
+        "not_configured": "Slack n'est pas disponible dans cette version.",
+        "connection_changed": "Votre compte ou la connexion Slack a changé pendant la connexion. Réessayez.",
+        "signed_out": "Connectez-vous à OpenWhispr pour connecter Slack.",
+        "policy_blocked": "Votre organisation a désactivé les connecteurs.",
+        "policy_unavailable": "Impossible de vérifier les paramètres de votre organisation. Réessayez."
+      },
+      "browser": {
+        "connectedTitle": "Slack est connecté",
+        "connectedBody": "Vous pouvez fermer cet onglet et retourner à OpenWhispr.",
+        "failedTitle": "Slack n'a pas été connecté",
+        "failedBody": "Retournez à OpenWhispr pour réessayer."
+      }
+    },
+    "recent": {
+      "title": "Actions récentes",
+      "actions": {
+        "email_draft": "Brouillon à {{destination}}",
+        "slack_send_message": "Message à {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "Brouillon d'e-mail",
+        "slack_send_message": "Message Slack"
+      },
+      "states": {
+        "pending": "En attente",
+        "committing": "En cours",
+        "sent": "Terminé",
+        "failed": "Échec",
+        "unknown": "Non confirmé",
+        "cancelled": "Annulé",
+        "expired": "Expiré"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Brouillon ouvert pour {{destination}}.",
+      "draftOpenedBodyCopied": "Brouillon ouvert pour {{destination}}. Le corps du message est dans votre presse-papiers.",
+      "draftOpenedSubjectCopied": "Brouillon ouvert pour {{destination}}. L'objet et le corps du message sont dans votre presse-papiers.",
+      "draftOpenedOnlySubjectCopied": "Brouillon ouvert pour {{destination}}. L'objet est dans votre presse-papiers.",
+      "needsDetails": "Il manque des précisions.",
+      "unavailable": "Les connecteurs ne sont pas disponibles pour le moment.",
+      "unknown": "Non confirmé. Vérifiez si l'action a abouti avant de réessayer.",
+      "draftUnknown": "Non confirmé : le brouillon pour {{destination}} ne s'est peut-être pas ouvert. Vérifiez avant de réessayer.",
+      "contactsFound": "Contacts trouvés : {{total}}",
+      "draftLimit": "Seuls {{count}} brouillons peuvent s'ouvrir par demande.",
+      "clipboardBusy": "Non ouvert : le texte d'un autre brouillon est encore dans votre presse-papiers.",
+      "errors": {
+        "open_failed": "Impossible d'ouvrir votre application de messagerie.",
+        "draft_too_long": "Trop de destinataires pour un lien de brouillon.",
+        "invalid_address": "Des adresses e-mail complètes sont nécessaires.",
+        "not_in_channel": "Pas membre de ce canal.",
+        "channel_not_found": "Cette conversation est introuvable.",
+        "is_archived": "Ce canal est archivé.",
+        "reconnect_needed": "Slack doit être reconnecté.",
+        "connection_changed": "La connexion Slack a changé. Rien n'a été envoyé.",
+        "rate_limited": "Slack est occupé.",
+        "missing_scope": "Permission Slack manquante.",
+        "msg_too_long": "Message trop long pour Slack.",
+        "no_text": "Le message est vide.",
+        "network": "Impossible de joindre Slack. Rien n'a été envoyé.",
+        "credential_save_failed": "Impossible d'enregistrer la connexion Slack sur cet ordinateur. Rien n'a été envoyé.",
+        "dm_failed": "Impossible d'ouvrir le message direct. Rien n'a été envoyé.",
+        "restricted": "Ce canal est en lecture seule ou restreint.",
+        "generic": "Cela n'a pas fonctionné."
+      }
+    }
+  },
   "notesView": {
     "searchPlaceholder": "Rechercher des notes…",
     "newNote": "Nouvelle note",
@@ -4008,6 +4195,11 @@
         "createLink": "Créer un lien",
         "copyLink": "Copier le lien",
         "copied": "Copié",
+        "replaceLink": {
+          "title": "Remplacer le lien de partage ?",
+          "description": "Cet appareil ne dispose pas du lien actuel : le copier implique d'en créer un nouveau. L'ancien lien cessera de fonctionner, y compris dans les e-mails d'invitation. Renvoyez chaque invitation pour que les personnes invitées puissent toujours ouvrir la note.",
+          "confirm": "Remplacer le lien"
+        },
         "export": "Exporter",
         "owner": "Propriétaire",
         "editor": "Peut modifier",

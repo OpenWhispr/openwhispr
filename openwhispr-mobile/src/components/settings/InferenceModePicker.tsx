@@ -8,18 +8,12 @@ type Props = {
   scope: InferenceScope;
   selectedMode: InferenceMode;
   onSelect: (mode: InferenceMode) => void;
-  title?: string;
 };
 
-export function InferenceModePicker({
-  scope,
-  selectedMode,
-  onSelect,
-  title = 'Inference Mode',
-}: Props) {
+export function InferenceModePicker({ scope, selectedMode, onSelect }: Props) {
   const modes = getInferenceModes(scope);
   return (
-    <SettingsSection title={title}>
+    <SettingsSection title="Mode">
       {modes.map((opt) => (
         <SettingsRow
           key={opt.mode}

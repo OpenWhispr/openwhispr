@@ -60,7 +60,7 @@ it('names the voice assistant throughout its settings screen', () => {
   render(<DictationAgentScreen />);
   expect(screen.getByText('Enable Voice Assistant')).toBeTruthy();
   expect(screen.getByText('Assistant Name')).toBeTruthy();
-  expect(screen.getByText(/Voice Assistant requires Cloud mode/)).toBeTruthy();
+  expect(screen.getByText(/Voice Assistant needs Cloud or Bring Your Own Key mode/)).toBeTruthy();
   expect(screen.queryByText(/agent/i)).toBeNull();
 });
 

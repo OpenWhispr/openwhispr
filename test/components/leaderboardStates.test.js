@@ -199,3 +199,16 @@ test("podium cards accent all three placements", async () => {
   assert.ok(markup.includes("border-slate-400/30 bg-slate-400/5"));
   assert.ok(markup.includes("border-orange-500/25 bg-orange-500/5"));
 });
+
+test("the loading board shows its fixed copy, with placeholders only for the data", async () => {
+  const LoadingBoard = await component("LeaderboardSkeleton");
+  const markup = renderToStaticMarkup(createElement(LoadingBoard));
+
+  for (const copy of ["Updates hourly", "Top performers", "Rank", "Member", "Loading..."]) {
+    assert.ok(markup.includes(copy), `expected the loading board to show “${copy}”`);
+  }
+  assert.ok(markup.includes("border-amber-400/25 bg-amber-400/5"));
+  assert.ok(markup.includes("border-slate-400/30 bg-slate-400/5"));
+  assert.ok(markup.includes("border-orange-500/25 bg-orange-500/5"));
+  assert.match(markup, /role="status"[^>]*>Loading\.\.\.</, "only the message is announced");
+});

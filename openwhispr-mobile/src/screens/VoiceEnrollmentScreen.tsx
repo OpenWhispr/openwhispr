@@ -94,7 +94,7 @@ export default function VoiceEnrollmentScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
       >
-        <Text className="mb-5 text-2xl font-bold text-label">
+        <Text accessibilityRole="header" className="mb-5 text-2xl font-bold text-label">
           {existingProfile ? 'Re-enroll Voice' : 'Enroll Voice'}
         </Text>
         <VoiceEnrollmentRecorder

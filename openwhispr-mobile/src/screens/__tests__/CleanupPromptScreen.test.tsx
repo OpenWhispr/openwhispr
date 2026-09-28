@@ -32,7 +32,7 @@ jest.mock('@/store/useCustomPromptsStore', () => ({
 import CleanupPromptScreen from '../CleanupPromptScreen';
 
 const CUSTOM = 'Always use bullet points, {{agentName}}.';
-const NOTICE = /requires Cloud mode with Dictation Cleanup turned on/;
+const NOTICE = /Your prompt is saved/;
 const PLACEHOLDER_CAUTION = /\{\{agentName\}\} is missing/;
 
 const editor = () => screen.getByLabelText('Cleanup prompt');
@@ -86,16 +86,40 @@ describe('CleanupPromptScreen — guidance', () => {
     expect(screen.getByText(PLACEHOLDER_CAUTION)).toBeTruthy();
   });
 
-  it('shows the inactive notice in Private mode', () => {
+  it('describes the prompt without tying it to OpenWhispr Cloud', () => {
+    render(<CleanupPromptScreen />);
+    expect(screen.queryByText(/OpenWhispr's cloud/)).not.toBeOnTheScreen();
+    expect(screen.queryByText(/requires Cloud mode/)).not.toBeOnTheScreen();
+  });
+
+  it('says the prompt has no effect while On-Device mode keeps the raw transcript', () => {
     mockActiveMode = 'private';
     render(<CleanupPromptScreen />);
-    expect(screen.getByText(NOTICE)).toBeTruthy();
+    expect(screen.getByText(/On-Device mode keeps the raw transcript/)).toBeTruthy();
+  });
+
+  it('treats provider cleanup as using the prompt', () => {
+    mockActiveMode = 'providers';
+    mockConfig = {
+      defaultMode: 'providers',
+      cleanupEnabled: true,
+      inference: { cleanup: { mode: 'providers', providerId: 'groq', modelId: 'llama' } },
+    };
+    render(<CleanupPromptScreen />);
+    expect(screen.queryByText(NOTICE)).not.toBeOnTheScreen();
+  });
+
+  it('shows the inactive notice while Bring Your Own Key skips cleanup', () => {
+    mockActiveMode = 'providers';
+    mockConfig = { defaultMode: 'providers', cleanupEnabled: true };
+    render(<CleanupPromptScreen />);
+    expect(screen.getByText(/skips cleanup until Text Cleanup has a selection/)).toBeTruthy();
   });
 
   it('shows the inactive notice when cleanup is turned off', () => {
     mockConfig = { defaultMode: 'cloud', cleanupEnabled: false };
     render(<CleanupPromptScreen />);
-    expect(screen.getByText(NOTICE)).toBeTruthy();
+    expect(screen.getByText(/Text Cleanup is off/)).toBeTruthy();
   });
 
   it('hides the notice in Cloud mode with cleanup on', () => {

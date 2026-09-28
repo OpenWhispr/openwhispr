@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { Alert, KeyboardAvoidingView, Platform, TextInput, View } from 'react-native';
+import { Alert, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ import { calendarRepository } from '@/data/calendarRepository';
 import type { Note } from '@/data/types';
 import type { GoogleCalendarEvent } from '@/data/calendarTypes';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { buildCalendarMeetingContext } from '@/lib/calendar/meetingContext';
 import { getMeetingCalendarEventSuggestions } from '@/lib/calendar/meetingSuggestions';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
@@ -25,6 +26,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { canRunCloudMeeting } from '@/lib/accountAccess';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useCloudMeeting } from '@/hooks/useCloudMeeting';
+import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMeetingLiveActivity';
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { Sentry } from '@/lib/sentry';
@@ -48,6 +50,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const [noteId, setNoteId] = useState<number | null>(null);
   const [count, setCount] = useState<number | undefined>(undefined);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  // Wall-clock start of the current meeting (local or cloud), for the Live Activity timer.
+  // recordingStartedAtRef is local-only and is cleared as soon as processing starts.
+  const [meetingStartedAt, setMeetingStartedAt] = useState<number | null>(null);
   const [rawNotes, setRawNotes] = useState('');
   const [calendarEvents, setCalendarEvents] = useState<GoogleCalendarEvent[]>([]);
   const [selectedCalendarEventId, setSelectedCalendarEventId] = useState<number | null>(null);
@@ -55,6 +60,8 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const recordingStartedAtRef = useRef<number | null>(null);
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  // Only the recording phase has a notes field to keep above the keyboard.
+  const keyboardHeight = useKeyboardHeight(phase === 'recording');
   const googleCalendarAccounts = useGoogleCalendarStore((s) => s.accounts);
   const loadGoogleCalendars = useGoogleCalendarStore((s) => s.load);
   const createMeetingNote = useNotesStore((s) => s.createMeetingNote);
@@ -208,7 +215,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     setRawNotes(note.content);
     lastSavedRawNotesRef.current = note.content;
     setNoteId(note.id);
-    recordingStartedAtRef.current = Date.now();
+    const startedAt = Date.now();
+    recordingStartedAtRef.current = startedAt;
+    setMeetingStartedAt(startedAt);
     setPhase('recording');
   };
 
@@ -229,7 +238,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     if (!(await isLocalAsrModelReady())) {
       Alert.alert(
         'Speech model needed',
-        'Download a local speech model in Settings → AI Models → Speech to Text, then try again.',
+        'Download a local speech model in Settings → AI Models → Dictation, then try again.',
       );
       setPhase('prompt');
       return;
@@ -312,6 +321,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     setRawNotes(note.content);
     lastSavedRawNotesRef.current = note.content;
     setNoteId(note.id);
+    setMeetingStartedAt(Date.now());
     setPhase('cloud-recording');
   };
 
@@ -341,6 +351,22 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     }
   };
 
+  const meetingActivityPhase: MeetingActivityPhase =
+    phase === 'recording' || phase === 'cloud-recording'
+      ? 'recording'
+      : phase === 'processing'
+        ? 'processing'
+        : 'idle';
+  useMeetingLiveActivity({
+    phase: meetingActivityPhase,
+    title: selectedMeetingContext?.title ?? null,
+    startedAt: meetingStartedAt,
+    onEndRequested: () => {
+      const stop = phase === 'cloud-recording' ? finishCloud : finish;
+      stop().catch(Sentry.captureException);
+    },
+  });
+
   if (phase === 'prompt') {
     return (
       <SpeakerCountPrompt
@@ -366,7 +392,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   if (phase === 'unsupported') {
     return (
       <View className="flex-1 gap-4 bg-systemBackground px-6" style={{ paddingTop: headerHeight }}>
-        <Text className="text-2xl font-bold text-label">Not available on this device</Text>
+        <Text accessibilityRole="header" className="text-2xl font-bold text-label">
+          Not available on this device
+        </Text>
         <Text className="text-base text-secondaryLabel">
           Meeting diarization runs on the Apple Neural Engine and needs iOS 17+ in a development or
           production build (not Expo Go or other platforms).
@@ -380,7 +408,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   if (phase === 'needs-model') {
     return (
       <View className="flex-1 gap-4 bg-systemBackground px-6" style={{ paddingTop: headerHeight }}>
-        <Text className="text-2xl font-bold text-label">Download diarization model</Text>
+        <Text accessibilityRole="header" className="text-2xl font-bold text-label">
+          Download diarization model
+        </Text>
         <Text className="text-base text-secondaryLabel">
           A one-time ~100 MB download. Runs fully on-device after that.
         </Text>
@@ -401,14 +431,11 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   if (phase === 'recording') {
     const countLabel =
       count != null ? `${count} ${count === 1 ? 'person' : 'people'}` : 'Auto-detecting';
-    const footerBottomPadding = Math.max(insets.bottom + 32, 56);
+    // The view fills the screen, so the keyboard covers the home-indicator inset too.
+    const footerBottomPadding =
+      keyboardHeight > 0 ? keyboardHeight + 12 : Math.max(insets.bottom + 32, 56);
     return (
-      <KeyboardAvoidingView
-        className="flex-1 bg-systemBackground px-6"
-        style={{ paddingTop: headerHeight }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={headerHeight}
-      >
+      <View className="flex-1 bg-systemBackground px-6" style={{ paddingTop: headerHeight }}>
         <View className="items-center pb-2 pt-4">
           <View className="mb-3 flex-row items-center gap-2">
             <View className="h-2 w-2 rounded-full bg-systemRed" />
@@ -466,7 +493,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
             Stop
           </Button>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     );
   }
 

@@ -11,6 +11,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useModelDownloadStore, type LocalModelKey } from '@/store/useModelDownloadStore';
 import { confirmDestructive } from '@/lib/alerts';
 import { safeHaptics } from '@/lib/utils';
+import { ModelLanguagesButton } from '@/components/settings/ModelLanguagesButton';
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -197,9 +198,13 @@ export default function ModelDownloadScreen() {
                       ) : null}
                     </View>
                     <Text className="text-sm text-secondaryLabel">{model.description}</Text>
-                    <Text className="mt-0.5 text-xs text-tertiaryLabel">
-                      {model.languagesNote} · {formatBytes(model.sizeBytes)}
-                    </Text>
+                    <View className="mt-0.5 flex-row items-center gap-1">
+                      <Text className="text-xs text-tertiaryLabel">{model.languagesNote}</Text>
+                      <ModelLanguagesButton model={model.key} />
+                      <Text className="text-xs text-tertiaryLabel">
+                        · {formatBytes(model.sizeBytes)}
+                      </Text>
+                    </View>
 
                     {isDownloading ? (
                       <View className="mt-3">

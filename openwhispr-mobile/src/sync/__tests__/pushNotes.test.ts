@@ -197,6 +197,27 @@ describe('pushNotes calendar context', () => {
       expect.objectContaining({ id: 1 }),
       'remote-note-1',
       '2026-06-26T11:00:00.000Z',
+      undefined,
+      undefined,
+    );
+  });
+
+  it('passes the server’s creation time from an update on to the note', async () => {
+    mockNotesRepository.getPendingNotes.mockReturnValue([note({ remoteId: 'remote-note-1' })]);
+    mockUpdateNoteRemote.mockResolvedValueOnce({
+      id: 'remote-note-1',
+      created_at: '2026-06-01T09:00:00.000Z',
+      updated_at: '2026-06-26T11:00:00.000Z',
+    });
+
+    await pushNotes();
+
+    expect(mockNotesRepository.markNotePushed).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1 }),
+      'remote-note-1',
+      '2026-06-26T11:00:00.000Z',
+      undefined,
+      '2026-06-01T09:00:00.000Z',
     );
   });
 

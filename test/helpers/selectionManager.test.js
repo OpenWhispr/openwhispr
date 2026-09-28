@@ -5,6 +5,20 @@ const { EventEmitter } = require("node:events");
 const childProcess = require("node:child_process");
 
 const selectionManagerPath = require.resolve("../../src/helpers/selectionManager");
+// selectionManager requires "./debugLogger" at load; the stub records every
+// line so tests can assert what a declined paste leaves in the debug log.
+const logged = [];
+const debugLoggerStub = {
+  debug: (message, meta, scope) => logged.push({ level: "debug", message, meta, scope }),
+  info: (message, meta, scope) => logged.push({ level: "info", message, meta, scope }),
+  warn: (message, meta, scope) => logged.push({ level: "warn", message, meta, scope }),
+  trace: () => {},
+  log: () => {},
+  error: () => {},
+};
+const declines = () =>
+  logged.filter((entry) => entry.message === "Assistant response paste declined");
+
 const originalLoad = Module._load;
 
 function loadSelectionManager({ spawn } = {}) {
@@ -12,6 +26,9 @@ function loadSelectionManager({ spawn } = {}) {
   Module._load = function loadWithElectronMock(request, parent, isMain) {
     if (request === "electron") {
       return { clipboard: { readText: () => "", writeText: () => {} } };
+    }
+    if (request === "./debugLogger") {
+      return debugLoggerStub;
     }
     if (request === "child_process" && spawn) {
       return { ...childProcess, spawn };
@@ -816,4 +833,159 @@ test("empty replacement output is rejected without consuming a paste", async () 
     code: "invalid_replacement",
   });
   assert.equal(pastes.length, 0);
+});
+
+test("a caret in a markdown-native macOS app is reported as accepting markdown", async () => {
+  const { manager } = makeHarness({ selections: [{ state: "none", editable: true }] });
+  manager._readExecutablePath = async () => "/Applications/Obsidian.app/Contents/MacOS/Obsidian";
+
+  const result = await manager.captureSelectedText({ probeEditable: true });
+
+  assert.equal(result.status, "editable");
+  assert.equal(result.acceptsMarkdown, true);
+});
+
+test("a caret in a plain-text macOS app is reported as wanting plain text", async () => {
+  const { manager } = makeHarness({ selections: [{ state: "none", editable: true }] });
+  manager._readExecutablePath = async () =>
+    "/System/Applications/TextEdit.app/Contents/MacOS/TextEdit";
+
+  const result = await manager.captureSelectedText({ probeEditable: true });
+
+  assert.equal(result.status, "editable");
+  assert.equal(result.acceptsMarkdown, false);
+});
+
+test("an unreadable pid defaults the caret to plain text", async () => {
+  const { manager } = makeHarness({ selections: [{ state: "none", editable: true }] });
+  manager._readExecutablePath = async () => "";
+
+  const result = await manager.captureSelectedText({ probeEditable: true });
+
+  assert.equal(result.status, "editable");
+  assert.equal(result.acceptsMarkdown, false);
+});
+
+test("Windows and Linux caret targets are judged by the identity they already carry", async () => {
+  const { manager } = makeHarness();
+  manager._readExecutablePath = async () => {
+    throw new Error("must not spawn ps for a target that names its app");
+  };
+
+  assert.equal(
+    await manager._targetAcceptsMarkdown({
+      kind: "win-hwnd",
+      id: "00001A2B",
+      exeName: "Obsidian.exe",
+      windowClass: "Chrome_WidgetWin_1",
+    }),
+    true
+  );
+  assert.equal(
+    await manager._targetAcceptsMarkdown({
+      kind: "win-hwnd",
+      id: "00001A2B",
+      exeName: "WINWORD.EXE",
+    }),
+    false
+  );
+  assert.equal(
+    await manager._targetAcceptsMarkdown({
+      kind: "x11-window",
+      id: "0x1",
+      windowClass: "md.obsidian.obsidian",
+    }),
+    true
+  );
+  assert.equal(await manager._targetAcceptsMarkdown(null), false);
+});
+
+test("a Linux AT-SPI target resolves its executable like the terminal check does", async () => {
+  const { manager } = makeHarness();
+  manager._readExecutablePath = async (pid) => (pid === 77 ? "obsidian" : "");
+
+  assert.equal(await manager._targetAcceptsMarkdown({ kind: "atspi-pid", id: 77 }), true);
+  assert.equal(await manager._targetAcceptsMarkdown({ kind: "atspi-pid", id: 78 }), false);
+});
+
+test("a paste declined by a changed target logs the code and the probe verdict", async () => {
+  logged.length = 0;
+  const { manager } = makeHarness({
+    selections: [
+      { state: "none", editable: true },
+      { state: "selected", text: "new selection" },
+    ],
+  });
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+  await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response");
+
+  assert.equal(declines().length, 1);
+  const [entry] = declines();
+  assert.equal(entry.level, "info");
+  assert.equal(entry.scope, "clipboard");
+  assert.equal(entry.meta.code, "target_changed");
+  assert.equal(entry.meta.platform, "darwin");
+  assert.equal(entry.meta.sessionFound, true);
+  assert.equal(entry.meta.sessionKind, "caret");
+  assert.equal(entry.meta.probeStatus, "selected");
+});
+
+test("a paste against a missing or expired session logs session_expired", async () => {
+  logged.length = 0;
+  const { manager, pastes } = makeHarness();
+
+  assert.deepEqual(await manager.pasteAtCapturedTarget("missing-session", "Agent response"), {
+    success: false,
+    code: "session_expired",
+  });
+  assert.equal(pastes.length, 0);
+  const [entry] = declines();
+  assert.equal(entry.meta.code, "session_expired");
+  assert.equal(entry.meta.sessionFound, false);
+});
+
+test("a selection session offered as a caret target logs its kind", async () => {
+  logged.length = 0;
+  const { manager } = makeHarness({ selections: ["some selected text"] });
+  const capture = await manager.captureSelectedText();
+
+  assert.equal(
+    (await manager.pasteAtCapturedTarget(capture.sessionId, "x")).code,
+    "session_expired"
+  );
+  const [entry] = declines();
+  assert.equal(entry.meta.sessionFound, true);
+  assert.equal(entry.meta.sessionKind, "selection");
+});
+
+test("empty text logs invalid_replacement before any clipboard work", async () => {
+  logged.length = 0;
+  const { manager, pastes } = makeHarness();
+
+  assert.deepEqual(await manager.pasteAtCapturedTarget("any-session", ""), {
+    success: false,
+    code: "invalid_replacement",
+  });
+  assert.equal(pastes.length, 0);
+  assert.equal(declines()[0].meta.code, "invalid_replacement");
+});
+
+test("a paste the clipboard helper reports as not pasted logs paste_failed", async () => {
+  logged.length = 0;
+  const { manager } = makeHarness({
+    selections: [
+      { state: "none", editable: true },
+      { state: "none", editable: true },
+    ],
+    pasteResult: { pasted: false, restoreComplete: Promise.resolve() },
+  });
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+
+  assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
+    success: false,
+    code: "paste_failed",
+  });
+  const [entry] = declines();
+  assert.equal(entry.meta.code, "paste_failed");
+  assert.equal(entry.meta.probeStatus, "editable");
 });

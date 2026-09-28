@@ -10,10 +10,11 @@ let mockError: string | null = null;
 let mockUser: { id: string; isAnonymous: boolean } | null = null;
 let mockGuest = false;
 let mockCurrentStep = 'privacy-mode';
+let mockConfig: Record<string, unknown> = { defaultMode: 'private' };
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: {
     getState: () => ({
-      config: { defaultMode: 'private' },
+      config: mockConfig,
       updateConfig: mockUpdateConfig,
       error: mockError,
     }),
@@ -43,6 +44,7 @@ beforeEach(() => {
   mockUser = null;
   mockGuest = false;
   mockCurrentStep = 'privacy-mode';
+  mockConfig = { defaultMode: 'private' };
   mockUpdateConfig.mockResolvedValue(undefined);
   mockChooseMode.mockResolvedValue(undefined);
   mockEnsureSession.mockResolvedValue(undefined);
@@ -53,7 +55,10 @@ it('retries anonymous authentication before allowing Cloud', async () => {
   });
   await chooseOnboardingMode('cloud', 'privacy-mode');
   expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'privacy-mode');
-  expect(mockUpdateConfig).toHaveBeenCalledWith({ defaultMode: 'cloud' });
+  expect(mockUpdateConfig).toHaveBeenCalledWith({
+    defaultMode: 'cloud',
+    inference: { dictation: { mode: 'openwhispr' } },
+  });
 });
 it('rejects Cloud without a session from download fallbacks too', async () => {
   mockCurrentStep = 'private-download';
@@ -103,6 +108,31 @@ it('lets a guest leave a stuck download for Cloud', async () => {
   mockCurrentStep = 'private-download';
   await chooseOnboardingMode('cloud', 'private-download');
   expect(mockEnsureSession).not.toHaveBeenCalled();
-  expect(mockUpdateConfig).toHaveBeenCalledWith({ defaultMode: 'cloud' });
+  expect(mockUpdateConfig).toHaveBeenCalledWith({
+    defaultMode: 'cloud',
+    inference: { dictation: { mode: 'openwhispr' } },
+  });
   expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download');
+});
+
+// A replayed onboarding pick must also move a Providers dictation route, or the
+// screens would show the new mode while dictation kept using the provider.
+it('moves the dictation route with the chosen mode and restores both on failure', async () => {
+  const providerRoute = { mode: 'providers', providerId: 'groq', modelId: 'whisper-large-v3' };
+  const inference = { dictation: providerRoute, upload: { mode: 'openwhispr' } };
+  mockConfig = { defaultMode: 'providers', inference, pinnedInference: ['upload'] };
+  mockChooseMode.mockRejectedValueOnce(new Error('Keychain unavailable'));
+  await expect(chooseOnboardingMode('private', 'privacy-mode')).rejects.toThrow(
+    'Keychain unavailable',
+  );
+  expect(mockUpdateConfig).toHaveBeenNthCalledWith(1, {
+    defaultMode: 'private',
+    inference: { dictation: { mode: 'local' } },
+    pinnedInference: undefined,
+  });
+  expect(mockUpdateConfig).toHaveBeenLastCalledWith({
+    defaultMode: 'providers',
+    inference,
+    pinnedInference: ['upload'],
+  });
 });

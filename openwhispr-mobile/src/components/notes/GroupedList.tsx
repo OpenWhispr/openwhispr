@@ -22,6 +22,7 @@ type GroupedListRowProps = {
   contentInsetLeft?: number;
   onPress?: () => void;
   onLongPress?: () => void;
+  disabled?: boolean;
   accessibilityLabel?: string;
   accessibilityRole?: 'button';
   testID?: string;
@@ -33,6 +34,7 @@ function Row({
   contentInsetLeft = NOTES_ROW_CONTENT_INSET,
   onPress,
   onLongPress,
+  disabled,
   accessibilityLabel,
   accessibilityRole,
   testID,
@@ -40,10 +42,14 @@ function Row({
 }: GroupedListRowProps) {
   return (
     <Pressable
+      // An accessible row hides nested controls from VoiceOver, so only pressable rows group.
+      accessible={Boolean(onPress || onLongPress)}
       onPress={onPress}
       onLongPress={onLongPress}
+      disabled={disabled}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={disabled === undefined ? undefined : { disabled }}
       testID={testID}
       className="flex-row items-center active:bg-tertiarySystemFill"
       style={{

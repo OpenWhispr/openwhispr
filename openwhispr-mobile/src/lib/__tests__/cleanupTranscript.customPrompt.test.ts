@@ -116,3 +116,36 @@ describe('cleanupTranscript custom prompt — regression guards', () => {
     expect(mockProcessText).not.toHaveBeenCalled();
   });
 });
+
+describe('cleanupTranscript privacy hint follows the resolved route', () => {
+  it('sends no privacy hint for a Cloud route, so a consented private-mode fallback is cleaned', async () => {
+    mockActiveMode = 'private';
+    mockConfig = { cleanupEnabled: true, defaultMode: 'private' };
+    await expect(
+      cleanupTranscript('um hello there', {
+        context: 'recording',
+        inferenceRoute: { mode: 'openwhispr', scope: 'cleanup' },
+      }),
+    ).resolves.toBe('cleaned:um hello there');
+    const req = lastRequest();
+    expect(req.inferenceRoute).toEqual({ mode: 'openwhispr', scope: 'cleanup' });
+    expect(req.routing).toBeUndefined();
+  });
+
+  it('marks provider cleanup in private mode as private content', async () => {
+    mockActiveMode = 'private';
+    mockConfig = { cleanupEnabled: true, defaultMode: 'private' };
+    await cleanupTranscript('um hello there', {
+      context: 'recording',
+      inferenceRoute: {
+        mode: 'providers',
+        scope: 'cleanup',
+        providerId: 'openai',
+        modelId: 'gpt-4o-mini',
+        endpoint: 'https://api.openai.com/v1',
+        credentialRef: 'provider.openai',
+      },
+    });
+    expect(lastRequest().routing).toEqual({ isPrivateNote: true });
+  });
+});

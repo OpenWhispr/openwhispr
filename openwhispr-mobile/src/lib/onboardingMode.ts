@@ -2,7 +2,8 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import type { ProcessingMode, UserConfig } from '@/types';
+import type { UserConfig } from '@/types';
+import { dictationModeConfig } from './inferenceModes';
 import { OnboardingError } from './onboardingErrors';
 
 // updateConfig reports persistence errors in its store instead of rejecting.
@@ -14,7 +15,7 @@ export async function saveOnboardingConfig(updates: Partial<UserConfig>): Promis
 }
 
 export async function chooseOnboardingMode(
-  mode: ProcessingMode,
+  mode: 'cloud' | 'private',
   from: 'privacy-mode' | 'private-download',
 ): Promise<void> {
   if (useOnboardingStore.getState().currentStep !== from) return;
@@ -34,15 +35,21 @@ export async function chooseOnboardingMode(
     }
   }
   if (useOnboardingStore.getState().currentStep !== from) return;
-  const previousMode = useConfigStore.getState().config?.defaultMode ?? 'cloud';
-  await saveOnboardingConfig({ defaultMode: mode });
+  const config = useConfigStore.getState().config ?? null;
+  const previous = {
+    defaultMode: config?.defaultMode ?? 'cloud',
+    inference: config?.inference,
+    pinnedInference: config?.pinnedInference,
+  };
+  // The dictation route moves with the mode, so a replayed pick also leaves a Providers route.
+  await saveOnboardingConfig(dictationModeConfig(config, mode));
   useProcessingModeStore.getState().resetToDefault(mode);
   try {
     await useOnboardingStore.getState().chooseMode(mode, from);
   } catch (error) {
     // Keep the active engine consistent with the screen when progress cannot be saved.
-    useProcessingModeStore.getState().resetToDefault(previousMode);
-    await saveOnboardingConfig({ defaultMode: previousMode });
+    useProcessingModeStore.getState().resetToDefault(previous.defaultMode);
+    await saveOnboardingConfig(previous);
     throw error;
   }
 }

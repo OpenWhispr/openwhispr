@@ -51,9 +51,13 @@ export function VoiceProfileList({
               color="quaternaryLabel"
             />
             <View className="items-center gap-1">
-              <Text className="text-[17px] font-semibold text-label">No voice profiles</Text>
+              <Text className="text-[17px] font-semibold text-label">
+                Label speakers automatically
+              </Text>
               <Text className="text-center text-[15px] leading-5 text-tertiaryLabel">
-                Voice profiles stay on this device and can be deleted anytime.
+                Record a short voice sample and OpenWhispr will recognize you in future meeting
+                transcripts instead of showing "Speaker 1". Works with on-device transcription.
+                Voiceprints stay on this device and can be deleted anytime.
               </Text>
             </View>
             <Pressable

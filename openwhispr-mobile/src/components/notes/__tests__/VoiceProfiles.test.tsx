@@ -81,10 +81,14 @@ describe('VoiceProfileList', () => {
 
   it('offers owner enrollment in the empty state', () => {
     const onEnrollOwner = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId, getByText } = render(
       <VoiceProfileList profiles={[]} {...baseListProps} onEnrollOwner={onEnrollOwner} />,
     );
 
+    expect(getByText('Label speakers automatically')).toBeTruthy();
+    expect(getByText(/works with on-device transcription/i)).toBeTruthy();
+    // Worded like the Enroll Me row and prompt card.
+    expect(getByText('Enroll Me')).toBeTruthy();
     fireEvent.press(getByTestId('voice-profile-enroll-owner-empty'));
 
     expect(onEnrollOwner).toHaveBeenCalled();

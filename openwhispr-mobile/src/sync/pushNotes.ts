@@ -485,7 +485,13 @@ export async function pushNotes(
       checkpoint(true);
       const server = await updateNote(u.remoteId, u.payload);
       checkpoint();
-      notesRepository.markNotePushed(u.pushed, server.id, server.updated_at);
+      notesRepository.markNotePushed(
+        u.pushed,
+        server.id,
+        server.updated_at,
+        undefined,
+        server.created_at,
+      );
       if (u.pushedTranscript) {
         const { raw, segmentIds, speakerIds } = u.pushedTranscript;
         notesRepository.markTranscriptPushed(u.localId, raw, segmentIds, speakerIds);

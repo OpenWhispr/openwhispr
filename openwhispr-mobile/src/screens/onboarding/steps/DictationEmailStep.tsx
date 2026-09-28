@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { OnboardingError } from '@/lib/onboardingErrors';
 import { useOnboardingPracticeMode } from '@/hooks/useOnboardingPracticeMode';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   emailInput: {
     minHeight: 140,
     color: PlatformColor('label') as unknown as string,
-    fontFamily: SpaceGrotesk.regular,
+    fontFamily: AppFont.regular,
     fontSize: 16,
     fontWeight: '400',
     lineHeight: 22,

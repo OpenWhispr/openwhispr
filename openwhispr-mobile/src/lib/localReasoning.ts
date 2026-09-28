@@ -174,9 +174,9 @@ export async function fitsLocalReasoningBudget(input: {
 export function getLocalReasoningUnavailableMessage(readiness?: LocalReasoningReadiness): string {
   switch (readiness?.status) {
     case 'disabled':
-      return 'Local Apple Intelligence is turned off in Account settings.';
+      return 'Local Apple Intelligence is turned off in AI Models.';
     case 'appleIntelligenceOff':
-      return 'Apple Intelligence is turned off, so this note cannot be enhanced on-device.';
+      return "Apple Intelligence is turned off in iOS Settings, so this can't run on-device.";
     case 'modelNotReady':
       return 'Apple Intelligence is still preparing its local model. Try again later.';
     case 'unavailable':

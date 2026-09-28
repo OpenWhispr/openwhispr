@@ -907,7 +907,9 @@ class ClipboardManager {
       if (platform === "darwin") {
         method = this.resolveFastPasteBinary() ? "cgevent" : "applescript";
         this.safeLog("🔍 Checking accessibility permissions for paste operation...");
-        const hasPermissions = await this.checkAccessibilityPermissions(allowClipboardFallback);
+        const hasPermissions = await this.checkAccessibilityPermissions(
+          allowClipboardFallback || options.silentAccessibilityCheck === true
+        );
 
         if (!hasPermissions) {
           this.safeLog("⚠️ No accessibility permissions - text copied to clipboard only");
@@ -917,7 +919,10 @@ class ClipboardManager {
           }
           const errorMsg =
             "Accessibility permissions required for automatic pasting. Text has been copied to clipboard - please paste manually with Cmd+V.";
-          throw new Error(errorMsg);
+          throw Object.assign(new Error(errorMsg), {
+            code: "ACCESSIBILITY_PERMISSION_REQUIRED",
+            clipboardCopied: true,
+          });
         }
 
         this.safeLog("✅ Permissions granted, attempting to paste...");

@@ -19,7 +19,34 @@ export interface BackgroundUploadResult {
   bodyBuildMs?: number;
 }
 
+export interface ProviderRequestOptions {
+  requestId: string;
+  routeSnapshot?: string;
+  recoveryAudioUri?: string;
+  url: string;
+  method: 'GET' | 'POST';
+  headers?: Record<string, string>;
+  body?: string;
+  fileUri?: string;
+  fileFieldName?: string;
+  fileMimeType?: string;
+  fileName?: string;
+  parameters?: Record<string, string>;
+  timeoutSeconds?: number;
+}
+
+export interface ProviderRequestResult {
+  status: number;
+  body: string;
+  url: string;
+  headers: Record<string, string>;
+}
+
 interface NativeBackgroundUploader {
+  listProviderRecoveryJobIds?(): string[];
+  clearProviderRecovery?(jobId: string): void;
+  requestProvider(options: ProviderRequestOptions): Promise<ProviderRequestResult>;
+  cancelProviderRequest(requestId: string): void;
   upload(options: {
     url: string;
     fileUri: string;
@@ -36,6 +63,28 @@ const NativeModule: NativeBackgroundUploader | null =
   Platform.OS === 'ios' ? requireNativeModule('BackgroundUploader') : null;
 
 export const BackgroundUploader = {
+  listProviderRecoveryJobIds(): string[] {
+    return NativeModule?.listProviderRecoveryJobIds?.() ?? [];
+  },
+
+  clearProviderRecovery(jobId: string): boolean {
+    if (!NativeModule?.clearProviderRecovery) return false;
+    NativeModule.clearProviderRecovery(jobId);
+    return true;
+  },
+
+  async requestProvider(options: ProviderRequestOptions): Promise<ProviderRequestResult> {
+    if (!NativeModule?.requestProvider)
+      throw Object.assign(new Error('Provider requests require an updated iOS native build'), {
+        code: 'PROVIDER_TRANSPORT_UNAVAILABLE',
+      });
+    return NativeModule.requestProvider(options);
+  },
+
+  cancelProviderRequest(requestId: string): void {
+    NativeModule?.cancelProviderRequest?.(requestId);
+  },
+
   isAvailable(): boolean {
     return NativeModule !== null;
   },

@@ -146,7 +146,11 @@ const assertDiarizerModelReadyForEnrollment = async (
 };
 
 const canUseCloudForMeetingNote = (note: Note | null | undefined): note is Note => {
-  if (!useAuthStore.getState().user) return false;
+  if (
+    !useAuthStore.getState().user &&
+    useConfigStore.getState().config?.inference?.notes?.mode !== 'providers'
+  )
+    return false;
   if (useProcessingModeStore.getState().activeMode === 'private') return false;
   return !!note && !note.deletedAt && note.noteType === 'meeting' && note.isPrivate !== 1;
 };
@@ -154,6 +158,9 @@ const canUseCloudForMeetingNote = (note: Note | null | undefined): note is Note 
 const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
   const note = notesRepository.getNoteById(noteId);
   if (!note || note.deletedAt || note.noteType !== 'meeting') return;
+  // Generated notes the user already has (edited, or from an action they ran) are never replaced
+  // automatically, e.g. by retrying a transcript; the Enhanced tab marks them stale instead.
+  if (note.enhancedContent?.trim()) return;
 
   const action = notesRepository.getActions().find(isDefaultGenerateNotesAction);
   if (!action) return;
@@ -182,7 +189,13 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
 
   const routing = { isPrivateNote: note.isPrivate === 1 };
   const canUseCloud = canUseCloudForMeetingNote(note);
-  const canUseLocal = await shouldUseLocalReasoning(routing);
+  const notesMode = useConfigStore.getState().config?.inference?.notes?.mode;
+  // On-Device notes take the chunked local path: a whole meeting rarely fits
+  // the on-device context in one request.
+  const canUseLocal =
+    notesMode === 'local'
+      ? (await getLocalReasoningReadiness()).status === 'ready'
+      : (notesMode !== 'providers' || !canUseCloud) && (await shouldUseLocalReasoning(routing));
   const systemPrompt = buildActionSystemPrompt({
     actionPrompt: action.prompt,
     inputKind: 'meeting-transcript',
@@ -190,7 +203,10 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
   });
 
   const writeGeneratedText = (generatedText: string) => {
-    if (!generatedText.trim()) return;
+    // The user may have run an action or written notes while these were generated.
+    if (!generatedText.trim() || notesRepository.getNoteById(noteId)?.enhancedContent?.trim()) {
+      return;
+    }
     notesRepository.updateNote(noteId, {
       enhancedContent: generatedText,
       enhancementPrompt: action.prompt,
@@ -200,6 +216,7 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
 
   const generateCloudOnce = async () => {
     const result = await ReasoningService.processText({
+      inferenceScope: 'notes',
       text: generationInput,
       systemPrompt,
       temperature: 0.3,
@@ -247,6 +264,7 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
     ? await generateLocalMeetingNotes(noteId, { actionPrompt: action.prompt })
     : (
         await ReasoningService.processText({
+          inferenceScope: 'notes',
           text: generationInput,
           systemPrompt,
           temperature: 0.3,
@@ -347,6 +365,8 @@ interface NotesStore {
   deleteFolderSafe: (id: number) => void;
   /** Creates in the private space unless `spaceId` names a team space to create it inside. */
   createFolder: (name: string, spaceId?: number) => Folder;
+  /** Folders of any space, read from the repository. `spaceFolders` only caches the browsed space's. */
+  getSpaceFolders: (spaceId: number) => Folder[];
   renameFolder: (id: number, name: string) => void;
   setNotePrivacy: (id: number, isPrivate: boolean) => Promise<void>;
   /** Data source for the conflict banner (see NoteEditorScreen) — the parked 409 row for this note, if any. */
@@ -547,6 +567,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     get().loadNotes();
     get().loadFolders();
   },
+
+  getSpaceFolders: (spaceId) => notesRepository.getFoldersBySpace(spaceId),
 
   moveNoteToFolder: (noteId, folderId) => {
     notesRepository.moveNoteToFolder(noteId, folderId);

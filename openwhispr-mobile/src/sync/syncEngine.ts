@@ -35,9 +35,29 @@ import { ApiError, isPolicyCloudBackupBlockedError } from '@/lib/apiClient';
 
 export type SyncReason = 'after-write' | 'foreground' | 'sign-in' | 'manual';
 
+// Triggers that arrive mid-run coalesce into one queued run, which keeps the
+// strongest reason asked for: a foreground run can be throttled away, and only
+// manual and sign-in runs force a fresh subscription check.
+const QUEUE_PRIORITY: Record<SyncReason, number> = {
+  foreground: 0,
+  'after-write': 1,
+  manual: 2,
+  'sign-in': 2,
+};
+
 let inFlight = false;
 let pendingTrigger: SyncReason | null = null;
+// Callers waiting on the queued run (see requestSync); settled once it ends.
+let pendingTriggerWaiters: Array<() => void> = [];
 let postWriteTimer: ReturnType<typeof setTimeout> | null = null;
+const syncCompletionListeners = new Set<(hasQueuedRun: boolean) => void>();
+
+export function subscribeSyncCompletion(listener: (hasQueuedRun: boolean) => void): () => void {
+  syncCompletionListeners.add(listener);
+  return (): void => {
+    syncCompletionListeners.delete(listener);
+  };
+}
 
 // The snippets endpoints (/api/snippets/*) may not be deployed yet on the
 // backend. A missing route returns 404/405; treat that as "endpoint unavailable"
@@ -93,6 +113,10 @@ const SUBSCRIPTION_CACHE_TTL_MS = 60_000;
 const FOREGROUND_THROTTLE_MS = 30_000;
 
 let lastForegroundSyncAt = 0;
+
+function isForegroundThrottled(): boolean {
+  return Date.now() - lastForegroundSyncAt < FOREGROUND_THROTTLE_MS;
+}
 
 let subscriptionCachedAt = 0;
 let subscriptionCached = false;
@@ -202,8 +226,10 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
   const auth = useAuthStore.getState();
   if (!auth.user || auth.isGuest) return;
   if (inFlight) {
-    pendingTrigger = reason;
-    return;
+    if (!pendingTrigger || QUEUE_PRIORITY[reason] > QUEUE_PRIORITY[pendingTrigger]) {
+      pendingTrigger = reason;
+    }
+    return new Promise((resolve) => pendingTriggerWaiters.push(resolve));
   }
 
   const cloudBackupEnabled = useConfigStore.getState().config?.cloudBackupEnabled ?? true;
@@ -211,9 +237,7 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
   // Foreground triggers fire on every AppState→active transition, which can
   // be noisy (window focus, sim re-focus). Skip if we synced very recently.
   // Applies to every run below, personal or team-only.
-  if (reason === 'foreground' && Date.now() - lastForegroundSyncAt < FOREGROUND_THROTTLE_MS) {
-    return;
-  }
+  if (reason === 'foreground' && isForegroundThrottled()) return;
 
   // Claimed before the paygate's network round trip, not after it. A run that
   // parks on that request while the user signs up would otherwise overlap the
@@ -458,24 +482,44 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
   } finally {
     dispose();
     inFlight = false;
+    // Replaying it would return before reaching this block, so listeners told
+    // a run was queued would never hear back.
+    if (pendingTrigger === 'foreground' && isForegroundThrottled()) pendingTrigger = null;
+    const hasQueuedRun = pendingTrigger !== null;
+    syncCompletionListeners.forEach((listener) => {
+      try {
+        listener(hasQueuedRun);
+      } catch (err) {
+        Sentry.captureException(err, { tags: { sync: 'completionListener' } });
+      }
+    });
+    const waiters = pendingTriggerWaiters;
+    pendingTriggerWaiters = [];
+    const settleWaiters = (): void => waiters.forEach((resolve) => resolve());
     if (pendingTrigger) {
       const next = pendingTrigger;
       pendingTrigger = null;
-      runSyncNow(next).catch(() => {});
-    }
+      runSyncNow(next)
+        .catch(() => {})
+        .finally(settleWaiters);
+    } else settleWaiters();
   }
 }
 
-export function requestSync(reason: SyncReason): void {
+// Resolves once the run this request started, or was queued behind, has ended —
+// success, failure or an early return alike — and never rejects. Pull-to-refresh
+// holds its spinner on it. An 'after-write' request only arms the debounce, so
+// it resolves right away.
+export function requestSync(reason: SyncReason): Promise<void> {
   if (reason === 'after-write') {
     if (postWriteTimer) clearTimeout(postWriteTimer);
     postWriteTimer = setTimeout(() => {
       postWriteTimer = null;
       runSyncNow('after-write').catch(() => {});
     }, POST_WRITE_DEBOUNCE_MS);
-    return;
+    return Promise.resolve();
   }
-  runSyncNow(reason).catch(() => {});
+  return runSyncNow(reason).catch(() => {});
 }
 
 let unsubscribeAuth: (() => void) | null = null;

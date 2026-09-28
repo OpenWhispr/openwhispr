@@ -184,8 +184,12 @@ class LlamaServerManager {
       this.modelPath === modelPath &&
       this.draftModelPath === requestedDraftPath &&
       requestedContextSize <= (this.contextSize || 0)
-    )
+    ) {
+      // Streaming chat reaches the port directly and never goes through
+      // inference(), so asking for the running server is its only activity.
+      this.resetIdleTimer();
       return;
+    }
 
     if (this.process) {
       await this.stop();
@@ -607,13 +611,24 @@ class LlamaServerManager {
 
   resetIdleTimer() {
     this.clearIdleTimer();
-    this.idleTimer = setTimeout(() => {
+    const timer = setTimeout(async () => {
+      // Streaming chat talks to the port directly, so only the server knows
+      // whether an answer that outlived the timeout is still being generated.
+      const slots = await this._requestJson("/slots");
+      if (this.idleTimer !== timer) return;
+      if (Array.isArray(slots) && slots.some((slot) => slot.is_processing)) {
+        this.resetIdleTimer();
+        return;
+      }
       debugLogger.info("llama-server idle timeout reached, stopping to free VRAM", {
         timeoutMs: IDLE_TIMEOUT_MS,
         model: this.modelPath ? path.basename(this.modelPath) : null,
       });
       this.stop();
     }, IDLE_TIMEOUT_MS);
+    // Freeing an idle server is housekeeping; it must never hold the process open.
+    timer.unref();
+    this.idleTimer = timer;
   }
 
   clearIdleTimer() {

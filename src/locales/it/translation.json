@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Le scorciatoie con i tasti del mouse sono attualmente supportate solo su macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" non può essere usato su questo desktop, le cui scorciatoie richiedono un tasto normale. Aggiungi un tasto, ad esempio Control+Alt+Space.",
       "holdNeedsReleaseKey": "Tieni premuto per parlare richiede un tasto di cui macOS rilevi il rilascio: Globo, un tasto destro come Opzione destra o una scorciatoia con modificatore. Tocca funziona con qualsiasi tasto.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
       "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
@@ -921,6 +922,7 @@
         "streamingOnlyProvider": "Questo provider supporta solo la trascrizione dal vivo. Scegli un altro provider per i caricamenti di file e i nuovi tentativi.",
         "providerKeyMissing": "Nessuna chiave API impostata per il tuo provider di trascrizione. Aggiungila in Impostazioni → Da voce a testo.",
         "cleanupTruncated": "Il modello IA ha esaurito lo spazio prima di finire la pulizia della dettatura.",
+        "cleanupDuplicated": "La pulizia con IA ha ripetuto la trascrizione. Il testo originale è stato conservato.",
         "cleanupEmptyReply": "Il modello IA ha restituito una risposta vuota invece della dettatura pulita."
       },
       "translationFallback": {
@@ -942,6 +944,18 @@
         "unavailable": "OpenWhispr non ha potuto leggere in sicurezza il testo selezionato. Controlla i permessi di accessibilità o automazione.",
         "tooLarge": "La selezione è troppo grande. Seleziona al massimo 6.000 caratteri.",
         "reasoningFailed": "L’IA non ha potuto completare la modifica. Il testo originale non è stato cambiato."
+      },
+      "pastePermission": {
+        "title": "Consenti di incollare automaticamente",
+        "description": "Abilita OpenWhispr in Impostazioni di Sistema → Privacy e sicurezza → Accessibilità.",
+        "settingsFailed": "Impossibile aprire le impostazioni. Apri Impostazioni di Sistema → Privacy e sicurezza → Accessibilità e abilita OpenWhispr.",
+        "manualPaste": "Copia il testo qui sotto, poi premi {{shortcut}} per incollarlo.",
+        "openSettings": "Apri impostazioni",
+        "copyToClipboard": "Copia negli appunti",
+        "copyFailed": "Copia non riuscita"
+      },
+      "pasteFailed": {
+        "title": "Impossibile incollare automaticamente"
       }
     },
     "clipboard": {
@@ -2957,7 +2971,35 @@
       "conversationWillAppear": "La conversazione apparirà qui...",
       "linkedEvent": "Evento collegato",
       "noFolder": "Nessuna cartella",
-      "participants": "Partecipanti"
+      "participants": "Partecipanti",
+      "table": {
+        "actions": "Azioni tabella",
+        "insertRowAbove": "Inserisci riga sopra",
+        "insertRowBelow": "Inserisci riga sotto",
+        "insertColumnLeft": "Inserisci colonna a sinistra",
+        "insertColumnRight": "Inserisci colonna a destra",
+        "deleteRow": "Elimina riga",
+        "deleteColumn": "Elimina colonna",
+        "deleteTable": "Elimina tabella"
+      },
+      "format": {
+        "toolbar": "Formattazione",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Grassetto",
+        "italic": "Corsivo",
+        "strike": "Barrato",
+        "code": "Codice",
+        "textStyle": "Stile testo",
+        "paragraph": "Testo normale",
+        "heading1": "Titolo 1",
+        "heading2": "Titolo 2",
+        "heading3": "Titolo 3",
+        "bulletList": "Elenco puntato",
+        "orderedList": "Elenco numerato",
+        "taskList": "Elenco di controllo",
+        "blockquote": "Citazione",
+        "table": "Inserisci tabella"
+      }
     },
     "participants": {
       "attendee": "partecipante",
@@ -3640,6 +3682,9 @@
     },
     "tools": {
       "search_notesName": "Cerca nelle note",
+      "email_draftName": "Bozza email",
+      "find_contactName": "Trova contatto",
+      "slack_send_messageName": "Messaggio Slack",
       "get_noteName": "Ottieni nota",
       "create_noteName": "Crea nota",
       "update_noteName": "Aggiorna nota",
@@ -3652,6 +3697,9 @@
       "update_dictionaryName": "Aggiorna dizionario",
       "update_snippetsName": "Aggiorna snippet",
       "search_notesStatus": "Ricerca nelle note...",
+      "email_draftStatus": "Apertura di una bozza email...",
+      "find_contactStatus": "Ricerca contatti...",
+      "slack_send_messageStatus": "Preparazione di un messaggio Slack...",
       "web_searchStatus": "Ricerca sul web...",
       "copy_to_clipboardStatus": "Copia negli appunti...",
       "get_calendar_eventsStatus": "Controllo del calendario...",
@@ -3743,6 +3791,7 @@
       "connectFailedDescription": "Si è verificato un errore durante la connessione a Calendar.app. Riavvia OpenWhispr e riprova."
     },
     "sections": {
+      "connectors": "Connettori",
       "calendar": "Calendario",
       "api": "API",
       "mcp": "MCP",
@@ -3801,6 +3850,144 @@
     "notABot": {
       "title": "OpenWhispr è un registratore di riunioni, non un bot",
       "description": "OpenWhispr cattura l'audio direttamente dal tuo sistema — non entra mai nelle tue riunioni come partecipante. Basta collegare il calendario e prendere appunti normalmente."
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Invia a {{destination}}",
+        "slackPost": "Pubblica su {{destination}}"
+      },
+      "identity": "Come {{account}}",
+      "identityWithWorkspace": "Come {{account}} in {{workspace}}",
+      "send": "Invia",
+      "edit": "Modifica",
+      "doneEditing": "Modifica completata",
+      "cancel": "Annulla",
+      "titleLabel": "Titolo",
+      "bodyLabel": "Messaggio",
+      "sending": "Invio in corso…",
+      "sent": "Inviato a {{destination}}.",
+      "open": "Apri",
+      "failed": "Invio non riuscito: {{message}}",
+      "unknown": "Impossibile confermare l'invio. Controlla {{destination}}.",
+      "cancelled": "Annullato. Non è stato inviato nulla.",
+      "notSent": "Non inviato.",
+      "policyRetry": "Non è stato possibile verificare le impostazioni della tua organizzazione, quindi non è stato inviato nulla. Premi Invia per riprovare.",
+      "errors": {
+        "not_in_channel": "Non sei membro di {{destination}}.",
+        "channel_not_found": "{{destination}} non è più stato trovato su Slack.",
+        "is_archived": "{{destination}} è archiviato.",
+        "reconnect_needed": "Slack deve essere ricollegato nelle Impostazioni.",
+        "connection_changed": "La connessione Slack è cambiata prima dell'invio, quindi non è stato inviato nulla.",
+        "rate_limited": "Slack è occupato. Riprova a breve.",
+        "missing_scope": "OpenWhispr non ha il permesso di pubblicare lì. Ricollega Slack nelle Impostazioni.",
+        "msg_too_long": "Il messaggio è troppo lungo per Slack (massimo 12.000 caratteri, una volta formattato).",
+        "no_text": "Il messaggio è vuoto.",
+        "network": "Impossibile raggiungere Slack. Non è stato inviato nulla.",
+        "credential_save_failed": "Impossibile salvare l'accesso a Slack su questo computer. Non è stato inviato nulla. Riprova.",
+        "dm_failed": "Impossibile aprire il messaggio diretto a {{destination}}. Non è stato inviato nulla.",
+        "restricted": "{{destination}} è di sola lettura o limitato per te.",
+        "generic": "Qualcosa è andato storto. Non è stato inviato nulla."
+      }
+    },
+    "policyOff": "La tua organizzazione ha disattivato i connettori.",
+    "email": {
+      "title": "Bozze email",
+      "description": "L'assistente apre una bozza precompilata nella tua app di posta. La rivedi e premi Invia tu stesso.",
+      "proRequired": "Passa a un piano a pagamento per far scrivere all'assistente le bozze delle email.",
+      "unavailable": "Le bozze email non sono disponibili al momento.",
+      "targetLabel": "Crea bozze email in",
+      "autoResolved": "Automatico · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (lavoro o scuola)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "App di posta predefinita"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "L'assistente può pubblicare messaggi nei canali e alle persone per tuo conto. Approvi ogni messaggio prima che venga inviato.",
+      "connect": "Connetti",
+      "reconnect": "Riconnetti",
+      "disconnect": "Disconnetti",
+      "connecting": "Completa la connessione nel tuo browser…",
+      "connectedAs": "Connesso come {{account}} in {{workspace}}",
+      "needsReconnect": "Slack deve essere ricollegato.",
+      "proRequired": "Passa a un piano a pagamento per far inviare all'assistente i messaggi Slack per te.",
+      "errors": {
+        "connect_failed": "Impossibile connettere Slack. Riprova.",
+        "disconnect_failed": "Impossibile disconnettere Slack. Riprova.",
+        "oauth_denied": "Slack non è stato connesso perché l'accesso non è stato consentito.",
+        "oauth_timeout": "La connessione ha impiegato troppo tempo. Riprova.",
+        "oauth_state_mismatch": "Quel link di accesso non era più valido. Riprova.",
+        "ports_busy": "Un'altra app sta usando le porte di cui OpenWhispr ha bisogno per connettersi. Chiudila e riprova.",
+        "token_exchange_failed": "Slack non ha completato la connessione. Riprova.",
+        "not_configured": "Slack non è disponibile in questa versione.",
+        "connection_changed": "Il tuo account o la connessione Slack sono cambiati durante la connessione. Riprova.",
+        "signed_out": "Accedi a OpenWhispr per connettere Slack.",
+        "policy_blocked": "La tua organizzazione ha disattivato i connettori.",
+        "policy_unavailable": "Non è stato possibile verificare le impostazioni della tua organizzazione. Riprova."
+      },
+      "browser": {
+        "connectedTitle": "Slack è connesso",
+        "connectedBody": "Puoi chiudere questa scheda e tornare a OpenWhispr.",
+        "failedTitle": "Slack non è stato connesso",
+        "failedBody": "Torna a OpenWhispr per riprovare."
+      }
+    },
+    "recent": {
+      "title": "Azioni recenti",
+      "actions": {
+        "email_draft": "Bozza a {{destination}}",
+        "slack_send_message": "Messaggio a {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "Bozza email",
+        "slack_send_message": "Messaggio Slack"
+      },
+      "states": {
+        "pending": "In attesa",
+        "committing": "In corso",
+        "sent": "Completato",
+        "failed": "Non riuscito",
+        "unknown": "Non confermato",
+        "cancelled": "Annullato",
+        "expired": "Scaduto"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Bozza aperta per {{destination}}.",
+      "draftOpenedBodyCopied": "Bozza aperta per {{destination}}. Il testo è negli appunti.",
+      "draftOpenedSubjectCopied": "Bozza aperta per {{destination}}. L'oggetto e il testo sono negli appunti.",
+      "draftOpenedOnlySubjectCopied": "Bozza per {{destination}} aperta. L'oggetto è negli appunti.",
+      "needsDetails": "Servono più dettagli.",
+      "unavailable": "I connettori non sono disponibili al momento.",
+      "unknown": "Non confermato. Controlla se è andato a buon fine prima di riprovare.",
+      "draftUnknown": "Non confermato: la bozza per {{destination}} potrebbe non essersi aperta. Controlla prima di riprovare.",
+      "contactsFound": "Contatti trovati: {{total}}",
+      "draftLimit": "Si possono aprire solo {{count}} bozze per richiesta.",
+      "clipboardBusy": "Non aperta: il testo di un'altra bozza è ancora negli appunti.",
+      "errors": {
+        "open_failed": "Impossibile aprire l'app email.",
+        "draft_too_long": "Troppi destinatari per un link di bozza.",
+        "invalid_address": "Servono indirizzi email completi.",
+        "not_in_channel": "Non sei membro di quel canale.",
+        "channel_not_found": "Impossibile trovare quella conversazione.",
+        "is_archived": "Quel canale è archiviato.",
+        "reconnect_needed": "Slack deve essere ricollegato.",
+        "connection_changed": "La connessione Slack è cambiata. Non è stato inviato nulla.",
+        "rate_limited": "Slack è occupato.",
+        "missing_scope": "Permesso Slack mancante.",
+        "msg_too_long": "Messaggio troppo lungo per Slack.",
+        "no_text": "Il messaggio è vuoto.",
+        "network": "Impossibile raggiungere Slack. Non è stato inviato nulla.",
+        "credential_save_failed": "Impossibile salvare l'accesso a Slack su questo computer. Non è stato inviato nulla.",
+        "dm_failed": "Impossibile aprire il messaggio diretto. Non è stato inviato nulla.",
+        "restricted": "Quel canale è di sola lettura o limitato.",
+        "generic": "Non ha funzionato."
+      }
     }
   },
   "calendar": {
@@ -3879,6 +4066,11 @@
         "createLink": "Crea link",
         "copyLink": "Copia link",
         "copied": "Copiato",
+        "replaceLink": {
+          "title": "Sostituire il link di condivisione?",
+          "description": "Questo dispositivo non ha il link attuale, quindi copiarlo significa crearne uno nuovo. Il vecchio link smetterà di funzionare, anche nelle email di invito. Reinvia ogni invito affinché le persone invitate possano continuare ad aprire la nota.",
+          "confirm": "Sostituisci link"
+        },
         "export": "Esporta",
         "owner": "Proprietario",
         "editor": "Può modificare",
