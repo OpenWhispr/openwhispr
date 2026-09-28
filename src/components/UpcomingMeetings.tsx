@@ -8,7 +8,6 @@ import EmptyStateCard from "./ui/EmptyStateCard";
 import ThemedEmptyIllustration from "./ui/ThemedEmptyIllustration";
 import calendarEmptyLight from "../assets/empty-states/home-calendar-light.svg";
 import calendarEmptyDark from "../assets/empty-states/home-calendar-dark.svg";
-import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { cn } from "./lib/utils";
 import type { CalendarAttendee, CalendarEvent } from "../types/calendar";
 import { parseAttendees } from "../utils/calendarAttendees";
@@ -240,18 +239,16 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border/70 dark:border-white/10",
-        !group.isToday && "overflow-clip"
+        "overflow-clip rounded-xl border border-border/70 bg-clip-padding dark:border-white/10",
+        group.isToday
+          ? "bg-[image:var(--gradient-calendar-today)]"
+          : "bg-surface-3 dark:bg-surface-2"
       )}
     >
       <div
         className={cn(
-          "flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium",
-          // Today's glass strip sits over the card's hairline on three sides so the blue meets
-          // the rounded edge directly instead of being outlined in grey.
-          group.isToday
-            ? cn(GRADIENT_CIRCLE, "-mx-px -mt-px rounded-t-2xl")
-            : "bg-surface-3 text-foreground dark:bg-surface-2"
+          "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium",
+          group.isToday ? "text-white" : "text-foreground"
         )}
       >
         <Calendar size={12} className="shrink-0" />
@@ -263,29 +260,33 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
           })}
         </span>
       </div>
-      <div className="rounded-b-[15px] bg-background px-2 dark:bg-surface-2/60">
-        {group.items.length === 0 ? (
-          <div className="flex flex-col items-center px-1 py-5 text-center">
-            <ThemedEmptyIllustration
-              light={calendarEmptyLight}
-              dark={calendarEmptyDark}
-              width={316}
-              height={120}
-            />
-            <p className="mt-3 text-sm font-semibold text-foreground">
-              {t("upcoming.noEventsToday")}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t("upcoming.emptyDayDescription")}
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-border/60">
-            {group.items.map((event) => (
-              <EventRow key={event.id} event={event} isNow={isNowFn(event)} />
-            ))}
-          </div>
-        )}
+      {/* The list sits on the header colour with its own rounded top, so that colour shows
+          around its corners. The opaque layer keeps the dark tint from mixing with it. */}
+      <div className="rounded-t-xl bg-background">
+        <div className="rounded-t-xl px-2 dark:bg-surface-2/60">
+          {group.items.length === 0 ? (
+            <div className="flex flex-col items-center px-1 py-5 text-center">
+              <ThemedEmptyIllustration
+                light={calendarEmptyLight}
+                dark={calendarEmptyDark}
+                width={316}
+                height={120}
+              />
+              <p className="mt-3 text-sm font-semibold text-foreground">
+                {t("upcoming.noEventsToday")}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("upcoming.emptyDayDescription")}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {group.items.map((event) => (
+                <EventRow key={event.id} event={event} isNow={isNowFn(event)} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
