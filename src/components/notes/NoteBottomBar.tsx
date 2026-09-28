@@ -16,6 +16,7 @@ interface NoteBottomBarProps {
   onInputEscape?: () => void;
   actionPicker?: React.ReactNode;
   callout?: React.ReactNode;
+  footnote?: React.ReactNode;
   hideInput?: boolean;
   chatOpen?: boolean;
   chatContent?: React.ReactNode;
@@ -33,6 +34,7 @@ export default function NoteBottomBar({
   onInputEscape,
   actionPicker,
   callout,
+  footnote,
   hideInput = false,
   chatOpen = false,
   chatContent,
@@ -68,7 +70,12 @@ export default function NoteBottomBar({
   );
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-5 pb-7 pt-6">
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-x-0 bottom-0 z-20 px-5 pt-6",
+        footnote ? "pb-1.5" : "pb-7"
+      )}
+    >
       <div
         aria-hidden="true"
         className={cn(
@@ -129,6 +136,11 @@ export default function NoteBottomBar({
           />
         )}
       </div>
+      {footnote && (
+        <div className="relative mt-1.5 flex h-4 select-none items-center justify-center gap-1 text-[10px] text-muted-foreground/70">
+          {footnote}
+        </div>
+      )}
     </div>
   );
 }

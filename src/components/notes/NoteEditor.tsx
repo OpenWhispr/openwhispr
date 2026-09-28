@@ -14,6 +14,7 @@ import {
   Search,
   Plus,
   Check,
+  ShieldCheck,
   Users,
 } from "../icons";
 import ShareNoteDialog, { type NoteExportOption } from "./ShareNoteDialog";
@@ -1319,6 +1320,15 @@ export default function NoteEditor({
                   <AlignLeft size={16} />
                   {t("notes.editor.generateSummary")}
                 </Button>
+              )
+            }
+            footnote={
+              viewMode === "transcript" &&
+              (hasChatSegments || isRecording) && (
+                <>
+                  <ShieldCheck size={10} className="shrink-0" />
+                  <span>{t("notes.speaker.consentNotice")}</span>
+                </>
               )
             }
             hideInput={chatMode === "sidebar"}

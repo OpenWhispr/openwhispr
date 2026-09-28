@@ -108,7 +108,7 @@ export function observeFloatingChatLayout(
   };
 
   // The capture listeners on the content root also see gestures over chrome
-  // that never scrolls the active scroller (consent strip, recording header).
+  // that never scrolls the active scroller (recording header).
   // A wheel there moves nothing, so no scroll event could ever rejoin follow
   // mode — only a gesture aimed at the scroller itself counts as leaving.
   const stopFollowing = (target: EventTarget | null): void => {
