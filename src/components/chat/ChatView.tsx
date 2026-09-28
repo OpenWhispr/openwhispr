@@ -115,14 +115,11 @@ export default function ChatView() {
     },
     [persistence]
   );
-  const markChatStarted = useCallback(() => setIsNewChat(false), []);
   const handleTextSubmit = useChatMessageSender({
     conversationId: activeConversationId,
     persistence,
     streaming,
     createConversation,
-    // After the message lands, not before, so a send that fails keeps the starter prompts.
-    onMessagePersisted: markChatStarted,
     onSendingChange: setSubmissionInFlight,
   });
 
