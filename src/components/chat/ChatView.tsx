@@ -36,7 +36,7 @@ function NewChatEmptyState({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex h-full min-h-80 flex-col items-center justify-center px-4 pb-[calc(min(40vh,16rem)+1.5rem)] text-center">
+    <div className="flex h-full min-h-80 flex-col items-center justify-center px-4 pb-[var(--chat-composer-inset,5rem)] text-center">
       <BrandMarkIcon size={64} className="text-foreground/15 dark:text-muted-foreground/35" />
       {showSuggestions && (
         <div className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
@@ -45,6 +45,9 @@ function NewChatEmptyState({
               key={key}
               type="button"
               disabled={disabled}
+              // Keep focus where it is: blurring the composer collapses it and slides the
+              // cards out from under the pointer before the click completes.
+              onMouseDown={(event) => event.preventDefault()}
               onClick={() => onPrompt(t(key))}
               className="flex min-h-24 flex-col items-start justify-between rounded-2xl border border-border bg-card p-4 text-start text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10"
             >
@@ -230,7 +233,6 @@ export default function ChatView() {
                   partialTranscript=""
                   onTextSubmit={handleTextSubmit}
                   onCancel={streaming.cancelStream}
-                  autoFocus={isNewChat}
                   voiceDraft
                   focusOnIdle={false}
                   placeholder={t("embeddedChat.askPlaceholder")}
