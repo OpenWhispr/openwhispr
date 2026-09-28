@@ -158,8 +158,11 @@ export function ContainerOverview({
     );
   }
 
+  // Keyed, and a direct child of the same parent in both of its slots, so crossing
+  // zero notes moves the composer instead of remounting it and losing its draft.
   const askSection = (
     <OverviewAskSection
+      key="ask"
       messages={chat.messages}
       agentState={chat.agentState}
       onTextSubmit={chat.sendMessage}
@@ -212,11 +215,9 @@ export function ContainerOverview({
         </div>
 
         {notes.length > 0 && (
-          <>
-            <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
-            {askSection}
-          </>
+          <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
         )}
+        {notes.length > 0 && askSection}
         <div className={notes.length > 0 ? "border-t border-border/70 dark:border-white/10" : ""}>
           <OverviewNoteList
             notes={notes}

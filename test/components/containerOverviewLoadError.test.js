@@ -13,22 +13,24 @@ function textOf(node) {
   return [...node.childNodes].map(textOf).join("");
 }
 
-test("a folder load error clears once the folder's notes arrive", async (t) => {
+async function mountOverview(t, cachePrefix) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
+    delete globalThis.__overviewNotes;
     delete globalThis.__overviewNotesByContainer;
+    delete globalThis.__overviewAskMounts;
   });
   installBrowserGlobals(t);
   const container = installHostDom(t);
   globalThis.__overviewNotesByContainer = {};
   const vite = await createRendererServer(t, {
-    cachePrefix: "openwhispr-container-overview-load-error-",
+    cachePrefix,
     mockModules: {
       "/stores/workspaceStore":
         "export const useWorkspaceStore = (selector) => selector({ workspaces: [] });",
       "/stores/noteStore": `
-        export const useNotes = () => [];
+        export const useNotes = () => globalThis.__overviewNotes ?? [];
         export const useNotesByContainer = () => globalThis.__overviewNotesByContainer;
         export const useFolders = () => [];
         export const useFolderCounts = () => ({});
@@ -40,7 +42,15 @@ test("a folder load error clears once the folder's notes arrive", async (t) => {
       "/lib/spacePermissions": "export const canManageSpace = () => false;",
       "/InviteTeammateDialog": "export default function Mock() { return null; }",
       "/OverviewExplainerBanner": "export const OverviewExplainerBanner = () => null;",
-      "/OverviewAskSection": "export const OverviewAskSection = () => null;",
+      "/OverviewAskSection": `
+        import { useEffect } from "react";
+        export const OverviewAskSection = () => {
+          useEffect(() => {
+            globalThis.__overviewAskMounts = (globalThis.__overviewAskMounts ?? 0) + 1;
+          }, []);
+          return null;
+        };
+      `,
       "/OverviewNoteList": "export const OverviewNoteList = () => null;",
     },
   });
@@ -54,13 +64,34 @@ test("a folder load error clears once the folder's notes arrive", async (t) => {
     onNewNote: () => {},
   };
   root = createRoot(container);
+  const render = () =>
+    React.act(async () => root.render(React.createElement(ContainerOverview, props)));
+  return { container, render };
+}
 
-  await React.act(async () => root.render(React.createElement(ContainerOverview, props)));
+test("a folder load error clears once the folder's notes arrive", async (t) => {
+  const { container, render } = await mountOverview(t, "openwhispr-container-overview-load-error-");
+
+  await render();
   assert.match(textOf(container), /common\.retry/, "a failed load offers a retry");
 
   globalThis.__overviewNotesByContainer = { "f:7": [] };
-  await React.act(async () => root.render(React.createElement(ContainerOverview, props)));
+  await render();
   const text = textOf(container);
   assert.doesNotMatch(text, /common\.retry/, "notes loaded elsewhere replace the error");
   assert.match(text, /Projects/);
+});
+
+test("the ask composer keeps its state when the note count crosses zero", async (t) => {
+  const { render } = await mountOverview(t, "openwhispr-container-overview-ask-identity-");
+  globalThis.__overviewNotesByContainer = { "f:7": [] };
+
+  await render();
+  // A chat reply that creates the folder's first note moves the composer above the list.
+  globalThis.__overviewNotes = [{ id: 1, title: "First" }];
+  await render();
+  globalThis.__overviewNotes = [];
+  await render();
+
+  assert.equal(globalThis.__overviewAskMounts, 1, "a remount would drop the draft and focus");
 });
