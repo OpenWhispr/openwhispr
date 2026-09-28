@@ -98,6 +98,8 @@ export default function ConversationList({
         is_archived: !!c.archived_at,
       });
       setConversations([...(active ?? []).map(toPreview), ...(archived ?? []).map(toPreview)]);
+      // The Archived toggle hides once nothing is archived; leave that view with it.
+      if (!archived?.length) setShowArchived(false);
     } catch {
       setLoadError(true);
     } finally {
@@ -233,9 +235,7 @@ export default function ConversationList({
 
       {flatItems.length === 0 ? (
         <EmptyConversationList
-          state={
-            loadError && conversations.length === 0 ? "error" : showArchived ? "archived" : "active"
-          }
+          state={loadError && conversations.length === 0 ? "error" : "active"}
           onRetry={() => {
             setIsLoading(true);
             setShowSkeleton(true);

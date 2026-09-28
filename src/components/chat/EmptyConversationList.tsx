@@ -4,7 +4,7 @@ import chatEmptyLight from "../../assets/empty-states/chat-empty-light.svg";
 import chatEmptyDark from "../../assets/empty-states/chat-empty-dark.svg";
 
 interface EmptyConversationListProps {
-  state: "active" | "archived" | "error";
+  state: "active" | "error";
   onRetry: () => void;
 }
 
@@ -22,13 +22,7 @@ export default function EmptyConversationList({ state, onRetry }: EmptyConversat
         />
       )}
       <p className="mt-3 text-sm font-semibold text-foreground">
-        {t(
-          state === "error"
-            ? "chat.loadFailed"
-            : state === "archived"
-              ? "chat.noArchived"
-              : "chat.noConversations"
-        )}
+        {t(state === "error" ? "chat.loadFailed" : "chat.noConversations")}
       </p>
       {state === "active" && (
         <p className="mt-2 text-xs text-muted-foreground">{t("chat.noConversationsDescription")}</p>

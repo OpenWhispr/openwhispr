@@ -8,6 +8,7 @@ import { formatRelativeTime } from "../../../utils/dateFormatting";
 import { useSpaceRoster } from "../../../hooks/useSpaceRoster";
 import { useAuth } from "../../../hooks/useAuth";
 import type { NoteItem, SpaceItem } from "../../../types/electron";
+import { Button } from "../../ui/button";
 import ThemedEmptyIllustration from "../../ui/ThemedEmptyIllustration";
 import notesEmptyLight from "../../../assets/empty-states/notes-empty-light.svg";
 import notesEmptyDark from "../../../assets/empty-states/notes-empty-dark.svg";
@@ -50,20 +51,14 @@ export function OverviewNoteList({
           {t("notes.empty.description")}
         </p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-          <button
-            onClick={onNewNote}
-            className="flex items-center gap-1.5 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
+          <Button onClick={onNewNote} className="px-5 font-medium">
             <Plus size={11} />
             {t("notes.empty.createNote")}
-          </button>
+          </Button>
           {onAddExisting && (
-            <button
-              onClick={onAddExisting}
-              className="rounded-full border border-border px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
+            <Button variant="outline" onClick={onAddExisting}>
               {t("notes.addToFolder.addExisting")}
-            </button>
+            </Button>
           )}
         </div>
       </div>
