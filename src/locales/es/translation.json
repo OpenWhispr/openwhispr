@@ -651,6 +651,8 @@
       "dataRetentionDisabled": "La retención de datos está desactivada. Las transcripciones y el audio no se guardan en el historial.",
       "press": "Pulsa",
       "toStart": "para empezar",
+      "welcomeBack": "Bienvenido de nuevo",
+      "welcomeBackNamed": "Bienvenido de nuevo, {{name}}",
       "dateGroups": {
         "today": "Hoy",
         "yesterday": "Ayer"

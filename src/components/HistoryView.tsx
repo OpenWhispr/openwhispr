@@ -34,6 +34,7 @@ interface HistoryViewProps {
   onRetryTranscription: (id: number, options?: { isRecover?: boolean }) => Promise<void>;
   showDiscarded: boolean;
   onToggleDiscarded: () => void;
+  userName?: string | null;
 }
 
 export default function HistoryView({
@@ -52,6 +53,7 @@ export default function HistoryView({
   onRetryTranscription,
   showDiscarded,
   onToggleDiscarded,
+  userName,
 }: HistoryViewProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
@@ -60,6 +62,7 @@ export default function HistoryView({
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );
   const { events, isLoading: eventsLoading, isConnected } = useUpcomingEvents();
+  const firstName = userName?.trim().split(/\s+/)[0];
 
   const groupedHistory = useMemo(() => {
     if (history.length === 0) return [];
@@ -97,6 +100,11 @@ export default function HistoryView({
 
   return (
     <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 pt-4 pb-6")}>
+      <h2 className="mb-4 text-xl text-foreground">
+        {firstName
+          ? t("controlPanel.history.welcomeBackNamed", { name: firstName })
+          : t("controlPanel.history.welcomeBack")}
+      </h2>
       {!useCleanupModel && !aiCTADismissed && (
         <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
           <button

@@ -642,6 +642,8 @@
       "dataRetentionDisabled": "La conservazione dei dati è disattivata. Trascrizioni e audio non vengono salvati nella cronologia.",
       "press": "Premi",
       "toStart": "per iniziare",
+      "welcomeBack": "Bentornato",
+      "welcomeBackNamed": "Bentornato, {{name}}",
       "dateGroups": {
         "today": "Oggi",
         "yesterday": "Ieri"

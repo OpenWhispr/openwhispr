@@ -642,6 +642,8 @@
       "dataRetentionDisabled": "Data retention is off. Transcriptions and audio are not saved to history.",
       "press": "Press",
       "toStart": "to start",
+      "welcomeBack": "Welcome Back",
+      "welcomeBackNamed": "Welcome Back, {{name}}",
       "dateGroups": {
         "today": "Today",
         "yesterday": "Yesterday"

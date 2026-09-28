@@ -642,6 +642,8 @@
       "dataRetentionDisabled": "資料保留已關閉。轉錄和音訊不會儲存至歷史記錄。",
       "press": "按下",
       "toStart": "開始",
+      "welcomeBack": "歡迎回來",
+      "welcomeBackNamed": "歡迎回來，{{name}}",
       "dateGroups": {
         "today": "今天",
         "yesterday": "昨天"

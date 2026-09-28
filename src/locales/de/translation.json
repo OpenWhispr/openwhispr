@@ -642,6 +642,8 @@
       "dataRetentionDisabled": "Datenaufbewahrung ist deaktiviert. Transkriptionen und Audio werden nicht im Verlauf gespeichert.",
       "press": "Drücken Sie",
       "toStart": "zum Starten",
+      "welcomeBack": "Willkommen zurück",
+      "welcomeBackNamed": "Willkommen zurück, {{name}}",
       "dateGroups": {
         "today": "Heute",
         "yesterday": "Gestern"

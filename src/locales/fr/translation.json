@@ -642,6 +642,8 @@
       "dataRetentionDisabled": "La conservation des données est désactivée. Les transcriptions et l'audio ne sont pas sauvegardés dans l'historique.",
       "press": "Appuyez sur",
       "toStart": "pour démarrer",
+      "welcomeBack": "Bon retour",
+      "welcomeBackNamed": "Bon retour, {{name}}",
       "dateGroups": {
         "today": "Aujourd'hui",
         "yesterday": "Hier"

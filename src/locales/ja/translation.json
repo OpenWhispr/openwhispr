@@ -642,6 +642,8 @@
       "dataRetentionDisabled": "データ保持が無効です。文字起こしと音声は履歴に保存されません。",
       "press": "押してください",
       "toStart": "開始するには",
+      "welcomeBack": "おかえりなさい",
+      "welcomeBackNamed": "おかえりなさい、{{name}}さん",
       "dateGroups": {
         "today": "今日",
         "yesterday": "昨日"

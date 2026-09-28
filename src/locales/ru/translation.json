@@ -642,6 +642,8 @@
       "dataRetentionDisabled": "Хранение данных отключено. Транскрипции и аудио не сохраняются в истории.",
       "press": "Нажмите",
       "toStart": "чтобы начать",
+      "welcomeBack": "С возвращением",
+      "welcomeBackNamed": "С возвращением, {{name}}",
       "dateGroups": {
         "today": "Сегодня",
         "yesterday": "Вчера"
