@@ -4021,6 +4021,8 @@
     "takeNotes": "メモを取る",
     "noEventsToday": "今日はひと休み",
     "emptyDayDescription": "休憩を楽しむか、会議を予定しましょう。",
+    "touchGrass": "試してみる",
+    "touchGrassLabel": "芝生です。ポインターか矢印キーでなでてみてください。Esc キーで戻ります。",
     "noUpcomingEvents": "今後の予定はありません",
     "moreCalendarsHint": "他のカレンダーも連携しますか？",
     "connectHere": "ここから連携",

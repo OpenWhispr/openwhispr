@@ -1193,6 +1193,8 @@
     "takeNotes": "Take notes",
     "noEventsToday": "Caught a break",
     "emptyDayDescription": "Enjoy the break or schedule a meeting.",
+    "touchGrass": "Try now",
+    "touchGrassLabel": "A patch of grass. Brush it with your pointer or the arrow keys. Press Escape to go back.",
     "noUpcomingEvents": "No upcoming events",
     "moreCalendarsHint": "Want additional calendars?",
     "connectHere": "Connect them here",
