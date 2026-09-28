@@ -237,7 +237,7 @@ export default function SnippetsView() {
   );
 
   return (
-    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "max-w-7xl flex flex-col gap-3 px-6 py-5")}>
+    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex flex-col gap-3 px-6 py-5")}>
       <EditSnippetDialog
         snippet={editing}
         onOpenChange={(open) => {

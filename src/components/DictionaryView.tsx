@@ -196,7 +196,7 @@ export default function DictionaryView() {
         variant="destructive"
       />
 
-      <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "max-w-7xl px-6 pt-6")}>
+      <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 pt-6")}>
         <TabsList className="h-10 rounded-full p-1">
           <TabsTrigger value="dictionary" className="h-8 gap-2 rounded-full px-4 text-sm">
             <NotebookPen size={17} />
@@ -210,7 +210,7 @@ export default function DictionaryView() {
       </div>
 
       <TabsContent value="dictionary" className="flex-1 min-h-0 mt-0 overflow-y-auto">
-        <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "max-w-7xl flex flex-col gap-3 px-6 py-5")}>
+        <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex flex-col gap-3 px-6 py-5")}>
           {/* ─── Add word ─── */}
           {userWords.length > 0 && addWordInput}
 
