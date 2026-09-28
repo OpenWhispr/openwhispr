@@ -9,6 +9,7 @@ import ThemedEmptyIllustration from "./ui/ThemedEmptyIllustration";
 import calendarEmptyLight from "../assets/empty-states/home-calendar-light.svg";
 import calendarEmptyDark from "../assets/empty-states/home-calendar-dark.svg";
 import { cn } from "./lib/utils";
+import { CARD_SURFACE_CLASS } from "./ui/surfaces";
 import type { CalendarAttendee, CalendarEvent } from "../types/calendar";
 import { parseAttendees } from "../utils/calendarAttendees";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
@@ -418,7 +419,9 @@ export default function UpcomingMeetings({
             </Button>
           </EmptyStateCard>
         ) : (
-          <div className="flex flex-col items-center rounded-2xl border border-border/70 bg-card/50 px-4 py-6 text-center dark:border-white/10 dark:bg-surface-2/60">
+          <div
+            className={cn(CARD_SURFACE_CLASS, "flex flex-col items-center px-4 py-6 text-center")}
+          >
             <ThemedEmptyIllustration
               light={calendarEmptyLight}
               dark={calendarEmptyDark}

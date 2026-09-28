@@ -33,7 +33,6 @@ test("a folder load error clears once the folder's notes arrive", async (t) => {
         export const useFolders = () => [];
         export const useFolderCounts = () => ({});
         export const useSpaceRootCounts = () => ({});
-        export const useIsTreeLoading = () => false;
         export const folderContainerKey = (id) => "f:" + id;
         export const ensureContainerLoaded = () => Promise.reject(new Error("offline"));
       `,

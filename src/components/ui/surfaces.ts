@@ -1,6 +1,5 @@
 // Surfaces shared by the redesigned control panel pages.
 
-// The redesign's card: Upload's panels and its batch queue sit on it.
 export const CARD_SURFACE_CLASS =
   "rounded-2xl border border-border/70 bg-card/50 dark:border-white/10 dark:bg-surface-2/60";
 

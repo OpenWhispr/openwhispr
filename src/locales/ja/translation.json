@@ -3509,7 +3509,6 @@
     "noConversationsDescription": "アシスタントとのチャットはここに表示されます。",
     "noArchived": "アーカイブ済みのチャットはありません",
     "loadFailed": "チャットを読み込めませんでした",
-    "selectChat": "会話を選択するか、新しく始めてください",
     "noResults": "該当する会話がありません",
     "today": "今日",
     "yesterday": "昨日",

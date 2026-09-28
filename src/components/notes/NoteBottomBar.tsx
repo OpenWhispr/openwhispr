@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ChatInput } from "../chat/ChatInput";
 import type { AgentState } from "../chat/types";
 import { cn } from "../lib/utils";
-import { FLOATING_CHAT_MAX_HEIGHT_CSS, observeFloatingChatSize } from "./floatingChatLayout";
+import { observeFloatingChatSize } from "./floatingChatLayout";
 
 const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
 
@@ -22,7 +22,7 @@ interface NoteBottomBarProps {
   chatContent?: React.ReactNode;
   agentState?: AgentState;
   onCancel?: () => void;
-  floatingPanelRef?: (panel: HTMLDivElement | null) => void | (() => void);
+  floatingPanelRef?: (panel: HTMLDivElement, container: HTMLElement) => void | (() => void);
 }
 
 export default function NoteBottomBar({
@@ -59,7 +59,7 @@ export default function NoteBottomBar({
         panel,
         container,
       });
-      const stopLayout = floatingPanelRef?.(panel);
+      const stopLayout = floatingPanelRef?.(panel, container);
 
       return () => {
         stopSizing();
@@ -91,7 +91,6 @@ export default function NoteBottomBar({
         data-note-chat-panel
         aria-hidden={hideInput}
         inert={hideInput}
-        style={{ maxHeight: FLOATING_CHAT_MAX_HEIGHT_CSS }}
         className={cn(
           "pointer-events-auto relative mx-auto flex w-full min-w-0 max-w-[600px] flex-col rounded-3xl border",
           chatOpen || hideInput ? "overflow-hidden" : "overflow-visible",

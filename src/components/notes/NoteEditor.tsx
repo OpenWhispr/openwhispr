@@ -770,10 +770,9 @@ export default function NoteEditor({
   }, []);
 
   const floatingChatPanelRef = useCallback(
-    (panel: HTMLDivElement | null): (() => void) | undefined => {
-      const container = panel?.parentElement?.parentElement;
+    (panel: HTMLDivElement, container: HTMLElement): (() => void) | undefined => {
       const contentRoot = contentScrollRef.current;
-      if (!panel || !container || !contentRoot) return undefined;
+      if (!contentRoot) return undefined;
 
       return observeFloatingChatLayout({
         panel,

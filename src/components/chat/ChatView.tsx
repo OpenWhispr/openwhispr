@@ -6,7 +6,6 @@ import { useChatMessageSender } from "./useChatMessageSender";
 import { ChatMessages } from "./ChatMessages";
 import { ChatInput } from "./ChatInput";
 import ConversationList from "./ConversationList";
-import EmptyChatState from "./EmptyChatState";
 import { ConfirmDialog } from "../ui/dialog";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
@@ -172,9 +171,6 @@ export default function ChatView() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleNewChat]);
 
-  const hasActiveChat =
-    activeConversationId !== null || persistence.messages.length > 0 || isNewChat;
-
   const composerElementRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useCallback((composer: HTMLDivElement | null) => {
     composerElementRef.current = composer;
@@ -216,50 +212,44 @@ export default function ChatView() {
           />
         </div>
         <div className="relative flex-1 min-w-80 min-h-0 flex flex-col">
-          {hasActiveChat ? (
-            <>
-              <ChatMessages
-                messages={persistence.messages}
-                emptyState={
-                  <NewChatEmptyState
-                    onPrompt={(prompt) => {
-                      // The starter card unmounts once the message lands; move focus to the
-                      // composer first so it isn't dropped.
-                      composerElementRef.current?.querySelector("textarea")?.focus();
-                      void handleTextSubmit(prompt);
-                    }}
-                    showSuggestions={isNewChat}
-                    disabled={submissionInFlight || streaming.agentState !== "idle"}
-                  />
-                }
-                contentClassName={`${PAGE_CONTENT_WIDTH_CLASS} pb-[var(--chat-composer-inset,5rem)]`}
+          <ChatMessages
+            messages={persistence.messages}
+            emptyState={
+              <NewChatEmptyState
+                onPrompt={(prompt) => {
+                  // The starter card unmounts once the message lands; move focus to the
+                  // composer first so it isn't dropped.
+                  composerElementRef.current?.querySelector("textarea")?.focus();
+                  void handleTextSubmit(prompt);
+                }}
+                showSuggestions={isNewChat}
+                disabled={submissionInFlight || streaming.agentState !== "idle"}
               />
-              <div ref={composerRef} className="absolute inset-x-0 bottom-0 z-10 px-3 pb-5 pt-1">
-                <ChatInput
-                  className="mx-auto w-full max-w-2xl"
-                  // New chat and switching cancel the stream at once, but the
-                  // cancelled send can hold the submission lock until an
-                  // in-flight tool returns; a message sent before then would
-                  // be dropped, so the input stays busy until it lets go.
-                  agentState={
-                    submissionInFlight && streaming.agentState === "idle"
-                      ? "thinking"
-                      : streaming.agentState
-                  }
-                  partialTranscript=""
-                  onTextSubmit={handleTextSubmit}
-                  onCancel={streaming.cancelStream}
-                  voiceDraft
-                  focusOnIdle={false}
-                  placeholder={t("embeddedChat.askPlaceholder")}
-                  variant="assistant"
-                  expandOnFocus
-                />
-              </div>
-            </>
-          ) : (
-            <EmptyChatState />
-          )}
+            }
+            contentClassName={`${PAGE_CONTENT_WIDTH_CLASS} pb-[var(--chat-composer-inset,5rem)]`}
+          />
+          <div ref={composerRef} className="absolute inset-x-0 bottom-0 z-10 px-3 pb-5 pt-1">
+            <ChatInput
+              className="mx-auto w-full max-w-2xl"
+              // New chat and switching cancel the stream at once, but the
+              // cancelled send can hold the submission lock until an
+              // in-flight tool returns; a message sent before then would
+              // be dropped, so the input stays busy until it lets go.
+              agentState={
+                submissionInFlight && streaming.agentState === "idle"
+                  ? "thinking"
+                  : streaming.agentState
+              }
+              partialTranscript=""
+              onTextSubmit={handleTextSubmit}
+              onCancel={streaming.cancelStream}
+              voiceDraft
+              focusOnIdle={false}
+              placeholder={t("embeddedChat.askPlaceholder")}
+              variant="assistant"
+              expandOnFocus
+            />
+          </div>
         </div>
       </div>
     </>

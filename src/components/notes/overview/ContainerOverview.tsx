@@ -10,7 +10,6 @@ import {
   useFolders,
   useFolderCounts,
   useSpaceRootCounts,
-  useIsTreeLoading,
   folderContainerKey,
   ensureContainerLoaded,
 } from "../../../stores/noteStore";
@@ -49,7 +48,6 @@ export function ContainerOverview({
   const notesByContainer = useNotesByContainer();
   const folderCounts = useFolderCounts();
   const spaceRootCounts = useSpaceRootCounts();
-  const isTreeLoading = useIsTreeLoading();
   const [spaceNotes, setSpaceNotes] = useState<NoteItem[] | null>(null);
   const [spaceNotesError, setSpaceNotesError] = useState(false);
   const [folderNotesError, setFolderNotesError] = useState(false);
@@ -98,7 +96,7 @@ export function ContainerOverview({
   const notes = folder ? containerNotes : (spaceNotes ?? []);
   const folderKey = folder ? folderContainerKey(folder.id) : null;
   const folderNotesLoaded = folderKey !== null && notesByContainer[folderKey] !== undefined;
-  const isLoaded = !isTreeLoading && (folder ? folderNotesLoaded : spaceNotes !== null);
+  const isLoaded = folder ? folderNotesLoaded : spaceNotes !== null;
   const loadFailed = folder
     ? folderNotesError && !folderNotesLoaded
     : spaceNotesError && spaceNotes === null;

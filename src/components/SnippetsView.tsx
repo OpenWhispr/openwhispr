@@ -12,6 +12,7 @@ import {
 import { Button } from "./ui/button";
 import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
 import { cn } from "./lib/utils";
+import { CARD_SURFACE_CLASS } from "./ui/surfaces";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
@@ -146,7 +147,8 @@ export default function SnippetsView() {
   const closePanel = () => {
     setPanelOpen(false);
     setExpansion("");
-    triggerInputRef.current?.focus();
+    // After the first snippet the trigger input remounts outside the empty card.
+    requestAnimationFrame(() => triggerInputRef.current?.focus());
   };
 
   const handleCreate = () => {
@@ -256,9 +258,10 @@ export default function SnippetsView() {
       {/* ─── Snippet list ─── */}
       <div
         className={cn(
-          "border border-border/70 bg-card/50 shadow-sm dark:border-white/10 dark:bg-surface-2/60",
+          CARD_SURFACE_CLASS,
+          "shadow-sm",
           snippets.length > 0
-            ? "rounded-2xl px-4 py-3"
+            ? "px-4 py-3"
             : "relative overflow-hidden rounded-3xl dark:bg-surface-window"
         )}
       >

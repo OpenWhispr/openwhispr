@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   CornerDownLeft,
@@ -16,6 +16,7 @@ import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
 import { cn } from "./lib/utils";
+import { CARD_SURFACE_CLASS } from "./ui/surfaces";
 import { ConfirmDialog } from "./ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useToast } from "./ui/useToast";
@@ -40,6 +41,7 @@ export default function DictionaryView() {
   const [editingWord, setEditingWord] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
+  const addInputRef = useRef<HTMLInputElement>(null);
 
   const pendingImportCount = useMemo(() => parseDictionaryImportText(bulkText).length, [bulkText]);
 
@@ -85,6 +87,8 @@ export default function DictionaryView() {
     if (addWords(newWord) > 0) {
       setNewWord("");
       setShowEmptyInput(false);
+      // The first word moves the input from the empty card to the top of the list.
+      requestAnimationFrame(() => addInputRef.current?.focus());
     }
   }, [addWords, newWord]);
 
@@ -133,6 +137,7 @@ export default function DictionaryView() {
     <div className="relative">
       <Input
         dir="auto"
+        ref={addInputRef}
         autoFocus={userWords.length === 0}
         placeholder={t("dictionary.addPlaceholder")}
         value={newWord}
@@ -273,9 +278,10 @@ export default function DictionaryView() {
           {/* ─── Dictionary list ─── */}
           <div
             className={cn(
-              "border border-border/70 bg-card/50 shadow-sm dark:border-white/10 dark:bg-surface-2/60",
+              CARD_SURFACE_CLASS,
+              "shadow-sm",
               userWords.length > 0
-                ? "rounded-2xl px-4 py-3"
+                ? "px-4 py-3"
                 : "relative overflow-hidden rounded-3xl dark:bg-surface-window"
             )}
           >
