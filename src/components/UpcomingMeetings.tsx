@@ -280,7 +280,7 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
       <div
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium",
-          group.isToday && !rustle ? "text-white" : "text-foreground"
+          group.isToday && !rustle ? "calendar-today-header text-white" : "text-foreground"
         )}
       >
         <Calendar size={12} className="shrink-0" />
@@ -320,18 +320,21 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
                 width={316}
                 height={120}
               />
-              <p className="mt-3 text-sm font-semibold text-foreground">
+              <p className="mt-3 text-[15px] font-medium text-foreground">
                 {t("upcoming.noEventsToday")}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1.5 text-[13px] text-muted-foreground">
                 {t("upcoming.emptyDayDescription")}
               </p>
               <Button
                 ref={tryButtonRef}
-                size="sm"
                 variant="ghost"
                 onClick={touchGrass}
-                className={cn("mt-3", DAY_CARD_BUTTON_CLASS)}
+                className={cn(
+                  "mt-5",
+                  DAY_CARD_BUTTON_CLASS,
+                  "h-9 rounded-full px-5 text-primary hover:text-primary dark:text-primary"
+                )}
               >
                 {t("upcoming.touchGrass")}
               </Button>

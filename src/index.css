@@ -807,6 +807,35 @@ body:has(.onboarding-canvas) kbd {
     0 12px 20px color-mix(in oklch, var(--onboarding-keycap-shadow) 8%, transparent);
 }
 
+/* Today's day-card header: a mosaic of faint tiles over --gradient-calendar-today,
+   fading in toward the right, as in the Home design. The tiles are a white wash cut by
+   a mask of vertical and horizontal stripes; it sits behind the header's text. */
+.calendar-today-header {
+  position: relative;
+  isolation: isolate;
+}
+
+.calendar-today-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: rgb(255 255 255 / 0.13);
+  mask-image:
+    linear-gradient(to right, transparent 22%, #000 70%),
+    linear-gradient(90deg, #000 5px, transparent 5px), linear-gradient(#000 5px, transparent 5px);
+  mask-size:
+    100% 100%,
+    7px 100%,
+    100% 7px;
+  mask-position:
+    0 0,
+    1px 0,
+    0 1.5px;
+  mask-composite: intersect;
+}
+
 /* OpenWhispr Brand Typography */
 .brand-heading {
   font-family: var(--font-family-display);
