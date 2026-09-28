@@ -229,7 +229,7 @@ export default function ChatView() {
                       void handleTextSubmit(prompt);
                     }}
                     showSuggestions={isNewChat}
-                    disabled={streaming.agentState !== "idle"}
+                    disabled={submissionInFlight || streaming.agentState !== "idle"}
                   />
                 }
                 contentClassName={`${PAGE_CONTENT_WIDTH_CLASS} pb-[var(--chat-composer-inset,5rem)]`}
