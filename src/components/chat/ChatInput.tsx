@@ -11,6 +11,10 @@ import { formatMmSs } from "../../utils/formatDuration";
 import { useVoiceDraft } from "./useVoiceDraft";
 import type { AgentState } from "./types";
 
+// Controls stay bottom-anchored so they hold the corner while the composer expands;
+// this lifts a 28px control to the center of the collapsed composer's 34px row.
+const COLLAPSED_ROW_CENTER = "mb-[3px]";
+
 interface ChatInputProps {
   agentState: AgentState;
   partialTranscript: string;
@@ -88,6 +92,7 @@ export function ChatInput({
   const inputText = draftText ?? localDraft;
   const setInputText = onDraftChange ?? setLocalDraft;
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
   const allowDeferredFocusRef = useRef(variant !== "note" || focusOnIdle);
   allowDeferredFocusRef.current = variant !== "note" || focusOnIdle;
   const focusAfterFrame = useCallback(() => {
@@ -147,7 +152,17 @@ export function ChatInput({
   useLayoutEffect(() => {
     const input = inputRef.current;
     if (!input) return;
-    if (expandOnFocus || variant === "sidebar" || isCompactNote) {
+    const composer = composerRef.current;
+    if (expandOnFocus && composer) {
+      // The focused composer opens at half its maximum height and grows with the
+      // draft up to that maximum (see --composer-fit-height below).
+      input.style.height = "100%";
+      const chromeHeight = composer.offsetHeight - input.offsetHeight;
+      input.style.height = "auto";
+      const draftHeight = input.scrollHeight;
+      input.style.height = "100%";
+      composer.style.setProperty("--composer-fit-height", `${draftHeight + chromeHeight}px`);
+    } else if (variant === "sidebar" || isCompactNote) {
       input.style.height = "100%";
     } else {
       input.style.height = "auto";
@@ -166,6 +181,7 @@ export function ChatInput({
   return (
     <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
       <div
+        ref={composerRef}
         className={cn(
           "flex items-center gap-2 min-h-11",
           variant === "sidebar"
@@ -190,10 +206,10 @@ export function ChatInput({
             ? "transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none"
             : expandOnFocus
               ? cn(
-                  "h-12 items-end transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none",
+                  "h-12 items-end pe-2.25 transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none",
                   expandOnFocusSize === "compact"
-                    ? "focus-within:h-[min(36vh,14rem)]"
-                    : "focus-within:h-[min(40vh,16rem)]"
+                    ? "focus-within:h-[clamp(min(18vh,7rem),var(--composer-fit-height,0px),min(36vh,14rem))]"
+                    : "focus-within:h-[clamp(min(20vh,8rem),var(--composer-fit-height,0px),min(40vh,16rem))]"
                 )
               : "transition-[border-color,box-shadow] duration-200",
           isIdle &&
@@ -314,6 +330,7 @@ export function ChatInput({
                 title={t("common.cancel")}
                 className={cn(
                   "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
+                  expandOnFocus && COLLAPSED_ROW_CENTER,
                   "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-colors duration-100"
@@ -358,6 +375,7 @@ export function ChatInput({
                 }
                 className={cn(
                   "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
+                  expandOnFocus && COLLAPSED_ROW_CENTER,
                   GRADIENT_CIRCLE,
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-all duration-100",
