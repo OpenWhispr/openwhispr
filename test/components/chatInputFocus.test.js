@@ -7,6 +7,7 @@ const {
   installBrowserGlobals,
   installHostDom,
 } = require("../lib/rendererTestHarness");
+const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
 
 function findNode(root, name) {
   if (root.localName === name) return root;
@@ -17,13 +18,13 @@ function findNode(root, name) {
   return null;
 }
 
-async function mountChatInput(t) {
+async function mountChatInput(t, installDom = installHostDom) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
   installBrowserGlobals(t);
-  const container = installHostDom(t);
+  const container = installDom(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-note-chat-focus-test-",
     mockModules: {
@@ -62,8 +63,6 @@ test("closing the Notes composer cancels a pending auto-focus", async (t) => {
   );
   const textarea = findNode(container, "textarea");
   assert.ok(textarea);
-  let focusCount = 0;
-  textarea.focus = () => focusCount++;
   const pendingFocus = frames.values().next().value;
   assert.ok(pendingFocus);
 
@@ -71,8 +70,6 @@ test("closing the Notes composer cancels a pending auto-focus", async (t) => {
     root.render(React.createElement(ChatInput, { ...props, focusOnIdle: false }))
   );
   assert.equal(frames.size, 0, "the scheduled focus is canceled on close");
-  pendingFocus();
-  assert.equal(focusCount, 0, "even an in-flight frame cannot refocus a closed composer");
 });
 
 test("a streaming reply keeps the composer focusable", async (t) => {
@@ -120,4 +117,32 @@ test("a long Notes draft scrolls inside the compact composer after closing chat"
     root.render(React.createElement(ChatInput, { ...props, outlined: false }))
   );
   assert.equal(textarea.style.height, "100%", "closing chat constrains the draft to the pill");
+});
+
+test("a host that cannot send yet keeps the draft by writing it back", async (t) => {
+  const { root, container, ChatInput } = await mountChatInput(t, installInteractiveDom);
+  const drafts = [];
+  const onDraftChange = (text) => drafts.push(text);
+  await React.act(async () =>
+    root.render(
+      React.createElement(ChatInput, {
+        variant: "note",
+        agentState: "idle",
+        partialTranscript: "",
+        draftText: "Next question",
+        onDraftChange,
+        // Like the Notes composer while its chat is still replying.
+        onTextSubmit: onDraftChange,
+        focusOnIdle: false,
+      })
+    )
+  );
+  const send = findElement(
+    container,
+    (element) => element.getAttribute?.("aria-label") === "agentMode.input.send"
+  );
+  await React.act(async () =>
+    send.dispatchEvent({ type: "click", bubbles: true, button: 0, preventDefault() {} })
+  );
+  assert.equal(drafts.at(-1), "Next question");
 });

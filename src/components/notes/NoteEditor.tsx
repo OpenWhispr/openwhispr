@@ -803,6 +803,11 @@ export default function NoteEditor({
       if (chatMode === "hidden") {
         setChatMode("floating");
       }
+      // The chat is still replying: keep the question as the draft instead of dropping it.
+      if (embeddedChat.agentState !== "idle") {
+        setChatDraft(text);
+        return;
+      }
       embeddedChat.sendMessage(text);
     },
     [chatMode, embeddedChat]

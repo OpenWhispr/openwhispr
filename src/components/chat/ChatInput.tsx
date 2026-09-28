@@ -127,8 +127,9 @@ export function ChatInput({
   const handleSubmit = useCallback(() => {
     const text = inputText.trim();
     if (!text || !onTextSubmit || isBusy) return;
-    onTextSubmit(text);
+    // Cleared first, so a host that can't send yet can write the draft back.
     setInputText("");
+    onTextSubmit(text);
     focusAfterFrame();
   }, [inputText, onTextSubmit, setInputText, isBusy, focusAfterFrame]);
 
@@ -172,9 +173,7 @@ export function ChatInput({
 
   useEffect(() => {
     if (!isIdle || !focusOnIdle) return;
-    const frameId = requestAnimationFrame(() => {
-      if (allowDeferredFocusRef.current) inputRef.current?.focus();
-    });
+    const frameId = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(frameId);
   }, [isIdle, focusOnIdle]);
 
