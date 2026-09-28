@@ -95,6 +95,7 @@ export interface ApiKeySettings {
   xaiApiKey: string;
   mistralApiKey: string;
   openrouterApiKey: string;
+  atlascloudApiKey: string;
   cortiClientId: string;
   cortiClientSecret: string;
   cortiApiKey: string;
@@ -328,6 +329,7 @@ function useSettingsInternal() {
     xaiApiKey: store.xaiApiKey,
     mistralApiKey: store.mistralApiKey,
     openrouterApiKey: store.openrouterApiKey,
+    atlascloudApiKey: store.atlascloudApiKey,
     tinfoilApiKey: store.tinfoilApiKey,
     deepgramApiKey: store.deepgramApiKey,
     assemblyaiApiKey: store.assemblyaiApiKey,

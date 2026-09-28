@@ -51,6 +51,13 @@ const BYOK_API_KEYS = [
     storeKey: "openrouterApiKey",
   },
   {
+    base: "atlascloud",
+    env: "ATLASCLOUD_API_KEY",
+    get: "getAtlascloudKey",
+    save: "saveAtlascloudKey",
+    storeKey: "atlascloudApiKey",
+  },
+  {
     base: "tinfoil",
     env: "TINFOIL_API_KEY",
     get: "getTinfoilKey",
