@@ -179,18 +179,18 @@ async function loadNoteEditor(t) {
   const NoteEditor = mod.default;
 
   const renders = [];
-  function Harness({ enhancement }) {
+  function Harness({ enhancement, overrides }) {
     // Run the real component body + hooks under React's lifecycle without
     // mounting host elements (the harness DOM has no layout), then assert on
     // the tree it returned.
-    renders.push(NoteEditor(baseProps(enhancement)));
+    renders.push(NoteEditor({ ...baseProps(enhancement), ...overrides }));
     return null;
   }
 
   const root = createRoot(container);
-  const render = (enhancement) =>
+  const render = (enhancement, overrides) =>
     React.act(async () => {
-      root.render(React.createElement(Harness, { enhancement }));
+      root.render(React.createElement(Harness, { enhancement, overrides }));
     });
   const click = (value) =>
     React.act(async () => {
@@ -278,6 +278,40 @@ test("hides the highlight instead of freezing it when no tab matches the selecti
     highlightStyle(latest()),
     { width: 90, height: 26, transform: "translateX(102px)", opacity: 0 },
     "the highlight fades in place rather than staying lit over nothing"
+  );
+
+  await unmount();
+});
+
+test("the summary callout makes way for the transcript selection bar", async (t) => {
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+  const propsWith = (key) => {
+    let found = null;
+    walk(latest(), (node) => {
+      if (!found && key in node.props) found = node.props;
+    });
+    return found;
+  };
+
+  await render(undefined, {
+    note: {
+      ...NOTE,
+      enhanced_content: null,
+      transcript: JSON.stringify([{ text: "Hello", source: "mic", timestamp: 0 }]),
+    },
+    onGenerateSummary() {},
+  });
+  findSegmentStrip(latest()).props.ref.current = measurableStrip(["transcript", "raw"]);
+  await click("transcript");
+  assert.ok(propsWith("onAskSubmit").callout, "a transcript without a summary offers one");
+
+  const transcript = propsWith("onToggleSelect");
+  await React.act(async () => transcript.onToggleSelect(transcript.segments[0].id));
+  assert.ok(propsWith("onAssignName"), "selecting a segment shows the selection bar");
+  // Both float in the same bottom strip; the callout would cover the bar's buttons.
+  assert.ok(
+    !propsWith("onAskSubmit").callout,
+    "the callout steps aside while segments are selected"
   );
 
   await unmount();

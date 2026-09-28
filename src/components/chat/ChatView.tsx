@@ -227,9 +227,12 @@ export default function ChatView() {
             }
             contentClassName={`${PAGE_CONTENT_WIDTH_CLASS} pb-[var(--chat-composer-inset,5rem)]`}
           />
-          <div ref={composerRef} className="absolute inset-x-0 bottom-0 z-10 px-3 pb-5 pt-1">
+          <div
+            ref={composerRef}
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-5 pt-1"
+          >
             <ChatInput
-              className="mx-auto w-full max-w-2xl"
+              className="pointer-events-auto mx-auto w-full max-w-2xl"
               // New chat and switching cancel the stream at once, but the
               // cancelled send can hold the submission lock until an
               // in-flight tool returns; a message sent before then would

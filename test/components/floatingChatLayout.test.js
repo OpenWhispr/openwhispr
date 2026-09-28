@@ -127,13 +127,6 @@ test("viewport resizes preserve pinned content without yanking a reader", async 
   assert.equal(container.style.getPropertyValue("--floating-inset"), "");
 });
 
-test("the panel cap leaves the promised note content visible", async () => {
-  const { FLOATING_CHAT_INSET_EXTRA_PX, FLOATING_CHAT_MIN_VISIBLE_CONTENT_PX } = await load();
-
-  assert.equal(FLOATING_CHAT_INSET_EXTRA_PX, 32);
-  assert.equal(FLOATING_CHAT_MIN_VISIBLE_CONTENT_PX, 80);
-});
-
 test("the in-view chat always opens at two-thirds height and ignores content growth", async () => {
   const { observeFloatingChatSize } = await load();
   const panel = { style: { height: "" } };

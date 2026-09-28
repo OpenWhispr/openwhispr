@@ -1332,7 +1332,8 @@ export default function NoteEditor({
                 : actionPicker
             }
             callout={
-              showSummaryCallout && (
+              showSummaryCallout &&
+              selectedSegmentIds.size === 0 && (
                 <Button className="h-9 gap-2 px-4 text-sm" onClick={onGenerateSummary}>
                   <AlignLeft size={16} />
                   {t("notes.editor.generateSummary")}
