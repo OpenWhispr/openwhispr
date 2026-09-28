@@ -18,6 +18,25 @@ import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { DictationErrorCard } from "../dictation/DictationErrorCard";
 import { TechnicalErrorDetails } from "./TechnicalErrorDetails";
 
+/** The inline action beside a toast's text; dismissing is left to the caller. */
+export function ToastActionButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void | Promise<void>;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-sm border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-medium whitespace-nowrap text-white/90 transition-colors hover:border-white/35 hover:bg-white/20 hover:text-white"
+    >
+      {children}
+    </button>
+  );
+}
+
 interface ToastState extends ToastProps {
   id: string;
   isExiting?: boolean;
@@ -212,7 +231,13 @@ const ToastViewport: React.FC<{
         <Toast
           key={toast.id}
           {...toast}
-          onClose={() => onDismiss(toast.id)}
+          onClose={() => {
+            try {
+              toast.onClose?.();
+            } finally {
+              onDismiss(toast.id);
+            }
+          }}
           onPauseTimer={() => onPauseTimer(toast.id)}
           onResumeTimer={(remaining) => onResumeTimer(toast.id, remaining)}
         />
@@ -245,6 +270,8 @@ const Toast: React.FC<
 > = ({
   title,
   description,
+  descriptionHotkey,
+  dismissible,
   secondaryDescription,
   copyCommand,
   technicalDetails,
@@ -287,7 +314,7 @@ const Toast: React.FC<
 
   const handleStructuredAction = (structuredAction: ToastActionConfig) => {
     if (structuredAction.dismissOnClick !== false) onClose?.();
-    void structuredAction.onClick();
+    return structuredAction.onClick();
   };
 
   const handleErrorHeightChange = React.useCallback(async (height: number) => {
@@ -338,6 +365,8 @@ const Toast: React.FC<
         <DictationErrorCard
           title={title}
           description={description}
+          descriptionHotkey={descriptionHotkey}
+          onDismiss={dismissible ? onClose : undefined}
           actions={actions ?? []}
           onAction={handleStructuredAction}
           onPreferredHeightChange={handleErrorHeightChange}

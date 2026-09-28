@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" 无法在此桌面上使用，其快捷键需要包含一个普通按键。请添加一个按键，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住说话需要 macOS 能检测到松开的按键：Globe、右侧 Option 之类的右侧按键，或带修饰键的快捷键。点按可用于任何按键。",
       "registrationFailed": "无法注册 \"{{hotkey}}\"，该快捷键可能已被其他应用占用。",
       "updateFailedCheckFormat": "无法将快捷键更新为 \"{{hotkey}}\"，请检查格式是否有效。",
@@ -702,6 +703,11 @@
       "title": "缺少必需的模型",
       "description": "您的组织要求在此设备上安装这些模型：{{models}}。",
       "download": "下载"
+    },
+    "cloudNudge": {
+      "title": "你已登录",
+      "description": "听写仍在使用你自己的配置。你可以随时切换到 OpenWhispr Cloud。",
+      "action": "打开设置"
     }
   },
   "reasoning": {
@@ -914,6 +920,7 @@
         "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
         "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。",
         "cleanupTruncated": "AI 模型的输出长度达到上限，未能完成听写清理。",
+        "cleanupDuplicated": "AI 清理重复了转录内容。已保留原始文本。",
         "cleanupEmptyReply": "AI 模型返回了空响应，没有生成清理后的文本。"
       },
       "translationFallback": {
@@ -935,6 +942,18 @@
         "unavailable": "OpenWhispr 无法安全读取选中的文本。请检查辅助功能或输入自动化权限。",
         "tooLarge": "选中的内容过长。请选择不超过 6,000 个字符。",
         "reasoningFailed": "AI 无法完成选中文本编辑。原始文本未被更改。"
+      },
+      "pastePermission": {
+        "title": "允许自动粘贴",
+        "description": "请在系统设置 → 隐私与安全性 → 辅助功能中启用 OpenWhispr。",
+        "settingsFailed": "无法打开设置。请打开系统设置 → 隐私与安全性 → 辅助功能，并启用 OpenWhispr。",
+        "manualPaste": "点击下方按钮复制文本，然后按 {{shortcut}} 粘贴。",
+        "openSettings": "打开设置",
+        "copyToClipboard": "复制到剪贴板",
+        "copyFailed": "复制失败"
+      },
+      "pasteFailed": {
+        "title": "无法自动粘贴"
       }
     },
     "clipboard": {
@@ -2655,7 +2674,8 @@
     "errors": {
       "contextTooLarge": "内容过长，{{model}} 无法在这台电脑上读取。大约需要 {{needed}} 个上下文 token，但内存中只能容纳 {{max}} 个。请改用云端模型，或对更短的选区执行该操作。",
       "contextTooLargeGeneric": "内容过长，{{model}} 无法在这台电脑上读取。请改用云端模型，或对更短的选区执行该操作。",
-      "localServerUnavailable": "无法在这台电脑上启动 {{model}}。请重试，或改用云端模型。"
+      "localServerUnavailable": "无法在这台电脑上启动 {{model}}。请重试，或改用云端模型。",
+      "localModelBusy": "本地模型仍在处理另一个请求。请等待其完成后再试。"
     }
   },
   "referral": {
@@ -2948,7 +2968,35 @@
       "conversationWillAppear": "对话将显示在这里...",
       "linkedEvent": "关联日程",
       "noFolder": "无文件夹",
-      "participants": "参与者"
+      "participants": "参与者",
+      "table": {
+        "actions": "表格操作",
+        "insertRowAbove": "在上方插入行",
+        "insertRowBelow": "在下方插入行",
+        "insertColumnLeft": "在左侧插入列",
+        "insertColumnRight": "在右侧插入列",
+        "deleteRow": "删除行",
+        "deleteColumn": "删除列",
+        "deleteTable": "删除表格"
+      },
+      "format": {
+        "toolbar": "格式",
+        "withShortcut": "{{action}}（{{shortcut}}）",
+        "bold": "粗体",
+        "italic": "斜体",
+        "strike": "删除线",
+        "code": "代码",
+        "textStyle": "文本样式",
+        "paragraph": "正文",
+        "heading1": "标题 1",
+        "heading2": "标题 2",
+        "heading3": "标题 3",
+        "bulletList": "项目符号列表",
+        "orderedList": "编号列表",
+        "taskList": "清单",
+        "blockquote": "引用",
+        "table": "插入表格"
+      }
     },
     "participants": {
       "attendee": "位参会者",
@@ -3099,6 +3147,8 @@
       "runAction": "运行 {{name}}",
       "selectAction": "选择操作",
       "done": "完成",
+      "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
+      "emptyReply": "模型返回了空回复。请重试，或选择其他模型。",
       "builtin": {
         "generateNotes": {
           "name": "生成笔记",
@@ -3629,6 +3679,9 @@
     },
     "tools": {
       "search_notesName": "搜索笔记",
+      "email_draftName": "邮件草稿",
+      "find_contactName": "查找联系人",
+      "slack_send_messageName": "Slack 消息",
       "get_noteName": "获取笔记",
       "create_noteName": "创建笔记",
       "update_noteName": "更新笔记",
@@ -3641,6 +3694,9 @@
       "update_dictionaryName": "更新词典",
       "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜索笔记...",
+      "email_draftStatus": "正在打开邮件草稿...",
+      "find_contactStatus": "正在查找联系人...",
+      "slack_send_messageStatus": "正在准备 Slack 消息...",
       "web_searchStatus": "正在搜索网页...",
       "copy_to_clipboardStatus": "正在复制到剪贴板...",
       "get_calendar_eventsStatus": "正在查看日历...",
@@ -3732,6 +3788,7 @@
       "connectFailedDescription": "连接 Calendar.app 时出错。请重启 OpenWhispr 后重试。"
     },
     "sections": {
+      "connectors": "连接器",
       "calendar": "日历",
       "api": "API",
       "mcp": "MCP",
@@ -3790,6 +3847,144 @@
     "notABot": {
       "title": "OpenWhispr 是会议录制工具，不是机器人",
       "description": "OpenWhispr 直接从您的系统捕获音频 — 它不会以参与者身份加入您的会议。只需连接日历，正常记录笔记即可。"
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "发送到 {{destination}}",
+        "slackPost": "发布到 {{destination}}"
+      },
+      "identity": "以 {{account}} 身份",
+      "identityWithWorkspace": "以 {{account}}（{{workspace}}）身份",
+      "send": "发送",
+      "edit": "编辑",
+      "doneEditing": "编辑完成",
+      "cancel": "取消",
+      "titleLabel": "标题",
+      "bodyLabel": "消息",
+      "sending": "发送中…",
+      "sent": "已发送到 {{destination}}。",
+      "open": "打开",
+      "failed": "发送失败：{{message}}",
+      "unknown": "无法确认是否已发送，请检查 {{destination}}。",
+      "cancelled": "已取消，未发送任何内容。",
+      "notSent": "未发送。",
+      "policyRetry": "无法检查您的组织设置，因此未发送任何内容。请点击“发送”重试。",
+      "errors": {
+        "not_in_channel": "您不是 {{destination}} 的成员。",
+        "channel_not_found": "在 Slack 中已找不到 {{destination}}。",
+        "is_archived": "{{destination}} 已归档。",
+        "reconnect_needed": "需要在设置中重新连接 Slack。",
+        "connection_changed": "发送前 Slack 连接发生了变化，因此未发送任何内容。",
+        "rate_limited": "Slack 正忙，请稍后重试。",
+        "missing_scope": "OpenWhispr 没有权限在那里发布。请在设置中重新连接 Slack。",
+        "msg_too_long": "消息对 Slack 来说太长了（格式化后最多 12,000 个字符）。",
+        "no_text": "消息为空。",
+        "network": "无法连接到 Slack，未发送任何内容。",
+        "credential_save_failed": "无法在此电脑上保存 Slack 登录信息，未发送任何内容。请重试。",
+        "dm_failed": "无法打开与 {{destination}} 的私信，未发送任何内容。",
+        "restricted": "{{destination}} 对您是只读或受限的。",
+        "generic": "出了点问题，未发送任何内容。"
+      }
+    },
+    "policyOff": "您的组织已关闭连接器。",
+    "email": {
+      "title": "邮件草稿",
+      "description": "助手会在您的邮件应用中打开预填好的草稿，由您检查并亲自点击发送。",
+      "proRequired": "升级到付费计划，让助手为您起草邮件。",
+      "unavailable": "邮件草稿暂时不可用。",
+      "targetLabel": "在此处起草邮件",
+      "autoResolved": "自动 · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook（工作或学校）",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "默认邮件应用"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "助手可以代表您在频道和给他人发布消息。每条消息发送前都需要您批准。",
+      "connect": "连接",
+      "reconnect": "重新连接",
+      "disconnect": "断开连接",
+      "connecting": "请在浏览器中完成连接…",
+      "connectedAs": "已以 {{account}} 身份连接到 {{workspace}}",
+      "needsReconnect": "需要重新连接 Slack。",
+      "proRequired": "升级到付费计划，让助手为您发送 Slack 消息。",
+      "errors": {
+        "connect_failed": "无法连接 Slack，请重试。",
+        "disconnect_failed": "无法断开 Slack 连接，请重试。",
+        "oauth_denied": "由于未获得授权，Slack 未连接。",
+        "oauth_timeout": "连接耗时过长，请重试。",
+        "oauth_state_mismatch": "该登录链接已过期，请重试。",
+        "ports_busy": "另一个应用正在使用 OpenWhispr 连接所需的端口。请关闭它后重试。",
+        "token_exchange_failed": "Slack 未完成连接，请重试。",
+        "not_configured": "此版本中 Slack 不可用。",
+        "connection_changed": "连接过程中您的账户或 Slack 连接发生了变化，请重试。",
+        "signed_out": "请登录 OpenWhispr 以连接 Slack。",
+        "policy_blocked": "您的组织已关闭连接器。",
+        "policy_unavailable": "无法检查您的组织设置，请重试。"
+      },
+      "browser": {
+        "connectedTitle": "Slack 已连接",
+        "connectedBody": "您可以关闭此标签页并返回 OpenWhispr。",
+        "failedTitle": "Slack 未连接",
+        "failedBody": "请返回 OpenWhispr 重试。"
+      }
+    },
+    "recent": {
+      "title": "最近的操作",
+      "actions": {
+        "email_draft": "发送给 {{destination}} 的草稿",
+        "slack_send_message": "发送给 {{destination}} 的消息"
+      },
+      "unlabeledActions": {
+        "email_draft": "邮件草稿",
+        "slack_send_message": "Slack 消息"
+      },
+      "states": {
+        "pending": "等待中",
+        "committing": "进行中",
+        "sent": "已完成",
+        "failed": "失败",
+        "unknown": "未确认",
+        "cancelled": "已取消",
+        "expired": "已过期"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "已打开发送给 {{destination}} 的草稿。",
+      "draftOpenedBodyCopied": "已打开发送给 {{destination}} 的草稿。正文已在剪贴板中。",
+      "draftOpenedSubjectCopied": "已打开发送给 {{destination}} 的草稿。主题和正文已在剪贴板中。",
+      "draftOpenedOnlySubjectCopied": "已打开发给 {{destination}} 的草稿。主题已在剪贴板中。",
+      "needsDetails": "需要更多信息。",
+      "unavailable": "连接器暂时不可用。",
+      "unknown": "未确认。请先检查是否已完成，再重试。",
+      "draftUnknown": "未确认：发给 {{destination}} 的草稿可能没有打开。请先检查，再重试。",
+      "contactsFound": "找到的联系人：{{total}}",
+      "draftLimit": "每次请求最多只能打开 {{count}} 份草稿。",
+      "clipboardBusy": "未打开：另一份草稿的文字仍在剪贴板中。",
+      "errors": {
+        "open_failed": "无法打开您的邮件应用。",
+        "draft_too_long": "收件人太多，无法生成草稿链接。",
+        "invalid_address": "需要完整的电子邮件地址。",
+        "not_in_channel": "不是该频道的成员。",
+        "channel_not_found": "找不到该对话。",
+        "is_archived": "该频道已归档。",
+        "reconnect_needed": "需要重新连接 Slack。",
+        "connection_changed": "Slack 连接已更改。未发送任何内容。",
+        "rate_limited": "Slack 正忙。",
+        "missing_scope": "缺少 Slack 权限。",
+        "msg_too_long": "消息对 Slack 来说太长。",
+        "no_text": "消息为空。",
+        "network": "无法连接到 Slack。未发送任何内容。",
+        "credential_save_failed": "无法在此电脑上保存 Slack 登录信息。未发送任何内容。",
+        "dm_failed": "无法打开私信。未发送任何内容。",
+        "restricted": "该频道为只读或受限。",
+        "generic": "操作未成功。"
+      }
     }
   },
   "calendar": {
@@ -3867,6 +4062,11 @@
         "createLink": "创建链接",
         "copyLink": "复制链接",
         "copied": "已复制",
+        "replaceLink": {
+          "title": "替换分享链接？",
+          "description": "此设备上没有当前链接，因此复制时需要创建新链接。旧链接将失效，包括邀请邮件中的链接。请重新发送每个邀请，以便受邀者仍能打开此笔记。",
+          "confirm": "替换链接"
+        },
         "export": "导出",
         "owner": "所有者",
         "editor": "可编辑",

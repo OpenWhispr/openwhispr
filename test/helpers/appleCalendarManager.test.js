@@ -104,3 +104,73 @@ test("_mapEvent preserves EventKit availability and the current user's response"
   assert.equal(mapped.availability_status, "free");
   assert.equal(mapped.self_response_status, "declined");
 });
+
+test("rooms and resources are flagged in attendees and kept, with the user, out of contacts", () => {
+  const AppleCalendarManager = loadManager();
+  const saved = [];
+  const synced = [];
+  const manager = new AppleCalendarManager(
+    {
+      saveAppleCalendars: () => {},
+      replaceAppleCalendarEvents: (events) => saved.push(...events),
+      syncCalendarContacts: (...args) => synced.push(args),
+    },
+    { reconcileProvider: () => {}, scheduleNextMeeting: () => {} }
+  );
+
+  manager._applySnapshot({
+    calendars: [{ id: "calendar-1" }],
+    events: [
+      {
+        id: "evt-room",
+        calendar_id: "calendar-1",
+        start: "2026-08-14T10:00:00Z",
+        end: "2026-08-14T10:30:00Z",
+        is_all_day: false,
+        status: "confirmed",
+        attendees: [
+          { email: "ana@example.com", name: "Ana", status: "accepted", self: false },
+          {
+            email: "boardroom@example.com",
+            name: "Boardroom",
+            status: "accepted",
+            self: false,
+            resource: true,
+          },
+          { email: "me@icloud.com", name: "Me", status: "accepted", self: true },
+        ],
+      },
+    ],
+  });
+
+  const attendees = JSON.parse(saved[0].attendees);
+  assert.equal(attendees[0].resource, undefined);
+  assert.equal(attendees[1].resource, true);
+  // Rows older builds stored for the room and the user are purged.
+  assert.deepEqual(synced, [
+    [
+      "apple",
+      null,
+      [{ email: "ana@example.com", displayName: "Ana" }],
+      ["boardroom@example.com", "me@icloud.com"],
+    ],
+  ]);
+});
+
+test("_mapEvent drops the organizer address only when the user organized the event", () => {
+  const AppleCalendarManager = loadManager();
+  const manager = new AppleCalendarManager({}, {});
+  const event = {
+    id: "evt-organizer",
+    calendar_id: "calendar-1",
+    start: "2026-08-14T10:00:00Z",
+    end: "2026-08-14T10:30:00Z",
+    is_all_day: false,
+    status: "confirmed",
+    organizer_email: "me@corp.test",
+    attendees: [{ email: "ana@example.com", status: "accepted", self: false }],
+  };
+
+  assert.equal(manager._mapEvent({ ...event, organizer_self: true }).organizer_email, null);
+  assert.equal(manager._mapEvent(event).organizer_email, "me@corp.test");
+});

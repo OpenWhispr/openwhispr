@@ -63,7 +63,7 @@ const clipboardModulePath = require.resolve("../../src/helpers/clipboard");
 
 const originalLoad = Module._load;
 
-function loadClipboardManager({ spawn } = {}) {
+function loadClipboardManager({ spawn, accessibility = true } = {}) {
   delete require.cache[clipboardModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
@@ -71,7 +71,7 @@ function loadClipboardManager({ spawn } = {}) {
       return {
         clipboard: fakeClipboard,
         systemPreferences: {
-          isTrustedAccessibilityClient: () => true,
+          isTrustedAccessibilityClient: () => accessibility,
         },
       };
     }
@@ -841,4 +841,61 @@ test("terminal detection matches window classes and macOS app names alike", () =
   assert.equal(manager.isLinuxTerminalWindowClass("konsole"), true);
   assert.equal(manager.isLinuxTerminalWindowClass("org.mozilla.firefox"), false);
   assert.equal(manager.isLinuxTerminalWindowClass(null), false);
+});
+
+for (const silent of [true, false]) {
+  test(`macOS denial preserves text and owns the dialog only when silent=${silent}`, async (t) => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "darwin" });
+    t.after(() => Object.defineProperty(process, "platform", platform));
+    const Manager = loadClipboardManager({ accessibility: false });
+    const manager = new Manager();
+    manager.resolveFastPasteBinary = () => null;
+    let dialogs = 0;
+    manager.showAccessibilityDialog = () => {
+      dialogs += 1;
+    };
+    resetClipboard({ text: "previous" });
+    await assert.rejects(
+      manager._pasteText("  final text\n", { silentAccessibilityCheck: silent }),
+      (error) => {
+        assert.equal(error.code, "ACCESSIBILITY_PERMISSION_REQUIRED");
+        assert.equal(error.clipboardCopied, true);
+        return true;
+      }
+    );
+    assert.equal(fakeClipboard.text, "  final text\n");
+    assert.equal(dialogs, silent ? 0 : 1);
+  });
+}
+
+test("intentional macOS clipboard fallback stays silent and does not throw", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  t.after(() => Object.defineProperty(process, "platform", platform));
+  const Manager = loadClipboardManager({ accessibility: false });
+  const manager = new Manager();
+  manager.resolveFastPasteBinary = () => null;
+  manager.showAccessibilityDialog = () => assert.fail("unexpected dialog");
+  resetClipboard();
+  const result = await manager._pasteText("manual text", { allowClipboardFallback: true });
+  assert.equal(result.pasted, false);
+  assert.equal(fakeClipboard.text, "manual text");
+});
+
+test("clipboard write failure is never classified as an Accessibility denial", async (t) => {
+  const write = fakeClipboard.writeText;
+  fakeClipboard.writeText = () => {
+    throw new Error("clipboard unavailable");
+  };
+  t.after(() => {
+    fakeClipboard.writeText = write;
+  });
+  const manager = new ClipboardManager();
+  await assert.rejects(manager._pasteText("final text"), (error) => {
+    assert.equal(error.message, "clipboard unavailable");
+    assert.equal(error.code, undefined);
+    assert.equal(error.clipboardCopied, undefined);
+    return true;
+  });
 });

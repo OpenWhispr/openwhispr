@@ -1,0 +1,33 @@
+name: Detect CI changes
+
+on:
+  workflow_call:
+    outputs:
+      desktop:
+        value: ${{ jobs.changes.outputs.desktop }}
+      mobile:
+        value: ${{ jobs.changes.outputs.mobile }}
+      build:
+        value: ${{ jobs.changes.outputs.build }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      desktop: ${{ steps.scope.outputs.desktop }}
+      mobile: ${{ steps.scope.outputs.mobile }}
+      build: ${{ steps.scope.outputs.build }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+      - name: Test CI routing
+        run: node --test .github/scripts/ci-scope.test.cjs
+      - name: Detect affected applications
+        id: scope
+        run: node .github/scripts/ci-scope.cjs

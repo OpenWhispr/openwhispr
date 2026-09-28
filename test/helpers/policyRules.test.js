@@ -598,6 +598,21 @@ test("copying an existing share link follows its own visibility", async () => {
   }
 });
 
+test("resending an invitation needs sharing to be on", async () => {
+  const { isShareActionAllowed } = await load();
+  const unmanaged = { status: "unmanaged", policy: null, appVersion: "1.8.1" };
+  const allowed = { status: "managed", policy, appVersion: "1.8.1" };
+
+  for (const snapshot of [unmanaged, allowed]) {
+    for (const visibility of ["link", "domain", "invited"]) {
+      assert.equal(isShareActionAllowed(snapshot, "resend-invitation", visibility), true);
+    }
+    // Disabling sharing suspends invitations, so the email could not open the note.
+    assert.equal(isShareActionAllowed(snapshot, "resend-invitation", "private"), false);
+    assert.equal(isShareActionAllowed(snapshot, "revoke-invitation", "private"), true);
+  }
+});
+
 test("sharing recovery remains available when exposure-increasing actions are blocked", async () => {
   const { isShareActionAllowed } = await load();
   const blockedSnapshots = [
@@ -1013,6 +1028,18 @@ test("the enterprise transcription tile is offered only to a managed policy snap
     managedOptions.map((o) => o.id),
     ["openwhispr", "providers", "local", "self-hosted", "enterprise"]
   );
+});
+
+test("a failed policy fetch is settled, but idle and loading are not", async () => {
+  const { isPolicySettled } = await load();
+  const snapshot = (status) => ({ status, policy: null, appVersion: null });
+
+  for (const status of ["managed", "unmanaged", "error"]) {
+    assert.equal(isPolicySettled(snapshot(status)), true, status);
+  }
+  for (const status of ["idle", "loading"]) {
+    assert.equal(isPolicySettled(snapshot(status)), false, status);
+  }
 });
 
 test("the local-history policy is resolved only once the fetch has settled", async () => {

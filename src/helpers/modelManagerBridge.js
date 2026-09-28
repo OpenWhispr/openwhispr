@@ -814,6 +814,11 @@ class ModelManager {
       startServer,
     });
 
+    // The preflight shrank the reply to make room for the prompt. A reply that
+    // fills that allowance was cut short by the window, not by the caller's cap,
+    // and a caller that can split its material would rather be refused.
+    const refuseWindowClip = options.refuseClippedByWindow === true && grantedMaxTokens < maxTokens;
+
     debugLogger.logReasoning("INFERENCE_SENDING_REQUEST", {
       messageCount: messages.length,
       systemPromptLength: (options.systemPrompt || "").length,
@@ -827,7 +832,7 @@ class ModelManager {
         // the original value would put the request back over the window.
         max_tokens: grantedMaxTokens,
         disableThinking: options.disableThinking,
-        requireCompleteOutput: options.requireCompleteOutput,
+        requireCompleteOutput: options.requireCompleteOutput || refuseWindowClip,
       });
 
       const totalTime = Date.now() - startTime;
@@ -844,18 +849,22 @@ class ModelManager {
         totalTimeMs: totalTime,
         error: error.message,
       });
+      if (refuseWindowClip && error.code === "OUTPUT_TRUNCATED") {
+        throw new ModelError(
+          `${modelInfo.model.name} ran out of context before the reply was complete.`,
+          "CONTEXT_TOO_LARGE",
+          { modelId, modelName: modelInfo.model.name, neededTokens: null, maxContextTokens: null }
+        );
+      }
       // A typed failure (a context overflow, say) must keep its identity, or
       // the renderer cannot translate it and the user sees raw server text.
-      if (error.code === "CONTEXT_TOO_LARGE") {
-        throw new ModelError(error.message, "CONTEXT_TOO_LARGE", {
+      if (error.code === "CONTEXT_TOO_LARGE" || error.code === "OUTPUT_TRUNCATED") {
+        throw new ModelError(error.message, error.code, {
           modelId,
           modelName: modelInfo.model.name,
           neededTokens: error.neededTokens ?? null,
           maxContextTokens: error.maxContextTokens ?? null,
         });
-      }
-      if (error.code === "OUTPUT_TRUNCATED") {
-        throw new ModelError(error.message, "OUTPUT_TRUNCATED", { modelId });
       }
       throw new ModelError(`Inference failed: ${error.message}`, "INFERENCE_FAILED", {
         error: error.message,
@@ -870,6 +879,10 @@ class ModelManager {
 
   getServerStatus() {
     return this.serverManager.getStatus();
+  }
+
+  cancelInference() {
+    this.serverManager.cancelInference();
   }
 
   async prewarmServer(modelId) {

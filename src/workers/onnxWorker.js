@@ -38,6 +38,7 @@ let speakerSession = null;
 let speakerInputName = null;
 let textSession = null;
 let textTokenizer = null;
+let textQueue = Promise.resolve();
 
 function log(level, message, extra) {
   if (!logStream) return;
@@ -313,12 +314,13 @@ async function textLoad({ modelDir }) {
   loadOrt();
 
   const tokenizerData = JSON.parse(fs.readFileSync(path.join(modelDir, "tokenizer.json"), "utf-8"));
-  textTokenizer = buildTextTokenizer(tokenizerData);
+  const tokenizer = buildTextTokenizer(tokenizerData);
 
   textSession = await ort.InferenceSession.create(
     path.join(modelDir, "model.onnx"),
     SESSION_OPTIONS
   );
+  textTokenizer = tokenizer;
   log("info", "text session loaded", { modelDir });
   return { ok: true };
 }
@@ -338,12 +340,21 @@ async function textEmbed({ text }) {
   return { embeddingBuffer: embedding.buffer };
 }
 
+async function textUnload() {
+  if (textSession) await textSession.release();
+  textSession = null;
+  textTokenizer = null;
+  log("info", "text session unloaded");
+  return { ok: true };
+}
+
 const handlers = {
   ping: () => ({ ok: true, sessions: { speaker: !!speakerSession, text: !!textSession } }),
   "speaker.load": speakerLoad,
   "speaker.extract": speakerExtract,
   "text.load": textLoad,
   "text.embed": textEmbed,
+  "text.unload": textUnload,
   shutdown: () => {
     log("info", "shutdown requested");
     setImmediate(() => process.exit(0));
@@ -357,7 +368,15 @@ async function dispatch({ id, method, payload }) {
     return { reply: { id, error: { message: `unknown method: ${method}` } }, transferList: [] };
   }
   try {
-    const result = await handler(payload || {});
+    let result;
+    if (method.startsWith("text.")) {
+      // Message callbacks overlap; never release a session during native inference.
+      const operation = textQueue.then(() => handler(payload || {}));
+      textQueue = operation.catch(() => {});
+      result = await operation;
+    } else {
+      result = await handler(payload || {});
+    }
     // MessagePortMain transfers only ports, not ArrayBuffers — clone the result buffers instead.
     return { reply: { id, result }, transferList: [] };
   } catch (err) {

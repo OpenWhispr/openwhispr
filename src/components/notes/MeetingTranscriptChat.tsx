@@ -744,6 +744,7 @@ interface MeetingTranscriptChatProps {
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
   onToggleSelect?: (segmentId: string) => void;
+  contentClassName?: string;
 }
 
 export function MeetingTranscriptChat({
@@ -768,6 +769,7 @@ export function MeetingTranscriptChat({
   onDismissSuggestion,
   onAttachSpeakerEmail,
   onToggleSelect,
+  contentClassName,
 }: MeetingTranscriptChatProps) {
   const { t } = useTranslation();
   const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
@@ -884,78 +886,82 @@ export function MeetingTranscriptChat({
     <div className="h-full flex flex-col">
       {consentNotice}
       {(isRecording || isDiarizing) && (
-        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 mx-4 mb-1.5 px-3 py-1.5 rounded-lg border border-border/70 bg-surface-2/40 text-xs text-foreground">
-          <div className="flex items-center gap-1.5 min-w-0">
-            {isDiarizing ? (
-              <Loader2 size={12} className="animate-spin text-muted-foreground shrink-0" />
-            ) : (
-              <Sparkles
-                size={12}
-                className={cn(
-                  "shrink-0",
-                  sessionDiarizationEnabled ? "text-primary" : "text-muted-foreground"
-                )}
-              />
-            )}
-            <span className="truncate">
-              {isDiarizing
-                ? t("notes.speaker.pill.finalizing")
-                : sessionDiarizationEnabled
-                  ? t("notes.speaker.pill.identifying")
-                  : t("notes.speaker.pill.notLabeled")}
-            </span>
-            {showAssumedHint && (
-              <span className="text-muted-foreground truncate">
-                {t("notes.speaker.pill.assumedHint")}
+        <div className={cn("shrink-0 px-4 mb-1.5", contentClassName)}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 rounded-lg border border-border/70 bg-surface-2/40 text-xs text-foreground">
+            <div className="flex items-center gap-1.5 min-w-0">
+              {isDiarizing ? (
+                <Loader2 size={12} className="animate-spin text-muted-foreground shrink-0" />
+              ) : (
+                <Sparkles
+                  size={12}
+                  className={cn(
+                    "shrink-0",
+                    sessionDiarizationEnabled ? "text-primary" : "text-muted-foreground"
+                  )}
+                />
+              )}
+              <span className="truncate">
+                {isDiarizing
+                  ? t("notes.speaker.pill.finalizing")
+                  : sessionDiarizationEnabled
+                    ? t("notes.speaker.pill.identifying")
+                    : t("notes.speaker.pill.notLabeled")}
               </span>
+              {showAssumedHint && (
+                <span className="text-muted-foreground truncate">
+                  {t("notes.speaker.pill.assumedHint")}
+                </span>
+              )}
+            </div>
+            <div className="flex-1" />
+            {!isDiarizing && sessionDiarizationEnabled && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">
+                  {t("notes.speaker.pill.speakersLabel")}
+                </span>
+                <div className="flex items-center gap-0.5 rounded-md border border-border bg-surface-2/60">
+                  <button
+                    onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount - 1)}
+                    disabled={sessionExpectedCount <= 1}
+                    className="px-1.5 py-0.5 rounded-s-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    aria-label={t("notes.speaker.pill.decAria")}
+                  >
+                    −
+                  </button>
+                  <span className="px-1.5 tabular-nums" aria-live="polite">
+                    {sessionExpectedCount === 1
+                      ? t("notes.speaker.pill.justYou")
+                      : sessionExpectedCount}
+                  </span>
+                  <button
+                    onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount + 1)}
+                    disabled={sessionExpectedCount >= MAX_SPEAKER_COUNT}
+                    className="px-1.5 py-0.5 rounded-e-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    aria-label={t("notes.speaker.pill.incAria")}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
+            {!isDiarizing && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => onSetSessionDiarizationEnabled?.(!sessionDiarizationEnabled)}
+                  className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:underline"
+                  aria-label={t("notes.speaker.pill.toggleAria")}
+                >
+                  {t("notes.speaker.pill.labelToggle")}
+                </button>
+                <div className="scale-75 -my-1">
+                  <Toggle
+                    checked={sessionDiarizationEnabled}
+                    onChange={(next) => onSetSessionDiarizationEnabled?.(next)}
+                  />
+                </div>
+              </div>
             )}
           </div>
-          <div className="flex-1" />
-          {!isDiarizing && sessionDiarizationEnabled && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-muted-foreground">{t("notes.speaker.pill.speakersLabel")}</span>
-              <div className="flex items-center gap-0.5 rounded-md border border-border bg-surface-2/60">
-                <button
-                  onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount - 1)}
-                  disabled={sessionExpectedCount <= 1}
-                  className="px-1.5 py-0.5 rounded-s-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                  aria-label={t("notes.speaker.pill.decAria")}
-                >
-                  −
-                </button>
-                <span className="px-1.5 tabular-nums" aria-live="polite">
-                  {sessionExpectedCount === 1
-                    ? t("notes.speaker.pill.justYou")
-                    : sessionExpectedCount}
-                </span>
-                <button
-                  onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount + 1)}
-                  disabled={sessionExpectedCount >= MAX_SPEAKER_COUNT}
-                  className="px-1.5 py-0.5 rounded-e-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                  aria-label={t("notes.speaker.pill.incAria")}
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          )}
-          {!isDiarizing && (
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => onSetSessionDiarizationEnabled?.(!sessionDiarizationEnabled)}
-                className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:underline"
-                aria-label={t("notes.speaker.pill.toggleAria")}
-              >
-                {t("notes.speaker.pill.labelToggle")}
-              </button>
-              <div className="scale-75 -my-1">
-                <Toggle
-                  checked={sessionDiarizationEnabled}
-                  onChange={(next) => onSetSessionDiarizationEnabled?.(next)}
-                />
-              </div>
-            </div>
-          )}
         </div>
       )}
       <div
@@ -965,9 +971,9 @@ export function MeetingTranscriptChat({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 min-h-0 overflow-y-auto px-4 pt-2 agent-chat-scroll pb-[var(--floating-inset,96px)]"
+        className="flex-1 min-h-0 overflow-y-auto pt-2 agent-chat-scroll pb-[var(--floating-inset,96px)]"
       >
-        <div>
+        <div className={cn("px-4", contentClassName)}>
           <div style={{ height: totalSize, width: "100%", position: "relative" }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const i = virtualItem.index;

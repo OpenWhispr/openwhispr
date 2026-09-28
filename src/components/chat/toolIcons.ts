@@ -9,6 +9,9 @@ import {
   FilePlus,
   FilePen,
   Zap,
+  Mail,
+  Users,
+  MessageSquare,
 } from "../icons";
 
 export const toolIcons: Record<string, typeof Search> = {
@@ -23,4 +26,7 @@ export const toolIcons: Record<string, typeof Search> = {
   get_snippet: Zap,
   update_snippets: Zap,
   update_dictionary: BookOpen,
+  email_draft: Mail,
+  find_contact: Users,
+  slack_send_message: MessageSquare,
 };

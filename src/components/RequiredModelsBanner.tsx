@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import { AlertTriangle } from "./icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
+import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
+import { cn } from "./lib/utils";
 import { DownloadProgressBar } from "./ui/DownloadProgressBar";
 import { useModelDownload } from "../hooks/useModelDownload";
 import { useRequiredLocalModels } from "../hooks/useRequiredLocalModels";
@@ -58,7 +60,7 @@ export function RequiredModelsBanner() {
     : null;
 
   return (
-    <div className="max-w-3xl mx-auto w-full mb-3">
+    <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
       <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
         <div className="flex items-start gap-3">
           <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">

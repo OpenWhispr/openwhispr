@@ -248,7 +248,8 @@ test("reopening a pre-v2 database clears microsoft sync tokens once", (t) => {
     .get();
   assert.equal(calendar.sync_token, null);
   assert.equal(calendar.sync_token_expires_at, null);
-  assert.equal(reopened.db.pragma("user_version", { simple: true }), 2);
+  // Reopening runs every later migration too.
+  assert.equal(reopened.db.pragma("user_version", { simple: true }), 3);
   reopened.db.close();
 });
 

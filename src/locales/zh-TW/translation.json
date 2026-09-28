@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "滑鼠按鍵快捷鍵目前僅在 macOS 上受支援。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" 無法在此桌面上使用，其快捷鍵需要包含一個一般按鍵。請加入一個按鍵，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住說話需要 macOS 能偵測到放開的按鍵：Globe、右側 Option 之類的右側按鍵，或帶修飾鍵的快速鍵。點按可用於任何按鍵。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
       "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
@@ -702,6 +703,11 @@
       "title": "缺少必要的模型",
       "description": "您的組織要求在此裝置上安裝這些模型：{{models}}。",
       "download": "下載"
+    },
+    "cloudNudge": {
+      "title": "你已登入",
+      "description": "聽寫仍在使用你自己的設定。你可以隨時切換至 OpenWhispr Cloud。",
+      "action": "開啟設定"
     }
   },
   "reasoning": {
@@ -914,6 +920,7 @@
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
         "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。",
         "cleanupTruncated": "AI 模型的輸出長度達到上限，未能完成聽寫清理。",
+        "cleanupDuplicated": "AI 清理重複了轉錄內容。已保留原始文字。",
         "cleanupEmptyReply": "AI 模型傳回空白回應，沒有產生清理後的文字。"
       },
       "translationFallback": {
@@ -935,6 +942,18 @@
         "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
         "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
         "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"
+      },
+      "pastePermission": {
+        "title": "允許自動貼上",
+        "description": "請在系統設定 → 隱私權與安全性 → 輔助使用中啟用 OpenWhispr。",
+        "settingsFailed": "無法開啟設定。請開啟系統設定 → 隱私權與安全性 → 輔助使用，並啟用 OpenWhispr。",
+        "manualPaste": "點擊下方按鈕複製文字，然後按 {{shortcut}} 貼上。",
+        "openSettings": "開啟設定",
+        "copyToClipboard": "複製到剪貼板",
+        "copyFailed": "複製失敗"
+      },
+      "pasteFailed": {
+        "title": "無法自動貼上"
       }
     },
     "clipboard": {
@@ -2655,7 +2674,8 @@
     "errors": {
       "contextTooLarge": "內容過長，{{model}} 無法在這台電腦上讀取。大約需要 {{needed}} 個上下文 token，但記憶體只能容納 {{max}} 個。請改用雲端模型，或對更短的選取範圍執行該動作。",
       "contextTooLargeGeneric": "內容過長，{{model}} 無法在這台電腦上讀取。請改用雲端模型，或對更短的選取範圍執行該動作。",
-      "localServerUnavailable": "無法在這台電腦上啟動 {{model}}。請重試，或改用雲端模型。"
+      "localServerUnavailable": "無法在這台電腦上啟動 {{model}}。請重試，或改用雲端模型。",
+      "localModelBusy": "本機模型仍在處理另一個請求。請等待其完成後再試。"
     }
   },
   "referral": {
@@ -2948,7 +2968,35 @@
       "conversationWillAppear": "對話將顯示在這裡...",
       "linkedEvent": "關聯行程",
       "noFolder": "無資料夾",
-      "participants": "參與者"
+      "participants": "參與者",
+      "table": {
+        "actions": "表格操作",
+        "insertRowAbove": "在上方插入列",
+        "insertRowBelow": "在下方插入列",
+        "insertColumnLeft": "在左側插入欄",
+        "insertColumnRight": "在右側插入欄",
+        "deleteRow": "刪除列",
+        "deleteColumn": "刪除欄",
+        "deleteTable": "刪除表格"
+      },
+      "format": {
+        "toolbar": "格式",
+        "withShortcut": "{{action}}（{{shortcut}}）",
+        "bold": "粗體",
+        "italic": "斜體",
+        "strike": "刪除線",
+        "code": "程式碼",
+        "textStyle": "文字樣式",
+        "paragraph": "內文",
+        "heading1": "標題 1",
+        "heading2": "標題 2",
+        "heading3": "標題 3",
+        "bulletList": "項目符號清單",
+        "orderedList": "編號清單",
+        "taskList": "核取清單",
+        "blockquote": "引用",
+        "table": "插入表格"
+      }
     },
     "participants": {
       "attendee": "位與會者",
@@ -3099,6 +3147,8 @@
       "runAction": "執行 {{name}}",
       "selectAction": "選擇動作",
       "done": "完成",
+      "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
+      "emptyReply": "模型傳回了空白回覆。請再試一次，或選擇其他模型。",
       "builtin": {
         "generateNotes": {
           "name": "生成筆記",
@@ -3629,6 +3679,9 @@
     },
     "tools": {
       "search_notesName": "搜尋筆記",
+      "email_draftName": "郵件草稿",
+      "find_contactName": "尋找聯絡人",
+      "slack_send_messageName": "Slack 訊息",
       "get_noteName": "取得筆記",
       "create_noteName": "建立筆記",
       "update_noteName": "更新筆記",
@@ -3641,6 +3694,9 @@
       "update_dictionaryName": "更新字典",
       "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜尋筆記...",
+      "email_draftStatus": "正在開啟郵件草稿...",
+      "find_contactStatus": "正在尋找聯絡人...",
+      "slack_send_messageStatus": "正在準備 Slack 訊息...",
       "web_searchStatus": "正在搜尋網頁...",
       "copy_to_clipboardStatus": "正在複製到剪貼簿...",
       "get_calendar_eventsStatus": "正在查看行事曆...",
@@ -3732,6 +3788,7 @@
       "connectFailedDescription": "連線 Calendar.app 時發生錯誤。請重新啟動 OpenWhispr 後再試一次。"
     },
     "sections": {
+      "connectors": "連接器",
       "calendar": "行事曆",
       "api": "API",
       "mcp": "MCP",
@@ -3790,6 +3847,144 @@
     "notABot": {
       "title": "OpenWhispr 是會議錄製工具，不是機器人",
       "description": "OpenWhispr 直接從您的系統擷取音訊 — 它不會以參與者身分加入您的會議。只需連接日曆，正常記錄筆記即可。"
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "傳送至 {{destination}}",
+        "slackPost": "發佈到 {{destination}}"
+      },
+      "identity": "以 {{account}} 身分",
+      "identityWithWorkspace": "以 {{account}}（{{workspace}}）身分",
+      "send": "傳送",
+      "edit": "編輯",
+      "doneEditing": "編輯完成",
+      "cancel": "取消",
+      "titleLabel": "標題",
+      "bodyLabel": "訊息",
+      "sending": "傳送中…",
+      "sent": "已傳送至 {{destination}}。",
+      "open": "開啟",
+      "failed": "無法傳送：{{message}}",
+      "unknown": "無法確認是否已傳送，請檢查 {{destination}}。",
+      "cancelled": "已取消，未傳送任何內容。",
+      "notSent": "未傳送。",
+      "policyRetry": "無法檢查您的組織設定，因此未傳送任何內容。請點一下「傳送」重試。",
+      "errors": {
+        "not_in_channel": "您不是 {{destination}} 的成員。",
+        "channel_not_found": "在 Slack 中已找不到 {{destination}}。",
+        "is_archived": "{{destination}} 已封存。",
+        "reconnect_needed": "需要在設定中重新連接 Slack。",
+        "connection_changed": "傳送前 Slack 連線發生了變化，因此未傳送任何內容。",
+        "rate_limited": "Slack 忙碌中，請稍後再試。",
+        "missing_scope": "OpenWhispr 沒有權限在那裡發佈。請在設定中重新連接 Slack。",
+        "msg_too_long": "訊息對 Slack 來說太長了（格式化後最多 12,000 個字元）。",
+        "no_text": "訊息是空的。",
+        "network": "無法連線到 Slack，未傳送任何內容。",
+        "credential_save_failed": "無法在這台電腦上儲存 Slack 登入資訊，未傳送任何內容。請再試一次。",
+        "dm_failed": "無法開啟與 {{destination}} 的私訊，未傳送任何內容。",
+        "restricted": "{{destination}} 對您是唯讀或受限的。",
+        "generic": "發生問題，未傳送任何內容。"
+      }
+    },
+    "policyOff": "您的組織已關閉連接器。",
+    "email": {
+      "title": "郵件草稿",
+      "description": "助理會在您的郵件應用程式中開啟預先填寫的草稿，由您檢查並親自按下傳送。",
+      "proRequired": "升級到付費方案，讓助理為您草擬郵件。",
+      "unavailable": "郵件草稿暫時無法使用。",
+      "targetLabel": "在此撰寫郵件",
+      "autoResolved": "自動 · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook（公司或學校）",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "預設郵件應用程式"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "助理可以代表您在頻道和向他人發佈訊息。每則訊息傳送前都需要您核准。",
+      "connect": "連接",
+      "reconnect": "重新連接",
+      "disconnect": "中斷連接",
+      "connecting": "請在瀏覽器中完成連接…",
+      "connectedAs": "已以 {{account}} 身分連接到 {{workspace}}",
+      "needsReconnect": "需要重新連接 Slack。",
+      "proRequired": "升級到付費方案，讓助理為您傳送 Slack 訊息。",
+      "errors": {
+        "connect_failed": "無法連接 Slack，請重試。",
+        "disconnect_failed": "無法中斷 Slack 連接，請重試。",
+        "oauth_denied": "由於未獲得授權，Slack 未連接。",
+        "oauth_timeout": "連接耗時過長，請重試。",
+        "oauth_state_mismatch": "該登入連結已過期，請重試。",
+        "ports_busy": "另一個應用程式正在使用 OpenWhispr 連接所需的連接埠。請關閉它後重試。",
+        "token_exchange_failed": "Slack 未完成連接，請重試。",
+        "not_configured": "此版本中 Slack 不可用。",
+        "connection_changed": "連接過程中您的帳戶或 Slack 連接發生了變化，請重試。",
+        "signed_out": "請登入 OpenWhispr 以連接 Slack。",
+        "policy_blocked": "您的組織已關閉連接器。",
+        "policy_unavailable": "無法檢查您的組織設定，請重試。"
+      },
+      "browser": {
+        "connectedTitle": "Slack 已連接",
+        "connectedBody": "您可以關閉此分頁並返回 OpenWhispr。",
+        "failedTitle": "Slack 未連接",
+        "failedBody": "請返回 OpenWhispr 重試。"
+      }
+    },
+    "recent": {
+      "title": "近期操作",
+      "actions": {
+        "email_draft": "傳送給 {{destination}} 的草稿",
+        "slack_send_message": "傳送給 {{destination}} 的訊息"
+      },
+      "unlabeledActions": {
+        "email_draft": "郵件草稿",
+        "slack_send_message": "Slack 訊息"
+      },
+      "states": {
+        "pending": "等待中",
+        "committing": "進行中",
+        "sent": "已完成",
+        "failed": "失敗",
+        "unknown": "未確認",
+        "cancelled": "已取消",
+        "expired": "已過期"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "已開啟傳送給 {{destination}} 的草稿。",
+      "draftOpenedBodyCopied": "已開啟傳送給 {{destination}} 的草稿。內文已在剪貼簿中。",
+      "draftOpenedSubjectCopied": "已開啟傳送給 {{destination}} 的草稿。主旨和內文已在剪貼簿中。",
+      "draftOpenedOnlySubjectCopied": "已開啟寄給 {{destination}} 的草稿。主旨已在剪貼簿中。",
+      "needsDetails": "需要更多資訊。",
+      "unavailable": "連接器暫時無法使用。",
+      "unknown": "未確認。請先檢查是否已完成，再重試。",
+      "draftUnknown": "未確認：寄給 {{destination}} 的草稿可能沒有開啟。請先檢查，再重試。",
+      "contactsFound": "找到的聯絡人：{{total}}",
+      "draftLimit": "每次請求最多只能開啟 {{count}} 份草稿。",
+      "clipboardBusy": "未開啟：另一份草稿的文字仍在剪貼簿中。",
+      "errors": {
+        "open_failed": "無法開啟您的郵件應用程式。",
+        "draft_too_long": "收件者太多，無法產生草稿連結。",
+        "invalid_address": "需要完整的電子郵件地址。",
+        "not_in_channel": "不是該頻道的成員。",
+        "channel_not_found": "找不到該對話。",
+        "is_archived": "該頻道已封存。",
+        "reconnect_needed": "需要重新連接 Slack。",
+        "connection_changed": "Slack 連線已變更。未傳送任何內容。",
+        "rate_limited": "Slack 忙碌中。",
+        "missing_scope": "缺少 Slack 權限。",
+        "msg_too_long": "訊息對 Slack 來說太長。",
+        "no_text": "訊息是空的。",
+        "network": "無法連線到 Slack。未傳送任何內容。",
+        "credential_save_failed": "無法在這台電腦上儲存 Slack 登入資訊。未傳送任何內容。",
+        "dm_failed": "無法開啟私訊。未傳送任何內容。",
+        "restricted": "該頻道為唯讀或受限。",
+        "generic": "操作未成功。"
+      }
     }
   },
   "calendar": {
@@ -3867,6 +4062,11 @@
         "createLink": "建立連結",
         "copyLink": "複製連結",
         "copied": "已複製",
+        "replaceLink": {
+          "title": "要取代分享連結嗎？",
+          "description": "此裝置上沒有目前的連結，因此複製時需要建立新連結。舊連結將會失效，包括邀請電子郵件中的連結。請重新傳送每個邀請，讓受邀者仍能開啟這則筆記。",
+          "confirm": "取代連結"
+        },
         "export": "匯出",
         "owner": "擁有者",
         "editor": "可編輯",

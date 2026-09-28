@@ -1,9 +1,21 @@
-const { Tray, Menu, nativeImage, app } = require("electron");
+const { Tray, Menu, nativeImage, app, systemPreferences } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
+const { windowsTrayIdentity } = require("../../package.json");
+
+// Permanent identity for signed production Windows builds; keep across releases.
+// Windows binds an unsigned executable's GUID to its path, so only builds from the
+// signed config, which sets windowsTrayIdentity, may use it.
+const WINDOWS_PRODUCTION_TRAY_GUID = "9afd9bd5-53da-42ef-8334-6e2b494c66fe";
+
+// macOS saves the menu-bar position under this GUID, so changing it resets every
+// user's placement. Electron lowercases the GUID before handing it to macOS, so
+// it stays lowercase here or the position key below matches no item.
+const MACOS_TRAY_GUID = "eb809902-04b5-5b08-b12a-f81d6f27e185";
+const MACOS_TRAY_POSITION_KEY = `NSStatusItem Preferred Position ${MACOS_TRAY_GUID}`;
 
 class TrayManager {
   constructor() {
@@ -138,10 +150,24 @@ class TrayManager {
         return;
       }
 
-      this.tray = new Tray(trayIcon);
-
       if (process.platform === "darwin") {
+        // The position key is an undocumented AppKit default, so placement is best
+        // effort. Position 0 starts the icon as far right as macOS allows, beside
+        // the system icons. A registered default only fills in for a missing value,
+        // so once the user drags the icon, their saved position wins.
+        systemPreferences.registerDefaults({ [MACOS_TRAY_POSITION_KEY]: 0 });
+        this.tray = new Tray(trayIcon, MACOS_TRAY_GUID);
         this.tray.setIgnoreDoubleClickEvents(true);
+      } else if (
+        process.platform === "win32" &&
+        process.env.OPENWHISPR_CHANNEL === "production" &&
+        windowsTrayIdentity === true
+      ) {
+        // Other channels have their own profile and single-instance lock, so they can
+        // run beside production and must not claim its GUID.
+        this.tray = new Tray(trayIcon, WINDOWS_PRODUCTION_TRAY_GUID);
+      } else {
+        this.tray = new Tray(trayIcon);
       }
 
       this.updateTrayMenu();

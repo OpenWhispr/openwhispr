@@ -4,6 +4,7 @@ const debugLogger = require("../helpers/debugLogger");
 class LocalReasoningService {
   constructor() {
     this.isProcessing = false;
+    this.activeRequestId = null;
   }
 
   async isAvailable() {
@@ -24,10 +25,14 @@ class LocalReasoningService {
     });
 
     if (this.isProcessing) {
-      throw new Error("Already processing a request");
+      // Typed so the renderer can translate it: a note summarised in parts
+      // holds this bridge for minutes, and whatever arrives meanwhile (another
+      // note's action, dictation cleanup) used to surface this text raw.
+      throw Object.assign(new Error("Already processing a request"), { code: "LOCAL_MODEL_BUSY" });
     }
 
     this.isProcessing = true;
+    this.activeRequestId = config.requestId ?? null;
     const startTime = Date.now();
 
     try {
@@ -40,6 +45,7 @@ class LocalReasoningService {
         systemPrompt: config.systemPrompt || "",
         disableThinking: config.disableThinking !== false,
         requireCompleteOutput: config.requireCompleteOutput,
+        refuseClippedByWindow: config.refuseClippedByWindow,
         // A minimum context window for this request. Rebuilding this object
         // field-by-field is what silently orphaned it before #2142: it was
         // declared, written by selection editing, and never forwarded.
@@ -80,7 +86,14 @@ class LocalReasoningService {
       throw error;
     } finally {
       this.isProcessing = false;
+      this.activeRequestId = null;
     }
+  }
+
+  // Only the caller that tagged the request can abort it, so a cancelled note
+  // never kills a dictation cleanup that took the slot after it.
+  cancel(requestId) {
+    if (requestId && requestId === this.activeRequestId) modelManager.cancelInference();
   }
 
   calculateMaxTokens(textLength, minTokens = 512, maxTokens = 2048, multiplier = 2) {

@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" はこのデスクトップでは使用できません。ショートカットには通常のキーが必要です。Control+Alt+Space のようにキーを追加してください。",
       "holdNeedsReleaseKey": "ホールドして話すには、macOS が離したことを検知できるキーが必要です。Globe、右 Option のような右側のキー、または修飾キー付きのショートカットです。タップならどのキーでも使えます。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
       "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
@@ -702,6 +703,11 @@
       "title": "必須モデルがありません",
       "description": "組織では、このデバイスにこれらのモデルが必要です：{{models}}。",
       "download": "ダウンロード"
+    },
+    "cloudNudge": {
+      "title": "サインインしました",
+      "description": "音声入力は引き続きご自身の設定で動作します。いつでも OpenWhispr Cloud に切り替えられます。",
+      "action": "設定を開く"
     }
   },
   "reasoning": {
@@ -914,6 +920,7 @@
         "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
         "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。",
         "cleanupTruncated": "AI モデルの出力が上限に達し、ディクテーションのクリーンアップが完了しませんでした。",
+        "cleanupDuplicated": "AI クリーンアップが文字起こしを繰り返しました。元のテキストを保持しました。",
         "cleanupEmptyReply": "AI モデルが空の応答を返したため、クリーンアップされたテキストがありません。"
       },
       "translationFallback": {
@@ -935,6 +942,18 @@
         "unavailable": "OpenWhispr は選択したテキストを安全に読み取れませんでした。アクセシビリティまたは入力自動化の権限を確認してください。",
         "tooLarge": "選択範囲が大きすぎます。6,000文字以内を選択してください。",
         "reasoningFailed": "AI は選択範囲の編集を完了できませんでした。元のテキストは変更されていません。"
+      },
+      "pastePermission": {
+        "title": "自動貼り付けを許可",
+        "description": "システム設定 → プライバシーとセキュリティ → アクセシビリティでOpenWhisprを有効にしてください。",
+        "settingsFailed": "設定を開けませんでした。システム設定 → プライバシーとセキュリティ → アクセシビリティを開き、OpenWhisprを有効にしてください。",
+        "manualPaste": "下のボタンでテキストをコピーし、{{shortcut}}を押して貼り付けてください。",
+        "openSettings": "設定を開く",
+        "copyToClipboard": "テキストをコピー",
+        "copyFailed": "コピーに失敗しました"
+      },
+      "pasteFailed": {
+        "title": "自動貼り付けに失敗しました"
       }
     },
     "clipboard": {
@@ -2655,7 +2674,8 @@
     "errors": {
       "contextTooLarge": "このコンピューターでは長すぎて {{model}} が読み取れません。約 {{needed}} トークンのコンテキストが必要ですが、メモリに収まるのは {{max}} までです。クラウドモデルを使うか、選択範囲を短くして実行してください。",
       "contextTooLargeGeneric": "このコンピューターでは長すぎて {{model}} が読み取れません。クラウドモデルを使うか、選択範囲を短くして実行してください。",
-      "localServerUnavailable": "このコンピューターでは {{model}} を起動できませんでした。もう一度試すか、クラウドモデルに切り替えてください。"
+      "localServerUnavailable": "このコンピューターでは {{model}} を起動できませんでした。もう一度試すか、クラウドモデルに切り替えてください。",
+      "localModelBusy": "ローカルモデルはまだ別のリクエストを処理しています。完了を待ってから、もう一度お試しください。"
     }
   },
   "notes": {
@@ -2842,7 +2862,35 @@
       "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
       "startRecording": "録音を開始",
       "generateSummary": "AI要約を生成",
-      "startWriting": "書き始める..."
+      "startWriting": "書き始める...",
+      "table": {
+        "actions": "表の操作",
+        "insertRowAbove": "上に行を挿入",
+        "insertRowBelow": "下に行を挿入",
+        "insertColumnLeft": "左に列を挿入",
+        "insertColumnRight": "右に列を挿入",
+        "deleteRow": "行を削除",
+        "deleteColumn": "列を削除",
+        "deleteTable": "表を削除"
+      },
+      "format": {
+        "toolbar": "書式",
+        "withShortcut": "{{action}}（{{shortcut}}）",
+        "bold": "太字",
+        "italic": "斜体",
+        "strike": "取り消し線",
+        "code": "コード",
+        "textStyle": "テキストスタイル",
+        "paragraph": "標準テキスト",
+        "heading1": "見出し 1",
+        "heading2": "見出し 2",
+        "heading3": "見出し 3",
+        "bulletList": "箇条書き",
+        "orderedList": "番号付きリスト",
+        "taskList": "チェックリスト",
+        "blockquote": "引用",
+        "table": "表を挿入"
+      }
     },
     "participants": {
       "attendee": "名の参加者",
@@ -2880,6 +2928,8 @@
       "runAction": "{{name}} を実行",
       "selectAction": "アクションを選択",
       "done": "完了",
+      "chunkProgress": "パート {{step}} / {{total}}",
+      "emptyReply": "モデルから空の応答が返されました。もう一度お試しいただくか、別のモデルを選択してください。",
       "builtin": {
         "generateNotes": {
           "name": "ノートを生成",
@@ -3629,6 +3679,9 @@
     },
     "tools": {
       "search_notesName": "ノートを検索",
+      "email_draftName": "メールの下書き",
+      "find_contactName": "連絡先を検索",
+      "slack_send_messageName": "Slackメッセージ",
       "get_noteName": "ノートを取得",
       "create_noteName": "ノートを作成",
       "update_noteName": "ノートを更新",
@@ -3641,6 +3694,9 @@
       "update_dictionaryName": "辞書を更新",
       "update_snippetsName": "スニペットを更新",
       "search_notesStatus": "ノートを検索中...",
+      "email_draftStatus": "メールの下書きを開いています...",
+      "find_contactStatus": "連絡先を検索中...",
+      "slack_send_messageStatus": "Slackメッセージを準備しています...",
       "web_searchStatus": "ウェブを検索中...",
       "copy_to_clipboardStatus": "クリップボードにコピー中...",
       "get_calendar_eventsStatus": "カレンダーを確認中...",
@@ -3732,6 +3788,7 @@
       "connectFailedDescription": "Calendar.app への接続中にエラーが発生しました。OpenWhispr を再起動してもう一度お試しください。"
     },
     "sections": {
+      "connectors": "コネクタ",
       "calendar": "カレンダー",
       "api": "API",
       "mcp": "MCP",
@@ -3790,6 +3847,144 @@
     "notABot": {
       "title": "OpenWhispr はミーティング録音ツールであり、ボットではありません",
       "description": "OpenWhispr はシステムから直接オーディオをキャプチャします — 参加者としてミーティングに参加することはありません。カレンダーを接続して、通常通りノートを取るだけです。"
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "{{destination}} に送信",
+        "slackPost": "{{destination}}に投稿"
+      },
+      "identity": "{{account}} として",
+      "identityWithWorkspace": "{{workspace}} の {{account}} として",
+      "send": "送信",
+      "edit": "編集",
+      "doneEditing": "編集完了",
+      "cancel": "キャンセル",
+      "titleLabel": "タイトル",
+      "bodyLabel": "メッセージ",
+      "sending": "送信中…",
+      "sent": "{{destination}} に送信しました。",
+      "open": "開く",
+      "failed": "送信できませんでした: {{message}}",
+      "unknown": "送信されたか確認できませんでした。{{destination}} を確認してください。",
+      "cancelled": "キャンセルしました。何も送信されていません。",
+      "notSent": "送信されていません。",
+      "policyRetry": "組織の設定を確認できなかったため、何も送信されていません。もう一度「送信」を押してください。",
+      "errors": {
+        "not_in_channel": "{{destination}}のメンバーではありません。",
+        "channel_not_found": "{{destination}}がSlackで見つからなくなりました。",
+        "is_archived": "{{destination}}はアーカイブされています。",
+        "reconnect_needed": "設定でSlackを再接続する必要があります。",
+        "connection_changed": "送信前にSlackの接続が変わったため、何も送信されませんでした。",
+        "rate_limited": "Slackが混み合っています。しばらくしてからもう一度お試しください。",
+        "missing_scope": "OpenWhisprにはそこに投稿する権限がありません。設定でSlackを再接続してください。",
+        "msg_too_long": "メッセージがSlackには長すぎます（整形後で最大12,000文字）。",
+        "no_text": "メッセージが空です。",
+        "network": "Slackに接続できませんでした。何も送信されていません。",
+        "credential_save_failed": "このコンピューターにSlackのログイン情報を保存できませんでした。何も送信されていません。もう一度お試しください。",
+        "dm_failed": "{{destination}}とのダイレクトメッセージを開けませんでした。何も送信されていません。",
+        "restricted": "{{destination}}は読み取り専用か、あなたには制限されています。",
+        "generic": "問題が発生しました。何も送信されていません。"
+      }
+    },
+    "policyOff": "組織によってコネクタが無効にされています。",
+    "email": {
+      "title": "メール下書き",
+      "description": "アシスタントがメールアプリに下書きを自動入力して開きます。内容を確認し、自分で送信を押してください。",
+      "proRequired": "アシスタントにメールの下書きを作成させるには、有料プランへのアップグレードが必要です。",
+      "unavailable": "現在メール下書きを利用できません。",
+      "targetLabel": "メールを作成するアプリ",
+      "autoResolved": "自動 · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook（職場または学校）",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "既定のメールアプリ"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "アシスタントはチャンネルや個人にあなたとしてメッセージを投稿できます。送信前に必ず内容を承認します。",
+      "connect": "接続",
+      "reconnect": "再接続",
+      "disconnect": "接続を解除",
+      "connecting": "ブラウザで接続を完了してください…",
+      "connectedAs": "{{workspace}} の {{account}} として接続済み",
+      "needsReconnect": "Slackを再接続する必要があります。",
+      "proRequired": "アシスタントにSlackメッセージを送信させるには、有料プランへのアップグレードが必要です。",
+      "errors": {
+        "connect_failed": "Slackを接続できませんでした。もう一度お試しください。",
+        "disconnect_failed": "Slackの接続を解除できませんでした。もう一度お試しください。",
+        "oauth_denied": "アクセスが許可されなかったため、Slackは接続されませんでした。",
+        "oauth_timeout": "接続に時間がかかりすぎました。もう一度お試しください。",
+        "oauth_state_mismatch": "そのサインインリンクは期限切れでした。もう一度お試しください。",
+        "ports_busy": "OpenWhisprが接続に必要なポートを別のアプリが使用しています。そのアプリを閉じてから、もう一度お試しください。",
+        "token_exchange_failed": "Slackの接続が完了しませんでした。もう一度お試しください。",
+        "not_configured": "このビルドではSlackを利用できません。",
+        "connection_changed": "接続中にアカウントまたはSlackの接続が変わりました。もう一度お試しください。",
+        "signed_out": "Slackを接続するにはOpenWhisprにサインインしてください。",
+        "policy_blocked": "組織によってコネクタが無効にされています。",
+        "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。"
+      },
+      "browser": {
+        "connectedTitle": "Slackが接続されました",
+        "connectedBody": "このタブを閉じてOpenWhisprに戻ることができます。",
+        "failedTitle": "Slackは接続されませんでした",
+        "failedBody": "OpenWhisprに戻ってもう一度お試しください。"
+      }
+    },
+    "recent": {
+      "title": "最近のアクション",
+      "actions": {
+        "email_draft": "{{destination}} 宛ての下書き",
+        "slack_send_message": "{{destination}} 宛てのメッセージ"
+      },
+      "unlabeledActions": {
+        "email_draft": "メール下書き",
+        "slack_send_message": "Slackメッセージ"
+      },
+      "states": {
+        "pending": "待機中",
+        "committing": "処理中",
+        "sent": "完了",
+        "failed": "失敗",
+        "unknown": "未確認",
+        "cancelled": "キャンセル済み",
+        "expired": "期限切れ"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "{{destination}} 宛ての下書きを開きました。",
+      "draftOpenedBodyCopied": "{{destination}} 宛ての下書きを開きました。本文はクリップボードにあります。",
+      "draftOpenedSubjectCopied": "{{destination}} 宛ての下書きを開きました。件名と本文はクリップボードにあります。",
+      "draftOpenedOnlySubjectCopied": "{{destination}} 宛ての下書きを開きました。件名はクリップボードにあります。",
+      "needsDetails": "詳細が必要です。",
+      "unavailable": "現在コネクタを利用できません。",
+      "unknown": "未確認です。再試行する前に完了したかどうかを確認してください。",
+      "draftUnknown": "未確認：{{destination}} 宛ての下書きが開かなかった可能性があります。再試行する前に確認してください。",
+      "contactsFound": "見つかった連絡先: {{total}}",
+      "draftLimit": "1回のリクエストで開ける下書きは{{count}}件までです。",
+      "clipboardBusy": "開いていません：別の下書きのテキストがまだクリップボードにあります。",
+      "errors": {
+        "open_failed": "メールアプリを開けませんでした。",
+        "draft_too_long": "下書きリンクには宛先が多すぎます。",
+        "invalid_address": "完全なメールアドレスが必要です。",
+        "not_in_channel": "そのチャンネルのメンバーではありません。",
+        "channel_not_found": "その会話が見つかりませんでした。",
+        "is_archived": "そのチャンネルはアーカイブされています。",
+        "reconnect_needed": "Slackを再接続する必要があります。",
+        "connection_changed": "Slackの接続が変わりました。何も送信されていません。",
+        "rate_limited": "Slackが混み合っています。",
+        "missing_scope": "Slackの権限がありません。",
+        "msg_too_long": "メッセージがSlackには長すぎます。",
+        "no_text": "メッセージが空です。",
+        "network": "Slackに接続できませんでした。何も送信されていません。",
+        "credential_save_failed": "このコンピューターにSlackのログイン情報を保存できませんでした。何も送信されていません。",
+        "dm_failed": "ダイレクトメッセージを開けませんでした。何も送信されていません。",
+        "restricted": "そのチャンネルは読み取り専用か、制限されています。",
+        "generic": "うまくいきませんでした。"
+      }
     }
   },
   "calendar": {
@@ -3867,6 +4062,11 @@
         "createLink": "リンクを作成",
         "copyLink": "リンクをコピー",
         "copied": "コピーしました",
+        "replaceLink": {
+          "title": "共有リンクを置き換えますか？",
+          "description": "このデバイスには現在のリンクがないため、コピーするには新しいリンクを作成する必要があります。古いリンクは、招待メール内のリンクも含めて使えなくなります。招待された人が引き続きノートを開けるように、各招待を再送信してください。",
+          "confirm": "リンクを置き換え"
+        },
         "export": "エクスポート",
         "owner": "オーナー",
         "editor": "編集可能",

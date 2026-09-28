@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Atalhos com botões do mouse atualmente são compatíveis apenas no macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" já está registrada por outro aplicativo.",
       "osReserved": "\"{{hotkey}}\" pode estar reservada pelo seu ambiente de desktop.",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" não pode ser usada neste ambiente de trabalho, cujos atalhos precisam de uma tecla normal. Adicione uma tecla, como Control+Alt+Space.",
       "holdNeedsReleaseKey": "Segurar para falar precisa de uma tecla cuja soltura o macOS detecte: Globo, uma tecla direita como Option direita ou um atalho com modificador. Tocar funciona com qualquer tecla.",
       "registrationFailed": "Não foi possível registrar \"{{hotkey}}\". Pode estar em uso por outro aplicativo.",
       "updateFailedCheckFormat": "Não foi possível atualizar o atalho para \"{{hotkey}}\". Verifique se o formato é válido.",
@@ -681,6 +682,11 @@
       "title": "Modelos exigidos ausentes",
       "description": "Sua organização exige estes modelos neste dispositivo: {{models}}.",
       "download": "Baixar"
+    },
+    "cloudNudge": {
+      "title": "Você entrou",
+      "description": "O ditado continua usando sua própria configuração. Você pode mudar para o OpenWhispr Cloud a qualquer momento.",
+      "action": "Abrir Configurações"
     }
   },
   "reasoning": {
@@ -893,6 +899,7 @@
         "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas.",
         "providerKeyMissing": "Nenhuma chave de API definida para seu provedor de transcrição. Adicione-a em Configurações → Fala para texto.",
         "cleanupTruncated": "O modelo de IA ficou sem espaço antes de terminar a limpeza do seu ditado.",
+        "cleanupDuplicated": "A limpeza por IA repetiu a transcrição. O texto original foi mantido.",
         "cleanupEmptyReply": "O modelo de IA devolveu uma resposta vazia em vez do ditado limpo."
       },
       "translationFallback": {
@@ -914,6 +921,18 @@
         "unavailable": "O OpenWhispr não conseguiu ler o texto selecionado com segurança. Verifique as permissões de acessibilidade ou automação.",
         "tooLarge": "A seleção é muito grande. Selecione no máximo 6.000 caracteres.",
         "reasoningFailed": "A IA não conseguiu concluir a edição. O texto original não foi alterado."
+      },
+      "pastePermission": {
+        "title": "Permitir colagem automática",
+        "description": "Ative o OpenWhispr em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade.",
+        "settingsFailed": "Não foi possível abrir os ajustes. Abra Ajustes do Sistema → Privacidade e Segurança → Acessibilidade e ative o OpenWhispr.",
+        "manualPaste": "Copie o texto abaixo e pressione {{shortcut}} para colá-lo.",
+        "openSettings": "Abrir ajustes",
+        "copyToClipboard": "Copiar texto",
+        "copyFailed": "Falha ao copiar"
+      },
+      "pasteFailed": {
+        "title": "Não foi possível colar automaticamente"
       }
     },
     "clipboard": {
@@ -2634,7 +2653,8 @@
     "errors": {
       "contextTooLarge": "Isto é longo demais para o {{model}} ler neste computador. São necessários cerca de {{needed}} tokens de contexto, mas apenas {{max}} cabem na memória. Experimente um modelo na nuvem ou execute a ação sobre uma seleção mais curta.",
       "contextTooLargeGeneric": "Isto é longo demais para o {{model}} ler neste computador. Experimente um modelo na nuvem ou execute a ação sobre uma seleção mais curta.",
-      "localServerUnavailable": "Não foi possível iniciar o {{model}} neste computador. Tente novamente ou mude para um modelo na nuvem."
+      "localServerUnavailable": "Não foi possível iniciar o {{model}} neste computador. Tente novamente ou mude para um modelo na nuvem.",
+      "localModelBusy": "O modelo local ainda está processando outro pedido. Aguarde até terminar e tente novamente."
     }
   },
   "upgradePrompt": {
@@ -2948,7 +2968,35 @@
       "conversationWillAppear": "A conversa aparecerá aqui...",
       "linkedEvent": "Evento vinculado",
       "noFolder": "Sem pasta",
-      "participants": "Participantes"
+      "participants": "Participantes",
+      "table": {
+        "actions": "Ações da tabela",
+        "insertRowAbove": "Inserir linha acima",
+        "insertRowBelow": "Inserir linha abaixo",
+        "insertColumnLeft": "Inserir coluna à esquerda",
+        "insertColumnRight": "Inserir coluna à direita",
+        "deleteRow": "Excluir linha",
+        "deleteColumn": "Excluir coluna",
+        "deleteTable": "Excluir tabela"
+      },
+      "format": {
+        "toolbar": "Formatação",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Negrito",
+        "italic": "Itálico",
+        "strike": "Tachado",
+        "code": "Código",
+        "textStyle": "Estilo de texto",
+        "paragraph": "Texto normal",
+        "heading1": "Título 1",
+        "heading2": "Título 2",
+        "heading3": "Título 3",
+        "bulletList": "Lista com marcadores",
+        "orderedList": "Lista numerada",
+        "taskList": "Lista de verificação",
+        "blockquote": "Citação",
+        "table": "Inserir tabela"
+      }
     },
     "participants": {
       "attendee": "participante",
@@ -3099,6 +3147,8 @@
       "runAction": "Executar {{name}}",
       "selectAction": "Selecionar ação",
       "done": "Concluído",
+      "chunkProgress": "Parte {{step}} de {{total}}",
+      "emptyReply": "O modelo retornou uma resposta vazia. Tente novamente ou escolha outro modelo.",
       "builtin": {
         "generateNotes": {
           "name": "Gerar notas",
@@ -3629,6 +3679,9 @@
     },
     "tools": {
       "search_notesName": "Pesquisar notas",
+      "email_draftName": "Rascunho de e-mail",
+      "find_contactName": "Encontrar contato",
+      "slack_send_messageName": "Mensagem do Slack",
       "get_noteName": "Obter nota",
       "create_noteName": "Criar nota",
       "update_noteName": "Atualizar nota",
@@ -3641,6 +3694,9 @@
       "update_dictionaryName": "Atualizar dicionário",
       "update_snippetsName": "Atualizar snippets",
       "search_notesStatus": "Pesquisando notas...",
+      "email_draftStatus": "Abrindo um rascunho de e-mail...",
+      "find_contactStatus": "Procurando contatos...",
+      "slack_send_messageStatus": "Preparando uma mensagem do Slack...",
       "web_searchStatus": "Pesquisando na web...",
       "copy_to_clipboardStatus": "Copiando para a área de transferência...",
       "get_calendar_eventsStatus": "Verificando calendário...",
@@ -3732,6 +3788,7 @@
       "connectFailedDescription": "Ocorreu um erro ao conectar ao Calendar.app. Reinicie o OpenWhispr e tente novamente."
     },
     "sections": {
+      "connectors": "Conectores",
       "calendar": "Calendário",
       "api": "API",
       "mcp": "MCP",
@@ -3790,6 +3847,144 @@
     "notABot": {
       "title": "O OpenWhispr é um gravador de reuniões, não um bot",
       "description": "O OpenWhispr captura áudio diretamente do seu sistema — ele nunca entra nas suas reuniões como participante. Basta conectar seu calendário e fazer anotações normalmente."
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Enviar para {{destination}}",
+        "slackPost": "Publicar em {{destination}}"
+      },
+      "identity": "Como {{account}}",
+      "identityWithWorkspace": "Como {{account}} em {{workspace}}",
+      "send": "Enviar",
+      "edit": "Editar",
+      "doneEditing": "Edição concluída",
+      "cancel": "Cancelar",
+      "titleLabel": "Título",
+      "bodyLabel": "Mensagem",
+      "sending": "Enviando…",
+      "sent": "Enviado para {{destination}}.",
+      "open": "Abrir",
+      "failed": "Não foi possível enviar: {{message}}",
+      "unknown": "Não foi possível confirmar o envio. Verifique {{destination}}.",
+      "cancelled": "Cancelado. Nada foi enviado.",
+      "notSent": "Não enviado.",
+      "policyRetry": "Não foi possível verificar as configurações da sua organização, então nada foi enviado. Pressione Enviar para tentar novamente.",
+      "errors": {
+        "not_in_channel": "Você não é membro de {{destination}}.",
+        "channel_not_found": "{{destination}} não foi mais encontrado no Slack.",
+        "is_archived": "{{destination}} está arquivado.",
+        "reconnect_needed": "O Slack precisa ser reconectado nas Configurações.",
+        "connection_changed": "A conexão do Slack mudou antes do envio, então nada foi enviado.",
+        "rate_limited": "O Slack está ocupado. Tente novamente em breve.",
+        "missing_scope": "O OpenWhispr não tem permissão para publicar ali. Reconecte o Slack nas Configurações.",
+        "msg_too_long": "A mensagem é longa demais para o Slack (no máximo 12.000 caracteres, já formatada).",
+        "no_text": "A mensagem está vazia.",
+        "network": "Não foi possível acessar o Slack. Nada foi enviado.",
+        "credential_save_failed": "Não foi possível salvar o login do Slack neste computador. Nada foi enviado. Tente novamente.",
+        "dm_failed": "Não foi possível abrir a mensagem direta para {{destination}}. Nada foi enviado.",
+        "restricted": "{{destination}} é somente leitura ou restrito para você.",
+        "generic": "Algo deu errado. Nada foi enviado."
+      }
+    },
+    "policyOff": "Sua organização desativou os conectores.",
+    "email": {
+      "title": "Rascunhos de e-mail",
+      "description": "O assistente abre um rascunho pré-preenchido no seu aplicativo de e-mail. Você revisa e aperta Enviar.",
+      "proRequired": "Atualize para um plano pago para que o assistente escreva rascunhos de e-mail para você.",
+      "unavailable": "Os rascunhos de e-mail não estão disponíveis no momento.",
+      "targetLabel": "Criar rascunhos de e-mail em",
+      "autoResolved": "Automático · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (trabalho ou escola)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "Aplicativo de e-mail padrão"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "O assistente pode publicar mensagens em canais e para pessoas em seu nome. Você aprova cada mensagem antes de ela ser enviada.",
+      "connect": "Conectar",
+      "reconnect": "Reconectar",
+      "disconnect": "Desconectar",
+      "connecting": "Termine de conectar no seu navegador…",
+      "connectedAs": "Conectado como {{account}} em {{workspace}}",
+      "needsReconnect": "O Slack precisa ser reconectado.",
+      "proRequired": "Atualize para um plano pago para que o assistente envie mensagens do Slack por você.",
+      "errors": {
+        "connect_failed": "Não foi possível conectar o Slack. Tente novamente.",
+        "disconnect_failed": "Não foi possível desconectar o Slack. Tente novamente.",
+        "oauth_denied": "O Slack não foi conectado porque o acesso não foi permitido.",
+        "oauth_timeout": "A conexão demorou demais. Tente novamente.",
+        "oauth_state_mismatch": "Esse link de login estava desatualizado. Tente novamente.",
+        "ports_busy": "Outro aplicativo está usando as portas que o OpenWhispr precisa para conectar. Feche-o e tente novamente.",
+        "token_exchange_failed": "O Slack não concluiu a conexão. Tente novamente.",
+        "not_configured": "O Slack não está disponível nesta versão.",
+        "connection_changed": "Sua conta ou a conexão do Slack mudou durante a conexão. Tente novamente.",
+        "signed_out": "Entre no OpenWhispr para conectar o Slack.",
+        "policy_blocked": "Sua organização desativou os conectores.",
+        "policy_unavailable": "Não foi possível verificar as configurações da sua organização. Tente novamente."
+      },
+      "browser": {
+        "connectedTitle": "O Slack está conectado",
+        "connectedBody": "Você pode fechar esta aba e voltar para o OpenWhispr.",
+        "failedTitle": "O Slack não foi conectado",
+        "failedBody": "Volte para o OpenWhispr para tentar novamente."
+      }
+    },
+    "recent": {
+      "title": "Ações recentes",
+      "actions": {
+        "email_draft": "Rascunho para {{destination}}",
+        "slack_send_message": "Mensagem para {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "Rascunho de e-mail",
+        "slack_send_message": "Mensagem do Slack"
+      },
+      "states": {
+        "pending": "Aguardando",
+        "committing": "Em andamento",
+        "sent": "Concluído",
+        "failed": "Falhou",
+        "unknown": "Não confirmado",
+        "cancelled": "Cancelado",
+        "expired": "Expirado"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Rascunho aberto para {{destination}}.",
+      "draftOpenedBodyCopied": "Rascunho aberto para {{destination}}. O corpo está na sua área de transferência.",
+      "draftOpenedSubjectCopied": "Rascunho aberto para {{destination}}. O assunto e o corpo estão na sua área de transferência.",
+      "draftOpenedOnlySubjectCopied": "Rascunho para {{destination}} aberto. O assunto está na sua área de transferência.",
+      "needsDetails": "Faltam detalhes.",
+      "unavailable": "Os conectores não estão disponíveis no momento.",
+      "unknown": "Não confirmado. Verifique se foi concluído antes de tentar novamente.",
+      "draftUnknown": "Não confirmado: o rascunho para {{destination}} pode não ter sido aberto. Verifique antes de tentar novamente.",
+      "contactsFound": "Contatos encontrados: {{total}}",
+      "draftLimit": "Só é possível abrir {{count}} rascunhos por solicitação.",
+      "clipboardBusy": "Não aberto: o texto de outro rascunho ainda está na sua área de transferência.",
+      "errors": {
+        "open_failed": "Não foi possível abrir seu aplicativo de e-mail.",
+        "draft_too_long": "Destinatários demais para um link de rascunho.",
+        "invalid_address": "São necessários endereços de e-mail completos.",
+        "not_in_channel": "Não é membro desse canal.",
+        "channel_not_found": "Não foi possível encontrar essa conversa.",
+        "is_archived": "Esse canal está arquivado.",
+        "reconnect_needed": "O Slack precisa ser reconectado.",
+        "connection_changed": "A conexão do Slack mudou. Nada foi enviado.",
+        "rate_limited": "O Slack está ocupado.",
+        "missing_scope": "Falta permissão do Slack.",
+        "msg_too_long": "Mensagem longa demais para o Slack.",
+        "no_text": "A mensagem está vazia.",
+        "network": "Não foi possível acessar o Slack. Nada foi enviado.",
+        "credential_save_failed": "Não foi possível salvar o login do Slack neste computador. Nada foi enviado.",
+        "dm_failed": "Não foi possível abrir a mensagem direta. Nada foi enviado.",
+        "restricted": "Esse canal é somente leitura ou restrito.",
+        "generic": "Não funcionou."
+      }
     }
   },
   "calendar": {
@@ -3867,6 +4062,11 @@
         "createLink": "Criar link",
         "copyLink": "Copiar link",
         "copied": "Copiado",
+        "replaceLink": {
+          "title": "Substituir o link de compartilhamento?",
+          "description": "Este dispositivo não tem o link atual, então copiá-lo significa criar um novo. O link antigo deixará de funcionar, inclusive nos e-mails de convite. Reenvie cada convite para que as pessoas convidadas continuem podendo abrir a nota.",
+          "confirm": "Substituir link"
+        },
         "export": "Exportar",
         "owner": "Proprietário",
         "editor": "Pode editar",
