@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import { useUiLocale } from "../hooks/useUiLocale";
@@ -7,10 +7,10 @@ import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
 import { Loader2, Sparkles, X, Trash2, Archive } from "./icons";
 import TranscriptionItem from "./ui/TranscriptionItem";
 import ThemedEmptyIllustration from "./ui/ThemedEmptyIllustration";
+import DictationHotkeyHint from "./ui/DictationHotkeyHint";
 import historyEmptyLight from "../assets/empty-states/home-history-light.svg";
 import historyEmptyDark from "../assets/empty-states/home-history-dark.svg";
 import type { TranscriptionItem as TranscriptionItemType } from "../types/electron";
-import { formatHotkeyLabel, parseHotkeyList } from "../utils/hotkeys";
 import { formatDateGroup } from "../utils/dateFormatting";
 import { useUpcomingEvents } from "../hooks/useUpcomingEvents";
 import UpcomingMeetings from "./UpcomingMeetings";
@@ -177,20 +177,7 @@ export default function HistoryView({
                 <p className="mt-2 max-w-md text-sm text-muted-foreground">
                   {t("controlPanel.history.emptyDescription")}
                 </p>
-                <span className="mt-2 inline-flex flex-wrap items-center justify-center gap-1.5 text-sm text-muted-foreground">
-                  {t("controlPanel.history.press")}
-                  <span dir="ltr" className="inline-flex items-center gap-1">
-                    {parseHotkeyList(hotkey).map((hk, index) => (
-                      <Fragment key={hk}>
-                        {index > 0 && <span className="text-foreground/45">/</span>}
-                        <kbd className="rounded-md bg-background px-1.5 py-px font-sans text-[11px] font-medium text-foreground/80 shadow-sm dark:bg-surface-2">
-                          {formatHotkeyLabel(hk)}
-                        </kbd>
-                      </Fragment>
-                    ))}
-                  </span>
-                  {t("controlPanel.history.toStart")}
-                </span>
+                <DictationHotkeyHint hotkey={hotkey} className="mt-2" />
               </div>
             </>
           ) : (
