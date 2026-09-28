@@ -44,9 +44,6 @@ function NewChatEmptyState({
               key={key}
               type="button"
               disabled={disabled}
-              // Keep focus where it is: blurring the composer collapses it and slides the
-              // cards out from under the pointer before the click completes.
-              onMouseDown={(event) => event.preventDefault()}
               onClick={() => onPrompt(t(key))}
               className="flex min-h-24 flex-col items-start justify-between rounded-2xl border border-border bg-card p-4 text-start text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10"
             >
