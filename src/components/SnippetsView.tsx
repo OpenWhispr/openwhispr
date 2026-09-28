@@ -213,7 +213,7 @@ export default function SnippetsView() {
         }}
         placeholder={t("dictionary.snippets.replacementPlaceholder")}
         rows={4}
-        className="min-h-[72px] resize-none rounded-none border-0 bg-transparent p-0 text-xs text-foreground shadow-none placeholder:text-foreground/45 hover:border-0 focus:border-0 focus:ring-0"
+        className="min-h-[72px] resize-none rounded-none border-0 bg-transparent text-xs text-foreground shadow-none placeholder:text-foreground/45 hover:border-0 focus:border-0 focus:ring-0"
       />
       <div className="flex items-center justify-between pt-1.5">
         <div dir="ltr" className="flex items-center gap-0.5">
