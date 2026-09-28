@@ -24,6 +24,7 @@ import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
+import { PAGE_HERO_ICON_TILE_CLASS } from "../ui/surfaces";
 
 const CARD_CLASS = "rounded-2xl border transition-colors duration-200";
 const CARD_IDLE_CLASS = "border-border/70 bg-card/50 dark:border-white/10 dark:bg-surface-2/60";
@@ -118,7 +119,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
         style={{ animation: "float-up 0.4s ease-out" }}
       >
         <div className="flex flex-col items-center gap-2 pt-4 text-center">
-          <div className="mb-1 flex h-12 w-12 items-center justify-center rounded-xl border border-border/70 bg-foreground/4 dark:border-white/10 dark:bg-white/5">
+          <div className={cn(PAGE_HERO_ICON_TILE_CLASS, "mb-1")}>
             <Sparkles size={20} className="text-foreground/60" />
           </div>
           <h2 className="text-xl font-semibold tracking-tight text-foreground">

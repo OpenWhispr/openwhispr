@@ -17,6 +17,7 @@ import {
 import { useContainerChat } from "../../../hooks/useContainerChat";
 import { cn } from "../../lib/utils";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../../ui/pageWidth";
+import { PAGE_HERO_ICON_TILE_CLASS } from "../../ui/surfaces";
 import { ContainerIcon } from "./ContainerIcon";
 import { OverviewExplainerBanner } from "./OverviewExplainerBanner";
 import { OverviewAskSection } from "./OverviewAskSection";
@@ -177,7 +178,7 @@ export function ContainerOverview({
     <div className="flex-1 overflow-y-auto min-h-0">
       <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-8 flex flex-col gap-5")}>
         <div className="flex flex-col items-center text-center gap-2 pt-4">
-          <div className="h-12 w-12 rounded-xl bg-foreground/4 dark:bg-white/5 border border-border/70 dark:border-white/10 flex items-center justify-center mb-1">
+          <div className={cn(PAGE_HERO_ICON_TILE_CLASS, "mb-1")}>
             <ContainerIcon space={space} folder={folder} size={20} />
           </div>
           <h1 className="text-xl font-semibold text-foreground tracking-tight">
