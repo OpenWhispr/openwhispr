@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles, ChevronDown, Settings2 } from "../icons";
+import { Sparkles, ChevronDown, Settings2, MessageSquareText } from "../icons";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -9,13 +9,7 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
-import {
-  useActions,
-  initializeActions,
-  getActionName,
-  getActionCta,
-  getActionDescription,
-} from "../../stores/actionStore";
+import { getActionName, getActionCta, getActionDescription } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
 import { FOLLOW_UP_EMAIL_KEY } from "../../helpers/builtinActions";
 
@@ -24,26 +18,34 @@ import { FOLLOW_UP_EMAIL_KEY } from "../../helpers/builtinActions";
 const ASK_BAR_ACTION_KEY = "askBarActionId";
 
 interface ActionPickerProps {
+  /** Actions only; templates have their own picker. */
+  actions: ActionItem[];
   onRunAction: (action: ActionItem) => void;
   onManageActions: () => void;
   disabled?: boolean;
+  /** A summary action edits the summary, so it needs one that no run is rewriting. */
+  hasSummary: boolean;
+  isSummaryBusy: boolean;
+  /** A chat action waits for the reply the chat is still writing. */
+  isChatBusy: boolean;
 }
 
 export default function ActionPicker({
+  actions,
   onRunAction,
   onManageActions,
   disabled,
+  hasSummary,
+  isSummaryBusy,
+  isChatBusy,
 }: ActionPickerProps) {
   const { t } = useTranslation();
-  const actions = useActions();
   const [lastUsedId, setLastUsedId] = useState<number | null>(() => {
     const stored = localStorage.getItem(ASK_BAR_ACTION_KEY);
     return stored ? Number(stored) : null;
   });
-
-  useEffect(() => {
-    initializeActions();
-  }, []);
+  const canRun = (action: ActionItem) =>
+    action.output === "summary" ? hasSummary && !isSummaryBusy : !isChatBusy;
 
   const activeAction =
     actions.find((a) => a.id === lastUsedId) ??
@@ -72,7 +74,7 @@ export default function ActionPicker({
     >
       <button
         onClick={() => handleRun(activeAction)}
-        disabled={disabled}
+        disabled={disabled || !canRun(activeAction)}
         aria-label={t("notes.actions.runAction", { name: getActionName(activeAction, t) })}
         className={cn(
           "flex items-center gap-1.5 h-7 ps-3 pe-1.5",
@@ -106,26 +108,38 @@ export default function ActionPicker({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side="top" sideOffset={8} className="min-w-48">
-          {actions.map((action) => (
-            <DropdownMenuItem
-              key={action.id}
-              onClick={() => handleRun(action)}
-              className={cn(
-                "text-xs gap-2.5 rounded-md px-2.5 py-1.5",
-                action.id === activeAction.id && "bg-accent/5"
-              )}
-            >
-              <Sparkles size={12} className="text-accent/50 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{getActionName(action, t)}</div>
-                {action.description && (
-                  <div className="text-xs text-muted-foreground/70 truncate">
-                    {getActionDescription(action, t)}
-                  </div>
+          {actions.map((action) => {
+            const editsSummary = action.output === "summary";
+            const OutputIcon = editsSummary ? Sparkles : MessageSquareText;
+            return (
+              <DropdownMenuItem
+                key={action.id}
+                onClick={() => handleRun(action)}
+                disabled={!canRun(action)}
+                className={cn(
+                  "text-xs gap-2.5 rounded-md px-2.5 py-1.5",
+                  action.id === activeAction.id && "bg-accent/5"
                 )}
-              </div>
-            </DropdownMenuItem>
-          ))}
+              >
+                <OutputIcon size={12} className="text-accent/50 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium truncate">{getActionName(action, t)}</span>
+                    <span className="text-[10px] font-medium px-1 py-px rounded bg-foreground/5 dark:bg-white/6 text-muted-foreground/70 shrink-0">
+                      {t(
+                        editsSummary ? "notes.actions.output.summary" : "notes.actions.output.chat"
+                      )}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground/70 truncate">
+                    {editsSummary && !hasSummary
+                      ? t("notes.actions.needsSummary")
+                      : getActionDescription(action, t)}
+                  </div>
+                </div>
+              </DropdownMenuItem>
+            );
+          })}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={onManageActions}

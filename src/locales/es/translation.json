@@ -2817,7 +2817,7 @@
     "sidebar": {
       "newNote": "Nueva nota",
       "searchNotes": "Buscar notas",
-      "actions": "Acciones"
+      "templatesAndActions": "Plantillas y acciones"
     },
     "spaces": {
       "privateSpaces": "Notas privadas",
@@ -3184,7 +3184,6 @@
     },
     "actions": {
       "manage": "Gestionar acciones...",
-      "manageTitle": "Acciones personalizadas",
       "addAction": "Nueva acción",
       "editAction": "Editar acción",
       "namePlaceholder": "Nombre de la acción",
@@ -3216,13 +3215,57 @@
         "detailedNotes": {
           "name": "Notas detalladas",
           "description": "Notas de reunión precisas y completas con decisiones y tareas"
+        },
+        "makeTodos": {
+          "name": "Crear tareas",
+          "description": "Enumera cada tarea y su responsable en el chat"
+        },
+        "createOutline": {
+          "name": "Crear esquema",
+          "description": "Esquematiza los temas de la nota en el chat"
         }
       },
       "errors": {
         "noModel": "No hay modelo de IA seleccionado. Configura uno en Ajustes.",
         "actionFailed": "La acción falló",
         "noEndpoint": "No hay URL del servidor autoalojado configurada. Configura una en Ajustes."
-      }
+      },
+      "tab": "Acciones",
+      "output": {
+        "chat": "Chat",
+        "summary": "Resumen con IA",
+        "chatHint": "Responde en el chat de la nota y deja el resumen con IA como está.",
+        "summaryHint": "Edita el resumen con IA actual de la nota."
+      },
+      "needsSummary": "Primero necesita un resumen con IA",
+      "replaceDescription": "{{name}} editará el resumen con IA de esta nota. Los cambios que hayas hecho pueden modificarse."
+    },
+    "templates": {
+      "tab": "Plantillas",
+      "managerTitle": "Plantillas y acciones",
+      "manage": "Gestionar plantillas...",
+      "select": "Elegir plantilla",
+      "generateWith": "Escribir el resumen con IA con {{name}}",
+      "regenerateWith": "Regenerar el resumen con IA con {{name}}",
+      "addTemplate": "Nueva plantilla",
+      "editTemplate": "Editar plantilla",
+      "namePlaceholder": "Nombre de la plantilla",
+      "contextLabel": "Contexto",
+      "contextPlaceholder": "¿Qué tipo de reunión es y en qué debe centrarse el resumen?",
+      "sectionsLabel": "Secciones",
+      "addSection": "Añadir sección",
+      "sectionHeadingPlaceholder": "Título de la sección",
+      "sectionInstructionPlaceholder": "¿Qué va en esta sección?",
+      "moveSectionUp": "Subir sección",
+      "moveSectionDown": "Bajar sección",
+      "removeSection": "Quitar sección",
+      "noSectionsHint": "Sin secciones, el contexto es la instrucción completa para el resumen.",
+      "noTemplates": "Aún no hay plantillas",
+      "emptyEditorTitle": "Seleccionar plantilla",
+      "emptyEditorDescription": "Elige una plantilla de la lista o crea una nueva",
+      "replaceTitle": "¿Reemplazar el resumen con IA?",
+      "replaceDescription": "{{name}} escribirá un nuevo resumen con IA para esta nota. Se perderán los cambios que hayas hecho en el actual.",
+      "replaceConfirm": "Reemplazar"
     },
     "empty": {
       "title": "Todavía no hay notas aquí",
@@ -3246,12 +3289,12 @@
         "description": "Las acciones usan IA para transformar tus notas. Configura un modelo de lenguaje para comenzar.",
         "configured": "Modelo de IA configurado"
       },
-      "actions": {
-        "title": "Acciones impulsadas por IA",
-        "description": "Las acciones transforman tus notas: corrigen transcripciones, resumen reuniones y más. Usa acciones integradas o crea las tuyas.",
-        "builtInLabel": "Integrada",
-        "createTitle": "Crea tu propia acción",
-        "createDescription": "Define una acción personalizada con tu propio prompt de IA. Puedes editar o agregar más después en los ajustes.",
+      "templates": {
+        "title": "Plantillas y acciones",
+        "description": "Las plantillas dan forma a tu resumen con IA, desde notas de reunión detalladas hasta secciones que tú defines. Las acciones se ejecutan sobre una nota, como redactar un correo de seguimiento en el chat.",
+        "builtInLabel": "Tus plantillas",
+        "createTitle": "Crea tu propia plantilla",
+        "createDescription": "Describe el resumen que quieres. Puedes añadir secciones, más plantillas y acciones después.",
         "created": "¡Creada!"
       },
       "getStarted": "Comenzar",
@@ -4432,9 +4475,7 @@
     "conversationSelector": "Cambiar conversación",
     "history": "Historial",
     "quickActions": "Acciones rápidas",
-    "generateSummary": "Generar resumen",
-    "makeTodos": "Crear tareas",
-    "createOutline": "Crear esquema"
+    "generateSummary": "Generar resumen"
   },
   "transcriptionPreview": {
     "label": "Vista previa",

@@ -61,7 +61,7 @@ import {
   SPLIT_BUTTON_GROUP_CLASS,
   SPLIT_BUTTON_SEGMENT_CLASS,
 } from "../ui/splitButton";
-import type { NoteItem, FolderItem } from "../../types/electron";
+import type { NoteItem, FolderItem, ActionItem, ActionKind } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
@@ -73,8 +73,23 @@ import transcriptsEmptyDark from "../../assets/empty-states/notes-transcripts-da
 import { Button } from "../ui/button";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
+import ActionPicker from "./ActionPicker";
+import TemplatePicker from "./TemplatePicker";
+import {
+  getActionCta,
+  getLastTemplateId,
+  initializeActions,
+  resolveTemplate,
+  useActionsOfKind,
+} from "../../stores/actionStore";
+import { compileChatActionPrompt } from "../../helpers/templatePrompts";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
-import { collectKnownPeople } from "../../utils/llmTranscript";
+import {
+  buildLlmTranscript,
+  buildMeetingContext,
+  collectKnownPeople,
+  type MeetingIdentity,
+} from "../../utils/llmTranscript";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
@@ -196,9 +211,9 @@ interface NoteEditorProps {
   onExportNote?: (format: "md" | "txt") => void;
   onExportTranscript?: (format: "txt" | "srt" | "json" | "md") => void;
   enhancement?: Enhancement;
-  actionPicker?: React.ReactNode;
-  /** Runs the built-in Generate Notes action; enables the post-recording summary pill. */
-  onGenerateSummary?: () => void;
+  /** Runs a template, or an action that edits the summary, on this note. */
+  onRunNoteAction?: (action: ActionItem) => void;
+  onManageActions?: (kind: ActionKind) => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   actionProgress?: NoteActionProgress | null;
@@ -232,8 +247,8 @@ export default function NoteEditor({
   onExportNote,
   onExportTranscript,
   enhancement,
-  actionPicker,
-  onGenerateSummary,
+  onRunNoteAction,
+  onManageActions,
   actionProcessingState,
   actionName,
   actionProgress,
@@ -411,17 +426,6 @@ export default function NoteEditor({
     [note.participants]
   );
 
-  const embeddedChat = useEmbeddedChat({
-    noteId: note.id,
-    folderId: note.folder_id,
-    noteTitle: note.title,
-    noteContent: note.content,
-    noteTranscript: note.transcript ?? undefined,
-    noteParticipants: parsedParticipants,
-    noteOwnedByUser: ownsNote(note, user?.id),
-    selfEmail: user?.email ?? null,
-    noteCalendarEventId: note.calendar_event_id,
-  });
   const titleRef = useRef<HTMLDivElement>(null);
   const prevNoteIdRef = useRef<number>(note.id);
 
@@ -447,9 +451,26 @@ export default function NoteEditor({
     return parseTranscriptSegments(note.transcript || "");
   }, [diarizedSegments, note.transcript]);
 
+  const templates = useActionsOfKind("template");
+  const noteActions = useActionsOfKind("action");
+  const chatActions = useMemo(() => noteActions.filter((a) => a.output === "chat"), [noteActions]);
+  // Regenerating keeps the note's template; a first summary uses the last one picked.
+  const noteTemplate = resolveTemplate(
+    templates,
+    note.enhancement_template_id ?? getLastTemplateId()
+  );
+  const isActionRunning = actionProcessingState === "processing";
+  const hasNoteMaterial = !!note.content.trim() || hasMeetingTranscript;
+  const canRunTemplate =
+    !!onRunNoteAction && !!noteTemplate && canEditNote && !isRecording && hasNoteMaterial;
+
+  useEffect(() => {
+    initializeActions();
+  }, []);
+
   const hasChatSegments = displaySegments.length > 0;
   const showSummaryCallout =
-    !!onGenerateSummary &&
+    canRunTemplate &&
     shouldOfferMeetingSummary({
       isRecording,
       hasTranscriptSegments: hasChatSegments,
@@ -463,19 +484,45 @@ export default function NoteEditor({
     [displaySegments, speakerMappings, speakerProfiles]
   );
 
-  const mentionPeople = useMemo(
-    () =>
-      collectKnownPeople(
-        {
-          selfName: user?.name?.trim() || null,
-          selfEmail: user?.email?.trim() || null,
-          participants: parsedParticipants,
-        },
-        speakerMappings,
-        displaySegments
-      ),
-    [user?.name, user?.email, parsedParticipants, speakerMappings, displaySegments]
+  const meetingIdentity = useMemo<MeetingIdentity>(
+    () => ({
+      selfName: user?.name?.trim() || null,
+      selfEmail: user?.email?.trim() || null,
+      participants: parsedParticipants,
+    }),
+    [user?.name, user?.email, parsedParticipants]
   );
+
+  const mentionPeople = useMemo(
+    () => collectKnownPeople(meetingIdentity, speakerMappings, displaySegments),
+    [meetingIdentity, speakerMappings, displaySegments]
+  );
+
+  // The chat reads a meeting the way note formatting does: who the user is and
+  // named speakers, not the stored segment JSON.
+  const chatTranscript = useMemo(() => {
+    if (displaySegments.length === 0) return note.transcript ?? undefined;
+    const selfLabel = meetingIdentity.selfName || t("notes.speaker.you");
+    return [
+      buildMeetingContext(meetingIdentity, selfLabel),
+      buildLlmTranscript(displaySegments, speakerMappings, selfLabel, t),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }, [displaySegments, meetingIdentity, note.transcript, speakerMappings, t]);
+
+  const embeddedChat = useEmbeddedChat({
+    noteId: note.id,
+    folderId: note.folder_id,
+    noteTitle: note.title,
+    noteContent: note.content,
+    noteTranscript: chatTranscript,
+    noteSummary: enhancement?.content,
+    noteParticipants: parsedParticipants,
+    noteOwnedByUser: ownsNote(note, user?.id),
+    selfEmail: user?.email ?? null,
+    noteCalendarEventId: note.calendar_event_id,
+  });
 
   const refreshSpeakerProfiles = useCallback(() => {
     window.electronAPI?.getSpeakerProfiles?.().then((profiles) => {
@@ -814,6 +861,20 @@ export default function NoteEditor({
     [chatMode, embeddedChat]
   );
 
+  // The chat shows the action's name while the model gets its prompt.
+  const handleChatAction = useCallback(
+    (action: ActionItem) => {
+      if (embeddedChat.agentState !== "idle") return;
+      if (chatMode === "hidden") {
+        setChatMode("floating");
+      }
+      void embeddedChat.sendMessage(getActionCta(action, t), {
+        requestText: compileChatActionPrompt(action),
+      });
+    },
+    [chatMode, embeddedChat, t]
+  );
+
   const handleChatInputFocus = useCallback(() => {
     if (chatMode === "hidden") {
       setChatMode("floating");
@@ -1117,6 +1178,16 @@ export default function NoteEditor({
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              {canRunTemplate && noteTemplate && (
+                <TemplatePicker
+                  templates={templates}
+                  current={noteTemplate}
+                  regenerate={!!enhancement}
+                  onRun={(template) => onRunNoteAction?.(template)}
+                  onManage={() => onManageActions?.("template")}
+                  disabled={isActionRunning}
+                />
+              )}
               {canEditNote && (
                 <NoteRecordControl
                   isRecording={isRecording}
@@ -1333,14 +1404,30 @@ export default function NoteEditor({
             actionPicker={
               isRecording ||
               !canEditNote ||
-              (viewMode === "transcript" && !hasMeetingTranscript && !hasChatSegments)
-                ? undefined
-                : actionPicker
+              (viewMode === "transcript" &&
+                !hasMeetingTranscript &&
+                !hasChatSegments) ? undefined : (
+                <ActionPicker
+                  actions={noteActions}
+                  onRunAction={(action) =>
+                    action.output === "chat" ? handleChatAction(action) : onRunNoteAction?.(action)
+                  }
+                  onManageActions={() => onManageActions?.("action")}
+                  disabled={!hasNoteMaterial}
+                  hasSummary={!!enhancement}
+                  isSummaryBusy={isActionRunning}
+                  isChatBusy={embeddedChat.agentState !== "idle"}
+                />
+              )
             }
             callout={
               showSummaryCallout &&
+              noteTemplate &&
               selectedSegmentIds.size === 0 && (
-                <Button className="h-9 gap-2 px-4 text-sm" onClick={onGenerateSummary}>
+                <Button
+                  className="h-9 gap-2 px-4 text-sm"
+                  onClick={() => onRunNoteAction?.(noteTemplate)}
+                >
                   <AlignLeft size={16} />
                   {t("notes.editor.generateSummary")}
                 </Button>
@@ -1373,6 +1460,13 @@ export default function NoteEditor({
           activeConversationId={embeddedChat.activeConversationId}
           onSwitchConversation={embeddedChat.switchConversation}
           onNewChat={embeddedChat.startNewChat}
+          chatActions={chatActions}
+          onRunChatAction={handleChatAction}
+          onGenerateSummary={
+            canRunTemplate && noteTemplate && !isActionRunning
+              ? () => onRunNoteAction?.(noteTemplate)
+              : undefined
+          }
         />
       )}
       <ShareNoteDialog

@@ -104,6 +104,19 @@ const NOTE = {
 
 const ENHANCEMENT = { content: NOTE.enhanced_content, isStale: false, onChange() {} };
 
+// The summary callout runs a template, so the note view needs one loaded.
+const TEMPLATE = {
+  id: 1,
+  client_id: "notes.actions.builtin.detailedNotes",
+  kind: "template",
+  name: "Detailed Notes",
+  description: "",
+  prompt: "",
+  sections: [{ heading: "Summary", instruction: "" }],
+  output: null,
+  translation_key: "notes.actions.builtin.detailedNotes",
+};
+
 function baseProps(enhancement) {
   return {
     note: { ...NOTE, enhanced_content: enhancement ? enhancement.content : null },
@@ -124,6 +137,7 @@ async function loadNoteEditor(t) {
       electronAPI: {
         getSpeakerProfiles: async () => [],
         getSpeakerMappings: async () => [],
+        getActions: async () => [TEMPLATE],
       },
     },
   });
@@ -311,7 +325,7 @@ test("the summary callout makes way for the transcript selection bar", async (t)
       enhanced_content: null,
       transcript: JSON.stringify([{ text: "Hello", source: "mic", timestamp: 0 }]),
     },
-    onGenerateSummary() {},
+    onRunNoteAction() {},
   });
   findSegmentStrip(latest()).props.ref.current = measurableStrip(["transcript", "raw"]);
   await click("transcript");

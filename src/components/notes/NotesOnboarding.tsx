@@ -11,10 +11,11 @@ import {
 } from "../../stores/settingsStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import {
-  useActions,
+  useActionsOfKind,
   initializeActions,
   getActionName,
   getActionDescription,
+  resolveTemplate,
 } from "../../stores/actionStore";
 import { notesInputClass, notesTextareaClass } from "./shared";
 import { useDialogs } from "../../hooks/useDialogs";
@@ -37,7 +38,7 @@ interface NotesOnboardingProps {
 export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const { t } = useTranslation();
   const { isProUser, isProLoading, isLLMConfigured, complete } = useNotesOnboarding();
-  const actions = useActions();
+  const templates = useActionsOfKind("template");
   const [llmExpanded, setLlmExpanded] = useState(!isLLMConfigured && !isProUser);
   const [createExpanded, setCreateExpanded] = useState(false);
   const [actionName, setActionName] = useState("");
@@ -109,8 +110,9 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
     onComplete();
   };
 
-  const builtInAction = actions.find((a) => a.is_builtin === 1);
-  const customActions = actions.filter((a) => a.is_builtin !== 1);
+  // The template the summary button writes with, and the ones the user made.
+  const builtInAction = resolveTemplate(templates, null);
+  const customActions = templates.filter((a) => a.is_builtin !== 1);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -123,10 +125,10 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
             <Sparkles size={20} className="text-foreground/60" />
           </div>
           <h2 className="text-xl font-semibold tracking-tight text-foreground">
-            {t("notes.onboarding.actions.title")}
+            {t("notes.onboarding.templates.title")}
           </h2>
           <p className="max-w-xl text-[13px] leading-relaxed text-foreground/50 dark:text-foreground/45">
-            {t("notes.onboarding.actions.description")}
+            {t("notes.onboarding.templates.description")}
           </p>
         </div>
 
@@ -231,7 +233,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
         {/* Built-in action, plus any custom actions the user just created */}
         <div>
           <p className="pb-2.5 text-sm text-muted-foreground">
-            {t("notes.onboarding.actions.builtInLabel")}
+            {t("notes.onboarding.templates.builtInLabel")}
           </p>
           {(builtInAction || customActions.length > 0) && (
             <div
@@ -287,11 +289,11 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
             <div className="flex items-center gap-3">
               <Plus size={16} className="text-foreground/45" />
               <span className="text-sm font-medium text-foreground">
-                {t("notes.onboarding.actions.createTitle")}
+                {t("notes.onboarding.templates.createTitle")}
               </span>
               {justCreated && (
                 <span className="text-xs font-medium text-success/70">
-                  {t("notes.onboarding.actions.created")}
+                  {t("notes.onboarding.templates.created")}
                 </span>
               )}
             </div>
@@ -307,15 +309,15 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
           {createExpanded && (
             <div className="space-y-2.5 px-5 pb-5" style={{ animation: "float-up 0.2s ease-out" }}>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                {t("notes.onboarding.actions.createDescription")}
+                {t("notes.onboarding.templates.createDescription")}
               </p>
               <input
                 dir="auto"
                 type="text"
                 value={actionName}
                 onChange={(e) => setActionName(e.target.value)}
-                placeholder={t("notes.actions.namePlaceholder")}
-                aria-label={t("notes.actions.namePlaceholder")}
+                placeholder={t("notes.templates.namePlaceholder")}
+                aria-label={t("notes.templates.namePlaceholder")}
                 disabled={isSaving}
                 className={cn(notesInputClass, "h-9 text-sm disabled:opacity-40")}
               />
@@ -333,8 +335,8 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 dir="auto"
                 value={actionPrompt}
                 onChange={(e) => setActionPrompt(e.target.value)}
-                placeholder={t("notes.actions.promptPlaceholder")}
-                aria-label={t("notes.actions.promptPlaceholder")}
+                placeholder={t("notes.templates.contextPlaceholder")}
+                aria-label={t("notes.templates.contextPlaceholder")}
                 rows={3}
                 disabled={isSaving}
                 className={cn(notesTextareaClass, "text-sm disabled:opacity-40")}

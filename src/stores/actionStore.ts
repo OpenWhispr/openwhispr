@@ -1,6 +1,10 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import { TFunction } from "i18next";
-import type { ActionItem } from "../types/electron";
+import type { ActionItem, ActionKind } from "../types/electron";
+import { DETAILED_NOTES_KEY } from "../helpers/builtinActions";
+
+const LAST_TEMPLATE_KEY = "summaryTemplateId";
 
 interface ActionState {
   actions: ActionItem[];
@@ -73,6 +77,35 @@ function removeActionFromStore(id: number): void {
 
 export function useActions(): ActionItem[] {
   return useActionStore((state) => state.actions);
+}
+
+export function useActionsOfKind(kind: ActionKind): ActionItem[] {
+  return useActionStore(useShallow((state) => state.actions.filter((a) => a.kind === kind)));
+}
+
+/**
+ * The template a summary is written with: the one asked for (the note's own, or
+ * the last one picked), else Detailed Notes. An id can outlive its template or
+ * belong to a teammate's, so it is only a preference.
+ */
+export function resolveTemplate(
+  templates: ActionItem[],
+  clientId: string | null | undefined
+): ActionItem | null {
+  return (
+    templates.find((a) => a.client_id === clientId) ??
+    templates.find((a) => a.translation_key === DETAILED_NOTES_KEY) ??
+    templates[0] ??
+    null
+  );
+}
+
+export function getLastTemplateId(): string | null {
+  return localStorage.getItem(LAST_TEMPLATE_KEY);
+}
+
+export function rememberTemplate(template: ActionItem): void {
+  localStorage.setItem(LAST_TEMPLATE_KEY, template.client_id);
 }
 
 export function getActionName(

@@ -2764,7 +2764,7 @@
     "sidebar": {
       "newNote": "新建笔记",
       "searchNotes": "搜索笔记",
-      "actions": "操作"
+      "templatesAndActions": "模板和操作"
     },
     "spaces": {
       "privateSpaces": "私人笔记",
@@ -3131,7 +3131,6 @@
     },
     "actions": {
       "manage": "管理操作...",
-      "manageTitle": "自定义操作",
       "addAction": "新建操作",
       "editAction": "编辑操作",
       "namePlaceholder": "操作名称",
@@ -3163,13 +3162,57 @@
         "detailedNotes": {
           "name": "详细笔记",
           "description": "准确、全面的会议笔记，包含决策和行动项"
+        },
+        "makeTodos": {
+          "name": "创建待办事项",
+          "description": "在聊天中列出每项待办及其负责人"
+        },
+        "createOutline": {
+          "name": "创建大纲",
+          "description": "在聊天中为笔记的主题列出大纲"
         }
       },
       "errors": {
         "noModel": "未选择 AI 模型。请在设置中配置。",
         "actionFailed": "操作失败",
         "noEndpoint": "未设置自托管服务器 URL。请在设置中配置。"
-      }
+      },
+      "tab": "操作",
+      "output": {
+        "chat": "聊天",
+        "summary": "AI 摘要",
+        "chatHint": "在笔记的聊天中回复，AI 摘要保持不变。",
+        "summaryHint": "编辑笔记当前的 AI 摘要。"
+      },
+      "needsSummary": "需要先生成 AI 摘要",
+      "replaceDescription": "{{name}}将编辑这条笔记的 AI 摘要。你对其所做的修改可能会被更改。"
+    },
+    "templates": {
+      "tab": "模板",
+      "managerTitle": "模板和操作",
+      "manage": "管理模板...",
+      "select": "选择模板",
+      "generateWith": "使用{{name}}生成 AI 摘要",
+      "regenerateWith": "使用{{name}}重新生成 AI 摘要",
+      "addTemplate": "新建模板",
+      "editTemplate": "编辑模板",
+      "namePlaceholder": "模板名称",
+      "contextLabel": "背景",
+      "contextPlaceholder": "这是什么类型的会议？摘要应侧重什么？",
+      "sectionsLabel": "章节",
+      "addSection": "添加章节",
+      "sectionHeadingPlaceholder": "章节标题",
+      "sectionInstructionPlaceholder": "这个章节写什么？",
+      "moveSectionUp": "上移章节",
+      "moveSectionDown": "下移章节",
+      "removeSection": "移除章节",
+      "noSectionsHint": "没有章节时，背景就是摘要的全部指令。",
+      "noTemplates": "暂无模板",
+      "emptyEditorTitle": "选择模板",
+      "emptyEditorDescription": "从列表中选择一个模板或创建新模板",
+      "replaceTitle": "替换 AI 摘要？",
+      "replaceDescription": "{{name}}将为这条笔记生成新的 AI 摘要。你对当前摘要所做的修改将会丢失。",
+      "replaceConfirm": "替换"
     },
     "empty": {
       "title": "这里还没有笔记",
@@ -3193,12 +3236,12 @@
         "description": "操作使用 AI 来处理你的笔记。设置一个语言模型以开始使用。",
         "configured": "AI 模型已配置"
       },
-      "actions": {
-        "title": "AI 驱动的操作",
-        "description": "操作可以处理你的笔记——整理转录、总结会议等。使用内置操作或创建你自己的。",
-        "builtInLabel": "内置",
-        "createTitle": "创建你的操作",
-        "createDescription": "使用你自己的 AI 提示词定义自定义操作。你可以随时在设置中编辑或添加更多。",
+      "templates": {
+        "title": "模板和操作",
+        "description": "模板决定 AI 摘要的样式，从详细的会议记录到你自定义的章节。操作在笔记上运行，例如在聊天中起草跟进邮件。",
+        "builtInLabel": "你的模板",
+        "createTitle": "创建你的模板",
+        "createDescription": "描述你想要的摘要。你之后可以添加章节、更多模板和操作。",
         "created": "已创建！"
       },
       "getStarted": "开始使用",
@@ -4432,9 +4475,7 @@
     "conversationSelector": "切换对话",
     "history": "历史记录",
     "quickActions": "快捷操作",
-    "generateSummary": "生成摘要",
-    "makeTodos": "创建待办事项",
-    "createOutline": "创建大纲"
+    "generateSummary": "生成摘要"
   },
   "transcriptionPreview": {
     "label": "预览",

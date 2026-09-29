@@ -2692,7 +2692,7 @@
     "sidebar": {
       "newNote": "新しいノート",
       "searchNotes": "ノートを検索",
-      "actions": "アクション"
+      "templatesAndActions": "テンプレートとアクション"
     },
     "spaces": {
       "privateSpaces": "プライベートノート",
@@ -2912,7 +2912,6 @@
     },
     "actions": {
       "manage": "アクションを管理...",
-      "manageTitle": "カスタムアクション",
       "addAction": "新しいアクション",
       "editAction": "アクションを編集",
       "namePlaceholder": "アクション名",
@@ -2944,13 +2943,57 @@
         "detailedNotes": {
           "name": "詳細ノート",
           "description": "決定事項とアクションを含む正確で網羅的な会議ノート"
+        },
+        "makeTodos": {
+          "name": "ToDoを作成",
+          "description": "すべてのToDoと担当者をチャットに一覧表示"
+        },
+        "createOutline": {
+          "name": "アウトラインを作成",
+          "description": "ノートのトピックをチャットでアウトライン化"
         }
       },
       "errors": {
         "noModel": "AIモデルが選択されていません。設定で構成してください。",
         "actionFailed": "アクションに失敗しました",
         "noEndpoint": "セルフホストサーバーの URL が設定されていません。設定で構成してください。"
-      }
+      },
+      "tab": "アクション",
+      "output": {
+        "chat": "チャット",
+        "summary": "AI要約",
+        "chatHint": "ノートのチャットで回答し、AI要約はそのまま残します。",
+        "summaryHint": "ノートの現在のAI要約を編集します。"
+      },
+      "needsSummary": "先にAI要約が必要です",
+      "replaceDescription": "{{name}}でこのノートのAI要約を編集します。加えた編集が変更される場合があります。"
+    },
+    "templates": {
+      "tab": "テンプレート",
+      "managerTitle": "テンプレートとアクション",
+      "manage": "テンプレートを管理...",
+      "select": "テンプレートを選択",
+      "generateWith": "{{name}}でAI要約を作成",
+      "regenerateWith": "{{name}}でAI要約を再作成",
+      "addTemplate": "新しいテンプレート",
+      "editTemplate": "テンプレートを編集",
+      "namePlaceholder": "テンプレート名",
+      "contextLabel": "コンテキスト",
+      "contextPlaceholder": "どのような会議で、要約では何に重点を置くべきですか？",
+      "sectionsLabel": "セクション",
+      "addSection": "セクションを追加",
+      "sectionHeadingPlaceholder": "セクションの見出し",
+      "sectionInstructionPlaceholder": "このセクションに何を書きますか？",
+      "moveSectionUp": "セクションを上に移動",
+      "moveSectionDown": "セクションを下に移動",
+      "removeSection": "セクションを削除",
+      "noSectionsHint": "セクションがない場合、コンテキストが要約への指示のすべてになります。",
+      "noTemplates": "テンプレートはまだありません",
+      "emptyEditorTitle": "テンプレートを選択",
+      "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください",
+      "replaceTitle": "AI要約を置き換えますか？",
+      "replaceDescription": "{{name}}でこのノートのAI要約を新しく作成します。現在の要約に加えた編集は失われます。",
+      "replaceConfirm": "置き換える"
     },
     "empty": {
       "title": "まだノートがありません",
@@ -3121,12 +3164,12 @@
         "description": "アクションは AI を使ってノートを変換します。言語モデルを設定して始めましょう。",
         "configured": "AI モデルが設定されました"
       },
-      "actions": {
-        "title": "AI アクション",
-        "description": "アクションでノートを変換できます — 文字起こしの整理、議事録の要約など。組み込みアクションを使うか、独自のアクションを作成できます。",
-        "builtInLabel": "組み込み",
-        "createTitle": "独自のアクションを作成",
-        "createDescription": "独自の AI プロンプトでカスタムアクションを定義できます。設定からいつでも編集・追加できます。",
+      "templates": {
+        "title": "テンプレートとアクション",
+        "description": "テンプレートでAI要約の形を決められます — 詳しい議事録から独自のセクションまで。アクションはノートに対して実行され、たとえばチャットでフォローアップメールを下書きできます。",
+        "builtInLabel": "あなたのテンプレート",
+        "createTitle": "独自のテンプレートを作成",
+        "createDescription": "必要な要約を説明してください。セクションや他のテンプレート、アクションは後から追加できます。",
         "created": "作成しました！"
       },
       "getStarted": "始める",
@@ -4432,9 +4475,7 @@
     "conversationSelector": "会話を切り替え",
     "history": "履歴",
     "quickActions": "クイックアクション",
-    "generateSummary": "要約を作成",
-    "makeTodos": "ToDoを作成",
-    "createOutline": "アウトラインを作成"
+    "generateSummary": "要約を作成"
   },
   "transcriptionPreview": {
     "label": "プレビュー",

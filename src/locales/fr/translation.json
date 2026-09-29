@@ -3115,7 +3115,7 @@
     "sidebar": {
       "newNote": "Nouvelle note",
       "searchNotes": "Rechercher des notes",
-      "actions": "Actions"
+      "templatesAndActions": "Modèles et actions"
     },
     "spaces": {
       "privateSpaces": "Notes privées",
@@ -3501,7 +3501,6 @@
       "chunkProgress": "Partie {{step}} sur {{total}}",
       "emptyReply": "Le modèle a renvoyé une réponse vide. Réessayez ou choisissez un autre modèle.",
       "manage": "Gérer les actions...",
-      "manageTitle": "Actions personnalisées",
       "addAction": "Nouvelle action",
       "editAction": "Modifier l'action",
       "namePlaceholder": "Nom de l'action",
@@ -3530,13 +3529,57 @@
         "detailedNotes": {
           "name": "Notes détaillées",
           "description": "Des notes de réunion précises et complètes avec décisions et actions"
+        },
+        "makeTodos": {
+          "name": "Créer des tâches",
+          "description": "Lister chaque tâche et son responsable dans le chat"
+        },
+        "createOutline": {
+          "name": "Créer un plan",
+          "description": "Structurer les sujets de la note dans le chat"
         }
       },
       "errors": {
         "noModel": "Aucun modèle IA sélectionné. Configurez-en un dans les Paramètres.",
         "actionFailed": "L'action a échoué",
         "noEndpoint": "Aucune URL de serveur auto-hébergé définie. Configurez-en une dans les Paramètres."
-      }
+      },
+      "tab": "Actions",
+      "output": {
+        "chat": "Chat",
+        "summary": "Résumé IA",
+        "chatHint": "Répond dans le chat de la note et laisse le résumé IA tel quel.",
+        "summaryHint": "Modifie le résumé IA actuel de la note."
+      },
+      "needsSummary": "Nécessite d'abord un résumé IA",
+      "replaceDescription": "{{name}} va modifier le résumé IA de cette note. Les modifications que vous y avez apportées peuvent changer."
+    },
+    "templates": {
+      "tab": "Modèles",
+      "managerTitle": "Modèles et actions",
+      "manage": "Gérer les modèles...",
+      "select": "Choisir un modèle",
+      "generateWith": "Rédiger le résumé IA avec {{name}}",
+      "regenerateWith": "Régénérer le résumé IA avec {{name}}",
+      "addTemplate": "Nouveau modèle",
+      "editTemplate": "Modifier le modèle",
+      "namePlaceholder": "Nom du modèle",
+      "contextLabel": "Contexte",
+      "contextPlaceholder": "De quel type de réunion s'agit-il, et sur quoi le résumé doit-il se concentrer ?",
+      "sectionsLabel": "Sections",
+      "addSection": "Ajouter une section",
+      "sectionHeadingPlaceholder": "Titre de la section",
+      "sectionInstructionPlaceholder": "Que contient cette section ?",
+      "moveSectionUp": "Monter la section",
+      "moveSectionDown": "Descendre la section",
+      "removeSection": "Supprimer la section",
+      "noSectionsHint": "Sans sections, le contexte constitue toute la consigne du résumé.",
+      "noTemplates": "Aucun modèle pour l'instant",
+      "emptyEditorTitle": "Sélectionner un modèle",
+      "emptyEditorDescription": "Choisissez un modèle dans la liste ou créez-en un nouveau",
+      "replaceTitle": "Remplacer le résumé IA ?",
+      "replaceDescription": "{{name}} va rédiger un nouveau résumé IA pour cette note. Les modifications apportées au résumé actuel seront perdues.",
+      "replaceConfirm": "Remplacer"
     },
     "onboarding": {
       "llm": {
@@ -3544,13 +3587,13 @@
         "description": "Les actions utilisent l'IA pour transformer vos notes. Configurez un modèle de langage pour commencer.",
         "configured": "Modèle IA configuré"
       },
-      "actions": {
-        "title": "Actions alimentées par l'IA",
-        "description": "Les actions transforment vos notes : nettoyage des transcriptions, résumés de réunions et bien plus. Utilisez les actions intégrées ou créez les vôtres.",
-        "builtInLabel": "Intégrée",
-        "createTitle": "Créez votre propre action",
-        "createDescription": "Définissez une action personnalisée avec votre propre prompt IA. Vous pourrez toujours la modifier ou en ajouter d'autres dans les paramètres.",
-        "created": "Créée !"
+      "templates": {
+        "title": "Modèles et actions",
+        "description": "Les modèles façonnent votre résumé IA, des notes de réunion détaillées aux sections que vous définissez. Les actions s'exécutent sur une note, comme la rédaction d'un e-mail de suivi dans le chat.",
+        "builtInLabel": "Vos modèles",
+        "createTitle": "Créez votre propre modèle",
+        "createDescription": "Décrivez le résumé souhaité. Vous pourrez ajouter des sections, d'autres modèles et des actions plus tard.",
+        "created": "Créé !"
       },
       "getStarted": "Commencer",
       "systemAudio": {
@@ -4508,9 +4551,7 @@
     "conversationSelector": "Changer de conversation",
     "history": "Historique",
     "quickActions": "Actions rapides",
-    "generateSummary": "Générer un résumé",
-    "makeTodos": "Créer des tâches",
-    "createOutline": "Créer un plan"
+    "generateSummary": "Générer un résumé"
   },
   "transcriptionPreview": {
     "label": "Aperçu",

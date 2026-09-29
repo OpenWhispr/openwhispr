@@ -2764,7 +2764,7 @@
     "sidebar": {
       "newNote": "新增筆記",
       "searchNotes": "搜尋筆記",
-      "actions": "動作"
+      "templatesAndActions": "範本與動作"
     },
     "spaces": {
       "privateSpaces": "私人筆記",
@@ -3131,7 +3131,6 @@
     },
     "actions": {
       "manage": "管理動作...",
-      "manageTitle": "自訂動作",
       "addAction": "新增動作",
       "editAction": "編輯動作",
       "namePlaceholder": "動作名稱",
@@ -3163,13 +3162,57 @@
         "detailedNotes": {
           "name": "詳細筆記",
           "description": "準確、完整的會議筆記，包含決策和行動項目"
+        },
+        "makeTodos": {
+          "name": "建立待辦事項",
+          "description": "在聊天中列出每項待辦及其負責人"
+        },
+        "createOutline": {
+          "name": "建立大綱",
+          "description": "在聊天中為筆記的主題列出大綱"
         }
       },
       "errors": {
         "noModel": "未選擇 AI 模型。請在設定中進行配置。",
         "actionFailed": "操作失敗",
         "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。"
-      }
+      },
+      "tab": "動作",
+      "output": {
+        "chat": "聊天",
+        "summary": "AI 摘要",
+        "chatHint": "在筆記的聊天中回覆，AI 摘要維持不變。",
+        "summaryHint": "編輯筆記目前的 AI 摘要。"
+      },
+      "needsSummary": "需要先產生 AI 摘要",
+      "replaceDescription": "{{name}}將編輯這則筆記的 AI 摘要。你對其所做的編輯可能會被更改。"
+    },
+    "templates": {
+      "tab": "範本",
+      "managerTitle": "範本與動作",
+      "manage": "管理範本...",
+      "select": "選擇範本",
+      "generateWith": "使用{{name}}產生 AI 摘要",
+      "regenerateWith": "使用{{name}}重新產生 AI 摘要",
+      "addTemplate": "新增範本",
+      "editTemplate": "編輯範本",
+      "namePlaceholder": "範本名稱",
+      "contextLabel": "背景",
+      "contextPlaceholder": "這是什麼類型的會議？摘要應著重在什麼？",
+      "sectionsLabel": "段落",
+      "addSection": "新增段落",
+      "sectionHeadingPlaceholder": "段落標題",
+      "sectionInstructionPlaceholder": "這個段落要寫什麼？",
+      "moveSectionUp": "上移段落",
+      "moveSectionDown": "下移段落",
+      "removeSection": "移除段落",
+      "noSectionsHint": "沒有段落時，背景就是摘要的完整指示。",
+      "noTemplates": "尚無範本",
+      "emptyEditorTitle": "選擇範本",
+      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本",
+      "replaceTitle": "要取代 AI 摘要嗎？",
+      "replaceDescription": "{{name}}將為這則筆記產生新的 AI 摘要。你對目前摘要所做的編輯將會遺失。",
+      "replaceConfirm": "取代"
     },
     "empty": {
       "title": "這裡還沒有筆記",
@@ -3193,12 +3236,12 @@
         "description": "動作使用 AI 來處理你的筆記。設定語言模型以開始使用。",
         "configured": "AI 模型已設定"
       },
-      "actions": {
-        "title": "AI 驅動的動作",
-        "description": "動作可以處理你的筆記——整理轉錄、摘要會議等。使用內建動作或建立你自己的。",
-        "builtInLabel": "內建",
-        "createTitle": "建立你的動作",
-        "createDescription": "使用你自己的 AI 提示詞定義自訂動作。你隨時可以在設定中編輯或新增更多。",
+      "templates": {
+        "title": "範本與動作",
+        "description": "範本決定 AI 摘要的樣式，從詳細的會議記錄到你自訂的段落。動作在筆記上執行，例如在聊天中草擬跟進郵件。",
+        "builtInLabel": "你的範本",
+        "createTitle": "建立你的範本",
+        "createDescription": "描述你想要的摘要。你之後可以新增段落、更多範本與動作。",
         "created": "已建立！"
       },
       "getStarted": "開始使用",
@@ -4432,9 +4475,7 @@
     "conversationSelector": "切換對話",
     "history": "歷史記錄",
     "quickActions": "快速操作",
-    "generateSummary": "產生摘要",
-    "makeTodos": "建立待辦事項",
-    "createOutline": "建立大綱"
+    "generateSummary": "產生摘要"
   },
   "transcriptionPreview": {
     "label": "預覽",

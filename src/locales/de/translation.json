@@ -3115,7 +3115,7 @@
     "sidebar": {
       "newNote": "Neue Notiz",
       "searchNotes": "Notizen suchen",
-      "actions": "Aktionen"
+      "templatesAndActions": "Vorlagen & Aktionen"
     },
     "spaces": {
       "privateSpaces": "Private Notizen",
@@ -3501,7 +3501,6 @@
       "chunkProgress": "Teil {{step}} von {{total}}",
       "emptyReply": "Das Modell hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
       "manage": "Aktionen verwalten...",
-      "manageTitle": "Benutzerdefinierte Aktionen",
       "addAction": "Neue Aktion",
       "editAction": "Aktion bearbeiten",
       "namePlaceholder": "Name der Aktion",
@@ -3530,13 +3529,57 @@
         "detailedNotes": {
           "name": "Ausführliche Notizen",
           "description": "Präzise, umfassende Meeting-Notizen mit Entscheidungen und Aufgaben"
+        },
+        "makeTodos": {
+          "name": "Aufgabenliste erstellen",
+          "description": "Alle Aufgaben und ihre Verantwortlichen im Chat auflisten"
+        },
+        "createOutline": {
+          "name": "Gliederung erstellen",
+          "description": "Die Themen der Notiz im Chat gliedern"
         }
       },
       "errors": {
         "noModel": "Kein KI-Modell ausgewählt. Konfigurieren Sie eins in den Einstellungen.",
         "actionFailed": "Aktion fehlgeschlagen",
         "noEndpoint": "Keine URL für den selbst gehosteten Server festgelegt. Konfigurieren Sie eine in den Einstellungen."
-      }
+      },
+      "tab": "Aktionen",
+      "output": {
+        "chat": "Chat",
+        "summary": "KI-Zusammenfassung",
+        "chatHint": "Antwortet im Chat der Notiz und lässt die KI-Zusammenfassung unverändert.",
+        "summaryHint": "Bearbeitet die aktuelle KI-Zusammenfassung der Notiz."
+      },
+      "needsSummary": "Erfordert zuerst eine KI-Zusammenfassung",
+      "replaceDescription": "{{name}} bearbeitet die KI-Zusammenfassung dieser Notiz. Ihre Änderungen daran können sich ändern."
+    },
+    "templates": {
+      "tab": "Vorlagen",
+      "managerTitle": "Vorlagen & Aktionen",
+      "manage": "Vorlagen verwalten...",
+      "select": "Vorlage auswählen",
+      "generateWith": "KI-Zusammenfassung mit {{name}} erstellen",
+      "regenerateWith": "KI-Zusammenfassung mit {{name}} neu erstellen",
+      "addTemplate": "Neue Vorlage",
+      "editTemplate": "Vorlage bearbeiten",
+      "namePlaceholder": "Name der Vorlage",
+      "contextLabel": "Kontext",
+      "contextPlaceholder": "Um welche Art von Besprechung geht es, und worauf soll sich die Zusammenfassung konzentrieren?",
+      "sectionsLabel": "Abschnitte",
+      "addSection": "Abschnitt hinzufügen",
+      "sectionHeadingPlaceholder": "Überschrift des Abschnitts",
+      "sectionInstructionPlaceholder": "Was gehört in diesen Abschnitt?",
+      "moveSectionUp": "Abschnitt nach oben verschieben",
+      "moveSectionDown": "Abschnitt nach unten verschieben",
+      "removeSection": "Abschnitt entfernen",
+      "noSectionsHint": "Ohne Abschnitte ist der Kontext die gesamte Anweisung für die Zusammenfassung.",
+      "noTemplates": "Noch keine Vorlagen",
+      "emptyEditorTitle": "Vorlage auswählen",
+      "emptyEditorDescription": "Wählen Sie eine Vorlage aus der Liste oder erstellen Sie eine neue",
+      "replaceTitle": "KI-Zusammenfassung ersetzen?",
+      "replaceDescription": "{{name}} erstellt eine neue KI-Zusammenfassung für diese Notiz. Ihre Änderungen an der aktuellen gehen verloren.",
+      "replaceConfirm": "Ersetzen"
     },
     "onboarding": {
       "llm": {
@@ -3544,12 +3587,12 @@
         "description": "Aktionen verwenden KI, um Ihre Notizen zu transformieren. Richten Sie ein Sprachmodell ein, um loszulegen.",
         "configured": "KI-Modell konfiguriert"
       },
-      "actions": {
-        "title": "KI-gestützte Aktionen",
-        "description": "Aktionen transformieren Ihre Notizen – bereinigen Transkriptionen, fassen Besprechungen zusammen und mehr. Verwenden Sie integrierte Aktionen oder erstellen Sie eigene.",
-        "builtInLabel": "Integriert",
-        "createTitle": "Eigene Aktion erstellen",
-        "createDescription": "Definieren Sie eine benutzerdefinierte Aktion mit Ihrem eigenen KI-Prompt. Sie können später jederzeit weitere hinzufügen oder bearbeiten.",
+      "templates": {
+        "title": "Vorlagen und Aktionen",
+        "description": "Vorlagen bestimmen Ihre KI-Zusammenfassung, von ausführlichen Besprechungsnotizen bis zu eigenen Abschnitten. Aktionen laufen auf einer Notiz, etwa ein Follow-up-E-Mail-Entwurf im Chat.",
+        "builtInLabel": "Ihre Vorlagen",
+        "createTitle": "Eigene Vorlage erstellen",
+        "createDescription": "Beschreiben Sie die gewünschte Zusammenfassung. Abschnitte, weitere Vorlagen und Aktionen können Sie später hinzufügen.",
         "created": "Erstellt!"
       },
       "getStarted": "Loslegen",
@@ -4508,9 +4551,7 @@
     "conversationSelector": "Unterhaltung wechseln",
     "history": "Verlauf",
     "quickActions": "Schnellaktionen",
-    "generateSummary": "Zusammenfassung erstellen",
-    "makeTodos": "Aufgabenliste erstellen",
-    "createOutline": "Gliederung erstellen"
+    "generateSummary": "Zusammenfassung erstellen"
   },
   "transcriptionPreview": {
     "label": "Vorschau",

@@ -7,14 +7,15 @@ import NoteEditor from "./NoteEditor";
 import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
 import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
-import ActionPicker from "./ActionPicker";
 import ActionManagerDialog from "./ActionManagerDialog";
+import { ConfirmDialog } from "../ui/dialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
-import type { ActionItem, NoteItem } from "../../types/electron";
-import { useActions } from "../../stores/actionStore";
-import { DETAILED_NOTES_KEY } from "../../helpers/builtinActions";
+import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
+import { getActionName } from "../../stores/actionStore";
+import { buildSummaryActionInput } from "../../helpers/templatePrompts";
+import { useDialogs } from "../../hooks/useDialogs";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
@@ -145,7 +146,8 @@ export default function PersonalNotesView({
   const [isSaving, setIsSaving] = useState(false);
   const [draft, setDraftState] = useState<NoteEditorDraft | null>(null);
   const draftRef = useRef<NoteEditorDraft | null>(null);
-  const [showActionManager, setShowActionManager] = useState(false);
+  const [managerKind, setManagerKind] = useState<ActionKind | null>(null);
+  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const [showAddNotesDialog, setShowAddNotesDialog] = useState(false);
   const pendingDocumentRef = useRef<PendingDocumentSave | null>(null);
   const pendingEnhancedRef = useRef<PendingEnhancedSave | null>(null);
@@ -247,7 +249,6 @@ export default function PersonalNotesView({
   const sessionExpectedCount = useMeetingRecordingStore((s) => s.sessionExpectedCount);
   const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
   const meetingRecordingAllowed = useTranscriptionContextAllowed("meeting");
-  const actions = useActions();
 
   const spaces = useSpaces();
   const folders = useFolders();
@@ -568,10 +569,6 @@ export default function PersonalNotesView({
     cancel: cancelAction,
   } = useActionProcessing(activeNoteId ?? null);
 
-  // Boolean flag so actions enable during recording without re-rendering on every transcript update.
-  const hasLiveTranscript = useMeetingRecordingStore(
-    (s) => s.recordingNoteId === activeNote?.id && !!s.transcript
-  );
   const activeNoteRawTranscript = activeNote?.transcript || "";
   const activeDraft = draft?.noteId === activeNote?.id ? draft : null;
   const editorNote = activeNote
@@ -687,13 +684,23 @@ export default function PersonalNotesView({
       }
     }
 
-    const parts = [
-      hasNotes ? noteContent : "",
-      meetingContext,
-      formattedTranscript ? `## Meeting Transcript\n${formattedTranscript}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+    // A template writes the summary from the material; an action edits the
+    // summary the note already has.
+    const editsSummary = action.kind === "action";
+    if (editsSummary && !editorEnhancedContent) return;
+    const parts = editsSummary
+      ? buildSummaryActionInput({
+          summary: editorEnhancedContent,
+          notes: noteContent,
+          meetingContext,
+        })
+      : [
+          hasNotes ? noteContent : "",
+          meetingContext,
+          formattedTranscript ? `## Meeting Transcript\n${formattedTranscript}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
     runAction(action, parts, makeContentHash(`${noteContent}\n${rawTranscript}`), {
       isCloudMode,
       modelId: effectiveModelId,
@@ -701,11 +708,13 @@ export default function PersonalNotesView({
       knownPeople,
       // The pieces, so a recording too long for a local model can be split
       // along the transcript rather than through the joined string.
-      material: {
-        notes: hasNotes ? noteContent : "",
-        meetingContext,
-        transcript: formattedTranscript,
-      },
+      material: editsSummary
+        ? undefined
+        : {
+            notes: hasNotes ? noteContent : "",
+            meetingContext,
+            transcript: formattedTranscript,
+          },
       allowTitleGeneration: isRegenerableNoteTitle(
         editorNote.title,
         [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],
@@ -713,9 +722,24 @@ export default function PersonalNotesView({
       ),
     });
   };
-  const generateSummary = () => {
-    const action = actions.find((a) => a.translation_key === DETAILED_NOTES_KEY);
-    if (action) void runNoteAction(action);
+  // Rewriting a summary loses any edits made to it, so ask first.
+  const requestNoteRun = (action: ActionItem) => {
+    if (!editorEnhancedContent) {
+      void runNoteAction(action);
+      return;
+    }
+    showConfirmDialog({
+      title: t("notes.templates.replaceTitle"),
+      description: t(
+        action.kind === "template"
+          ? "notes.templates.replaceDescription"
+          : "notes.actions.replaceDescription",
+        { name: getActionName(action, t) }
+      ),
+      confirmText: t("notes.templates.replaceConfirm"),
+      cancelText: t("notes.actions.cancel"),
+      onConfirm: () => void runNoteAction(action),
+    });
   };
 
   if (!isOnboardingComplete) {
@@ -739,7 +763,7 @@ export default function PersonalNotesView({
         <div className="w-52 shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full">
           <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
             <button
-              onClick={() => setShowActionManager(true)}
+              onClick={() => setManagerKind("template")}
               className={cn(
                 "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
                 "text-foreground/85 hover:text-foreground hover:bg-foreground/5",
@@ -748,7 +772,7 @@ export default function PersonalNotesView({
               )}
             >
               <Sparkles size={14} className="shrink-0" />
-              {t("notes.sidebar.actions")}
+              {t("notes.sidebar.templatesAndActions")}
             </button>
           </div>
 
@@ -804,21 +828,23 @@ export default function PersonalNotesView({
               actionName={actionName}
               actionProgress={actionProgress}
               onCancelAction={cancelAction}
-              onGenerateSummary={generateSummary}
-              actionPicker={
-                <ActionPicker
-                  onRunAction={runNoteAction}
-                  onManageActions={() => setShowActionManager(true)}
-                  disabled={
-                    (!editorNote?.content?.trim() &&
-                      !hasLiveTranscript &&
-                      !activeNoteRawTranscript) ||
-                    actionProcessingState === "processing"
-                  }
-                />
-              }
+              onRunNoteAction={requestNoteRun}
+              onManageActions={setManagerKind}
             />
-            <ActionManagerDialog open={showActionManager} onOpenChange={setShowActionManager} />
+            <ActionManagerDialog
+              open={managerKind !== null}
+              onOpenChange={(open) => !open && setManagerKind(null)}
+              initialKind={managerKind ?? "template"}
+            />
+            <ConfirmDialog
+              open={confirmDialog.open}
+              onOpenChange={(open) => !open && hideConfirmDialog()}
+              title={confirmDialog.title}
+              description={confirmDialog.description}
+              confirmText={confirmDialog.confirmText}
+              cancelText={confirmDialog.cancelText}
+              onConfirm={confirmDialog.onConfirm}
+            />
           </>
         ) : activeContext && overviewSpace ? (
           <ContainerOverview

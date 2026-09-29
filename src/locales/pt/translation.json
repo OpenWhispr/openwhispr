@@ -2764,7 +2764,7 @@
     "sidebar": {
       "newNote": "Nova nota",
       "searchNotes": "Pesquisar notas",
-      "actions": "Ações"
+      "templatesAndActions": "Modelos e ações"
     },
     "spaces": {
       "privateSpaces": "Notas privadas",
@@ -3131,7 +3131,6 @@
     },
     "actions": {
       "manage": "Gerenciar ações...",
-      "manageTitle": "Ações personalizadas",
       "addAction": "Nova ação",
       "editAction": "Editar ação",
       "namePlaceholder": "Nome da ação",
@@ -3163,13 +3162,57 @@
         "detailedNotes": {
           "name": "Notas detalhadas",
           "description": "Notas de reunião precisas e completas com decisões e ações"
+        },
+        "makeTodos": {
+          "name": "Criar tarefas",
+          "description": "Lista cada tarefa e seu responsável no chat"
+        },
+        "createOutline": {
+          "name": "Criar esboço",
+          "description": "Organiza os tópicos da nota no chat"
         }
       },
       "errors": {
         "noModel": "Nenhum modelo de IA selecionado. Configure um nas Configurações.",
         "actionFailed": "A ação falhou",
         "noEndpoint": "Nenhum URL de servidor auto-hospedado definido. Configure um nas Configurações."
-      }
+      },
+      "tab": "Ações",
+      "output": {
+        "chat": "Chat",
+        "summary": "Resumo com IA",
+        "chatHint": "Responde no chat da nota e deixa o resumo com IA como está.",
+        "summaryHint": "Edita o resumo com IA atual da nota."
+      },
+      "needsSummary": "Precisa de um resumo com IA primeiro",
+      "replaceDescription": "{{name}} vai editar o resumo com IA desta nota. As edições que você fez nele podem mudar."
+    },
+    "templates": {
+      "tab": "Modelos",
+      "managerTitle": "Modelos e ações",
+      "manage": "Gerenciar modelos...",
+      "select": "Escolher modelo",
+      "generateWith": "Escrever o resumo com IA usando {{name}}",
+      "regenerateWith": "Gerar novamente o resumo com IA usando {{name}}",
+      "addTemplate": "Novo modelo",
+      "editTemplate": "Editar modelo",
+      "namePlaceholder": "Nome do modelo",
+      "contextLabel": "Contexto",
+      "contextPlaceholder": "Que tipo de reunião é esta e em que o resumo deve se concentrar?",
+      "sectionsLabel": "Seções",
+      "addSection": "Adicionar seção",
+      "sectionHeadingPlaceholder": "Título da seção",
+      "sectionInstructionPlaceholder": "O que entra nesta seção?",
+      "moveSectionUp": "Mover seção para cima",
+      "moveSectionDown": "Mover seção para baixo",
+      "removeSection": "Remover seção",
+      "noSectionsHint": "Sem seções, o contexto é a instrução completa para o resumo.",
+      "noTemplates": "Nenhum modelo ainda",
+      "emptyEditorTitle": "Selecionar modelo",
+      "emptyEditorDescription": "Escolha um modelo da lista ou crie um novo",
+      "replaceTitle": "Substituir o resumo com IA?",
+      "replaceDescription": "{{name}} vai escrever um novo resumo com IA para esta nota. As edições que você fez no atual serão perdidas.",
+      "replaceConfirm": "Substituir"
     },
     "empty": {
       "title": "Ainda não há notas aqui",
@@ -3193,13 +3236,13 @@
         "description": "As ações usam IA para transformar suas notas. Configure um modelo de linguagem para começar.",
         "configured": "Modelo de IA configurado"
       },
-      "actions": {
-        "title": "Ações com IA",
-        "description": "As ações transformam suas notas — limpam transcrições, resumem reuniões e muito mais. Use ações integradas ou crie as suas.",
-        "builtInLabel": "Integrada",
-        "createTitle": "Crie sua própria ação",
-        "createDescription": "Defina uma ação personalizada com seu próprio prompt de IA. Você sempre pode editar ou adicionar mais nas configurações.",
-        "created": "Criada!"
+      "templates": {
+        "title": "Modelos e ações",
+        "description": "Os modelos dão forma ao seu resumo com IA, de notas de reunião detalhadas a seções que você define. As ações rodam sobre uma nota, como escrever um e-mail de acompanhamento no chat.",
+        "builtInLabel": "Seus modelos",
+        "createTitle": "Crie seu próprio modelo",
+        "createDescription": "Descreva o resumo que você quer. Você pode adicionar seções, mais modelos e ações depois.",
+        "created": "Criado!"
       },
       "getStarted": "Começar",
       "systemAudio": {
@@ -4432,9 +4475,7 @@
     "conversationSelector": "Trocar conversa",
     "history": "Histórico",
     "quickActions": "Ações rápidas",
-    "generateSummary": "Gerar resumo",
-    "makeTodos": "Criar tarefas",
-    "createOutline": "Criar esboço"
+    "generateSummary": "Gerar resumo"
   },
   "transcriptionPreview": {
     "label": "Pré-visualização",

@@ -184,6 +184,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Token handling shared by the OAuth connectors (`boundLogin.js`): reads, the reconnect flag, saving a refreshed token and one refresh at a time, only ever for the login an action is bound to. Gmail's and Linear's clients share one timed POST and its body helpers (`providerHttp.js`)
   - Logins: one encrypted file per OpenWhispr account and connector under `userData/connectors/` (atomic writes, `0o700`, `connectorCredentials.js`). Every write names the account and the generation it started from, so an OAuth round trip, refresh or disconnect that outlives a reconnect or account switch writes nothing. Bindings carry `ownerAccountId`; receipts carry `account_id`. Signed out → every connector action is refused (`signed_out`). Pending actions also expire in main (`sweepExpired`, every minute)
 - **postMigrationDetector.js**: Detects users returning from the pre-Gizmo bundle ID via a `.bundle-migrated` sentinel in userData; consumed by `ipcHandlers.js` to drive the `PostMigrationOnboarding` modal
+- **templatePrompts.js**: Pure compiler from a note template or action to the system prompt the model receives (see Note Templates and Actions). Shared by `actionProcessingStore.ts`, the note chat, and the live canary's note probe
 
 ### React Components (src/components/)
 
@@ -755,6 +756,15 @@ Live meeting transcription runs two streams (mic + system-audio tap) and must ke
 - **Renderer**: `src/stores/meetingSegmentReducer.ts` is the pure `(state, event, deps) → reduction` transition for those events (timestamp-sorted insert, retract by exact match, per-source partial slots); `meetingRecordingStore.ts` supplies `mintSegmentId` / `decorateFinal` (speaker identifications, provisional speaker, locks — must not write to the store) and applies the reduction. Tests: `test/stores/meetingSegmentReducer.test.js`, `test/stores/meetingRecordingStoreImports.test.js`
 - **Regression pins**: BYOK `session.update` payload and the disconnect-commit callback (`test/helpers/openaiRealtimeStreaming.test.js`, `tinfoilRealtimeStreaming.test.js`), token-endpoint wire bodies (`test/helpers/realtimeTokenProviders.test.js`). Tests named `characterization: …` pin known oddities on purpose — flip them deliberately when changing policy
 - **Fixtures**: `test/helpers/harness/pcmFixtures.js` — deterministic 24 kHz PCM generators (`makeSine`, `makeSeededNoise`, `mix`, `delayBy`, `toInt16Buffer`, `chunkBuffer`, …) used by the gate and echo-detector tests
+
+### 19. Note Templates and Actions
+
+Rows in the `actions` table (built-ins seeded from `src/helpers/builtinActions.js`) are one of two kinds:
+
+- **Templates** (`kind: 'template'`) write a note's AI summary (`enhanced_content`) from its notes, meeting context, and transcript. A template is a context (`prompt`) plus ordered `sections` (`{heading, instruction}`); `compileTemplatePrompt` wraps sections in the shared notes rules. A template without sections keeps the request it always had (the generic system prompt, or the material preamble for a standalone key). The note records the template in `enhancement_template_id` (its `client_id`), which syncs with the note
+- **Actions** (`kind: 'action'`) run over a note with an `output` of `summary` (rewrites the current summary; `requireCompleteOutput`, no transcript, never split into parts; only `enhanced_content` is written) or `chat` (sent into the note chat via `SendToAIOptions.requestText`, so the chat shows the action's name; text only, no connectors)
+- Invariant: the built-in Detailed Notes compiled from its sections equals the flat prompt it replaced byte for byte (`test/helpers/templatePrompts.test.js`); a built-in's `previousPrompts` only upgrades rows that are still flat
+- UI: `TemplatePicker` beside the note's Share control, the "Generate AI Summary" callout (runs the note's or last-picked template), `ActionPicker` in the ask bar, the sidebar chat's quick-action pills, and `ActionManagerDialog` (Templates | Actions). Replacing an existing summary asks for confirmation first
 
 ## Development Guidelines
 
