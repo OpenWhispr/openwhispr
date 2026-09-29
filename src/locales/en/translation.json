@@ -3500,6 +3500,7 @@
       "done": "Done",
       "chunkProgress": "Part {{step}} of {{total}}",
       "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
+      "allActions": "All actions",
       "manage": "Manage Actions...",
       "addAction": "New Action",
       "editAction": "Edit Action",
@@ -3514,8 +3515,6 @@
       "promptLabel": "Prompt",
       "emptyEditorTitle": "Select an action",
       "emptyEditorDescription": "Choose an action from the list or create a new one",
-      "runAction": "Run {{name}}",
-      "selectAction": "Select action",
       "builtin": {
         "generateNotes": {
           "name": "Generate Notes",
@@ -3568,16 +3567,6 @@
           "name": "Slack update",
           "description": "Write a short team update to post in Slack",
           "cta": "Write a Slack update"
-        },
-        "prepNextMeeting": {
-          "name": "Prep next meeting",
-          "description": "Build the next meeting's agenda from open items",
-          "cta": "Prep the next meeting"
-        },
-        "coachMe": {
-          "name": "Coach me",
-          "description": "Candid feedback on how you ran the meeting",
-          "cta": "Coach me on this meeting"
         }
       },
       "errors": {
@@ -3930,7 +3919,8 @@
       "thinking": "Thinking...",
       "typeMessage": "Type a message...",
       "send": "Send",
-      "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text."
+      "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text.",
+      "commands": "Commands"
     },
     "tools": {
       "search_notesName": "Search notes",

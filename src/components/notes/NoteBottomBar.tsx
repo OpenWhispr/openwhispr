@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ChatInput } from "../chat/ChatInput";
 import type { AgentState } from "../chat/types";
+import type { SlashCommand } from "../chat/slashCommands";
 import { cn } from "../lib/utils";
 import { observeFloatingChatSize } from "./floatingChatLayout";
 
@@ -14,7 +15,8 @@ interface NoteBottomBarProps {
   onAskSubmit: (text: string) => void;
   onInputFocus?: () => void;
   onInputEscape?: () => void;
-  actionPicker?: React.ReactNode;
+  actionChips?: React.ReactNode;
+  slashCommands?: SlashCommand[];
   callout?: React.ReactNode;
   footnote?: React.ReactNode;
   hideInput?: boolean;
@@ -32,7 +34,8 @@ export default function NoteBottomBar({
   onAskSubmit,
   onInputFocus,
   onInputEscape,
-  actionPicker,
+  actionChips,
+  slashCommands,
   callout,
   footnote,
   hideInput = false,
@@ -86,6 +89,11 @@ export default function NoteBottomBar({
       {callout && !chatOpen && !hideInput && (
         <div className="pointer-events-auto relative mb-3 flex justify-center">{callout}</div>
       )}
+      {actionChips && !chatOpen && !hideInput && (
+        <div className="pointer-events-auto relative mx-auto mb-2 w-full min-w-0 max-w-[600px] px-1">
+          {actionChips}
+        </div>
+      )}
       <div
         ref={attachPanel}
         data-note-chat-panel
@@ -113,6 +121,7 @@ export default function NoteBottomBar({
         >
           {chatContent}
         </div>
+        {actionChips && chatOpen && <div className="shrink-0 px-2 pt-2">{actionChips}</div>}
         {!hideInput && (
           <ChatInput
             className={cn("w-full min-w-0", chatOpen && "px-2 py-1")}
@@ -129,9 +138,7 @@ export default function NoteBottomBar({
             focusOnIdle={chatOpen}
             voiceDraft={chatOpen}
             placeholder={t("embeddedChat.askPlaceholder")}
-            trailingContent={
-              !chatOpen && actionPicker ? <div className="shrink-0">{actionPicker}</div> : null
-            }
+            slashCommands={slashCommands}
           />
         )}
       </div>

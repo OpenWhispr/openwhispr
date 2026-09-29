@@ -113,7 +113,7 @@ export function getActionName(
     : action.name;
 }
 
-/** Verb-form label for the ask bar button; falls back to the action name. */
+/** Verb-form label the chat shows for a running action; falls back to the action name. */
 export function getActionCta(
   action: { name: string; translation_key?: string },
   t: TFunction

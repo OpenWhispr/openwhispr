@@ -51,15 +51,25 @@ test("in-view chat expands the existing capsule around one composer", async (t) 
   assert.equal((html.match(/<textarea/g) ?? []).length, 1);
 });
 
-test("closing a selected chat restores the compact actions and summary callout", async (t) => {
-  const html = await renderBottomBar(t, {
-    chatOpen: false,
+test("the action chips sit above the composer, inside the chat once it opens", async (t) => {
+  const props = {
     chatContent: createElement("div", null, "Previous conversation"),
-    actionPicker: createElement("button", null, "More actions"),
+    actionChips: createElement("button", null, "All actions"),
     callout: createElement("button", null, "Generate summary"),
-  });
+  };
+  const closed = await renderBottomBar(t, { ...props, chatOpen: false });
 
-  assert.ok(html.includes("More actions"));
-  assert.ok(html.includes("Generate summary"));
-  assert.ok(html.includes("agentMode.input.send"));
+  assert.ok(closed.includes("Generate summary"));
+  assert.ok(
+    closed.indexOf("All actions") < closed.indexOf("<textarea"),
+    "the chips sit above the composer"
+  );
+
+  const open = await renderBottomBar(t, { ...props, chatOpen: true });
+  assert.equal(open.split("All actions").length, 2, "the chips show once");
+  assert.ok(
+    open.indexOf("Previous conversation") < open.indexOf("All actions") &&
+      open.indexOf("All actions") < open.indexOf("<textarea"),
+    "an open chat keeps the chips, between its messages and the composer"
+  );
 });

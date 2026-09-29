@@ -3130,6 +3130,7 @@
       "showInFileManager": "Mostra in {{manager}}"
     },
     "actions": {
+      "allActions": "Tutte le azioni",
       "manage": "Gestisci azioni...",
       "addAction": "Nuova azione",
       "editAction": "Modifica azione",
@@ -3144,8 +3145,6 @@
       "promptLabel": "Istruzione",
       "emptyEditorTitle": "Seleziona un'azione",
       "emptyEditorDescription": "Scegli un'azione dall'elenco o creane una nuova",
-      "runAction": "Esegui {{name}}",
-      "selectAction": "Seleziona azione",
       "done": "Fatto",
       "chunkProgress": "Parte {{step}} di {{total}}",
       "emptyReply": "Il modello ha restituito una risposta vuota. Riprova o scegli un altro modello.",
@@ -3201,16 +3200,6 @@
           "name": "Aggiornamento Slack",
           "description": "Scrivi un breve aggiornamento per il team da pubblicare su Slack",
           "cta": "Scrivi un aggiornamento Slack"
-        },
-        "prepNextMeeting": {
-          "name": "Prepara la prossima riunione",
-          "description": "Crea l'agenda della prossima riunione dai punti aperti",
-          "cta": "Prepara la prossima riunione"
-        },
-        "coachMe": {
-          "name": "Dammi un feedback",
-          "description": "Un feedback sincero su come hai condotto la riunione",
-          "cta": "Dammi un feedback su questa riunione"
         }
       },
       "errors": {
@@ -3759,7 +3748,8 @@
       "thinking": "Pensiero...",
       "typeMessage": "Scrivi un messaggio...",
       "send": "Invia",
-      "voiceDraftStreamingOnly": "L'input vocale non è disponibile con il tuo provider di trascrizione: supporta solo la dettatura dal vivo. Scegli un altro provider in Impostazioni → Da voce a testo."
+      "voiceDraftStreamingOnly": "L'input vocale non è disponibile con il tuo provider di trascrizione: supporta solo la dettatura dal vivo. Scegli un altro provider in Impostazioni → Da voce a testo.",
+      "commands": "Comandi"
     },
     "tools": {
       "search_notesName": "Cerca nelle note",

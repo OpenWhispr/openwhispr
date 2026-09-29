@@ -3500,6 +3500,7 @@
       "done": "Terminé",
       "chunkProgress": "Partie {{step}} sur {{total}}",
       "emptyReply": "Le modèle a renvoyé une réponse vide. Réessayez ou choisissez un autre modèle.",
+      "allActions": "Toutes les actions",
       "manage": "Gérer les actions...",
       "addAction": "Nouvelle action",
       "editAction": "Modifier l'action",
@@ -3514,8 +3515,6 @@
       "promptLabel": "Instruction",
       "emptyEditorTitle": "Sélectionner une action",
       "emptyEditorDescription": "Choisissez une action dans la liste ou créez-en une nouvelle",
-      "runAction": "Exécuter {{name}}",
-      "selectAction": "Sélectionner l'action",
       "builtin": {
         "generateNotes": {
           "name": "Générer des notes",
@@ -3568,16 +3567,6 @@
           "name": "Point Slack",
           "description": "Rédiger un court point d'équipe à publier sur Slack",
           "cta": "Rédiger un point Slack"
-        },
-        "prepNextMeeting": {
-          "name": "Préparer la prochaine réunion",
-          "description": "Construire l'ordre du jour de la prochaine réunion à partir des points ouverts",
-          "cta": "Préparer la prochaine réunion"
-        },
-        "coachMe": {
-          "name": "Coachez-moi",
-          "description": "Un retour franc sur la façon dont vous avez mené la réunion",
-          "cta": "Me coacher sur cette réunion"
         }
       },
       "errors": {
@@ -3930,7 +3919,8 @@
       "thinking": "Réflexion...",
       "typeMessage": "Écrivez un message...",
       "send": "Envoyer",
-      "voiceDraftStreamingOnly": "La saisie vocale n'est pas disponible avec votre fournisseur de transcription : il ne prend en charge que la dictée en direct. Choisissez un autre fournisseur dans Réglages → Parole en texte."
+      "voiceDraftStreamingOnly": "La saisie vocale n'est pas disponible avec votre fournisseur de transcription : il ne prend en charge que la dictée en direct. Choisissez un autre fournisseur dans Réglages → Parole en texte.",
+      "commands": "Commandes"
     },
     "tools": {
       "search_notesName": "Rechercher des notes",

@@ -333,10 +333,6 @@ const CREATE_OUTLINE_PROMPT = `Outline this note, based only on what it says. Us
 
 const SLACK_UPDATE_PROMPT = `Write a short Slack message I can post to my team about this meeting: one line on what it was about, then 3–5 bullets with the outcomes, decisions, and who is doing what next. Use Slack formatting (bold with *asterisks*, no Markdown headings), keep it under 120 words, and use only what the note supports. Return only the message.`;
 
-const PREP_NEXT_MEETING_PROMPT = `Help me prepare for the next meeting on this topic. Write a short agenda of 3–6 items built from this note's open questions, unresolved decisions, and action items, each with who owns it. Then list anything to check, bring, or send beforehand. Use only what the note supports.`;
-
-const COACH_ME_PROMPT = `Give me brief, candid coaching on how I ("You" in the transcript) ran or took part in this meeting, based only on the transcript: 2–3 things that went well and 2–3 specific things to do differently next time, each tied to the moment in the transcript it comes from. If there is no transcript, say so in one sentence instead.`;
-
 const SHORTEN_PROMPT = `Make it about half as long. Keep every decision, number, date, name, and action item; cut repetition, background, and detail that would not change what anyone does next.`;
 
 const ADD_TLDR_PROMPT = `Add a "## TL;DR" section at the very top: two or three sentences on what the meeting decided and what happens next. Leave the rest of the summary exactly as it is.`;
@@ -512,6 +508,22 @@ export const BUILTIN_ACTIONS = [
     icon: "clipboard-check",
     sortOrder: 3,
   },
+  builtinAction({
+    key: "shorten",
+    name: "Shorten",
+    description: "Make the summary about half as long",
+    prompt: SHORTEN_PROMPT,
+    output: "summary",
+    sortOrder: 4,
+  }),
+  builtinAction({
+    key: "addTldr",
+    name: "Add TL;DR",
+    description: "Put a two- or three-sentence TL;DR at the top of the summary",
+    prompt: ADD_TLDR_PROMPT,
+    output: "summary",
+    sortOrder: 5,
+  }),
   {
     translationKey: CREATE_OUTLINE_KEY,
     kind: "action",
@@ -522,56 +534,8 @@ export const BUILTIN_ACTIONS = [
     output: "chat",
     previousPrompts: [],
     icon: "file-text",
-    sortOrder: 4,
-  },
-  builtinTemplate({
-    key: "oneOnOne",
-    name: "1:1",
-    description: "Updates, feedback, growth, and next steps from a one-on-one",
-    prompt: ONE_ON_ONE_CONTEXT,
-    sections: ONE_ON_ONE_SECTIONS,
-    sortOrder: 5,
-  }),
-  builtinTemplate({
-    key: "standUp",
-    name: "Stand-up",
-    description: "Each person's progress, plans, and blockers",
-    prompt: STAND_UP_CONTEXT,
-    sections: STAND_UP_SECTIONS,
     sortOrder: 6,
-  }),
-  builtinTemplate({
-    key: "salesCall",
-    name: "Sales call",
-    description: "Needs, objections, budget, and the decision process",
-    prompt: SALES_CALL_CONTEXT,
-    sections: SALES_CALL_SECTIONS,
-    sortOrder: 7,
-  }),
-  builtinTemplate({
-    key: "userInterview",
-    name: "User interview",
-    description: "Workflow, pain points, reactions, and quotes from a participant",
-    prompt: USER_INTERVIEW_CONTEXT,
-    sections: USER_INTERVIEW_SECTIONS,
-    sortOrder: 8,
-  }),
-  builtinAction({
-    key: "shorten",
-    name: "Shorten",
-    description: "Make the summary about half as long",
-    prompt: SHORTEN_PROMPT,
-    output: "summary",
-    sortOrder: 9,
-  }),
-  builtinAction({
-    key: "addTldr",
-    name: "Add TL;DR",
-    description: "Put a two- or three-sentence TL;DR at the top of the summary",
-    prompt: ADD_TLDR_PROMPT,
-    output: "summary",
-    sortOrder: 10,
-  }),
+  },
   builtinAction({
     key: "slackUpdate",
     name: "Slack update",
@@ -579,25 +543,39 @@ export const BUILTIN_ACTIONS = [
     prompt: SLACK_UPDATE_PROMPT,
     output: "chat",
     icon: "send",
+    sortOrder: 7,
+  }),
+  builtinTemplate({
+    key: "oneOnOne",
+    name: "1:1",
+    description: "Updates, feedback, growth, and next steps from a one-on-one",
+    prompt: ONE_ON_ONE_CONTEXT,
+    sections: ONE_ON_ONE_SECTIONS,
+    sortOrder: 8,
+  }),
+  builtinTemplate({
+    key: "standUp",
+    name: "Stand-up",
+    description: "Each person's progress, plans, and blockers",
+    prompt: STAND_UP_CONTEXT,
+    sections: STAND_UP_SECTIONS,
+    sortOrder: 9,
+  }),
+  builtinTemplate({
+    key: "salesCall",
+    name: "Sales call",
+    description: "Needs, objections, budget, and the decision process",
+    prompt: SALES_CALL_CONTEXT,
+    sections: SALES_CALL_SECTIONS,
+    sortOrder: 10,
+  }),
+  builtinTemplate({
+    key: "userInterview",
+    name: "User interview",
+    description: "Workflow, pain points, reactions, and quotes from a participant",
+    prompt: USER_INTERVIEW_CONTEXT,
+    sections: USER_INTERVIEW_SECTIONS,
     sortOrder: 11,
-  }),
-  builtinAction({
-    key: "prepNextMeeting",
-    name: "Prep next meeting",
-    description: "Build the next meeting's agenda from open items",
-    prompt: PREP_NEXT_MEETING_PROMPT,
-    output: "chat",
-    icon: "calendar",
-    sortOrder: 12,
-  }),
-  builtinAction({
-    key: "coachMe",
-    name: "Coach me",
-    description: "Candid feedback on how you ran the meeting",
-    prompt: COACH_ME_PROMPT,
-    output: "chat",
-    icon: "message-circle",
-    sortOrder: 13,
   }),
 ];
 

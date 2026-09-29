@@ -2911,6 +2911,7 @@
       "showInFileManager": "{{manager}}で表示"
     },
     "actions": {
+      "allActions": "すべてのアクション",
       "manage": "アクションを管理...",
       "addAction": "新しいアクション",
       "editAction": "アクションを編集",
@@ -2925,8 +2926,6 @@
       "promptLabel": "プロンプト",
       "emptyEditorTitle": "アクションを選択",
       "emptyEditorDescription": "リストからアクションを選択するか、新しく作成してください",
-      "runAction": "{{name}} を実行",
-      "selectAction": "アクションを選択",
       "done": "完了",
       "chunkProgress": "パート {{step}} / {{total}}",
       "emptyReply": "モデルから空の応答が返されました。もう一度お試しいただくか、別のモデルを選択してください。",
@@ -2982,16 +2981,6 @@
           "name": "Slack用の共有",
           "description": "Slackに投稿するチーム向けの短い共有文を作成します",
           "cta": "Slack用の共有を書く"
-        },
-        "prepNextMeeting": {
-          "name": "次の会議の準備",
-          "description": "未解決の項目から次の会議のアジェンダを作成します",
-          "cta": "次の会議を準備"
-        },
-        "coachMe": {
-          "name": "コーチング",
-          "description": "会議の進め方への率直なフィードバック",
-          "cta": "この会議のコーチングを受ける"
         }
       },
       "errors": {
@@ -3759,7 +3748,8 @@
       "thinking": "考え中...",
       "typeMessage": "メッセージを入力...",
       "send": "送信",
-      "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声テキスト変換 で別のプロバイダーを選択してください。"
+      "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声テキスト変換 で別のプロバイダーを選択してください。",
+      "commands": "コマンド"
     },
     "tools": {
       "search_notesName": "ノートを検索",

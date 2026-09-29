@@ -73,16 +73,18 @@ import transcriptsEmptyDark from "../../assets/empty-states/notes-transcripts-da
 import { Button } from "../ui/button";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
-import ActionPicker from "./ActionPicker";
+import ActionChips from "./ActionChips";
 import TemplatePicker from "./TemplatePicker";
 import {
   getActionCta,
+  getActionName,
   getLastTemplateId,
   initializeActions,
   resolveTemplate,
   useActionsOfKind,
 } from "../../stores/actionStore";
 import { compileChatActionPrompt } from "../../helpers/templatePrompts";
+import type { SlashCommand } from "../chat/slashCommands";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
 import {
   buildLlmTranscript,
@@ -875,6 +877,39 @@ export default function NoteEditor({
     [chatMode, embeddedChat, enhancement, t]
   );
 
+  const runAction = useCallback(
+    (action: ActionItem) => {
+      if (action.output === "chat") {
+        handleChatAction(action);
+        return;
+      }
+      // Uncover the summary the action rewrites; a docked chat already sits beside it.
+      if (chatMode === "floating") handleChatModeChange("hidden");
+      onRunNoteAction?.(action);
+    },
+    [chatMode, handleChatAction, handleChatModeChange, onRunNoteAction]
+  );
+  const offersActions =
+    !isRecording &&
+    canEditNote &&
+    !(viewMode === "transcript" && !hasMeetingTranscript && !hasChatSegments);
+  // A summary action waits for a run already writing the summary; a chat action
+  // for the reply the chat is still writing.
+  const canRunAction = (action: ActionItem) =>
+    hasNoteMaterial &&
+    (action.output === "summary" ? !isActionRunning : embeddedChat.agentState === "idle");
+  const actionCommands: SlashCommand[] | undefined = offersActions
+    ? noteActions.map((action) => ({
+        id: action.client_id,
+        label: getActionName(action, t),
+        hint: t(
+          action.output === "summary" ? "notes.actions.output.summary" : "notes.actions.output.chat"
+        ),
+        disabled: !canRunAction(action),
+        run: () => runAction(action),
+      }))
+    : undefined;
+
   const handleChatInputFocus = useCallback(() => {
     if (chatMode === "hidden") {
       setChatMode("floating");
@@ -1401,24 +1436,17 @@ export default function NoteEditor({
                 />
               )
             }
-            actionPicker={
-              isRecording ||
-              !canEditNote ||
-              (viewMode === "transcript" &&
-                !hasMeetingTranscript &&
-                !hasChatSegments) ? undefined : (
-                <ActionPicker
+            actionChips={
+              offersActions && (
+                <ActionChips
                   actions={noteActions}
-                  onRunAction={(action) =>
-                    action.output === "chat" ? handleChatAction(action) : onRunNoteAction?.(action)
-                  }
+                  canRun={canRunAction}
+                  onRunAction={runAction}
                   onManageActions={() => onManageActions?.("action")}
-                  disabled={!hasNoteMaterial}
-                  isSummaryBusy={isActionRunning}
-                  isChatBusy={embeddedChat.agentState !== "idle"}
                 />
               )
             }
+            slashCommands={actionCommands}
             callout={
               showSummaryCallout &&
               noteTemplate &&
@@ -1461,6 +1489,7 @@ export default function NoteEditor({
           onNewChat={embeddedChat.startNewChat}
           chatActions={chatActions}
           onRunChatAction={handleChatAction}
+          slashCommands={actionCommands}
           onGenerateSummary={
             canRunTemplate && noteTemplate && !isActionRunning
               ? () => onRunNoteAction?.(noteTemplate)

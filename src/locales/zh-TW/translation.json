@@ -3130,6 +3130,7 @@
       "showInFileManager": "在{{manager}}中顯示"
     },
     "actions": {
+      "allActions": "全部動作",
       "manage": "管理動作...",
       "addAction": "新增動作",
       "editAction": "編輯動作",
@@ -3144,8 +3145,6 @@
       "promptLabel": "提示詞",
       "emptyEditorTitle": "選擇動作",
       "emptyEditorDescription": "從列表中選擇一個動作或建立新動作",
-      "runAction": "執行 {{name}}",
-      "selectAction": "選擇動作",
       "done": "完成",
       "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
       "emptyReply": "模型傳回了空白回覆。請再試一次，或選擇其他模型。",
@@ -3201,16 +3200,6 @@
           "name": "Slack 更新",
           "description": "寫一則發到 Slack 的簡短團隊更新",
           "cta": "寫一則 Slack 更新"
-        },
-        "prepNextMeeting": {
-          "name": "準備下次會議",
-          "description": "根據未決事項擬定下次會議的議程",
-          "cta": "準備下次會議"
-        },
-        "coachMe": {
-          "name": "給我建議",
-          "description": "坦誠回饋你主持會議的表現",
-          "cta": "為這次會議給我建議"
         }
       },
       "errors": {
@@ -3759,7 +3748,8 @@
       "thinking": "正在思考...",
       "typeMessage": "輸入訊息...",
       "send": "傳送",
-      "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。"
+      "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。",
+      "commands": "指令"
     },
     "tools": {
       "search_notesName": "搜尋筆記",

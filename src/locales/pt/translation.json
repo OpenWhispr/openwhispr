@@ -3130,6 +3130,7 @@
       "showInFileManager": "Mostrar no {{manager}}"
     },
     "actions": {
+      "allActions": "Todas as ações",
       "manage": "Gerenciar ações...",
       "addAction": "Nova ação",
       "editAction": "Editar ação",
@@ -3144,8 +3145,6 @@
       "promptLabel": "Instrução",
       "emptyEditorTitle": "Selecionar ação",
       "emptyEditorDescription": "Escolha uma ação da lista ou crie uma nova",
-      "runAction": "Executar {{name}}",
-      "selectAction": "Selecionar ação",
       "done": "Concluído",
       "chunkProgress": "Parte {{step}} de {{total}}",
       "emptyReply": "O modelo retornou uma resposta vazia. Tente novamente ou escolha outro modelo.",
@@ -3201,16 +3200,6 @@
           "name": "Atualização no Slack",
           "description": "Escreva uma breve atualização para a equipe no Slack",
           "cta": "Escrever uma atualização no Slack"
-        },
-        "prepNextMeeting": {
-          "name": "Preparar a próxima reunião",
-          "description": "Monte a pauta da próxima reunião com os itens em aberto",
-          "cta": "Preparar a próxima reunião"
-        },
-        "coachMe": {
-          "name": "Me dê feedback",
-          "description": "Feedback sincero sobre como você conduziu a reunião",
-          "cta": "Me dar feedback sobre esta reunião"
         }
       },
       "errors": {
@@ -3759,7 +3748,8 @@
       "thinking": "Pensando...",
       "typeMessage": "Digite uma mensagem...",
       "send": "Enviar",
-      "voiceDraftStreamingOnly": "A entrada por voz não está disponível com seu provedor de transcrição: ele só suporta ditado ao vivo. Escolha outro provedor em Configurações → Fala para texto."
+      "voiceDraftStreamingOnly": "A entrada por voz não está disponível com seu provedor de transcrição: ele só suporta ditado ao vivo. Escolha outro provedor em Configurações → Fala para texto.",
+      "commands": "Comandos"
     },
     "tools": {
       "search_notesName": "Pesquisar notas",

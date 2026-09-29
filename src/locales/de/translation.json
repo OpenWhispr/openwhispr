@@ -3500,6 +3500,7 @@
       "done": "Fertig",
       "chunkProgress": "Teil {{step}} von {{total}}",
       "emptyReply": "Das Modell hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
+      "allActions": "Alle Aktionen",
       "manage": "Aktionen verwalten...",
       "addAction": "Neue Aktion",
       "editAction": "Aktion bearbeiten",
@@ -3514,8 +3515,6 @@
       "promptLabel": "Anweisung",
       "emptyEditorTitle": "Aktion auswählen",
       "emptyEditorDescription": "Wählen Sie eine Aktion aus der Liste oder erstellen Sie eine neue",
-      "runAction": "{{name}} ausführen",
-      "selectAction": "Aktion auswählen",
       "builtin": {
         "generateNotes": {
           "name": "Notizen generieren",
@@ -3568,16 +3567,6 @@
           "name": "Slack-Update",
           "description": "Ein kurzes Team-Update für Slack schreiben",
           "cta": "Slack-Update schreiben"
-        },
-        "prepNextMeeting": {
-          "name": "Nächstes Meeting vorbereiten",
-          "description": "Die Agenda des nächsten Meetings aus offenen Punkten erstellen",
-          "cta": "Nächstes Meeting vorbereiten"
-        },
-        "coachMe": {
-          "name": "Coache mich",
-          "description": "Offenes Feedback dazu, wie Sie das Meeting geführt haben",
-          "cta": "Feedback zu diesem Meeting"
         }
       },
       "errors": {
@@ -3930,7 +3919,8 @@
       "thinking": "Denkt nach...",
       "typeMessage": "Nachricht eingeben...",
       "send": "Senden",
-      "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Sprache zu Text einen anderen Anbieter."
+      "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Sprache zu Text einen anderen Anbieter.",
+      "commands": "Befehle"
     },
     "tools": {
       "search_notesName": "Notizen durchsuchen",

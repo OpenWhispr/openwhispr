@@ -32,7 +32,7 @@ const SHORTEN = action({ id: 3, client_id: "shorten", name: "Shorten", output: "
 
 async function load(t, path, initialStorage) {
   installBrowserGlobals(t, { initialStorage });
-  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-note-action-pickers-" });
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-note-action-chips-" });
   return (await vite.ssrLoadModule(path)).default;
 }
 
@@ -59,40 +59,42 @@ function collect(node, out = []) {
   return out;
 }
 
-test("the ask-bar picker runs the follow-up email by default, even if a template was remembered", async (t) => {
-  // Before templates split off, the remembered id could point at one.
-  const ActionPicker = await load(t, "/components/notes/ActionPicker.tsx", {
-    askBarActionId: "99",
-  });
-  const html = renderToStaticMarkup(
-    createElement(ActionPicker, {
-      actions: [SHORTEN, FOLLOW_UP],
-      onRunAction: () => {},
-      onManageActions: () => {},
-      isSummaryBusy: false,
-      isChatBusy: false,
+test("the ask bar shows the first four actions as chips and every action under All actions", async (t) => {
+  const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
+  const actions = [
+    FOLLOW_UP,
+    action({ id: 4, client_id: "todos", name: "Make to-dos" }),
+    SHORTEN,
+    action({ id: 5, client_id: "tldr", name: "Add TL;DR", output: "summary" }),
+    action({ id: 6, client_id: "outline", name: "Create outline" }),
+  ];
+  const ran = [];
+  const tree = collect(
+    renderTree(ActionChips, {
+      actions,
+      canRun: (a) => a.output === "chat",
+      onRunAction: (a) => ran.push(a.name),
+      onManageActions: () => ran.push("manage"),
     })
   );
-  assert.match(html, /aria-label="notes\.actions\.runAction"[^>]*>.*Follow-up email<\/span>/);
-});
 
-test("a summary action waits only for a run already writing the summary", async (t) => {
-  const ActionPicker = await load(t, "/components/notes/ActionPicker.tsx", {
-    askBarActionId: String(SHORTEN.id),
-  });
-  const render = (isSummaryBusy) =>
-    renderToStaticMarkup(
-      createElement(ActionPicker, {
-        actions: [SHORTEN, FOLLOW_UP],
-        onRunAction: () => {},
-        onManageActions: () => {},
-        isSummaryBusy,
-        isChatBusy: false,
-      })
-    );
-  const disabledRun = /<button[^>]*disabled=""[^>]*aria-label="notes\.actions\.runAction"/;
-  assert.doesNotMatch(render(false), disabledRun, "runs on a note with or without a summary");
-  assert.match(render(true), disabledRun);
+  const chips = tree.filter((node) => node.type === "button" && node.props.onClick);
+  assert.deepEqual(
+    chips.map((chip) => chip.key),
+    ["2", "4", "3", "5"]
+  );
+  assert.deepEqual(
+    chips.map((chip) => chip.props.disabled),
+    [false, false, true, true],
+    "a chip is disabled while its action can't run"
+  );
+  chips[0].props.onClick();
+
+  const menuItems = tree.filter((node) => typeof node.type !== "string" && node.props.onClick);
+  assert.equal(menuItems.length, actions.length + 1, "every action, then Manage Actions");
+  menuItems.at(-2).props.onClick();
+  menuItems.at(-1).props.onClick();
+  assert.deepEqual(ran, ["Follow-up email", "Create outline", "manage"]);
 });
 
 test("the sidebar chat offers the note's chat actions, and Generate summary writes the summary", async (t) => {
@@ -107,6 +109,7 @@ test("the sidebar chat offers the note's chat actions, and Generate summary writ
     chatActions: [FOLLOW_UP],
     onRunChatAction: (a) => ran.push(["action", a.name]),
     onGenerateSummary: () => ran.push(["summary"]),
+    slashCommands: [{ id: "cmd", label: "Follow-up email", run: () => {} }],
   };
 
   const idle = collect(renderTree(EmbeddedChat, { ...props, agentState: "idle" }));
@@ -117,6 +120,8 @@ test("the sidebar chat offers the note's chat actions, and Generate summary writ
   );
   for (const pill of pills) pill.props.onClick();
   assert.deepEqual(ran, [["summary"], ["action", "Follow-up email"]]);
+  const composer = idle.find((node) => node.props.variant === "sidebar");
+  assert.equal(composer.props.slashCommands, props.slashCommands, "/ reaches the sidebar composer");
 
   const streaming = collect(renderTree(EmbeddedChat, { ...props, agentState: "streaming" })).filter(
     (node) => node.type === "button" && node.props.onMouseDown

@@ -10,12 +10,11 @@ import {
   Mail,
   MessageSquareText,
   Send,
-  Calendar,
-  MessageCircle,
 } from "../icons";
 import { cn } from "../lib/utils";
 import { ChatMessages } from "../chat/ChatMessages";
 import { ChatInput } from "../chat/ChatInput";
+import type { SlashCommand } from "../chat/slashCommands";
 import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
 import {
   DropdownMenu,
@@ -37,8 +36,6 @@ const ACTION_ICONS: Record<string, typeof MessageSquareText> = {
   "clipboard-check": ClipboardCheck,
   "file-text": FileText,
   send: Send,
-  calendar: Calendar,
-  "message-circle": MessageCircle,
 };
 
 interface EmbeddedChatProps {
@@ -60,6 +57,7 @@ interface EmbeddedChatProps {
   onRunChatAction?: (action: ActionItem) => void;
   /** Writes the note's AI summary with its template; absent when it can't run now. */
   onGenerateSummary?: () => void;
+  slashCommands?: SlashCommand[];
 }
 
 function EmptyState({ floating }: { floating: boolean }) {
@@ -103,6 +101,7 @@ export default function EmbeddedChat({
   chatActions = [],
   onRunChatAction,
   onGenerateSummary,
+  slashCommands,
 }: EmbeddedChatProps) {
   const { t } = useTranslation();
 
@@ -290,6 +289,7 @@ export default function EmbeddedChat({
             voiceDraft
             focusOnIdle={false}
             placeholder={t("embeddedChat.askPlaceholder")}
+            slashCommands={slashCommands}
           />
         </div>
       </div>

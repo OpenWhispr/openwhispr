@@ -3130,6 +3130,7 @@
       "showInFileManager": "在{{manager}}中显示"
     },
     "actions": {
+      "allActions": "全部操作",
       "manage": "管理操作...",
       "addAction": "新建操作",
       "editAction": "编辑操作",
@@ -3144,8 +3145,6 @@
       "promptLabel": "提示词",
       "emptyEditorTitle": "选择操作",
       "emptyEditorDescription": "从列表中选择一个操作或创建新操作",
-      "runAction": "运行 {{name}}",
-      "selectAction": "选择操作",
       "done": "完成",
       "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
       "emptyReply": "模型返回了空回复。请重试，或选择其他模型。",
@@ -3201,16 +3200,6 @@
           "name": "Slack 更新",
           "description": "写一条发到 Slack 的简短团队更新",
           "cta": "写一条 Slack 更新"
-        },
-        "prepNextMeeting": {
-          "name": "准备下次会议",
-          "description": "根据未决事项拟定下次会议的议程",
-          "cta": "准备下次会议"
-        },
-        "coachMe": {
-          "name": "给我建议",
-          "description": "坦诚反馈你主持会议的表现",
-          "cta": "为这次会议给我建议"
         }
       },
       "errors": {
@@ -3759,7 +3748,8 @@
       "thinking": "正在思考...",
       "typeMessage": "输入消息...",
       "send": "发送",
-      "voiceDraftStreamingOnly": "当前转录服务商仅支持实时听写，因此无法使用语音输入。请在“设置 → 语音转文字”中选择其他服务商。"
+      "voiceDraftStreamingOnly": "当前转录服务商仅支持实时听写，因此无法使用语音输入。请在“设置 → 语音转文字”中选择其他服务商。",
+      "commands": "命令"
     },
     "tools": {
       "search_notesName": "搜索笔记",
