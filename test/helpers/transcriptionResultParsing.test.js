@@ -36,6 +36,30 @@ test("whisper: real text passes through with normalized whitespace", () => {
   });
 });
 
+test("whisper: timed engine output keeps segments for subtitle export", () => {
+  assert.deepEqual(
+    whisper.parseWhisperResult({
+      transcription: [{ text: " Hello there", offsets: { from: 0, to: 2000 } }],
+    }),
+    {
+      success: true,
+      text: "Hello there",
+      segments: [{ text: "Hello there", start: 0, end: 2 }],
+    }
+  );
+  assert.deepEqual(
+    whisper.parseWhisperResult({
+      text: "hello",
+      segments: [{ text: "hello", start: 0.5, end: 1.25 }],
+    }),
+    {
+      success: true,
+      text: "hello",
+      segments: [{ text: "hello", start: 0.5, end: 1.25 }],
+    }
+  );
+});
+
 test("whisper: a response with neither text nor transcription is an engine failure, not silence", () => {
   const result = whisper.parseWhisperResult({ status: "loading" });
   assert.equal(result.success, false);

@@ -40,4 +40,27 @@ function mapVerboseSegments(responseData) {
   return mapped.length ? mapped : null;
 }
 
-module.exports = { timestampRequestFields, mapVerboseSegments };
+// whisper.cpp's CLI JSON stores offsets in milliseconds under `transcription`.
+// The server `verbose_json` shape is the same `segments` array mapVerboseSegments
+// already reads. Null when the engine returned text only.
+function mapWhisperSegments(result) {
+  const verbose = mapVerboseSegments(result);
+  if (verbose) return verbose;
+
+  const rows = result?.transcription;
+  if (!Array.isArray(rows)) return null;
+
+  const mapped = [];
+  for (const seg of rows) {
+    const text = typeof seg?.text === "string" ? seg.text.trim() : "";
+    const fromMs = seg?.offsets?.from;
+    if (!text || !Number.isFinite(fromMs)) continue;
+    const start = Math.max(0, fromMs) / 1000;
+    const toMs = Number.isFinite(seg?.offsets?.to) ? seg.offsets.to : fromMs;
+    const end = Math.max(start, Math.max(0, toMs) / 1000);
+    mapped.push({ text, start, end });
+  }
+  return mapped.length ? mapped : null;
+}
+
+module.exports = { timestampRequestFields, mapVerboseSegments, mapWhisperSegments };

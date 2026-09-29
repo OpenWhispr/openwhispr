@@ -215,6 +215,7 @@ const {
   isTeardownCollateral,
   summarizeChunkResults,
   assembleChunkTranscript,
+  assembleChunkSegments,
   chunkRetryDelayMs,
   abortableSleep,
   createTeardownGate,
@@ -563,10 +564,12 @@ async function chunkedCloudTranscribe({
     }
 
     const text = assembleChunkTranscript(results, segmentDuration, durationSeconds);
+    const segments = assembleChunkSegments(results, segmentDuration);
     return {
       text,
       responses,
       lastResponse: responses[responses.length - 1],
+      ...(segments ? { segments } : {}),
       ...(failed > 0
         ? {
             warning: `${failed} of ${totalChunks} chunks failed`,
@@ -9932,7 +9935,7 @@ class IPCHandlers {
             fileSize,
             filePath: path.basename(realCloud),
           });
-          const { text, warning, failedChunks, totalChunks } = await chunkedCloudTranscribe({
+          const { text, warning, failedChunks, totalChunks, segments } = await chunkedCloudTranscribe({
             filePath: realCloud,
             apiUrl,
             policyHeaders: withPolicyHeaders(authHeader),
@@ -9943,6 +9946,7 @@ class IPCHandlers {
           return {
             success: true,
             text,
+            ...(segments ? { segments } : {}),
             ...(warning ? { warning, failedChunks, totalChunks } : {}),
           };
         }
@@ -9964,8 +9968,9 @@ class IPCHandlers {
           session: getInlineCloudUploadSession(),
         });
         const result = interpretTranscribeResponse(data);
+        const segments = mapVerboseSegments(result);
 
-        return { success: true, text: result.text };
+        return { success: true, text: result.text, ...(segments ? { segments } : {}) };
       } catch (error) {
         if (signal?.aborted) {
           debugLogger.debug("Cloud audio file transcription cancelled", { requestId });

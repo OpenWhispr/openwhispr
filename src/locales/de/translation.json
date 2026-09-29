@@ -3301,6 +3301,8 @@
       "saving": "Wird gespeichert",
       "transcriptEmptyTitle": "Noch nichts aufgenommen",
       "transcriptEmptyDescription": "Drücke auf Aufnahme, um mit der Transkription zu beginnen. Alles Gesagte erscheint hier in Echtzeit.",
+      "transcriptUntimedTitle": "Kein zeitgestempeltes Transkript",
+      "transcriptUntimedDescription": "Dieser Upload wurde als reiner Text transkribiert, daher sind Untertitel nicht verfügbar. Ein Anbieter mit Segmentzeiten macht den SRT-Export hier verfügbar.",
       "startRecording": "Aufnahme starten",
       "generateSummary": "KI-Zusammenfassung erstellen",
       "startWriting": "Schreibe los...",
