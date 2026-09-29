@@ -59,4 +59,7 @@ async function main() {
   console.log(`\n[embedding-model] Model ready at ${MODEL_DIR}\n`);
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
