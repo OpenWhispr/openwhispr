@@ -4332,5 +4332,22 @@
     },
     "start": "メモを取る",
     "join": "参加して文字起こし"
+  },
+  "voiceConversation": {
+    "title": "音声会話",
+    "errors": {
+      "languageUnsupported": "音声会話は現在英語のみに対応しています。ディクテーション言語を英語または自動に設定してください。",
+      "voiceModelsMissing": "音声会話には音声モデルが必要です。設定からダウンロードしてください。",
+      "speechModelMissing": "音声会話にはParakeet音声モデルが必要です。設定 → 音声テキスト変換 からダウンロードしてください。",
+      "brainNotDownloaded": "音声アシスタントのローカルモデルはまだダウンロードされていません。",
+      "workerStopped": "音声エンジンが予期せず終了したため、音声会話を停止しました。ホットキーを押すと再開できます。",
+      "micDenied": "音声会話でマイクを使用できません。システム設定で OpenWhispr のマイクへのアクセスを許可してください。",
+      "startFailed": "音声会話を開始できませんでした。もう一度お試しください。",
+      "transcriptionFailed": "文字起こしできませんでした。もう一度話してください。",
+      "brainSignInRequired": "音声会話で OpenWhispr Cloud を使うにはサインインするか、音声アシスタントにローカルモデルを選んでください。",
+      "endedForMeeting": "会議の録音が始まったため、音声会話を終了しました。",
+      "meetingRecording": "会議の録音中は音声会話を開始できません。",
+      "brainKeyMissing": "設定 → AIモデルで音声アシスタントのプロバイダーの API キーを追加するか、ローカルモデルを選んでください。"
+    }
   }
 }

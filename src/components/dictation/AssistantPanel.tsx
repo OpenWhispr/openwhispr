@@ -23,6 +23,7 @@ import {
 } from "../../helpers/agentToolPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
+import type { AssistantSpeechTap } from "../../services/voice/types";
 import {
   normalizeAgentSelectionContext,
   type AgentSelectionContext,
@@ -82,6 +83,8 @@ interface AssistantPanelProps {
   onResponseContent: () => void;
   onConversationReset: () => void;
   onSelectionContextChange: (context: AgentSelectionContext | null) => void;
+  /** Local voice conversation: speaks the streamed answer and lets barge-in cancel it. */
+  speechTap?: AssistantSpeechTap | null;
 }
 
 // Avoid reparsing Markdown when only the selection indicator changes.
@@ -105,6 +108,7 @@ export function AssistantPanel({
   onResponseContent,
   onConversationReset,
   onSelectionContextChange,
+  speechTap = null,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -126,6 +130,15 @@ export function AssistantPanel({
     },
     onResponseContent,
   });
+
+  useEffect(() => {
+    if (!speechTap) return undefined;
+    const { cancelRef } = speechTap;
+    cancelRef.current = streaming.cancelStream;
+    return () => {
+      if (cancelRef.current === streaming.cancelStream) cancelRef.current = null;
+    };
+  }, [speechTap, streaming.cancelStream]);
 
   const createConversation = useCallback(
     (text: string) => {
@@ -211,7 +224,11 @@ export function AssistantPanel({
       setSelectedContext(null);
       onSelectionContextChange(null);
     }
-    void sendMessage(pendingCommand.text, sendOptions)
+    void sendMessage(pendingCommand.text, {
+      ...sendOptions,
+      // Spoken turns only: a follow-up typed during a voice session stays typed chat.
+      voiceTap: speechTap ?? undefined,
+    })
       .then((sent) => {
         if (sent) {
           onCommandConsumed(commandId);
@@ -229,6 +246,7 @@ export function AssistantPanel({
               ? t("common.unknownError")
               : String(error);
         onCommandDiscarded(commandId);
+        speechTap?.onResponseDone();
         setMessages((prev) => [
           ...prev,
           {
@@ -252,6 +270,7 @@ export function AssistantPanel({
     confirmCopied,
     sendMessage,
     setMessages,
+    speechTap,
     t,
   ]);
 
@@ -387,6 +406,13 @@ export function AssistantPanel({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        // A hands-free voice session has no dictation to cancel: Esc ends it
+        // (onClose stops the session) whatever it is doing.
+        if (speechTap) {
+          if (isBusy) streaming.cancelStream();
+          onClose();
+          return;
+        }
         if (voiceState === "listening") return;
         if (isBusy) {
           streaming.cancelStream();
@@ -422,6 +448,7 @@ export function AssistantPanel({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [
+    speechTap,
     voiceState,
     isBusy,
     streaming,

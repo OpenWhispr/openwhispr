@@ -102,28 +102,25 @@ async function closeLogStream(logger) {
   });
 }
 
-test(
-  "packaged Windows suppresses main and renderer console logging at the default level",
-  async () => {
-    const logger = loadLogger({ platform: "win32", isPackaged: true });
+test("packaged Windows suppresses main and renderer console logging at the default level", async () => {
+  const logger = loadLogger({ platform: "win32", isPackaged: true });
 
-    const calls = await captureConsole(() => {
-      logger.info("Recording started", { microphone: "Default" }, "audio");
-      logger.warn("Recording warning");
-      logger.error("Recording failure");
-      logger.logEntry({
-        level: "info",
-        message: "Pipeline timing",
-        meta: { roundTripDurationMs: 42 },
-        scope: "performance",
-        source: "renderer",
-      });
+  const calls = await captureConsole(() => {
+    logger.info("Recording started", { microphone: "Default" }, "audio");
+    logger.warn("Recording warning");
+    logger.error("Recording failure");
+    logger.logEntry({
+      level: "info",
+      message: "Pipeline timing",
+      meta: { roundTripDurationMs: 42 },
+      scope: "performance",
+      source: "renderer",
     });
+  });
 
-    assert.deepEqual(calls, []);
-    assert.equal(logger.getLogPath(), null, "default INFO logging remains non-persistent");
-  }
-);
+  assert.deepEqual(calls, []);
+  assert.equal(logger.getLogPath(), null, "default INFO logging remains non-persistent");
+});
 
 test("log-level settings never opt a packaged Windows build into console logging", async (t) => {
   const cases = [
@@ -185,42 +182,39 @@ test("development and non-Windows packaged builds preserve console logging", asy
   }
 });
 
-test(
-  "packaged Windows retains debug logs in the file sink while suppressing the console",
-  async () => {
-    const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-debug-logger-"));
-    const logger = loadLogger({
-      platform: "win32",
-      isPackaged: true,
-      env: { OPENWHISPR_LOG_LEVEL: "debug" },
-      isReady: true,
-      userDataPath,
-    });
+test("packaged Windows retains debug logs in the file sink while suppressing the console", async () => {
+  const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-debug-logger-"));
+  const logger = loadLogger({
+    platform: "win32",
+    isPackaged: true,
+    env: { OPENWHISPR_LOG_LEVEL: "debug" },
+    isReady: true,
+    userDataPath,
+  });
 
-    try {
-      const calls = await captureConsole(() => {
-        logger.logEntry({
-          level: "info",
-          message: "Pipeline timing",
-          scope: "performance",
-          source: "renderer",
-        });
+  try {
+    const calls = await captureConsole(() => {
+      logger.logEntry({
+        level: "info",
+        message: "Pipeline timing",
+        scope: "performance",
+        source: "renderer",
       });
-      const logPath = logger.getLogPath();
-      await closeLogStream(logger);
+    });
+    const logPath = logger.getLogPath();
+    await closeLogStream(logger);
 
-      assert.deepEqual(calls, []);
-      assert.ok(logPath);
-      assert.match(
-        fs.readFileSync(logPath, "utf8"),
-        /\[INFO\]\[performance\]\[renderer\] Pipeline timing/
-      );
-    } finally {
-      await closeLogStream(logger);
-      fs.rmSync(userDataPath, { recursive: true, force: true });
-    }
+    assert.deepEqual(calls, []);
+    assert.ok(logPath);
+    assert.match(
+      fs.readFileSync(logPath, "utf8"),
+      /\[INFO\]\[performance\]\[renderer\] Pipeline timing/
+    );
+  } finally {
+    await closeLogStream(logger);
+    fs.rmSync(userDataPath, { recursive: true, force: true });
   }
-);
+});
 
 test("routine window-drag activity obeys the packaged Windows console policy", async () => {
   delete require.cache[loggerPath];
@@ -254,4 +248,13 @@ test("routine window-drag activity obeys the packaged Windows console policy", a
   });
 
   assert.deepEqual(calls, []);
+});
+
+test("build scripts can load the logger on Windows under plain Node", () => {
+  delete require.cache[loggerPath];
+  // Outside Electron, require("electron") is the path to its binary, not the API.
+  const logger = withRuntime({ platform: "win32", electron: "/path/to/electron" }, () =>
+    require(loggerPath)
+  );
+  assert.equal(logger.resolveConsoleLogging(), true);
 });

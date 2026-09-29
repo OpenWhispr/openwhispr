@@ -1,8 +1,21 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 
-const { resolveSystemTarExecutable, runSystemTar } = require("../../src/helpers/systemTar");
+const {
+  extractTarBz2,
+  resolveSystemTarExecutable,
+  runSystemTar,
+} = require("../../src/helpers/systemTar");
+
+// A real tar.bz2 holding sherpa-fixture/nested/tokens.txt (same as downloadSherpaOnnx.test.js).
+const BZIP2_FIXTURE = Buffer.from(
+  "QlpoOTFBWSZTWcjrkBQAAIZfgNqQQAP9AEAAAIB/ad7QCAggAHQaQmp4gTeomjCMZDaoMkgNGgABoGgPnMCiCBG+QQRRzUsRSpCCCEAnU6vjF4NbYtiEQUCGSyC5UXVrxyzeEU/18sO69rZRodrj+ckuqldRtcyf1bjbOD33nz4ahhPLBGufu1kDTQiID+LuSKcKEhkdcgKA",
+  "base64"
+);
 
 function makeChild({ closeOnKill = true } = {}) {
   const child = new EventEmitter();
@@ -129,4 +142,26 @@ test("rejects after the kill grace period when the killed process never closes",
     /tar extraction timed out after 10ms/
   );
   assert.equal(child.killed, true);
+});
+
+test("logs a system tar failure and extracts with the bundled JS decoder", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "system-tar-"));
+  const originalPath = process.env.PATH;
+  t.after(() => {
+    process.env.PATH = originalPath;
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const archive = path.join(root, "model.tar.bz2");
+  fs.writeFileSync(archive, BZIP2_FIXTURE);
+  // No tar on PATH, so the system extractor fails to start (Windows rejects bzip2 before spawning).
+  process.env.PATH = root;
+  const logged = [];
+
+  await extractTarBz2(archive, root, { logger: { debug: (message) => logged.push(message) } });
+
+  assert.equal(
+    fs.readFileSync(path.join(root, "sherpa-fixture", "nested", "tokens.txt"), "utf8"),
+    "Windows bzip2 extraction works.\n"
+  );
+  assert.deepEqual(logged, ["System tar failed, falling back to JS extraction"]);
 });

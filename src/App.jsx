@@ -8,6 +8,7 @@ import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useLinuxPillInteractivity } from "./hooks/useLinuxPillInteractivity";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useAssistantPanel } from "./hooks/useAssistantPanel";
+import { useVoiceConversation } from "./hooks/useVoiceConversation";
 import { useOnboardingAssistantDemo } from "./hooks/useOnboardingAssistantDemo";
 import { useLiveTranscriptPanel } from "./hooks/useLiveTranscriptPanel";
 import { useMainWindowSizeOwner } from "./hooks/useMainWindowSizeOwner";
@@ -191,6 +192,57 @@ export default function App() {
     openPanel: openAssistantPanel,
   } = assistant;
 
+  const voiceConversation = useVoiceConversation({
+    onUserTurn: (text) =>
+      assistant.handleCommand({ text, attachment: null, selectedContext: null, delivery: null }),
+    onError: (message) =>
+      toast({ title: t("voiceConversation.title"), description: message, variant: "destructive" }),
+  });
+  const {
+    enabled: voiceConversationEnabled,
+    active: voiceConversationActive,
+    toggle: toggleVoiceConversation,
+    stop: stopVoiceConversation,
+  } = voiceConversation;
+  const { handleClose: closeAssistant } = assistant;
+  const interceptVoiceAgentToggle = React.useCallback(() => {
+    // A session outlives the setting being turned off; the press must still stop it.
+    if (!voiceConversationEnabled && !voiceConversationActive) return false;
+    // Open the (empty) panel on start so the listening state is visible at once, and
+    // close it again if the session never starts (refused, cancelled, mic denied).
+    const opensPanel = !voiceConversationActive && !assistantOpenRef.current;
+    if (opensPanel) void openAssistantPanel();
+    void toggleVoiceConversation().then((listening) => {
+      if (opensPanel && !listening) closeAssistant();
+    });
+    return true;
+  }, [
+    assistantOpenRef,
+    closeAssistant,
+    openAssistantPanel,
+    toggleVoiceConversation,
+    voiceConversationActive,
+    voiceConversationEnabled,
+  ]);
+  // Voice conversation harness: open the panel and start a mic-less session once, after
+  // the app has settled; the main process then plays the scripted conversation.
+  const startHarnessRef = React.useRef(null);
+  startHarnessRef.current = () => {
+    void openAssistantPanel();
+    void voiceConversation.startHarness();
+  };
+  const { harnessAvailable } = voiceConversation;
+  React.useEffect(() => {
+    if (!harnessAvailable) return undefined;
+    const timer = setTimeout(() => startHarnessRef.current?.(), 4000);
+    return () => clearTimeout(timer);
+  }, [harnessAvailable]);
+
+  const handleAssistantClose = React.useCallback(() => {
+    void stopVoiceConversation();
+    closeAssistant();
+  }, [closeAssistant, stopVoiceConversation]);
+
   const handleDictationError = React.useCallback(
     (options = {}) => {
       noteDictationError(options);
@@ -235,6 +287,7 @@ export default function App() {
       liveTranscriptApiRef.current?.showFinalText(text);
     },
     assistantOpenRef,
+    interceptVoiceAgentToggle,
   });
   const isVisuallyProcessing = isProcessing || isPreparing || isStopping;
 
@@ -506,11 +559,13 @@ export default function App() {
 
   const micTooltip = getMicTooltip();
   const assistantVoiceState =
-    isRecording && isAssistantVoice
+    voiceConversation.state === "listening"
       ? "listening"
-      : isProcessing && isAssistantVoice
-        ? "transcribing"
-        : "idle";
+      : isRecording && isAssistantVoice
+        ? "listening"
+        : isProcessing && isAssistantVoice
+          ? "transcribing"
+          : "idle";
   const anyPanelOpen = assistant.open || liveTranscript.open;
   const anyPanelMounted = assistant.mounted || liveTranscript.mounted;
   const canReopenLiveTranscript =
@@ -825,7 +880,8 @@ export default function App() {
             open={assistant.open}
             footerPhase={assistant.footerPhase}
             horizontalDirection={voiceHorizontalDirection}
-            onClose={assistant.handleClose}
+            onClose={handleAssistantClose}
+            speechTap={voiceConversation.speechTap}
             onBusyChange={assistant.setBusy}
             onResponseReadyChange={assistant.setResponseReady}
             onResponseContent={assistant.handleResponseContent}

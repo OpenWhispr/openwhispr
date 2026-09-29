@@ -273,6 +273,7 @@ const BOOLEAN_SETTINGS = new Set([
   "useCleanupModel",
   "useDictationAgent",
   "voiceAgentScreenContext",
+  "voiceConversationEnabled",
   "useDictationAgentVisionModel",
   "useDictationTranslation",
   "translationDisableThinking",
@@ -987,6 +988,8 @@ export interface SettingsState
   // Voice-agent screen context: opt-in screenshot capture, plus an optional
   // dedicated model used only when a screenshot is attached.
   voiceAgentScreenContext: boolean;
+  // Hands-free local voice conversation on the Voice Assistant hotkey (opt-in).
+  voiceConversationEnabled: boolean;
   emailDraftTarget: EmailDraftTargetSetting;
   useDictationAgentVisionModel: boolean;
   dictationAgentVisionMode: InferenceMode;
@@ -1014,6 +1017,7 @@ export interface SettingsState
   setDictationAgentCustomApiKey: (key: string) => void;
 
   setVoiceAgentScreenContext: (value: boolean) => void;
+  setVoiceConversationEnabled: (value: boolean) => void;
   setEmailDraftTarget: (value: EmailDraftTargetSetting) => void;
   setUseDictationAgentVisionModel: (value: boolean) => void;
   setDictationAgentVisionProvider: (value: string) => void;
@@ -1929,6 +1933,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentCustomApiKey: readString("dictationAgentCustomApiKey", ""),
 
   voiceAgentScreenContext: readBoolean("voiceAgentScreenContext", false),
+  voiceConversationEnabled: readBoolean("voiceConversationEnabled", false),
   emailDraftTarget: normalizeEmailDraftTarget(readString("emailDraftTarget", "auto")),
   useDictationAgentVisionModel: readBoolean("useDictationAgentVisionModel", false),
   // Cloud already vision-routes screenshot commands, so the override is BYOK-only.
@@ -1969,6 +1974,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ),
 
   setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
+  setVoiceConversationEnabled: createBooleanSetter("voiceConversationEnabled"),
   setEmailDraftTarget: createStringSetter("emailDraftTarget"),
   setUseDictationAgentVisionModel: createBooleanSetter("useDictationAgentVisionModel"),
   setDictationAgentVisionProvider: createStringSetter("dictationAgentVisionProvider"),

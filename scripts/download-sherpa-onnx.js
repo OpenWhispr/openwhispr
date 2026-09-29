@@ -15,7 +15,8 @@ const {
   PARAKEET_MINIMUM_MACOS_VERSION,
   compareVersions,
 } = require("../src/helpers/parakeetCapability");
-const { renameImportedModule } = require("./lib/pe-imports");
+const { extractTarBz2WithJs } = require("../src/helpers/systemTar");
+const { listImportedModules, renameImportedModule } = require("./lib/pe-imports");
 
 const SHERPA_ONNX_VERSION = "1.13.8";
 const GITHUB_RELEASE_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}`;
@@ -212,10 +213,7 @@ async function extractTarBz2(archivePath, destDir, { platform = process.platform
   if (platform === "win32") {
     // Windows bsdtar may spawn an external bzip2 and never finish. Use the
     // same bundled decompressor as model installation, with no PATH tools.
-    const { pipeline } = require("stream/promises");
-    const unbzip2 = require("unbzip2-stream");
-    const tar = require("tar");
-    await pipeline(fs.createReadStream(archivePath), unbzip2(), tar.x({ cwd: destDir }));
+    await extractTarBz2WithJs(archivePath, destDir);
     return;
   }
   // Use relative paths from archive dir as cwd, so neither -f nor -C args
@@ -243,8 +241,10 @@ function copyBinary(extractDir, binaryName, outputPath, platformArch) {
   return true;
 }
 
+const isUpstreamRuntime = (name) => name.toLowerCase() === WINDOWS_ONNXRUNTIME_UPSTREAM_NAME;
+const isPeImageName = (name) => /\.(dll|node)$/i.test(name);
+
 function privatizeWindowsOnnxRuntime({ binDir, binaryPaths, libraryNames }) {
-  const isUpstreamRuntime = (name) => name.toLowerCase() === WINDOWS_ONNXRUNTIME_UPSTREAM_NAME;
   const upstreamName = libraryNames.find(isUpstreamRuntime);
   if (!upstreamName) {
     throw new Error(
@@ -281,6 +281,51 @@ function privatizeWindowsOnnxRuntime({ binDir, binaryPaths, libraryNames }) {
   }
 
   return shippedLibraries;
+}
+
+// sherpa-onnx-node's Windows package (packaged by afterPack) ships the same
+// runtime beside its .node addon, so it gets the same rename. A package that
+// an earlier pack already privatized is left as is.
+function privatizeOnnxRuntimeDir(dir) {
+  const images = fs.readdirSync(dir).filter(isPeImageName);
+  if (images.includes(WINDOWS_ONNXRUNTIME_PRIVATE_NAME) && !images.some(isUpstreamRuntime)) {
+    return;
+  }
+  privatizeWindowsOnnxRuntime({ binDir: dir, binaryPaths: [], libraryNames: images });
+}
+
+// `npm run dev` loads sherpa-onnx-node's platform package straight from node_modules,
+// which afterPack never touches, so the #2054 collision would still hit the voice
+// worker in development. Idempotent, like the packaged rename.
+function privatizeInstalledSherpaNode(
+  platformArch,
+  modulesDir = path.join(__dirname, "..", "node_modules")
+) {
+  if (!platformArch.startsWith("win32-")) return;
+  const dir = path.join(modulesDir, `sherpa-onnx-win-${platformArch.slice("win32-".length)}`);
+  if (!fs.existsSync(dir)) return;
+  privatizeOnnxRuntimeDir(dir);
+  console.log(`  ${path.basename(dir)} loads ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}`);
+}
+
+function verifyOnnxRuntimePrivatizedDir(dir) {
+  const images = fs.readdirSync(dir).filter(isPeImageName);
+  if (!images.includes(WINDOWS_ONNXRUNTIME_PRIVATE_NAME)) {
+    throw new Error(
+      `${dir} has no ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}; its ONNX Runtime was not privatized`
+    );
+  }
+  for (const name of images) {
+    const imagePath = path.join(dir, name);
+    if (isUpstreamRuntime(name)) {
+      throw new Error(
+        `${imagePath} must not ship; it should be ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}`
+      );
+    }
+    if (listImportedModules(fs.readFileSync(imagePath)).some(isUpstreamRuntime)) {
+      throw new Error(`${imagePath} still imports ${WINDOWS_ONNXRUNTIME_UPSTREAM_NAME}`);
+    }
+  }
 }
 
 function readInstallMarker(markerPath) {
@@ -476,6 +521,8 @@ async function main() {
       return;
     }
 
+    privatizeInstalledSherpaNode(args.platformArch);
+
     // Remove old CLI-style binaries replaced by WS server binaries
     const oldBinaryName = args.platformArch.startsWith("win32")
       ? `sherpa-onnx-${args.platformArch}.exe`
@@ -530,8 +577,11 @@ module.exports = {
   findObsoleteLibraries,
   isCompleteInstall,
   parseMacosDeploymentTargets,
+  privatizeInstalledSherpaNode,
+  privatizeOnnxRuntimeDir,
   privatizeWindowsOnnxRuntime,
   validateMacosDeploymentTargets,
+  verifyOnnxRuntimePrivatizedDir,
   verifyPackagedMacosParakeet,
 };
 

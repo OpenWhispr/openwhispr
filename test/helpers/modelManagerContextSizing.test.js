@@ -553,3 +553,21 @@ test("a reply cut off at the token cap keeps its code through the bridge", async
     }
   );
 });
+
+test("server options carry a model's registry llama-server flags", () => {
+  const manager = loadModelManager();
+  const withFlags = manager.serverOptions({
+    model: { contextLength: 131072, llamaServerArgs: ["--swa-full"] },
+  });
+  assert.deepEqual(withFlags.extraArgs, ["--swa-full"]);
+  assert.equal(manager.serverOptions({ model: { contextLength: 8192 } }).extraArgs, undefined);
+});
+
+test("both Gemma 4 E4B builds are registered with --swa-full, so their prompt cache survives edits", () => {
+  const gemma = modelRegistryData.localProviders.find((provider) => provider.id === "gemma");
+  for (const id of ["gemma-4-e4b-it-q4_k_m", "gemma-4-e4b-it-qat-q4_0"]) {
+    const e4b = gemma.models.find((model) => model.id === id);
+    assert.ok(e4b, `${id} is in the registry`);
+    assert.deepEqual(e4b.llamaServerArgs, ["--swa-full"], id);
+  }
+});

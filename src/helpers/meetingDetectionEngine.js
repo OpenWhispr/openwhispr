@@ -702,6 +702,11 @@ class MeetingDetectionEngine {
     }
   }
 
+  /** Whether a meeting is being recorded; a voice conversation won't start over it. */
+  isRecordingMeeting() {
+    return this._recordingSession !== null;
+  }
+
   setUserRecording(active) {
     this._userRecording = active;
     this.audioActivityDetector.setUserRecording(active);

@@ -843,3 +843,68 @@ test("entering onboarding hides an already-visible companion pill", () => {
 
   assert.equal(pill.isVisible(), false);
 });
+
+function makeVoiceConversationManager() {
+  const manager = new WindowManager();
+  manager.setOnboardingActive(false);
+  manager.hotkeyManager = { isInListeningMode: () => false };
+  const sent = [];
+  let captures = 0;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
+  };
+  manager.selectionManager = { captureTarget: async () => void (captures += 1) };
+  manager.showDictationPanel = () => sent.push({ channel: "show-dictation-panel" });
+  const userRecording = [];
+  manager.meetingDetectionEngine = { setUserRecording: (active) => userRecording.push(active) };
+  return { manager, sent, userRecording, captures: () => captures };
+}
+
+test("during a voice conversation the Voice Assistant hotkey only reaches the renderer to stop it", () => {
+  const { manager, sent, captures } = makeVoiceConversationManager();
+  manager.setVoiceConversationActive(true);
+  // An answer being generated used to swallow the press.
+  manager.setAssistantPanelBusy(true);
+
+  manager.sendToggleVoiceAgent();
+
+  assert.deepEqual(sent, [{ channel: "toggle-voice-agent", payload: undefined }]);
+  assert.equal(captures(), 0);
+});
+
+test("dictation waits for a voice conversation to end", () => {
+  const { manager, sent } = makeVoiceConversationManager();
+  manager.setVoiceConversationActive(true);
+
+  manager.sendToggleDictation();
+  manager.sendStartDictation();
+  manager.sendPrepareDictation();
+  assert.deepEqual(sent, []);
+
+  manager.setVoiceConversationActive(false);
+  manager.sendToggleDictation();
+  assert.ok(sent.some(({ channel }) => channel === "toggle-dictation"));
+});
+
+test("a voice conversation keeps meeting detection quiet across dictation lifecycle changes", () => {
+  const { manager, userRecording } = makeVoiceConversationManager();
+  manager.setVoiceConversationActive(true);
+  // A dictation lifecycle report used to overwrite the voice session's flag with false.
+  manager.setDictationLifecycleState("preparing", "assistant");
+  manager.setDictationLifecycleState("idle", "dictation");
+  manager.setVoiceConversationActive(false);
+
+  assert.deepEqual(userRecording, [true, true, true, false]);
+});
+
+test("a dictation already recording can still be stopped after a voice conversation begins", () => {
+  const { manager, sent } = makeVoiceConversationManager();
+  manager._mainWindowPlacementCoordinator = { cancelPending: () => undefined };
+  manager.setDictationLifecycleState("recording", "dictation");
+  manager.setVoiceConversationActive(true);
+
+  manager.sendToggleDictation();
+
+  assert.ok(sent.some(({ channel }) => channel === "toggle-dictation"));
+});

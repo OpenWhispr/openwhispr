@@ -4,6 +4,7 @@ const path = require("path");
 const { net } = require("electron");
 const { execFile } = require("child_process");
 const { pipeline } = require("stream");
+const { createHash } = require("crypto");
 const debugLogger = require("./debugLogger");
 const { runSystemTar } = require("./systemTar");
 
@@ -523,6 +524,16 @@ async function findFiles(dir, pattern, maxDepth = 5, depth = 0) {
   return results;
 }
 
+function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    fs.createReadStream(filePath)
+      .on("data", (chunk) => hash.update(chunk))
+      .on("end", () => resolve(hash.digest("hex")))
+      .on("error", reject);
+  });
+}
+
 module.exports = {
   downloadFile,
   fetchJson,
@@ -534,4 +545,5 @@ module.exports = {
   extractArchive,
   findFile,
   findFiles,
+  sha256File,
 };

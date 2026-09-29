@@ -303,6 +303,10 @@ jobs:
           rm -f node_modules/ffmpeg-static/ffmpeg
           npm_config_arch=x64 node node_modules/ffmpeg-static/install.js
 
+      - name: Install sherpa-onnx runtime for target architecture
+        if: matrix.arch == 'x64'
+        run: node scripts/install-sherpa-darwin-x64.js
+
       - name: Cache native binaries
         uses: actions/cache@v4
         with:

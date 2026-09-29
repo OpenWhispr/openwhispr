@@ -115,8 +115,9 @@ class DebugLogger {
   }
 
   resolveConsoleLogging() {
-    // Packaged Windows apps can inherit the launching shell's standard handles.
-    return process.platform !== "win32" || !app.isPackaged || hasConsoleLogOptIn();
+    // Packaged Windows apps can inherit the launching shell's standard handles. Build
+    // scripts load this under plain Node, where there is no Electron app at all.
+    return process.platform !== "win32" || !app?.isPackaged || hasConsoleLogOptIn();
   }
 
   refreshLogLevel() {

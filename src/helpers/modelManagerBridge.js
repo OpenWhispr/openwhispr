@@ -231,6 +231,9 @@ class ModelManager {
       ),
       threads: 4,
       gpuLayers: 99,
+      ...(Array.isArray(modelInfo.model.llamaServerArgs)
+        ? { extraArgs: modelInfo.model.llamaServerArgs }
+        : {}),
     };
   }
 

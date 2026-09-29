@@ -22,9 +22,23 @@ import {
   appendDictionarySuffix,
   appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
+  buildVoiceTurnMessage,
   getAgentSystemPrompt,
+  getAgentSystemPromptParts,
+  getVoiceReplyInstructions,
 } from "../../config/prompts";
 import { getDictionaryHintWords } from "../../utils/snippets";
+import { buildVoiceHistory } from "../../services/voice/voiceHistory";
+import { compactToolResultForVoice } from "../../services/voice/voiceTools";
+import {
+  createWriteOnceGuard,
+  isBlockedRepeat,
+  runToolResultOnce,
+  VOICE_EXCLUDED_TOOLS,
+  type ToolResultLike,
+  type WriteOnceGuard,
+} from "../../services/voice/voiceToolPolicy";
+import type { AssistantSpeechTap } from "../../services/voice/types";
 import { createToolRegistry } from "../../services/tools";
 import {
   executeTool,
@@ -39,17 +53,18 @@ import {
   buildAgentRequestText,
   type AgentSelectionContext,
 } from "../../utils/agentSelectionContext";
+import { estimateModelSizeB } from "../../utils/localModelSize";
 
 const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
 const STREAM_FLUSH_INTERVAL_MS = 32;
 
 const LOCAL_TOOL_MIN_PARAMS_B = 4;
-
-function estimateModelSizeB(modelId: string): number {
-  const match = modelId.match(/-([\d.]+)[bB]/);
-  return match ? parseFloat(match[1]) : 0;
-}
+// Voice turns on a local model: stops one that loops. Speech is already capped at three
+// sentences, so this only has to leave room for tool arguments (a dictated note, up to a
+// 30-second turn) and the answer. Other providers get no cap: a reasoning model spends
+// its thinking tokens from the same budget and would return nothing to say.
+const VOICE_LOCAL_MAX_OUTPUT_TOKENS = 1024;
 
 async function buildRAGContext(userText: string, scope?: ContainerScope): Promise<string> {
   if (!window.electronAPI?.semanticSearchNotes) return "";
@@ -104,6 +119,43 @@ interface UseChatStreamingOptions {
   onResponseContent?: () => void;
 }
 
+const DRY_RUN_RESULT = { success: true, dryRun: true, note: "Test run: nothing was changed." };
+
+/**
+ * Voice turns get compacted tool results (see compactToolResultForVoice) and run
+ * each write tool at most once (see createWriteOnceGuard); in the harness, the
+ * tools named in `dryRunNames` return a canned success instead.
+ */
+function prepareVoiceTools(
+  tools: ReturnType<ToolRegistry["toAISDKFormat"]> | undefined,
+  {
+    dryRunNames,
+    guard,
+    onBlockedRepeat,
+  }: { dryRunNames: Set<string>; guard: WriteOnceGuard; onBlockedRepeat: (callId: string) => void }
+): ReturnType<ToolRegistry["toAISDKFormat"]> | undefined {
+  if (!tools) return tools;
+  const prepared: ReturnType<ToolRegistry["toAISDKFormat"]> = {};
+  for (const [name, tool] of Object.entries(tools)) {
+    const execute = tool.execute;
+    prepared[name] = execute
+      ? ({
+          ...tool,
+          execute: async (...args: Parameters<typeof execute>) => {
+            const result = await guard.run(name, async () =>
+              dryRunNames.has(name)
+                ? DRY_RUN_RESULT
+                : compactToolResultForVoice(name, await execute(...args))
+            );
+            if (isBlockedRepeat(result)) onBlockedRepeat(args[1].toolCallId);
+            return result;
+          },
+        } as typeof tool)
+      : tool;
+  }
+  return prepared;
+}
+
 export interface SendToAIOptions {
   /** Screenshot for this message; attached only when the resolved model can see it. */
   attachment?: ChatImageAttachment;
@@ -123,6 +175,11 @@ export interface SendToAIOptions {
   onApprovalRequested?: () => void;
   /** Fires when this turn's answer must not be pasted at the caret (see ToolExecutionContext). */
   onHoldDelivery?: (options?: HoldDeliveryOptions) => void;
+  /**
+   * Voice conversation: this request answers a spoken turn. It gets the voice prompt
+   * and limits, and the tap hears the answer as it streams and when it ends.
+   */
+  voiceTap?: AssistantSpeechTap;
 }
 
 export interface ChatStreaming {
@@ -160,6 +217,10 @@ export function useChatStreaming({
   onResponseContent,
 }: UseChatStreamingOptions): ChatStreaming {
   const { t } = useTranslation();
+  // Voice turns: each user message exactly as sent, so later turns replay it verbatim.
+  // Tool steps are deliberately not replayed: Qwen3.5's template renders an assistant
+  // turn differently once a newer question follows, so they can never match the cache.
+  const voiceSentContentRef = useRef(new Map<string, string>());
   const [agentState, setAgentState] = useState<AgentState>("idle");
   const [toolStatus, setToolStatus] = useState("");
   const [activeToolName, setActiveToolName] = useState("");
@@ -283,12 +344,28 @@ export function useChatStreaming({
           responseAnnounced = true;
           if (!options?.suppressResponseContent) onResponseContent?.();
         };
+        const voiceTap = options?.voiceTap ?? null;
+        const voiceTurn = voiceTap !== null;
         const settings = getSettings();
-        const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
-          inferenceScope,
-          hasScreenContext: !!options?.attachment,
-          isProviderImageWired: providerSupportsImages,
-        });
+        const { config: resolvedConfig, attachScreenContext } = resolveChatStreamingInference(
+          settings,
+          {
+            inferenceScope,
+            hasScreenContext: !!options?.attachment,
+            isProviderImageWired: providerSupportsImages,
+          }
+        );
+        // Voice conversation harness: pin voice turns to a local model (OPENWHISPR_VOICE_HARNESS_BRAIN)
+        // so model comparisons don't depend on, or change, the user's settings.
+        const voiceModelOverride = voiceTap?.brainOverride ?? null;
+        const llmConfig = voiceModelOverride
+          ? {
+              ...resolvedConfig,
+              mode: "local" as const,
+              provider: "local",
+              model: voiceModelOverride,
+            }
+          : resolvedConfig;
         const requestedAttachment = attachScreenContext ? (options?.attachment ?? null) : null;
         const llmMode = llmConfig.mode || "openwhispr";
         const policyState = usePolicyStore.getState();
@@ -316,6 +393,7 @@ export function useChatStreaming({
               isStreaming: false,
             },
           ]);
+          voiceTap?.onResponseDone();
           return;
         }
 
@@ -361,7 +439,10 @@ export function useChatStreaming({
             : undefined;
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
-          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${slackReady}`;
+          // A voice turn changes which tools this registry may offer (voice turns
+          // exclude snippet editing), so it must be part of the cache key too —
+          // otherwise a registry built for one kind of turn gets reused for the other.
+          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${slackReady}-${voiceTurn}`;
           if (toolRegistryRef.current?.key === cacheKey) {
             registry = toolRegistryRef.current.registry;
           } else {
@@ -379,6 +460,7 @@ export function useChatStreaming({
                 setSnippets: (snippets) => useSettingsStore.getState().setSnippets(snippets),
               },
               connectors,
+              ...(voiceTurn ? { excludeTools: VOICE_EXCLUDED_TOOLS } : {}),
             });
             toolRegistryRef.current = { key: cacheKey, registry };
           }
@@ -387,20 +469,29 @@ export function useChatStreaming({
         const ragContext = await buildRAGContext(userText, scope);
         if (cancelled() || !mountedRef.current) return;
         const combinedContext = [noteContextRef.current, ragContext].filter(Boolean).join("\n\n");
+        const toolNames = registry?.getAll().map((t) => t.name);
+        const promptParts = voiceTurn
+          ? getAgentSystemPromptParts(toolNames, combinedContext || undefined)
+          : null;
+        voiceTap?.onToolsAvailable(toolNames ?? []);
         // The user's dictionary rides on every conversation so replies use their
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
-          getAgentSystemPrompt(
-            registry?.getAll().map((t) => t.name),
-            combinedContext || undefined
-          ),
+          promptParts
+            ? `${promptParts.stable}\n\n${getVoiceReplyInstructions(toolNames)}`
+            : getAgentSystemPrompt(toolNames, combinedContext || undefined),
           getDictionaryHintWords(settings),
           settings.uiLanguage
         );
 
-        const history: HistoryMessage[] = allMessages
-          .slice(-20)
-          .map((m) => ({ role: m.role, content: m.content }));
+        const history: HistoryMessage[] = promptParts
+          ? buildVoiceHistory(
+              allMessages,
+              voiceSentContentRef.current,
+              promptParts.turnContext,
+              buildVoiceTurnMessage
+            )
+          : allMessages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
 
         const selectedContext = options?.selectedContext;
         if (selectedContext) {
@@ -476,6 +567,24 @@ export function useChatStreaming({
           // carry only the model-facing output (the cloud path yields it).
           const toolDisplayTexts = new Map<string, string>();
 
+          // Shared by both branches below: OpenWhispr Cloud runs tools via
+          // executeToolCall, BYOK/local runs them via the AI SDK's registry.toAISDKFormat()
+          // wrapper, but "each write tool runs at most once per voice turn" applies to
+          // whichever one actually answers this request. One guard per request, so
+          // "once per turn" resets with each spoken turn.
+          const writeToolNames = new Set(
+            (registry?.getAll() ?? []).filter((tool) => !tool.readOnly).map((tool) => tool.name)
+          );
+          const dryRunNames = voiceTap?.dryRunWrites ? writeToolNames : new Set<string>();
+          // A write that settles after a barge-in cancelled this request belongs to no turn.
+          const writeOnceGuard = voiceTap
+            ? createWriteOnceGuard(writeToolNames, (name, ok) => {
+                if (!cancelled()) voiceTap.onWriteToolResult(name, ok);
+              })
+            : null;
+          // Nothing ran for a repeat the guard blocked, so its tool chip is dropped.
+          const blockedRepeatCallIds = new Set<string>();
+
           if (isCloudAgent) {
             const executeToolCall = registry
               ? async (name: string, argsJson: string, toolCallId: string) => {
@@ -494,16 +603,32 @@ export function useChatStreaming({
                       displayText: t("agentMode.tools.invalidArgs", { name }),
                     };
                   }
-                  const result = await executeTool(
-                    tool,
-                    args,
-                    toolScope.createContext({ messageId: assistantId, toolCallId })
-                  );
-                  const data = result.success
-                    ? typeof result.data === "string"
-                      ? result.data
-                      : JSON.stringify(result.data)
-                    : result.displayText;
+                  const execute = () =>
+                    dryRunNames.has(name)
+                      ? Promise.resolve({
+                          success: true,
+                          data: DRY_RUN_RESULT,
+                          displayText: DRY_RUN_RESULT.note,
+                        })
+                      : executeTool(
+                          tool,
+                          args,
+                          toolScope.createContext({ messageId: assistantId, toolCallId })
+                        );
+                  const result: ToolResultLike = writeOnceGuard
+                    ? await runToolResultOnce(writeOnceGuard, name, execute)
+                    : await execute();
+                  if (result.blocked) blockedRepeatCallIds.add(toolCallId);
+                  const modelData = voiceTurn
+                    ? compactToolResultForVoice(name, result.data)
+                    : result.data;
+                  // A blocked repeat's data is the guard's note to the model, even after a failure.
+                  const data =
+                    result.success || result.blocked
+                      ? typeof modelData === "string"
+                        ? modelData
+                        : JSON.stringify(modelData)
+                      : result.displayText;
                   const metadata =
                     result.success && result.data && typeof result.data === "object"
                       ? (result.data as Record<string, unknown> | Array<Record<string, unknown>>)
@@ -523,7 +648,7 @@ export function useChatStreaming({
               ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
             });
           } else {
-            const aiTools = registry?.toAISDKFormat(
+            const registryTools = registry?.toAISDKFormat(
               (toolCallId, abortSignal) =>
                 toolScope.createContext({
                   messageId: assistantId,
@@ -532,6 +657,13 @@ export function useChatStreaming({
                 }),
               (id, text) => toolDisplayTexts.set(id, text)
             );
+            const aiTools = writeOnceGuard
+              ? prepareVoiceTools(registryTools, {
+                  dryRunNames,
+                  guard: writeOnceGuard,
+                  onBlockedRepeat: (callId) => blockedRepeatCallIds.add(callId),
+                })
+              : registryTools;
             stream = ReasoningService.processTextStreamingAI(
               llmMessages,
               llmConfig.model,
@@ -548,6 +680,9 @@ export function useChatStreaming({
                 customApiKey:
                   isCustomAgent || isLanAgent ? llmConfig.customApiKey || undefined : undefined,
                 disableThinking: llmConfig.disableThinking,
+                ...(voiceTurn && isLocalProvider
+                  ? { maxTokens: VOICE_LOCAL_MAX_OUTPUT_TOKENS }
+                  : {}),
               },
               aiTools
             );
@@ -561,12 +696,17 @@ export function useChatStreaming({
             if (chunk.type === "content") {
               if (chunk.text) announceResponse();
               fullContent += chunk.text;
+              // A barge-in cancelled this answer; its late chunks belong to no turn.
+              if (chunk.text && !cancelled()) voiceTap?.onContentDelta(chunk.text);
               scheduleContentFlush();
             } else if (chunk.type === "tool_calls") {
               // Text that arrived before a tool step must be on screen before the
               // step appears, not an interval after it.
               flushContentNow();
               if (chunk.calls.length > 0) announceResponse();
+              if (voiceTap && chunk.calls.length > 0 && !cancelled()) {
+                voiceTap.onToolCall(chunk.calls.map((call) => call.name));
+              }
               for (const call of chunk.calls) {
                 setAgentState("tool-executing");
                 beginToolActivity(
@@ -593,21 +733,24 @@ export function useChatStreaming({
                 );
               }
             } else if (chunk.type === "tool_result") {
+              const blockedRepeat = blockedRepeatCallIds.has(chunk.callId);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId && m.toolCalls
                     ? {
                         ...m,
-                        toolCalls: m.toolCalls.map((tc) =>
-                          tc.id === chunk.callId
-                            ? {
-                                ...tc,
-                                status: "completed" as const,
-                                result: toolDisplayTexts.get(chunk.callId) ?? chunk.displayText,
-                                ...(chunk.metadata ? { metadata: chunk.metadata } : {}),
-                              }
-                            : tc
-                        ),
+                        toolCalls: blockedRepeat
+                          ? m.toolCalls.filter((tc) => tc.id !== chunk.callId)
+                          : m.toolCalls.map((tc) =>
+                              tc.id === chunk.callId
+                                ? {
+                                    ...tc,
+                                    status: "completed" as const,
+                                    result: toolDisplayTexts.get(chunk.callId) ?? chunk.displayText,
+                                    ...(chunk.metadata ? { metadata: chunk.metadata } : {}),
+                                  }
+                                : tc
+                            ),
                       }
                     : m
                 )
@@ -633,6 +776,7 @@ export function useChatStreaming({
             if (!explicitlyCancelled && fullContent.trim().length > 0) {
               const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
               onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
+              voiceTap?.onResponseDone();
             }
             return;
           }
@@ -657,6 +801,7 @@ export function useChatStreaming({
 
           const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
           onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
+          voiceTap?.onResponseDone();
           if (hasDeliverableContent) {
             await options?.onComplete?.({
               assistantId,
@@ -698,6 +843,7 @@ export function useChatStreaming({
                   : m
               )
             );
+            voiceTap?.onResponseDone();
           }
         }
 

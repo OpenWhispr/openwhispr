@@ -28,6 +28,8 @@ interface ToolRegistrySettings {
   webSearchEnabled: boolean;
   /** Live dictionary and snippet access; enables the vocabulary tools. */
   vocabulary?: DictionaryActions & SnippetActions;
+  /** Tools this surface must never offer (voice turns drop snippet editing). */
+  excludeTools?: readonly string[];
   /** Present only when connectors are available (signed in, paid, policy allows). */
   connectors?: { emailDraftTarget: EmailDraftTarget; slackReady: boolean };
 }
@@ -64,6 +66,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     registry.register(createEmailDraftTool(settings.connectors.emailDraftTarget));
     if (settings.connectors.slackReady) registry.register(slackSendMessageTool);
   }
+  for (const name of settings.excludeTools ?? []) registry.unregister(name);
 
   return registry;
 }

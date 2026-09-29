@@ -161,3 +161,22 @@ test("mic preparation is a first-class lifecycle mirrored only for ordinary dict
     interactive: false,
   });
 });
+
+test("a voice conversation holds off dictation and translation but never its own hotkey", () => {
+  const voice = {
+    voiceConversationActive: true,
+    assistantPanelOpen: true,
+    companionAvailable: true,
+  };
+  assert.equal(shouldBlockDictationWhilePanelOpen({ ...voice, inputKind: "dictation" }), true);
+  assert.equal(shouldBlockDictationWhilePanelOpen({ ...voice, inputKind: "translation" }), true);
+  // The press that stops the session must land even while an answer is being generated.
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({
+      ...voice,
+      assistantPanelBusy: true,
+      inputKind: "assistant",
+    }),
+    false
+  );
+});

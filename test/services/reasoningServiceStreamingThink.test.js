@@ -824,3 +824,38 @@ test("a provider error part rejects the agent stream instead of ending it silent
 
   await assert.rejects(collectAgentText(stream), /Incorrect API key/);
 });
+
+// Local chat follows the "Disable thinking" setting (on unless turned off): with it on,
+// llama-server is asked to skip thinking, not only to have its <think> text hidden.
+test("local tool chat asks llama-server to skip thinking unless the setting allows it", async (t) => {
+  const { reasoningService } = await loadReasoningService(t, "openwhispr-local-thinking-test-", {
+    window: {
+      electronAPI: { llamaServerStart: async () => ({ success: true, port: 8221 }) },
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const bodies = [];
+  globalThis.fetch = async (_input, init = {}) => {
+    bodies.push(JSON.parse(init.body));
+    return createOpenAiSseResponse(["Answer"]);
+  };
+  const send = (disableThinking) =>
+    collectAgentText(
+      reasoningService.processTextStreamingAI(
+        [{ role: "user", content: "hello" }],
+        "qwen3-4b-q4_k_m",
+        "qwen",
+        { systemPrompt: "Answer the user.", disableThinking },
+        {}
+      )
+    );
+
+  await send(undefined);
+  await send(false);
+
+  assert.deepEqual(bodies[0].chat_template_kwargs, { enable_thinking: false });
+  assert.equal("chat_template_kwargs" in bodies[1], false);
+});

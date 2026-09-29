@@ -1,9 +1,8 @@
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
-const { pipeline } = require("stream/promises");
 const debugLogger = require("./debugLogger");
-const { runSystemTar } = require("./systemTar");
+const { extractTarBz2 } = require("./systemTar");
 const {
   downloadFile,
   fetchJson,
@@ -571,23 +570,8 @@ class ParakeetManager {
     }
   }
 
-  async _runTarExtract(archivePath, extractDir) {
-    try {
-      await this._runSystemTar(archivePath, extractDir);
-      return;
-    } catch (err) {
-      debugLogger.debug("System tar failed, falling back to JS extraction", {
-        error: err.message,
-      });
-    }
-
-    const unbzip2 = require("unbzip2-stream");
-    const tar = require("tar");
-    await pipeline(fs.createReadStream(archivePath), unbzip2(), tar.x({ cwd: extractDir }));
-  }
-
-  _runSystemTar(archivePath, extractDir) {
-    return runSystemTar(archivePath, extractDir);
+  _runTarExtract(archivePath, extractDir) {
+    return extractTarBz2(archivePath, extractDir, { logger: debugLogger });
   }
 
   async cancelDownload() {

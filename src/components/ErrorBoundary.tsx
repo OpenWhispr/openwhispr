@@ -1,5 +1,6 @@
 import React from "react";
 import i18n from "../i18n";
+import logger from "../utils/logger";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -22,6 +23,12 @@ export default class ErrorBoundary extends React.Component<ErrorBoundaryProps, E
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("[ErrorBoundary] Uncaught error:", error, errorInfo);
+    // Also forward to the main-process log: the pill window's console is not visible.
+    logger.error(
+      "Renderer crashed into ErrorBoundary",
+      { error: error?.message, stack: error?.stack, componentStack: errorInfo?.componentStack },
+      "renderer"
+    );
   }
 
   handleReload = () => {

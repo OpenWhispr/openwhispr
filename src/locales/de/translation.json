@@ -4332,5 +4332,22 @@
     },
     "start": "Notizen aufnehmen",
     "join": "Beitreten & transkribieren"
+  },
+  "voiceConversation": {
+    "title": "Sprachkonversation",
+    "errors": {
+      "languageUnsupported": "Sprachkonversation versteht vorerst nur Englisch. Stellen Sie Ihre Diktiersprache auf Englisch oder Automatisch.",
+      "voiceModelsMissing": "Für die Sprachkonversation werden ihre Sprachmodelle benötigt. Laden Sie sie in den Einstellungen herunter.",
+      "speechModelMissing": "Für die Sprachkonversation wird ein Parakeet-Sprachmodell benötigt. Laden Sie eines unter Einstellungen → Sprache zu Text herunter.",
+      "brainNotDownloaded": "Das lokale Modell des Sprachassistenten ist noch nicht heruntergeladen.",
+      "workerStopped": "Die Sprachkonversation wurde beendet, weil ihre Sprach-Engine unerwartet geschlossen wurde. Drücken Sie das Tastenkürzel, um neu zu starten.",
+      "micDenied": "Die Sprachkonversation kann nicht auf das Mikrofon zugreifen. Erlauben Sie OpenWhispr den Mikrofonzugriff in den Systemeinstellungen.",
+      "startFailed": "Die Sprachkonversation konnte nicht gestartet werden. Versuchen Sie es erneut.",
+      "transcriptionFailed": "Das konnte nicht transkribiert werden. Sagen Sie es bitte noch einmal.",
+      "brainSignInRequired": "Melden Sie sich an, um OpenWhispr Cloud für die Sprachkonversation zu nutzen, oder wählen Sie ein lokales Modell für den Sprachassistenten.",
+      "endedForMeeting": "Die Sprachkonversation wurde beendet, weil eine Besprechungsaufnahme gestartet wurde.",
+      "meetingRecording": "Die Sprachkonversation kann nicht starten, während eine Besprechung aufgenommen wird.",
+      "brainKeyMissing": "Fügen Sie unter Einstellungen → KI-Modelle einen API-Schlüssel für den Anbieter des Sprachassistenten hinzu, oder wählen Sie ein lokales Modell."
+    }
   }
 }

@@ -1817,6 +1817,56 @@ declare global {
       getGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;
       dismissGpuPackMigrationNotice: () => Promise<{ success: boolean }>;
 
+      // Local voice conversation, gated by the voiceConversationEnabled setting
+      // (the dev harness runs without it — see OPENWHISPR_VOICE_HARNESS)
+      voiceConversation?: {
+        start: (options: {
+          parakeetModel?: string;
+          brainModel?: string;
+          harness?: boolean;
+        }) => Promise<{
+          sessionId: number;
+          sampleRate: number;
+          loadMs: number;
+          smartTurn: boolean;
+        }>;
+        isHarness: () => Promise<boolean>;
+        brainOverride: () => Promise<string | null>;
+        reportTurn: (report: import("../services/voice/types").VoiceTurnReport) => void;
+        reportTurnEvent: (turnEvent: { type: "first-audio" | "flushed"; at: number }) => void;
+        onHarnessDone: (callback: () => void) => () => void;
+        sendMic: (samples: Float32Array) => void;
+        keepModelWarm: (modelId: string) => Promise<{ warmed: boolean; reason?: string }>;
+        /** Synthesizes short lines ahead of time so they play without a wait. */
+        prepareSpeech: (texts: readonly string[]) => Promise<{ queued: number }>;
+        speak: (request: { utteranceId: string; chunkIndex: number; text: string }) => Promise<{
+          queueWaitMs?: number;
+          firstAudioMs?: number | null;
+          totalMs?: number;
+          cancelled?: boolean;
+        }>;
+        cancelSpeech: (utteranceId: string) => Promise<{ cancelled: boolean }>;
+        /** Ends the named session; null ends whichever is running (e.g. one still starting). */
+        stop: (sessionId: number | null) => Promise<{ stopped: boolean }>;
+        onEvent: (
+          callback: (event: import("../services/voice/types").VoiceConversationEvent) => void
+        ) => () => void;
+        getReadiness: (request: {
+          parakeetModel: string;
+          language: string;
+          brain: { mode: string; model: string; provider: string; signedIn: boolean };
+        }) => Promise<import("../services/voice/types").VoiceConversationReadiness>;
+        downloadModels: () => Promise<{ ready: boolean; missing: string[]; missingBytes: number }>;
+        cancelModelDownload: () => Promise<{ cancelled: boolean }>;
+        onDownloadProgress: (
+          callback: (progress: {
+            model: string;
+            downloadedBytes: number;
+            totalBytes: number;
+          }) => void
+        ) => () => void;
+      };
+
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
         audioBlob: ArrayBuffer,

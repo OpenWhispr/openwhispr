@@ -21,6 +21,8 @@ const { buildLinuxWrapperScript } = require("./lib/linux-launcher");
 const {
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
+  privatizeOnnxRuntimeDir,
+  verifyOnnxRuntimePrivatizedDir,
 } = require("./download-sherpa-onnx");
 
 // ---------------------------------------------------------------------------
@@ -297,6 +299,72 @@ function verifyUnpackedBinaries(context) {
 }
 
 // ---------------------------------------------------------------------------
+// Voice conversation dependencies (sherpa-onnx-node + Smart Turn onnxruntime-web)
+// ---------------------------------------------------------------------------
+
+// sherpa-onnx-node loads `sherpa-onnx-${platform}-${os.arch()}` at runtime, so
+// the package must match the target arch, not the build host's: a mac x64
+// build on an arm64 runner only gets darwin-arm64 from `npm ci`.
+const SHERPA_PLATFORM_PACKAGE = /^sherpa-onnx-(?:darwin|linux|win)-(?:arm64|x64|ia32)$/;
+
+function requiredSherpaPackages({ platform, arch }) {
+  const sherpaPlatform = platform === "win32" ? "win" : platform;
+  const archs = arch === "universal" ? ["arm64", "x64"] : [arch];
+  return archs.map((name) => `sherpa-onnx-${sherpaPlatform}-${name}`);
+}
+
+// All Smart Turn loads from onnxruntime-web in Node (require → ort.node.min.js, which
+// starts the threaded WASM build). electron-builder.json leaves out the package's other
+// builds (~100 MB of browser, WebGPU and JSPI variants), so a mismatch there must fail
+// here: a missing file otherwise only shows up as silence-only turn detection.
+const SMART_TURN_RUNTIME_FILES = [
+  "ort.node.min.js",
+  "ort-wasm-simd-threaded.mjs",
+  "ort-wasm-simd-threaded.wasm",
+];
+
+// The voice worker loads sherpa-onnx-node (native, per-platform package) and
+// Smart Turn on onnxruntime-web, whose WASM threads load from real files.
+function prepareVoiceDependencies(context) {
+  const modulesDir = path.join(resolveResourcesDir(context), "app.asar.unpacked", "node_modules");
+  const sherpaDirs = requiredSherpaPackages({
+    platform: context.electronPlatformName,
+    arch: Arch[context.arch],
+  });
+  const missing = sherpaDirs.filter((name) => !fs.existsSync(path.join(modulesDir, name)));
+  if (missing.length > 0) {
+    throw new Error(
+      `afterPack: missing ${missing.join(", ")} in ${modulesDir}; voice conversation would fail to load for this target (install the target-arch platform package before packaging)`
+    );
+  }
+  // npm installs the build host's package too, so a mac x64 build made on an arm64
+  // runner would also ship darwin-arm64 (~33 MB) that it never loads.
+  for (const name of fs.readdirSync(modulesDir)) {
+    if (SHERPA_PLATFORM_PACKAGE.test(name) && !sherpaDirs.includes(name)) {
+      fs.rmSync(path.join(modulesDir, name), { recursive: true, force: true });
+      console.log(`  afterPack: removed ${name}, which this target never loads`);
+    }
+  }
+  const ortDist = path.join(modulesDir, "onnxruntime-web", "dist");
+  const missingRuntime = SMART_TURN_RUNTIME_FILES.filter(
+    (file) => !fs.existsSync(path.join(ortDist, file))
+  );
+  if (missingRuntime.length > 0) {
+    throw new Error(
+      `afterPack: missing ${missingRuntime.join(", ")} in ${ortDist}; Smart Turn would fall back to silence-only turns`
+    );
+  }
+  if (context.electronPlatformName === "win32") {
+    for (const name of sherpaDirs) {
+      const dir = path.join(modulesDir, name);
+      privatizeOnnxRuntimeDir(dir);
+      verifyOnnxRuntimePrivatizedDir(dir);
+      console.log(`  afterPack: ${name} loads ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main hook
 // ---------------------------------------------------------------------------
 
@@ -304,8 +372,11 @@ exports.default = async function (context) {
   stripOnnxruntimeBinaries(context);
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
+  prepareVoiceDependencies(context);
   verifyUnpackedBinaries(context);
   registerMacResourceBinariesForSigning(context);
 };
 
 exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
+exports.requiredSherpaPackages = requiredSherpaPackages;
+exports.prepareVoiceDependencies = prepareVoiceDependencies;

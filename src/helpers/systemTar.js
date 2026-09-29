@@ -116,7 +116,31 @@ function runSystemTar(
   });
 }
 
+async function extractTarBz2WithJs(archivePath, destDir) {
+  const fs = require("fs");
+  const unbzip2 = require("unbzip2-stream");
+  const tar = require("tar");
+  const { pipeline } = require("stream/promises");
+  await pipeline(fs.createReadStream(archivePath), unbzip2(), tar.x({ cwd: destDir }));
+}
+
+// Windows' bsdtar can lack bz2 support (runSystemTar rejects there), so the
+// bundled JS extractor is the fallback everywhere. The logger is optional
+// because build scripts also load this under plain Node, where debugLogger
+// can't be relied on (it reads Electron's app on Windows).
+async function extractTarBz2(archivePath, destDir, { logger } = {}) {
+  try {
+    await runSystemTar(archivePath, destDir);
+    return;
+  } catch (error) {
+    logger?.debug("System tar failed, falling back to JS extraction", { error: error.message });
+  }
+  await extractTarBz2WithJs(archivePath, destDir);
+}
+
 module.exports = {
   resolveSystemTarExecutable,
   runSystemTar,
+  extractTarBz2,
+  extractTarBz2WithJs,
 };

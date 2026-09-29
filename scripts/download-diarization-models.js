@@ -2,8 +2,8 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { execFileSync } = require("child_process");
 const { downloadFile, parseArgs } = require("./lib/download-utils");
+const { extractTarBz2 } = require("../src/helpers/systemTar");
 
 const SEGMENTATION_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2";
@@ -28,15 +28,6 @@ function getModelDir() {
   }
 
   return path.join(os.homedir(), ".cache", "openwhispr", "diarization-models");
-}
-
-function extractTarBz2(archivePath, destDir) {
-  fs.mkdirSync(destDir, { recursive: true });
-  const cwd = path.dirname(archivePath);
-  execFileSync("tar", ["-xjf", path.basename(archivePath), "-C", path.relative(cwd, destDir)], {
-    stdio: "inherit",
-    cwd,
-  });
 }
 
 async function main() {
@@ -69,7 +60,7 @@ async function main() {
 
       const extractDir = path.join(modelDir, "temp-segmentation");
       fs.mkdirSync(extractDir, { recursive: true });
-      extractTarBz2(archivePath, extractDir);
+      await extractTarBz2(archivePath, extractDir);
 
       // Find model.onnx inside the extracted directory
       const extractedModelPath = path.join(extractDir, SEGMENTATION_DIR, SEGMENTATION_FILE);

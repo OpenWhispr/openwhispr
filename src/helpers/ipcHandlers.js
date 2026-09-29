@@ -1333,6 +1333,13 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    this.voiceConversation = require("./voiceConversationIpc").registerVoiceConversationIpc({
+      parakeetManager: this.parakeetManager,
+      onSessionActiveChange: (active) => this.windowManager.setVoiceConversationActive(active),
+      warmSemanticSearch: () => this.getSemanticSearch?.()?.warmUp(),
+      isMeetingRecording: () => Boolean(this.meetingDetectionEngine?.isRecordingMeeting()),
+    });
+
     ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
       this.windowManager.setOnboardingWindowMode(mode)
     );
@@ -3926,6 +3933,11 @@ class IPCHandlers {
       } catch (e) {
         errors.push(`Embedding worker stop: ${e.message}`);
       }
+      try {
+        await require("./voiceWorkerClient").stop();
+      } catch (e) {
+        errors.push(`Voice worker stop: ${e.message}`);
+      }
 
       // Revoke Google OAuth tokens before DB is closed
       try {
@@ -3965,6 +3977,12 @@ class IPCHandlers {
         await this.diarizationManager?.deleteModels();
       } catch (e) {
         errors.push(`Diarization models: ${e.message}`);
+      }
+      try {
+        const { getVoiceModelsDir } = require("./voiceModels");
+        fs.rmSync(getVoiceModelsDir(), { recursive: true, force: true });
+      } catch (e) {
+        errors.push(`Voice models: ${e.message}`);
       }
       try {
         const modelManager = require("./modelManagerBridge").default;
@@ -8590,6 +8608,7 @@ class IPCHandlers {
       meetingReconnectCount = 0;
       meetingFatalErrorSent = false;
       this.meetingDetectionEngine?.endRecordingSession();
+      this.voiceConversation?.endSessionForMeeting();
       this.meetingDetectionEngine?.setUserRecording(true);
 
       const completeStart = async (result) => {

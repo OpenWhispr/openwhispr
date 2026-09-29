@@ -82,6 +82,20 @@ test("registry exposes the vocabulary tools, and get_snippet only when snippets 
   assert.equal(noVocabulary.get("update_dictionary"), undefined);
 });
 
+test("excluded tools are left out of the registry", async () => {
+  const { createToolRegistry } = await import("../../src/services/tools/index.ts");
+  const registry = createToolRegistry({
+    isSignedIn: false,
+    calendarConnected: false,
+    cloudBackupEnabled: false,
+    webSearchEnabled: false,
+    vocabulary: vocabulary(snippets).actions,
+    excludeTools: ["update_snippets"],
+  });
+  assert.equal(registry.get("update_snippets"), undefined);
+  assert.equal(registry.get("update_dictionary")?.readOnly, false);
+});
+
 test("update_snippets replaces an existing trigger, adds a new one, and removes by trigger", async () => {
   const { createUpdateSnippetsTool } = await load();
   const { actions, writes } = vocabulary(snippets);

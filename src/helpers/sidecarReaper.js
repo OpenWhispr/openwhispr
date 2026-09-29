@@ -103,4 +103,4 @@ async function reapStaleSidecars({
   );
 }
 
-module.exports = { reapStaleSidecars, waitForExit };
+module.exports = { reapStaleSidecars, waitForExit, isProcessAlive };

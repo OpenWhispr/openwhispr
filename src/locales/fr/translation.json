@@ -4332,5 +4332,22 @@
     },
     "start": "Prendre des notes",
     "join": "Rejoindre et transcrire"
+  },
+  "voiceConversation": {
+    "title": "Conversation vocale",
+    "errors": {
+      "languageUnsupported": "La conversation vocale ne comprend que l'anglais pour l'instant. Réglez votre langue de dictée sur l'anglais ou Auto.",
+      "voiceModelsMissing": "La conversation vocale a besoin de ses modèles vocaux. Téléchargez-les dans les Réglages.",
+      "speechModelMissing": "La conversation vocale a besoin d'un modèle vocal Parakeet. Téléchargez-en un dans Réglages → Parole en texte.",
+      "brainNotDownloaded": "Le modèle local de l'Assistant vocal n'est pas encore téléchargé.",
+      "workerStopped": "La conversation vocale s'est arrêtée, car son moteur vocal s'est fermé de manière inattendue. Appuyez sur le raccourci pour recommencer.",
+      "micDenied": "La conversation vocale ne peut pas utiliser le micro. Autorisez l'accès au micro pour OpenWhispr dans les réglages du système.",
+      "startFailed": "La conversation vocale n'a pas pu démarrer. Réessayez.",
+      "transcriptionFailed": "Impossible de transcrire cela. Essayez de le redire.",
+      "brainSignInRequired": "Connectez-vous pour utiliser OpenWhispr Cloud en conversation vocale, ou choisissez un modèle local pour l'Assistant vocal.",
+      "endedForMeeting": "La conversation vocale s'est arrêtée, car l'enregistrement d'une réunion a commencé.",
+      "meetingRecording": "La conversation vocale ne peut pas démarrer pendant l'enregistrement d'une réunion.",
+      "brainKeyMissing": "Ajoutez une clé API pour le fournisseur de l'Assistant vocal dans Réglages → Modèles IA, ou choisissez un modèle local."
+    }
   }
 }

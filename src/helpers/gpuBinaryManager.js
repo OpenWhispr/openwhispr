@@ -1,6 +1,5 @@
 const fs = require("fs");
 const { promises: fsPromises } = require("fs");
-const { createHash } = require("crypto");
 const path = require("path");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
@@ -13,6 +12,7 @@ const {
   extractArchive,
   findFile,
   findFiles,
+  sha256File,
 } = require("./downloadUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 
@@ -24,16 +24,6 @@ function githubReleaseHeaders() {
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
-}
-
-function sha256File(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = createHash("sha256");
-    fs.createReadStream(filePath)
-      .on("data", (chunk) => hash.update(chunk))
-      .on("end", () => resolve(hash.digest("hex")))
-      .on("error", reject);
-  });
 }
 
 function getMissingRequiredLibraries(directory, assetConfig) {
