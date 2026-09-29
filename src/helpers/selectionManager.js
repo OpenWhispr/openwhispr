@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const { execFile, spawn } = require("child_process");
 const debugLogger = require("./debugLogger");
+const { isMarkdownTargetSignature } = require("./markdownTargets");
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
 const MAX_SELECTION_EDIT_CODE_POINTS = 6000;
@@ -176,12 +177,15 @@ class SelectionManager {
       const capture = await this._readCurrentSelection(expectedTarget, { probeEditable });
       if (capture.status === "editable") {
         const sessionId = crypto.randomUUID();
+        // The renderer asks for plain prose and strips markdown only when the
+        // target is not a markdown-friendly app.
+        const acceptsMarkdown = await this._targetAcceptsMarkdown(capture.target);
         this.sessions.set(sessionId, {
           kind: "caret",
           target: capture.target,
           expiresAt: this.now() + SESSION_TTL_MS,
         });
-        return { status: "editable", sessionId };
+        return { status: "editable", sessionId, acceptsMarkdown };
       }
       if (capture.status !== "selected") return capture;
 
@@ -257,7 +261,9 @@ class SelectionManager {
 
   async pasteAtCapturedTarget(sessionId, text, options = {}) {
     if (typeof text !== "string" || text.length === 0) {
-      return { success: false, code: "invalid_replacement" };
+      return this._declineAssistantPaste("invalid_replacement", {
+        sessionFound: this.sessions.has(sessionId),
+      });
     }
 
     return this.clipboardManager.runClipboardOperation(async () => {
@@ -265,12 +271,20 @@ class SelectionManager {
       const session = this.sessions.get(sessionId);
       this.sessions.delete(sessionId);
       if (!session || session.kind !== "caret") {
-        return { success: false, code: "session_expired" };
+        return this._declineAssistantPaste("session_expired", {
+          sessionFound: Boolean(session),
+          sessionKind: session?.kind ?? null,
+        });
       }
 
       const current = await this._readCurrentSelection(session.target, { probeEditable: true });
       if (current.status !== "editable") {
-        return { success: false, code: "target_changed" };
+        return this._declineAssistantPaste("target_changed", {
+          sessionFound: true,
+          sessionKind: "caret",
+          probeStatus: current.status,
+          probeCode: current.code ?? null,
+        });
       }
 
       try {
@@ -281,7 +295,11 @@ class SelectionManager {
         });
         await pasteResult?.restoreComplete;
         if (pasteResult?.pasted === false) {
-          return { success: false, code: "paste_failed" };
+          return this._declineAssistantPaste("paste_failed", {
+            sessionFound: true,
+            sessionKind: "caret",
+            probeStatus: "editable",
+          });
         }
         return { success: true };
       } catch (error) {
@@ -289,6 +307,17 @@ class SelectionManager {
         return { success: false, code: "paste_failed", error: error.message };
       }
     });
+  }
+
+  // One line per refusal. The renderer discards the code it receives, so the
+  // debug log is the only place a declined assistant paste can be diagnosed.
+  _declineAssistantPaste(code, details = {}) {
+    debugLogger.info(
+      "Assistant response paste declined",
+      { code, platform: this.platform, ...details },
+      "clipboard"
+    );
+    return { success: false, code };
   }
 
   _pruneSessions() {
@@ -336,9 +365,10 @@ class SelectionManager {
       };
     }
     // Chromium browsers (and any app whose accessibility tree stays dormant)
-    // never resolve a focused element, so the read above cannot tell a selection
-    // from an empty field. A synthetic copy still can — the same route Windows
-    // and Linux take by default.
+    // never resolve a focused element — or resolve only the bare window (the
+    // native read's "unknown" state) — so the read above cannot tell a
+    // selection from an empty field. A synthetic copy still can — the same
+    // route Windows and Linux take by default.
     return this._readMacSelectionViaClipboard(pid, expectedTarget, probeEditable);
   }
 
@@ -498,8 +528,24 @@ class SelectionManager {
     // to match — so resolve the executable name before a Wayland terminal's
     // empty prompt can read as a writable caret.
     if (target.kind === "atspi-pid" && (await this._isTerminalPid(target.id))) return capture;
-    const editable = await this.textEditMonitor?.isFocusedEditable?.(target);
-    return editable ? { status: "editable", target } : capture;
+    // macOS targets normally carry the copier's NSWorkspace app name, already
+    // matched above; only an unnamed target needs its executable resolved so a
+    // terminal cannot become a caret destination. Never resolve a
+    // named one — `ps` reports bundle paths like "Visual Studio Code" whose
+    // "st" substring would misread editors as terminals.
+    if (
+      target.kind === "mac-pid" &&
+      !this._targetSignature(target) &&
+      (await this._isTerminalPid(target.pid))
+    ) {
+      return capture;
+    }
+    const verdict = await this.textEditMonitor?.isFocusedEditable?.(target);
+    if (verdict === "editable") return { status: "editable", target };
+    // An empty copy cannot distinguish a caret from an integrated terminal or
+    // a page without an input; it can also hide a selection matching the clipboard.
+    // Unknown accessibility must keep the panel fallback, including on revalidation.
+    return capture;
   }
 
   _isTerminalTarget(...targets) {
@@ -516,13 +562,36 @@ class SelectionManager {
   // the parsing below degrades to the bare name unchanged.
   async _isTerminalPid(pid) {
     if (!this.clipboardManager.isTerminalSignature) return false;
+    const names = await this._readTargetNames(pid);
+    return names ? this.clipboardManager.isTerminalSignature(names) : false;
+  }
+
+  // "<bundle name> <executable name>" for a pid — "Visual Studio Code Code" on
+  // macOS, the bare comm name on Linux — or "" when the pid cannot be read.
+  async _readTargetNames(pid) {
     const executablePath = await this._readExecutablePath(pid);
-    if (!executablePath) return false;
+    if (!executablePath) return "";
     // Match the bundle and executable names, not the whole path — segments
     // like "/System/" would collide with short signatures such as "st".
     const bundleName = executablePath.match(/\/([^/]+)\.app\//)?.[1] ?? "";
     const executableName = executablePath.split("/").pop() ?? "";
-    return this.clipboardManager.isTerminalSignature(`${bundleName} ${executableName}`);
+    return `${bundleName} ${executableName}`.trim();
+  }
+
+  // Windows and Linux X11 targets name their app on the target; macOS AX and
+  // Linux AT-SPI targets carry only a pid, so resolve the executable exactly
+  // as the terminal check does. A miss or an error means plain text.
+  async _targetAcceptsMarkdown(target) {
+    if (!target) return false;
+    try {
+      const parts = [this._targetSignature(target)];
+      const pid =
+        target.kind === "mac-pid" ? target.pid : target.kind === "atspi-pid" ? target.id : null;
+      if (pid) parts.push(await this._readTargetNames(pid));
+      return isMarkdownTargetSignature(parts.join(" ").trim());
+    } catch {
+      return false;
+    }
   }
 
   async _readExecutablePath(pid) {
@@ -630,9 +699,8 @@ class SelectionManager {
     // Wayland) still holds pre-copy content; snapshot it so stale text can't
     // be mistaken for the copied selection. Known limitation: a clipboard that
     // already held exactly the selected text reads as "no selection". The
-    // command then falls back to the Assistant panel — never to a caret paste,
-    // because the editable probe reads the focused element's own selection
-    // state and refuses a field with a live selection.
+    // editable probe must independently verify an empty writable field before
+    // caret delivery; a live selection or unknown accessibility keeps the panel.
     const baseline = new Set([...beforeWrite, ...this.clipboardManager._readClipboardTextAll()]);
 
     const copyResult = await sendCopy();

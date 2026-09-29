@@ -156,3 +156,86 @@ test("paste-text does not schedule AutoLearn monitoring after a clipboard-only f
   assert.deepEqual(result, { success: true, pasted: false });
   assert.deepEqual(monitored, []);
 });
+
+test("paste-text serializes only a copied Accessibility denial and skips AutoLearn", async (t) => {
+  const originalTimeout = global.setTimeout;
+  t.after(() => {
+    global.setTimeout = originalTimeout;
+    target._autoLearnEnabled = false;
+    target.textEditMonitor = null;
+  });
+  let scheduled = 0;
+  global.setTimeout = () => {
+    scheduled += 1;
+    return 1;
+  };
+  target._autoLearnEnabled = true;
+  target.textEditMonitor = {
+    activateTargetPid: async () => true,
+    startMonitoring: () => assert.fail("must not monitor denial"),
+  };
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  target.clipboardManager = {
+    pasteText: async (_text, options) => {
+      assert.equal(options.silentAccessibilityCheck, true);
+      throw Object.assign(new Error("internal detail"), {
+        code: "ACCESSIBILITY_PERMISSION_REQUIRED",
+        clipboardCopied: true,
+      });
+    },
+  };
+  assert.deepEqual(
+    await handlers.get("paste-text")({ sender: {} }, "final text", {
+      silentAccessibilityCheck: false,
+    }),
+    {
+      success: false,
+      pasted: false,
+      code: "ACCESSIBILITY_PERMISSION_REQUIRED",
+      clipboardCopied: true,
+    }
+  );
+  assert.equal(scheduled, 0);
+});
+
+test("paste-text preserves rejection for generic errors and unconfirmed clipboard writes", async () => {
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  for (const error of [
+    new Error("accessibility mentioned in an unrelated failure"),
+    Object.assign(new Error("not copied"), { code: "ACCESSIBILITY_PERMISSION_REQUIRED" }),
+  ]) {
+    target.clipboardManager = {
+      pasteText: async () => {
+        throw error;
+      },
+    };
+    await assert.rejects(
+      handlers.get("paste-text")({ sender: {} }, "text"),
+      (thrown) => thrown === error
+    );
+  }
+});
+
+test("Accessibility settings opens the macOS system pane and reports launch failure", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  t.after(() => {
+    Object.defineProperty(process, "platform", platform);
+    delete electronStub.shell.openExternal;
+  });
+  const urls = [];
+  electronStub.shell.openExternal = async (url) => {
+    urls.push(url);
+  };
+  assert.deepEqual(await handlers.get("open-accessibility-settings")(), { success: true });
+  assert.deepEqual(urls, [
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+  ]);
+  electronStub.shell.openExternal = async () => {
+    throw new Error("launch failed");
+  };
+  assert.deepEqual(await handlers.get("open-accessibility-settings")(), {
+    success: false,
+    error: "launch failed",
+  });
+});

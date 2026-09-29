@@ -47,6 +47,7 @@ export function ChatMessages({
             .map((msg) => (
               <ChatMessage
                 key={msg.id}
+                messageId={msg.id}
                 role={msg.role as "user" | "assistant"}
                 content={msg.content}
                 isStreaming={msg.isStreaming}

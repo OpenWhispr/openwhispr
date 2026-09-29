@@ -1812,6 +1812,47 @@ a:hover {
   color: oklch(0.5 0 0 / 0.4);
 }
 
+/* Tables (GFM: a header row, then one-line cells) */
+.rich-text-editor-content .tableWrapper {
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+.rich-text-editor-content table {
+  border-collapse: collapse;
+}
+
+.rich-text-editor-content th,
+.rich-text-editor-content td {
+  min-width: 5rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--color-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.rich-text-editor-content th {
+  font-weight: 600;
+  background: oklch(0.5 0 0 / 0.04);
+}
+
+.rich-text-editor-content th p,
+.rich-text-editor-content td p {
+  margin: 0;
+}
+
+/* prosemirror-tables marks each cell of a cell selection. The .dark selector
+   wins over the dark header background below. */
+.rich-text-editor-content .selectedCell,
+.dark .rich-text-editor-content .selectedCell {
+  background: oklch(0.62 0.22 260 / 0.15);
+}
+
+/* Tiptap draws the gap cursor (e.g. above a table that starts the note) in black. */
+.rich-text-editor-content .ProseMirror-gapcursor:after {
+  border-top-color: var(--color-foreground);
+}
+
 /* Placeholder */
 .rich-text-editor-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
@@ -1819,6 +1860,11 @@ a:hover {
   pointer-events: none;
   float: inline-start;
   height: 0;
+}
+
+/* The empty-line format toolbar sits where the placeholder would show. */
+.rich-text-editor-content:has(~ .rich-text-editor-line-menu) p.is-editor-empty:first-child::before {
+  content: none;
 }
 
 /* Dark mode adjustments */
@@ -1841,6 +1887,10 @@ a:hover {
 
 .dark .rich-text-editor-content ul[data-type="taskList"] li[data-checked="true"] > div {
   color: oklch(0.7 0 0 / 0.4);
+}
+
+.dark .rich-text-editor-content th {
+  background: oklch(0.8 0 0 / 0.06);
 }
 
 .dark .rich-text-editor-content p.is-editor-empty:first-child::before {

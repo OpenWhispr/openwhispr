@@ -4,12 +4,12 @@ import { useToast } from "./ui/useToast";
 import {
   getActiveRecordingSessionId,
   getMicAnalyser,
+  persistLiveTranscript,
   primeMeetingWorklet,
   stopRecording,
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
 import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
-import { serializeTranscriptSegments } from "../utils/transcriptSpeakerState";
 import logger from "../utils/logger";
 
 const EMA_PREV = 0.5;
@@ -66,13 +66,7 @@ export default function MeetingRecordingMount(): null {
   useEffect(() => {
     if (!isTranscribing) return;
 
-    const interval = setInterval(() => {
-      const { recordingNoteId, segments } = useMeetingRecordingStore.getState();
-      if (!recordingNoteId || segments.length === 0) return;
-      window.electronAPI.updateNote(recordingNoteId, {
-        transcript: serializeTranscriptSegments(segments),
-      });
-    }, 30_000);
+    const interval = setInterval(() => void persistLiveTranscript(), 30_000);
 
     return () => clearInterval(interval);
   }, [isTranscribing]);

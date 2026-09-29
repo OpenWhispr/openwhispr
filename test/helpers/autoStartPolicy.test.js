@@ -186,25 +186,12 @@ test("an AppImage relaunches from the AppImage file, not its FUSE mount", () => 
   );
 });
 
-test("the Windows portable build relaunches from the portable exe, not its unpack dir", () => {
-  assert.deepEqual(
-    getRelaunchOptions({
-      argv: ["C:\\Users\\me\\AppData\\Local\\Temp\\2abc\\OpenWhispr.exe", HIDDEN_LAUNCH_FLAG],
-      protocol: "openwhispr",
-      portableExecutablePath: "D:\\Tools\\OpenWhispr-1.10.0.exe",
-    }),
-    { launcherPath: "D:\\Tools\\OpenWhispr-1.10.0.exe", args: [] }
-  );
-});
-
 test("the AppImage waiter outlives this process, then execs the file with its args", () => {
   assert.deepEqual(
     getRelaunchWaiter({
-      platform: "linux",
       launcherPath: "/home/user/OpenWhispr.AppImage",
       args: ["--no-sandbox"],
       pid: 4242,
-      ppid: 4200,
     }),
     {
       file: "/bin/sh",
@@ -214,49 +201,6 @@ test("the AppImage waiter outlives this process, then execs the file with its ar
         "4242",
         "/home/user/OpenWhispr.AppImage",
         "--no-sandbox",
-      ],
-    }
-  );
-});
-
-test("the portable waiter waits for the stub and quotes the path for PowerShell", () => {
-  assert.deepEqual(
-    getRelaunchWaiter({
-      platform: "win32",
-      launcherPath: "D:\\Tom's Tools\\OpenWhispr.exe",
-      args: ["--log-level=debug"],
-      pid: 4242,
-      ppid: 4200,
-      systemRoot: "D:\\Win",
-    }),
-    {
-      file: "D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-      args: [
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        "Wait-Process -Id 4200; Start-Process -FilePath 'D:\\Tom''s Tools\\OpenWhispr.exe' -ArgumentList '--log-level=debug'",
-      ],
-    }
-  );
-});
-
-test("the portable waiter runs the system PowerShell and omits -ArgumentList without args", () => {
-  assert.deepEqual(
-    getRelaunchWaiter({
-      platform: "win32",
-      launcherPath: "D:\\Tools\\OpenWhispr.exe",
-      args: [],
-      pid: 4242,
-      ppid: 4200,
-    }),
-    {
-      file: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-      args: [
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        "Wait-Process -Id 4200; Start-Process -FilePath 'D:\\Tools\\OpenWhispr.exe'",
       ],
     }
   );

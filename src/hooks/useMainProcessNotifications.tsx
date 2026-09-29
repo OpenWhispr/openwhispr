@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { TFunction } from "i18next";
+import { ToastActionButton } from "../components/ui/Toast";
 import type { ToastContextType } from "../components/ui/useToast";
 
 /**
@@ -42,7 +43,7 @@ export function useMainProcessNotifications({
         description: t("app.toasts.gpuFallback.description"),
         duration: 10000,
         action: (
-          <button
+          <ToastActionButton
             onClick={async () => {
               try {
                 const result = await window.electronAPI?.whisperGpuRetry?.();
@@ -51,10 +52,9 @@ export function useMainProcessNotifications({
                 // silently fail — toast stays up for another attempt
               }
             }}
-            className="rounded-sm border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-medium whitespace-nowrap text-white/90 transition-colors hover:border-white/35 hover:bg-white/20 hover:text-white"
           >
             {t("app.toasts.gpuFallback.retry")}
-          </button>
+          </ToastActionButton>
         ),
       });
     };

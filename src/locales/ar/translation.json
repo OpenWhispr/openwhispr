@@ -48,6 +48,7 @@
         "streamingOnlyProvider": "هذا المزود يدعم التفريغ المباشر فقط. اختر مزودًا آخر لرفع الملفات وإعادة المحاولة.",
         "providerKeyMissing": "لم يتم تعيين مفتاح API لمزود التفريغ الخاص بك. أضفه في الإعدادات ← تحويل الكلام إلى نص (Speech to Text).",
         "cleanupTruncated": "نفدت مساحة الإخراج لدى نموذج الذكاء الاصطناعي قبل أن يُكمل تنقيح إملائك.",
+        "cleanupDuplicated": "كرر تنقيح الذكاء الاصطناعي النص. تم الاحتفاظ بالنص الأصلي.",
         "cleanupEmptyReply": "أرجع نموذج الذكاء الاصطناعي ردًا فارغًا بدلًا من الإملاء المنقَّح."
       },
       "translationFallback": {
@@ -69,6 +70,18 @@
         "title": "لم يتم لصق النص المفرَّغ",
         "description": "توقف الإملاء بينما كان مفتاح الاختصار لا يزال مضغوطًا، لذلك لم يتم لصق النص. نصك المفرَّغ موجود في الحافظة.",
         "descriptionClipboardFailed": "توقف الإملاء بينما كان مفتاح الاختصار لا يزال مضغوطًا، لذلك لم يتم لصق النص، ولم يمكن نسخه إلى الحافظة أيضًا."
+      },
+      "pastePermission": {
+        "title": "السماح باللصق التلقائي",
+        "description": "فعّل OpenWhispr في إعدادات النظام ← الخصوصية والأمن ← تسهيلات الاستخدام.",
+        "settingsFailed": "تعذّر فتح الإعدادات. افتح إعدادات النظام ← الخصوصية والأمن ← تسهيلات الاستخدام وفعّل OpenWhispr.",
+        "manualPaste": "انسخ النص أدناه، ثم اضغط على {{shortcut}} للصقه.",
+        "openSettings": "فتح الإعدادات",
+        "copyToClipboard": "نسخ إلى الحافظة",
+        "copyFailed": "تعذّر النسخ"
+      },
+      "pasteFailed": {
+        "title": "تعذّر اللصق تلقائيًا"
       }
     },
     "clipboard": {
@@ -336,7 +349,8 @@
     "errors": {
       "contextTooLarge": "هذا أطول من أن يقرأه {{model}} على هذا الكمبيوتر. عدد الرموز المطلوبة من السياق: نحو {{needed}}، لكن ما يتسع في الذاكرة: {{max}} فقط. جرّب نموذجًا سحابيًا، أو نفّذ الإجراء على تحديد أقصر.",
       "contextTooLargeGeneric": "هذا أطول من أن يقرأه {{model}} على هذا الكمبيوتر. جرّب نموذجًا سحابيًا، أو نفّذ الإجراء على تحديد أقصر.",
-      "localServerUnavailable": "تعذّر تشغيل {{model}} على هذا الكمبيوتر. حاول مرة أخرى، أو بدّل إلى نموذج سحابي."
+      "localServerUnavailable": "تعذّر تشغيل {{model}} على هذا الكمبيوتر. حاول مرة أخرى، أو بدّل إلى نموذج سحابي.",
+      "localModelBusy": "لا يزال النموذج المحلي يعالج طلبًا آخر. انتظر حتى ينتهي، ثم حاول مرة أخرى."
     }
   },
   "reasoning": {
@@ -576,6 +590,11 @@
       "title": "النماذج المطلوبة مفقودة",
       "description": "تتطلب مؤسستك هذه النماذج على هذا الجهاز: {{models}}.",
       "download": "تنزيل"
+    },
+    "cloudNudge": {
+      "title": "تم تسجيل دخولك",
+      "description": "لا يزال الإملاء يعمل على إعدادك الخاص. يمكنك التبديل إلى OpenWhispr Cloud في أي وقت.",
+      "action": "فتح الإعدادات"
     }
   },
   "integrations": {
@@ -631,6 +650,7 @@
       "connectFailedDescription": "حدث خطأ ما أثناء الاتصال بتطبيق Calendar.app. يرجى إعادة تشغيل OpenWhispr والمحاولة مرة أخرى."
     },
     "sections": {
+      "connectors": "الموصلات",
       "calendar": "التقويم (Calendar)",
       "api": "API",
       "mcp": "MCP",
@@ -689,6 +709,144 @@
     "notABot": {
       "title": "OpenWhispr هو مسجل اجتماعات، وليس روبوتًا",
       "description": "يلتقط OpenWhispr الصوت مباشرة من نظامك — فهو لا ينضم أبدًا إلى اجتماعاتك كمشارك. ما عليك سوى ربط التقويم الخاص بك وتدوين الملاحظات كالمعتاد."
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "إرسال إلى {{destination}}",
+        "slackPost": "نشر في {{destination}}"
+      },
+      "identity": "بصفتك {{account}}",
+      "identityWithWorkspace": "بصفتك {{account}} في {{workspace}}",
+      "send": "إرسال",
+      "edit": "تعديل",
+      "doneEditing": "تم التعديل",
+      "cancel": "إلغاء",
+      "titleLabel": "العنوان",
+      "bodyLabel": "الرسالة",
+      "sending": "جارٍ الإرسال…",
+      "sent": "تم الإرسال إلى {{destination}}.",
+      "open": "فتح",
+      "failed": "تعذّر الإرسال: {{message}}",
+      "unknown": "تعذّر تأكيد الإرسال. تحقق من {{destination}}.",
+      "cancelled": "تم الإلغاء. لم يتم إرسال شيء.",
+      "notSent": "لم يُرسل.",
+      "policyRetry": "تعذّر التحقق من إعدادات مؤسستك، لذا لم يتم إرسال شيء. اضغط على إرسال للمحاولة مرة أخرى.",
+      "errors": {
+        "not_in_channel": "أنت لست عضوًا في {{destination}}.",
+        "channel_not_found": "تعذّر العثور على {{destination}} في Slack بعد الآن.",
+        "is_archived": "{{destination}} مؤرشفة.",
+        "reconnect_needed": "يلزم إعادة ربط Slack من الإعدادات.",
+        "connection_changed": "تغيّر اتصال Slack قبل الإرسال، لذا لم يُرسل شيء.",
+        "rate_limited": "Slack مشغول حاليًا. حاول مرة أخرى بعد قليل.",
+        "missing_scope": "لا يملك OpenWhispr إذنًا للنشر هناك. أعد ربط Slack من الإعدادات.",
+        "msg_too_long": "الرسالة طويلة جدًا بالنسبة لـ Slack (12,000 حرف كحد أقصى بعد التنسيق).",
+        "no_text": "الرسالة فارغة.",
+        "network": "تعذّر الوصول إلى Slack. لم يُرسل شيء.",
+        "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى.",
+        "dm_failed": "تعذّر فتح الرسالة المباشرة إلى {{destination}}. لم يُرسل شيء.",
+        "restricted": "{{destination}} للقراءة فقط أو مقيّدة بالنسبة لك.",
+        "generic": "حدث خطأ ما. لم يُرسل شيء."
+      }
+    },
+    "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
+    "email": {
+      "title": "مسودات البريد الإلكتروني",
+      "description": "يفتح المساعد مسودة معبأة مسبقًا في تطبيق البريد الإلكتروني الخاص بك. راجعها واضغط إرسال بنفسك.",
+      "proRequired": "قم بالترقية إلى خطة مدفوعة ليكتب المساعد مسودات رسائلك الإلكترونية.",
+      "unavailable": "مسودات البريد الإلكتروني غير متاحة حاليًا.",
+      "targetLabel": "صياغة رسائل البريد الإلكتروني في",
+      "autoResolved": "تلقائي · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (العمل أو المدرسة)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "تطبيق البريد الافتراضي"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "يمكن للمساعد نشر الرسائل في القنوات وللأشخاص نيابةً عنك. توافق على كل رسالة قبل إرسالها.",
+      "connect": "ربط",
+      "reconnect": "إعادة الربط",
+      "disconnect": "قطع الربط",
+      "connecting": "أكمل الربط في متصفحك…",
+      "connectedAs": "متصل بصفتك {{account}} في {{workspace}}",
+      "needsReconnect": "يلزم إعادة ربط Slack.",
+      "proRequired": "قم بالترقية إلى خطة مدفوعة ليتمكن المساعد من إرسال رسائل Slack نيابةً عنك.",
+      "errors": {
+        "connect_failed": "تعذّر ربط Slack. حاول مرة أخرى.",
+        "disconnect_failed": "تعذّر قطع ربط Slack. حاول مرة أخرى.",
+        "oauth_denied": "لم يتم ربط Slack لأن الإذن لم يُمنح.",
+        "oauth_timeout": "استغرق الربط وقتًا طويلاً. حاول مرة أخرى.",
+        "oauth_state_mismatch": "رابط تسجيل الدخول هذا كان قديمًا. حاول مرة أخرى.",
+        "ports_busy": "يستخدم تطبيق آخر المنافذ التي يحتاجها OpenWhispr للربط. أغلقه وحاول مرة أخرى.",
+        "token_exchange_failed": "لم يكمل Slack عملية الربط. حاول مرة أخرى.",
+        "not_configured": "Slack غير متاح في هذا الإصدار.",
+        "connection_changed": "تغيّر حسابك أو اتصال Slack أثناء الربط. حاول مرة أخرى.",
+        "signed_out": "سجّل الدخول إلى OpenWhispr لربط Slack.",
+        "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
+        "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى."
+      },
+      "browser": {
+        "connectedTitle": "تم توصيل Slack",
+        "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
+        "failedTitle": "لم يتم توصيل Slack",
+        "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
+      }
+    },
+    "recent": {
+      "title": "الإجراءات الأخيرة",
+      "actions": {
+        "email_draft": "مسودة إلى {{destination}}",
+        "slack_send_message": "رسالة إلى {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "مسودة بريد إلكتروني",
+        "slack_send_message": "رسالة Slack"
+      },
+      "states": {
+        "pending": "قيد الانتظار",
+        "committing": "قيد التنفيذ",
+        "sent": "تم",
+        "failed": "فشل",
+        "unknown": "لم يتم التأكيد",
+        "cancelled": "أُلغي",
+        "expired": "منتهي الصلاحية"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "فُتحت مسودة إلى {{destination}}.",
+      "draftOpenedBodyCopied": "فُتحت مسودة إلى {{destination}}. نص الرسالة في الحافظة.",
+      "draftOpenedSubjectCopied": "فُتحت مسودة إلى {{destination}}. الموضوع ونص الرسالة في الحافظة.",
+      "draftOpenedOnlySubjectCopied": "تم فتح مسودة إلى {{destination}}. الموضوع موجود في الحافظة.",
+      "needsDetails": "يلزم مزيد من التفاصيل.",
+      "unavailable": "الموصلات غير متاحة حاليًا.",
+      "unknown": "لم يتم التأكيد. تحقق مما إذا كان الإجراء قد تم قبل المحاولة مرة أخرى.",
+      "draftUnknown": "لم يتم التأكيد: ربما لم تُفتح المسودة إلى {{destination}}. تحقق قبل المحاولة مرة أخرى.",
+      "contactsFound": "جهات الاتصال التي عُثر عليها: {{total}}",
+      "draftLimit": "يمكن فتح {{count}} مسودات فقط لكل طلب.",
+      "clipboardBusy": "لم تُفتح: نص مسودة أخرى لا يزال في الحافظة.",
+      "errors": {
+        "open_failed": "تعذّر فتح تطبيق البريد الإلكتروني.",
+        "draft_too_long": "عدد المستلمين كبير جدًا لرابط المسودة.",
+        "invalid_address": "يلزم إدخال عناوين بريد إلكتروني كاملة.",
+        "not_in_channel": "لست عضوًا في تلك القناة.",
+        "channel_not_found": "تعذّر العثور على تلك المحادثة.",
+        "is_archived": "تلك القناة مؤرشفة.",
+        "reconnect_needed": "يلزم إعادة ربط Slack.",
+        "connection_changed": "تغيّر اتصال Slack. لم يُرسل شيء.",
+        "rate_limited": "Slack مشغول حاليًا.",
+        "missing_scope": "إذن Slack مفقود.",
+        "msg_too_long": "الرسالة طويلة جدًا بالنسبة لـ Slack.",
+        "no_text": "الرسالة فارغة.",
+        "network": "تعذّر الوصول إلى Slack. لم يُرسل شيء.",
+        "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء.",
+        "dm_failed": "تعذّر فتح الرسالة المباشرة. لم يُرسل شيء.",
+        "restricted": "تلك القناة للقراءة فقط أو مقيّدة.",
+        "generic": "لم ينجح ذلك."
+      }
     }
   },
   "auth": {
@@ -1229,6 +1387,9 @@
     },
     "tools": {
       "search_notesName": "البحث في الملاحظات",
+      "email_draftName": "مسودة بريد إلكتروني",
+      "find_contactName": "البحث عن جهة اتصال",
+      "slack_send_messageName": "رسالة Slack",
       "get_noteName": "الحصول على الملاحظة",
       "create_noteName": "إنشاء ملاحظة",
       "update_noteName": "تحديث الملاحظة",
@@ -1241,6 +1402,9 @@
       "update_dictionaryName": "تحديث القاموس",
       "update_snippetsName": "تحديث المقتطفات",
       "search_notesStatus": "جاري البحث في الملاحظات...",
+      "email_draftStatus": "جارٍ فتح مسودة بريد إلكتروني...",
+      "find_contactStatus": "جارٍ البحث عن جهات الاتصال...",
+      "slack_send_messageStatus": "جارٍ تحضير رسالة Slack...",
       "web_searchStatus": "جاري البحث في الويب...",
       "copy_to_clipboardStatus": "جاري النسخ إلى الحافظة...",
       "get_calendar_eventsStatus": "جاري التحقق من التقويم...",
@@ -1275,6 +1439,11 @@
         "createLink": "إنشاء رابط",
         "copyLink": "نسخ الرابط",
         "copied": "تم النسخ",
+        "replaceLink": {
+          "title": "استبدال رابط المشاركة؟",
+          "description": "لا يتوفر الرابط الحالي على هذا الجهاز، لذا يتطلب نسخه إنشاء رابط جديد. سيتوقف الرابط القديم عن العمل، بما في ذلك الروابط في رسائل الدعوة. أعد إرسال كل دعوة حتى يظل بإمكان المدعوين فتح الملاحظة.",
+          "confirm": "استبدال الرابط"
+        },
         "export": "تصدير",
         "owner": "المالك",
         "editor": "يمكنه التعديل",
@@ -1628,7 +1797,35 @@
       "conversationWillAppear": "ستظهر المحادثة هنا...",
       "linkedEvent": "الحدث المرتبط",
       "noFolder": "بدون مجلد",
-      "participants": "المشاركون"
+      "participants": "المشاركون",
+      "table": {
+        "actions": "إجراءات الجدول",
+        "insertRowAbove": "إدراج صف أعلى",
+        "insertRowBelow": "إدراج صف أسفل",
+        "insertColumnLeft": "إدراج عمود إلى اليسار",
+        "insertColumnRight": "إدراج عمود إلى اليمين",
+        "deleteRow": "حذف الصف",
+        "deleteColumn": "حذف العمود",
+        "deleteTable": "حذف الجدول"
+      },
+      "format": {
+        "toolbar": "التنسيق",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "غامق",
+        "italic": "مائل",
+        "strike": "يتوسطه خط",
+        "code": "تعليمات برمجية",
+        "textStyle": "نمط النص",
+        "paragraph": "نص عادي",
+        "heading1": "عنوان 1",
+        "heading2": "عنوان 2",
+        "heading3": "عنوان 3",
+        "bulletList": "قائمة نقطية",
+        "orderedList": "قائمة مرقمة",
+        "taskList": "قائمة مهام",
+        "blockquote": "اقتباس",
+        "table": "إدراج جدول"
+      }
     },
     "participants": {
       "attendee": "حاضر",
@@ -1784,6 +1981,8 @@
     },
     "actions": {
       "done": "تم",
+      "chunkProgress": "الجزء {{step}} من {{total}}",
+      "emptyReply": "أعاد النموذج ردًا فارغًا. حاول مرة أخرى، أو اختر نموذجًا آخر.",
       "manage": "إدارة الإجراءات...",
       "manageTitle": "إجراءات مخصصة",
       "addAction": "إجراء جديد",
@@ -3523,6 +3722,7 @@
       "mouseButtonOnlyMac": "اختصارات أزرار الماوس مدعومة حاليًا على نظام macOS فقط.",
       "alreadyRegistered": "\"{{hotkey}}\" مسجل بالفعل بواسطة تطبيق آخر.",
       "osReserved": "قد يكون \"{{hotkey}}\" محجوزًا بواسطة بيئة سطح المكتب لديك.",
+      "rightModifierNeedsListener": "لا يمكن استخدام \"{{hotkey}}\" على سطح المكتب هذا، إذ تحتاج اختصاراته إلى مفتاح عادي. أضف مفتاحًا، مثل Control+Alt+Space.",
       "holdNeedsReleaseKey": "يحتاج الضغط المستمر للتحدث إلى مفتاح يمكن لـ macOS أن يرصد تحريره: Globe، أو مفتاح جانبي أيمن مثل Option الأيمن، أو اختصار مع مفتاح تعديل. أما النقر فيعمل مع أي مفتاح.",
       "registrationFailed": "تعذر تسجيل \"{{hotkey}}\". قد يكون قيد الاستخدام بواسطة تطبيق آخر.",
       "updateFailedCheckFormat": "فشل تحديث الاختصار إلى \"{{hotkey}}\". تأكد من أن التنسيق صالح.",
