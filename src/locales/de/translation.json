@@ -3592,9 +3592,8 @@
         "chat": "Chat",
         "summary": "KI-Zusammenfassung",
         "chatHint": "Antwortet im Chat der Notiz und lässt die KI-Zusammenfassung unverändert.",
-        "summaryHint": "Bearbeitet die aktuelle KI-Zusammenfassung der Notiz."
+        "summaryHint": "Bearbeitet die KI-Zusammenfassung der Notiz oder erstellt sie aus dem Transkript, falls es noch keine gibt."
       },
-      "needsSummary": "Erfordert zuerst eine KI-Zusammenfassung",
       "replaceDescription": "{{name}} bearbeitet die KI-Zusammenfassung dieser Notiz. Ihre Änderungen daran können sich ändern."
     },
     "templates": {

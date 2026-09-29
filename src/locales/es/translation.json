@@ -3278,9 +3278,8 @@
         "chat": "Chat",
         "summary": "Resumen con IA",
         "chatHint": "Responde en el chat de la nota y deja el resumen con IA como está.",
-        "summaryHint": "Edita el resumen con IA actual de la nota."
+        "summaryHint": "Edita el resumen con IA de la nota, o lo escribe a partir de la transcripción si aún no hay uno."
       },
-      "needsSummary": "Primero necesita un resumen con IA",
       "replaceDescription": "{{name}} editará el resumen con IA de esta nota. Los cambios que hayas hecho pueden modificarse."
     },
     "templates": {

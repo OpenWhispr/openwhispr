@@ -3225,9 +3225,8 @@
         "chat": "聊天",
         "summary": "AI 摘要",
         "chatHint": "在筆記的聊天中回覆，AI 摘要維持不變。",
-        "summaryHint": "編輯筆記目前的 AI 摘要。"
+        "summaryHint": "編輯筆記的 AI 摘要；如果還沒有摘要，就根據轉錄內容產生一份。"
       },
-      "needsSummary": "需要先產生 AI 摘要",
       "replaceDescription": "{{name}}將編輯這則筆記的 AI 摘要。你對其所做的編輯可能會被更改。"
     },
     "templates": {

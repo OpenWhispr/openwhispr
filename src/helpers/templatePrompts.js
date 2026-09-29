@@ -1,10 +1,15 @@
-// Turns a note template or action into the system prompt (and, for a summary
-// action, the input) that the model receives. Pure, so the live canary and
-// the tests can build the exact request the app sends.
+// Turns a note template or action into the input and system prompt the model
+// receives. Pure, so the live canary and the tests can build the exact request
+// the app sends.
+//
+// A template always writes the summary from the note's own material: the user's
+// notes, the meeting context and the transcript. An action works from the AI
+// summary when the note has one, and from that same material when it doesn't.
 
 import {
   BASE_SYSTEM_PROMPT,
-  CHAT_ACTION_PREAMBLE,
+  CHAT_ACTION_ON_MATERIAL_PREAMBLE,
+  CHAT_ACTION_ON_SUMMARY_PREAMBLE,
   MEETING_INPUT_PREAMBLE,
   MEETING_SYSTEM_PROMPT,
   NOTE_INPUT_PREAMBLE,
@@ -12,6 +17,7 @@ import {
   SECTIONED_NOTES_FORMAT,
   SECTIONED_NOTES_INSTRUCTIONS,
   STANDALONE_PROMPT_KEYS,
+  SUMMARY_ACTION_FROM_MATERIAL_PROMPT,
   SUMMARY_ACTION_SYSTEM_PROMPT,
 } from "./builtinActions.js";
 
@@ -60,21 +66,43 @@ export function compileTemplatePrompt(template, { isMeetingNote = false } = {}) 
   return (isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT) + template.prompt;
 }
 
-export function compileSummaryActionPrompt(action) {
-  return SUMMARY_ACTION_SYSTEM_PROMPT + action.prompt;
+export function compileSummaryActionPrompt(action, { fromSummary, isMeetingNote = false }) {
+  if (fromSummary) return SUMMARY_ACTION_SYSTEM_PROMPT + action.prompt;
+  const preamble = isMeetingNote ? MEETING_INPUT_PREAMBLE : NOTE_INPUT_PREAMBLE;
+  return preamble + SUMMARY_ACTION_FROM_MATERIAL_PROMPT + action.prompt;
 }
 
-export function compileChatActionPrompt(action) {
-  return CHAT_ACTION_PREAMBLE + action.prompt;
+export function compileChatActionPrompt(action, { fromSummary }) {
+  return (
+    (fromSummary ? CHAT_ACTION_ON_SUMMARY_PREAMBLE : CHAT_ACTION_ON_MATERIAL_PREAMBLE) +
+    action.prompt
+  );
 }
 
 /**
- * What a summary action rewrites: the current summary, with the user's notes and
- * the meeting context for accuracy. The transcript stays out, so the request
- * always fits and is never split into parts.
+ * What a template or a summary action reads. With a summary to work from, an
+ * action gets it plus the user's notes and the meeting context for accuracy;
+ * the transcript stays out, so the request always fits and is never split.
  */
-export function buildSummaryActionInput({ summary, notes, meetingContext }) {
-  return [`## Current Summary\n${summary}`, notes.trim() && `## My Notes\n${notes}`, meetingContext]
-    .filter(Boolean)
-    .join("\n\n");
+export function buildNoteRunInput(action, { summary, notes, meetingContext, transcript }) {
+  const join = (parts) => parts.filter(Boolean).join("\n\n");
+  const hasNotes = notes.trim().length > 0;
+  if (action.kind === "action" && summary?.trim()) {
+    return {
+      input: join([
+        `## Current Summary\n${summary}`,
+        hasNotes && `## My Notes\n${notes}`,
+        meetingContext,
+      ]),
+      fromSummary: true,
+    };
+  }
+  return {
+    input: join([
+      hasNotes && notes,
+      meetingContext,
+      transcript && `## Meeting Transcript\n${transcript}`,
+    ]),
+    fromSummary: false,
+  };
 }

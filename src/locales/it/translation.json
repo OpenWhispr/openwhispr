@@ -3225,9 +3225,8 @@
         "chat": "Chat",
         "summary": "Riepilogo AI",
         "chatHint": "Risponde nella chat della nota e lascia invariato il riepilogo AI.",
-        "summaryHint": "Modifica il riepilogo AI attuale della nota."
+        "summaryHint": "Modifica il riepilogo AI della nota, oppure lo scrive dalla trascrizione se non c'è ancora."
       },
-      "needsSummary": "Serve prima un riepilogo AI",
       "replaceDescription": "{{name}} modificherà il riepilogo AI di questa nota. Le modifiche che hai apportato potrebbero cambiare."
     },
     "templates": {

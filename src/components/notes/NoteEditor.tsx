@@ -869,10 +869,10 @@ export default function NoteEditor({
         setChatMode("floating");
       }
       void embeddedChat.sendMessage(getActionCta(action, t), {
-        requestText: compileChatActionPrompt(action),
+        requestText: compileChatActionPrompt(action, { fromSummary: !!enhancement }),
       });
     },
-    [chatMode, embeddedChat, t]
+    [chatMode, embeddedChat, enhancement, t]
   );
 
   const handleChatInputFocus = useCallback(() => {
@@ -1414,7 +1414,6 @@ export default function NoteEditor({
                   }
                   onManageActions={() => onManageActions?.("action")}
                   disabled={!hasNoteMaterial}
-                  hasSummary={!!enhancement}
                   isSummaryBusy={isActionRunning}
                   isChatBusy={embeddedChat.agentState !== "idle"}
                 />

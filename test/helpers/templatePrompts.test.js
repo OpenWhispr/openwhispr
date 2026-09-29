@@ -95,30 +95,69 @@ test("sections are trimmed, lose their Markdown heading marks, and need a headin
   );
 });
 
-test("a summary action edits the current summary with the notes as reference only", async () => {
-  const { compileSummaryActionPrompt, buildSummaryActionInput } = await load();
-  assert.match(
-    compileSummaryActionPrompt({ prompt: "Translate it to Spanish." }),
-    /revise an existing AI summary[\s\S]*Instructions: Translate it to Spanish\.$/
+const MATERIAL = {
+  summary: "- shipped",
+  notes: "ask about pricing",
+  meetingContext: "## Meeting Context\nInvited participants: Alice.",
+  transcript: "Alice: we ship Friday.",
+};
+const TEMPLATE = { kind: "template", prompt: "", sections: [{ heading: "A", instruction: "" }] };
+const ACTION = { kind: "action", output: "summary", prompt: "Translate it to Spanish." };
+
+test("a template always reads the transcript, never the summary it replaces", async () => {
+  const { buildNoteRunInput } = await load();
+  assert.deepEqual(buildNoteRunInput(TEMPLATE, MATERIAL), {
+    input:
+      "ask about pricing\n\n## Meeting Context\nInvited participants: Alice.\n\n## Meeting Transcript\nAlice: we ship Friday.",
+    fromSummary: false,
+  });
+});
+
+test("an action reads the summary when there is one, and the transcript when there isn't", async () => {
+  const { buildNoteRunInput } = await load();
+  assert.deepEqual(buildNoteRunInput(ACTION, MATERIAL), {
+    input:
+      "## Current Summary\n- shipped\n\n## My Notes\nask about pricing\n\n## Meeting Context\nInvited participants: Alice.",
+    fromSummary: true,
+  });
+  assert.deepEqual(
+    buildNoteRunInput(ACTION, { ...MATERIAL, summary: " " }),
+    buildNoteRunInput(TEMPLATE, MATERIAL)
   );
   assert.equal(
-    buildSummaryActionInput({
+    buildNoteRunInput(ACTION, {
       summary: "- shipped",
-      notes: "ask about pricing",
-      meetingContext: "## Meeting Context\nInvited participants: Alice.",
-    }),
-    "## Current Summary\n- shipped\n\n## My Notes\nask about pricing\n\n## Meeting Context\nInvited participants: Alice."
-  );
-  assert.equal(
-    buildSummaryActionInput({ summary: "- shipped", notes: "  ", meetingContext: "" }),
+      notes: "  ",
+      meetingContext: "",
+      transcript: "",
+    }).input,
     "## Current Summary\n- shipped"
   );
 });
 
-test("a chat action asks about the note the chat already has in context", async () => {
-  const { compileChatActionPrompt } = await load();
+test("a summary action revises the summary, or writes one from the material first", async () => {
+  const { compileSummaryActionPrompt, MEETING_INPUT_PREAMBLE } = await load();
   assert.match(
-    compileChatActionPrompt({ prompt: "List the to-dos." }),
-    /note I'm viewing[\s\S]*\n\nList the to-dos\.$/
+    compileSummaryActionPrompt(ACTION, { fromSummary: true }),
+    /^You revise an existing AI summary[\s\S]*Instructions: Translate it to Spanish\.$/
+  );
+  const fromMaterial = compileSummaryActionPrompt(ACTION, {
+    fromSummary: false,
+    isMeetingNote: true,
+  });
+  assert.ok(fromMaterial.startsWith(MEETING_INPUT_PREAMBLE));
+  assert.match(fromMaterial, /no AI summary yet[\s\S]*Instructions: Translate it to Spanish\.$/);
+});
+
+test("a chat action works from the summary when there is one, and the transcript when there isn't", async () => {
+  const { compileChatActionPrompt } = await load();
+  const action = { prompt: "List the to-dos." };
+  assert.match(
+    compileChatActionPrompt(action, { fromSummary: true }),
+    /^Work from the AI summary[\s\S]*\n\nList the to-dos\.$/
+  );
+  assert.match(
+    compileChatActionPrompt(action, { fromSummary: false }),
+    /no AI summary yet, so work from its transcript and notes[\s\S]*\n\nList the to-dos\.$/
   );
 });

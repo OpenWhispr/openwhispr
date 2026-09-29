@@ -3592,9 +3592,8 @@
         "chat": "Chat",
         "summary": "AI summary",
         "chatHint": "Answers in the note's chat and leaves the AI summary as it is.",
-        "summaryHint": "Edits the note's current AI summary."
+        "summaryHint": "Edits the note's AI summary, or writes one from the transcript if there isn't one yet."
       },
-      "needsSummary": "Needs an AI summary first",
       "replaceDescription": "{{name}} will edit this note's AI summary. Any edits you made to it may be changed."
     },
     "templates": {

@@ -375,6 +375,8 @@ export interface RunActionOptions {
   knownPeople?: MentionPerson[];
   /** Structured pieces of `noteContent`; only its transcript is ever split into parts. */
   material?: NoteMaterial;
+  /** An action's input is the note's AI summary rather than its notes and transcript. */
+  fromSummary?: boolean;
 }
 
 export interface RunActionLabels {
@@ -422,7 +424,10 @@ export function runBackgroundAction(
       // Only summary actions reach the runner; chat actions run in the note chat.
       const editsSummary = action.kind === "action";
       const instructions = editsSummary
-        ? compileSummaryActionPrompt(action)
+        ? compileSummaryActionPrompt(action, {
+            fromSummary: !!options.fromSummary,
+            isMeetingNote: options.isMeetingNote,
+          })
         : compileTemplatePrompt(action, { isMeetingNote: options.isMeetingNote });
       const providerOverrides = buildNoteFormattingOverrides(noteFormatting, options.isCloudMode);
       const systemPrompt = appendDictionarySuffix(

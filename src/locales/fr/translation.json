@@ -3592,9 +3592,8 @@
         "chat": "Chat",
         "summary": "Résumé IA",
         "chatHint": "Répond dans le chat de la note et laisse le résumé IA tel quel.",
-        "summaryHint": "Modifie le résumé IA actuel de la note."
+        "summaryHint": "Modifie le résumé IA de la note, ou le rédige à partir de la transcription s'il n'y en a pas encore."
       },
-      "needsSummary": "Nécessite d'abord un résumé IA",
       "replaceDescription": "{{name}} va modifier le résumé IA de cette note. Les modifications que vous y avez apportées peuvent changer."
     },
     "templates": {

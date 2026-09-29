@@ -14,7 +14,7 @@ import { useActionProcessing } from "../../hooks/useActionProcessing";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
 import { getActionName, rememberTemplate } from "../../stores/actionStore";
-import { buildSummaryActionInput } from "../../helpers/templatePrompts";
+import { buildNoteRunInput } from "../../helpers/templatePrompts";
 import { useDialogs } from "../../hooks/useDialogs";
 import {
   useSettingsStore,
@@ -684,39 +684,30 @@ export default function PersonalNotesView({
       }
     }
 
-    // A template writes the summary from the material; an action edits the
-    // summary the note already has.
-    const editsSummary = action.kind === "action";
-    if (editsSummary && !editorEnhancedContent) return;
+    const isTemplate = action.kind === "template";
     // A note's first summary uses the template that last ran.
-    if (!editsSummary) rememberTemplate(action);
-    const parts = editsSummary
-      ? buildSummaryActionInput({
-          summary: editorEnhancedContent,
-          notes: noteContent,
-          meetingContext,
-        })
-      : [
-          hasNotes ? noteContent : "",
-          meetingContext,
-          formattedTranscript ? `## Meeting Transcript\n${formattedTranscript}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n\n");
-    runAction(action, parts, makeContentHash(`${noteContent}\n${rawTranscript}`), {
+    if (isTemplate) rememberTemplate(action);
+    const { input, fromSummary } = buildNoteRunInput(action, {
+      summary: editorEnhancedContent,
+      notes: noteContent,
+      meetingContext,
+      transcript: formattedTranscript,
+    });
+    runAction(action, input, makeContentHash(`${noteContent}\n${rawTranscript}`), {
       isCloudMode,
       modelId: effectiveModelId,
       isMeetingNote,
       knownPeople,
+      fromSummary,
       // The pieces, so a recording too long for a local model can be split
       // along the transcript rather than through the joined string.
-      material: editsSummary
-        ? undefined
-        : {
+      material: isTemplate
+        ? {
             notes: hasNotes ? noteContent : "",
             meetingContext,
             transcript: formattedTranscript,
-          },
+          }
+        : undefined,
       allowTitleGeneration: isRegenerableNoteTitle(
         editorNote.title,
         [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],

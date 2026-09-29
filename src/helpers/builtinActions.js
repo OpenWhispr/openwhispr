@@ -294,9 +294,7 @@ const USER_INTERVIEW_SECTIONS = [
   },
 ];
 
-const FOLLOW_UP_EMAIL_PROMPT = `You are an expert at writing follow-up emails after meetings. Draft the follow-up email the user ("You") would send to the other participants, based only on the provided meeting material: meeting context, the user's manual notes, and the transcript.
-
-RULES:
+const FOLLOW_UP_EMAIL_BODY = `RULES:
 - Use only information supported by the material. Do not invent facts, decisions, owners, deadlines, or names.
 - Preserve the exact names of people, clients, projects, products, numbers, dates, and documents.
 - Distinguish what was decided from what was proposed or still open.
@@ -324,9 +322,14 @@ Open questions
 
 Omit any section that has no supported content. Return only the email.`;
 
-const MAKE_TODOS_PROMPT = `List the to-dos in this note: every action someone committed to or was asked to do, based only on its notes, AI summary, and transcript. One checkbox per item in the form \`- [ ] Action — Owner\`, with any stated due date inside the action text. Leave the owner out when the note does not show one. If there are no to-dos, say so in one sentence.`;
+// Shipped in 1.10.1 and 1.10.2, when the email always read the transcript.
+const FOLLOW_UP_EMAIL_PROMPT_1_10_2 = `You are an expert at writing follow-up emails after meetings. Draft the follow-up email the user ("You") would send to the other participants, based only on the provided meeting material: meeting context, the user's manual notes, and the transcript.\n\n${FOLLOW_UP_EMAIL_BODY}`;
 
-const CREATE_OUTLINE_PROMPT = `Outline this note, based only on its notes, AI summary, and transcript. Use nested Markdown bullets: one top-level bullet per main topic in the order it came up, with its key points, decisions, and numbers beneath it. Return only the outline.`;
+const FOLLOW_UP_EMAIL_PROMPT = `You are an expert at writing follow-up emails after meetings. Draft the follow-up email the user ("You") would send to the other participants, based only on the meeting material you are working from.\n\n${FOLLOW_UP_EMAIL_BODY}`;
+
+const MAKE_TODOS_PROMPT = `List the to-dos in this note: every action someone committed to or was asked to do, based only on what the note supports. One checkbox per item in the form \`- [ ] Action — Owner\`, with any stated due date inside the action text. Leave the owner out when the note does not show one. If there are no to-dos, say so in one sentence.`;
+
+const CREATE_OUTLINE_PROMPT = `Outline this note, based only on what it says. Use nested Markdown bullets: one top-level bullet per main topic in the order it came up, with its key points, decisions, and numbers beneath it. Return only the outline.`;
 
 const SLACK_UPDATE_PROMPT = `Write a short Slack message I can post to my team about this meeting: one line on what it was about, then 3–5 bullets with the outcomes, decisions, and who is doing what next. Use Slack formatting (bold with *asterisks*, no Markdown headings), keep it under 120 words, and use only what the note supports. Return only the message.`;
 
@@ -334,7 +337,7 @@ const PREP_NEXT_MEETING_PROMPT = `Help me prepare for the next meeting on this t
 
 const COACH_ME_PROMPT = `Give me brief, candid coaching on how I ("You" in the transcript) ran or took part in this meeting, based only on the transcript: 2–3 things that went well and 2–3 specific things to do differently next time, each tied to the moment in the transcript it comes from. If there is no transcript, say so in one sentence instead.`;
 
-const SHORTEN_PROMPT = `Make the summary about half as long. Keep every decision, number, date, name, and action item; cut repetition, background, and detail that would not change what anyone does next.`;
+const SHORTEN_PROMPT = `Make it about half as long. Keep every decision, number, date, name, and action item; cut repetition, background, and detail that would not change what anyone does next.`;
 
 const ADD_TLDR_PROMPT = `Add a "## TL;DR" section at the very top: two or three sentences on what the meeting decided and what happens next. Leave the rest of the summary exactly as it is.`;
 
@@ -390,9 +393,17 @@ Apply the instructions below to the current summary and return the complete revi
 
 Instructions: `;
 
+// With no summary to edit, a summary action writes one from the material first.
+export const SUMMARY_ACTION_FROM_MATERIAL_PROMPT = `The note has no AI summary yet. Write concise, accurate notes of the material in Markdown (no title or preamble, and only what the material supports, with action items as \`- [ ] Action — Owner\`), apply the instructions below to them, and return the result. It becomes the note's AI summary.
+
+Instructions: `;
+
 // A chat action is sent as the user's turn in the note chat, whose system prompt
-// already carries the note being viewed.
-export const CHAT_ACTION_PREAMBLE = `Using the note I'm viewing (its notes, AI summary, and transcript are in your context), follow these instructions:
+// already carries the whole note. It works from the AI summary when there is one.
+export const CHAT_ACTION_ON_SUMMARY_PREAMBLE = `Work from the AI summary of the note I'm viewing (it's in your context), and use its transcript only if the instructions below ask for it. Follow these instructions:
+
+`;
+export const CHAT_ACTION_ON_MATERIAL_PREAMBLE = `The note I'm viewing has no AI summary yet, so work from its transcript and notes (they're in your context). Follow these instructions:
 
 `;
 
@@ -485,7 +496,7 @@ export const BUILTIN_ACTIONS = [
     prompt: FOLLOW_UP_EMAIL_PROMPT,
     sections: null,
     output: "chat",
-    previousPrompts: [],
+    previousPrompts: [FOLLOW_UP_EMAIL_PROMPT_1_10_2],
     icon: "mail",
     sortOrder: 2,
   },

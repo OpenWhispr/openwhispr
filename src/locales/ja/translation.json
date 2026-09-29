@@ -3006,9 +3006,8 @@
         "chat": "チャット",
         "summary": "AI要約",
         "chatHint": "ノートのチャットで回答し、AI要約はそのまま残します。",
-        "summaryHint": "ノートの現在のAI要約を編集します。"
+        "summaryHint": "ノートのAI要約を編集します。要約がまだない場合は文字起こしから作成します。"
       },
-      "needsSummary": "先にAI要約が必要です",
       "replaceDescription": "{{name}}でこのノートのAI要約を編集します。加えた編集が変更される場合があります。"
     },
     "templates": {

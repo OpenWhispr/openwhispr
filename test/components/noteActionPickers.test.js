@@ -69,7 +69,6 @@ test("the ask-bar picker runs the follow-up email by default, even if a template
       actions: [SHORTEN, FOLLOW_UP],
       onRunAction: () => {},
       onManageActions: () => {},
-      hasSummary: true,
       isSummaryBusy: false,
       isChatBusy: false,
     })
@@ -77,21 +76,23 @@ test("the ask-bar picker runs the follow-up email by default, even if a template
   assert.match(html, /aria-label="notes\.actions\.runAction"[^>]*>.*Follow-up email<\/span>/);
 });
 
-test("a summary action can't run on a note with no summary to edit", async (t) => {
+test("a summary action waits only for a run already writing the summary", async (t) => {
   const ActionPicker = await load(t, "/components/notes/ActionPicker.tsx", {
     askBarActionId: String(SHORTEN.id),
   });
-  const html = renderToStaticMarkup(
-    createElement(ActionPicker, {
-      actions: [SHORTEN, FOLLOW_UP],
-      onRunAction: () => {},
-      onManageActions: () => {},
-      hasSummary: false,
-      isSummaryBusy: false,
-      isChatBusy: false,
-    })
-  );
-  assert.match(html, /<button[^>]*disabled=""[^>]*aria-label="notes\.actions\.runAction"/);
+  const render = (isSummaryBusy) =>
+    renderToStaticMarkup(
+      createElement(ActionPicker, {
+        actions: [SHORTEN, FOLLOW_UP],
+        onRunAction: () => {},
+        onManageActions: () => {},
+        isSummaryBusy,
+        isChatBusy: false,
+      })
+    );
+  const disabledRun = /<button[^>]*disabled=""[^>]*aria-label="notes\.actions\.runAction"/;
+  assert.doesNotMatch(render(false), disabledRun, "runs on a note with or without a summary");
+  assert.match(render(true), disabledRun);
 });
 
 test("the sidebar chat offers the note's chat actions, and Generate summary writes the summary", async (t) => {

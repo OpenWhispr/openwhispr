@@ -23,8 +23,7 @@ interface ActionPickerProps {
   onRunAction: (action: ActionItem) => void;
   onManageActions: () => void;
   disabled?: boolean;
-  /** A summary action edits the summary, so it needs one that no run is rewriting. */
-  hasSummary: boolean;
+  /** A summary action waits while another run is writing the summary. */
   isSummaryBusy: boolean;
   /** A chat action waits for the reply the chat is still writing. */
   isChatBusy: boolean;
@@ -35,7 +34,6 @@ export default function ActionPicker({
   onRunAction,
   onManageActions,
   disabled,
-  hasSummary,
   isSummaryBusy,
   isChatBusy,
 }: ActionPickerProps) {
@@ -45,7 +43,7 @@ export default function ActionPicker({
     return stored ? Number(stored) : null;
   });
   const canRun = (action: ActionItem) =>
-    action.output === "summary" ? hasSummary && !isSummaryBusy : !isChatBusy;
+    action.output === "summary" ? !isSummaryBusy : !isChatBusy;
 
   const activeAction =
     actions.find((a) => a.id === lastUsedId) ??
@@ -132,9 +130,7 @@ export default function ActionPicker({
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground/70 truncate">
-                    {editsSummary && !hasSummary
-                      ? t("notes.actions.needsSummary")
-                      : getActionDescription(action, t)}
+                    {getActionDescription(action, t)}
                   </div>
                 </div>
               </DropdownMenuItem>

@@ -187,6 +187,7 @@ test("a summary action rewrites only the summary and never saves a clipped rewri
       isCloudMode: true,
       isMeetingNote: true,
       allowTitleGeneration: true,
+      fromSummary: true,
     },
     LABELS
   );
@@ -227,4 +228,30 @@ test("a cut-off rewrite reports a notes error, not the dictation one providers a
   await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
   assert.equal(events[0].messageKey, "notes.actions.errors.outputTruncated");
   assert.equal(updates.length, 0);
+});
+
+test("a summary action on a note without a summary writes one from the transcript", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  const action = {
+    id: 6,
+    client_id: "tldr",
+    kind: "action",
+    output: "summary",
+    name: "TL;DR",
+    prompt: "Add a TL;DR.",
+  };
+
+  store.runBackgroundAction(
+    14,
+    "## Meeting Transcript\nAlice: we ship Friday.",
+    "hash-14",
+    action,
+    { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true, fromSummary: false },
+    LABELS
+  );
+
+  await waitFor(() => updates.length > 0, "the note to be written");
+  assert.match(calls[0].config.systemPrompt, /no AI summary yet[\s\S]*Add a TL;DR\.$/);
+  assert.equal(calls[0].text, "## Meeting Transcript\nAlice: we ship Friday.");
+  assert.deepEqual(Object.keys(updates[0].payload), ["enhanced_content"]);
 });
