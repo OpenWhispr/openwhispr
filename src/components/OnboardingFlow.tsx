@@ -783,8 +783,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       await continueFromCurrentStep();
       return;
     }
-    await finalizeOnboarding("local", { localPending: true });
-  }, [continueFromCurrentStep, currentStepId, finalizeOnboarding]);
+    // The local assistant is optional. If the user skips it, prevent
+    // dictation from falling back to an unconfigured cleanup provider.
+    settingsStore.updateCleanupSettings({ useCleanupModel: false });
+    await finalizeOnboarding("local");
+  }, [continueFromCurrentStep, currentStepId, finalizeOnboarding, settingsStore]);
 
   const canContinue = (() => {
     switch (currentStepId) {
