@@ -110,6 +110,12 @@ test("a template always reads the transcript, never the summary it replaces", as
     input:
       "ask about pricing\n\n## Meeting Context\nInvited participants: Alice.\n\n## Meeting Transcript\nAlice: we ship Friday.",
     fromSummary: false,
+    // In pieces too, for splitting a long recording on a local model.
+    material: {
+      notes: "ask about pricing",
+      meetingContext: "## Meeting Context\nInvited participants: Alice.",
+      transcript: "Alice: we ship Friday.",
+    },
   });
 });
 
@@ -122,7 +128,8 @@ test("an action reads the summary when there is one, and the transcript when the
   });
   assert.deepEqual(
     buildNoteRunInput(ACTION, { ...MATERIAL, summary: " " }),
-    buildNoteRunInput(TEMPLATE, MATERIAL)
+    buildNoteRunInput(TEMPLATE, MATERIAL),
+    "without a summary, an action reads, and can split, the material a template does"
   );
   assert.equal(
     buildNoteRunInput(ACTION, {

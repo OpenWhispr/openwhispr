@@ -423,6 +423,8 @@ export function runBackgroundAction(
     try {
       // Only summary actions reach the runner; chat actions run in the note chat.
       const editsSummary = action.kind === "action";
+      // A summary action with no summary yet writes a first one, like a template.
+      const rewritesSummary = editsSummary && !!options.fromSummary;
       const instructions = editsSummary
         ? compileSummaryActionPrompt(action, {
             fromSummary: !!options.fromSummary,
@@ -444,11 +446,11 @@ export function runBackgroundAction(
         // that fills the shrunken allowance, so a recording is summarised in
         // parts rather than saved clipped. A plain note has no parts route, so
         // its clipped reply is saved as before. Other routes ignore the flag.
-        // A summary action replaces the whole summary, so a clipped rewrite
-        // would lose content: providers refuse it (OpenWhispr Cloud refuses a
-        // truncated reply for every request).
-        refuseClippedByWindow: editsSummary || hasTranscript(options.material),
-        ...(editsSummary && { requireCompleteOutput: true }),
+        // Rewriting an existing summary replaces all of it, so a clipped
+        // rewrite would lose content: providers refuse it (OpenWhispr Cloud
+        // refuses a truncated reply for every request).
+        refuseClippedByWindow: rewritesSummary || hasTranscript(options.material),
+        ...(rewritesSummary && { requireCompleteOutput: true }),
         requestId: runId,
         ...providerOverrides,
       };
@@ -481,16 +483,19 @@ export function runBackgroundAction(
       const enhancedContent = options.knownPeople?.length
         ? tagActionItemOwners(enhanced, options.knownPeople)
         : enhanced;
-      // A summary action keeps the template and material hash the summary was
-      // built from, so the note still names its template and staleness holds.
-      const updates: Record<string, string> = editsSummary
-        ? { enhanced_content: enhancedContent }
-        : {
+      // A summary action keeps the template the summary was built from. Editing
+      // a summary also keeps its material hash; writing one from the material
+      // records that material, so later edits to it mark the summary stale.
+      const updates: Record<string, string> = !editsSummary
+        ? {
             enhanced_content: enhancedContent,
             enhancement_prompt: instructions,
             enhancement_template_id: action.client_id,
             enhanced_at_content_hash: contentHash,
-          };
+          }
+        : options.fromSummary
+          ? { enhanced_content: enhancedContent }
+          : { enhanced_content: enhancedContent, enhanced_at_content_hash: contentHash };
       if (title) updates.title = title;
       await window.electronAPI.updateNote(noteId, updates);
 

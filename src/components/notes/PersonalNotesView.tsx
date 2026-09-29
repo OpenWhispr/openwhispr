@@ -687,7 +687,7 @@ export default function PersonalNotesView({
     const isTemplate = action.kind === "template";
     // A note's first summary uses the template that last ran.
     if (isTemplate) rememberTemplate(action);
-    const { input, fromSummary } = buildNoteRunInput(action, {
+    const { input, fromSummary, material } = buildNoteRunInput(action, {
       summary: editorEnhancedContent,
       notes: noteContent,
       meetingContext,
@@ -699,15 +699,7 @@ export default function PersonalNotesView({
       isMeetingNote,
       knownPeople,
       fromSummary,
-      // The pieces, so a recording too long for a local model can be split
-      // along the transcript rather than through the joined string.
-      material: isTemplate
-        ? {
-            notes: hasNotes ? noteContent : "",
-            meetingContext,
-            transcript: formattedTranscript,
-          }
-        : undefined,
+      material,
       allowTitleGeneration: isRegenerableNoteTitle(
         editorNote.title,
         [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],

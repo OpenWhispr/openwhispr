@@ -83,6 +83,8 @@ export function compileChatActionPrompt(action, { fromSummary }) {
  * What a template or a summary action reads. With a summary to work from, an
  * action gets it plus the user's notes and the meeting context for accuracy;
  * the transcript stays out, so the request always fits and is never split.
+ * Otherwise the run reads the note's material, also returned in pieces so a
+ * recording too long for a local model can be split along its transcript.
  */
 export function buildNoteRunInput(action, { summary, notes, meetingContext, transcript }) {
   const join = (parts) => parts.filter(Boolean).join("\n\n");
@@ -104,5 +106,6 @@ export function buildNoteRunInput(action, { summary, notes, meetingContext, tran
       transcript && `## Meeting Transcript\n${transcript}`,
     ]),
     fromSummary: false,
+    material: { notes: hasNotes ? notes : "", meetingContext, transcript },
   };
 }

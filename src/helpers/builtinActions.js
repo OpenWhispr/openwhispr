@@ -11,7 +11,8 @@ export const FOLLOW_UP_EMAIL_KEY = "notes.actions.builtin.followUpEmail";
 export const MAKE_TODOS_KEY = "notes.actions.builtin.makeTodos";
 export const CREATE_OUTLINE_KEY = "notes.actions.builtin.createOutline";
 
-// Mirrored by the API's note action schemas, which reject anything longer.
+// Caps on a template's or action's fields, enforced when a row is saved. Keep
+// them in step with the API's schemas once custom rows sync.
 export const NOTE_ACTION_LIMITS = {
   name: 200,
   description: 1000,

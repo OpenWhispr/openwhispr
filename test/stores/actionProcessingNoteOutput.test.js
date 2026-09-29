@@ -220,7 +220,7 @@ test("a cut-off rewrite reports a notes error, not the dictation one providers a
       name: "Shorten",
       prompt: "x",
     },
-    { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true },
+    { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true, fromSummary: true },
     LABELS
   );
 
@@ -230,7 +230,7 @@ test("a cut-off rewrite reports a notes error, not the dictation one providers a
   assert.equal(updates.length, 0);
 });
 
-test("a summary action on a note without a summary writes one from the transcript", async (t) => {
+test("a summary action on a note without a summary writes one from the transcript, and tracks it for staleness", async (t) => {
   const { store, calls, updates } = await loadStore(t);
   const action = {
     id: 6,
@@ -253,5 +253,10 @@ test("a summary action on a note without a summary writes one from the transcrip
   await waitFor(() => updates.length > 0, "the note to be written");
   assert.match(calls[0].config.systemPrompt, /no AI summary yet[\s\S]*Add a TL;DR\.$/);
   assert.equal(calls[0].text, "## Meeting Transcript\nAlice: we ship Friday.");
-  assert.deepEqual(Object.keys(updates[0].payload), ["enhanced_content"]);
+  assert.equal(calls[0].config.requireCompleteOutput, undefined, "nothing to lose yet");
+  assert.deepEqual(Object.keys(updates[0].payload), [
+    "enhanced_content",
+    "enhanced_at_content_hash",
+  ]);
+  assert.equal(updates[0].payload.enhanced_at_content_hash, "hash-14");
 });
