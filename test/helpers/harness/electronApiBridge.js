@@ -9,7 +9,7 @@ const AUTH_GENERATION = 0;
 
 // syncAll() asserts the whole dictionary and snippet surface exists before doing
 // any work and aborts the pass if a name is missing, so both are present but
-// inert — this harness covers notes and folders.
+// inert — this harness covers notes, folders and note templates/actions.
 function inertDictionaryApi() {
   return {
     getPendingDictionary: async () => [],
@@ -179,6 +179,16 @@ function createElectronApi(db, options = {}) {
       db.upsertTranscriptionFromCloud(cloudTranscription),
     markTranscriptionSynced: async (id, cloudId) => db.markTranscriptionSynced(id, cloudId),
     hardDeleteTranscription: async (id) => db.hardDeleteTranscription(id),
+
+    // Note templates and actions
+    getPendingNoteActions: async () => db.getPendingNoteActions(),
+    getPendingNoteActionDeletes: async () => db.getPendingNoteActionDeletes(),
+    getNoteActionForCloudMerge: async (cloudEntry) => db.getNoteActionForCloudMerge(cloudEntry),
+    upsertNoteActionFromCloud: async (cloudEntry) => db.upsertNoteActionFromCloud(cloudEntry),
+    markNoteActionSynced: async (id, cloudId, serverUpdatedAt, snapshot) =>
+      db.markNoteActionSynced(id, cloudId, serverUpdatedAt, snapshot),
+    hardDeleteNoteAction: async (id) => db.hardDeleteNoteAction(id),
+    clearNoteActionCloudId: async (id) => db.clearNoteActionCloudId(id),
 
     ...inertDictionaryApi(),
     ...inertSnippetApi(),

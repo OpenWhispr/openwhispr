@@ -728,6 +728,13 @@ export interface ActionItem {
   updated_at: string;
 }
 
+/** An actions row as sync reads it, tombstones included (getActions hides them). */
+export interface NoteActionSyncRow extends ActionItem {
+  cloud_id: string | null;
+  sync_status: "synced" | "pending";
+  deleted_at: string | null;
+}
+
 export interface GpuDevice {
   index: number;
   uuid: string;
@@ -3459,6 +3466,23 @@ declare global {
       hardDeleteSnippet?: (id: number) => Promise<{ success: boolean; id: number }>;
       clearSnippetCloudId?: (id: number) => Promise<{ success: boolean }>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
+
+      getPendingNoteActions?: () => Promise<NoteActionSyncRow[]>;
+      getPendingNoteActionDeletes?: () => Promise<NoteActionSyncRow[]>;
+      getNoteActionForCloudMerge?: (
+        cloudEntry: Record<string, unknown>
+      ) => Promise<NoteActionSyncRow | null>;
+      upsertNoteActionFromCloud?: (
+        cloudEntry: Record<string, unknown>
+      ) => Promise<NoteActionSyncRow | null>;
+      markNoteActionSynced?: (
+        id: number,
+        cloudId: string,
+        serverUpdatedAt: string | undefined,
+        snapshot: NoteActionSyncRow
+      ) => Promise<{ success: boolean; changes: number }>;
+      hardDeleteNoteAction?: (id: number) => Promise<{ success: boolean; id: number }>;
+      clearNoteActionCloudId?: (id: number) => Promise<{ success: boolean }>;
     };
 
     api?: {

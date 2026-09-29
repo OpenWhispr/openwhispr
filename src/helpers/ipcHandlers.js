@@ -1965,6 +1965,51 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("db-get-pending-note-actions", async () => {
+      return this.databaseManager.getPendingNoteActions();
+    });
+
+    ipcMain.handle("db-get-pending-note-action-deletes", async () => {
+      return this.databaseManager.getPendingNoteActionDeletes();
+    });
+
+    ipcMain.handle("db-get-note-action-for-cloud-merge", async (_event, cloudEntry) => {
+      return this.databaseManager.getNoteActionForCloudMerge(cloudEntry);
+    });
+
+    // A pulled row reaches open windows like a new one: the action store
+    // replaces a row it already holds by id.
+    ipcMain.handle("db-upsert-note-action-from-cloud", async (_event, cloudEntry) => {
+      const action = this.databaseManager.upsertNoteActionFromCloud(cloudEntry);
+      if (action) {
+        setImmediate(() => {
+          broadcastToWindows("action-created", action);
+        });
+      }
+      return action;
+    });
+
+    ipcMain.handle(
+      "db-mark-note-action-synced",
+      async (_event, id, cloudId, serverUpdatedAt, snapshot) => {
+        return this.databaseManager.markNoteActionSynced(id, cloudId, serverUpdatedAt, snapshot);
+      }
+    );
+
+    ipcMain.handle("db-hard-delete-note-action", async (_event, id) => {
+      const result = this.databaseManager.hardDeleteNoteAction(id);
+      if (result.success) {
+        setImmediate(() => {
+          broadcastToWindows("action-deleted", { id });
+        });
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-clear-note-action-cloud-id", async (_event, id) => {
+      return this.databaseManager.clearNoteActionCloudId(id);
+    });
+
     ipcMain.handle("undo-learned-corrections", async (_event, words) => {
       try {
         if (!Array.isArray(words) || words.length === 0) {

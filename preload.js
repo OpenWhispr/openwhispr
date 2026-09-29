@@ -1252,6 +1252,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   clearSnippetCloudId: (id) => ipcRenderer.invoke("db-clear-snippet-cloud-id", id),
   broadcastSnippetsUpdated: () => ipcRenderer.invoke("db-broadcast-snippets-updated"),
 
+  getPendingNoteActions: () => ipcRenderer.invoke("db-get-pending-note-actions"),
+  getPendingNoteActionDeletes: () => ipcRenderer.invoke("db-get-pending-note-action-deletes"),
+  getNoteActionForCloudMerge: (cloudEntry) =>
+    ipcRenderer.invoke("db-get-note-action-for-cloud-merge", cloudEntry),
+  upsertNoteActionFromCloud: (cloudEntry) =>
+    ipcRenderer.invoke("db-upsert-note-action-from-cloud", cloudEntry),
+  markNoteActionSynced: (id, cloudId, serverUpdatedAt, snapshot) =>
+    ipcRenderer.invoke("db-mark-note-action-synced", id, cloudId, serverUpdatedAt, snapshot),
+  hardDeleteNoteAction: (id) => ipcRenderer.invoke("db-hard-delete-note-action", id),
+  clearNoteActionCloudId: (id) => ipcRenderer.invoke("db-clear-note-action-cloud-id", id),
+
   // Google Calendar
   gcalStartOAuth: () => ipcRenderer.invoke("gcal-start-oauth"),
   gcalDisconnect: (email) => ipcRenderer.invoke("gcal-disconnect", email),

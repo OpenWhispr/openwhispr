@@ -5,6 +5,7 @@ import type {
   TranscriptionItem,
   ConversationPreview,
   ConversationCreateSnapshot,
+  NoteActionSyncRow,
 } from "../types/electron";
 import { NotesService, type CloudNote } from "./NotesService.js";
 import { ConversationsService } from "./ConversationsService.js";
@@ -14,6 +15,11 @@ import { TranscriptionsService } from "./TranscriptionsService.js";
 import { syncPendingAnalytics } from "./AnalyticsService.js";
 import { DictionaryService } from "./DictionaryService.js";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
+import {
+  NoteActionService,
+  type CloudNoteActionEntry,
+  type NoteActionFields,
+} from "./NoteActionService.js";
 import { CloudApiError, isAuthContextError } from "./cloudApi.js";
 import { LeaderboardService } from "./LeaderboardService";
 import {
@@ -67,6 +73,11 @@ import {
 
 function isHttpStatus(err: unknown, status: number): boolean {
   return err instanceof CloudApiError && err.status === status;
+}
+
+function toNoteActionFields(row: NoteActionSyncRow): NoteActionFields {
+  const { kind, name, description, prompt, sections, output, icon, sort_order } = row;
+  return { kind, name, description, prompt, sections, output, icon, sort_order };
 }
 
 // Typed errors from space write-access checks (legacy team_* and canonical
@@ -519,6 +530,7 @@ export class SyncService {
             this.snippetsDirty = false;
             await this.syncSnippets();
           } while (this.snippetsDirty);
+          await this.syncNoteActions();
         } else {
           // Backup is off: team-space content still syncs (membership is
           // consent, D7) and note deletes still propagate so revoked/deleted
@@ -2750,6 +2762,176 @@ export class SyncService {
       if (changed) await window.electronAPI.broadcastSnippetsUpdated?.();
     } catch (err) {
       console.error("Snippet pull failed:", err);
+    }
+  }
+
+  // Custom note templates and actions. Built-ins are seeded on every device and
+  // never leave it. An API without /api/note-actions answers 404; each stage
+  // logs it and the rows stay pending until the endpoint exists.
+  private async syncNoteActions(): Promise<void> {
+    const api = window.electronAPI;
+    const required = [
+      "getPendingNoteActions",
+      "getPendingNoteActionDeletes",
+      "getNoteActionForCloudMerge",
+      "upsertNoteActionFromCloud",
+      "markNoteActionSynced",
+      "hardDeleteNoteAction",
+      "clearNoteActionCloudId",
+    ] as const;
+    const missing = required.filter((name) => typeof api[name] !== "function");
+    if (missing.length > 0) {
+      throw new Error(
+        `Note action IPC bindings missing — preload out of date: ${missing.join(", ")}`
+      );
+    }
+
+    await this.pushPendingNoteActions();
+    await this.pushNoteActionDeletes();
+    await this.pullNoteActions();
+  }
+
+  private async pushPendingNoteActions(): Promise<void> {
+    const pending = (await window.electronAPI.getPendingNoteActions?.()) ?? [];
+    for (const entry of pending.filter((e) => e.cloud_id)) {
+      try {
+        const server = await NoteActionService.update(entry.cloud_id!, toNoteActionFields(entry));
+        await window.electronAPI.markNoteActionSynced?.(
+          entry.id,
+          server.id,
+          server.updated_at,
+          entry
+        );
+      } catch (err) {
+        if (isHttpStatus(err, 404)) {
+          // Deleted or purged in the cloud: the next push re-creates it from the
+          // same client id, which revives a tombstone.
+          await window.electronAPI.clearNoteActionCloudId?.(entry.id);
+        } else {
+          console.error("Note action update sync failed:", err);
+        }
+      }
+    }
+
+    const creates = pending.filter((e) => !e.cloud_id);
+    for (let i = 0; i < creates.length; i += BATCH_SIZE) {
+      const chunk = creates.slice(i, i + BATCH_SIZE);
+      try {
+        const { created } = await NoteActionService.batchCreate(
+          chunk.map((e) => ({
+            ...toNoteActionFields(e),
+            client_action_id: e.client_id,
+            created_at: e.created_at,
+          }))
+        );
+        const byClientId = new Map(created.map((c) => [c.client_action_id, c]));
+        for (const local of chunk) {
+          const server = byClientId.get(local.client_id);
+          if (!server) continue;
+          const result = await window.electronAPI.markNoteActionSynced?.(
+            local.id,
+            server.id,
+            server.updated_at,
+            local
+          );
+          // Deleted or edited during the push: drop the cloud copy. An edited row
+          // is still pending and re-creates it on the next pass.
+          if (result && result.changes === 0) {
+            try {
+              await NoteActionService.delete(server.id);
+            } catch (deleteErr) {
+              console.error("Note action orphan cleanup failed:", deleteErr);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Note action batch create failed:", err);
+      }
+    }
+  }
+
+  private async pushNoteActionDeletes(): Promise<void> {
+    const deletes = (await window.electronAPI.getPendingNoteActionDeletes?.()) ?? [];
+    for (const entry of deletes) {
+      try {
+        await NoteActionService.delete(entry.cloud_id!);
+        await window.electronAPI.hardDeleteNoteAction?.(entry.id);
+      } catch (err) {
+        if (isHttpStatus(err, 404)) {
+          await window.electronAPI.hardDeleteNoteAction?.(entry.id);
+        } else {
+          console.error("Note action delete sync failed:", err);
+        }
+      }
+    }
+  }
+
+  private async pullNoteActions(): Promise<void> {
+    try {
+      const since = localStorage.getItem("lastSyncedAt.noteActions") ?? undefined;
+      const sinceId = localStorage.getItem("lastSyncedAt.noteActions.id") ?? undefined;
+
+      let cursor: string | undefined = since;
+      let cursorId: string | undefined = sinceId;
+      let maxUpdatedAt = normalizeTimestamp(since);
+      let maxId = sinceId ?? "";
+      const cursorField: keyof Pick<CloudNoteActionEntry, "created_at" | "updated_at"> = since
+        ? "updated_at"
+        : "created_at";
+
+      while (true) {
+        const { entries, hasMore } = since
+          ? await NoteActionService.listDelta(cursor, BATCH_SIZE, cursorId)
+          : await NoteActionService.listSnapshot(cursor, BATCH_SIZE, cursorId);
+        if (entries.length === 0) break;
+
+        for (const cloudEntry of entries) {
+          const cloudTs = normalizeTimestamp(cloudEntry.updated_at);
+          if (cloudTs > maxUpdatedAt) {
+            maxUpdatedAt = cloudTs;
+            maxId = cloudEntry.id;
+          } else if (cloudTs === maxUpdatedAt && cloudEntry.id > maxId) {
+            maxId = cloudEntry.id;
+          }
+
+          // A row matching a built-in is left alone by both the delete and the
+          // upsert below.
+          const local = await window.electronAPI.getNoteActionForCloudMerge?.(
+            cloudEntry as unknown as Record<string, unknown>
+          );
+
+          if (cloudEntry.deleted_at) {
+            if (local && !(local.sync_status === "pending" && !local.cloud_id)) {
+              await window.electronAPI.hardDeleteNoteAction?.(local.id);
+            }
+            continue;
+          }
+
+          // Last write wins; a synced row always takes the cloud copy it is not
+          // linked to yet.
+          if (
+            !local ||
+            cloudTs > normalizeTimestamp(local.updated_at) ||
+            (local.sync_status !== "pending" && local.cloud_id !== cloudEntry.id)
+          ) {
+            await window.electronAPI.upsertNoteActionFromCloud?.(
+              cloudEntry as unknown as Record<string, unknown>
+            );
+          }
+        }
+
+        if (!hasMore) break;
+        const last = entries[entries.length - 1];
+        const nextCursor = last[cursorField];
+        if (nextCursor === cursor && last.id === cursorId) break;
+        cursor = nextCursor;
+        cursorId = last.id;
+      }
+
+      if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.noteActions", maxUpdatedAt);
+      if (maxId) localStorage.setItem("lastSyncedAt.noteActions.id", maxId);
+    } catch (err) {
+      console.error("Note action pull failed:", err);
     }
   }
 

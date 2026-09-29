@@ -1,7 +1,8 @@
 // In-memory stand-in for the cloud API behind window.electronAPI.cloudApiRequest.
 // Notes and folders are modelled with the hardened server's real write rules,
-// conversations only on the read side; the other entity types exist only so a
-// full syncAll() pass can complete.
+// note templates/actions with /api/note-actions' rules, conversations only on
+// the read side; the other entity types exist only so a full syncAll() pass can
+// complete.
 //
 // Each hardening rule sits behind its own flag so a test can flip the server
 // back to the legacy behaviour and prove the client still does not lose data:
@@ -41,6 +42,7 @@ const NOTE_FIELDS = [
   "enhanced_content",
   "note_type",
   "enhancement_prompt",
+  "enhancement_template_id",
   "source_file",
   "audio_duration_seconds",
   "folder_id",
@@ -64,6 +66,7 @@ const NOTE_DEFAULTS = {
   enhanced_content: null,
   note_type: "personal",
   enhancement_prompt: null,
+  enhancement_template_id: null,
   source_file: null,
   audio_duration_seconds: null,
   folder_id: null,
@@ -79,6 +82,17 @@ const FOLDER_DEFAULTS = { name: "", is_default: false, sort_order: 0 };
 
 const CONVERSATION_DEFAULTS = { title: "Untitled", archived_at: null, messages: [] };
 
+const NOTE_ACTION_DEFAULTS = {
+  kind: "template",
+  name: "",
+  description: "",
+  prompt: "",
+  sections: null,
+  output: null,
+  icon: null,
+  sort_order: 0,
+};
+
 function createFakeCloud(config = {}) {
   const cfg = {
     materialPatchGate: true,
@@ -91,6 +105,7 @@ function createFakeCloud(config = {}) {
   const notes = new Map();
   const folders = new Map();
   const conversations = new Map();
+  const noteActions = new Map();
   const log = [];
   const failures = [];
   let seq = 0;
@@ -219,6 +234,62 @@ function createFakeCloud(config = {}) {
     clientKey: "client_conversation_id",
     prefix: "conv",
   };
+
+  const noteActionCollection = {
+    store: noteActions,
+    clientKey: "client_action_id",
+    prefix: "action",
+  };
+
+  // Every write carries the whole row, and updated_at is always the server's
+  // clock, never the client's.
+  function writeNoteAction(row, input) {
+    for (const [key, fallback] of Object.entries(NOTE_ACTION_DEFAULTS)) {
+      row[key] = input[key] ?? fallback;
+    }
+    row.updated_at = toIso(clock());
+    return row;
+  }
+
+  // batch-create upserts by client id and revives a tombstone.
+  function upsertNoteAction(input) {
+    let row = findByClientId(noteActionCollection, input.client_action_id);
+    if (!row) {
+      row = {
+        id: nextId("action"),
+        client_action_id: input.client_action_id,
+        created_at: toIso(input.created_at ?? clock()),
+      };
+      noteActions.set(row.id, row);
+    }
+    row.deleted_at = null;
+    return writeNoteAction(row, input);
+  }
+
+  // since/since_id streams (updated_at, id) deltas with tombstones; cursor/
+  // cursor_id pages the live rows by (created_at, id). Both run forwards.
+  function pageNoteActions(query) {
+    const limit = Number(query.get("limit")) || 200;
+    const since = query.get("since");
+    const [key, bound, boundId] = since
+      ? ["updated_at", since, query.get("since_id")]
+      : ["created_at", query.get("cursor"), query.get("cursor_id")];
+    let rows = [...noteActions.values()].filter((r) => since || !r.deleted_at);
+    if (bound) {
+      rows = rows.filter((r) => {
+        const order = compare(normalizeTimestamp(r[key]), normalizeTimestamp(bound));
+        return boundId ? order > 0 || (order === 0 && r.id > boundId) : order >= 0;
+      });
+    }
+    rows.sort(
+      (a, b) =>
+        compare(normalizeTimestamp(a[key]), normalizeTimestamp(b[key])) || compare(a.id, b.id)
+    );
+    return {
+      entries: rows.slice(0, limit).map((row) => structuredClone(row)),
+      hasMore: rows.length > limit,
+    };
+  }
 
   // Snapshot paging walks created_at backwards from `before` and hides
   // tombstones; delta paging walks updated_at forwards from `since` and must
@@ -364,6 +435,19 @@ function createFakeCloud(config = {}) {
         return { entries: [], hasMore: false };
       case "POST /api/snippets/batch-create":
         return { created: [] };
+
+      case "POST /api/note-actions/batch-create":
+        return { created: (body?.entries ?? []).map(upsertNoteAction) };
+      case "PATCH /api/note-actions/update": {
+        const { id, ...fields } = body ?? {};
+        return writeNoteAction(requireLive(noteActionCollection, id), fields);
+      }
+      case "DELETE /api/note-actions/delete":
+        // Idempotent: deleting a tombstone again is not a 404.
+        if (!noteActions.get(body?.id)?.deleted_at) tombstone(noteActionCollection, body?.id);
+        return {};
+      case "GET /api/note-actions/list":
+        return pageNoteActions(query);
       default:
         throw new HttpError(404, `fake cloud has no route for ${route}`, "no_route");
     }
@@ -440,6 +524,7 @@ function createFakeCloud(config = {}) {
     notes: () => [...notes.values()].map((row) => structuredClone(row)),
     folders: () => [...folders.values()].map((row) => structuredClone(row)),
     conversations: () => [...conversations.values()].map((row) => structuredClone(row)),
+    noteActions: () => [...noteActions.values()].map((row) => structuredClone(row)),
     note: (id) => {
       const row = notes.get(id) ?? findByClientId(noteCollection, id);
       return row ? structuredClone(row) : null;

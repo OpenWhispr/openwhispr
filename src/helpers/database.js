@@ -530,11 +530,15 @@ class DatabaseManager {
       }
       // Every row before these columns rewrote the AI summary from the note's
       // material, which is what a template does, so 'template' is the default.
+      // Existing custom rows start 'pending', so the first sync uploads them.
       for (const column of [
         "client_id TEXT",
         "kind TEXT NOT NULL DEFAULT 'template'",
         "sections TEXT",
         "output TEXT",
+        "cloud_id TEXT",
+        "sync_status TEXT DEFAULT 'pending'",
+        "deleted_at TEXT",
       ]) {
         try {
           this.db.exec(`ALTER TABLE actions ADD COLUMN ${column}`);
@@ -2980,6 +2984,180 @@ class DatabaseManager {
     }
   }
 
+  // Built-ins are seeded on every device and never sync. A legacy row over
+  // NOTE_ACTION_LIMITS stays local-only, since the API would reject its batch.
+  getPendingNoteActions() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM actions WHERE sync_status = 'pending' AND deleted_at IS NULL AND is_builtin = 0"
+        )
+        .all()
+        .map(toActionItem)
+        .filter((row) => !resolveActionFields(row.kind, row).error);
+    } catch (error) {
+      debugLogger.error("Error getting pending note actions", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getPendingNoteActionDeletes() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM actions WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending'"
+        )
+        .all()
+        .map(toActionItem);
+    } catch (error) {
+      debugLogger.error(
+        "Error getting pending note action deletes",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  getNoteActionForCloudMerge(cloudEntry) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const byClientId = this.db
+        .prepare("SELECT * FROM actions WHERE client_id = ?")
+        .get(cloudEntry.client_action_id ?? null);
+      return toActionItem(
+        byClientId ||
+          this.db.prepare("SELECT * FROM actions WHERE cloud_id = ?").get(cloudEntry.id ?? null)
+      );
+    } catch (error) {
+      debugLogger.error(
+        "Error getting note action for cloud merge",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  // Returns null for a row it does not apply: a malformed one, or one matching a
+  // built-in, which no cloud row may overwrite.
+  upsertNoteActionFromCloud(cloudEntry) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const { id: cloudId, client_action_id: clientId, kind } = cloudEntry;
+      if (!cloudId || !clientId || (kind !== "template" && kind !== "action")) return null;
+      const fields = resolveActionFields(kind, cloudEntry);
+      if (fields.error) return null;
+      const existing = this.getNoteActionForCloudMerge(cloudEntry);
+      if (existing?.is_builtin) return null;
+
+      const updatedAt = cloudEntry.updated_at || new Date().toISOString();
+      const values = [
+        clientId,
+        cloudId,
+        kind,
+        fields.name,
+        fields.description,
+        fields.prompt,
+        fields.sections,
+        fields.output,
+        cloudEntry.icon || "sparkles",
+        cloudEntry.sort_order ?? 0,
+        updatedAt,
+      ];
+      if (existing) {
+        this.db
+          .prepare(
+            `UPDATE actions
+             SET client_id = ?, cloud_id = ?, kind = ?, name = ?, description = ?, prompt = ?,
+                 sections = ?, output = ?, icon = ?, sort_order = ?, updated_at = ?,
+                 sync_status = 'synced', deleted_at = NULL
+             WHERE id = ?`
+          )
+          .run(...values, existing.id);
+        return this.getAction(existing.id);
+      }
+      const result = this.db
+        .prepare(
+          `INSERT INTO actions
+             (client_id, cloud_id, kind, name, description, prompt, sections, output, icon,
+              sort_order, updated_at, created_at, sync_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')`
+        )
+        .run(...values, cloudEntry.created_at || updatedAt);
+      return this.getAction(result.lastInsertRowid);
+    } catch (error) {
+      debugLogger.error(
+        "Error upserting note action from cloud",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  // An edit that lands while the push is in flight no longer matches the pushed
+  // snapshot, so the row stays pending and the next pass pushes it again.
+  markNoteActionSynced(id, cloudId, serverUpdatedAt, snapshot) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare(
+          `UPDATE actions
+           SET sync_status = 'synced', cloud_id = ?, updated_at = COALESCE(?, updated_at)
+           WHERE id = ? AND deleted_at IS NULL
+             AND name IS ? AND description IS ? AND prompt IS ? AND sections IS ?
+             AND output IS ? AND icon IS ? AND sort_order IS ?`
+        )
+        .run(
+          cloudId,
+          serverUpdatedAt ?? null,
+          id,
+          snapshot.name,
+          snapshot.description,
+          snapshot.prompt,
+          snapshot.sections ? JSON.stringify(snapshot.sections) : null,
+          snapshot.output,
+          snapshot.icon,
+          snapshot.sort_order
+        );
+      return { success: result.changes > 0, changes: result.changes };
+    } catch (error) {
+      debugLogger.error("Error marking note action synced", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  hardDeleteNoteAction(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db.prepare("DELETE FROM actions WHERE id = ? AND is_builtin = 0").run(id);
+      return { success: result.changes > 0, id };
+    } catch (error) {
+      debugLogger.error("Error hard deleting note action", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  clearNoteActionCloudId(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare("UPDATE actions SET cloud_id = NULL, sync_status = 'pending' WHERE id = ?")
+        .run(id);
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error(
+        "Error clearing note action cloud_id",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
   saveNote(
     title,
     content,
@@ -4256,7 +4434,9 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
-        .prepare("SELECT * FROM actions ORDER BY sort_order ASC, created_at ASC")
+        .prepare(
+          "SELECT * FROM actions WHERE deleted_at IS NULL ORDER BY sort_order ASC, created_at ASC"
+        )
         .all()
         .map(toActionItem);
     } catch (error) {
@@ -4268,7 +4448,9 @@ class DatabaseManager {
   getAction(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return toActionItem(this.db.prepare("SELECT * FROM actions WHERE id = ?").get(id));
+      return toActionItem(
+        this.db.prepare("SELECT * FROM actions WHERE id = ? AND deleted_at IS NULL").get(id)
+      );
     } catch (error) {
       debugLogger.error("Error getting action", { error: error.message }, "notes");
       throw error;
@@ -4339,7 +4521,7 @@ class DatabaseManager {
       if (fields.error) return { success: false, error: fields.error };
       this.db
         .prepare(
-          "UPDATE actions SET name = ?, description = ?, prompt = ?, icon = ?, sort_order = ?, sections = ?, output = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+          "UPDATE actions SET name = ?, description = ?, prompt = ?, icon = ?, sort_order = ?, sections = ?, output = ?, updated_at = CURRENT_TIMESTAMP, sync_status = 'pending' WHERE id = ?"
         )
         .run(
           fields.name,
@@ -4358,13 +4540,23 @@ class DatabaseManager {
     }
   }
 
+  // A row the cloud has never seen goes at once; a synced one stays as a
+  // tombstone until sync pushes the delete.
   deleteAction(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const action = this.db.prepare("SELECT * FROM actions WHERE id = ?").get(id);
+      const action = this.getAction(id);
       if (!action) return { success: false, error: "Action not found" };
       if (action.is_builtin) return { success: false, error: "Cannot delete built-in actions" };
-      this.db.prepare("DELETE FROM actions WHERE id = ?").run(id);
+      if (action.cloud_id) {
+        this.db
+          .prepare(
+            "UPDATE actions SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, sync_status = 'pending' WHERE id = ?"
+          )
+          .run(id);
+      } else {
+        this.db.prepare("DELETE FROM actions WHERE id = ?").run(id);
+      }
       return { success: true, id };
     } catch (error) {
       debugLogger.error("Error deleting action", { error: error.message }, "notes");
