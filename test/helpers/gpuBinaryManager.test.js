@@ -156,7 +156,10 @@ test("CUDA: resolves its exact asset from the pinned tag and installs binary + c
   state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
   state.extractedFiles = {
     "whisper-server-linux-x64-cuda": "binary",
-    "libggml-cuda.so": "lib",
+    "libcudart.so.12": "cudart",
+    "libcublas.so.12": "cublas",
+    "libcublasLt.so.12": "cublasLt",
+    "CUDA-12.9-LICENSE.txt": "license",
     "README.md": "doc",
   };
 
@@ -170,7 +173,10 @@ test("CUDA: resolves its exact asset from the pinned tag and installs binary + c
   const binaryPath = path.join(binDir, "whisper-server-linux-x64-cuda");
   assert.ok(fs.existsSync(binaryPath));
   assert.ok(fs.statSync(binaryPath).mode & 0o100, "binary is executable");
-  assert.ok(fs.existsSync(path.join(binDir, "libggml-cuda.so")), "companion lib copied");
+  assert.ok(fs.existsSync(path.join(binDir, "libcudart.so.12")));
+  assert.ok(fs.existsSync(path.join(binDir, "libcublas.so.12")));
+  assert.ok(fs.existsSync(path.join(binDir, "libcublasLt.so.12")));
+  assert.ok(fs.existsSync(path.join(binDir, "CUDA-12.9-LICENSE.txt")));
   assert.ok(!fs.existsSync(path.join(binDir, "README.md")), "unrelated files not copied");
   assert.equal(manager.getCudaBinaryPath(), binaryPath);
   assert.equal(manager.isDownloaded(), true);
@@ -313,7 +319,13 @@ test("guard: a second download while one is in flight throws", async () => {
     await gate;
     fs.writeFileSync(dest, state.archiveContent);
   };
-  state.extractedFiles = { "whisper-server-linux-x64-cuda": "binary" };
+  state.extractedFiles = {
+    "whisper-server-linux-x64-cuda": "binary",
+    "libcudart.so.12": "cudart",
+    "libcublas.so.12": "cublas",
+    "libcublasLt.so.12": "cublasLt",
+    "CUDA-12.9-LICENSE.txt": "license",
+  };
 
   const manager = cudaManagerWithoutDigestPin();
   const first = manager.download();
@@ -336,6 +348,10 @@ test("cleanup on failure: archive and extract dir removed, next download can sta
 
   state.extractImpl = async (_archivePath, destDir) => {
     fs.writeFileSync(path.join(destDir, "whisper-server-linux-x64-cuda"), "binary");
+    fs.writeFileSync(path.join(destDir, "libcudart.so.12"), "cudart");
+    fs.writeFileSync(path.join(destDir, "libcublas.so.12"), "cublas");
+    fs.writeFileSync(path.join(destDir, "libcublasLt.so.12"), "cublasLt");
+    fs.writeFileSync(path.join(destDir, "CUDA-12.9-LICENSE.txt"), "license");
   };
   await manager.download();
   assert.equal(manager.isDownloaded(), true);
@@ -378,25 +394,31 @@ test("delete: removes only the pack's own directory; other packs untouched", asy
 
 test("install isolation: packs sharing lib names cannot clobber each other", async () => {
   state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
-  state.extractedFiles = { "whisper-server-linux-x64-cuda": "bin", "libggml-base.so": "cuda-ggml" };
+  state.extractedFiles = {
+    "whisper-server-linux-x64-cuda": "bin",
+    "libcudart.so.12": "cuda-cudart",
+    "libcublas.so.12": "cublas",
+    "libcublasLt.so.12": "cublasLt",
+    "CUDA-12.9-LICENSE.txt": "license",
+  };
   await cudaManagerWithoutDigestPin().download();
 
   state.release = makeRelease("llama-b9763-bin-ubuntu-vulkan-x64.tar.gz");
-  state.extractedFiles = { "llama-server": "bin", "libggml-base.so": "llama-ggml" };
+  state.extractedFiles = { "llama-server": "bin", "libcudart.so.12": "llama-cudart" };
   await new LlamaVulkanManager().download();
 
   const read = (dir) =>
-    fs.readFileSync(path.join(userDataDir, "bin", dir, "libggml-base.so"), "utf8");
-  assert.equal(read("whisper-cuda"), "cuda-ggml");
-  assert.equal(read("llama-vulkan"), "llama-ggml");
+    fs.readFileSync(path.join(userDataDir, "bin", dir, "libcudart.so.12"), "utf8");
+  assert.equal(read("whisper-cuda"), "cuda-cudart");
+  assert.equal(read("llama-vulkan"), "llama-cudart");
 });
 
-test("atomic install: a failure after extraction leaves no half-installed pack", async () => {
+test("atomic install: an incomplete CUDA runtime leaves no half-installed pack", async () => {
   state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
-  state.extractedFiles = { "not-the-binary": "x" };
+  state.extractedFiles = { "whisper-server-linux-x64-cuda": "binary" };
 
   const manager = cudaManagerWithoutDigestPin();
-  await assert.rejects(() => manager.download(), { message: /not found in archive/ });
+  await assert.rejects(() => manager.download(), { message: /libcudart\.so\.12 not found/ });
 
   assert.equal(manager.isDownloaded(), false);
   assert.ok(!fs.existsSync(path.join(userDataDir, "bin", "whisper-cuda")));
@@ -494,12 +516,21 @@ test("re-download replaces the previous install, including stale libs", async ()
   seedPack("whisper-cuda", ["whisper-server-linux-x64-cuda", "libstale.so"]);
 
   state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
-  state.extractedFiles = { "whisper-server-linux-x64-cuda": "new", "libggml-cuda.so": "lib" };
+  state.extractedFiles = {
+    "whisper-server-linux-x64-cuda": "new",
+    "libcudart.so.12": "cudart",
+    "libcublas.so.12": "cublas",
+    "libcublasLt.so.12": "cublasLt",
+    "CUDA-12.9-LICENSE.txt": "license",
+  };
   await cudaManagerWithoutDigestPin().download();
 
   const packDir = path.join(userDataDir, "bin", "whisper-cuda");
   assert.deepEqual(fs.readdirSync(packDir).sort(), [
-    "libggml-cuda.so",
+    "CUDA-12.9-LICENSE.txt",
+    "libcublas.so.12",
+    "libcublasLt.so.12",
+    "libcudart.so.12",
     "whisper-server-linux-x64-cuda",
   ]);
 });
@@ -571,7 +602,13 @@ test("orphan detection: enabled flag with no pack on disk is reported for the no
     assert.deepEqual(detectOrphanedGpuPacks(packs), ["CUDA whisper"]);
 
     // Pack present on disk — enabled but not orphaned
-    seedPack("whisper-cuda", ["whisper-server-linux-x64-cuda"]);
+    seedPack("whisper-cuda", [
+      "whisper-server-linux-x64-cuda",
+      "libcudart.so.12",
+      "libcublas.so.12",
+      "libcublasLt.so.12",
+      "CUDA-12.9-LICENSE.txt",
+    ]);
     assert.deepEqual(detectOrphanedGpuPacks(packs), []);
 
     process.env.WHISPER_VULKAN_ENABLED = "true";
