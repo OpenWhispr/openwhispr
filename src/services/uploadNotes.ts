@@ -44,13 +44,14 @@ export function buildUploadTranscript(
   return stored.length ? JSON.stringify(stored) : undefined;
 }
 
-// What an upload persists onto the note row about the diarizer invocation,
+// What an upload persists onto the note row about the diarization run,
 // matching the meeting path's write semantics: the columns are written only
 // when diarization ran. A null diarization_enabled means "user never chose" and
 // consumers fall back to the global speaker setting — writing 0 would force
 // diarization off when recording into the note later. The
-// expected_speaker_count is only ever a count the diarizer was actually invoked
-// with (numSpeakers lingers in localStorage while its input is hidden); auto
+// expected_speaker_count is only a count the user entered for that run
+// (numSpeakers lingers in localStorage while its input is hidden), which the
+// upload applied as a cap on auto-detected clusters, not a forced count; auto
 // detection stays null so isExplicitSpeakerCount never mistakes it for an
 // explicit choice.
 export function buildUploadNoteMetadata(

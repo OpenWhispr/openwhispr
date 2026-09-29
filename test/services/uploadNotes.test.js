@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const load = () => import("../../src/services/uploadNotes.ts");
 const { MAX_SPEAKER_COUNT } = require("../../src/constants/speakerDetection.json");
 
-test("maps the diarizer invocation onto the note columns", async () => {
+test("maps the diarization settings onto the note columns", async () => {
   const { buildUploadNoteMetadata } = await load();
 
   const { audioDurationSeconds, noteUpdates } = buildUploadNoteMetadata(
