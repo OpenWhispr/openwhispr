@@ -115,9 +115,9 @@ test("short-utterance phantom clusters are dropped from a two-person call", () =
   assert.deepEqual(speakersOf(dropNegligibleClusters(segments)), ["speaker_01", "speaker_06"]);
 });
 
-// The same call clustered at 0.65: the larger phantom holds over 5 % of the
-// speech, so a 5 % share floor alone would keep it.
-test("a phantom holding over 5% of the speech is still dropped", () => {
+// The same call clustered at 0.65: the larger phantom held 5.6 % of the speech
+// (59.6 s of 1058.4 s) in segments averaging 1.92 s.
+test("a short-segment phantom under 10% of the speech is dropped", () => {
   const segments = [
     ...cluster("speaker_0", 94, 5.77),
     ...cluster("speaker_1", 83, 5.44),
