@@ -32,7 +32,6 @@ import { followsSystemDefaultMic } from "./micSelectionRecovery";
 import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
-import { mergeStreamingTranscript } from "./streamingTranscript";
 import {
   ANALYTICS_COUNTER_VERSION,
   countSpokenWords,
@@ -431,6 +430,9 @@ const STREAMING_PROVIDERS = {
     // audioStreamEnd before its own disconnect gives up.
     awaitsFinalTranscript: true,
     finalCeilingMs: 3000,
+    // Its stop result supersedes the streamed finals: it also carries a last
+    // turn the server never finalized.
+    preferStopTranscript: true,
     warmup: (opts) => window.electronAPI.geminiStreamingWarmup(opts),
     start: (opts) => window.electronAPI.geminiStreamingStart(opts),
     send: (buf) => window.electronAPI.geminiStreamingSend(buf),
@@ -5261,27 +5263,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
     const tTerminate = performance.now();
 
-    finalText = mergeStreamingTranscript(this.streamingFinalText, this.streamingPartialText);
-    if (finalText && this.streamingPartialText?.trim() && this.streamingFinalText?.trim()) {
-      logger.debug(
-        "Merged trailing streaming partial into committed transcript",
-        { textLength: finalText.length },
-        "streaming"
-      );
-    } else if (!this.streamingFinalText && this.streamingPartialText) {
+    finalText =
+      (provider.preferStopTranscript && stopResult?.text) || this.streamingFinalText || "";
+
+    if (!finalText && this.streamingPartialText) {
+      finalText = this.streamingPartialText;
       logger.debug("Using partial text as fallback", { textLength: finalText.length }, "streaming");
     }
 
-    if (stopResult?.text) {
-      const mergedWithStop = mergeStreamingTranscript(finalText, stopResult.text);
-      if (mergedWithStop !== finalText) {
-        finalText = mergedWithStop;
-        logger.debug(
-          "Using disconnect result text as fallback",
-          { textLength: finalText.length },
-          "streaming"
-        );
-      }
+    if (!finalText && stopResult?.text) {
+      finalText = stopResult.text;
+      logger.debug(
+        "Using disconnect result text as fallback",
+        { textLength: finalText.length },
+        "streaming"
+      );
     }
 
     this.cleanupStreamingListeners(sessionId);

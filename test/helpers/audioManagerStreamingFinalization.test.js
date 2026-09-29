@@ -139,6 +139,35 @@ test("streaming completion keeps the recording occurrence time", async (t) => {
   assert.equal(completion.analyticsOccurredAt, new Date(recordingStartedAt).toISOString());
 });
 
+test("only a provider that prefers its stop transcript pastes it over the streamed finals", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  globalThis.window.dispatchEvent = () => true;
+
+  for (const [preferStopTranscript, expected] of [
+    [true, "Turn one. Turn two is still open"],
+    [false, "Turn one."],
+  ]) {
+    const { manager } = createFinalizingManager(AudioManager);
+    let completion;
+    manager.streamingFinalText = "Turn one.";
+    manager.streamingPartialText = "Turn two is still open";
+    manager.getStreamingProvider = () => ({
+      awaitsFinalTranscript: true,
+      preferStopTranscript,
+      finalize() {},
+      stop: async () => ({ success: true, text: "Turn one. Turn two is still open" }),
+    });
+    manager.finalizeChineseScript = async (text) => text;
+    manager.onTranscriptionComplete = (result) => {
+      completion = result;
+    };
+
+    await manager.stopStreamingRecording();
+
+    assert.equal(completion.text, expected);
+  }
+});
+
 test("cancelling an active streaming recording discards it without publishing text", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager, states, getProviderStopCalls } = createFinalizingManager(AudioManager);
@@ -1673,21 +1702,4 @@ test("a selection edit that fails during the language re-transcription surfaces 
   assert.equal(cancelled.stopResult, true);
   assert.deepEqual(cancelled.errors, []);
   assert.deepEqual(cancelled.published, []);
-});
-
-test("streaming stop keeps a trailing partial after earlier finalized turns", async (t) => {
-  const AudioManager = await loadManagerClass(t);
-  const { manager } = createFinalizingManager(AudioManager);
-  globalThis.window.dispatchEvent = () => true;
-  let completion;
-  manager.streamingFinalText = "The first sentence.";
-  manager.streamingPartialText = "and the last ten seconds";
-  manager.finalizeChineseScript = async (text) => text;
-  manager.onTranscriptionComplete = (result) => {
-    completion = result;
-  };
-
-  await manager.stopStreamingRecording();
-
-  assert.equal(completion.text, "The first sentence. and the last ten seconds");
 });
