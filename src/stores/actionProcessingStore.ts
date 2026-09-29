@@ -448,17 +448,18 @@ export function runBackgroundAction(
       );
       const requestConfig: ReasoningConfig = {
         systemPrompt,
-        maxTokens: NOTE_OUTPUT_MAX_TOKENS,
+        // A rewrite repeats a summary written under NOTE_OUTPUT_MAX_TOKENS, plus its edit.
+        maxTokens: rewritesSummary ? 2 * NOTE_OUTPUT_MAX_TOKENS : NOTE_OUTPUT_MAX_TOKENS,
         temperature: 0.3,
         disableThinking: settings.noteFormattingDisableThinking,
         // A local model that shrinks the reply to fit the prompt refuses a reply
         // that fills the shrunken allowance, so a recording is summarised in
         // parts rather than saved clipped. A plain note has no parts route, so
         // its clipped reply is saved as before. Other routes ignore the flag.
+        refuseClippedByWindow: hasTranscript(options.material),
         // Rewriting an existing summary replaces all of it, so a clipped
         // rewrite would lose content: providers refuse it (OpenWhispr Cloud
         // refuses a truncated reply for every request).
-        refuseClippedByWindow: rewritesSummary || hasTranscript(options.material),
         ...(rewritesSummary && { requireCompleteOutput: true }),
         requestId: runId,
         ...providerOverrides,
