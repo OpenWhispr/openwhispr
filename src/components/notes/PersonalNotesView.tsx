@@ -13,7 +13,7 @@ import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
-import { getActionName } from "../../stores/actionStore";
+import { getActionName, rememberTemplate } from "../../stores/actionStore";
 import { buildSummaryActionInput } from "../../helpers/templatePrompts";
 import { useDialogs } from "../../hooks/useDialogs";
 import {
@@ -688,6 +688,8 @@ export default function PersonalNotesView({
     // summary the note already has.
     const editsSummary = action.kind === "action";
     if (editsSummary && !editorEnhancedContent) return;
+    // A note's first summary uses the template that last ran.
+    if (!editsSummary) rememberTemplate(action);
     const parts = editsSummary
       ? buildSummaryActionInput({
           summary: editorEnhancedContent,

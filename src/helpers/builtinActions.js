@@ -11,8 +11,7 @@ export const FOLLOW_UP_EMAIL_KEY = "notes.actions.builtin.followUpEmail";
 export const MAKE_TODOS_KEY = "notes.actions.builtin.makeTodos";
 export const CREATE_OUTLINE_KEY = "notes.actions.builtin.createOutline";
 
-// Mirrored by the API's note action schemas; a longer row would be rejected
-// there and hold up the rest of its sync batch.
+// Mirrored by the API's note action schemas, which reject anything longer.
 export const NOTE_ACTION_LIMITS = {
   name: 200,
   description: 1000,

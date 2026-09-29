@@ -5,9 +5,11 @@ import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
+import { useToast } from "../ui/useToast";
 import { cn } from "../lib/utils";
 import { useActionsOfKind, initializeActions, getActionName } from "../../stores/actionStore";
 import { NOTE_ACTION_LIMITS } from "../../helpers/builtinActions";
+import { normalizeSections } from "../../helpers/templatePrompts";
 import type { ActionItem, ActionKind, ActionOutput, TemplateSection } from "../../types/electron";
 
 interface ActionManagerDialogProps {
@@ -21,14 +23,6 @@ type SectionDraft = TemplateSection & { key: string };
 
 const toDrafts = (sections: TemplateSection[] | null): SectionDraft[] =>
   (sections ?? []).map((section) => ({ ...section, key: crypto.randomUUID() }));
-
-const fromDrafts = (drafts: SectionDraft[]): TemplateSection[] =>
-  drafts
-    .map(({ heading, instruction }) => ({
-      heading: heading.trim(),
-      instruction: instruction.trim(),
-    }))
-    .filter((section) => section.heading);
 
 const TEXTAREA_CLASS = cn(
   "w-full rounded border border-border/70 bg-input px-3.5 py-3 text-sm text-foreground leading-relaxed transition-colors duration-200 outline-none resize-none",
@@ -50,6 +44,7 @@ export default function ActionManagerDialog({
   initialKind,
 }: ActionManagerDialogProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [kind, setKind] = useState<ActionKind>(initialKind);
   const items = useActionsOfKind(kind);
   const [name, setName] = useState("");
@@ -135,7 +130,7 @@ export default function ActionManagerDialog({
       return next;
     });
 
-  const savedSections = fromDrafts(sections);
+  const savedSections: TemplateSection[] = normalizeSections(sections);
   const canSave =
     !!name.trim() && (isTemplate ? !!prompt.trim() || savedSections.length > 0 : !!prompt.trim());
 
@@ -144,23 +139,26 @@ export default function ActionManagerDialog({
     setIsSaving(true);
     try {
       const fields = isTemplate ? { sections: savedSections } : { output };
-      if (editingId !== null) {
-        await window.electronAPI.updateAction(editingId, {
-          name: name.trim(),
-          description: description.trim(),
-          prompt: prompt.trim(),
-          ...fields,
-        });
-      } else {
-        await window.electronAPI.createAction(
-          name.trim(),
-          description.trim(),
-          prompt.trim(),
-          undefined,
-          { kind, ...fields }
-        );
-        setIsCreating(false);
+      const result =
+        editingId !== null
+          ? await window.electronAPI.updateAction(editingId, {
+              name: name.trim(),
+              description: description.trim(),
+              prompt: prompt.trim(),
+              ...fields,
+            })
+          : await window.electronAPI.createAction(
+              name.trim(),
+              description.trim(),
+              prompt.trim(),
+              undefined,
+              { kind, ...fields }
+            );
+      if (!result.success) {
+        toast({ title: t("notes.actions.errors.saveFailed"), variant: "destructive" });
+        return;
       }
+      if (editingId === null) setIsCreating(false);
     } finally {
       setIsSaving(false);
     }

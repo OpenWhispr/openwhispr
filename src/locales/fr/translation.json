@@ -3542,7 +3542,9 @@
       "errors": {
         "noModel": "Aucun modèle IA sélectionné. Configurez-en un dans les Paramètres.",
         "actionFailed": "L'action a échoué",
-        "noEndpoint": "Aucune URL de serveur auto-hébergé définie. Configurez-en une dans les Paramètres."
+        "noEndpoint": "Aucune URL de serveur auto-hébergé définie. Configurez-en une dans les Paramètres.",
+        "summaryTruncated": "Le modèle d'IA a manqué de place avant d'avoir fini de réécrire le résumé, qui reste donc inchangé.",
+        "saveFailed": "Enregistrement impossible. Vérifiez que rien n'est trop long, puis réessayez."
       },
       "tab": "Actions",
       "output": {

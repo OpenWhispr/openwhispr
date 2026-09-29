@@ -10,6 +10,8 @@ import {
   useSettingsStore,
 } from "../../stores/settingsStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
+import { NOTE_ACTION_LIMITS } from "../../helpers/builtinActions";
+import { useToast } from "../ui/useToast";
 import {
   useActionsOfKind,
   initializeActions,
@@ -37,6 +39,7 @@ interface NotesOnboardingProps {
 
 export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { isProUser, isProLoading, isLLMConfigured, complete } = useNotesOnboarding();
   const templates = useActionsOfKind("template");
   const [llmExpanded, setLlmExpanded] = useState(!isLLMConfigured && !isProUser);
@@ -90,11 +93,15 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
     if (!actionName.trim() || !actionPrompt.trim()) return;
     setIsSaving(true);
     try {
-      await window.electronAPI.createAction(
+      const result = await window.electronAPI.createAction(
         actionName.trim(),
         actionDescription.trim(),
         actionPrompt.trim()
       );
+      if (!result.success) {
+        toast({ title: t("notes.actions.errors.saveFailed"), variant: "destructive" });
+        return;
+      }
       setActionName("");
       setActionDescription("");
       setActionPrompt("");
@@ -316,6 +323,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 type="text"
                 value={actionName}
                 onChange={(e) => setActionName(e.target.value)}
+                maxLength={NOTE_ACTION_LIMITS.name}
                 placeholder={t("notes.templates.namePlaceholder")}
                 aria-label={t("notes.templates.namePlaceholder")}
                 disabled={isSaving}
@@ -326,6 +334,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 type="text"
                 value={actionDescription}
                 onChange={(e) => setActionDescription(e.target.value)}
+                maxLength={NOTE_ACTION_LIMITS.description}
                 placeholder={t("notes.actions.descriptionPlaceholder")}
                 aria-label={t("notes.actions.descriptionPlaceholder")}
                 disabled={isSaving}
@@ -335,6 +344,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 dir="auto"
                 value={actionPrompt}
                 onChange={(e) => setActionPrompt(e.target.value)}
+                maxLength={NOTE_ACTION_LIMITS.prompt}
                 placeholder={t("notes.templates.contextPlaceholder")}
                 aria-label={t("notes.templates.contextPlaceholder")}
                 rows={3}

@@ -31,6 +31,7 @@ async function loadStore(t) {
         export default {
           processText: async (text, model, agentName, config) => {
             globalThis.__processTextCalls.push({ text, model, config });
+            if (globalThis.__processTextError) throw globalThis.__processTextError;
             return globalThis.__processTextResult ?? "# Notes\\n- decided things";
           },
         };
@@ -42,6 +43,7 @@ async function loadStore(t) {
   t.after(() => {
     delete globalThis.__processTextCalls;
     delete globalThis.__processTextResult;
+    delete globalThis.__processTextError;
   });
 
   const store = await vite.ssrLoadModule("/stores/actionProcessingStore.ts");
@@ -196,4 +198,33 @@ test("a summary action rewrites only the summary and never saves a clipped rewri
   assert.equal(calls[0].config.refuseClippedByWindow, true);
   // The template and material hash stay those of the summary being edited.
   assert.deepEqual(Object.keys(updates[0].payload), ["enhanced_content"]);
+});
+
+test("a cut-off rewrite reports a notes error, not the dictation one providers attach", async (t) => {
+  const { store, updates } = await loadStore(t);
+  const { TRUNCATED_OUTPUT_MESSAGE_KEY } = await import("../../src/services/ai/chatRequestBody.ts");
+  globalThis.__processTextError = Object.assign(new Error("Model output was truncated"), {
+    messageKey: TRUNCATED_OUTPUT_MESSAGE_KEY,
+  });
+
+  store.runBackgroundAction(
+    13,
+    "## Current Summary\n- decided things",
+    "hash-13",
+    {
+      id: 5,
+      client_id: "shorten",
+      kind: "action",
+      output: "summary",
+      name: "Shorten",
+      prompt: "x",
+    },
+    { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+
+  let events = [];
+  await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
+  assert.equal(events[0].messageKey, "notes.actions.errors.summaryTruncated");
+  assert.equal(updates.length, 0);
 });

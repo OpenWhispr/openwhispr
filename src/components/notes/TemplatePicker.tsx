@@ -13,7 +13,7 @@ import {
   SPLIT_BUTTON_SEGMENT_CLASS,
 } from "../ui/splitButton";
 import { cn } from "../lib/utils";
-import { getActionDescription, getActionName, rememberTemplate } from "../../stores/actionStore";
+import { getActionDescription, getActionName } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
 
 interface TemplatePickerProps {
@@ -37,11 +37,6 @@ export default function TemplatePicker({
 }: TemplatePickerProps) {
   const { t } = useTranslation();
   const currentName = getActionName(current, t);
-
-  const handlePick = (template: ActionItem) => {
-    rememberTemplate(template);
-    onRun(template);
-  };
 
   const MainIcon = regenerate ? RefreshCw : Sparkles;
 
@@ -82,7 +77,7 @@ export default function TemplatePicker({
           {templates.map((template) => (
             <DropdownMenuItem
               key={template.id}
-              onClick={() => handlePick(template)}
+              onClick={() => onRun(template)}
               className="gap-2.5 rounded-md px-2.5 py-1.5 text-xs"
             >
               <Check

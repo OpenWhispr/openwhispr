@@ -629,9 +629,18 @@ class DatabaseManager {
         "CREATE INDEX IF NOT EXISTS idx_agent_conversations_container ON agent_conversations(space_id, folder_id)"
       );
 
+      const builtinKeys = BUILTIN_ACTIONS.map((action) => action.translationKey);
+      // A built-in's client id is its key. An older build renames built-in keys it
+      // doesn't know (below), so after a downgrade and upgrade the key comes back
+      // from the client id instead of the row being seeded a second time.
+      this.db
+        .prepare(
+          `UPDATE actions SET translation_key = client_id WHERE is_builtin = 1 AND client_id IN (${builtinKeys.map(() => "?").join(", ")}) AND translation_key IS NOT client_id`
+        )
+        .run(...builtinKeys);
+
       // Pre-2026 installs carry one built-in row under an older key: rename it to
       // Generate Notes so the loop below recognizes and upgrades it.
-      const builtinKeys = BUILTIN_ACTIONS.map((action) => action.translationKey);
       this.db
         .prepare(
           `UPDATE actions SET translation_key = ? WHERE is_builtin = 1 AND (translation_key IS NULL OR translation_key NOT IN (${builtinKeys.map(() => "?").join(", ")}))`
@@ -640,7 +649,8 @@ class DatabaseManager {
 
       // Built-ins: insert any that are missing, and roll a new default out to rows
       // that are still a previous flat default (never a user edit). A built-in's
-      // kind and output are fixed, so they are settled whatever the prompt.
+      // kind is fixed, so it is settled whatever the prompt; its output is only
+      // filled in, since the user may point an action at the summary instead.
       const selectBuiltin = this.db.prepare(
         "SELECT id, prompt, sections FROM actions WHERE is_builtin = 1 AND translation_key = ?"
       );
@@ -651,7 +661,7 @@ class DatabaseManager {
         "UPDATE actions SET name = ?, description = ?, prompt = ?, sections = ? WHERE id = ?"
       );
       const settleBuiltin = this.db.prepare(
-        "UPDATE actions SET client_id = ?, kind = ?, output = ? WHERE id = ?"
+        "UPDATE actions SET client_id = ?, kind = ?, output = COALESCE(output, ?) WHERE id = ?"
       );
       for (const action of BUILTIN_ACTIONS) {
         const sections = action.sections ? JSON.stringify(action.sections) : null;

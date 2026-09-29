@@ -5,8 +5,11 @@ const { createDb } = require("./harness/db.js");
 const DatabaseManager = require("../../src/helpers/database.js");
 const {
   BUILTIN_ACTIONS,
+  CREATE_OUTLINE_KEY,
   DETAILED_NOTES_KEY,
   FOLLOW_UP_EMAIL_KEY,
+  GENERATE_NOTES_KEY,
+  MAKE_TODOS_KEY,
   NOTE_ACTION_LIMITS,
 } = require("../../src/helpers/builtinActions.js");
 
@@ -167,4 +170,34 @@ test("templates and actions are validated and normalized when saved", (t) => {
 
   const [detailed] = builtinRows(db, DETAILED_NOTES_KEY);
   assert.equal(db.updateAction(detailed.id, { sections: [] }).success, false);
+});
+
+test("an older build renaming the newer built-ins doesn't stop the next launch", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  // What a build that predates Make to-dos and Create outline does to their rows.
+  db.db
+    .prepare(
+      "UPDATE actions SET translation_key = ? WHERE is_builtin = 1 AND translation_key IN (?, ?)"
+    )
+    .run(GENERATE_NOTES_KEY, MAKE_TODOS_KEY, CREATE_OUTLINE_KEY);
+  db.db.close();
+
+  relaunch((upgraded) => {
+    for (const key of [GENERATE_NOTES_KEY, MAKE_TODOS_KEY, CREATE_OUTLINE_KEY]) {
+      assert.equal(builtinRows(upgraded, key).length, 1, key);
+    }
+  });
+});
+
+test("a built-in action pointed at the summary stays there across launches", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const [email] = builtinRows(db, FOLLOW_UP_EMAIL_KEY);
+  assert.equal(db.updateAction(email.id, { output: "summary" }).success, true);
+  db.db.close();
+
+  relaunch((reopened) => {
+    assert.equal(builtinRows(reopened, FOLLOW_UP_EMAIL_KEY)[0].output, "summary");
+  });
 });

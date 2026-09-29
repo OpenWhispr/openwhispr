@@ -11,6 +11,7 @@ import type { ActionItem } from "../types/electron";
 import { estimateNoteTokens, planNoteChunks, splitChunkInHalf } from "../helpers/noteChunking";
 import type { LocalInferenceError } from "../utils/localInferenceError";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
+import { TRUNCATED_OUTPUT_MESSAGE_KEY } from "../services/ai/chatRequestBody";
 
 // Output room reserved in each part's window when the parts are planned. The
 // allowance a part actually gets is its share of the room the final pass has
@@ -439,7 +440,8 @@ export function runBackgroundAction(
         // parts rather than saved clipped. A plain note has no parts route, so
         // its clipped reply is saved as before. Other routes ignore the flag.
         // A summary action replaces the whole summary, so a clipped rewrite
-        // would lose content: it is refused on every route instead.
+        // would lose content: providers refuse it (OpenWhispr Cloud refuses a
+        // truncated reply for every request).
         refuseClippedByWindow: editsSummary || hasTranscript(options.material),
         ...(editsSummary && { requireCompleteOutput: true }),
         requestId: runId,
@@ -504,7 +506,16 @@ export function runBackgroundAction(
         messageKey?: string;
         messageParams?: Record<string, string | number>;
       };
-      pushErrorEvent({ noteId, message, messageKey, messageParams });
+      pushErrorEvent({
+        noteId,
+        message,
+        // The providers' truncation key describes dictation cleanup.
+        messageKey:
+          messageKey === TRUNCATED_OUTPUT_MESSAGE_KEY
+            ? "notes.actions.errors.summaryTruncated"
+            : messageKey,
+        messageParams,
+      });
     } finally {
       if (activeRuns.get(noteId) === runId) activeRuns.delete(noteId);
     }

@@ -75,10 +75,6 @@ function removeActionFromStore(id: number): void {
   useActionStore.setState({ actions: next });
 }
 
-export function useActions(): ActionItem[] {
-  return useActionStore((state) => state.actions);
-}
-
 export function useActionsOfKind(kind: ActionKind): ActionItem[] {
   return useActionStore(useShallow((state) => state.actions.filter((a) => a.kind === kind)));
 }

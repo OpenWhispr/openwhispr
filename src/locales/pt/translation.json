@@ -3175,7 +3175,9 @@
       "errors": {
         "noModel": "Nenhum modelo de IA selecionado. Configure um nas Configurações.",
         "actionFailed": "A ação falhou",
-        "noEndpoint": "Nenhum URL de servidor auto-hospedado definido. Configure um nas Configurações."
+        "noEndpoint": "Nenhum URL de servidor auto-hospedado definido. Configure um nas Configurações.",
+        "summaryTruncated": "O modelo de IA ficou sem espaço antes de terminar de reescrever o resumo, então o resumo ficou como estava.",
+        "saveFailed": "Não foi possível salvar. Verifique se nada está longo demais e tente novamente."
       },
       "tab": "Ações",
       "output": {

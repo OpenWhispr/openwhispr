@@ -3175,7 +3175,9 @@
       "errors": {
         "noModel": "未選擇 AI 模型。請在設定中進行配置。",
         "actionFailed": "操作失敗",
-        "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。"
+        "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。",
+        "summaryTruncated": "AI 模型在改寫完摘要之前就用完了輸出空間，因此摘要維持不變。",
+        "saveFailed": "無法儲存。請檢查是否有內容過長，然後再試一次。"
       },
       "tab": "動作",
       "output": {
