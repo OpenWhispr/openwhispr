@@ -3414,7 +3414,7 @@
       "speakerDetectionDescription": "Identifier les différents intervenants dans l'audio",
       "numSpeakersPlaceholder": "Détection automatique",
       "numSpeakersLabel": "Nombre d'intervenants",
-      "numSpeakersHint": "Indiquer le nombre exact améliore la précision, surtout pour les enregistrements longs.",
+      "numSpeakersHint": "Les intervenants sont détectés automatiquement, jusqu'à ce nombre.",
       "downloadingModels": "Téléchargement des modèles...",
       "openaiDiarizeNote": "Remplace votre modèle de transcription par gpt-4o-transcribe-diarize, le seul modèle OpenAI avec détection des locuteurs. Les coûts peuvent différer de votre modèle sélectionné.",
       "mistralDiarizeNote": "Détection des locuteurs incluse sans frais supplémentaires avec Voxtral.",

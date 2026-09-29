@@ -1899,7 +1899,7 @@
       "speakerDetectionDescription": "تحديد المتحدثين المختلفين في الصوت",
       "numSpeakersPlaceholder": "اكتشاف تلقائي",
       "numSpeakersLabel": "عدد المتحدثين",
-      "numSpeakersHint": "يؤدي تحديد العدد الدقيق إلى تحسين الدقة، خاصة في التسجيلات الطويلة.",
+      "numSpeakersHint": "يُكتشف المتحدثون تلقائيًا، بحد أقصى هذا العدد.",
       "downloadingModels": "جاري تنزيل النماذج...",
       "openaiDiarizeNote": "يستبدل نموذج التفريغ الذي اخترته بالنموذج gpt-4o-transcribe-diarize، وهو نموذج OpenAI الوحيد الذي يدعم اكتشاف المتحدثين. قد تختلف التكاليف عن نموذجك المحدد.",
       "mistralDiarizeNote": "تم تضمين ميزة اكتشاف المتحدث بدون تكلفة إضافية مع Voxtral.",

@@ -3071,7 +3071,7 @@
       "speakerDetectionDescription": "识别音频中的不同说话人",
       "numSpeakersPlaceholder": "自动检测",
       "numSpeakersLabel": "说话人数",
-      "numSpeakersHint": "设置准确的人数可以提高准确性，尤其是长录音。",
+      "numSpeakersHint": "将自动检测说话人，不超过此人数。",
       "downloadingModels": "正在下载模型...",
       "openaiDiarizeNote": "将替换您的转录模型为 gpt-4o-transcribe-diarize，这是唯一支持说话人检测的 OpenAI 模型。费用可能与您选择的模型不同。",
       "mistralDiarizeNote": "使用 Voxtral 时说话人检测无需额外费用。",

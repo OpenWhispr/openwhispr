@@ -3414,7 +3414,7 @@
       "speakerDetectionDescription": "Identify different speakers in the audio",
       "numSpeakersPlaceholder": "Auto-detect",
       "numSpeakersLabel": "Number of speakers",
-      "numSpeakersHint": "Setting the exact count improves accuracy, especially on long recordings.",
+      "numSpeakersHint": "Speakers are detected automatically, up to this number.",
       "downloadingModels": "Downloading models...",
       "openaiDiarizeNote": "Overrides your transcription model with gpt-4o-transcribe-diarize, the only OpenAI model with speaker detection. Costs may differ from your selected model.",
       "mistralDiarizeNote": "Speaker detection included at no extra cost with Voxtral.",

@@ -3071,7 +3071,7 @@
       "speakerDetectionDescription": "Identifica i diversi parlanti nell'audio",
       "numSpeakersPlaceholder": "Rilevamento automatico",
       "numSpeakersLabel": "Numero di parlanti",
-      "numSpeakersHint": "Indicare il numero esatto migliora la precisione, soprattutto nelle registrazioni lunghe.",
+      "numSpeakersHint": "I parlanti vengono rilevati automaticamente, fino a questo numero.",
       "downloadingModels": "Download modelli in corso...",
       "openaiDiarizeNote": "Sostituisce il tuo modello di trascrizione con gpt-4o-transcribe-diarize, l’unico modello OpenAI con rilevamento dei parlanti. I costi potrebbero differire dal modello selezionato.",
       "mistralDiarizeNote": "Rilevamento dei parlanti incluso senza costi aggiuntivi con Voxtral.",

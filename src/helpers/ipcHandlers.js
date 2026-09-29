@@ -3765,7 +3765,11 @@ class IPCHandlers {
 
         const { convertToWav } = require("./ffmpegUtils");
         const { getSafeTempDir } = require("./safeTempDir");
-        const { resolveClusterThreshold, dropNegligibleClusters } = require("./diarizationPolicy");
+        const {
+          resolveClusterThreshold,
+          dropNegligibleClusters,
+          isCollapsedDiarization,
+        } = require("./diarizationPolicy");
         const { PCM16_MONO_16K_BYTES_PER_SECOND } = require("./transcriptionTimeout");
         const wavPath = path.join(getSafeTempDir(), `ow-diarize-${Date.now()}.wav`);
 
@@ -3779,11 +3783,11 @@ class IPCHandlers {
           const durationSeconds = fs.statSync(wavPath).size / PCM16_MONO_16K_BYTES_PER_SECOND;
           const threshold = resolveClusterThreshold(durationSeconds, options.threshold);
 
-          let segments = await this.diarizationManager.diarize(wavPath, {
-            numSpeakers,
-            threshold,
-            signal,
-          });
+          // Always auto-cluster: forcing 2 clusters on #2021's two-person call
+          // split short utterances from long ones instead of one speaker from
+          // the other, merging both speakers. The requested count is applied
+          // as a cap after cleanup instead.
+          let segments = await this.diarizationManager.diarize(wavPath, { threshold, signal });
           if (signal?.aborted) {
             return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
           }
@@ -3791,6 +3795,16 @@ class IPCHandlers {
           // path fed raw sherpa output to the merge, which is how a 2-person
           // voice memo surfaced 46 speakers.
           segments = dropNegligibleClusters(segments);
+          // A collapsed run's labels are wrong either way: two people under
+          // one label, or one person split off into a phantom. With no
+          // segments the renderer keeps the plain transcript and shows the
+          // diarization warning instead.
+          if (isCollapsedDiarization(segments)) {
+            debugLogger.warn("Discarding diarization: one cluster holds nearly all speech", {
+              durationSeconds,
+            });
+            segments = [];
+          }
           segments = this.diarizationManager.capSpeakerClusters(
             segments,
             numSpeakers > 0 ? numSpeakers : MAX_SPEAKER_COUNT

@@ -10,6 +10,7 @@ const {
   clusterThresholdForDuration,
   resolveClusterThreshold,
   dropNegligibleClusters,
+  isCollapsedDiarization,
 } = require("../../src/helpers/diarizationPolicy");
 
 // 0.55 is tuned for short clean audio; on a 73-minute single-mic voice memo one
@@ -40,6 +41,12 @@ test("hour-plus audio is clamped to the long-audio threshold", () => {
     LONG_AUDIO_CLUSTER_THRESHOLD
   );
   assert.equal(clusterThresholdForDuration(3 * 3600), LONG_AUDIO_CLUSTER_THRESHOLD);
+});
+
+// Too high a threshold is the opposite failure: at 0.72 and above, a
+// 20-minute two-person call (#2021) came back as one speaker plus phantoms.
+test("the long-audio threshold stays below where #2021's two speakers merged", () => {
+  assert.ok(clusterThresholdForDuration(3 * 3600) < 0.72);
 });
 
 test("unknown duration falls back to the default threshold", () => {
@@ -73,13 +80,102 @@ test("clusters below the minimum total speaking time are dropped", () => {
   );
 });
 
-test("a cluster whose short segments add up past the minimum survives", () => {
+test("the second-largest cluster survives once its short segments pass the minimum", () => {
   const segments = [
     { start: 0, end: 30, speaker: "speaker_0" },
     { start: 30, end: 30.6, speaker: "speaker_1" },
     { start: 40, end: 40.6, speaker: "speaker_1" },
   ];
   assert.equal(dropNegligibleClusters(segments).length, 3);
+});
+
+// `count` segments of `seconds` each, so a fixture can reproduce a cluster's
+// measured total speech and mean segment length.
+function cluster(speaker, count, seconds) {
+  return Array.from({ length: count }, (_, i) => ({
+    start: i * 20,
+    end: i * 20 + seconds,
+    speaker,
+  }));
+}
+
+const speakersOf = (segments) => [...new Set(segments.map((s) => s.speaker))].sort();
+
+// Measured on a 20-minute two-person Spanish call (#2021): four phantom
+// clusters of short backchannels and turn starts, each over the 1 s floor.
+test("short-utterance phantom clusters are dropped from a two-person call", () => {
+  const segments = [
+    ...cluster("speaker_06", 79, 6.46),
+    ...cluster("speaker_01", 85, 5.44),
+    ...cluster("speaker_00", 23, 1.72),
+    ...cluster("speaker_02", 20, 1.57),
+    ...cluster("speaker_04", 9, 1.49),
+    ...cluster("speaker_03", 2, 0.72),
+  ];
+  assert.deepEqual(speakersOf(dropNegligibleClusters(segments)), ["speaker_01", "speaker_06"]);
+});
+
+// The same call clustered at 0.65: the larger phantom holds over 5 % of the
+// speech, so a 5 % share floor alone would keep it.
+test("a phantom holding over 5% of the speech is still dropped", () => {
+  const segments = [
+    ...cluster("speaker_0", 94, 5.77),
+    ...cluster("speaker_1", 83, 5.44),
+    ...cluster("speaker_2", 31, 1.92),
+    ...cluster("speaker_3", 3, 1.7),
+  ];
+  assert.deepEqual(speakersOf(dropNegligibleClusters(segments)), ["speaker_0", "speaker_1"]);
+});
+
+test("a minor third speaker with real turns survives", () => {
+  const segments = [
+    ...cluster("speaker_0", 80, 6),
+    ...cluster("speaker_1", 80, 6),
+    ...cluster("speaker_2", 7, 6),
+    ...cluster("speaker_3", 20, 1.5),
+  ];
+  assert.deepEqual(speakersOf(dropNegligibleClusters(segments)), [
+    "speaker_0",
+    "speaker_1",
+    "speaker_2",
+  ]);
+});
+
+test("a short-turn speaker with a real share of the speech survives", () => {
+  const segments = [
+    ...cluster("speaker_0", 100, 2),
+    ...cluster("speaker_1", 100, 2),
+    ...cluster("speaker_2", 40, 2),
+  ];
+  assert.equal(speakersOf(dropNegligibleClusters(segments)).length, 3);
+});
+
+test("the second-largest cluster survives even when it looks like a phantom", () => {
+  const segments = [
+    ...cluster("speaker_0", 200, 6),
+    ...cluster("speaker_1", 20, 1.5),
+    ...cluster("speaker_2", 10, 1.5),
+  ];
+  assert.deepEqual(speakersOf(dropNegligibleClusters(segments)), ["speaker_0", "speaker_1"]);
+});
+
+// Forcing two clusters on #2021's call put both real speakers in one cluster
+// and kept a phantom for the rest.
+test("one cluster holding nearly all the speech is a collapsed run", () => {
+  const segments = [...cluster("speaker_01", 165, 6.06), ...cluster("speaker_00", 35, 1.72)];
+  assert.equal(isCollapsedDiarization(segments), true);
+});
+
+test("a balanced run or a single cluster is not a collapsed run", () => {
+  const balanced = [...cluster("speaker_06", 79, 6.46), ...cluster("speaker_01", 85, 5.44)];
+  assert.equal(isCollapsedDiarization(balanced), false);
+  assert.equal(isCollapsedDiarization(cluster("speaker_0", 50, 6)), false);
+  assert.equal(isCollapsedDiarization([]), false);
+});
+
+test("a dominant speaker beside someone with real turns is not a collapsed run", () => {
+  const lecture = [...cluster("speaker_0", 550, 6), ...cluster("speaker_1", 5, 6)];
+  assert.equal(isCollapsedDiarization(lecture), false);
 });
 
 test("dropping never empties the result or touches a clean input", () => {
